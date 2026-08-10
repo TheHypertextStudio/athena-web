@@ -9,7 +9,12 @@
  */
 export { default as FocusPanel } from './focus-panel';
 export { focusRailStatus } from './focus-rail-status';
-export { TaskTimerButton, type TaskTimerButtonProps } from './task-timer-button';
+export {
+  TaskTimerButton,
+  TaskTimerMenuItem,
+  type TaskTimerButtonProps,
+  type TaskTimerMenuItemProps,
+} from './task-timer-button';
 export { TimeAnalytics } from './time-analytics';
 export { TimeSharePanel } from './time-share-panel';
 export { formatClock, formatDuration, spokenDuration } from './format-duration';

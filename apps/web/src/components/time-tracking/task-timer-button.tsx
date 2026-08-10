@@ -21,6 +21,7 @@
 import {
   Button,
   ControlGroup,
+  DropdownMenuItem,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -42,6 +43,39 @@ export interface TaskTimerButtonProps {
   readonly withLabel?: boolean;
 }
 
+/** Props for the task-specific timer row inside an action menu. */
+export type TaskTimerMenuItemProps = Pick<TaskTimerButtonProps, 'taskId' | 'title'>;
+
+interface TaskTimerAction {
+  readonly active: boolean;
+  readonly tracking: boolean;
+  readonly label: string;
+  readonly disabled: boolean;
+  readonly run: () => Promise<void>;
+}
+
+/** Keep button and menu placements on one timer state machine. */
+function useTaskTimerAction(taskId: string, title: string): TaskTimerAction {
+  const { record, phase } = useTimerState();
+  const controls = useTimerControls(record?.id ?? null);
+  const tracking = record?.taskId === taskId;
+  const active = tracking && phase === 'running';
+
+  return {
+    active,
+    tracking,
+    label: active ? 'Pause tracking' : tracking ? 'Resume tracking' : 'Track this task',
+    disabled: controls.starting || controls.transitioning,
+    run: async () => {
+      if (active) {
+        await controls.pause();
+        return;
+      }
+      await controls.start({ label: title, taskId });
+    },
+  };
+}
+
 /**
  * Start (or pause) tracking this specific task.
  *
@@ -54,26 +88,21 @@ export function TaskTimerButton({
   controlSize,
   withLabel = true,
 }: TaskTimerButtonProps): JSX.Element {
-  const { record, phase } = useTimerState();
-  const controls = useTimerControls(record?.id ?? null);
-  const tracking = record?.taskId === taskId;
-  const active = tracking && phase === 'running';
-
-  const label = active ? 'Pause tracking' : tracking ? 'Resume tracking' : 'Track this task';
+  const action = useTaskTimerAction(taskId, title);
 
   return (
     <ControlGroup {...(controlSize ? { controlSize } : {})} className="shrink-0">
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant={tracking ? 'secondary' : 'outline'}
+            variant={action.tracking ? 'secondary' : 'outline'}
             iconOnly={!withLabel}
-            aria-label={label}
-            aria-pressed={active}
+            aria-label={action.label}
+            aria-pressed={action.active}
             data-testid={`task-timer-${taskId}`}
             // Only its own transitions disable it. A single shared `busy` meant starting a timer
             // anywhere greyed out every row's control at once.
-            disabled={controls.starting || controls.transitioning}
+            disabled={action.disabled}
             onClick={(event) => {
               // Every real host is an activatable row (a task-table `<Link>`, a `ListRow`'s
               // click-to-open). Stopping propagation keeps the row's own handler from also
@@ -81,19 +110,32 @@ export function TaskTimerButton({
               // stopPropagation alone does not cancel that native default action.
               event.preventDefault();
               event.stopPropagation();
-              if (active) {
-                void controls.pause();
-                return;
-              }
-              void controls.start({ label: title, taskId });
+              void action.run();
             }}
           >
-            {active ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-            {withLabel ? (active ? 'Tracking' : tracking ? 'Resume' : 'Track') : null}
+            {action.active ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+            {withLabel ? (action.active ? 'Tracking' : action.tracking ? 'Resume' : 'Track') : null}
           </Button>
         </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
+        <TooltipContent>{action.label}</TooltipContent>
       </Tooltip>
     </ControlGroup>
+  );
+}
+
+/** Start, pause, or resume tracking this task from an overflow menu. */
+export function TaskTimerMenuItem({ taskId, title }: TaskTimerMenuItemProps): JSX.Element {
+  const action = useTaskTimerAction(taskId, title);
+
+  return (
+    <DropdownMenuItem
+      disabled={action.disabled}
+      onSelect={() => {
+        void action.run();
+      }}
+    >
+      {action.active ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+      {action.label}
+    </DropdownMenuItem>
   );
 }

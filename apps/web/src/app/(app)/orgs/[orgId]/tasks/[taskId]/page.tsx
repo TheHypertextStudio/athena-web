@@ -3,15 +3,7 @@
 import { type Priority } from '@docket/types';
 import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Ellipsis, Trash2 } from '@docket/ui/icons';
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  Skeleton,
-} from '@docket/ui/primitives';
+import { Skeleton } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
 import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
@@ -30,6 +22,10 @@ import { Subtasks } from '@/components/task-detail/Subtasks';
 import { MailAttachmentsPanel } from '@/components/athena/mail-attachments-panel';
 import TaskAttachments from '@/components/task-detail/TaskAttachments';
 import { TaskActivitySection } from '@/components/task-detail/task-activity-section';
+import {
+  TaskHeaderControls,
+  TaskHeaderOverflowMenu,
+} from '@/components/task-detail/task-header-controls';
 import { TaskTimerButton } from '@/components/time-tracking';
 import { TaskPropertiesRail } from '@/components/task-detail/task-properties-rail';
 import {
@@ -247,81 +243,97 @@ export default function TaskDetailPage(): JSX.Element {
           />
         </h1>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusPicker
-            current={task.state}
-            states={workflowStates}
-            currentType={stateTypeOf(task.state)}
-            onSelect={(stateKey) => {
-              void setState(stateKey);
-            }}
-            pending={statusPending}
-          />
-          <PriorityPicker
-            current={task.priority}
-            onSelect={(priority: Priority) => {
-              void setPriority(priority);
-            }}
-            pending={priorityPending}
-          />
-          <ActorPicker
-            options={memberOptions}
-            value={task.assigneeId ?? null}
-            onChange={(assigneeId) => {
-              patchTask({ assigneeId });
-            }}
-            placeholder="Assign"
-            clearLabel="Unassigned"
-            ariaLabel="Assignee"
-            triggerVariant="outline"
-            readOnly={!canEdit}
-          />
-          {delegate ? (
-            <span className="text-body-medium flex items-center gap-1.5">
-              <span className="text-on-surface-variant text-xs">delegate</span>
-              <ActorAvatar
-                kind={delegate.kind}
-                name={delegate.name}
-                avatarUrl={delegate.avatarUrl}
+        <TaskHeaderControls
+          status={
+            <StatusPicker
+              current={task.state}
+              states={workflowStates}
+              currentType={stateTypeOf(task.state)}
+              onSelect={(stateKey) => {
+                void setState(stateKey);
+              }}
+              pending={statusPending}
+            />
+          }
+          priority={
+            <PriorityPicker
+              current={task.priority}
+              onSelect={(priority: Priority) => {
+                void setPriority(priority);
+              }}
+              pending={priorityPending}
+            />
+          }
+          assignee={
+            <ActorPicker
+              options={memberOptions}
+              value={task.assigneeId ?? null}
+              onChange={(assigneeId) => {
+                patchTask({ assigneeId });
+              }}
+              placeholder="Assign"
+              clearLabel="Unassigned"
+              ariaLabel="Assignee"
+              triggerVariant="outline"
+              triggerClassName="min-w-0 shrink"
+              readOnly={!canEdit}
+            />
+          }
+          delegate={
+            delegate ? (
+              <span className="text-body-medium flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+                <span className="text-on-surface-variant text-xs">delegate</span>
+                <ActorAvatar
+                  kind={delegate.kind}
+                  name={delegate.name}
+                  avatarUrl={delegate.avatarUrl}
+                />
+                <span className="text-on-surface-variant truncate">{delegate.name}</span>
+              </span>
+            ) : null
+          }
+          actions={
+            <>
+              {/* Track this task. Deliberately unconditional on workflow state and on `canEdit`:
+                  time tracking is the viewer's own personal record of what they did, so it is not
+                  a content mutation and a task being blocked, done or someone else's does not stop
+                  a person having spent real time on it. */}
+              <TaskTimerButton taskId={taskId} title={task.title} controlSize="md" />
+              <AthenaContextAction
+                label="Have Athena handle this"
+                context={{
+                  workspaceId: orgId,
+                  source: { type: 'task', id: taskId, label: task.title },
+                }}
               />
-              <span className="text-on-surface-variant">{delegate.name}</span>
-            </span>
-          ) : null}
-          <div className="ml-auto flex items-center gap-2">
-            {/* Track this task. Deliberately unconditional on workflow state and on `canEdit`:
-                time tracking is the viewer's own personal record of what they did, so it is not a
-                content mutation and a task being blocked, done or someone else's does not stop a
-                person having spent real time on it. */}
-            <TaskTimerButton taskId={taskId} title={task.title} controlSize="md" />
-            <AthenaContextAction
-              label="Have Athena handle this"
-              context={{
+            </>
+          }
+          overflow={
+            <TaskHeaderOverflowMenu
+              taskId={taskId}
+              title={task.title}
+              athenaContext={{
                 workspaceId: orgId,
                 source: { type: 'task', id: taskId, label: task.title },
               }}
+              priority={task.priority}
+              priorityPending={priorityPending}
+              memberOptions={memberOptions}
+              assigneeId={task.assigneeId ?? null}
+              canEdit={canEdit}
+              canManage={canManage}
+              onPriorityChange={(priority) => {
+                void setPriority(priority);
+              }}
+              onAssigneeChange={(assigneeId) => {
+                patchTask({ assigneeId });
+              }}
+              onDelete={() => {
+                changeConfirmDeleteOpen(true);
+              }}
             />
-            {canManage ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Task actions">
-                    <Ellipsis className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" width="sm">
-                  <DropdownMenuItem
-                    className="text-error focus:text-error"
-                    onSelect={() => {
-                      changeConfirmDeleteOpen(true);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete task
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-          </div>
-        </div>
+          }
+        />
 
         {actionError ? (
           <p role="alert" className="text-error text-body-medium">

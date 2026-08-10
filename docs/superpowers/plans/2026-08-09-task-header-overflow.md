@@ -100,7 +100,7 @@
 
   Expected: no whitespace errors; the worklog and both documents agree on tiers and scope.
 
-- [ ] **Step 3: Commit the design checkpoint**
+- [x] **Step 3: Commit the design checkpoint**
 
   Stage only the three documentation files. Commit as `chore(web): Record the task-header overflow contract` with a substantive body describing the approved visibility order and TDD execution path.
 
@@ -119,21 +119,21 @@
 - Produces: `TaskTimerMenuItem({ taskId, title }): JSX.Element` and `AthenaContextMenuItem({ label, context }): JSX.Element`.
 - Both menu items consume the same `useTimerState`/`useTimerControls` and `useAthenaPanel` hooks as their inline counterparts.
 
-- [ ] **Step 1: Write failing behavior tests**
+- [x] **Step 1: Write failing behavior tests**
 
   Add a timer test that opens a real `DropdownMenu`, selects `Track this task`, and expects the existing records POST body `{ context: { label: 'Ship it', taskId: 'task_1' } }`. Add an Athena test that opens a real menu, selects `Have Athena handle this`, and expects the real provider's dock to open with the supplied task context.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run: `pnpm --filter @docket/web exec vitest run tests/time-tracking/task-timer-button.test.tsx tests/athena/context-action.test.tsx`
 
   Expected: FAIL because `TaskTimerMenuItem` and `AthenaContextMenuItem` are not exported.
 
-- [ ] **Step 3: Implement shared action state and menu rows**
+- [x] **Step 3: Implement shared action state and menu rows**
 
   Extract a file-local `useTaskTimerAction(taskId, title)` returning `{ active, tracking, label, disabled, run }`; keep `TaskTimerButton` on it and render `TaskTimerMenuItem` with `DropdownMenuItem`, `Pause`/`Play`, and `onSelect={run}`. Add `AthenaContextMenuItem` beside `AthenaContextAction`, rendering `DropdownMenuItem` with `Sparkles` and `onSelect={() => openAthena(context)}`.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
   Run the same focused command and expect both files to pass with no warnings.
 
@@ -149,17 +149,17 @@
 - `TaskHeaderControlsProps` consumes `status`, `priority`, `assignee`, optional `delegate`, `actions`, and `overflow` React nodes.
 - `TaskHeaderOverflowMenuProps` consumes `taskId`, `title`, `athenaContext`, `priority`, `priorityPending`, `memberOptions`, `assigneeId`, `canEdit`, `canManage`, `onPriorityChange`, `onAssigneeChange`, and `onDelete`.
 
-- [ ] **Step 1: Write the structural and interaction regression tests**
+- [x] **Step 1: Write the structural and interaction regression tests**
 
   Render `TaskHeaderControls` with recognizable real buttons. Assert the root has `@container/task-header`, `flex-nowrap`, and no descendant class contains `flex-wrap`; assert metadata is `hidden @md/task-header:flex`, wide context/actions are `hidden @3xl/task-header:flex`, and overflow is always rendered. Render `TaskHeaderOverflowMenu`, open `Task actions`, then select a priority and assignee and assert the supplied callbacks receive literal values. Verify Delete is absent for non-managers and invokes `onDelete` for managers.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run: `pnpm --filter @docket/web exec vitest run tests/task-detail/task-header-controls.test.tsx`
 
   Expected: FAIL because the module does not exist.
 
-- [ ] **Step 3: Implement the minimal one-line layout**
+- [x] **Step 3: Implement the minimal one-line layout**
 
   Use this structure:
 
@@ -181,7 +181,7 @@
 
   Implement the overflow with Radix submenus and radio items for Priority and Assignee, followed by `TaskTimerMenuItem`, `AthenaContextMenuItem`, and the permission-gated Delete row.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
   Run the focused test and expect all cases to pass.
 
@@ -197,11 +197,11 @@
 - Consumes: `TaskHeaderControls`, `TaskHeaderOverflowMenu`, existing task mutation callbacks, and the existing delete confirmation state.
 - Produces: the task-detail header behavior visible to users.
 
-- [ ] **Step 1: Replace the wrapping route markup**
+- [x] **Step 1: Replace the wrapping route markup**
 
   Remove the route's `flex flex-wrap` control row and inline management-only dropdown. Compose the existing `StatusPicker`, `PriorityPicker`, `ActorPicker`, delegate display, `TaskTimerButton`, and `AthenaContextAction` into `TaskHeaderControls`, with `TaskHeaderOverflowMenu` always present.
 
-- [ ] **Step 2: Run focused web verification**
+- [x] **Step 2: Run focused web verification**
 
   Run: `pnpm --filter @docket/web exec vitest run tests/task-detail/task-header-controls.test.tsx tests/time-tracking/task-timer-button.test.tsx tests/athena/context-action.test.tsx`
 
@@ -217,6 +217,6 @@
 
   Move `TASK-HEADER-OVERFLOW-001` to Completed and record the exact focused/full validation evidence plus the marketing-policy prerequisite as a separate atomic commit.
 
-- [ ] **Step 5: Commit the product fix**
+- [x] **Step 5: Commit the product fix**
 
   Stage only the task-header implementation, focused tests, and worklog. Commit as `fix(web): Collapse task-header actions instead of wrapping` with a substantive body describing the container tiers, persistent overflow access, and preserved permissions.

@@ -15,7 +15,12 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { TooltipProvider } from '@docket/ui/primitives';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  TooltipProvider,
+} from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,7 +49,8 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
-const { TaskTimerButton } = await import('@/components/time-tracking/task-timer-button');
+const { TaskTimerButton, TaskTimerMenuItem } =
+  await import('@/components/time-tracking/task-timer-button');
 
 /** A JSON response shaped like the RPC client's. */
 function jsonResponse(body: unknown, status = 200): Response {
@@ -199,6 +205,32 @@ describe('TaskTimerButton', () => {
     expect(button).toHaveAttribute('aria-label', 'Track this task');
 
     fireEvent.click(button);
+    await waitFor(() => {
+      expect(recordsPost).toHaveBeenCalledWith({
+        json: { context: { label: 'Ship it', taskId: 'task_1' } },
+      });
+    });
+  });
+
+  it('starts the same task from a real overflow menu item', async () => {
+    activeGet.mockResolvedValue(jsonResponse(NOTHING_TRACKED));
+    recordsPost.mockResolvedValue(jsonResponse({ id: 'rec_1' }));
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <DropdownMenu defaultOpen>
+          <DropdownMenuTrigger>Task actions</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <TaskTimerMenuItem taskId="task_1" title="Ship it" />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Track this task' }));
+
     await waitFor(() => {
       expect(recordsPost).toHaveBeenCalledWith({
         json: { context: { label: 'Ship it', taskId: 'task_1' } },

@@ -2,7 +2,7 @@
 
 import { cn } from '@docket/ui';
 import { Sparkles } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
+import { Button, DropdownMenuItem } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import type { PersonalAthenaContext } from '@/lib/athena/presentation';
@@ -31,6 +31,9 @@ export interface AthenaContextActionProps {
   /** Container-query breakpoint at which {@link AthenaContextActionProps.text} appears. */
   readonly labelFrom?: '@2xl' | '@4xl';
 }
+
+/** Props for a contextual Athena row inside an action menu. */
+export type AthenaContextMenuItemProps = Pick<AthenaContextActionProps, 'label' | 'context'>;
 
 /** Open the shared personal Athena dock with the current workspace or object attached. */
 export function AthenaContextAction({
@@ -62,5 +65,24 @@ export function AthenaContextAction({
         </span>
       )}
     </Button>
+  );
+}
+
+/** Open the shared personal Athena dock from an overflow menu. */
+export function AthenaContextMenuItem({
+  label,
+  context = null,
+}: AthenaContextMenuItemProps): JSX.Element {
+  const { openAthena } = useAthenaPanel();
+
+  return (
+    <DropdownMenuItem
+      onSelect={() => {
+        openAthena(context);
+      }}
+    >
+      <Sparkles aria-hidden="true" />
+      {label}
+    </DropdownMenuItem>
   );
 }

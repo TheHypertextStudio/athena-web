@@ -18,7 +18,7 @@ import type { JSX } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { ImportPanel } from '@/components/settings/import-panel';
 import { SectionHeader } from '@/components/settings/section-header';
-import { settingsSections } from '@/components/settings/sections';
+import { workspaceSettingsSections } from '@/components/settings/settings-registry';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 
 /** The Import section page. */
@@ -28,7 +28,7 @@ export default function ImportSettingsPage(): JSX.Element {
   const { canManage } = useCanManageOrg(orgId);
 
   const isPersonal = activeOrg?.isPersonal ?? false;
-  const section = settingsSections(isPersonal).find((s) => s.key === 'import');
+  const section = workspaceSettingsSections(isPersonal).find((s) => s.key === 'import');
 
   return (
     <div className="flex flex-col gap-6">

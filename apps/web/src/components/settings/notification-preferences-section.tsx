@@ -18,9 +18,11 @@ import {
   type NotificationQuietHours,
 } from '@docket/notifications';
 import { cn } from '@docket/ui';
-import { CheckCircle2, Schedule } from '@docket/ui/icons';
-import { Badge, Button, Input } from '@docket/ui/primitives';
-import { type JSX, useEffect, useState } from 'react';
+import { Schedule } from '@docket/ui/icons';
+import { Badge, Input } from '@docket/ui/primitives';
+import { type JSX, useEffect, useRef, useState } from 'react';
+
+import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 
 const CHANNELS: readonly { key: NotificationChannel; label: string }[] = [
   { key: 'web', label: 'Web' },
@@ -90,9 +92,40 @@ export function NotificationPreferencesSection({
     preferences.quietHours ?? DEFAULT_QUIET_HOURS,
   );
 
+  // The quiet-hours value we last mirrored in from the server; `null` until the first load seeds
+  // it. Read at reconcile time via a ref so the effect below doesn't need `quietHours` itself as
+  // a dependency (that would re-run on every local edit, not just server updates).
+  const quietHoursRef = useRef(quietHours);
+  quietHoursRef.current = quietHours;
+  const syncedQuietHoursRef = useRef<NotificationQuietHours | null>(null);
+
+  // Mirror the server's quiet hours into local state on the initial load and whenever the server
+  // value genuinely changes — but only while the field still holds what was last mirrored in. An
+  // in-flight local edit (mid-debounce, not yet saved) is preserved rather than clobbered by an
+  // unrelated preference change elsewhere on this page triggering a refetch. Without this guard,
+  // toggling a channel checkbox while a quiet-hours edit is still debouncing would silently
+  // discard that edit the moment the refetch lands.
   useEffect(() => {
-    setQuietHours(preferences.quietHours ?? DEFAULT_QUIET_HOURS);
+    const next = preferences.quietHours ?? DEFAULT_QUIET_HOURS;
+    if (
+      syncedQuietHoursRef.current === null ||
+      JSON.stringify(quietHoursRef.current) === JSON.stringify(syncedQuietHoursRef.current)
+    ) {
+      setQuietHours(next);
+    }
+    syncedQuietHoursRef.current = next;
   }, [preferences.quietHours]);
+
+  // Autosave replaces the former explicit "Save quiet hours" button, matching every other
+  // control on this page (and everywhere else in settings): edits persist on a quiet debounce,
+  // firing the same patch a button would, and never on mount or for an unchanged value.
+  useDebouncedAutosave({
+    value: quietHours,
+    baseline: preferences.quietHours ?? DEFAULT_QUIET_HOURS,
+    save: (next) => {
+      void onPatch({ quietHours: next });
+    },
+  });
 
   const patchChannel = (
     category: NotificationCategoryValue,
@@ -202,17 +235,9 @@ export function NotificationPreferencesSection({
               }}
             />
           </label>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={saving}
-            onClick={() => {
-              void onPatch({ quietHours });
-            }}
-          >
-            <CheckCircle2 className="size-4" />
-            Save quiet hours
-          </Button>
+          <p aria-live="polite" className="text-on-surface-variant h-4 text-xs">
+            {saving ? 'Saving…' : ''}
+          </p>
         </div>
         <div className="border-outline-variant grid gap-3 border-t p-4">
           <div className="flex flex-wrap gap-2">

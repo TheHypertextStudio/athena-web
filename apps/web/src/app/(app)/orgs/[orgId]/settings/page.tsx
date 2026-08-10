@@ -22,7 +22,7 @@ import { useEffect, type JSX } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useActiveOrg } from '@/components/active-org';
-import { defaultSettingsSection, sectionHref } from '@/components/settings/sections';
+import { defaultSettingsSection, sectionHref } from '@/components/settings/settings-registry';
 
 /**
  * The Settings area root redirect.

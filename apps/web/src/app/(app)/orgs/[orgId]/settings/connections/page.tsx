@@ -18,7 +18,7 @@ import type { JSX } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { ConnectionsPanel } from '@/components/settings/connections-panel';
 import { SectionHeader } from '@/components/settings/section-header';
-import { settingsSections } from '@/components/settings/sections';
+import { workspaceSettingsSections } from '@/components/settings/settings-registry';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 
 /** The Connections section page. */
@@ -28,7 +28,7 @@ export default function ConnectionsSettingsPage(): JSX.Element {
   const { canManage } = useCanManageOrg(orgId);
 
   const isPersonal = activeOrg?.isPersonal ?? false;
-  const section = settingsSections(isPersonal).find((s) => s.key === 'connections');
+  const section = workspaceSettingsSections(isPersonal).find((s) => s.key === 'connections');
 
   return (
     <div className="flex flex-col gap-6">
@@ -39,7 +39,9 @@ export default function ConnectionsSettingsPage(): JSX.Element {
       <ConnectionsPanel
         orgId={orgId}
         canManage={canManage}
-        linkedAccountsHref={`/orgs/${orgId}/settings/connected-accounts`}
+        // Linked identities are user-scoped, not workspace-scoped, and now live in the Personal
+        // group of the settings modal rather than under this org's own settings tree.
+        linkedAccountsHref="/settings/connected-accounts"
       />
     </div>
   );

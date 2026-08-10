@@ -18,7 +18,7 @@ import { Shield, X } from '@docket/ui/icons';
 import Link from 'next/link';
 import { type JSX, useEffect, useState } from 'react';
 
-import { sectionHref } from '@/components/settings/sections';
+import { sectionHref } from '@/components/settings/settings-registry';
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 

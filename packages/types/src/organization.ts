@@ -8,6 +8,15 @@ import { SettingsImageValue } from './settings-image';
 import { VocabularyPreset, VocabularySkin } from './vocabulary';
 
 /**
+ * Workspace addresses are lowercase, hyphen-separated identifiers.
+ *
+ * @remarks
+ * The single source of truth for the slug shape — imported by both {@link OrgUpdate}'s server-side
+ * validation and any client-side field validation, so the two can never drift apart.
+ */
+export const WORKSPACE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
  * Body for creating an Organization (the single un-nested create).
  *
  * @remarks
@@ -100,7 +109,7 @@ export const OrgUpdate = z
       .trim()
       .min(1)
       .max(80)
-      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .regex(WORKSPACE_SLUG_PATTERN)
       .optional()
       .describe('The editable, globally unique URL-safe workspace identifier.'),
     avatar: SettingsImageValue.nullable()

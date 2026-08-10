@@ -33,7 +33,7 @@ import { ChevronDown, LayoutTemplate, Settings } from '@docket/ui/icons';
 import Link from 'next/link';
 import { type JSX, useEffect, useMemo, useRef } from 'react';
 
-import { sectionHref } from '@/components/settings/sections';
+import { sectionHref } from '@/components/settings/settings-registry';
 import { sortTemplates, templatesOfKindDef } from '@/components/templates/queries';
 import { useApiQuery } from '@/lib/query';
 

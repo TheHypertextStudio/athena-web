@@ -11,6 +11,7 @@ import { useAppParams } from '@/lib/app-location';
 import { useEffect, useState, type JSX } from 'react';
 
 import { SectionHeader } from '@/components/settings/section-header';
+import { SettingRowStatus } from '@/components/settings/setting-row-status';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
@@ -29,41 +30,6 @@ const ESTIMATION_SCALE_ORDER: readonly EstimationScale[] = [
 function scaleValuesCopy(scale: EstimationScale): string | null {
   const options = ESTIMATION_SCALES[scale];
   return options.length > 0 ? options.map((o) => o.label).join(', ') : null;
-}
-
-/** Props for {@link AutosaveStatus}. */
-interface AutosaveStatusProps {
-  pending: boolean;
-  error: unknown;
-  errorFallback: string;
-  success: boolean;
-  /** What to show once settled with no unsaved change in flight (e.g. "Current maximum: 2"). */
-  idleLabel: string;
-}
-
-/** The shared saving/error/saved/idle status line under an autosaving settings control. */
-function AutosaveStatus({
-  pending,
-  error,
-  errorFallback,
-  success,
-  idleLabel,
-}: AutosaveStatusProps): JSX.Element {
-  return (
-    <div className="text-label-medium flex min-h-5 items-center gap-2" aria-live="polite">
-      {pending ? (
-        <span className="text-on-surface-variant">Saving…</span>
-      ) : error ? (
-        <span role="alert" className="text-error">
-          {userErrorMessage(error, errorFallback)}
-        </span>
-      ) : success ? (
-        <span className="text-on-surface-variant">Saved</span>
-      ) : (
-        <span className="text-on-surface-variant">{idleLabel}</span>
-      )}
-    </div>
-  );
 }
 
 /** Configure the maximum Initiative hierarchy depth for a workspace. */
@@ -176,11 +142,14 @@ export default function WorkStructureSettingsPage(): JSX.Element {
             ))}
           </fieldset>
 
-          <AutosaveStatus
+          <SettingRowStatus
             pending={saveDepth.isPending}
-            error={saveDepth.error}
-            errorFallback="Could not save work structure settings."
-            success={saveDepth.isSuccess}
+            saved={saveDepth.isSuccess}
+            error={
+              saveDepth.error
+                ? userErrorMessage(saveDepth.error, 'Could not save work structure settings.')
+                : null
+            }
             idleLabel={`Current maximum: ${settingsQ.data.initiativeMaxDepth}`}
           />
 
@@ -231,11 +200,14 @@ export default function WorkStructureSettingsPage(): JSX.Element {
             })}
           </fieldset>
 
-          <AutosaveStatus
+          <SettingRowStatus
             pending={saveScale.isPending}
-            error={saveScale.error}
-            errorFallback="Could not save the estimation scale."
-            success={saveScale.isSuccess}
+            saved={saveScale.isSuccess}
+            error={
+              saveScale.error
+                ? userErrorMessage(saveScale.error, 'Could not save the estimation scale.')
+                : null
+            }
             idleLabel={`Current scale: ${ESTIMATION_SCALE_LABEL[settingsQ.data.estimationScale]}`}
           />
         </section>

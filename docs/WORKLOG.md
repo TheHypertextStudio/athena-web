@@ -7,6 +7,30 @@
 
 ## Active Tasks
 
+### [WEB-SWITCHER-002] Restore the production gate after integration
+
+- **Status**: REVIEW
+- **Started**: 2026-08-10
+- **Priority**: P0
+- **Description**: The open-document switcher and edit-session fixes rebased cleanly onto the
+  current `main`, but the combined settings redesign failed the design-token CI ratchet. The
+  replacement exact-SHA run then exposed a stale guided-provider contract from the concurrently
+  landed Notion integration.
+- **Approach**: Migrate replacement settings files to named MD3 typography roles, keep colour
+  swatches stable on hover and focus, register the new settings dialog as an overlay, remove stale
+  design-debt entries, and add Notion to the provider catalog's closed-set expectation.
+- **Files Changed**: Calendar settings, notification preferences, settings status/navigation, the
+  label colour picker, the design-token scanner/debt ledger, and the provider bootstrap policy.
+- **Validation**: The local design-token policy passes 8/8, all affected package typechecks pass,
+  notification preferences pass 4/4, the UI suite passes 563/563, and the targeted provider policy
+  reproduces the exact GitHub failure before this contract repair. Exact-SHA GitHub CI, E2E, and
+  production verification follow the next fast-forward push.
+- **Learnings**: A clean textual rebase can still fail a semantic ratchet when one side replaces
+  ledgered files. The production gate also correctly caught Notion being added to the guided
+  catalog without updating the contract that enumerates every deployable provider.
+
+---
+
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW

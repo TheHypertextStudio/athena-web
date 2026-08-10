@@ -212,6 +212,7 @@ describe('guided integration bootstrap contracts', () => {
       'google',
       'github',
       'linear',
+      'notion',
       'apple',
       'stripe',
       'anthropic',

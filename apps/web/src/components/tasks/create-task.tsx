@@ -211,6 +211,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [bodyResetGeneration, setBodyResetGeneration] = useState(0);
+  const [legacyTemplateSlotVisible, setLegacyTemplateSlotVisible] = useState(false);
 
   const teamId = draft.teamOverride ?? defaultTeamId;
 
@@ -429,6 +430,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           <TeamPicker teams={teams} value={teamId} onChange={changeTeam} disabled={creating} />
         ) : undefined
       }
+      templateSlotVisible={globalCreation === undefined ? legacyTemplateSlotVisible : undefined}
       templateSlot={
         globalCreation === undefined ? (
           <ComposerTemplateControl
@@ -436,6 +438,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
             kind="task"
             open={open && destinationReady}
             autoApplyId={defaultTemplateId}
+            onVisibilityChange={setLegacyTemplateSlotVisible}
             onApply={(chosen) => {
               updateDraft((current) =>
                 templateMerge(current, templatePatch(chosen.payload, 'task'), {

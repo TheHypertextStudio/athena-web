@@ -152,15 +152,14 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
 
   const openCreate = useCallback(
     (nextRequest: CreateObjectRequest): void => {
-      const initialWorkspaceId =
-        nextRequest.initialWorkspaceId ?? shellWorkspaceId ?? orgs[0]?.id ?? null;
+      const initialWorkspaceId = nextRequest.initialWorkspaceId ?? shellWorkspaceId ?? null;
       // Persist the resolved workspace with the request, rather than leaving an omitted request
       // value to follow the shell later. Kind bodies use this immutable snapshot to decide whether
       // contextual defaults remain valid after a destination switch.
       setRequest({ ...nextRequest, initialWorkspaceId });
       setTargetWorkspaceId(initialWorkspaceId);
     },
-    [orgs, shellWorkspaceId],
+    [shellWorkspaceId],
   );
 
   const closeCreate = useCallback((): void => {
@@ -168,20 +167,26 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
     setTargetWorkspaceId(null);
   }, []);
 
-  // A create may open while the workspace list is still resolving. Choose the shell target once
-  // it becomes known, but never follow later shell navigation while a draft is already targeted.
+  // A create may open during the shell's brief no-active-workspace frame. Wait for the shell's
+  // resolved selection, rather than guessing from membership order, then freeze it exactly once.
   useEffect(() => {
-    if (request === null || targetWorkspaceId !== null) return;
-    const fallback = request.initialWorkspaceId ?? shellWorkspaceId ?? orgs[0]?.id ?? null;
-    if (fallback === null) return;
+    if (
+      request?.initialWorkspaceId !== null ||
+      targetWorkspaceId !== null ||
+      shellWorkspaceId === null
+    ) {
+      return;
+    }
     // An unresolved opening request is the one exception to the normal immutable snapshot rule:
-    // record the first usable shell workspace in both fields before the destination can change.
+    // record the resolved shell workspace in both fields before the destination can change.
     // Subsequent shell navigation and composer retargeting leave this opening classification intact.
     setRequest((current) =>
-      current?.initialWorkspaceId === null ? { ...current, initialWorkspaceId: fallback } : current,
+      current?.initialWorkspaceId === null
+        ? { ...current, initialWorkspaceId: shellWorkspaceId }
+        : current,
     );
-    setTargetWorkspaceId(fallback);
-  }, [orgs, request, shellWorkspaceId, targetWorkspaceId]);
+    setTargetWorkspaceId(shellWorkspaceId);
+  }, [request, shellWorkspaceId, targetWorkspaceId]);
 
   const value = useMemo<CreateObjectValue>(
     () => ({ request, openCreate, closeCreate }),

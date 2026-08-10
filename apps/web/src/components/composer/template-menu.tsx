@@ -174,6 +174,8 @@ export interface ComposerTemplateControlProps {
    * read resolves.
    */
   autoApplyId?: string | null;
+  /** Report whether this data-connected control renders a visible template menu. */
+  onVisibilityChange?: (visible: boolean) => void;
   /** Whether the composer is submitting. */
   disabled: boolean;
 }
@@ -198,6 +200,7 @@ export function ComposerTemplateControl({
   teamId,
   leadingSeparator,
   autoApplyId = null,
+  onVisibilityChange,
   disabled,
 }: ComposerTemplateControlProps): JSX.Element | null {
   const query = useApiQuery({ ...templatesOfKindDef(orgId, kind), enabled: open });
@@ -225,6 +228,12 @@ export function ComposerTemplateControl({
     autoApplied.current = true;
     onApply(match);
   }, [autoApplyId, templates, onApply]);
+
+  // Legacy shell layout needs the result of this data-dependent render decision, not merely the
+  // ReactNode it was handed. That keeps an empty template query from reserving a context-row gap.
+  useEffect(() => {
+    onVisibilityChange?.(templates.length > 0);
+  }, [onVisibilityChange, templates.length]);
 
   // A failed or pending read renders nothing rather than a disabled control. The composer's job
   // is creating the entity; a template is an accelerant, and a broken accelerant should get out

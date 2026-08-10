@@ -65,6 +65,15 @@ export interface ComposerShellProps {
    */
   templateSlot?: ReactNode;
   /**
+   * Whether the legacy template slot currently renders a control.
+   *
+   * @remarks
+   * Page-owned composers can pass this data-derived flag when their template component returns
+   * `null` for an empty response. It lets the shell hide an otherwise blank legacy row and use
+   * the no-context title spacing without inferring visibility from a ReactNode.
+   */
+  templateSlotVisible?: boolean;
+  /**
    * An optional action aligned to the leading side of the footer.
    *
    * @remarks
@@ -150,6 +159,7 @@ export function ComposerShell({
   context,
   contextRow,
   templateSlot,
+  templateSlotVisible,
   leadingAction,
   onLeadingAction,
   leadingFields,
@@ -180,6 +190,10 @@ export function ComposerShell({
   // A draft worth protecting is one with typed text; bare default property picks are not.
   const isDirty =
     title.trim().length > 0 || (summary ?? '').trim().length > 0 || body.trim().length > 0;
+  const legacyTemplateSlotVisible = templateSlotVisible ?? Boolean(templateSlot);
+  const hasLegacyIcon = icon !== undefined && icon !== null && icon !== false;
+  const hasLegacyContext = context !== undefined && context !== null && context !== false;
+  const legacyContextVisible = hasLegacyIcon || hasLegacyContext || legacyTemplateSlotVisible;
 
   /** Gate every dismiss path (Esc, backdrop, X) so a dirty draft is never silently discarded. */
   const requestClose = (): void => {
@@ -238,7 +252,12 @@ export function ComposerShell({
         {contextRow !== undefined ? (
           <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm">{contextRow}</div>
         ) : icon || context || templateSlot ? (
-          <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm has-[>div:empty]:hidden">
+          <div
+            className={cn(
+              'flex items-center gap-2 px-6 pt-5 pr-16 text-sm has-[>div:only-child:empty]:hidden',
+              !legacyContextVisible && 'hidden',
+            )}
+          >
             {icon ? (
               <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4">
                 {icon}
@@ -247,7 +266,16 @@ export function ComposerShell({
             {context ? (
               <span className="text-on-surface-variant min-w-0 truncate">{context}</span>
             ) : null}
-            {templateSlot ? <div className="ml-auto shrink-0">{templateSlot}</div> : null}
+            {templateSlot ? (
+              <div
+                className={cn(
+                  'ml-auto shrink-0 empty:hidden',
+                  !legacyTemplateSlotVisible && 'hidden',
+                )}
+              >
+                {templateSlot}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -260,7 +288,7 @@ export function ComposerShell({
           }}
           className={cn(
             'flex flex-col px-6',
-            contextRow !== undefined || icon || context ? 'pt-3' : 'pt-5',
+            contextRow !== undefined || legacyContextVisible ? 'pt-3' : 'pt-5',
           )}
         >
           {leadingFields ? <div className="flex flex-col gap-3 pb-4">{leadingFields}</div> : null}

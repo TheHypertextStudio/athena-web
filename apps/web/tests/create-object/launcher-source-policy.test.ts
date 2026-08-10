@@ -99,8 +99,16 @@ function supportedDialogFromExpression(expression: ts.Expression): string | unde
   if (ts.isIdentifier(expression)) return supportedDialogName(expression);
   if (ts.isPropertyAccessExpression(expression)) return supportedDialogName(expression.name);
   if (
+    ts.isElementAccessExpression(expression) &&
+    ts.isStringLiteralLike(expression.argumentExpression) &&
+    SUPPORTED_DIALOGS.has(expression.argumentExpression.text)
+  ) {
+    return expression.argumentExpression.text;
+  }
+  if (
     ts.isParenthesizedExpression(expression) ||
     ts.isAsExpression(expression) ||
+    ts.isTypeAssertionExpression(expression) ||
     ts.isSatisfiesExpression(expression) ||
     ts.isNonNullExpression(expression)
   ) {
@@ -112,12 +120,15 @@ function supportedDialogFromExpression(expression: ts.Expression): string | unde
 /** Report syntax-aware supported-dialog ownership violations for one production source. */
 function findSupportedDialogViolations(entry: ProductionSource): readonly string[] {
   const path = normalizeSourcePath(entry.path);
+  const allowedDialog = OWNER_DIALOG_BY_FILE.get(path);
+  const containsEscapeCandidate = entry.text.includes('\\');
   const canContainSupportedDialogSyntax =
+    allowedDialog !== undefined ||
+    containsEscapeCandidate ||
     [...SUPPORTED_DIALOGS].some((dialog) => entry.text.includes(dialog)) ||
     [...SUPPORTED_CREATE_MODULE_BASENAMES].some((module) => entry.text.includes(module));
   if (!canContainSupportedDialogSyntax) return [];
 
-  const allowedDialog = OWNER_DIALOG_BY_FILE.get(path);
   const sourceFile = ts.createSourceFile(
     path,
     entry.text,
@@ -143,13 +154,17 @@ function findSupportedDialogViolations(entry: ProductionSource): readonly string
       const importClause = node.importClause;
       const moduleDialog = supportedDialogForModule(path, node.moduleSpecifier.text);
       if (importClause?.name) {
-        report(moduleDialog, 'imports default exposing', importClause.name);
+        report(moduleDialog, 'imports default exposing', importClause.name, false);
       }
       if (importClause?.namedBindings && ts.isNamespaceImport(importClause.namedBindings)) {
         report(moduleDialog, 'imports namespace exposing', node);
       }
       if (importClause?.namedBindings && ts.isNamedImports(importClause.namedBindings)) {
         for (const specifier of importClause.namedBindings.elements) {
+          const sourceName = specifier.propertyName ?? specifier.name;
+          if (moduleDialog && sourceName.text === 'default') {
+            report(moduleDialog, 'imports default exposing', specifier, false);
+          }
           const names = new Set([
             supportedDialogName(specifier.propertyName),
             supportedDialogName(specifier.name),
@@ -164,10 +179,18 @@ function findSupportedDialogViolations(entry: ProductionSource): readonly string
         node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)
           ? supportedDialogForModule(path, node.moduleSpecifier.text)
           : undefined;
-      if (!node.exportClause || ts.isNamespaceExport(node.exportClause)) {
+      if (!node.exportClause) {
+        report(moduleDialog, 're-exports namespace exposing', node);
+      } else if (ts.isNamespaceExport(node.exportClause)) {
+        if (allowedDialog && node.exportClause.name.text === 'default') {
+          report(allowedDialog, 'default-exports from owner', node.exportClause, false);
+        }
         report(moduleDialog, 're-exports namespace exposing', node);
       } else {
         for (const specifier of node.exportClause.elements) {
+          if (allowedDialog && specifier.name.text === 'default') {
+            report(allowedDialog, 'default-exports from owner', specifier, false);
+          }
           const sourceName = specifier.propertyName ?? specifier.name;
           if (moduleDialog && sourceName.text === 'default') {
             report(moduleDialog, 're-exports default exposing', specifier, false);
@@ -182,7 +205,20 @@ function findSupportedDialogViolations(entry: ProductionSource): readonly string
     }
 
     if (ts.isExportAssignment(node)) {
-      report(supportedDialogFromExpression(node.expression), 'default-exports', node, false);
+      report(
+        allowedDialog ?? supportedDialogFromExpression(node.expression),
+        allowedDialog ? 'default-exports from owner' : 'default-exports',
+        node,
+        false,
+      );
+    }
+
+    if (
+      allowedDialog &&
+      ts.canHaveModifiers(node) &&
+      ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)
+    ) {
+      report(allowedDialog, 'default-exports from owner', node, false);
     }
 
     if (ts.isVariableDeclaration(node)) {
@@ -361,6 +397,42 @@ describe('global creation launcher source policy', () => {
     ).not.toEqual([]);
   });
 
+  it('rejects a default import under an alias inside its supported dialog owner', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/tasks/create-task.tsx',
+        text: `import TaskDialogAlias from '@/components/tasks/create-task';`,
+      }),
+    ).not.toEqual([]);
+  });
+
+  it('rejects a named default import under an alias inside its supported dialog owner', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/tasks/create-task.tsx',
+        text: `import { default as TaskDialogAlias } from '@/components/tasks/create-task';`,
+      }),
+    ).not.toEqual([]);
+  });
+
+  it('rejects a default import from an escaped supported module specifier', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/example-launcher.tsx',
+        text: String.raw`import TaskDialogAlias from '@/components/tasks/create-\u0074ask';`,
+      }),
+    ).not.toEqual([]);
+  });
+
+  it('rejects a default import from an identity-escaped supported module specifier', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/example-launcher.tsx',
+        text: String.raw`import TaskDialogAlias from '@/components/tasks/create-ta\sk';`,
+      }),
+    ).not.toEqual([]);
+  });
+
   it.each([
     ['a foreign definition', `export const CreateProjectDialog = () => null;`],
     ['a foreign mount', `const view = <CreateProjectDialog open />;`],
@@ -374,6 +446,59 @@ describe('global creation launcher source policy', () => {
       findSupportedDialogViolations({
         path: 'src/components/tasks/create-task.tsx',
         text,
+      }),
+    ).not.toEqual([]);
+  });
+
+  it.each([
+    ['a named default function', `export default function TaskDialog() {}`],
+    ['an anonymous default function', `export default function () {}`],
+    ['a named default class', `export default class TaskDialog {}`],
+    ['an anonymous default class', `export default class {}`],
+    [
+      'a local export-as-default declaration',
+      `const TaskDialog = () => null; export { TaskDialog as default };`,
+    ],
+    [
+      'a namespace export-as-default declaration',
+      `export * as default from './task-dialog-helpers';`,
+    ],
+    [
+      'an aliased default export assignment',
+      `const TaskDialog = CreateTaskDialog; export default TaskDialog;`,
+    ],
+  ])('rejects %s inside a supported dialog owner', (_label, text) => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/tasks/create-task.tsx',
+        text,
+      }),
+    ).not.toEqual([]);
+  });
+
+  it('rejects a wrapped optional element-access dialog default export outside an owner', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/example-launcher.tsx',
+        text: `export default (((dialogs?.['CreateTaskDialog']) as unknown)!);`,
+      }),
+    ).not.toEqual([]);
+  });
+
+  it('rejects an escaped element-access dialog default export outside an owner', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/example-launcher.tsx',
+        text: String.raw`export default dialogs?.['Create\u0054askDialog'];`,
+      }),
+    ).not.toEqual([]);
+  });
+
+  it('rejects a line-continuation element-access dialog default export outside an owner', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/example-launcher.tsx',
+        text: "export default dialogs?.['Create\\\nTaskDialog'];",
       }),
     ).not.toEqual([]);
   });

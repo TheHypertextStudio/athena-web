@@ -7,41 +7,9 @@
 
 ## Active Tasks
 
-### [FOCUS-001] Turn the timer rail into a working companion and immersive Focus mode
-
-- **Status**: REVIEW
-- **Started**: 2026-08-09
-- **Priority**: P1
-- **Description**: Expand the universal timer rail into a useful working companion, add a
-  chrome-free immersive `/focus` surface, and let interruptions be handed to Personal Athena
-  without inheriting the active task or becoming a chat surface.
-- **Subtasks**:
-  - [x] Default context-free Athena work to the caller's Personal workspace.
-  - [x] Add linked task context, recent time, and the minimal interruption handoff.
-  - [x] Add the authenticated pop-out/same-tab Focus route and idle-after-finish state.
-  - [x] Rebase the Focus slice onto current `main` without replaying superseded work.
-  - [x] Close code-review findings for recency, terminal polling, degraded states, recoverable
-        mutations, cross-window timer synchronization, safe return paths, workflow fidelity, and touch
-        targets.
-  - [x] Prevent lagging controlled editor values from overwriting newer focused input so the
-        current-main coverage gate can flush final drafts deterministically.
-  - [ ] Fast-forward `main`, deploy, and verify production.
-- **Validation**: Independent review found no remaining actionable Focus findings. The focused
-  component, route, API, editor, and Playwright journeys pass, including the resumed-session
-  recency and failed unanchored-name retry regressions. Full exact-tree CI and production proof
-  are the remaining release checks.
-- **Notes**: The repository's `merge=keepours` policy for `docs/WORKLOG.md` drops this branch entry
-  during rebases, so each current-main rebase must preserve or restore it. During closeout,
-  current `main` exposed a real rich-text reconciliation race: a stale parent echo could reset
-  ProseMirror between keystrokes and corrupt the value flushed on blur. The regression drives a
-  deliberately lagging controlled value and proves that only genuine external values may replace
-  newer locally emitted Markdown.
-
----
-
 ### [WEB-SWITCHER-002] Restore the production gate after integration
 
-- **Status**: REVIEW
+- **Status**: IN_PROGRESS
 - **Started**: 2026-08-10
 - **Priority**: P0
 - **Description**: The open-document switcher and edit-session fixes rebased cleanly onto the
@@ -54,11 +22,15 @@
   exact-SHA CI gate passed, repair the generated Notion migration so its enum addition remains
   idempotent with the migration runner's required pre-commit enum preflight, cover that contract
   directly, and repeat CI, deployment, E2E, and live production verification on the replacement
-  SHA.
+  SHA. Close the E2E follow-up by replacing settings selectors made stale by the unified modal,
+  synchronizing the offline suite with the production worker it now runs against, and keeping the
+  reporting-only server-log step from changing a green shard to red.
 - **Files Changed**: Calendar settings, notification preferences, settings status/navigation, the
   label colour picker, the design-token scanner/debt ledger, the provider bootstrap policy, and
   behavioral API coverage for the Notion mirror designer, reconciler, and management routes. The
-  Notion mirror migration and enum contract test also carry the production-gate repair.
+  Notion mirror migration and enum contract test also carry the production-gate repair. The E2E
+  follow-up covers settings navigation, autosaving notification preferences, production service
+  worker readiness, and the workflow's diagnostic log command.
 - **Validation**: The local design-token policy passes 8/8, all affected package typechecks pass,
   notification preferences pass 4/4, the UI suite passes 563/563, and the targeted provider policy
   reproduces the exact GitHub failure before this contract repair. The following exact-SHA run
@@ -4657,6 +4629,39 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [FOCUS-001] Turn the timer rail into a working companion and immersive Focus mode
+
+- **Completed**: 2026-08-10
+- **Duration**: 2 days
+- **Priority**: P1
+- **Summary**: The timer rail is now a compact working companion with one-click task navigation,
+  task context, recent time, and a minimal Personal Athena interruption handoff. The authenticated
+  `/focus` route provides an additive chrome-free mode with safe pop-out and return behavior while
+  sharing the same timer state and leaving finished sessions in a useful idle state.
+- **Files Changed**: Focus route and time-tracking components, Personal Athena context resolution,
+  task/timeline hooks, cross-window state helpers, entry routing, focused unit/API/Playwright tests,
+  the controlled Markdown editor reconciliation fix, time-tracking specifications, design records,
+  screenshots, and the surface inventory.
+- **Validation**: Independent review found no remaining actionable findings. Focus/editor tests
+  pass 47/47 and the migration contract passes 5/5; repository formatting and 20-package
+  typechecking pass. Exact-SHA CI run 31432462756 passed types, format/policy, lint, coverage,
+  secret scan, build, database migration, API/admin deployment, and scheduler configuration. The
+  full Focus Playwright journey passed in 11 seconds. Production API health returns `status: ok`,
+  web and admin return 200, and signed-out `/focus` redirects to sign-in with `/focus` preserved as
+  the callback.
+- **Learnings**: A full-height timer rail needs task context and a deliberate endpoint, while the
+  Focus Athena surface is most useful as a one-line handoff rather than a second chat. Cross-window
+  timer state must invalidate every visible client, and controlled rich-text editors must
+  distinguish lagging parent echoes from genuine external replacements.
+- **Retrospective**:
+  - **What went well**: The approved visual direction translated into shared rail/immersive
+    boundaries, focused regressions, and production evidence without duplicating the timer model.
+  - **What could improve**: The keep-ours worklog driver repeatedly dropped the feature entry
+    during rebases, and the obsolete `launch:verify-prod` script reference should be repaired in a
+    separate tooling slice.
+
+---
 
 ### [WEB-EDITOR-001] Make Markdown code feel native
 

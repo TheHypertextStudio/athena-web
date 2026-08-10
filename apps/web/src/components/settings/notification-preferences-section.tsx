@@ -156,7 +156,7 @@ export function NotificationPreferencesSection({
   return (
     <section aria-label="Notification preferences" className="flex flex-col gap-6">
       <section className="border-outline-variant rounded-lg border p-4">
-        <h3 className="text-on-surface text-body-medium font-semibold">
+        <h3 className="text-on-surface text-title-small">
           How should Docket reach me for announcements?
         </h3>
         <div className="mt-3 grid gap-2 @2xl:grid-cols-2">
@@ -196,10 +196,10 @@ export function NotificationPreferencesSection({
       <section className="border-outline-variant bg-surface-container-low rounded-lg border">
         <div className="border-outline-variant flex items-center gap-2 border-b px-4 py-3">
           <Schedule aria-hidden="true" className="text-on-surface-variant size-4" />
-          <h3 className="text-on-surface text-body-medium font-semibold">Quiet hours</h3>
+          <h3 className="text-on-surface text-title-small">Quiet hours</h3>
         </div>
         <div className="grid gap-3 p-4 @2xl:grid-cols-2 @2xl:items-end @4xl:grid-cols-[minmax(0,1fr)_10rem_10rem_auto]">
-          <label className="text-on-surface text-body-medium flex items-center gap-2 font-medium">
+          <label className="text-on-surface text-label-large flex items-center gap-2">
             <input
               type="checkbox"
               className="accent-primary size-4"
@@ -211,7 +211,7 @@ export function NotificationPreferencesSection({
             />
             Quiet hours
           </label>
-          <label className="text-on-surface-variant flex flex-col gap-1 text-xs">
+          <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
             Start
             <Input
               type="time"
@@ -223,7 +223,7 @@ export function NotificationPreferencesSection({
               }}
             />
           </label>
-          <label className="text-on-surface-variant flex flex-col gap-1 text-xs">
+          <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
             End
             <Input
               type="time"
@@ -235,7 +235,7 @@ export function NotificationPreferencesSection({
               }}
             />
           </label>
-          <p aria-live="polite" className="text-on-surface-variant h-4 text-xs">
+          <p aria-live="polite" className="text-on-surface-variant text-body-small h-4">
             {saving ? 'Saving…' : ''}
           </p>
         </div>
@@ -277,16 +277,16 @@ export function NotificationPreferencesSection({
       </section>
 
       <section aria-label="Channel preferences" className="flex flex-col gap-3">
-        <h3 className="text-on-surface text-body-medium font-semibold">Advanced channel rules</h3>
+        <h3 className="text-on-surface text-title-small">Advanced channel rules</h3>
         <div className="border-outline-variant overflow-x-auto rounded-lg border">
           <table className="min-w-full border-separate border-spacing-0 text-left">
             <thead>
               <tr className="bg-surface-container-low">
-                <th className="text-on-surface-variant px-4 py-3 text-xs font-medium">Category</th>
+                <th className="text-on-surface-variant text-label-medium px-4 py-3">Category</th>
                 {CHANNELS.map((channel) => (
                   <th
                     key={channel.key}
-                    className="text-on-surface-variant px-3 py-3 text-center text-xs font-medium"
+                    className="text-on-surface-variant text-label-medium px-3 py-3 text-center"
                   >
                     {channel.label}
                   </th>
@@ -304,14 +304,10 @@ export function NotificationPreferencesSection({
                   <tr key={category} className="border-outline-variant border-t">
                     <th className="border-outline-variant border-t px-4 py-3">
                       <span className="flex min-w-48 items-center gap-2">
-                        <span className="text-on-surface text-body-medium font-medium">
+                        <span className="text-on-surface text-label-large">
                           {CATEGORY_LABELS[category]}
                         </span>
-                        {locked ? (
-                          <Badge variant="secondary" className="font-normal">
-                            Required
-                          </Badge>
-                        ) : null}
+                        {locked ? <Badge variant="secondary">Required</Badge> : null}
                       </span>
                     </th>
                     {CHANNELS.map((channel) => {

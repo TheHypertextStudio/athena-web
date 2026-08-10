@@ -75,9 +75,6 @@
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
     "raw-type-utility": 3
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/settings/calendar/page.tsx": {
-    "raw-type-utility": 25
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/settings/connections/error.tsx": {
     "raw-type-utility": 3
   },
@@ -101,9 +98,6 @@
   },
   "apps/web/src/app/(app)/settings/profile/page.tsx": {
     "raw-type-utility": 14
-  },
-  "apps/web/src/app/(app)/settings/workspaces/page.tsx": {
-    "raw-type-utility": 4
   },
   "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
     "raw-type-utility": 8
@@ -404,9 +398,6 @@
   "apps/web/src/components/settings/export-request-form.tsx": {
     "raw-type-utility": 7
   },
-  "apps/web/src/components/settings/global-settings-section-nav.tsx": {
-    "raw-type-utility": 1
-  },
   "apps/web/src/components/settings/google-calendar-settings.tsx": {
     "raw-type-utility": 22
   },
@@ -467,9 +458,6 @@
   "apps/web/src/components/settings/members-tab.tsx": {
     "raw-type-utility": 5
   },
-  "apps/web/src/components/settings/notification-preferences-section.tsx": {
-    "raw-type-utility": 12
-  },
   "apps/web/src/components/settings/passkeys-section.tsx": {
     "raw-type-utility": 6
   },
@@ -493,9 +481,6 @@
   },
   "apps/web/src/components/settings/settings-image-picker.tsx": {
     "raw-type-utility": 4
-  },
-  "apps/web/src/components/settings/settings-section-nav.tsx": {
-    "raw-type-utility": 3
   },
   "apps/web/src/components/settings/settings-subsection.tsx": {
     "raw-type-utility": 4

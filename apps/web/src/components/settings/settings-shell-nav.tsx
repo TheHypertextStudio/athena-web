@@ -32,7 +32,7 @@ import { useCanManageOrg } from './use-can-manage-org';
 
 /** Shared row layout for every settings link, personal or workspace. */
 const ROW_BASE =
-  'flex min-h-9 w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-body-medium transition-colors';
+  'flex min-h-9 w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-label-large transition-colors';
 
 /** Props for {@link NavRow}. */
 interface NavRowProps {
@@ -56,7 +56,7 @@ function NavRow({ href, section }: NavRowProps): JSX.Element {
           ROW_BASE,
           'focus-visible:ring-ring outline-none focus-visible:ring-2',
           active
-            ? 'bg-surface-container-highest text-on-surface font-medium'
+            ? 'bg-surface-container-highest text-on-surface'
             : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
         )}
       >
@@ -82,7 +82,7 @@ function NavGroup({ label, sections, hrefFor }: NavGroupProps): JSX.Element | nu
   if (sections.length === 0) return null;
   return (
     <div className="flex flex-col gap-1">
-      <h2 className="text-on-surface-variant px-2.5 text-xs font-medium">{label}</h2>
+      <h2 className="text-on-surface-variant text-label-medium px-2.5">{label}</h2>
       <ul className="flex flex-col gap-0.5">
         {sections.map((section) => (
           <NavRow key={section.key} href={hrefFor(section)} section={section} />

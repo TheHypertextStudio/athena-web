@@ -40,13 +40,13 @@ export function SettingRowStatus({
 }: SettingRowStatusProps): JSX.Element {
   if (error) {
     return (
-      <p role="alert" className="text-error text-xs">
+      <p role="alert" className="text-error text-body-small">
         {error}
       </p>
     );
   }
   return (
-    <p aria-live="polite" className="text-on-surface-variant text-xs">
+    <p aria-live="polite" className="text-on-surface-variant text-body-small">
       {pending ? 'Saving…' : saved ? 'Saved' : (idleLabel ?? '')}
     </p>
   );

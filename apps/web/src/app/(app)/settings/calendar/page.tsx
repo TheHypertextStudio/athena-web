@@ -160,24 +160,24 @@ export default function CalendarSettingsPage(): JSX.Element {
       />
 
       {loading ? (
-        <p className="text-on-surface-variant text-sm">Loading calendar settings…</p>
+        <p className="text-on-surface-variant text-body-medium">Loading calendar settings…</p>
       ) : loadFailed ? (
-        <p role="alert" className="text-error text-sm">
+        <p role="alert" className="text-error text-body-medium">
           Calendar settings are temporarily unavailable.
         </p>
       ) : (
         <section aria-labelledby="calendar-defaults" className="flex max-w-2xl flex-col gap-4">
           <div>
-            <h3 id="calendar-defaults" className="text-on-surface text-sm font-semibold">
+            <h3 id="calendar-defaults" className="text-on-surface text-title-small">
               Scheduling defaults
             </h3>
-            <p className="text-on-surface-variant text-xs">
+            <p className="text-on-surface-variant text-body-small">
               These follow you across devices; the canvas still adapts to every viewport.
             </p>
           </div>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">New regions become</span>
+          <label className="text-label-large flex flex-col gap-1">
+            <span>New regions become</span>
             <Select
               value={draft.defaultCreateIntent ?? DEFAULTS.defaultCreateIntent}
               onChange={(event) => {
@@ -192,8 +192,8 @@ export default function CalendarSettingsPage(): JSX.Element {
             </Select>
           </label>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">Default event calendar</span>
+          <label className="text-label-large flex flex-col gap-1">
+            <span>Default event calendar</span>
             <Select
               value={draft.defaultLayerId ?? ''}
               onChange={(event) => {
@@ -210,8 +210,8 @@ export default function CalendarSettingsPage(): JSX.Element {
             </Select>
           </label>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">
+          <label className="text-label-large flex flex-col gap-1">
+            <span>
               Vertical scale · {String(draft.pixelsPerHour ?? DEFAULTS.pixelsPerHour)} px/hour
             </span>
             <input
@@ -229,8 +229,8 @@ export default function CalendarSettingsPage(): JSX.Element {
             />
           </label>
 
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">
+          <label className="text-label-large flex flex-col gap-1">
+            <span>
               Preferred lane width · {String(draft.minLaneWidth ?? DEFAULTS.minLaneWidth)} px
             </span>
             <input
@@ -249,11 +249,11 @@ export default function CalendarSettingsPage(): JSX.Element {
           </label>
 
           {savePreferences.isError ? (
-            <p role="alert" className="text-error text-xs">
+            <p role="alert" className="text-error text-body-small">
               Could not save these preferences.
             </p>
           ) : (
-            <p aria-live="polite" className="text-on-surface-variant h-4 text-xs">
+            <p aria-live="polite" className="text-on-surface-variant text-body-small h-4">
               {savePreferences.isPending ? 'Saving…' : savePreferences.isSuccess ? 'Saved' : ''}
             </p>
           )}
@@ -262,22 +262,22 @@ export default function CalendarSettingsPage(): JSX.Element {
 
       <section aria-labelledby="calendar-sharing" className="flex max-w-2xl flex-col gap-4">
         <div>
-          <h3 id="calendar-sharing" className="text-on-surface text-sm font-semibold">
+          <h3 id="calendar-sharing" className="text-on-surface text-title-small">
             Workspace comparison
           </h3>
-          <p className="text-on-surface-variant text-xs">
+          <p className="text-on-surface-variant text-body-small">
             Nothing is shared until you enable a layer. Provider-private events remain busy-only.
           </p>
         </div>
 
         {sharedWorkspaces.length === 0 ? (
-          <p className="text-on-surface-variant text-sm">
+          <p className="text-on-surface-variant text-body-medium">
             Join a shared workspace to compare schedules.
           </p>
         ) : (
           <>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium">Workspace</span>
+            <label className="text-label-large flex flex-col gap-1">
+              <span>Workspace</span>
               <Select
                 value={workspaceId}
                 onChange={(event) => {
@@ -297,7 +297,7 @@ export default function CalendarSettingsPage(): JSX.Element {
                 const access = shareDraft[layer.id];
                 return (
                   <div key={layer.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
-                    <label className="flex min-w-0 flex-1 items-center gap-2 text-sm">
+                    <label className="text-body-medium flex min-w-0 flex-1 items-center gap-2">
                       <input
                         type="checkbox"
                         checked={access !== undefined}
@@ -335,11 +335,11 @@ export default function CalendarSettingsPage(): JSX.Element {
             </div>
 
             {sharesQ.isError || replaceShares.isError ? (
-              <p role="alert" className="text-error text-xs">
+              <p role="alert" className="text-error text-body-small">
                 Calendar sharing is temporarily unavailable.
               </p>
             ) : (
-              <p aria-live="polite" className="text-on-surface-variant h-4 text-xs">
+              <p aria-live="polite" className="text-on-surface-variant text-body-small h-4">
                 {replaceShares.isPending ? 'Saving…' : replaceShares.isSuccess ? 'Saved' : ''}
               </p>
             )}

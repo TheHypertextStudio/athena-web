@@ -60,8 +60,8 @@ export function LabelColorPicker({
             }}
             className={cn(
               'flex size-7 items-center justify-center rounded-full outline-none',
-              'bg-(--label-dot) transition-transform',
-              'hover:scale-110 focus-visible:scale-110',
+              'bg-(--label-dot) transition-[box-shadow]',
+              'hover:ring-on-surface-variant hover:ring-2',
               // The ring sits on the surface rather than on the swatch, so it reads against
               // every hue instead of vanishing into the light ones.
               'focus-visible:ring-on-surface focus-visible:ring-2 focus-visible:ring-offset-2',

@@ -174,8 +174,8 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
       return;
     }
     // An unresolved opening request is the one exception to the normal immutable snapshot rule:
-    // record the resolved shell workspace in both fields before the destination can change.
-    // Subsequent shell navigation and composer retargeting leave this opening classification intact.
+    // freeze the resolved shell workspace as the initial id while preserving any target the user
+    // already selected. Only an untouched null target follows the shell resolution.
     setRequest((current) =>
       current?.initialWorkspaceId === null
         ? { ...current, initialWorkspaceId: shellWorkspaceId }

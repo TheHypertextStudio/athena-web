@@ -333,6 +333,8 @@ function TemplateLifecycleHarness({
 interface GlobalTaskHarnessProps {
   readonly teams?: readonly TeamOut[];
   readonly request?: Record<string, unknown>;
+  /** Start on the ready target while the provider has not frozen the opening workspace. */
+  readonly delayedOpening?: boolean;
   /** Override destination readiness facts for submit-gate coverage. */
   readonly destination?: {
     readonly workspaceResolved?: boolean;
@@ -361,6 +363,7 @@ const BLOCKED_DESTINATIONS: readonly [
 function renderGlobalTask({
   teams = GLOBAL_TEAMS,
   request = {},
+  delayedOpening = false,
   destination = {},
 }: GlobalTaskHarnessProps = {}) {
   const client = new QueryClient({
@@ -368,23 +371,30 @@ function renderGlobalTask({
   });
   const closeCreate = vi.fn();
   const onCreated = vi.fn();
-  createObjectState.current = {
-    request: {
-      kind: 'task',
-      initialWorkspaceId: ORG_ID,
-      sameWorkspaceCompletion: 'stay',
-      onCreated,
-      ...request,
-    },
-    closeCreate,
-    openCreate: vi.fn(),
-  };
+  const requestedInitialWorkspaceId =
+    'initialWorkspaceId' in request ? (request['initialWorkspaceId'] as string | null) : ORG_ID;
 
   function Harness(): JSX.Element {
-    const [targetWorkspaceId, setTargetWorkspaceId] = useState(ORG_ID);
+    const [initialWorkspaceId, setInitialWorkspaceId] = useState<string | null>(
+      delayedOpening ? null : requestedInitialWorkspaceId,
+    );
+    const [targetWorkspaceId, setTargetWorkspaceId] = useState(
+      delayedOpening ? TARGET_ORG_ID : ORG_ID,
+    );
     const targetIsOriginal = targetWorkspaceId === ORG_ID;
     const targetTeams = targetIsOriginal ? teams : TARGET_TEAMS;
     const defaultTeamId = targetTeams[0]?.id ?? null;
+    createObjectState.current = {
+      request: {
+        kind: 'task',
+        sameWorkspaceCompletion: 'stay',
+        onCreated,
+        ...request,
+        initialWorkspaceId,
+      },
+      closeCreate,
+      openCreate: vi.fn(),
+    };
     creationState.current = {
       workspaces: [
         { id: ORG_ID, name: 'Alpha workspace', slug: 'alpha', avatar: null, isPersonal: true },
@@ -427,7 +437,21 @@ function renderGlobalTask({
       loading: destination.loading ?? false,
       loadError: destination.loadError ?? null,
     };
-    return <GlobalTaskComposer />;
+    return (
+      <>
+        {delayedOpening ? (
+          <button
+            type="button"
+            onClick={() => {
+              setInitialWorkspaceId(ORG_ID);
+            }}
+          >
+            Resolve opening workspace
+          </button>
+        ) : null}
+        <GlobalTaskComposer />
+      </>
+    );
   }
 
   render(
@@ -661,6 +685,30 @@ describe('CreateTaskDialog — robust composer', () => {
       'false',
     );
     expect(taskPost).not.toHaveBeenCalled();
+  });
+
+  it('waits for the immutable opening workspace before classifying a selected target', async () => {
+    taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_delayed_cross', title: 'Delayed' }));
+    const { onCreated } = renderGlobalTask({ teams: TEAMS, delayedOpening: true });
+
+    expect(screen.getByRole('combobox', { name: 'Workspace' })).toHaveValue(TARGET_ORG_ID);
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Delayed' } });
+    expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
+    expect(taskPost).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('Resolve opening workspace'));
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalledWith({
+        param: { orgId: TARGET_ORG_ID, teamId: TARGET_TEAM_ID },
+      });
+      expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/tasks/task_delayed_cross`);
+    });
+    expect(onCreated).not.toHaveBeenCalled();
   });
 
   it('clears a prior team workflow and cycle before submitting under the newly selected team', async () => {

@@ -492,7 +492,11 @@ describe('CreateObjectProvider', () => {
       target: { value: ALPHA_ID },
     });
 
-    expect(screen.getByTestId('target-workspace')).toHaveAttribute('data-workspace-id', ALPHA_ID);
+    await waitFor(() => {
+      expect(screen.getByTestId('target-workspace')).toHaveAttribute('data-workspace-id', ALPHA_ID);
+      expect(screen.getByTestId('target-state')).toHaveTextContent('settled');
+      expect(screen.getByTestId('target-name')).toHaveTextContent('Alpha workspace');
+    });
     expect(screen.getByTestId('initial-workspace')).toHaveAttribute('data-workspace-id', '');
 
     fireEvent.click(screen.getByRole('button', { name: 'Resolve persisted Bravo workspace' }));

@@ -46,6 +46,25 @@ import { firstJson, jsonResponse } from '../support/http';
 const ORG_ID = '0RG00000000000000000000001';
 const TARGET_ORG_ID = '0RG00000000000000000000002';
 
+interface TeamDestinationOverrides {
+  readonly openingWorkspaceResolved?: boolean;
+  readonly workspaceResolved?: boolean;
+  readonly loading?: boolean;
+  readonly loadError?: string | null;
+  readonly canManage?: boolean;
+  readonly permissionsLoading?: boolean;
+}
+
+/** Destination states that must never enable a Team mutation. */
+const BLOCKED_TEAM_DESTINATIONS: readonly [string, TeamDestinationOverrides][] = [
+  ['the opening workspace is unresolved', { openingWorkspaceResolved: false }],
+  ['the target workspace is unresolved', { workspaceResolved: false }],
+  ['target data is loading', { loading: true }],
+  ['target data failed to load', { loadError: 'Application-owned load failure.' }],
+  ['target permissions are unresolved', { permissionsLoading: true }],
+  ['the member cannot manage', { canManage: false }],
+];
+
 beforeEach(() => {
   teamPost.mockReset();
   createObjectState.current = {
@@ -66,13 +85,7 @@ afterEach(() => {
 function renderGlobalTeam({
   destination = {},
 }: {
-  readonly destination?: {
-    readonly workspaceResolved?: boolean;
-    readonly loading?: boolean;
-    readonly loadError?: string | null;
-    readonly canManage?: boolean;
-    readonly permissionsLoading?: boolean;
-  };
+  readonly destination?: TeamDestinationOverrides;
 } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -80,7 +93,11 @@ function renderGlobalTeam({
   const closeCreate = vi.fn();
   const onCreated = vi.fn();
   createObjectState.current = {
-    request: { kind: 'team', initialWorkspaceId: ORG_ID, onCreated },
+    request: {
+      kind: 'team',
+      initialWorkspaceId: destination.openingWorkspaceResolved === false ? null : ORG_ID,
+      onCreated,
+    },
     closeCreate,
     openCreate: vi.fn(),
   };
@@ -148,8 +165,8 @@ describe('GlobalTeamComposer', () => {
     expect(screen.queryByRole('button', { name: 'Template' })).toBeNull();
   });
 
-  it('disables submission when the member cannot manage the destination workspace', () => {
-    renderGlobalTeam({ destination: { canManage: false } });
+  it.each(BLOCKED_TEAM_DESTINATIONS)('disables submission when %s', (_reason, destination) => {
+    renderGlobalTeam({ destination });
     fireEvent.change(screen.getByLabelText('Team name'), { target: { value: 'Blocked' } });
 
     expect(screen.getByRole('button', { name: 'Create team' })).toBeDisabled();

@@ -299,10 +299,11 @@ function GlobalTeamComposerBody({
   const teamNoun = useVocabulary('team');
 
   const targetWorkspaceId = creation.targetWorkspaceId;
-  const initialWorkspaceId = request.initialWorkspaceId ?? targetWorkspaceId;
+  const initialWorkspaceId = request.initialWorkspaceId ?? null;
   const teamOrgId = targetWorkspaceId ?? initialWorkspaceId ?? '';
   const targetIsOriginalWorkspace = targetWorkspaceId === initialWorkspaceId;
   const destinationReady =
+    initialWorkspaceId !== null &&
     targetWorkspaceId !== null &&
     creation.workspace !== null &&
     !creation.loading &&

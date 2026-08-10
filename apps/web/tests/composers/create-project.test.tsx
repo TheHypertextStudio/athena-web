@@ -96,6 +96,9 @@ const TARGET_ORG_ID = '0RG00000000000000000000006';
 const TARGET_TEAM_ID = 'TEAM0000000000000000000007';
 const TARGET_ACTOR_ID = 'ADA00000000000000000000008';
 const SECOND_TEAM_ID = 'TEAM0000000000000000000009';
+const TARGET_SECOND_TEAM_ID = 'TEAM0000000000000000000010';
+const TARGET_PROGRAM_ID = 'PR0GRAM0000000000000000011';
+const TARGET_INITIATIVE_ID = 'Q3000000000000000000000012';
 
 /** The single (implicit) team the composer creates projects in. */
 const TEAMS: readonly TeamOut[] = [
@@ -121,6 +124,17 @@ const MEMBERS = [
   },
 ];
 
+const TARGET_MEMBERS = [
+  {
+    actorId: TARGET_ACTOR_ID,
+    organizationId: TARGET_ORG_ID,
+    displayName: 'Target Lead',
+    avatar: null,
+    status: 'active',
+    createdAt: '2026-01-02T00:00:00Z',
+  },
+];
+
 const INITIATIVES = [
   {
     id: Q3_ID,
@@ -128,6 +142,16 @@ const INITIATIVES = [
     name: 'Q3 Reliability',
     status: 'active',
     createdAt: '2026-01-01T00:00:00Z',
+  },
+];
+
+const TARGET_INITIATIVES = [
+  {
+    id: TARGET_INITIATIVE_ID,
+    organizationId: TARGET_ORG_ID,
+    name: 'Delivery initiative',
+    status: 'active',
+    createdAt: '2026-01-02T00:00:00Z',
   },
 ];
 
@@ -141,12 +165,30 @@ const PROGRAMS = [
   },
 ];
 
+const TARGET_PROGRAMS = [
+  {
+    id: TARGET_PROGRAM_ID,
+    organizationId: TARGET_ORG_ID,
+    name: 'Delivery program',
+    status: 'active',
+    createdAt: '2026-01-02T00:00:00Z',
+  },
+];
+
 const TARGET_TEAMS: readonly TeamOut[] = [
   {
     id: TeamId.parse(TARGET_TEAM_ID),
     organizationId: OrganizationId.parse(TARGET_ORG_ID),
     name: 'Delivery',
     key: 'DEL',
+    summary: null,
+    triageEnabled: true,
+  },
+  {
+    id: TeamId.parse(TARGET_SECOND_TEAM_ID),
+    organizationId: OrganizationId.parse(TARGET_ORG_ID),
+    name: 'Operations',
+    key: 'OPS',
     summary: null,
     triageEnabled: true,
   },
@@ -166,10 +208,22 @@ const GLOBAL_PROJECT_TEAMS: readonly TeamOut[] = [
 
 beforeEach(() => {
   projectPost.mockReset();
-  membersGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MEMBERS }));
+  membersGet
+    .mockReset()
+    .mockImplementation(({ param }: { param: { orgId: string } }) =>
+      jsonResponse(true, { items: param.orgId === TARGET_ORG_ID ? TARGET_MEMBERS : MEMBERS }),
+    );
   agentsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
-  initiativesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: INITIATIVES }));
-  programsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: PROGRAMS }));
+  initiativesGet.mockReset().mockImplementation(({ param }: { param: { orgId: string } }) =>
+    jsonResponse(true, {
+      items: param.orgId === TARGET_ORG_ID ? TARGET_INITIATIVES : INITIATIVES,
+    }),
+  );
+  programsGet
+    .mockReset()
+    .mockImplementation(({ param }: { param: { orgId: string } }) =>
+      jsonResponse(true, { items: param.orgId === TARGET_ORG_ID ? TARGET_PROGRAMS : PROGRAMS }),
+    );
   templatesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
   createObjectState.current = {
     request: null,
@@ -214,41 +268,65 @@ function renderComposer() {
   return { onCreated, onOpenChange };
 }
 
+interface ProjectDestinationOverrides {
+  readonly openingWorkspaceResolved?: boolean;
+  readonly workspaceResolved?: boolean;
+  readonly loading?: boolean;
+  readonly loadError?: string | null;
+  readonly canContribute?: boolean;
+  readonly permissionsLoading?: boolean;
+}
+
+/** Destination states that must never enable a Project mutation. */
+const BLOCKED_PROJECT_DESTINATIONS: readonly [string, ProjectDestinationOverrides][] = [
+  ['the opening workspace is unresolved', { openingWorkspaceResolved: false }],
+  ['the target workspace is unresolved', { workspaceResolved: false }],
+  ['target data is loading', { loading: true }],
+  ['target data failed to load', { loadError: 'Application-owned load failure.' }],
+  ['target permissions are unresolved', { permissionsLoading: true }],
+  ['the member cannot contribute', { canContribute: false }],
+];
+
 /** Render the global Project host with a destination that can be changed without moving the page. */
 function renderGlobalProject({
   request = {},
+  delayedOpening = false,
   destination = {},
 }: {
   readonly request?: Record<string, unknown>;
-  readonly destination?: {
-    readonly workspaceResolved?: boolean;
-    readonly loading?: boolean;
-    readonly loadError?: string | null;
-    readonly canContribute?: boolean;
-    readonly permissionsLoading?: boolean;
-  };
+  readonly delayedOpening?: boolean;
+  readonly destination?: ProjectDestinationOverrides;
 } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const closeCreate = vi.fn();
   const onCreated = vi.fn();
-  createObjectState.current = {
-    request: {
-      kind: 'project',
-      initialWorkspaceId: ORG_ID,
-      sameWorkspaceCompletion: 'stay',
-      onCreated,
-      ...request,
-    },
-    closeCreate,
-    openCreate: vi.fn(),
-  };
+  const requestedInitialWorkspaceId =
+    'initialWorkspaceId' in request ? (request['initialWorkspaceId'] as string | null) : ORG_ID;
 
   function Harness(): JSX.Element {
-    const [targetWorkspaceId, setTargetWorkspaceId] = useState(ORG_ID);
+    const [initialWorkspaceId, setInitialWorkspaceId] = useState<string | null>(
+      delayedOpening || destination.openingWorkspaceResolved === false
+        ? null
+        : requestedInitialWorkspaceId,
+    );
+    const [targetWorkspaceId, setTargetWorkspaceId] = useState(
+      delayedOpening ? TARGET_ORG_ID : ORG_ID,
+    );
     const targetIsOriginal = targetWorkspaceId === ORG_ID;
     const targetTeams = targetIsOriginal ? GLOBAL_PROJECT_TEAMS : TARGET_TEAMS;
+    createObjectState.current = {
+      request: {
+        kind: 'project',
+        sameWorkspaceCompletion: 'stay',
+        onCreated,
+        ...request,
+        initialWorkspaceId,
+      },
+      closeCreate,
+      openCreate: vi.fn(),
+    };
     creationState.current = {
       workspaces: [
         { id: ORG_ID, name: 'Alpha workspace', slug: 'alpha', avatar: null, isPersonal: true },
@@ -291,7 +369,21 @@ function renderGlobalProject({
       loading: destination.loading ?? false,
       loadError: destination.loadError ?? null,
     };
-    return <GlobalProjectComposer />;
+    return (
+      <>
+        {delayedOpening ? (
+          <button
+            type="button"
+            onClick={() => {
+              setInitialWorkspaceId(ORG_ID);
+            }}
+          >
+            Freeze opening workspace
+          </button>
+        ) : null}
+        <GlobalProjectComposer />
+      </>
+    );
   }
 
   render(
@@ -428,8 +520,8 @@ describe('CreateProjectDialog — robust composer', () => {
     expect(workspace.closest('div.flex.flex-wrap')).toHaveClass('flex-wrap', 'justify-start');
   });
 
-  it('disables submission while the target permission is unresolved or denied', () => {
-    renderGlobalProject({ destination: { canContribute: false } });
+  it.each(BLOCKED_PROJECT_DESTINATIONS)('disables submission when %s', (_reason, destination) => {
+    renderGlobalProject({ destination });
 
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Blocked' } });
 
@@ -457,6 +549,107 @@ describe('CreateProjectDialog — robust composer', () => {
       expect(projectPost).toHaveBeenCalledTimes(1);
     });
     expect(firstJson(projectPost.mock.calls)).toMatchObject({ programId: PROGRAM_ID });
+  });
+
+  it('keeps a ready selected target blocked until the opening workspace freezes', async () => {
+    projectPost.mockResolvedValue(
+      jsonResponse(true, { id: 'project_delayed_cross', name: 'Delayed project' }),
+    );
+    const { onCreated } = renderGlobalProject({ delayedOpening: true });
+
+    expect(screen.getByRole('combobox', { name: 'Workspace' })).toHaveValue(TARGET_ORG_ID);
+    fireEvent.change(screen.getByLabelText(/^(Project|Engagement) name$/), {
+      target: { value: 'Delayed project' },
+    });
+    expect(screen.getByRole('button', { name: /^Create (Project|Engagement)$/ })).toBeDisabled();
+    expect(projectPost).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('Freeze opening workspace'));
+    await waitFor(() => {
+      expect(programsGet).toHaveBeenCalledWith(
+        expect.objectContaining({ param: { orgId: TARGET_ORG_ID } }),
+      );
+      expect(screen.getByRole('button', { name: /^Create (Project|Engagement)$/ })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Create (Project|Engagement)$/ }));
+
+    await waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith(
+        `/orgs/${TARGET_ORG_ID}/projects/project_delayed_cross`,
+      );
+    });
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('clears destination references again after a round trip to the opening workspace', async () => {
+    projectPost.mockResolvedValue(
+      jsonResponse(true, { id: 'project_round_trip', name: 'Round trip' }),
+    );
+    renderGlobalProject();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: TARGET_ORG_ID },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Team — currently Delivery/ })).toBeVisible();
+      expect(programsGet).toHaveBeenCalledWith(
+        expect.objectContaining({ param: { orgId: TARGET_ORG_ID } }),
+      );
+    });
+    fireEvent.change(screen.getByLabelText(/^(Project|Engagement) name$/), {
+      target: { value: 'Round trip' },
+    });
+    fireEvent.pointerDown(screen.getByRole('button', { name: /Team — currently Delivery/ }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByText('Operations'));
+    fireEvent.click(screen.getByRole('button', { name: /Lead/ }));
+    fireEvent.click(await screen.findByText('Target Lead'));
+    fireEvent.click(screen.getByRole('button', { name: /^(Program|Retainer) —/ }));
+    fireEvent.click(await screen.findByText('Delivery program'));
+    const initiatives = screen.getByRole('button', { name: /^(Initiatives|Engagements) —/ });
+    fireEvent.click(initiatives);
+    fireEvent.click(await screen.findByText('Delivery initiative'));
+    fireEvent.click(initiatives);
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: ORG_ID },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create Project' })).toBeEnabled();
+      expect(programsGet).toHaveBeenCalledWith(
+        expect.objectContaining({ param: { orgId: ORG_ID } }),
+      );
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    await waitFor(() => {
+      expect(projectPost).toHaveBeenCalledTimes(1);
+    });
+    const body = firstJson(projectPost.mock.calls);
+    expect(body).toMatchObject({ name: 'Round trip', teamId: TEAM_ID });
+    expect(body).not.toHaveProperty('leadId');
+    expect(body).not.toHaveProperty('programId');
+    expect(body).not.toHaveProperty('initiativeIds');
+    expect(body['teamId']).not.toBe(TARGET_SECOND_TEAM_ID);
+  });
+
+  it('invalidates the independent portfolio for same-workspace stay success', async () => {
+    projectPost.mockResolvedValue(jsonResponse(true, { id: 'project_stay', name: 'Stay' }));
+    const { client, onCreated } = renderGlobalProject();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Stay' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    await waitFor(() => {
+      expect(projectPost).toHaveBeenCalledTimes(1);
+    });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.projects(ORG_ID) });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.portfolio() });
+    expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'project_stay' }));
+    expect(routerPush).not.toHaveBeenCalled();
   });
 
   it('posts portable content to the selected workspace and clears all prior workspace references', async () => {
@@ -520,6 +713,7 @@ describe('CreateProjectDialog — robust composer', () => {
     expect(body).not.toHaveProperty('programId');
     expect(body).not.toHaveProperty('initiativeIds');
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.projects(TARGET_ORG_ID) });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.portfolio() });
     expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/projects/project_target`);
     expect(closeCreate).toHaveBeenCalledOnce();
     expect(onCreated).not.toHaveBeenCalled();

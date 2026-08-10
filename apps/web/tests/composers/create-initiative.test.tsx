@@ -79,6 +79,25 @@ const MEMBERS = [
   },
 ];
 
+interface InitiativeDestinationOverrides {
+  readonly openingWorkspaceResolved?: boolean;
+  readonly workspaceResolved?: boolean;
+  readonly loading?: boolean;
+  readonly loadError?: string | null;
+  readonly canContribute?: boolean;
+  readonly permissionsLoading?: boolean;
+}
+
+/** Destination states that must never enable an Initiative mutation. */
+const BLOCKED_INITIATIVE_DESTINATIONS: readonly [string, InitiativeDestinationOverrides][] = [
+  ['the opening workspace is unresolved', { openingWorkspaceResolved: false }],
+  ['the target workspace is unresolved', { workspaceResolved: false }],
+  ['target data is loading', { loading: true }],
+  ['target data failed to load', { loadError: 'Application-owned load failure.' }],
+  ['target permissions are unresolved', { permissionsLoading: true }],
+  ['the member cannot contribute', { canContribute: false }],
+];
+
 beforeEach(() => {
   initiativePost.mockReset();
   membersGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MEMBERS }));
@@ -107,13 +126,7 @@ function renderGlobalInitiative({
   destination = {},
 }: {
   readonly request?: Record<string, unknown>;
-  readonly destination?: {
-    readonly workspaceResolved?: boolean;
-    readonly loading?: boolean;
-    readonly loadError?: string | null;
-    readonly canContribute?: boolean;
-    readonly permissionsLoading?: boolean;
-  };
+  readonly destination?: InitiativeDestinationOverrides;
 } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -123,7 +136,7 @@ function renderGlobalInitiative({
   createObjectState.current = {
     request: {
       kind: 'initiative',
-      initialWorkspaceId: ORG_ID,
+      initialWorkspaceId: destination.openingWorkspaceResolved === false ? null : ORG_ID,
       sameWorkspaceCompletion: 'stay',
       onCreated,
       ...request,
@@ -240,13 +253,46 @@ describe('GlobalInitiativeComposer', () => {
     expect(screen.queryByText('Team theme')).toBeNull();
   });
 
-  it('disables submission when the member cannot contribute in the destination', () => {
-    renderGlobalInitiative({ destination: { canContribute: false } });
-    fireEvent.change(screen.getByLabelText('Initiative name'), { target: { value: 'Blocked' } });
+  it.each(BLOCKED_INITIATIVE_DESTINATIONS)(
+    'disables submission when %s',
+    (_reason, destination) => {
+      renderGlobalInitiative({ destination });
+      fireEvent.change(screen.getByLabelText('Initiative name'), { target: { value: 'Blocked' } });
 
-    expect(screen.getByRole('button', { name: 'Create Initiative' })).toBeDisabled();
-    expect(initiativePost).not.toHaveBeenCalled();
-  });
+      expect(screen.getByRole('button', { name: 'Create Initiative' })).toBeDisabled();
+      expect(initiativePost).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['stay', false],
+    ['open', true],
+  ] as const)(
+    'notifies the opening workspace and honors same-workspace %s completion',
+    async (sameWorkspaceCompletion, shouldRoute) => {
+      initiativePost.mockResolvedValue(
+        jsonResponse(true, { id: `initiative_${sameWorkspaceCompletion}`, name: 'Origin' }),
+      );
+      const { onCreated } = renderGlobalInitiative({ request: { sameWorkspaceCompletion } });
+
+      fireEvent.change(screen.getByLabelText('Initiative name'), { target: { value: 'Origin' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Create Initiative' }));
+
+      await waitFor(() => {
+        expect(initiativePost).toHaveBeenCalledTimes(1);
+      });
+      expect(onCreated).toHaveBeenCalledWith(
+        expect.objectContaining({ id: `initiative_${sameWorkspaceCompletion}` }),
+      );
+      if (shouldRoute) {
+        expect(routerPush).toHaveBeenCalledWith(
+          `/orgs/${ORG_ID}/initiatives/initiative_${sameWorkspaceCompletion}`,
+        );
+      } else {
+        expect(routerPush).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it('retargets the POST while preserving portable fields and clearing the prior owner', async () => {
     initiativePost.mockResolvedValue(

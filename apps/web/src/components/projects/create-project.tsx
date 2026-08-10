@@ -182,11 +182,13 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   // carry a Team, person, Program, or Initiative id into a workspace that cannot own that row.
   useEffect(() => {
     if (globalCreation === undefined) return;
-    if (previousWorkspaceId.current === globalCreation.targetWorkspaceId) return;
+    const previousTargetWorkspaceId = previousWorkspaceId.current;
+    if (previousTargetWorkspaceId === globalCreation.targetWorkspaceId) return;
     previousWorkspaceId.current = globalCreation.targetWorkspaceId;
     // A null-to-opening transition is the shell resolving its immutable workspace, not a retarget.
     // Preserve contextual defaults that are valid only in that opening workspace.
     if (
+      previousTargetWorkspaceId === null &&
       globalCreation.targetWorkspaceId !== null &&
       globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId
     ) {
@@ -445,12 +447,13 @@ function GlobalProjectComposerBody({
   const projectNoun = useVocabulary('project');
 
   const targetWorkspaceId = creation.targetWorkspaceId;
-  const initialWorkspaceId = request.initialWorkspaceId ?? targetWorkspaceId;
+  const initialWorkspaceId = request.initialWorkspaceId ?? null;
   const projectOrgId = targetWorkspaceId ?? initialWorkspaceId ?? '';
   const targetIsOriginalWorkspace = targetWorkspaceId === initialWorkspaceId;
   const currentActorId =
     creation.members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
   const destinationReady =
+    initialWorkspaceId !== null &&
     targetWorkspaceId !== null &&
     creation.workspace !== null &&
     !creation.loading &&
@@ -461,6 +464,7 @@ function GlobalProjectComposerBody({
     (workspaceId: string | null, references: ProjectCreationReferences): void => {
       if (workspaceId === null) return;
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects(workspaceId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.portfolio() });
       if (references.programId !== null) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.programs(workspaceId) });
       }

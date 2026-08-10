@@ -96,6 +96,25 @@ const MEMBERS = [
   },
 ];
 
+interface ProgramDestinationOverrides {
+  readonly openingWorkspaceResolved?: boolean;
+  readonly workspaceResolved?: boolean;
+  readonly loading?: boolean;
+  readonly loadError?: string | null;
+  readonly canManage?: boolean;
+  readonly permissionsLoading?: boolean;
+}
+
+/** Destination states that must never enable a Program mutation. */
+const BLOCKED_PROGRAM_DESTINATIONS: readonly [string, ProgramDestinationOverrides][] = [
+  ['the opening workspace is unresolved', { openingWorkspaceResolved: false }],
+  ['the target workspace is unresolved', { workspaceResolved: false }],
+  ['target data is loading', { loading: true }],
+  ['target data failed to load', { loadError: 'Application-owned load failure.' }],
+  ['target permissions are unresolved', { permissionsLoading: true }],
+  ['the member cannot manage', { canManage: false }],
+];
+
 beforeEach(() => {
   programPost.mockReset();
   membersGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MEMBERS }));
@@ -145,13 +164,7 @@ function renderGlobalProgram({
   destination = {},
 }: {
   readonly request?: Record<string, unknown>;
-  readonly destination?: {
-    readonly workspaceResolved?: boolean;
-    readonly loading?: boolean;
-    readonly loadError?: string | null;
-    readonly canManage?: boolean;
-    readonly permissionsLoading?: boolean;
-  };
+  readonly destination?: ProgramDestinationOverrides;
 } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -161,7 +174,7 @@ function renderGlobalProgram({
   createObjectState.current = {
     request: {
       kind: 'program',
-      initialWorkspaceId: ORG_ID,
+      initialWorkspaceId: destination.openingWorkspaceResolved === false ? null : ORG_ID,
       sameWorkspaceCompletion: 'stay',
       onCreated,
       ...request,
@@ -278,13 +291,43 @@ describe('CreateProgramDialog — visibility picker', () => {
     expect(screen.queryByText('Team program')).toBeNull();
   });
 
-  it('disables submission when the member cannot manage the destination workspace', () => {
-    renderGlobalProgram({ destination: { canManage: false } });
+  it.each(BLOCKED_PROGRAM_DESTINATIONS)('disables submission when %s', (_reason, destination) => {
+    renderGlobalProgram({ destination });
     fireEvent.change(screen.getByLabelText('Program name'), { target: { value: 'Blocked' } });
 
     expect(screen.getByRole('button', { name: 'Create Program' })).toBeDisabled();
     expect(programPost).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['stay', false],
+    ['open', true],
+  ] as const)(
+    'notifies the opening workspace and honors same-workspace %s completion',
+    async (sameWorkspaceCompletion, shouldRoute) => {
+      programPost.mockResolvedValue(
+        jsonResponse(true, { id: `program_${sameWorkspaceCompletion}`, name: 'Origin' }),
+      );
+      const { onCreated } = renderGlobalProgram({ request: { sameWorkspaceCompletion } });
+
+      fireEvent.change(screen.getByLabelText('Program name'), { target: { value: 'Origin' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Create Program' }));
+
+      await waitFor(() => {
+        expect(programPost).toHaveBeenCalledTimes(1);
+      });
+      expect(onCreated).toHaveBeenCalledWith(
+        expect.objectContaining({ id: `program_${sameWorkspaceCompletion}` }),
+      );
+      if (shouldRoute) {
+        expect(routerPush).toHaveBeenCalledWith(
+          `/orgs/${ORG_ID}/programs/program_${sameWorkspaceCompletion}`,
+        );
+      } else {
+        expect(routerPush).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it('retargets the POST while preserving portable fields and clearing the prior owner', async () => {
     programPost.mockResolvedValue(

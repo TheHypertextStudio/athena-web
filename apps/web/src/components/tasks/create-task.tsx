@@ -593,10 +593,11 @@ function GlobalTaskComposerDialog({
   const router = useRouter();
 
   const targetWorkspaceId = creation.targetWorkspaceId;
-  const initialWorkspaceId = request.initialWorkspaceId ?? targetWorkspaceId;
+  const initialWorkspaceId = request.initialWorkspaceId ?? null;
   const currentActorId =
     creation.members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
   const destinationReady =
+    initialWorkspaceId !== null &&
     targetWorkspaceId !== null &&
     creation.workspace !== null &&
     !creation.loading &&

@@ -26,6 +26,7 @@ import time from '../../src/routes/time';
 import { SHARE_TOKEN_HEADER } from '../../src/time/share';
 import {
   addMember,
+  agedSession,
   appWithSession,
   fakeSession,
   getDb,
@@ -127,6 +128,32 @@ describe('Time share tokens', () => {
     expect(JSON.stringify(listed)).not.toContain(minted.token);
   });
 
+  it('requires a freshly re-authenticated session to mint an external read grant', async () => {
+    const stale = appWithSession(time, agedSession(userId, 5 * 60 * 1000 + 1));
+    const response = await stale.request('/share-tokens', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ label: 'Stolen-session attempt' }),
+    });
+    expect(response.status).toBe(401);
+    expect(await json<{ code: string }>(response)).toEqual(
+      expect.objectContaining({ code: 'reauth_required' }),
+    );
+  });
+
+  it('stores a finite expiry and refuses the grant after it expires', async () => {
+    const minted = await mint({ label: 'Short-lived', expiresInSeconds: 300 });
+    expect(new Date(minted.expiresAt).getTime()).toBeGreaterThan(Date.now());
+
+    const schema = await getDb();
+    await schema.db
+      .update(schema.timeShareToken)
+      .set({ expiresAt: new Date(Date.now() - 1) })
+      .where(eq(schema.timeShareToken.id, minted.id));
+
+    expect((await readPublic(minted.token)).status).toBe(401);
+  });
+
   it('answers idle for a valid token with nothing running, cross-origin', async () => {
     const minted = await mint({ label: 'Personal site' });
     const response = await readPublic(minted.token);
@@ -151,12 +178,13 @@ describe('Time share tokens', () => {
   it('reports the running task, and honours a token that withholds its name', async () => {
     const open = await mint({ label: 'Public', includeTitle: true, includeWorkspace: true });
     const quiet = await mint({ label: 'Discreet', includeTitle: false });
-    const started = await app.request('/records', {
+    const startedResponse = await app.request('/records', {
       method: 'POST',
       headers: JSON_HEADERS,
       body: JSON.stringify({ context: { label: 'Rewrite the onboarding', organizationId } }),
     });
-    expect(started.status).toBe(200);
+    expect(startedResponse.status).toBe(200);
+    const started = await json<{ id: string }>(startedResponse);
 
     const shown = await json<PublicTimerStatusOut>(await readPublic(open.token));
     expect(shown).toEqual(
@@ -167,6 +195,14 @@ describe('Time share tokens', () => {
       }),
     );
     expect(new Date(shown.serverNow).toString()).not.toBe('Invalid Date');
+    const schema = await getDb();
+    const intervals = await schema.db
+      .select()
+      .from(schema.timeInterval)
+      .where(eq(schema.timeInterval.timeRecordId, started.id));
+    const active = intervals.find((interval) => interval.endedAt === null);
+    expect(active).toBeDefined();
+    expect(shown.lastTransitionAt).toBe(active?.startedAt.toISOString());
 
     const withheld = await json<PublicTimerStatusOut>(await readPublic(quiet.token));
     expect(withheld).toEqual(
@@ -184,9 +220,36 @@ describe('Time share tokens', () => {
       }),
     );
     await app.request(`/records/${record.id}/pause`, { method: 'POST' });
-    await expect(json<PublicTimerStatusOut>(await readPublic(minted.token))).resolves.toEqual(
-      expect.objectContaining({ state: 'paused', taskTitle: 'Stepped away' }),
+    const paused = await json<PublicTimerStatusOut>(await readPublic(minted.token));
+    expect(paused).toEqual(expect.objectContaining({ state: 'paused', taskTitle: 'Stepped away' }));
+    const schema = await getDb();
+    const intervals = await schema.db
+      .select()
+      .from(schema.timeInterval)
+      .where(eq(schema.timeInterval.timeRecordId, record.id));
+    const latestEnd = intervals
+      .flatMap((interval) => (interval.endedAt ? [interval.endedAt] : []))
+      .sort((left, right) => right.getTime() - left.getTime())[0];
+    expect(latestEnd).toBeDefined();
+    expect(paused.lastTransitionAt).toBe(latestEnd?.toISOString());
+  });
+
+  it('durably rate-limits one grant without affecting a different grant', async () => {
+    const limited = await mint({ label: 'Limited' });
+    const independent = await mint({ label: 'Independent' });
+    const schema = await getDb();
+    await schema.db
+      .update(schema.timeShareToken)
+      .set({ rateWindowStartedAt: new Date(), rateWindowCount: 120 })
+      .where(eq(schema.timeShareToken.id, limited.id));
+
+    const throttled = await readPublic(limited.token);
+    expect(throttled.status).toBe(429);
+    expect(Number(throttled.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect(await json<{ code: string }>(throttled)).toEqual(
+      expect.objectContaining({ code: 'rate_limited' }),
     );
+    expect((await readPublic(independent.token)).status).toBe(200);
   });
 
   it('refuses a missing, unknown or revoked token identically', async () => {

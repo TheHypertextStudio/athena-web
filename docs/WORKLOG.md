@@ -7,6 +7,32 @@
 
 ## Active Tasks
 
+### [TIME-GRANTS-001] Harden narrow external timer-status grants
+
+- **Status**: REVIEW
+- **Started**: 2026-08-10
+- **Priority**: P1
+- **Description**: Let a narrowly scoped external reader establish whether tracking started or
+  resumed after a caller-provided instant without exposing Docket history or coupling Docket to a
+  consuming product. Grants must expire, remain immediately revocable, resist polling abuse, and
+  require a freshly re-authenticated session when minted.
+- **Approach**: Extend the existing current-timer grant and response contracts with bounded expiry
+  and the latest tracking transition, enforce a durable per-grant request window, and reuse the
+  existing five-minute step-up convention at the mint route. Keep the public route and DTOs wholly
+  generic.
+- **Files changed**: Generic timer-share API contracts and routes, the time-share persistence
+  schema plus forward-only migration `0079`, focused API/DTO tests, and this work log.
+- **Validation**: Red-before-green coverage is green: the isolated API route suite passes 9/9 and
+  the isolated shared DTO suite passes 4/4. Full `@docket/types` and `@docket/db` suites pass
+  594/594 and 135/135 respectively; their typecheck/lint gates pass. `@docket/api` typecheck and
+  lint pass. A broad API test attempt was interrupted after unrelated 60–120 second timeouts under
+  concurrent Gradle/Worker builds, so it is deliberately not claimed as full-suite evidence.
+  Authored changed-source audit confirms no consuming-product, alarm, or wake terminology entered
+  Docket; the generated schema snapshot still contains the unrelated pre-existing agent dispatch
+  action named `wake`.
+
+---
+
 ### [WEB-SWITCHER-002] Restore the production gate after integration
 
 - **Status**: REVIEW

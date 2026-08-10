@@ -17,6 +17,7 @@ import {
   health,
   initiative,
   label,
+  labelGroup,
   milestone,
   program,
   project,
@@ -251,13 +252,25 @@ export async function loadEntityRows(
       }));
     }
     case 'label': {
-      const rows = await db.select().from(label).where(eq(label.organizationId, orgId));
+      // `label.group` is a legacy always-null column (see its own doc comment); the real
+      // cluster is `label.groupId`, a foreign key, so the projected "Group" select option is
+      // the referenced `labelGroup.name`, not the id.
+      const rows = await db
+        .select({
+          id: label.id,
+          name: label.name,
+          color: label.color,
+          groupName: labelGroup.name,
+        })
+        .from(label)
+        .leftJoin(labelGroup, eq(labelGroup.id, label.groupId))
+        .where(eq(label.organizationId, orgId));
       return rows.map((row) => ({
         entityId: row.id,
         values: {
           name: text(row.name),
           color: option(row.color),
-          group: option(row.group),
+          group: option(row.groupName),
         },
       }));
     }

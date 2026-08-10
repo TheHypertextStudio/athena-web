@@ -483,6 +483,32 @@ describe('CreateObjectProvider', () => {
     expect(screen.getByTestId('initial-workspace')).toHaveAttribute('data-workspace-id', BRAVO_ID);
   });
 
+  it('freezes the delayed shell workspace without replacing a target selected during the gap', async () => {
+    renderDelayedProvider();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open project' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Publish workspace memberships' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: ALPHA_ID },
+    });
+
+    expect(screen.getByTestId('target-workspace')).toHaveAttribute('data-workspace-id', ALPHA_ID);
+    expect(screen.getByTestId('initial-workspace')).toHaveAttribute('data-workspace-id', '');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve persisted Bravo workspace' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('initial-workspace')).toHaveAttribute(
+        'data-workspace-id',
+        BRAVO_ID,
+      );
+    });
+    expect(screen.getByTestId('target-workspace')).toHaveAttribute('data-workspace-id', ALPHA_ID);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Navigate shell to Alpha workspace' }));
+    expect(screen.getByTestId('initial-workspace')).toHaveAttribute('data-workspace-id', BRAVO_ID);
+    expect(screen.getByTestId('target-workspace')).toHaveAttribute('data-workspace-id', ALPHA_ID);
+  });
+
   it('switches among workspaces and resolves the selected target data and permissions', async () => {
     renderProvider();
     fireEvent.click(screen.getByRole('button', { name: 'Open program' }));

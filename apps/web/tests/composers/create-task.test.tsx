@@ -100,6 +100,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { CreateTaskDialog, GlobalTaskComposer } from '../../src/components/tasks/create-task';
+import { ComposerShell } from '../../src/components/composer/composer-shell';
+import { ComposerTemplateControl } from '../../src/components/composer/template-menu';
 import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse } from '../support/http';
 
@@ -266,6 +268,66 @@ function renderComposer(overrides: Partial<Parameters<typeof CreateTaskDialog>[0
     </QueryClientProvider>,
   );
   return { onCreated, onOpenChange };
+}
+
+/** Props for the mounted legacy-template lifecycle harness. */
+interface TemplateLifecycleHarnessProps {
+  /** The template query's workspace key. */
+  readonly orgId: string;
+  /** The template query's object kind. */
+  readonly kind: 'project' | 'task';
+  /** Whether the composer is currently open. */
+  readonly open: boolean;
+  /** The person whose personal templates remain eligible. */
+  readonly currentActorId: string | null;
+  /** The team whose team-scoped templates remain eligible. */
+  readonly teamId: string | null;
+}
+
+/** Exercise template visibility and the legacy shell layout without remounting the harness. */
+function TemplateLifecycleHarness({
+  orgId,
+  kind,
+  open,
+  currentActorId,
+  teamId,
+}: TemplateLifecycleHarnessProps): JSX.Element {
+  const [templateVisible, setTemplateVisible] = useState(false);
+
+  return (
+    <>
+      <output data-testid="legacy-template-visible" data-visible={String(templateVisible)} />
+      <ComposerShell
+        open={open}
+        onOpenChange={() => undefined}
+        heading="New task"
+        templateSlotVisible={templateVisible}
+        templateSlot={
+          <ComposerTemplateControl
+            orgId={orgId}
+            kind={kind}
+            open={open}
+            currentActorId={currentActorId}
+            teamId={teamId}
+            onApply={() => undefined}
+            onVisibilityChange={setTemplateVisible}
+            disabled={false}
+          />
+        }
+        title=""
+        onTitleChange={() => undefined}
+        titlePlaceholder="Task title"
+        body=""
+        onBodyChange={() => undefined}
+        creating={false}
+        canSubmit={false}
+        onSubmit={() => undefined}
+        submitLabel="Create task"
+      >
+        {null}
+      </ComposerShell>
+    </>
+  );
 }
 
 interface GlobalTaskHarnessProps {
@@ -474,6 +536,112 @@ describe('CreateTaskDialog — robust composer', () => {
 
     expect(template.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(title.closest('form')).toHaveClass('pt-3');
+  });
+
+  it('resets and restores cached legacy template layout across close, destination, and filter transitions', () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    client.setQueryData(queryKeys.templatesOfKind(ORG_ID, 'task'), {
+      items: [taskTemplate('My Alpha template', 'personal', ADA_ID, null)],
+    });
+    client.setQueryData(queryKeys.templatesOfKind(TARGET_ORG_ID, 'project'), {
+      items: [
+        {
+          ...taskTemplate('Delivery template', 'team', APOLLO_ID, TARGET_TEAM_ID),
+          organizationId: TARGET_ORG_ID,
+          payload: { targetType: 'project' },
+          targetType: 'project',
+        },
+      ],
+    });
+
+    const frame = (props: TemplateLifecycleHarnessProps): JSX.Element => (
+      <QueryClientProvider client={client}>
+        <TemplateLifecycleHarness {...props} />
+      </QueryClientProvider>
+    );
+    const rendered = render(
+      frame({
+        orgId: ORG_ID,
+        kind: 'task',
+        open: true,
+        currentActorId: ADA_ID,
+        teamId: TEAM_ID,
+      }),
+    );
+
+    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'true');
+    expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-3');
+
+    rendered.rerender(
+      frame({
+        orgId: ORG_ID,
+        kind: 'task',
+        open: false,
+        currentActorId: ADA_ID,
+        teamId: TEAM_ID,
+      }),
+    );
+    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'false');
+
+    rendered.rerender(
+      frame({
+        orgId: TARGET_ORG_ID,
+        kind: 'project',
+        open: false,
+        currentActorId: ADA_ID,
+        teamId: TARGET_TEAM_ID,
+      }),
+    );
+    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'false');
+
+    rendered.rerender(
+      frame({
+        orgId: TARGET_ORG_ID,
+        kind: 'project',
+        open: true,
+        currentActorId: ADA_ID,
+        teamId: TARGET_TEAM_ID,
+      }),
+    );
+    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'true');
+    expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-3');
+
+    rendered.rerender(
+      frame({
+        orgId: TARGET_ORG_ID,
+        kind: 'project',
+        open: true,
+        currentActorId: ADA_ID,
+        teamId: SECOND_TEAM_ID,
+      }),
+    );
+    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'false');
+    expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-5');
+
+    rendered.rerender(
+      frame({
+        orgId: ORG_ID,
+        kind: 'task',
+        open: true,
+        currentActorId: ADA_ID,
+        teamId: TEAM_ID,
+      }),
+    );
+    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'true');
+
+    rendered.rerender(
+      frame({
+        orgId: ORG_ID,
+        kind: 'task',
+        open: true,
+        currentActorId: APOLLO_ID,
+        teamId: TEAM_ID,
+      }),
+    );
+    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'false');
+    expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-5');
   });
 
   it.each(BLOCKED_DESTINATIONS)('disables submission when %s', async (_reason, destination) => {

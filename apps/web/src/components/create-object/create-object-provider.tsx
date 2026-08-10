@@ -170,11 +170,7 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
   // A create may open during the shell's brief no-active-workspace frame. Wait for the shell's
   // resolved selection, rather than guessing from membership order, then freeze it exactly once.
   useEffect(() => {
-    if (
-      request?.initialWorkspaceId !== null ||
-      targetWorkspaceId !== null ||
-      shellWorkspaceId === null
-    ) {
+    if (request?.initialWorkspaceId !== null || shellWorkspaceId === null) {
       return;
     }
     // An unresolved opening request is the one exception to the normal immutable snapshot rule:
@@ -185,7 +181,7 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
         ? { ...current, initialWorkspaceId: shellWorkspaceId }
         : current,
     );
-    setTargetWorkspaceId(shellWorkspaceId);
+    if (targetWorkspaceId === null) setTargetWorkspaceId(shellWorkspaceId);
   }, [request, shellWorkspaceId, targetWorkspaceId]);
 
   const value = useMemo<CreateObjectValue>(

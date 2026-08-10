@@ -31,11 +31,15 @@ import {
 } from '@docket/ui/primitives';
 import { ChevronDown, LayoutTemplate, Settings } from '@docket/ui/icons';
 import Link from 'next/link';
-import { type JSX, type ReactNode, useEffect, useMemo, useRef } from 'react';
+import { type JSX, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
 import { sectionHref } from '@/components/settings/settings-registry';
 import { sortTemplates, templatesOfKindDef } from '@/components/templates/queries';
 import { useApiQuery } from '@/lib/query';
+
+// Keep the legacy shell's visibility state in sync before the browser paints on the client, while
+// retaining a server-safe passive hook for Next's server render.
+const usePrePaintEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /** How each scope is titled where templates are grouped. */
 const SCOPE_LABEL: Record<TemplateOut['scope'], string> = {
@@ -230,15 +234,17 @@ export function ComposerTemplateControl({
   }, [autoApplyId, templates, onApply]);
 
   // Legacy shell layout needs the result of this data-dependent render decision, not merely the
-  // ReactNode it was handed. That keeps an empty template query from reserving a context-row gap.
-  useEffect(() => {
-    onVisibilityChange?.(templates.length > 0);
-  }, [onVisibilityChange, templates.length]);
+  // ReactNode it was handed. Run before paint so cached templates reopening a dialog do not flash
+  // the no-context spacing, and include every scope input so a changed person or team clears it.
+  const visible = open && templates.length > 0;
+  usePrePaintEffect(() => {
+    onVisibilityChange?.(visible);
+  }, [currentActorId, kind, onVisibilityChange, open, orgId, teamId, visible]);
 
   // A failed or pending read renders nothing rather than a disabled control. The composer's job
   // is creating the entity; a template is an accelerant, and a broken accelerant should get out
   // of the way instead of sitting there greyed out asking to be understood.
-  if (templates.length === 0) return null;
+  if (!visible) return null;
 
   return (
     <>

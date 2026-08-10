@@ -140,6 +140,24 @@ export interface ComposerTemplateControlProps {
   /** Apply a template to the draft. */
   onApply: (template: TemplateOut) => void;
   /**
+   * The signed-in member's Actor id in this destination workspace.
+   *
+   * @remarks
+   * When supplied, personal templates belonging to another member are excluded. `undefined`
+   * preserves the legacy page-owned menu behavior until that composer migrates to a destination
+   * context that can identify the selected member.
+   */
+  currentActorId?: string | null;
+  /**
+   * The task's selected team in this destination workspace.
+   *
+   * @remarks
+   * When supplied, team templates are offered only for this team. `undefined` preserves the
+   * legacy page-owned menu behavior; `null` deliberately hides team-scoped templates while the
+   * destination has no resolved team.
+   */
+  teamId?: string | null;
+  /**
    * A template to apply as soon as the list loads, from a `?template=` compose request.
    *
    * @remarks
@@ -168,13 +186,26 @@ export function ComposerTemplateControl({
   kind,
   open,
   onApply,
+  currentActorId,
+  teamId,
   autoApplyId = null,
   disabled,
 }: ComposerTemplateControlProps): JSX.Element | null {
   const query = useApiQuery({ ...templatesOfKindDef(orgId, kind), enabled: open });
   const items = query.data?.items;
   // Memoized so the auto-apply effect below is not re-entered on every unrelated render.
-  const templates = useMemo(() => items ?? [], [items]);
+  const templates = useMemo(() => {
+    const all = items ?? [];
+    // Legacy page-owned composer mounts have no selected-person context yet, so keep their
+    // existing visibility unchanged. A migrated global composer passes both values and makes the
+    // server's intentionally broad read safe for the destination currently on screen.
+    if (currentActorId === undefined && teamId === undefined) return all;
+    return all.filter((template) => {
+      if (template.scope === 'organization') return true;
+      if (template.scope === 'personal') return template.ownerActorId === currentActorId;
+      return template.teamId === teamId;
+    });
+  }, [currentActorId, items, teamId]);
 
   // Guarded by a ref so a re-render after the merge does not apply the same template twice.
   const autoApplied = useRef(false);

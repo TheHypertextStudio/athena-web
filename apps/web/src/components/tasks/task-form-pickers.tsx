@@ -1,6 +1,6 @@
 'use client';
 
-import type { EstimationScale, Priority, TeamOut } from '@docket/types';
+import type { EstimationScale, Priority } from '@docket/types';
 import {
   ActorPicker,
   DatePicker,
@@ -14,12 +14,9 @@ import type { JSX } from 'react';
 
 import { PRIORITY_OPTIONS } from '@/components/pickers/options';
 import { EstimatePicker } from '@/components/task-detail/EstimatePicker';
-import { TeamPicker } from '@/components/teams/team-picker';
 import { formatCalendarDate } from '@/lib/format-date';
 
 interface TaskComposerPickersProps {
-  teams: readonly TeamOut[];
-  teamId: string | null;
   statusOptions: readonly { value: string; label: string }[];
   state: string | null;
   priority: Priority;
@@ -41,7 +38,6 @@ interface TaskComposerPickersProps {
   estimationScale: EstimationScale | null;
   estimate: number | null;
   creating: boolean;
-  onTeamChange: (id: string | null) => void;
   onStateChange: (state: string | null) => void;
   onPriorityChange: (priority: Priority) => void;
   onAssigneeChange: (id: string | null) => void;
@@ -60,8 +56,6 @@ function triggerDate(value: string | null): string | undefined {
 
 /** TaskComposerPickers renders the task UI control for its parent workflow. */
 export function TaskComposerPickers({
-  teams,
-  teamId,
   statusOptions,
   state,
   priority,
@@ -82,7 +76,6 @@ export function TaskComposerPickers({
   estimationScale,
   estimate,
   creating,
-  onTeamChange,
   onStateChange,
   onPriorityChange,
   onAssigneeChange,
@@ -99,7 +92,6 @@ export function TaskComposerPickers({
 
   return (
     <>
-      <TeamPicker teams={teams} value={teamId} onChange={onTeamChange} disabled={creating} />
       {statusOptions.length > 0 ? (
         <EnumPicker
           options={statusOptions}

@@ -25,6 +25,7 @@ import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useS
 import AccountMenu, { type AccountMenuIdentity } from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
 import { CreateObjectProvider } from '@/components/create-object/create-object-provider';
+import { GlobalTaskComposer } from '@/components/tasks/create-task';
 import Agenda from '@/components/agenda/agenda';
 import DayTasksPanel from '@/components/rail/day-tasks-panel';
 import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
@@ -788,6 +789,7 @@ function AppShellInner({
             ) : sessionRejected ? null : (
               <SettingsShell active={settingsSurface}>{children}</SettingsShell>
             )}
+            <GlobalTaskComposer />
           </AppShell>
         </AthenaPanelProvider>
       </PageScrollProvider>

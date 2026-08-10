@@ -18,20 +18,49 @@
 import { OrganizationId, TeamId, type TeamOut } from '@docket/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { type JSX, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Hoisted so the mock factory (lifted above imports) can reference them.
-const { taskPost, membersGet, agentsGet, projectsGet, cyclesGet, labelsGet, teamGet } = vi.hoisted(
-  () => ({
+const {
+  taskPost,
+  membersGet,
+  agentsGet,
+  projectsGet,
+  cyclesGet,
+  labelsGet,
+  milestonesGet,
+  teamGet,
+  templatesGet,
+  workStructureGet,
+  creationState,
+  createObjectState,
+  sessionState,
+  routerPush,
+} = vi.hoisted(() => {
+  const creationState: { current: unknown } = { current: null };
+  const createObjectState: { current: unknown } = { current: null };
+  const sessionState: { data: { user: { id: string } } | null; isPending: boolean } = {
+    data: { user: { id: 'user_1' } },
+    isPending: false,
+  };
+  return {
     taskPost: vi.fn(),
     membersGet: vi.fn(),
     agentsGet: vi.fn(),
     projectsGet: vi.fn(),
     cyclesGet: vi.fn(),
     labelsGet: vi.fn(),
+    milestonesGet: vi.fn(),
     teamGet: vi.fn(),
-  }),
-);
+    templatesGet: vi.fn(),
+    workStructureGet: vi.fn(),
+    creationState,
+    createObjectState,
+    sessionState,
+    routerPush: vi.fn(),
+  };
+});
 
 vi.mock('../../src/lib/api', () => ({
   api: {
@@ -44,6 +73,9 @@ vi.mock('../../src/lib/api', () => ({
           projects: { $get: projectsGet },
           cycles: { $get: cyclesGet },
           labels: { $get: labelsGet },
+          milestones: { $get: milestonesGet },
+          templates: { $get: templatesGet },
+          settings: { 'work-structure': { $get: workStructureGet } },
           teams: { ':teamId': { $get: teamGet } },
         },
       },
@@ -51,7 +83,23 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
-import { CreateTaskDialog } from '../../src/components/tasks/create-task';
+vi.mock('../../src/components/create-object/create-object-provider', () => ({
+  useCreateObject: () => createObjectState.current,
+}));
+
+vi.mock('../../src/components/create-object/creation-context', () => ({
+  useCreationContext: () => creationState.current,
+}));
+
+vi.mock('../../src/lib/auth-client', () => ({
+  useSession: () => sessionState,
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush }),
+}));
+
+import { CreateTaskDialog, GlobalTaskComposer } from '../../src/components/tasks/create-task';
 import { firstJson, jsonResponse } from '../support/http';
 
 // Branded ids (ActorId / ProjectId / TeamId / LabelId) are ULIDs, so the composer's `*.parse(...)`
@@ -61,6 +109,11 @@ const TEAM_ID = 'TEAM0000000000000000000002';
 const ADA_ID = 'ADA00000000000000000000003';
 const APOLLO_ID = 'APR00000000000000000000004';
 const BUG_ID = 'BG000000000000000000000005';
+const TARGET_ORG_ID = '0RG00000000000000000000006';
+const TARGET_TEAM_ID = 'TEAM0000000000000000000007';
+const SECOND_TEAM_ID = 'TEAM0000000000000000000008';
+const CYCLE_ID = 'CYCLE00000000000000000009';
+const MILESTONE_ID = 'MILESTONE000000000000000010';
 
 /** The single (implicit) team the composer creates tasks in. */
 const TEAMS: readonly TeamOut[] = [
@@ -109,6 +162,33 @@ const LABELS = [
   },
 ];
 
+/** The cycle and milestone choices used to prove a workspace switch clears foreign ids. */
+const CYCLES = [{ id: CYCLE_ID, teamId: TEAM_ID, displayName: 'Cycle 1' }];
+const MILESTONES = [{ id: MILESTONE_ID, projectId: APOLLO_ID, name: 'Launch' }];
+
+const GLOBAL_TEAMS: readonly TeamOut[] = [
+  ...TEAMS,
+  {
+    id: TeamId.parse(SECOND_TEAM_ID),
+    organizationId: OrganizationId.parse(ORG_ID),
+    name: 'Platform',
+    key: 'PLT',
+    summary: null,
+    triageEnabled: true,
+  },
+];
+
+const TARGET_TEAMS: readonly TeamOut[] = [
+  {
+    id: TeamId.parse(TARGET_TEAM_ID),
+    organizationId: OrganizationId.parse(TARGET_ORG_ID),
+    name: 'Delivery',
+    key: 'DEL',
+    summary: null,
+    triageEnabled: true,
+  },
+];
+
 /** No agents in these scenarios. */
 const AGENTS: unknown[] = [];
 
@@ -117,8 +197,11 @@ beforeEach(() => {
   membersGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MEMBERS }));
   agentsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: AGENTS }));
   projectsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: PROJECTS }));
-  cyclesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
+  cyclesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: CYCLES }));
   labelsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: LABELS }));
+  milestonesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MILESTONES }));
+  templatesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
+  workStructureGet.mockReset().mockResolvedValue(jsonResponse(true, { estimationScale: 'none' }));
   teamGet.mockReset().mockResolvedValue(
     jsonResponse(true, {
       workflowStates: [
@@ -127,6 +210,15 @@ beforeEach(() => {
       ],
     }),
   );
+  createObjectState.current = {
+    request: null,
+    closeCreate: vi.fn(),
+    openCreate: vi.fn(),
+  };
+  creationState.current = null;
+  sessionState.data = { user: { id: 'user_1' } };
+  sessionState.isPending = false;
+  routerPush.mockReset();
   // Radix Popover needs these DOM APIs that jsdom does not implement.
   Element.prototype.scrollIntoView = vi.fn();
   Element.prototype.hasPointerCapture = vi.fn(() => false);
@@ -164,7 +256,277 @@ function renderComposer(overrides: Partial<Parameters<typeof CreateTaskDialog>[0
   return { onCreated, onOpenChange };
 }
 
+interface GlobalTaskHarnessProps {
+  readonly teams?: readonly TeamOut[];
+  readonly request?: Record<string, unknown>;
+  /** Override destination readiness facts for submit-gate coverage. */
+  readonly destination?: {
+    readonly workspaceResolved?: boolean;
+    readonly loading?: boolean;
+    readonly loadError?: string | null;
+    readonly canContribute?: boolean;
+    readonly permissionsLoading?: boolean;
+  };
+}
+
+/** Destination states that must never enable a Task mutation. */
+const BLOCKED_DESTINATIONS: readonly [
+  string,
+  NonNullable<GlobalTaskHarnessProps['destination']>,
+][] = [
+  ['the target has not resolved', { workspaceResolved: false }],
+  ['target data is loading', { loading: true }],
+  [
+    'target data failed to load',
+    { loadError: 'Could not load creation options for this workspace.' },
+  ],
+  ['the member cannot contribute', { canContribute: false }],
+];
+
+/** Render the global Task host with a switchable target workspace. */
+function renderGlobalTask({
+  teams = GLOBAL_TEAMS,
+  request = {},
+  destination = {},
+}: GlobalTaskHarnessProps = {}) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const closeCreate = vi.fn();
+  const onCreated = vi.fn();
+  createObjectState.current = {
+    request: {
+      kind: 'task',
+      initialWorkspaceId: ORG_ID,
+      sameWorkspaceCompletion: 'stay',
+      onCreated,
+      ...request,
+    },
+    closeCreate,
+    openCreate: vi.fn(),
+  };
+
+  function Harness(): JSX.Element {
+    const [targetWorkspaceId, setTargetWorkspaceId] = useState(ORG_ID);
+    const targetIsOriginal = targetWorkspaceId === ORG_ID;
+    const targetTeams = targetIsOriginal ? teams : TARGET_TEAMS;
+    const defaultTeamId = targetTeams[0]?.id ?? null;
+    creationState.current = {
+      workspaces: [
+        { id: ORG_ID, name: 'Alpha workspace', slug: 'alpha', avatar: null, isPersonal: true },
+        {
+          id: TARGET_ORG_ID,
+          name: 'Bravo workspace',
+          slug: 'bravo',
+          avatar: null,
+          isPersonal: false,
+        },
+      ],
+      targetWorkspaceId,
+      setTargetWorkspaceId,
+      workspace:
+        destination.workspaceResolved === false
+          ? null
+          : {
+              id: targetWorkspaceId,
+              name: targetIsOriginal ? 'Alpha workspace' : 'Bravo workspace',
+              vocabulary: { preset: targetIsOriginal ? 'startup' : 'agency', overrides: {} },
+            },
+      teams: targetTeams,
+      members: [
+        {
+          actorId: ADA_ID,
+          organizationId: targetWorkspaceId,
+          displayName: 'Ada Lovelace',
+          userId: 'user_1',
+        },
+      ],
+      roles: [],
+      vocabulary: { preset: targetIsOriginal ? 'startup' : 'agency', overrides: {} },
+      defaultTeamId,
+      permissions: {
+        canContribute: destination.canContribute ?? true,
+        canManage: true,
+        canCreate: true,
+        loading: destination.permissionsLoading ?? false,
+      },
+      loading: destination.loading ?? false,
+      loadError: destination.loadError ?? null,
+    };
+    return <GlobalTaskComposer />;
+  }
+
+  render(
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>,
+  );
+  return { closeCreate, onCreated };
+}
+
+/** Make one task template row without coupling tests to DTO implementation details. */
+function taskTemplate(
+  name: string,
+  scope: 'organization' | 'personal' | 'team',
+  ownerActorId: string | null,
+  teamId: string | null,
+) {
+  return {
+    id: `${name.replaceAll(' ', '_')}_id`,
+    organizationId: ORG_ID,
+    targetType: 'task',
+    name,
+    description: null,
+    scope,
+    ownerActorId,
+    teamId,
+    payload: { targetType: 'task' },
+    isSeed: false,
+    createdAt: '2026-01-01T00:00:00Z',
+  };
+}
+
 describe('CreateTaskDialog — robust composer', () => {
+  it('renders Workspace, Team, then Template above the task title for a global task', async () => {
+    templatesGet.mockResolvedValue(
+      jsonResponse(true, {
+        items: [taskTemplate('My template', 'personal', ADA_ID, null)],
+      }),
+    );
+    renderGlobalTask();
+
+    const workspace = screen.getByRole('combobox', { name: 'Workspace' });
+    const team = screen.getByRole('button', { name: /Team — currently General/ });
+    const template = await screen.findByRole('button', { name: 'Template' });
+    const title = screen.getByLabelText('Task title');
+
+    expect(workspace.compareDocumentPosition(team) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(team.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(template.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /Team/ })).toHaveLength(1);
+  });
+
+  it('omits the team control from the global context row when one team is implied', async () => {
+    templatesGet.mockResolvedValue(
+      jsonResponse(true, {
+        items: [taskTemplate('My template', 'personal', ADA_ID, null)],
+      }),
+    );
+    renderGlobalTask({ teams: TEAMS });
+
+    expect(screen.getByRole('combobox', { name: 'Workspace' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'Template' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Team/ })).toBeNull();
+  });
+
+  it.each(BLOCKED_DESTINATIONS)('disables submission when %s', async (_reason, destination) => {
+    renderGlobalTask({ teams: TEAMS, destination });
+
+    if (destination.workspaceResolved !== false && !destination.loading && !destination.loadError) {
+      await waitFor(() => {
+        expect(teamGet).toHaveBeenCalled();
+      });
+    }
+
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Blocked task' } });
+
+    expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Create more' })).toBeDisabled();
+    expect(taskPost).not.toHaveBeenCalled();
+  });
+
+  it('posts to the selected workspace and clears every task reference from the previous one', async () => {
+    taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_target', title: 'Portable task' }));
+    renderGlobalTask({
+      request: { defaultAssigneeId: ADA_ID, defaultProjectId: APOLLO_ID },
+    });
+
+    await waitFor(() => {
+      expect(milestonesGet).toHaveBeenCalled();
+    });
+
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Portable task' } });
+    const description = screen.getByLabelText('Add a description…');
+    await act(async () => {
+      description.innerHTML = '<p>Keep this draft text.</p>';
+      fireEvent.input(description);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Milestone/ }));
+    fireEvent.click(await screen.findByText('Launch'));
+    fireEvent.click(screen.getByRole('button', { name: /Cycle/ }));
+    fireEvent.click(await screen.findByText('Cycle 1'));
+    const labelsTrigger = screen.getByRole('button', { name: /Labels/ });
+    fireEvent.click(labelsTrigger);
+    fireEvent.click(await screen.findByText('Bug'));
+    fireEvent.click(labelsTrigger);
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: TARGET_ORG_ID },
+    });
+
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalledWith({
+        param: { orgId: TARGET_ORG_ID, teamId: TARGET_TEAM_ID },
+      });
+      expect(projectsGet).toHaveBeenCalledWith(
+        expect.objectContaining({ param: { orgId: TARGET_ORG_ID } }),
+      );
+      expect(workStructureGet).toHaveBeenCalledWith(
+        expect.objectContaining({ param: { orgId: TARGET_ORG_ID } }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(taskPost).toHaveBeenCalledTimes(1);
+    });
+    expect(taskPost).toHaveBeenCalledWith(
+      expect.objectContaining({ param: { orgId: TARGET_ORG_ID } }),
+    );
+    const body = firstJson(taskPost.mock.calls);
+    expect(body).toMatchObject({
+      title: 'Portable task',
+      description: 'Keep this draft text.',
+      teamId: TARGET_TEAM_ID,
+      priority: 'none',
+    });
+    expect(body).not.toHaveProperty('assigneeId');
+    expect(body).not.toHaveProperty('projectId');
+    expect(body).not.toHaveProperty('milestoneId');
+    expect(body).not.toHaveProperty('cycleId');
+    expect(body).not.toHaveProperty('labels');
+  });
+
+  it('offers only templates scoped to the selected person and team', async () => {
+    templatesGet.mockResolvedValue(
+      jsonResponse(true, {
+        items: [
+          taskTemplate('Workspace template', 'organization', null, null),
+          taskTemplate('My template', 'personal', ADA_ID, null),
+          taskTemplate('Someone else template', 'personal', APOLLO_ID, null),
+          taskTemplate('General template', 'team', APOLLO_ID, TEAM_ID),
+          taskTemplate('Platform template', 'team', APOLLO_ID, SECOND_TEAM_ID),
+        ],
+      }),
+    );
+    renderGlobalTask();
+
+    await waitFor(() => {
+      expect(templatesGet).toHaveBeenCalled();
+    });
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Template' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+
+    expect(await screen.findByText('Workspace template')).toBeVisible();
+    expect(screen.getByText('My template')).toBeVisible();
+    expect(screen.getByText('General template')).toBeVisible();
+    expect(screen.queryByText('Someone else template')).toBeNull();
+    expect(screen.queryByText('Platform template')).toBeNull();
+  });
+
   it('sends the title, description, and a default priority through the create DTO', async () => {
     taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_1', title: 'Ship it' }));
     const { onCreated, onOpenChange } = renderComposer();
@@ -269,12 +631,77 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(taskPost).not.toHaveBeenCalled();
   });
 
-  it('offers no summary line — a task title is already its one-liner', () => {
+  it('creates another task without closing and keeps its destination and properties', async () => {
+    taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_more', title: 'First task' }));
+    const { onCreated, closeCreate } = renderGlobalTask({ teams: TEAMS });
+
+    await waitFor(() => {
+      expect(projectsGet).toHaveBeenCalled();
+    });
+
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'First task' } });
+    fireEvent.click(screen.getByRole('button', { name: /Project/ }));
+    fireEvent.click(await screen.findByText('Apollo'));
+    const description = screen.getByLabelText('Add a description…');
+    await act(async () => {
+      description.innerHTML = '<p>Only this text resets.</p>';
+      fireEvent.input(description);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create more' }));
+
+    await waitFor(() => {
+      expect(taskPost).toHaveBeenCalledTimes(1);
+    });
+    expect(firstJson(taskPost.mock.calls)).toMatchObject({
+      title: 'First task',
+      description: 'Only this text resets.',
+      projectId: APOLLO_ID,
+      teamId: TEAM_ID,
+    });
+    expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'task_more' }));
+    expect(closeCreate).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Task title')).toHaveValue('');
+      expect(screen.getByLabelText('Add a description…').textContent).toBe('');
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Task created. Ready to create another.');
+    expect(document.activeElement).toBe(screen.getByLabelText('Task title'));
+  });
+
+  it('uses Cmd or Ctrl+Shift+Enter to create another task once', async () => {
+    taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_shortcut', title: 'Shortcut' }));
+    const { closeCreate } = renderGlobalTask({ teams: TEAMS });
+
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalled();
+    });
+
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Shortcut' } });
+    const description = screen.getByLabelText('Add a description…');
+    fireEvent.keyDown(description, { key: 'Enter', ctrlKey: true, shiftKey: true });
+    fireEvent.keyDown(description, { key: 'Enter', ctrlKey: true, shiftKey: true, repeat: true });
+
+    await waitFor(() => {
+      expect(taskPost).toHaveBeenCalledTimes(1);
+    });
+    expect(closeCreate).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Task title')).toHaveValue('');
+    });
+    expect(document.activeElement).toBe(screen.getByLabelText('Task title'));
+  });
+
+  it('offers no summary line — a task title is already its one-liner', async () => {
     // Tasks deliberately capture title + description only. The other work entities are long-lived
     // containers whose names ("Atlas", "Q3 Reliability") say nothing alone, so a summary earns its
     // space there; a task title ("Dual-write the ingest path") is the summary by construction, and
     // a second one-line field under it just asked for the same sentence twice.
     renderComposer();
+
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalled();
+    });
 
     expect(screen.getByLabelText('Task title')).toBeTruthy();
     expect(screen.queryByLabelText('One-sentence summary')).toBeNull();

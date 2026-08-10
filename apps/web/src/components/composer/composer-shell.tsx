@@ -26,7 +26,7 @@
  */
 import { Button, Dialog, DialogContent, DialogTitle } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import { type JSX, type ReactNode, useId, useState } from 'react';
+import { type JSX, type ReactNode, type RefObject, useId, useState } from 'react';
 
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 /** Props for {@link ComposerShell}. */
@@ -46,6 +46,15 @@ export interface ComposerShellProps {
    *  names the dialog for assistive tech. */
   context?: ReactNode;
   /**
+   * The ordered destination context rendered above the title.
+   *
+   * @remarks
+   * New global composers supply their complete context in this row (for example Workspace,
+   * conditional Team, then Template). The older `icon`/`context`/`templateSlot` API remains as a
+   * compatibility seam for the page-owned composers that have not migrated yet.
+   */
+  contextRow?: ReactNode;
+  /**
    * The template control, pinned to the right of the top row.
    *
    * @remarks
@@ -55,6 +64,16 @@ export interface ComposerShellProps {
    * old initiative picker read as a property and behave as a bulldozer.
    */
   templateSlot?: ReactNode;
+  /**
+   * An optional action aligned to the leading side of the footer.
+   *
+   * @remarks
+   * It is intentionally outside the primary-submit button so a composer can offer a continuation
+   * such as "Create more" without making that path look like the default action.
+   */
+  leadingAction?: ReactNode;
+  /** Run the continuation action when Cmd/Ctrl+Shift+Enter is pressed. */
+  onLeadingAction?: () => void;
   /**
    * Extra fields rendered above the title, for composers whose subject is not the entity itself.
    *
@@ -68,6 +87,8 @@ export interface ComposerShellProps {
   title: string;
   /** Report a changed title. */
   onTitleChange: (title: string) => void;
+  /** Optional ref used by a continuation action to return focus to the task title. */
+  titleInputRef?: RefObject<HTMLInputElement | null>;
   /** Accessible label + placeholder for the title field. */
   titlePlaceholder: string;
   /**
@@ -86,6 +107,15 @@ export interface ComposerShellProps {
   summaryMaxLength?: number;
   /** The current description text. */
   body: string;
+  /**
+   * A stable generation for an intentional body reset.
+   *
+   * @remarks
+   * Rich-text editors own a document separate from React's input tree. A composer that keeps its
+   * dialog open after creating an object may advance this key to start a fresh document without
+   * remounting the rest of its draft or disrupting ordinary controlled updates.
+   */
+  bodyResetKey?: string | number;
   /** Report a changed description. */
   onBodyChange: (body: string) => void;
   /** Placeholder for the description field (omit to hide the description body entirely). */
@@ -94,6 +124,8 @@ export interface ComposerShellProps {
   children: ReactNode;
   /** A server/validation error to surface under the pickers, if any. */
   error?: string | null;
+  /** Application-owned success copy announced without adding visible chrome to the composer. */
+  statusMessage?: string | null;
   /** Whether a create is in flight (disables the form + shows the busy label). */
   creating: boolean;
   /** Whether the form may be submitted (e.g. the title is non-empty + a team resolved). */
@@ -116,20 +148,26 @@ export function ComposerShell({
   heading,
   icon,
   context,
+  contextRow,
   templateSlot,
+  leadingAction,
+  onLeadingAction,
   leadingFields,
   title,
   onTitleChange,
+  titleInputRef,
   titlePlaceholder,
   summary,
   onSummaryChange,
   summaryPlaceholder,
   summaryMaxLength,
   body,
+  bodyResetKey,
   onBodyChange,
   bodyPlaceholder,
   children,
   error,
+  statusMessage,
   creating,
   canSubmit,
   onSubmit,
@@ -167,14 +205,39 @@ export function ComposerShell({
         requestClose();
       }}
     >
-      <DialogContent className="max-w-3xl gap-0 p-0" aria-describedby={undefined}>
+      <DialogContent
+        className="max-w-3xl gap-0 p-0"
+        aria-describedby={undefined}
+        onKeyDownCapture={(event) => {
+          if (
+            !onLeadingAction ||
+            event.key !== 'Enter' ||
+            !event.shiftKey ||
+            (!event.metaKey && !event.ctrlKey) ||
+            event.repeat ||
+            creating ||
+            !canSubmit
+          ) {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          onLeadingAction();
+        }}
+      >
         {/* The dialog's accessible name — never shown; the title field is the only visible heading. */}
         <DialogTitle className="sr-only">{heading}</DialogTitle>
+        {statusMessage ? (
+          <p role="status" aria-live="polite" className="sr-only">
+            {statusMessage}
+          </p>
+        ) : null}
 
-        {/* Top row: the breadcrumb on the left, the template control on the right. Rendered only
-            when one of them has something to show, so a composer with neither starts flush at the
-            title field below. `pr-16` reserves the close button's corner. */}
-        {icon || context || templateSlot ? (
+        {/* A migrated composer owns the order of its whole context row. Older page-owned composers
+            retain their breadcrumb + right-pinned template layout until their own migration lands. */}
+        {contextRow !== undefined ? (
+          <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm">{contextRow}</div>
+        ) : icon || context || templateSlot ? (
           <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm">
             {icon ? (
               <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4">
@@ -195,7 +258,10 @@ export function ComposerShell({
             event.preventDefault();
             if (canSubmit && !creating) onSubmit();
           }}
-          className={cn('flex flex-col px-6', icon || context || templateSlot ? 'pt-3' : 'pt-5')}
+          className={cn(
+            'flex flex-col px-6',
+            contextRow !== undefined || icon || context || templateSlot ? 'pt-3' : 'pt-5',
+          )}
         >
           {leadingFields ? <div className="flex flex-col gap-3 pb-4">{leadingFields}</div> : null}
 
@@ -205,6 +271,7 @@ export function ComposerShell({
               aria-label={titlePlaceholder}
               placeholder={titlePlaceholder}
               value={title}
+              ref={titleInputRef}
               disabled={creating}
               autoFocus
               onChange={(event) => {
@@ -238,6 +305,7 @@ export function ComposerShell({
                * every side.
                */}
               <FreeformTextEditor
+                key={bodyResetKey}
                 value={body}
                 disabled={creating}
                 onChange={onBodyChange}
@@ -283,14 +351,17 @@ export function ComposerShell({
               </Button>
             </>
           ) : (
-            <Button
-              type="submit"
-              form={formId}
-              disabled={creating || !canSubmit}
-              className="ml-auto"
-            >
-              {creating ? 'Creating…' : submitLabel}
-            </Button>
+            <>
+              {leadingAction ? <div className="mr-auto">{leadingAction}</div> : null}
+              <Button
+                type="submit"
+                form={formId}
+                disabled={creating || !canSubmit}
+                className={leadingAction ? undefined : 'ml-auto'}
+              >
+                {creating ? 'Creating…' : submitLabel}
+              </Button>
+            </>
           )}
         </div>
       </DialogContent>

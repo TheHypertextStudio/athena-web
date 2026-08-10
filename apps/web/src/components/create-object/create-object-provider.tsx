@@ -152,10 +152,13 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
 
   const openCreate = useCallback(
     (nextRequest: CreateObjectRequest): void => {
-      setRequest(nextRequest);
-      setTargetWorkspaceId(
-        nextRequest.initialWorkspaceId ?? shellWorkspaceId ?? orgs[0]?.id ?? null,
-      );
+      const initialWorkspaceId =
+        nextRequest.initialWorkspaceId ?? shellWorkspaceId ?? orgs[0]?.id ?? null;
+      // Persist the resolved workspace with the request, rather than leaving an omitted request
+      // value to follow the shell later. Kind bodies use this immutable snapshot to decide whether
+      // contextual defaults remain valid after a destination switch.
+      setRequest({ ...nextRequest, initialWorkspaceId });
+      setTargetWorkspaceId(initialWorkspaceId);
     },
     [orgs, shellWorkspaceId],
   );

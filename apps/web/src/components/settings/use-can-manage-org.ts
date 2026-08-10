@@ -60,7 +60,10 @@ export interface CanManageOrg {
 export function useCanManageOrg(orgId: string): CanManageOrg {
   const { data: authSession } = useSession();
   const userId = authSession?.user.id ?? null;
-  const enabled = Boolean(userId);
+  // Also gated on a non-empty orgId: a caller resolving its workspace asynchronously (e.g. the
+  // settings modal's nav, before the org list loads) may briefly pass `''`, and firing a request
+  // with an empty `:orgId` path segment is never useful.
+  const enabled = Boolean(userId) && Boolean(orgId);
 
   const membersQ = useApiQuery(
     apiQueryOptions(

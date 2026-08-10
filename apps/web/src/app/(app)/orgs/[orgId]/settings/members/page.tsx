@@ -31,7 +31,7 @@ import {
   defaultSettingsSection,
   sectionHref,
   SETTINGS_SECTIONS,
-} from '@/components/settings/sections';
+} from '@/components/settings/settings-registry';
 
 /** The registry entry for this section (its title + description copy). */
 const SECTION = SETTINGS_SECTIONS.find((s) => s.key === 'members');

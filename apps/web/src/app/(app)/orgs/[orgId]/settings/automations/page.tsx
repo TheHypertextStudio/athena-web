@@ -16,7 +16,7 @@ import { useActiveOrg } from '@/components/active-org';
 import AutomationsTab from '@/components/settings/automations-tab';
 import { MailIngestSection } from '@/components/settings/mail-ingest-section';
 import { SectionHeader } from '@/components/settings/section-header';
-import { settingsSections } from '@/components/settings/sections';
+import { workspaceSettingsSections } from '@/components/settings/settings-registry';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 
 /** The Automations section page. */
@@ -26,7 +26,7 @@ export default function AutomationsSettingsPage(): JSX.Element {
   const { canManage } = useCanManageOrg(orgId);
 
   const isPersonal = activeOrg?.isPersonal ?? false;
-  const section = settingsSections(isPersonal).find((s) => s.key === 'automations');
+  const section = workspaceSettingsSections(isPersonal).find((s) => s.key === 'automations');
 
   return (
     <div className="flex flex-col gap-6">

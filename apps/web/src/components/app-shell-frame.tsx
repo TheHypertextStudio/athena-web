@@ -34,6 +34,7 @@ import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/co
 import { QueryPersistence } from '@/components/query-persistence';
 import { ReachabilityProvider } from '@/components/reachability';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
+import { SettingsShell } from '@/components/settings/settings-shell';
 import { UpdateCard, useServiceWorkerUpdate } from '@/components/service-worker-provider';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import {
@@ -770,7 +771,7 @@ function AppShellInner({
             {unavailable ? (
               <OfflineContent online={offline?.online ?? false} onRetry={offline?.onRetry} />
             ) : sessionRejected ? null : (
-              children
+              <SettingsShell active={settingsSurface}>{children}</SettingsShell>
             )}
           </AppShell>
         </AthenaPanelProvider>

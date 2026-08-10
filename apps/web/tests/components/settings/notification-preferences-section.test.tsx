@@ -39,7 +39,7 @@ describe('NotificationPreferencesSection', () => {
     });
   });
 
-  it('saves quiet-hours edits as a structured preference patch', async () => {
+  it('autosaves quiet-hours edits as a structured preference patch — no Save button', async () => {
     const onPatch = vi.fn(() => Promise.resolve());
     render(
       <NotificationPreferencesSection
@@ -58,22 +58,26 @@ describe('NotificationPreferencesSection', () => {
       />,
     );
 
+    expect(screen.queryByRole('button', { name: 'Save quiet hours' })).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByLabelText('Quiet hours'));
     fireEvent.change(screen.getByLabelText('Quiet hours start'), { target: { value: '19:30' } });
     fireEvent.change(screen.getByLabelText('Quiet hours end'), { target: { value: '07:00' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save quiet hours' }));
 
-    await waitFor(() => {
-      expect(onPatch).toHaveBeenCalledWith({
-        quietHours: {
-          enabled: true,
-          start: '19:30',
-          end: '07:00',
-          days: ['mon', 'tue', 'wed', 'thu', 'fri'],
-          allowUrgent: true,
-        },
-      });
-    });
+    await waitFor(
+      () => {
+        expect(onPatch).toHaveBeenCalledWith({
+          quietHours: {
+            enabled: true,
+            start: '19:30',
+            end: '07:00',
+            days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+            allowUrgent: true,
+          },
+        });
+      },
+      { timeout: 2000 },
+    );
   });
 
   it('surfaces announcement choices before the advanced channel matrix', async () => {
@@ -128,18 +132,20 @@ describe('NotificationPreferencesSection', () => {
 
     fireEvent.click(screen.getByLabelText('Quiet on Saturday'));
     fireEvent.click(screen.getByLabelText('Allow urgent notifications'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save quiet hours' }));
 
-    await waitFor(() => {
-      expect(onPatch).toHaveBeenCalledWith({
-        quietHours: {
-          enabled: true,
-          start: '18:00',
-          end: '08:00',
-          days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
-          allowUrgent: false,
-        },
-      });
-    });
+    await waitFor(
+      () => {
+        expect(onPatch).toHaveBeenCalledWith({
+          quietHours: {
+            enabled: true,
+            start: '18:00',
+            end: '08:00',
+            days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'],
+            allowUrgent: false,
+          },
+        });
+      },
+      { timeout: 2000 },
+    );
   });
 });

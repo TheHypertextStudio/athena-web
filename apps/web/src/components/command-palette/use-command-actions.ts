@@ -169,6 +169,14 @@ export function useCommandActions({
         keywords: ['timeline', 'roadmap', 'programs', 'projects'],
         run: go('/portfolio'),
       },
+      {
+        id: 'nav:settings',
+        section: 'navigation',
+        label: 'Go to Settings',
+        icon: Settings,
+        keywords: ['preferences', 'profile', 'account', 'security', 'notifications'],
+        run: go('/settings'),
+      },
     );
 
     // ── Navigation: org-scoped sections for the bound org (org scope only) ────

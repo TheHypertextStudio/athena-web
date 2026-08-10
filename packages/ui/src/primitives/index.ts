@@ -166,6 +166,7 @@ export {
   SheetTitle,
   SheetTrigger,
 } from './sheet';
+export { SettingsDialogContent } from './settings-dialog';
 export { Separator } from './separator';
 export { Surface, type SurfaceElement, type SurfaceProps, type SurfaceTone } from './surface';
 export { Skeleton } from './skeleton';

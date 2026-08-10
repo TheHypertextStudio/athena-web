@@ -1,12 +1,18 @@
 'use client';
 
-import type { OrgOut, OrgUpdate, VocabularyPreset } from '@docket/types';
+import {
+  type OrgOut,
+  type OrgUpdate,
+  type VocabularyPreset,
+  WORKSPACE_SLUG_PATTERN,
+} from '@docket/types';
 import { Input, Select, Skeleton } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
+import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 
 import { SectionHeader } from './section-header';
 import { SettingsImagePicker } from './settings-image-picker';
@@ -27,9 +33,6 @@ interface WorkspaceDraft {
   readonly vocabulary: VocabularyPreset;
 }
 
-/** Workspace addresses are lowercase, hyphen-separated identifiers. */
-const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
 /** Convert a workspace response into controlled form values. */
 function draftFromWorkspace(workspace: OrgOut): WorkspaceDraft {
   return {
@@ -42,58 +45,16 @@ function draftFromWorkspace(workspace: OrgOut): WorkspaceDraft {
 }
 
 /**
- * Build the single-field patch for an autosave commit.
- *
- * @returns The `OrgUpdate` to send, or `null` when the field value is invalid
- * and must not be persisted (the user's input stays untouched).
- */
-function fieldPatch(field: keyof WorkspaceDraft, source: WorkspaceDraft): OrgUpdate | null {
-  switch (field) {
-    case 'name': {
-      const name = source.name.trim();
-      return name ? { name } : null;
-    }
-    case 'purpose':
-      return { purpose: source.purpose.trim() || null };
-    case 'slug': {
-      const slug = source.slug.trim();
-      return SLUG_PATTERN.test(slug) ? { slug } : null;
-    }
-    case 'avatar':
-      return { avatar: source.avatar.trim() || null };
-    case 'vocabulary':
-      return { vocabulary: source.vocabulary };
-  }
-}
-
-/** Whether a draft field still matches what is currently persisted. */
-function fieldUnchanged(
-  field: keyof WorkspaceDraft,
-  source: WorkspaceDraft,
-  persisted: WorkspaceDraft,
-): boolean {
-  switch (field) {
-    case 'name':
-      return source.name.trim() === persisted.name;
-    case 'purpose':
-      return source.purpose.trim() === persisted.purpose;
-    case 'slug':
-      return source.slug.trim() === persisted.slug;
-    case 'avatar':
-      return source.avatar.trim() === persisted.avatar;
-    case 'vocabulary':
-      return source.vocabulary === persisted.vocabulary;
-  }
-}
-
-/**
  * Edit every safe, user-facing workspace identity attribute.
  *
  * @remarks
- * Editing autosaves: text fields persist on blur, and the terminology select
- * and logo picker persist immediately on change. Each commit fires only for the
- * field that actually changed from what is persisted, never on mount and never
- * for an unchanged value. Status is surfaced inline; there is no Save button.
+ * Each field autosaves independently through {@link useDebouncedAutosave} — the shared seam
+ * behind every autosaving field in the app, rather than a page-local reimplementation of it (this
+ * page used to carry its own ~90-line `fieldPatch`/`fieldUnchanged`/`commitField` dirty-check,
+ * doing by hand exactly what that hook already does). Text fields persist on a quiet debounce; the
+ * terminology select and logo picker persist immediately on change. `editing` is the one piece of
+ * genuinely page-specific logic left: this page polls the workspace on a 15s live query, and
+ * without it a poll landing mid-edit would overwrite whatever the caller hasn't finished typing.
  */
 export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProps): JSX.Element {
   const key = queryKeys.organization(orgId);
@@ -108,7 +69,6 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
   const { canManage, loading: permissionLoading } = useCanManageOrg(orgId);
   const [draft, setDraft] = useState<WorkspaceDraft | null>(null);
   const [editing, setEditing] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!workspaceQ.data) return;
@@ -127,11 +87,6 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
         'Could not save workspace settings.',
       ),
     invalidateKeys: [key, queryKeys.orgs()],
-    // Do not replace the draft here: the live query reconciles persisted state,
-    // which preserves any other field the user is still editing.
-    onSuccess: () => {
-      setSaved(true);
-    },
   });
 
   const current = workspaceQ.data ? draftFromWorkspace(workspaceQ.data) : null;
@@ -142,33 +97,44 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
   function update<K extends keyof WorkspaceDraft>(keyName: K, value: WorkspaceDraft[K]): void {
     setDraft((previous) => (previous ? { ...previous, [keyName]: value } : previous));
     setEditing(true);
-    setSaved(false);
   }
 
-  /** Autosave a single field when it changed from what is persisted. */
-  function commitField(field: keyof WorkspaceDraft, source: WorkspaceDraft): void {
-    if (!canEdit || !current) return;
-    if (fieldUnchanged(field, source, current)) return;
-    const patch = fieldPatch(field, source);
-    if (!patch) return;
-    save.mutate(patch);
-  }
-
-  /** Change a field and persist it immediately (selects, logo). */
-  function updateAndCommit<K extends keyof WorkspaceDraft>(
-    keyName: K,
-    value: WorkspaceDraft[K],
-  ): void {
-    if (!draft) return;
-    const next = { ...draft, [keyName]: value };
-    setDraft(next);
-    setEditing(true);
-    setSaved(false);
-    commitField(keyName, next);
-  }
+  useDebouncedAutosave({
+    value: draft?.name.trim() ?? '',
+    baseline: current?.name,
+    ready: canEdit && current !== null,
+    save: (name) => {
+      if (name) save.mutate({ name });
+    },
+  });
+  useDebouncedAutosave({
+    value: draft?.purpose.trim() ?? '',
+    baseline: current?.purpose,
+    ready: canEdit && current !== null,
+    save: (purpose) => {
+      save.mutate({ purpose: purpose || null });
+    },
+  });
+  useDebouncedAutosave({
+    value: draft?.slug.trim() ?? '',
+    baseline: current?.slug,
+    ready: canEdit && current !== null,
+    save: (slug) => {
+      if (WORKSPACE_SLUG_PATTERN.test(slug)) save.mutate({ slug });
+    },
+  });
+  useDebouncedAutosave({
+    value: draft?.vocabulary,
+    baseline: current?.vocabulary,
+    ready: canEdit && current !== null,
+    delayMs: 0,
+    save: (vocabulary) => {
+      if (vocabulary) save.mutate({ vocabulary });
+    },
+  });
 
   const nameInvalid = draft !== null && draft.name.trim() === '';
-  const slugInvalid = draft !== null && !SLUG_PATTERN.test(draft.slug.trim());
+  const slugInvalid = draft !== null && !WORKSPACE_SLUG_PATTERN.test(draft.slug.trim());
 
   return (
     <div className="flex flex-col gap-6">
@@ -203,9 +169,6 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 onChange={(event) => {
                   update('name', event.target.value);
                 }}
-                onBlur={() => {
-                  commitField('name', draft);
-                }}
               />
               {nameInvalid ? (
                 <span className="text-error text-xs font-normal">Workspace name is required.</span>
@@ -223,9 +186,6 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 onChange={(event) => {
                   update('purpose', event.target.value);
                 }}
-                onBlur={() => {
-                  commitField('purpose', draft);
-                }}
                 className="border-outline-variant bg-surface text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
               />
             </label>
@@ -239,9 +199,6 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 aria-describedby="workspace-slug-help"
                 onChange={(event) => {
                   update('slug', event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'));
-                }}
-                onBlur={() => {
-                  commitField('slug', draft);
                 }}
               />
               <span
@@ -264,7 +221,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 value={draft.vocabulary}
                 disabled={readOnly}
                 onChange={(event) => {
-                  updateAndCommit('vocabulary', event.target.value as VocabularyPreset);
+                  update('vocabulary', event.target.value as VocabularyPreset);
                 }}
               >
                 <option value="startup">Product and startup</option>
@@ -280,7 +237,10 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 fallback={(draft.name.trim()[0] ?? 'W').toUpperCase()}
                 disabled={readOnly}
                 onChange={(value) => {
-                  updateAndCommit('avatar', value);
+                  update('avatar', value);
+                  if (canEdit && value.trim() !== (current?.avatar ?? '')) {
+                    save.mutate({ avatar: value.trim() || null });
+                  }
                 }}
               />
             </div>
@@ -292,7 +252,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
             </p>
           ) : (
             <p role="status" aria-live="polite" className="text-on-surface-variant h-4 text-xs">
-              {save.isPending ? 'Saving…' : saved ? 'Saved' : ''}
+              {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : ''}
             </p>
           )}
         </section>

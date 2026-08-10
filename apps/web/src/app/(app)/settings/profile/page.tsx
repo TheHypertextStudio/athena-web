@@ -9,6 +9,7 @@ import { SettingsImagePicker } from '@/components/settings/settings-image-picker
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { unwrap, useApiMutation } from '@/lib/query';
+import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 import { Input } from '@docket/ui/primitives';
 
 /** The signed-in user's profile destination. */
@@ -17,7 +18,6 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
   const [name, setName] = useState('');
   const [image, setImage] = useState('');
   const [baseline, setBaseline] = useState({ name: '', image: '' });
-  const [saved, setSaved] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,26 +36,26 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
       setName(next.name);
       setImage(next.image);
       setBaseline(next);
-      setSaved(true);
       void refetch();
     },
   });
 
-  /**
-   * Persist a single changed field on blur/change. Skips the save when the value
-   * is unchanged from what's loaded (dirty guard) so mount and no-op edits never
-   * write, and surfaces name validation inline without discarding the input.
-   */
-  function commitName(): void {
-    const trimmed = name.trim();
-    if (trimmed === baseline.name) return;
-    if (!trimmed) {
-      setNameError('Your name cannot be empty.');
-      return;
-    }
-    setNameError(null);
-    save.mutate({ name: trimmed });
-  }
+  // Autosave replaces the former hand-rolled `commitName` dirty-check: the field persists on a
+  // quiet debounce once it differs from what's loaded, and never on mount or for an unchanged
+  // value — the same seam every other autosaving field in the app now shares.
+  useDebouncedAutosave({
+    value: name.trim(),
+    baseline: baseline.name,
+    ready: Boolean(session),
+    save: (trimmed) => {
+      if (!trimmed) {
+        setNameError('Your name cannot be empty.');
+        return;
+      }
+      setNameError(null);
+      save.mutate({ name: trimmed });
+    },
+  });
 
   function commitImage(next: string): void {
     if (next.trim() === baseline.image) return;
@@ -88,7 +88,7 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
               <p className="text-on-surface-variant shrink-0 text-xs" role="status">
                 Saving…
               </p>
-            ) : saved ? (
+            ) : save.isSuccess ? (
               <p className="text-on-surface-variant shrink-0 text-xs" role="status">
                 Saved
               </p>
@@ -102,11 +102,7 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
               aria-invalid={nameError ? true : undefined}
               onChange={(event) => {
                 setName(event.target.value);
-                setSaved(false);
                 setNameError(null);
-              }}
-              onBlur={() => {
-                commitName();
               }}
             />
             {nameError ? (
@@ -121,7 +117,6 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
             fallback={(name.trim()[0] ?? session.user.email[0] ?? '?').toUpperCase()}
             onChange={(value) => {
               setImage(value);
-              setSaved(false);
               commitImage(value);
             }}
           />

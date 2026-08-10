@@ -30,7 +30,7 @@ import {
 } from '@/lib/query';
 
 import { DeleteAccountDialog } from './delete-account-dialog';
-import { sectionHref } from './sections';
+import { sectionHref } from './settings-registry';
 import { userErrorMessage } from '@/lib/problem';
 
 /** Whole days from now until an ISO instant (floored at 0). */

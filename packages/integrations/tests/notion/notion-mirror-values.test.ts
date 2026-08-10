@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import { NOTION_RELATION_LIMIT, NOTION_TEXT_LIMIT } from '../../src/notion-mirror';
 import {
+  parseMirrorValue,
   projectRow,
   propertyValue,
+  readMirrorProperties,
   type MirrorTruncation,
   type MirrorValue,
 } from '../../src/notion-mirror-values';
@@ -92,6 +94,124 @@ describe('propertyValue', () => {
         value: 'Dana Whitfield',
       }),
     ).toEqual({ rich_text: [{ text: { content: 'Dana Whitfield' } }] });
+  });
+});
+
+describe('parseMirrorValue', () => {
+  it('round-trips every kind whose write and read shapes agree', () => {
+    // title/rich_text are deliberately NOT here: Notion's write shape is `{ text: { content } }`
+    // but a real read response computes `plain_text` instead — genuinely different shapes, covered
+    // separately below with a realistic read fixture rather than propertyValue's write output.
+    const cases: readonly [NotionColumnBinding['kind'], MirrorValue][] = [
+      ['number', { kind: 'number', value: 42 }],
+      ['checkbox', { kind: 'boolean', value: true }],
+      ['date', { kind: 'date', value: '2026-08-08' }],
+      ['url', { kind: 'url', value: 'https://x' }],
+      ['select', { kind: 'option', value: 'To do' }],
+    ];
+    for (const [kind, value] of cases) {
+      const binding = bind({ kind });
+      const [, raw] = propertyValue(binding, value, []) ?? [];
+      expect(parseMirrorValue(kind, raw)).toEqual(value);
+    }
+  });
+
+  it('reads a title/rich_text property from a realistic Notion read response', () => {
+    // Unlike propertyValue's write shape (`text.content`), a real GET/query response computes
+    // `plain_text` per rich-text run — this is what the reader actually has to parse.
+    expect(
+      parseMirrorValue('title', {
+        title: [{ plain_text: 'Fix the ' }, { plain_text: 'timetable' }],
+      }),
+    ).toEqual({ kind: 'text', value: 'Fix the timetable' });
+    expect(parseMirrorValue('rich_text', { rich_text: [{ plain_text: 'note' }] })).toEqual({
+      kind: 'text',
+      value: 'note',
+    });
+    expect(parseMirrorValue('title', { title: [] })).toEqual({ kind: 'text', value: null });
+  });
+
+  it('reads people and relation ids off their arrays', () => {
+    expect(parseMirrorValue('people', { people: [{ id: 'u1' }, { id: 'u2' }] })).toEqual({
+      kind: 'people',
+      externalIds: ['u1', 'u2'],
+    });
+    expect(parseMirrorValue('relation', { relation: [{ id: 'p1' }] })).toEqual({
+      kind: 'relation',
+      externalPageIds: ['p1'],
+    });
+  });
+
+  it('reads a status property the same way as select', () => {
+    expect(parseMirrorValue('status', { status: { name: 'In progress' } })).toEqual({
+      kind: 'option',
+      value: 'In progress',
+    });
+  });
+
+  it('reads the first multi_select option, since only one is ever written', () => {
+    expect(
+      parseMirrorValue('multi_select', { multi_select: [{ name: 'Urgent' }, { name: 'Bug' }] }),
+    ).toEqual({ kind: 'option', value: 'Urgent' });
+    expect(parseMirrorValue('multi_select', { multi_select: [] })).toEqual({
+      kind: 'option',
+      value: null,
+    });
+  });
+
+  it('reads a cleared select/date/url as an explicit null, not absence', () => {
+    expect(parseMirrorValue('select', { select: null })).toEqual({ kind: 'option', value: null });
+    expect(parseMirrorValue('date', { date: null })).toEqual({ kind: 'date', value: null });
+    expect(parseMirrorValue('url', { url: null })).toEqual({ kind: 'url', value: null });
+  });
+
+  it('treats a shape it does not recognize as absent rather than guessing', () => {
+    expect(parseMirrorValue('number', null)).toBeUndefined();
+    expect(parseMirrorValue('number', 'not an object')).toBeUndefined();
+  });
+});
+
+describe('readMirrorProperties', () => {
+  it('matches by property id, not by the name Notion currently returns it under', () => {
+    // The whole reason a binding stores an id: the caller's stale `title` must not matter, and a
+    // page that renamed the property between design time and this read must still resolve.
+    const bindings = [bind({ propertyId: 'pid_title' })];
+    const raw = {
+      'A Completely Different Name': {
+        id: 'pid_title',
+        type: 'title',
+        title: [{ plain_text: 'Read back' }],
+      },
+    };
+    expect(readMirrorProperties(bindings, raw)).toEqual({
+      title: { kind: 'text', value: 'Read back' },
+    });
+  });
+
+  it('omits a field whose property id is not present on the page', () => {
+    const bindings = [bind({ field: 'notYetProvisioned', propertyId: 'pid_missing' })];
+    expect(readMirrorProperties(bindings, {})).toEqual({});
+  });
+
+  it('omits a binding with no property id at all (not yet provisioned)', () => {
+    const bindings = [bind({ propertyId: undefined })];
+    const raw = { Name: { id: 'pid_title', type: 'title', title: [{ plain_text: 'x' }] } };
+    expect(readMirrorProperties(bindings, raw)).toEqual({});
+  });
+
+  it('reads several bindings from one page at once', () => {
+    const bindings = [
+      bind({ propertyId: 'pid_title' }),
+      bind({ field: 'state', kind: 'select', propertyId: 'pid_state' }),
+    ];
+    const raw = {
+      Name: { id: 'pid_title', type: 'title', title: [{ plain_text: 'A task' }] },
+      Status: { id: 'pid_state', type: 'select', select: { name: 'Done' } },
+    };
+    expect(readMirrorProperties(bindings, raw)).toEqual({
+      title: { kind: 'text', value: 'A task' },
+      state: { kind: 'option', value: 'Done' },
+    });
   });
 });
 

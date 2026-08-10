@@ -85,7 +85,7 @@ export const notionMirrorDatabase = pgTable(
     /** Notion's database id (null until provisioned). */
     externalDatabaseId: text('external_database_id'),
     /**
-     * Notion's data source id — the collection rows actually live in (API version 2025-09-03).
+     * Notion's data source id — the collection rows actually live in (API version 2026-03-11).
      *
      * @remarks
      * Distinct from {@link notionMirrorDatabase.externalDatabaseId}: a database owns one or more

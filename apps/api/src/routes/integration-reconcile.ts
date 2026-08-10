@@ -189,7 +189,7 @@ export function planTaskReconcile(
 }
 
 /** The per-team workflow-state keys reconciliation maps completion/cancellation onto. */
-interface StateKeys {
+export interface StateKeys {
   /** New-task / reopened default (first state). */
   readonly openKey: string;
   /** First `completed`-type state. */
@@ -201,7 +201,9 @@ interface StateKeys {
 }
 
 /** Build the {@link StateKeys} for a team from its workflow-state list. */
-function resolveStateKeys(states: readonly { key: string; type: WorkflowStateType }[]): StateKeys {
+export function resolveStateKeys(
+  states: readonly { key: string; type: WorkflowStateType }[],
+): StateKeys {
   const byType = (t: WorkflowStateType): string | undefined =>
     states.find((s) => s.type === t)?.key;
   const openKey = byType('unstarted') ?? states[0]?.key ?? 'backlog';

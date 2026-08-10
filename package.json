@@ -25,6 +25,7 @@
     "clean": "turbo run clean && rm -rf node_modules",
     "ci:gate-policy": "tsx scripts/ci-gate-policy.ts",
     "secret-scan": "tsx scripts/secret-scan.ts",
+    "secret:paste": "tsx scripts/set-secret-from-clipboard.ts",
     "launch:verify-prod": "tsx scripts/production-verify.ts",
     "launch:record": "tsx scripts/launch-record.ts",
     "icons": "pnpm --filter @docket/brand icons",

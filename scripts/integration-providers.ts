@@ -70,6 +70,7 @@ export type ProviderId =
   | 'google'
   | 'github'
   | 'linear'
+  | 'notion'
   | 'apple'
   | 'stripe'
   | 'anthropic'
@@ -594,6 +595,41 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '       and OAuth-authorization events off.',
       '     • Linear shows a separate webhook signing secret on the application detail page.',
       `6) Set Public ${env === 'production' ? 'ON for production' : 'OFF for this non-production app'}, then create the app.`,
+    ],
+  },
+  {
+    id: 'notion',
+    title: 'Notion Integration Set-up (optional)',
+    label: 'Notion Connections',
+    optional: true,
+    consoleUrl: 'https://app.notion.com/developers',
+    vars: ['NOTION_CLIENT_ID', 'NOTION_CLIENT_SECRET', 'NOTION_WEBHOOK_TOKEN'],
+    requiredVars: ['NOTION_CLIENT_ID', 'NOTION_CLIENT_SECRET'],
+    optionalVars: ['NOTION_WEBHOOK_TOKEN'],
+    optionalLabel: 'Notion webhook delivery (otherwise the mirror polls)',
+    instructions: (env, urls) => [
+      'Creates a Notion Public Connection (OAuth). ~5 min. You need a Notion workspace to develop',
+      'against. Optional — local dev runs against a built-in mock, so you can press Enter past these',
+      'prompts to skip and wire up Notion later.',
+      '',
+      '1) Open https://app.notion.com/developers → "Connections" → "New connection".',
+      `2) Connection name: "${appName(env)}" (shown to people during OAuth consent — not the`,
+      '   "Your Name\'s connection" default). Authentication method: OAuth — Access token is',
+      '   single-workspace and wrong for a product other workspaces install into. Development',
+      '   workspace: whichever workspace you test against. Installable in: "Public" / any workspace.',
+      '3) Under "Redirect URIs", add one per Docket frontend, exactly, no trailing slash:',
+      ...urls.webBases.map((web) => `     ${web}/api/auth/callback/notion`),
+      '4) Create. On "Manage connection" → "Configuration" → "Capabilities", check all three content',
+      '   capabilities: Read content, Update content, Insert content — two-way sync needs all three.',
+      '   Under "User capabilities" (a radio group), select "Read user information including email',
+      '   addresses" — People matching is built entirely on workspace emails, and without it',
+      '   matching silently returns everyone as unmatched instead of erroring.',
+      '5) Copy "Client ID" (not a secret — Notion echoes it in the plaintext Authorization URL on the',
+      '   same page) and "Client secret" (click the eye icon to reveal it) into the prompts below.',
+      '',
+      'The "Webhooks" tab is a separate, later step: Notion mints its verification token during the',
+      'subscription handshake, not now. Leave that prompt blank today; the mirror polls until it',
+      'exists.',
     ],
   },
   {

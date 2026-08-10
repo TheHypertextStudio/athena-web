@@ -1,10 +1,10 @@
 # Notion sync
 
 > **Status**: Two modes, both running. **Linked databases** shipped (connector + two-way sync +
-> Docket-wins conflict resolution). **Docket-designed databases** provision, project and read back
-> under the shared sync lease, driven by webhooks with polling as the safety net. Remaining: the
-> `pull`/`adopt` directions (a Notion row becoming a Docket entity) and the incremental
-> `last_edited_time` cursor for the linked mode — see §8.9.
+> Docket-wins conflict resolution + the incremental `last_edited_time` cursor, §4/§8.9).
+> **Docket-designed databases** provision, project, pull Notion edits back onto Task/Project
+> (including `task.state`, via `setTaskState`), and adopt Notion-created rows as new tasks/projects
+> — all under the shared sync lease, driven by webhooks with polling as the safety net.
 > **Owner surface**: `packages/integrations/src/notion*.ts`, `apps/api/src/routes/notion-mirror*.ts`,
 > `apps/api/src/routes/sync-notion.ts`
 > **Related**: [`integration-sync.md`](./integration-sync.md) (the shared sync spine),
@@ -68,9 +68,12 @@ Disconnecting the integration does not touch the migrated tasks: `task.source_in
 
 ## 2. Notion's data model, as the adapter meets it
 
-Notion API version **`2025-09-03`** (`NOTION_API_VERSION`), the release that introduced _data
-sources_. Under it, a **database** owns one or more **data sources**, and rows, schemas and page
-parents are all data-source scoped. So:
+Notion API version **`2026-03-11`** (`NOTION_API_VERSION`), current as verified against Notion's
+own versioning reference and changelog (2026-08-09). Data sources — a **database** owning one or
+more **data sources**, with rows, schemas and page parents all data-source scoped — were introduced
+in the `2025-09-03` release and are unaffected by the bump to `2026-03-11`, whose three breaking
+changes (block position, `archived` → `in_trash`, a block-type rename) are otherwise unrelated to
+data sources. The `in_trash` rename is the one that touches this adapter — see §4. So:
 
 - `ResourceRef.id` (what Docket calls a "list", what the UI calls a database) is a **data source
   id**.
@@ -193,8 +196,11 @@ indistinguishable, to the reconciler, from a page filtered out by the integratio
 selection. And the reconciler is right to leave those alone: absence must never destroy local work.
 
 So the adapter runs the query **twice** per data source — once normally, once with
-`is_archived: true` — and maps a trashed page to a tombstone (`ImportedItem.removed`). Reconciliation
-then archives the local linked task on an explicit tombstone.
+`in_trash: true` — and maps a trashed page to a tombstone (`ImportedItem.removed`). Reconciliation
+then archives the local linked task on an explicit tombstone. (`in_trash` is the `2026-03-11`
+parameter name; the adapter previously sent a nonstandard `is_archived`, which the installed SDK's
+own declared types never recognized at any version — an independent bug, fixed alongside the
+version bump rather than left for a rename Notion's changelog happened to formalize.)
 
 The two partitions are disjoint by definition, but results are de-duplicated by page id with the
 **live copy winning**, so a page that moved to the trash mid-pagination cannot archive a Docket task
@@ -257,7 +263,7 @@ they are incremented by the same branch.
 
 Notion is a native Better Auth social provider, gated on `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET`
 (both optional — absent means Notion is simply not offered). Notion's OAuth has **no scope
-parameter**: a public integration's capabilities are declared on the integration itself and the
+parameter**: a **Public Connection**'s capabilities are declared on the connection itself and the
 person chooses which pages to share during consent. So, unlike Linear, there is no read-vs-write
 scope gate and Notion **defaults `writeBack` on** at connect (`WRITE_BACK_CAPABLE_PROVIDERS`).
 
@@ -265,13 +271,34 @@ Configuration is per workspace, like every other connector: the integration row 
 `config.listIds` holds the Notion data source ids that workspace syncs. A workspace with no Notion
 integration row shows Notion unconnected; connecting it in one workspace changes nothing in another.
 
-Setup:
+Setup (also walked by `pnpm integrations`):
 
-1. Create a **public integration** at <https://www.notion.com/my-integrations> with the
-   _Read content_, _Update content_ and _Insert content_ capabilities.
-2. Set its redirect URI to `<API_URL>/api/auth/callback/notion`.
-3. Put its client id/secret in `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET`.
-4. In Docket: **Settings → Connections → Notion → Connect**, then pick the databases to sync.
+1. `app.notion.com/developers` → **Connections** → **New connection**. Notion retired the old
+   "integrations" naming for this **Connections** model: an **Internal Connection** is a static
+   token scoped to one workspace, a **Personal Access Token** is user-scoped with no OAuth, and a
+   **Public Connection** is OAuth 2.0, installable across many workspaces, Marketplace-eligible —
+   that last one is what Docket uses, since it serves many separate customer workspaces from one
+   integration.
+2. Connection name: `Docket` (shown during consent, not the personal default). Authentication
+   method: OAuth. Installable in: any/public workspace.
+3. Redirect URIs — the callback is browser-facing (Better Auth's native `/api/auth/callback/notion`
+   route, same as every other social provider, reached through the web app's same-origin proxy, not
+   the raw API host):
+   - Dev: `https://docket.localhost/api/auth/callback/notion`
+   - Prod: `https://docket.hypertext.studio/api/auth/callback/notion`
+4. On the created connection's **Configuration** tab, under **Capabilities**, check all three
+   content capabilities — **Read content**, **Update content**, **Insert content** — and under
+   **User capabilities** (a radio group, mutually exclusive) select **"Read user information
+   including email addresses"**, not the no-email option above it. People matching
+   (`syncExternalActors`) is built entirely on `GET /v1/users` returning emails; without this
+   selected, matching silently returns everyone as unmatched rather than erroring.
+5. Copy **Client ID** (not a secret — Notion echoes it in the plaintext Authorization URL on the
+   same page) into `NOTION_CLIENT_ID`, and **Client secret** (reveal via the eye icon) into
+   `NOTION_CLIENT_SECRET`.
+6. The **Webhooks** tab is a separate, later step — Notion mints `NOTION_WEBHOOK_TOKEN` itself
+   during the subscription handshake, not at connection-creation time. Leave it unset until then;
+   the mirror falls back to its polling cadence in the meantime.
+7. In Docket: **Settings → Connections → Notion → Connect**, then pick the databases to sync.
 
 ---
 
@@ -374,6 +401,31 @@ entity whose `updated_at` moved for a reason this database does not carry costs 
 Rich text caps at 2000 characters and relations at 100 per request; both truncate and report what
 they dropped.
 
+### 8.8 Why not Notion's own Sync/Workers
+
+Notion ships a first-party **Sync** capability (a **Worker** subtype, `app.notion.com/product/dev`)
+that does the same _shape_ of thing as the push-only entities here: continuously upsert external
+records into a Notion database from a declarative schema on a persistent cursor. It was not used,
+for three independently-sourced reasons rather than a preference:
+
+- **Locked properties.** A Sync worker creates and owns its own database; the properties it writes
+  are visible and copyable in Notion's UI but not editable there. That is incompatible with the
+  table designer for every entity, not only the two-way ones — the whole point is a database the
+  person can rename, re-column, and work in normally.
+- **One-way only**, external → Notion, by Notion's own guidance ("use Sync when the external system
+  is the source of truth"; "for bidirectional workflows, regular Workers are recommended instead").
+  Tasks and projects need two-way.
+- **Multi-tenancy does not fit the billing model.** Every source describing Workers pricing frames
+  credits as purchased by "workspace admins" against _that workspace's own_ Business/Enterprise
+  plan, pooled per-workspace — not one deployment serving many separate OAuth-installing customer
+  workspaces, which is Docket's actual model. The one source that speaks to third-party SaaS
+  distribution directly says the opposite: "for most SaaS builders, public connections with OAuth
+  2.0 are the right choice" — the REST-API-plus-OAuth path this file documents, not Workers.
+
+This is inference from an absence of a stated third-party multi-tenant model, not an explicit "no."
+Revisit if Notion documents per-installation Worker provisioning for Public Connections on arbitrary
+customer plans.
+
 ### 8.8 The SDK is the source of truth
 
 `@notionhq/client` supplies every request and response shape, pins the API version, retries
@@ -407,8 +459,37 @@ The whole flow runs with **no Notion account**: `MockNotionMirror` is a behaviou
 workspace (pages stored, `last_edited_time` advancing, `since` honoured, trash surfaced), selected
 by the container in `local`/`test` mode exactly as `MockConnector` is.
 
-**Still open.** The `pull` and `adopt` directions — reading a Notion row's properties back into a
-Docket entity, and adopting a row somebody created there — are planned by `planMirrorRow` but not
-applied; they need the per-entity inverse of `notion-mirror-entities.ts`, which does not exist yet.
-Until then a conflict record carries honest gaps for the remote field values rather than invented
-ones. The incremental `last_edited_time` cursor for the **linked** mode (§4) is also still to come.
+**`pull` is applied** for Task and Project (`applyPulledValues`, `notion-mirror-entities.ts`), via
+`readMirrorProperties` (`notion-mirror-values.ts`) matching by property id, the same rename-safety
+rule everything else in this file follows. Deliberately narrower than the full projection catalog:
+
+- **Person fields** (`assignee`/`lead`) are excluded. They project as a resolved display name, and
+  reversing free text into an actor id is ambiguous — two actors can share a name, a typo matches
+  nobody — which risks silently assigning the wrong person, worse than not pulling it.
+- **`docketUrl`** is derived from the entity's own id and was never stored, so there is nothing to
+  read back.
+
+`priority`/`status`/`health` are applied when the pulled option exactly matches one of Docket's
+fixed enum values, an unrecognized option (a rename, a typo) treated as "not read" rather than
+written blind. `task.state` goes through `setTaskState` — the same shared transition
+`PATCH /tasks/:id/status` uses — rather than a plain column write, since it is per-team
+configurable and needs `completedAt`/`canceledAt` derivation and event emission; an unrecognized
+state name is caught the same way.
+
+A contested edit's conflict record still carries honest gaps for the fields this reader does not
+apply, rather than inventing values for them.
+
+**`adopt` is applied too** (`adoptEntity`, `notion-mirror-entities.ts`) — a row created directly in
+Notion, on a two-way entity, becomes a first-class Docket task or project. It reuses
+`resolveImportTeam` (`integration-import.ts`), the exact team-landing answer the linked-database
+mode already settled on for the identical problem: prefer `config.teamId` when configured, else
+the org's earliest-created team. A new task's initial state is the landing team's own open-type
+workflow state (`resolveStateKeys`), never a Notion status value — interpreting an arbitrary select
+option as a _starting_ state has no more principled an answer than "the team's default", the same
+reasoning `applyPulledValues` already applies to an _edit_.
+
+The incremental `last_edited_time` cursor for the **linked** mode (§4) is done: `runSync`'s flat
+path (`integration-sync.ts`) passes `ImportWorkInput.since` on every non-full sync, and
+`NotionProviderClient.queryDataSource` (`notion.ts`) filters both the live and trashed queries to
+`last_edited_time.on_or_after` it — the same full-vs-incremental policy the work-graph branch
+already used, now shared by the flat path so Notion stops re-reading every row on every sweep.

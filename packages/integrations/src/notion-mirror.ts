@@ -11,10 +11,12 @@
  * its own narrower schema — nine entities, twelve property kinds, four person representations —
  * but only as a *subset* the SDK validates.
  *
- * `@notionhq/client` also settles three things this module would otherwise have had to guess:
- * it pins the API version (`2025-09-03`, the data-sources release the linked-mode connector
- * already targets), it retries throttled requests with backoff internally, and it ships
- * `verifyWebhookSignature` so the observer never hand-rolls an HMAC.
+ * `@notionhq/client` also settles two things this module would otherwise have had to guess: it
+ * retries throttled requests with backoff internally, and it ships `verifyWebhookSignature` so the
+ * observer never hand-rolls an HMAC. The API version is NOT left to the SDK's own default —
+ * `Client.defaultNotionVersion` lags behind Notion's actual latest release (confirmed against the
+ * installed `@notionhq/client@5.24.0`, itself published the same week this was checked), so the
+ * version is passed explicitly below, from the same constant the linked-mode connector uses.
  *
  * The older linked-database connector in `./notion.ts` stays on `ProviderHttp`. It is shipped,
  * covered by 36 tests, and migrating it is a mechanical change with no behaviour to gain — so it
@@ -38,6 +40,7 @@ import {
   isNotionClientError,
 } from '@notionhq/client';
 import type { NotionColumnBinding, NotionPropertyKind } from '@docket/types';
+import { NOTION_API_VERSION } from './notion-mapping';
 
 import { ConnectorError } from './connector-error';
 import { provisionedKind } from './notion-mirror-schema';
@@ -383,6 +386,7 @@ export class NotionMirrorClient implements NotionMirrorPort {
   constructor(auth: string, fetchImpl?: typeof fetch) {
     this.notion = new Client({
       auth,
+      notionVersion: NOTION_API_VERSION,
       ...(fetchImpl ? { fetch: fetchImpl } : {}),
     });
   }

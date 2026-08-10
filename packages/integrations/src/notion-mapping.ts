@@ -2,7 +2,7 @@
  * `@docket/integrations` — the pure Notion ⇄ Docket property mapping.
  *
  * @remarks
- * Notion has no fixed task schema: every database (a *data source*, in the 2025-09-03 API)
+ * Notion has no fixed task schema: every database (a *data source*, in the 2026-03-11 API)
  * declares its own property names and types. So the mapping cannot be a hard-coded field list —
  * it has to be derived from the data source's own schema at sync time. {@link readNotionSchema}
  * does that derivation once per data source; every other function here consumes the derived
@@ -25,8 +25,8 @@
 import type { ImportedItem, TaskPushOp } from './connector';
 import { asRecord, str } from './json';
 
-/** The Notion API version this adapter speaks (the data-sources release). */
-export const NOTION_API_VERSION = '2025-09-03';
+/** The Notion API version this adapter speaks. */
+export const NOTION_API_VERSION = '2026-03-11';
 
 /**
  * The Notion property types this mapping understands.

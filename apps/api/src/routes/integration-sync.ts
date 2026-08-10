@@ -380,6 +380,20 @@ export async function runSync(
       return { processed, total: snapshot.items.length, stampFullSync: full };
     }
 
+    // Same full-vs-incremental policy as the work-graph branch above: no full sync yet, the last
+    // one is stale, or a manual trigger all force a complete re-read. `since` is advisory — most
+    // flat connectors have no incremental-read support and simply ignore it (see `ImportWorkInput`
+    // .since's own doc comment); the ones that do (Notion) stop re-reading every row on every
+    // sweep. An absent row from an incremental read is unchanged, never gone — `reconcileTasks`
+    // already treats "not in this batch" that way for local-only tasks, so nothing there needed to
+    // change for this to be safe.
+    const flatLastSyncedAt = row.lastSyncedAt;
+    const full =
+      row.lastFullSyncedAt === null ||
+      flatLastSyncedAt === null ||
+      now.getTime() - row.lastFullSyncedAt.getTime() > FULL_SYNC_INTERVAL_MS ||
+      opts.trigger === 'manual';
+
     const items: ImportedItem[] = await connector.importWork({
       connectionId: row.id,
       provider,
@@ -387,6 +401,7 @@ export async function runSync(
         ? { externalWorkspaceId: row.connection.externalWorkspaceId }
         : {}),
       ...(config.listIds && config.listIds.length > 0 ? { listIds: config.listIds } : {}),
+      ...(!full ? { since: lookbackISO(flatLastSyncedAt, row.syncCadenceMinutes) } : {}),
     });
     const tally = await reconcileTasks(row.organizationId, opts.actorId, row, teamId, items, {
       assigneeId: null,
@@ -394,7 +409,7 @@ export async function runSync(
     });
     const processed =
       tally.inserted + tally.pulled + tally.pushed + tally.deleted + tally.archived + tally.created;
-    return { processed, total: items.length };
+    return { processed, total: items.length, stampFullSync: full };
   });
 }
 

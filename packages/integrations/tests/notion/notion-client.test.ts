@@ -239,7 +239,7 @@ describe('NotionProviderClient.importWork', () => {
     http.get = () => trackerSchemaPayload;
     http.post = (path, body) => {
       if (!path.endsWith('/query')) return { results: [], has_more: false };
-      if ((body as Record<string, unknown>)['is_archived'] === true) {
+      if ((body as Record<string, unknown>)['in_trash'] === true) {
         return { results: [], has_more: false };
       }
       return {
@@ -268,7 +268,7 @@ describe('NotionProviderClient.importWork', () => {
   it('deduplicates a page that appears in both the live and archived passes, live winning', async () => {
     const http = new RecordingHttp();
     http.get = () => trackerSchemaPayload;
-    // A router that ignores `is_archived` returns the same rows twice — the mid-pagination race.
+    // A router that ignores `in_trash` returns the same rows twice — the mid-pagination race.
     http.post = (path) =>
       path.endsWith('/query')
         ? {
@@ -290,7 +290,7 @@ describe('NotionProviderClient.importWork', () => {
     http.get = () => trackerSchemaPayload;
     http.post = (path, body) => {
       if (!path.endsWith('/query')) return { results: [], has_more: false };
-      const archived = (body as Record<string, unknown>)['is_archived'] === true;
+      const archived = (body as Record<string, unknown>)['in_trash'] === true;
       return {
         results: archived
           ? [tasksTrackerPage({ id: 'gone', title: 'Deleted in Notion', inTrash: true })]
@@ -307,6 +307,50 @@ describe('NotionProviderClient.importWork', () => {
       ['Still here', false],
       ['Deleted in Notion', true],
     ]);
+  });
+
+  it('filters both partitions to last_edited_time when the caller supplies a cursor', async () => {
+    const http = new RecordingHttp();
+    http.get = () => trackerSchemaPayload;
+    http.post = (path) =>
+      path.endsWith('/query') ? { results: [], has_more: false } : { results: [], has_more: false };
+
+    await notion(http).importWork(
+      {
+        connectionId: 'c',
+        provider: 'notion',
+        listIds: [TASKS_TRACKER_DATA_SOURCE],
+        since: '2026-08-01T00:00:00.000Z',
+      },
+      '2026-08-02T00:00:00.000Z',
+    );
+
+    const queries = http.calls.filter((c) => c.path.endsWith('/query'));
+    expect(queries).toHaveLength(2); // live + archived
+    for (const call of queries) {
+      expect(call.body).toMatchObject({
+        filter: {
+          timestamp: 'last_edited_time',
+          last_edited_time: { on_or_after: '2026-08-01T00:00:00.000Z' },
+        },
+      });
+    }
+  });
+
+  it('omits the filter entirely when the caller supplies no cursor, re-reading everything', async () => {
+    const http = new RecordingHttp();
+    http.get = () => trackerSchemaPayload;
+    http.post = () => ({ results: [], has_more: false });
+
+    await notion(http).importWork(
+      { connectionId: 'c', provider: 'notion', listIds: [TASKS_TRACKER_DATA_SOURCE] },
+      '2026-08-02T00:00:00.000Z',
+    );
+
+    const queries = http.calls.filter((c) => c.path.endsWith('/query'));
+    for (const call of queries) {
+      expect((call.body as Record<string, unknown>)['filter']).toBeUndefined();
+    }
   });
 
   it('falls back to every shared database when no list is selected', async () => {
@@ -366,7 +410,7 @@ describe('NotionProviderClient.importWork', () => {
     let archivedPage = 0;
     http.post = (path, body) => {
       if (!path.endsWith('/query')) return { results: [], has_more: false };
-      if ((body as Record<string, unknown>)['is_archived'] === true) {
+      if ((body as Record<string, unknown>)['in_trash'] === true) {
         archivedPage += 1;
         return archivedPage === 1
           ? {

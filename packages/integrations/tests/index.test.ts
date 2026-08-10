@@ -64,7 +64,7 @@ describe('@docket/integrations package entry point', () => {
   });
 
   it('re-exports the Notion mapping, provider-client guards, push, and SMS adapters', () => {
-    expect(Integrations.NOTION_API_VERSION).toBe('2025-09-03');
+    expect(Integrations.NOTION_API_VERSION).toBe('2026-03-11');
     expect(typeof Integrations.isWritableProviderClient).toBe('function');
     expect(typeof Integrations.CapturePushSender).toBe('function');
     expect(typeof Integrations.CaptureSmsSender).toBe('function');

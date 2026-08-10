@@ -170,6 +170,17 @@ export interface ImportWorkInput {
    * absent or empty, every container is imported; when present, only the listed ones are pulled.
    */
   readonly listIds?: readonly string[];
+  /**
+   * RFC3339 cursor: only rows the provider reports changed at or after this instant are read.
+   *
+   * @remarks
+   * Purely advisory — a connector with no incremental-read support (most of them) simply ignores
+   * it and returns everything, exactly as if it were absent. The caller (`runSync`) supplies it
+   * only on an already-incremental sync (a recent `lastFullSyncedAt`, not a manual trigger), with
+   * a lookback margin past the connector's own cadence, so a provider that DOES honor it stays
+   * safe against clock skew without every connector needing its own cursor-bookkeeping code.
+   */
+  readonly since?: string;
 }
 
 /** A selectable external container (e.g. a Google Tasks list) the connector can sync from. */

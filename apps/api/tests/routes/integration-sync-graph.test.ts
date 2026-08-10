@@ -642,6 +642,54 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
     expect(run!.total).toBe(1);
   });
 
+  it('the flat import path stamps lastFullSyncedAt too, not only the work-graph branch', async () => {
+    // Mirrors the work-graph branch's own "full-backfills on the first run" coverage above: this
+    // is the flat path's half of the same full-vs-incremental mechanism (the Notion connector's
+    // incremental last_edited_time reads depend on lastFullSyncedAt actually advancing here).
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [row] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider: 'github',
+        pattern: 'connector',
+        roles: ['work'],
+        createdBy: humanActorId,
+      })
+      .returning();
+
+    expect(row!.lastFullSyncedAt).toBeNull();
+    const run = await runSync(row!, { actorId: humanActorId, trigger: 'scheduled' });
+    expect(run!.status).toBe('succeeded');
+
+    const after = await reload(row!.id);
+    expect(after.lastFullSyncedAt).not.toBeNull();
+  });
+
+  it('a second scheduled flat sync inside the full-sync window does not re-stamp lastFullSyncedAt', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [row] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider: 'github',
+        pattern: 'connector',
+        roles: ['work'],
+        createdBy: humanActorId,
+      })
+      .returning();
+
+    await runSync(row!, { actorId: humanActorId, trigger: 'scheduled' });
+    const afterFirst = await reload(row!.id);
+    expect(afterFirst.lastFullSyncedAt).not.toBeNull();
+
+    await runSync(afterFirst, { actorId: humanActorId, trigger: 'scheduled' });
+    const afterSecond = await reload(row!.id);
+    // Went incremental, so the full-sync stamp does not move — same assertion shape as the
+    // work-graph branch's equivalent test above.
+    expect(afterSecond.lastFullSyncedAt!.getTime()).toBe(afterFirst.lastFullSyncedAt!.getTime());
+  });
+
   it('lookbackISO widens the incremental cutoff by the cadence overlap, treating a null cadence as zero overlap', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const row = await seedLinearIntegration(orgId, humanActorId);

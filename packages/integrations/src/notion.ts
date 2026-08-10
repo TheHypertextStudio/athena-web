@@ -8,7 +8,7 @@
  * Google Tasks. That is what lets Docket supersede Notion rather than merely mirror it — see
  * `docs/engineering/specs/notion-sync.md`.
  *
- * Notion's "database" is addressed through its **data sources** (API version 2025-09-03): a
+ * Notion's "database" is addressed through its **data sources** (API version 2026-03-11): a
  * database owns one or more data sources, and rows, schemas and page parents are all data-source
  * scoped. `ResourceRef.id` is therefore a data source id, stored per task as `externalListId`, so
  * a write-back always addresses the collection the row actually lives in.
@@ -218,12 +218,23 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
    * with the LIVE copy winning anyway: if a page moved to the trash mid-pagination it would
    * otherwise appear in both passes, and letting the tombstone win there would archive a Docket
    * task on the strength of a race.
+   *
+   * @param dataSourceId - The data source to read.
+   * @param since - RFC3339 cutoff; when given, both passes filter to `last_edited_time` at or
+   *   after it — an omitted-property page (nothing changed) still needs the archived pass run
+   *   without the filter's blind spot for a page trashed exactly at the boundary, so the filter is
+   *   applied identically to both partitions rather than only the live one.
    */
-  private async queryDataSource(dataSourceId: string): Promise<unknown[]> {
+  private async queryDataSource(dataSourceId: string, since?: string): Promise<unknown[]> {
+    const filter =
+      since === undefined
+        ? {}
+        : { filter: { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } } };
     const live = await pageThrough(`data_source:${dataSourceId}`, (cursor) =>
       this.http.postJson<NotionListPayload>(
         `/data_sources/${dataSourceId}/query`,
         {
+          ...filter,
           page_size: NOTION_PAGE_SIZE,
           ...(cursor !== undefined ? { start_cursor: cursor } : {}),
         },
@@ -235,7 +246,8 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
       this.http.postJson<NotionListPayload>(
         `/data_sources/${dataSourceId}/query`,
         {
-          is_archived: true,
+          ...filter,
+          in_trash: true,
           page_size: NOTION_PAGE_SIZE,
           ...(cursor !== undefined ? { start_cursor: cursor } : {}),
         },
@@ -257,7 +269,10 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
    *
    * @remarks
    * `input.listIds` selects which Notion databases to sync; absent/empty means every data source
-   * shared with the integration, matching every other container-aware connector.
+   * shared with the integration, matching every other container-aware connector. `input.since`,
+   * when the caller supplies it, filters both the live and archived queries to pages Notion
+   * reports edited at or after it — otherwise every sweep re-reads every row in every selected
+   * database from scratch.
    */
   async importWork(input: ImportWorkInput, importedAt: string): Promise<ImportedItem[]> {
     const selected =
@@ -268,7 +283,7 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
     const items: ImportedItem[] = [];
     for (const dataSourceId of selected) {
       const schema = await this.schemaFor(dataSourceId);
-      for (const row of await this.queryDataSource(dataSourceId)) {
+      for (const row of await this.queryDataSource(dataSourceId, input.since)) {
         const record = asRecord(row);
         if (record === undefined) continue;
         const item = mapNotionPage(record, schema, importedAt);

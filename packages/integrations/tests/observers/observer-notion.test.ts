@@ -25,7 +25,7 @@ function delivery(over: Record<string, unknown> = {}): Record<string, unknown> {
     integration_id: 'int_1',
     authors: [{ id: 'person_1', type: 'person' }],
     attempt_number: 1,
-    api_version: '2025-09-03',
+    api_version: '2026-03-11',
     type: 'page.properties_updated',
     entity: { type: 'page', id: 'page_1' },
     ...over,

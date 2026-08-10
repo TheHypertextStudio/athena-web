@@ -28,6 +28,7 @@ import {
   orderedColumns,
   projectRow,
   provisionedKind,
+  readMirrorProperties,
 } from '@docket/integrations';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
@@ -39,7 +40,12 @@ import { recordSyncConflict } from './sync-notion';
 import { runLeasedSync, type RunSyncOptions, type SyncRunRow } from './integration-sync';
 import type { IntegrationRow } from './integration-provider';
 import { contentChanged, planMirrorRow, type MirrorLocalRow } from './notion-mirror-plan';
-import { loadEntityRows, type MirrorEntityRecord } from './notion-mirror-entities';
+import {
+  adoptEntity,
+  applyPulledValues,
+  loadEntityRows,
+  type MirrorEntityRecord,
+} from './notion-mirror-entities';
 import type { MirrorDatabaseRow } from './notion-mirror-design';
 
 /**
@@ -72,6 +78,7 @@ export interface MirrorPassResult {
 export interface MirrorContext {
   readonly orgId: string;
   readonly integrationId: string;
+  readonly integrationRow: IntegrationRow;
   readonly actorId: string;
   readonly mirror: NotionMirrorPort;
   readonly now: Date;
@@ -372,10 +379,88 @@ export async function pullBackEntity(
     const local = mirrors.get(change.externalPageId);
     const action = planMirrorRow(local, change, direction);
 
-    if (action.kind === 'noop' || action.kind === 'pull' || action.kind === 'adopt') {
-      // `pull` and `adopt` write Docket state rather than Notion state; both need per-entity
-      // mapping that only the two-way entities have, and neither is wired yet — recorded as
-      // untouched rather than silently dropped. See the spec's open-work section.
+    if (action.kind === 'noop') continue;
+
+    if (action.kind === 'adopt') {
+      // A row created directly in Notion, on a two-way entity. `adoptEntity` reuses the same
+      // team-landing answer the linked-database mode already settled on (`resolveImportTeam`) —
+      // see its own doc comment for why that is the consistent answer rather than a new one.
+      if (written >= budget) {
+        complete = false;
+        break;
+      }
+      const values = readMirrorProperties(bindings, change.properties);
+      const entityId = await adoptEntity(
+        ctx.orgId,
+        ctx.actorId,
+        ctx.integrationRow,
+        design.entityType,
+        values,
+      );
+      if (entityId !== undefined) {
+        const record = await loadOneEntity(
+          ctx.orgId,
+          ctx.integrationId,
+          design.entityType,
+          entityId,
+        );
+        const contentHash =
+          record === undefined ? '' : projectRow(bindings, record.values).contentHash;
+        await db.insert(notionMirrorRow).values({
+          organizationId: ctx.orgId,
+          integrationId: ctx.integrationId,
+          entityType: design.entityType,
+          entityId,
+          externalPageId: change.externalPageId,
+          externalUpdatedAt: new Date(change.externalUpdatedAt),
+          lastPushedAt: null,
+          contentHash,
+        });
+        written += 1;
+      }
+      continue;
+    }
+
+    if (action.kind === 'pull') {
+      /* v8 ignore next -- @preserve defensive: `pull` is only returned by planMirrorRow when its
+       * `local` argument was defined (see notion-mirror-plan.ts) — this repeats that check because
+       * the narrowing does not cross the function-call boundary. */
+      if (local === undefined) continue;
+      const values = readMirrorProperties(bindings, change.properties);
+      const applied = await applyPulledValues(
+        ctx.orgId,
+        ctx.actorId,
+        design.entityType,
+        local.entityId,
+        values,
+      );
+      if (applied) {
+        // Recompute the content hash from Docket's now-current values, not just stamp the anchor.
+        // Skipping this would leave the stored hash describing the pre-pull row: the very next
+        // projection pass would see it as "changed" against a hash that predates the pull, and push
+        // straight back to Notion the same values just read from it — a real wasted write, not
+        // merely a stale flag, since the projected payload really would differ from what is stored.
+        const record = await loadOneEntity(
+          ctx.orgId,
+          ctx.integrationId,
+          design.entityType,
+          local.entityId,
+        );
+        const contentHash =
+          record === undefined ? null : projectRow(bindings, record.values).contentHash;
+        // No Notion call here — this is a local DB write, not a Notion write, so it is not paced
+        // against the rate limit. It IS counted against the pass's write budget: the budget's real
+        // job is capping how long one sweep runs, and a pull that reads Notion's full property set
+        // is not free either.
+        await db
+          .update(notionMirrorRow)
+          .set({
+            externalUpdatedAt: new Date(change.externalUpdatedAt),
+            ...(contentHash !== null ? { contentHash } : {}),
+          })
+          .where(eq(notionMirrorRow.id, local.mirrorRowId));
+        written += 1;
+      }
       continue;
     }
 
@@ -567,6 +652,7 @@ export async function runNotionMirrorSync(
     const ctx: MirrorContext = {
       orgId: row.organizationId,
       integrationId: row.id,
+      integrationRow: row,
       actorId: opts.actorId,
       mirror: buildNotionMirror(token === 'mock' ? undefined : token),
       now,

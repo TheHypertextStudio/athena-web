@@ -7,6 +7,36 @@
 
 ## Active Tasks
 
+### [AGENDA-RAIL-001] Redesign the Agenda rail as a purpose-built single-day companion
+
+- **Status**: REVIEW
+- **Started**: 2026-08-10
+- **Priority**: P1
+- **Description**: Replace the miniature full-calendar structure in the Agenda rail with a
+  purpose-built single-day companion that removes redundant date chrome and outer canvas padding,
+  separates day context from events, improves event legibility and spacing, uses intentional scale
+  steps, supports fast date jumps, and exposes direct click-or-drag creation through a local draft
+  region and responsive quick-create dialog.
+- **Subtasks**:
+  - [x] Inspect the current Agenda, shared scheduling canvas, quick-create path, and design audit.
+  - [x] Confirm the structural direction and direct-creation behavior with the user.
+  - [x] Record the approved design and its validation contract.
+  - [x] Self-review the design for ambiguity, contradictions, and scope.
+- **Blockers**: None.
+- **Notes**: This task is design-only. Implementation planning begins only after the written spec
+  receives explicit review.
+- **Files Changed**: `docs/superpowers/specs/2026-08-10-agenda-rail-structural-redesign-design.md`
+  and this work log.
+- **Validation**: The spec has no TODO/TBD placeholders, Prettier passes for both changed files,
+  and `git diff --check` reports no whitespace errors. The self-review resolved keyboard-shortcut
+  ownership and ensured one draft cannot render beside a duplicate optimistic item.
+- **Learnings**: The rail's visual defects share one structural cause: a multi-lane calendar host
+  owns single-day presentation decisions. Keeping scheduling geometry shared while moving date,
+  context, scale, event presentation, and responsive draft creation into a rail shell preserves
+  interaction parity without growing a matrix of canvas flags.
+
+---
+
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW

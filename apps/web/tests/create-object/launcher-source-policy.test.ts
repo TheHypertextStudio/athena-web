@@ -70,7 +70,7 @@ function supportedDialogForModule(sourcePath: string, moduleSpecifier: string): 
   let modulePath: string | undefined;
 
   if (normalizedSpecifier.startsWith('@/')) {
-    modulePath = `src/${normalizedSpecifier.slice(2)}`;
+    modulePath = posix.normalize(`src/${normalizedSpecifier.slice(2)}`);
   } else if (normalizedSpecifier.startsWith('.')) {
     modulePath = posix.normalize(
       posix.join(posix.dirname(normalizeSourcePath(sourcePath)), normalizedSpecifier),
@@ -94,6 +94,21 @@ function terminalJsxTagName(name: ts.JsxTagNameExpression): string | undefined {
   return undefined;
 }
 
+/** Return the supported dialog referenced by a default-export expression, when applicable. */
+function supportedDialogFromExpression(expression: ts.Expression): string | undefined {
+  if (ts.isIdentifier(expression)) return supportedDialogName(expression);
+  if (ts.isPropertyAccessExpression(expression)) return supportedDialogName(expression.name);
+  if (
+    ts.isParenthesizedExpression(expression) ||
+    ts.isAsExpression(expression) ||
+    ts.isSatisfiesExpression(expression) ||
+    ts.isNonNullExpression(expression)
+  ) {
+    return supportedDialogFromExpression(expression.expression);
+  }
+  return undefined;
+}
+
 /** Report syntax-aware supported-dialog ownership violations for one production source. */
 function findSupportedDialogViolations(entry: ProductionSource): readonly string[] {
   const path = normalizeSourcePath(entry.path);
@@ -112,8 +127,13 @@ function findSupportedDialogViolations(entry: ProductionSource): readonly string
   );
   const violations: string[] = [];
 
-  const report = (dialog: string | undefined, action: string, node: ts.Node): void => {
-    if (!dialog || dialog === allowedDialog) return;
+  const report = (
+    dialog: string | undefined,
+    action: string,
+    node: ts.Node,
+    ownerMayUseDialog = true,
+  ): void => {
+    if (!dialog || (ownerMayUseDialog && dialog === allowedDialog)) return;
     const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
     violations.push(`${path}:${line + 1}:${character + 1} ${action} ${dialog}`);
   };
@@ -121,12 +141,12 @@ function findSupportedDialogViolations(entry: ProductionSource): readonly string
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       const importClause = node.importClause;
+      const moduleDialog = supportedDialogForModule(path, node.moduleSpecifier.text);
+      if (importClause?.name) {
+        report(moduleDialog, 'imports default exposing', importClause.name);
+      }
       if (importClause?.namedBindings && ts.isNamespaceImport(importClause.namedBindings)) {
-        report(
-          supportedDialogForModule(path, node.moduleSpecifier.text),
-          'imports namespace exposing',
-          node,
-        );
+        report(moduleDialog, 'imports namespace exposing', node);
       }
       if (importClause?.namedBindings && ts.isNamedImports(importClause.namedBindings)) {
         for (const specifier of importClause.namedBindings.elements) {
@@ -148,6 +168,10 @@ function findSupportedDialogViolations(entry: ProductionSource): readonly string
         report(moduleDialog, 're-exports namespace exposing', node);
       } else {
         for (const specifier of node.exportClause.elements) {
+          const sourceName = specifier.propertyName ?? specifier.name;
+          if (moduleDialog && sourceName.text === 'default') {
+            report(moduleDialog, 're-exports default exposing', specifier, false);
+          }
           const names = new Set([
             supportedDialogName(specifier.propertyName),
             supportedDialogName(specifier.name),
@@ -155,6 +179,10 @@ function findSupportedDialogViolations(entry: ProductionSource): readonly string
           for (const dialog of names) report(dialog, 're-exports', specifier);
         }
       }
+    }
+
+    if (ts.isExportAssignment(node)) {
+      report(supportedDialogFromExpression(node.expression), 'default-exports', node, false);
     }
 
     if (ts.isVariableDeclaration(node)) {
@@ -287,6 +315,14 @@ describe('global creation launcher source policy', () => {
       `export * from '@/components/projects/create-project';`,
     ],
     [
+      'a normalized alias star re-export from a supported create module',
+      `export * from '@/components/tasks/../tasks/create-task';`,
+    ],
+    [
+      'a normalized alias namespace import from a supported create module',
+      `import * as dialogs from '@/components/tasks/../tasks/create-task';`,
+    ],
+    [
       'a namespace re-export from a supported create module',
       `export * as initiativeDialogs from '@/components/initiatives/create-initiative';`,
     ],
@@ -304,6 +340,27 @@ describe('global creation launcher source policy', () => {
     ).not.toEqual([]);
   });
 
+  it('rejects a default import and arbitrary local mount from a supported create module', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/example-launcher.tsx',
+        text: `
+          import TaskDialog from '@/components/tasks/create-task';
+          const view = <TaskDialog open />;
+        `,
+      }),
+    ).not.toEqual([]);
+  });
+
+  it('rejects a named default re-export from a supported create module', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/example-launcher.tsx',
+        text: `export { default as TaskDialog } from '@/components/tasks/create-task';`,
+      }),
+    ).not.toEqual([]);
+  });
+
   it.each([
     ['a foreign definition', `export const CreateProjectDialog = () => null;`],
     ['a foreign mount', `const view = <CreateProjectDialog open />;`],
@@ -311,6 +368,7 @@ describe('global creation launcher source policy', () => {
       'a foreign import',
       `import { CreateProjectDialog } from '@/components/projects/create-project';`,
     ],
+    ['a default export of its own dialog', `export default CreateTaskDialog;`],
   ])('rejects %s inside a supported dialog owner', (_label, text) => {
     expect(
       findSupportedDialogViolations({

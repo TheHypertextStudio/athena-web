@@ -1,0 +1,45 @@
+{
+  "themes": {
+    "light": {
+      "keywordColor": "lab(41.7003 22.5097 -73.931)",
+      "blockBackground": "lab(94.1456 -0.357151 -4.89365)",
+      "keywordContrast": 5.0411135035526735
+    },
+    "dark": {
+      "keywordColor": "lab(76.0907 1.30591 -39.8025)",
+      "blockBackground": "lab(19.2903 -0.244156 -6.65695)",
+      "keywordContrast": 7.103658285535827
+    }
+  },
+  "layout": {
+    "viewportWidth": 320,
+    "documentWidth": 320,
+    "selectHeight": 40,
+    "copyHeight": 40,
+    "blockWidth": 264,
+    "codeClientWidth": 262,
+    "codeScrollWidth": 685,
+    "keywordColor": "lab(41.7003 22.5097 -73.931)",
+    "blockBackground": "lab(94.1456 -0.357151 -4.89365)"
+  },
+  "commentThemes": {
+    "light": {
+      "keywordColor": "lab(41.7003 22.5097 -73.931)",
+      "blockBackground": "lab(94.1456 -0.357151 -4.89365)"
+    },
+    "dark": {
+      "keywordColor": "lab(76.0907 1.30591 -39.8025)",
+      "blockBackground": "lab(19.2903 -0.244156 -6.65695)"
+    }
+  },
+  "commentLayout": {
+    "viewportWidth": 320,
+    "documentWidth": 320,
+    "copyHeight": 40,
+    "blockWidth": 237,
+    "codeClientWidth": 235,
+    "codeScrollWidth": 701,
+    "textboxCount": 0,
+    "languageSelectCount": 0
+  }
+}

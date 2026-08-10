@@ -35,6 +35,8 @@ import {
 import { useMentionController } from '@/components/mentions/use-mention-controller';
 
 import { useSlashCommands } from './use-slash-commands';
+import { createCodeBlockExtension } from './code-block-extension';
+import CodeBlockNodeView from './code-block-node-view';
 
 /** Props for {@link FreeformTextEditor}. */
 export interface FreeformTextEditorProps {
@@ -140,7 +142,13 @@ export function FreeformTextEditor({
 
   const extensions = useMemo(
     () => [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false }),
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+        link: false,
+        codeBlock: false,
+        code: { HTMLAttributes: { 'data-inline-code': '' } },
+      }),
+      createCodeBlockExtension(ReactNodeViewRenderer(CodeBlockNodeView)),
       Link.configure({
         openOnClick: false,
         autolink: true,
@@ -171,12 +179,12 @@ export function FreeformTextEditor({
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        'aria-label': ariaLabel,
-        'aria-multiline': 'true',
+        ...(readOnly
+          ? { role: 'document' }
+          : { 'aria-label': ariaLabel, 'aria-multiline': 'true', role: 'textbox' }),
         'data-placeholder': placeholder,
-        role: 'textbox',
         class:
-          'text-on-surface text-body-medium min-h-10 w-full cursor-text font-normal outline-none [&_a:not([data-mention-kind])]:text-primary [&_a:not([data-mention-kind])]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_code]:bg-surface-container-high [&_code]:rounded [&_code]:px-1 [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-large [&_h2]:mt-5 [&_h3]:text-title-medium [&_h3]:mt-4 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:bg-surface-container-high [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+          'text-on-surface text-body-medium min-h-10 w-full cursor-text font-normal outline-none [&_a:not([data-mention-kind])]:text-primary [&_a:not([data-mention-kind])]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_[data-inline-code]]:border-outline-variant [&_[data-inline-code]]:bg-surface-container-high [&_[data-inline-code]]:rounded [&_[data-inline-code]]:border [&_[data-inline-code]]:px-1.5 [&_[data-inline-code]]:py-0.5 [&_[data-inline-code]]:font-mono [&_.hljs-keyword]:text-primary [&_.hljs-built_in]:text-primary [&_.hljs-type]:text-primary [&_.hljs-selector-tag]:text-primary [&_.hljs-title]:text-secondary [&_.hljs-function]:text-secondary [&_.hljs-section]:text-secondary [&_.hljs-string]:text-tertiary [&_.hljs-attr]:text-tertiary [&_.hljs-addition]:text-tertiary [&_.hljs-number]:text-secondary [&_.hljs-literal]:text-secondary [&_.hljs-symbol]:text-secondary [&_.hljs-comment]:text-on-surface-variant [&_.hljs-quote]:text-on-surface-variant [&_.hljs-meta]:text-on-surface-variant [&_.hljs-deletion]:text-error [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-large [&_h2]:mt-5 [&_h3]:text-title-medium [&_h3]:mt-4 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
       },
       handleKeyDown: (view, event) => {
         // First, because ProseMirror consults `editorProps.handleKeyDown` before any plugin

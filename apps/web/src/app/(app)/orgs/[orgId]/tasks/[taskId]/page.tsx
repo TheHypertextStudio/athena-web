@@ -23,6 +23,7 @@ import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
+import { CommentActivityFeed } from '@/components/task-detail/CommentActivityFeed';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
 import { StatusPicker } from '@/components/task-detail/StatusPicker';
 import { Subtasks } from '@/components/task-detail/Subtasks';
@@ -73,7 +74,10 @@ export default function TaskDetailPage(): JSX.Element {
     milestones,
     cycles,
     roles,
+    comments,
+    activities,
     detailKey,
+    commentsKey,
     isPending,
     isError,
     error,
@@ -85,6 +89,7 @@ export default function TaskDetailPage(): JSX.Element {
     patchTask,
     addSubtask,
     toggleSubtask,
+    addComment,
     deleteTask,
     resetDelete,
     actionError,
@@ -92,7 +97,7 @@ export default function TaskDetailPage(): JSX.Element {
     priorityPending,
     deletePending,
     deleteError,
-  } = useTaskMutations(orgId, taskId, detailKey, detailKey);
+  } = useTaskMutations(orgId, taskId, detailKey, commentsKey);
 
   const { scale: estimationScale } = useEstimationScale(orgId);
 
@@ -120,6 +125,7 @@ export default function TaskDetailPage(): JSX.Element {
   );
 
   const canEdit = useOrgCapability(members, roles, 'contribute');
+  const canComment = useOrgCapability(members, roles, 'comment');
   const canManage = useOrgCapability(members, roles, 'manage');
   // Rename any subtask in place (an arbitrary task by id), then re-read this task's detail so the
   // refreshed subtask titles flow back in.
@@ -380,6 +386,14 @@ export default function TaskDetailPage(): JSX.Element {
               />
             </div>
           </section>
+
+          <CommentActivityFeed
+            comments={comments}
+            activities={activities}
+            resolveActor={resolveActor}
+            onComment={addComment}
+            canComment={canComment}
+          />
 
           <TaskActivitySection orgId={orgId} taskId={taskId} />
         </div>

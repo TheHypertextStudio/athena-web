@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-09
+> **Last Updated**: 2026-08-10
 
 ---
 
@@ -4574,6 +4574,47 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [WEB-EDITOR-001] Make Markdown code feel native
+
+- **Completed**: 2026-08-10
+- **Duration**: 1 day
+- **Priority**: P1
+- **Summary**: Shared Markdown editors now treat inline code and fenced code as first-class
+  content. Typing exactly three backticks at the start of a line creates a block immediately;
+  authors can choose a durable fence language, readers can copy the exact source, and persisted
+  comments render through the same read-only Markdown surface instead of plain text.
+- **Files Changed**: `apps/web/src/components/editor/`,
+  `apps/web/src/components/task-detail/CommentActivityFeed.tsx`, the task detail page, editor unit tests, persisted
+  Playwright coverage, dependency manifests, the approved design and implementation plan, and the
+  eight-shot craft audit under `docs/design/audits/`.
+- **Validation**: Editor tests cover immediate and mid-line backticks, inline-code shortcuts,
+  Markdown round trips, known and unknown fences, exact copy, clipboard failure, lazy-load
+  deduplication, failed chunks, malformed grammars, and read-only comments. A real-stack
+  Playwright journey proved API persistence and reload behavior. The light/dark desktop/mobile
+  craft audit scored 3 in all eight dimensions, measured 40px controls, verified no 320px page
+  overflow, and met WCAG AA token contrast. Web lint, web type checking, the production build,
+  and all 1,878 web tests pass. The root tooling suite also passes all 139 tests. Its aggregate
+  test gate still reports only the settings/design-system token-policy debt already present at
+  `origin/main`; after removing two caught raw weight utilities, no Markdown editor file appears
+  in that failure set.
+- **Learnings**: Tiptap's Markdown serializer can retain the native code-block contract while a
+  ProseMirror decoration plugin supplies syntax tokens after an on-demand grammar settles. Keying
+  imports by grammar, rather than fence alias, keeps JSX/JavaScript and TSX/TypeScript to one
+  request each. Wiring the existing comment feed into the routed task detail page also exposed a
+  duplicated query key; correcting that boundary let the persisted browser journey prove the real
+  authoring, API, static-rendering, reload, highlighting, and exact-copy path end to end.
+- **Retrospective**:
+  - **What went well**: Red-green tests locked the authoring and failure semantics before the node
+    view polish, and browser measurements caught responsive and contrast requirements directly.
+  - **What could improve**: The machine-wide Portless proxy had drifted from the repository's
+    pinned client, which made the first real-stack attempt target the wrong listener.
+  - **What was learned**: An isolated repository-version proxy with an explicit port makes local
+    persisted E2E deterministic when a global proxy is newer.
+  - **What should change**: Keep persisted editor smoke coverage and the eight-shot evidence spec
+    together whenever the shared rich-text surface changes.
+
+---
 
 ### [DIRECTIVE-MCP-001] Expose the directive feed on the MCP surface
 

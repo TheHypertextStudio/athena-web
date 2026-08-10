@@ -7,6 +7,7 @@ import { Badge, Button, Separator, Text } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
+import { StaticMarkdown } from '@/components/editor/static-markdown';
 
 /** A resolved actor descriptor for rendering an author avatar + name. */
 export interface FeedActor {
@@ -114,9 +115,7 @@ function CommentEntry({
             <span className="text-on-surface-variant text-xs">(edited)</span>
           ) : null}
         </div>
-        <p className="text-on-surface text-body-medium mt-0.5 whitespace-pre-wrap">
-          {comment.body}
-        </p>
+        <StaticMarkdown value={comment.body} className="mt-0.5 max-w-none" />
       </div>
     </li>
   );
@@ -224,9 +223,9 @@ export function CommentActivityFeed({
   }
 
   return (
-    <section aria-labelledby="activity-heading" className="flex flex-col gap-4">
-      <h2 id="activity-heading" className="text-body-medium font-medium">
-        Activity
+    <section aria-labelledby="conversation-heading" className="flex flex-col gap-4">
+      <h2 id="conversation-heading" className="text-title-small text-on-surface">
+        Conversation
       </h2>
 
       {entries.length === 0 ? (

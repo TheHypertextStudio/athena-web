@@ -5,6 +5,7 @@ import { join, relative, resolve } from 'node:path';
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { CommentOut } from '@docket/types';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -193,8 +194,9 @@ describe('clicking an editor-shaped surface starts editing', () => {
 
   it('leaves a read-only document inert', async () => {
     renderEditor(<EntityDocument value="A single line." canEdit={false} onSave={vi.fn()} />);
-    const surface = await screen.findByLabelText('Description');
+    const surface = await screen.findByRole('document');
     expect(surface.getAttribute('contenteditable')).toBe('false');
+    expect(screen.queryByRole('textbox')).toBeNull();
   });
 
   it('focuses the composer body editor from a click on its own tinted background/padding', async () => {
@@ -245,6 +247,40 @@ describe('clicking an editor-shaped surface starts editing', () => {
     await waitFor(() => {
       expect(document.activeElement).toBe(surface);
     });
+  });
+
+  it('renders persisted comment Markdown through the shared read-only surface', async () => {
+    const user = userEvent.setup();
+    const { container } = renderEditor(
+      <CommentActivityFeed
+        comments={[
+          CommentOut.parse({
+            id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+            organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+            authorId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+            subjectType: 'task',
+            subjectId: 'task_1',
+            body: 'Run `pnpm test`.\n\n```typescript\nconst ready = true\n```',
+            parentCommentId: null,
+            editedAt: null,
+            createdAt: '2026-08-09T12:00:00.000Z',
+          }),
+        ]}
+        activities={[]}
+        resolveActor={() => ({ name: 'Ada', kind: 'human' })}
+        onComment={vi.fn(async () => undefined)}
+        canComment={false}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-inline-code]')).toHaveTextContent('pnpm test');
+    });
+    expect(container.querySelector('[data-code-block]')).toHaveTextContent('const ready = true');
+    expect(container.querySelector('[data-static-markdown]')).not.toBeNull();
+    expect(container.querySelector('.ProseMirror')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Copy code' }));
+    await expect(navigator.clipboard.readText()).resolves.toBe('const ready = true');
   });
 });
 

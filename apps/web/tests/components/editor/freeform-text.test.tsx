@@ -37,8 +37,10 @@ describe('FreeformTextEditor', () => {
   it('renders saved writing as quiet readable text, rather than a disabled field', () => {
     renderEditor(<FreeformText value="A saved update." emptyText="Nothing here." />);
 
-    const writing = screen.getByLabelText('Description');
+    const writing = screen.getByRole('document');
     expect(writing.getAttribute('contenteditable')).toBe('false');
+    expect(writing).not.toHaveAttribute('aria-multiline');
+    expect(screen.queryByRole('textbox')).toBeNull();
     expect(writing.closest('.opacity-60')).toBeNull();
   });
 });

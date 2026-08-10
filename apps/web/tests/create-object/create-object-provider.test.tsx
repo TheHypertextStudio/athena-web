@@ -18,7 +18,7 @@ import {
 import { ContextProvider, useContextState } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { JSX } from 'react';
+import { type JSX, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { membersGet, orgGet, rolesGet, sessionState, teamsGet } = vi.hoisted(() => {
@@ -269,6 +269,7 @@ function ProviderProbe(): JSX.Element {
       </button>
 
       <output data-testid="request-kind">{request?.kind ?? 'closed'}</output>
+      <output data-testid="initial-workspace">{request?.initialWorkspaceId ?? 'none'}</output>
       <output data-testid="shell-workspace">{shellWorkspaceId ?? 'none'}</output>
       <output data-testid="target-workspace">{creation.targetWorkspaceId ?? 'none'}</output>
       <output data-testid="target-state">{creation.loading ? 'loading' : 'settled'}</output>
@@ -282,6 +283,39 @@ function ProviderProbe(): JSX.Element {
       <output data-testid="can-create">{String(creation.permissions.canCreate)}</output>
       <output data-testid="permissions-loading">{String(creation.permissions.loading)}</output>
       {request ? <WorkspacePicker /> : null}
+    </>
+  );
+}
+
+/** Resolve shell workspace data after a creation request has already opened. */
+function DelayedProviderHarness(): JSX.Element {
+  const [workspaces, setWorkspaces] = useState<readonly OrgSummary[]>([]);
+  const { setContext } = useContextState();
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setContext(ALPHA_ID);
+          setWorkspaces(WORKSPACES);
+        }}
+      >
+        Resolve Alpha workspace
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setContext(BRAVO_ID);
+        }}
+      >
+        Navigate shell to Bravo workspace
+      </button>
+      <ActiveOrgContext orgs={workspaces} activeOrgId={null} orgsError={null}>
+        <CreateObjectProvider>
+          <ProviderProbe />
+        </CreateObjectProvider>
+      </ActiveOrgContext>
     </>
   );
 }
@@ -311,6 +345,21 @@ function renderProvider(workspaces: readonly OrgSummary[] = WORKSPACES): {
       rendered.rerender(frame());
     },
   };
+}
+
+/** Render the provider before the shell knows any workspace. */
+function renderDelayedProvider(): void {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+
+  render(
+    <QueryClientProvider client={client}>
+      <ContextProvider initialContext={null}>
+        <DelayedProviderHarness />
+      </ContextProvider>
+    </QueryClientProvider>,
+  );
 }
 
 beforeEach(() => {
@@ -385,6 +434,32 @@ describe('CreateObjectProvider', () => {
     await waitFor(() => {
       expect(screen.getByTestId('target-name')).toHaveTextContent('Bravo workspace');
     });
+  });
+
+  it('fills an unresolved opening snapshot once and keeps it immutable after a target switch', async () => {
+    renderDelayedProvider();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open project' }));
+    expect(screen.getByTestId('target-workspace')).toHaveTextContent('none');
+    expect(screen.getByTestId('initial-workspace')).toHaveTextContent('none');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve Alpha workspace' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('target-workspace')).toHaveTextContent(ALPHA_ID);
+      expect(screen.getByTestId('initial-workspace')).toHaveTextContent(ALPHA_ID);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Navigate shell to Bravo workspace' }));
+    expect(screen.getByTestId('shell-workspace')).toHaveTextContent(BRAVO_ID);
+    expect(screen.getByTestId('target-workspace')).toHaveTextContent(ALPHA_ID);
+    expect(screen.getByTestId('initial-workspace')).toHaveTextContent(ALPHA_ID);
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: BRAVO_ID },
+    });
+
+    expect(screen.getByTestId('target-workspace')).toHaveTextContent(BRAVO_ID);
+    expect(screen.getByTestId('initial-workspace')).toHaveTextContent(ALPHA_ID);
   });
 
   it('switches among workspaces and resolves the selected target data and permissions', async () => {

@@ -173,7 +173,14 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
   useEffect(() => {
     if (request === null || targetWorkspaceId !== null) return;
     const fallback = request.initialWorkspaceId ?? shellWorkspaceId ?? orgs[0]?.id ?? null;
-    if (fallback !== null) setTargetWorkspaceId(fallback);
+    if (fallback === null) return;
+    // An unresolved opening request is the one exception to the normal immutable snapshot rule:
+    // record the first usable shell workspace in both fields before the destination can change.
+    // Subsequent shell navigation and composer retargeting leave this opening classification intact.
+    setRequest((current) =>
+      current?.initialWorkspaceId === null ? { ...current, initialWorkspaceId: fallback } : current,
+    );
+    setTargetWorkspaceId(fallback);
   }, [orgs, request, shellWorkspaceId, targetWorkspaceId]);
 
   const value = useMemo<CreateObjectValue>(

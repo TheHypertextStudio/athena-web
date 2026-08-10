@@ -31,7 +31,7 @@ import {
 } from '@docket/ui/primitives';
 import { ChevronDown, LayoutTemplate, Settings } from '@docket/ui/icons';
 import Link from 'next/link';
-import { type JSX, useEffect, useMemo, useRef } from 'react';
+import { type JSX, type ReactNode, useEffect, useMemo, useRef } from 'react';
 
 import { sectionHref } from '@/components/settings/settings-registry';
 import { sortTemplates, templatesOfKindDef } from '@/components/templates/queries';
@@ -158,6 +158,14 @@ export interface ComposerTemplateControlProps {
    */
   teamId?: string | null;
   /**
+   * Decorative content to render only when this control itself is rendered.
+   *
+   * @remarks
+   * Global context rows use this for the separator before Template. Keeping it inside this
+   * data-connected control means pending and empty template lists cannot leave a dangling glyph.
+   */
+  leadingSeparator?: ReactNode;
+  /**
    * A template to apply as soon as the list loads, from a `?template=` compose request.
    *
    * @remarks
@@ -188,6 +196,7 @@ export function ComposerTemplateControl({
   onApply,
   currentActorId,
   teamId,
+  leadingSeparator,
   autoApplyId = null,
   disabled,
 }: ComposerTemplateControlProps): JSX.Element | null {
@@ -220,12 +229,17 @@ export function ComposerTemplateControl({
   // A failed or pending read renders nothing rather than a disabled control. The composer's job
   // is creating the entity; a template is an accelerant, and a broken accelerant should get out
   // of the way instead of sitting there greyed out asking to be understood.
+  if (templates.length === 0) return null;
+
   return (
-    <TemplateMenu
-      templates={templates}
-      onApply={onApply}
-      manageHref={sectionHref(orgId, 'templates')}
-      disabled={disabled}
-    />
+    <>
+      {leadingSeparator}
+      <TemplateMenu
+        templates={templates}
+        onApply={onApply}
+        manageHref={sectionHref(orgId, 'templates')}
+        disabled={disabled}
+      />
+    </>
   );
 }

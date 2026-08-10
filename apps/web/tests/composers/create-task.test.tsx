@@ -100,6 +100,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { CreateTaskDialog, GlobalTaskComposer } from '../../src/components/tasks/create-task';
+import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse } from '../support/http';
 
 // Branded ids (ActorId / ProjectId / TeamId / LabelId) are ULIDs, so the composer's `*.parse(...)`
@@ -112,7 +113,7 @@ const BUG_ID = 'BG000000000000000000000005';
 const TARGET_ORG_ID = '0RG00000000000000000000006';
 const TARGET_TEAM_ID = 'TEAM0000000000000000000007';
 const SECOND_TEAM_ID = 'TEAM0000000000000000000008';
-const CYCLE_ID = 'CYCLE00000000000000000009';
+const CYCLE_ID = 'CYC1E000000000000000000009';
 const MILESTONE_ID = 'MILESTONE000000000000000010';
 
 /** The single (implicit) team the composer creates tasks in. */
@@ -208,6 +209,17 @@ beforeEach(() => {
         { key: 'backlog', name: 'Backlog', type: 'backlog', position: 0 },
         { key: 'todo', name: 'Todo', type: 'unstarted', position: 1 },
       ],
+    }),
+  );
+  teamGet.mockImplementation(({ param }: { param: { teamId: string } }) =>
+    jsonResponse(true, {
+      workflowStates:
+        param.teamId === SECOND_TEAM_ID
+          ? [{ key: 'planned', name: 'Planned', type: 'unstarted', position: 0 }]
+          : [
+              { key: 'backlog', name: 'Backlog', type: 'backlog', position: 0 },
+              { key: 'todo', name: 'Todo', type: 'unstarted', position: 1 },
+            ],
     }),
   );
   createObjectState.current = {
@@ -361,7 +373,7 @@ function renderGlobalTask({
       <Harness />
     </QueryClientProvider>,
   );
-  return { closeCreate, onCreated };
+  return { closeCreate, onCreated, client };
 }
 
 /** Make one task template row without coupling tests to DTO implementation details. */
@@ -404,6 +416,7 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(team.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(template.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /Team/ })).toHaveLength(1);
+    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(2);
   });
 
   it('omits the team control from the global context row when one team is implied', async () => {
@@ -417,6 +430,17 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(screen.getByRole('combobox', { name: 'Workspace' })).toBeVisible();
     expect(await screen.findByRole('button', { name: 'Template' })).toBeVisible();
     expect(screen.queryByRole('button', { name: /Team/ })).toBeNull();
+    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(1);
+  });
+
+  it('does not leave a blank context row in the legacy single-team composer', async () => {
+    renderComposer();
+
+    await waitFor(() => {
+      expect(templatesGet).toHaveBeenCalled();
+    });
+
+    expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-5');
   });
 
   it.each(BLOCKED_DESTINATIONS)('disables submission when %s', async (_reason, destination) => {
@@ -431,8 +455,41 @@ describe('CreateTaskDialog — robust composer', () => {
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Blocked task' } });
 
     expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Create more' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Create more' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
     expect(taskPost).not.toHaveBeenCalled();
+  });
+
+  it('clears a prior team workflow and cycle before submitting under the newly selected team', async () => {
+    taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_team', title: 'Retargeted' }));
+    renderGlobalTask();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Status — Backlog/ })).toBeVisible();
+    });
+
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Retargeted' } });
+    fireEvent.click(screen.getByRole('button', { name: /Cycle/ }));
+    fireEvent.click(await screen.findByText('Cycle 1'));
+    fireEvent.pointerDown(screen.getByRole('button', { name: /Team — currently General/ }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByText('Platform'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Status — Planned/ })).toBeVisible();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(taskPost).toHaveBeenCalledTimes(1);
+    });
+    const body = firstJson(taskPost.mock.calls);
+    expect(body).toMatchObject({ teamId: SECOND_TEAM_ID, state: 'planned' });
+    expect(body).not.toHaveProperty('cycleId');
   });
 
   it('posts to the selected workspace and clears every task reference from the previous one', async () => {
@@ -631,7 +688,23 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(taskPost).not.toHaveBeenCalled();
   });
 
-  it('creates another task without closing and keeps its destination and properties', async () => {
+  it('defaults Create more off so the primary Create closes normally', async () => {
+    taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_normal', title: 'Normal task' }));
+    const { closeCreate, onCreated } = renderGlobalTask({ teams: TEAMS });
+
+    const createMore = screen.getByRole('switch', { name: 'Create more' });
+    expect(createMore).toHaveAttribute('aria-checked', 'false');
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Normal task' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(taskPost).toHaveBeenCalledTimes(1);
+    });
+    expect(closeCreate).toHaveBeenCalledOnce();
+    expect(onCreated).toHaveBeenCalledOnce();
+  });
+
+  it('continues from the primary Create while Create more is on and closes after it is turned off', async () => {
     taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_more', title: 'First task' }));
     const { onCreated, closeCreate } = renderGlobalTask({ teams: TEAMS });
 
@@ -647,8 +720,11 @@ describe('CreateTaskDialog — robust composer', () => {
       description.innerHTML = '<p>Only this text resets.</p>';
       fireEvent.input(description);
     });
+    const createMore = screen.getByRole('switch', { name: 'Create more' });
+    fireEvent.click(createMore);
+    expect(createMore).toHaveAttribute('aria-checked', 'true');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create more' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     await waitFor(() => {
       expect(taskPost).toHaveBeenCalledTimes(1);
@@ -667,6 +743,21 @@ describe('CreateTaskDialog — robust composer', () => {
     });
     expect(screen.getByRole('status')).toHaveTextContent('Task created. Ready to create another.');
     expect(document.activeElement).toBe(screen.getByLabelText('Task title'));
+
+    fireEvent.click(createMore);
+    expect(createMore).toHaveAttribute('aria-checked', 'false');
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Final task' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(taskPost).toHaveBeenCalledTimes(2);
+    });
+    expect(firstJson(taskPost.mock.calls.slice(1))).toMatchObject({
+      title: 'Final task',
+      projectId: APOLLO_ID,
+      teamId: TEAM_ID,
+    });
+    expect(closeCreate).toHaveBeenCalledOnce();
   });
 
   it('uses Cmd or Ctrl+Shift+Enter to create another task once', async () => {
@@ -679,6 +770,10 @@ describe('CreateTaskDialog — robust composer', () => {
 
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Shortcut' } });
     const description = screen.getByLabelText('Add a description…');
+    expect(screen.getByRole('switch', { name: 'Create more' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
     fireEvent.keyDown(description, { key: 'Enter', ctrlKey: true, shiftKey: true });
     fireEvent.keyDown(description, { key: 'Enter', ctrlKey: true, shiftKey: true, repeat: true });
 
@@ -690,6 +785,111 @@ describe('CreateTaskDialog — robust composer', () => {
       expect(screen.getByLabelText('Task title')).toHaveValue('');
     });
     expect(document.activeElement).toBe(screen.getByLabelText('Task title'));
+    expect(screen.getByRole('switch', { name: 'Create more' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+
+  it('uses Cmd or Ctrl+Shift+Enter from the title without changing Create more', async () => {
+    taskPost.mockResolvedValue(
+      jsonResponse(true, { id: 'task_title_shortcut', title: 'Title shortcut' }),
+    );
+    const { closeCreate } = renderGlobalTask({ teams: TEAMS });
+
+    const title = screen.getByLabelText('Task title');
+    fireEvent.change(title, { target: { value: 'Title shortcut' } });
+    fireEvent.keyDown(title, { key: 'Enter', metaKey: true, shiftKey: true });
+
+    await waitFor(() => {
+      expect(taskPost).toHaveBeenCalledTimes(1);
+      expect(title).toHaveValue('');
+    });
+    expect(closeCreate).not.toHaveBeenCalled();
+    expect(screen.getByRole('switch', { name: 'Create more' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+
+  it('routes a normal cross-workspace Task without invoking the origin callback', async () => {
+    taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_cross', title: 'Cross task' }));
+    const { closeCreate, onCreated } = renderGlobalTask({ teams: TEAMS });
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: TARGET_ORG_ID },
+    });
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalledWith({
+        param: { orgId: TARGET_ORG_ID, teamId: TARGET_TEAM_ID },
+      });
+    });
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Cross task' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/tasks/task_cross`);
+    });
+    expect(closeCreate).toHaveBeenCalledOnce();
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('keeps a cross-workspace repeat in the modal without invoking the origin callback', async () => {
+    taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_cross_more', title: 'Cross more' }));
+    const { client, closeCreate, onCreated } = renderGlobalTask({ teams: TEAMS });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: TARGET_ORG_ID },
+    });
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalledWith({
+        param: { orgId: TARGET_ORG_ID, teamId: TARGET_TEAM_ID },
+      });
+    });
+    fireEvent.click(screen.getByRole('switch', { name: 'Create more' }));
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Cross more' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(taskPost).toHaveBeenCalledTimes(1);
+    });
+    expect(closeCreate).not.toHaveBeenCalled();
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks(TARGET_ORG_ID) });
+  });
+
+  it('invalidates target task, graph, project, and cycle caches for a repeated Task', async () => {
+    taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_invalidate', title: 'Invalidate' }));
+    const { client } = renderGlobalTask({ teams: TEAMS });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /Project/ })).toBeEnabled();
+    });
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Invalidate' } });
+    fireEvent.click(screen.getByRole('button', { name: /Project/ }));
+    fireEvent.click(await screen.findByText('Apollo'));
+    fireEvent.click(screen.getByRole('button', { name: /Cycle/ }));
+    fireEvent.click(await screen.findByText('Cycle 1'));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Cycle — Cycle 1/ })).toBeVisible();
+    });
+    const createMore = screen.getByRole('switch', { name: 'Create more' });
+    fireEvent.click(createMore);
+    expect(createMore).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: 'Create task' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(taskPost).toHaveBeenCalledTimes(1);
+    });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks(ORG_ID) });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', ORG_ID, 'task-graph'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.projects(ORG_ID) });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.cycles(ORG_ID) });
   });
 
   it('offers no summary line — a task title is already its one-liner', async () => {

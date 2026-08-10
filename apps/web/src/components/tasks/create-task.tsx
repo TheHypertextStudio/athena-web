@@ -43,7 +43,8 @@ import {
   type WorkflowState,
 } from '@docket/types';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
-import { Button } from '@docket/ui/primitives';
+import { ChevronRight } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -92,6 +93,16 @@ export interface TaskDraft {
   estimate: number | null;
 }
 
+/** Workspace references carried with a successful task create for precise cache invalidation. */
+export interface TaskCreationReferences {
+  /** The project relation selected when the task was submitted, if any. */
+  readonly projectId: string | null;
+  /** The milestone relation selected when the task was submitted, if any. */
+  readonly milestoneId: string | null;
+  /** The cycle relation selected when the task was submitted, if any. */
+  readonly cycleId: string | null;
+}
+
 /** Destination facts supplied by the global create host. */
 export interface TaskGlobalCreation {
   /** The destination selected in the global composer, independent of the background shell. */
@@ -106,8 +117,18 @@ export interface TaskGlobalCreation {
   readonly canContribute: boolean;
   /** The target-workspace Actor id for scoping personal templates. */
   readonly currentActorId: string | null;
-  /** Observe a successful continuation without closing or navigating the composer. */
-  readonly onContinuedCreated: (task: TaskOut) => void;
+  /**
+   * Complete a successful create against the selected destination.
+   *
+   * @remarks
+   * The host owns invalidation, navigation, and the origin request callback. `continueCreating`
+   * distinguishes a persistent Create-more submit from the normal completion path.
+   */
+  readonly onCreated: (
+    task: TaskOut,
+    references: TaskCreationReferences,
+    continueCreating: boolean,
+  ) => void;
 }
 
 /** Props for {@link CreateTaskDialog}. */
@@ -186,6 +207,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
 
   const [workflowStates, setWorkflowStates] = useState<readonly WorkflowState[]>([]);
   const [creating, setCreating] = useState(false);
+  const [createMore, setCreateMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [bodyResetGeneration, setBodyResetGeneration] = useState(0);
@@ -261,6 +283,15 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     [updateDraft],
   );
 
+  /** Select a team and clear every field whose validity depends on that team's workflow. */
+  const changeTeam = useCallback(
+    (next: string | null): void => {
+      setWorkflowStates([]);
+      updateDraft(() => ({ teamOverride: next, state: null, cycleId: null }));
+    },
+    [updateDraft],
+  );
+
   const statusOptions = useMemo(() => workflowStateOptions(workflowStates), [workflowStates]);
 
   /** Toggle a label id in/out of the selected set. */
@@ -323,16 +354,23 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           return;
         }
         const created = await res.json();
+        const references: TaskCreationReferences = {
+          projectId: draft.projectId,
+          milestoneId: draft.milestoneId,
+          cycleId: draft.cycleId,
+        };
+        if (globalCreation !== undefined) {
+          globalCreation.onCreated(created, references, continueCreating);
+        }
         if (continueCreating) {
           focusTitleAfterContinuation.current = true;
           updateDraft(() => ({ title: '', description: '' }));
           setBodyResetGeneration((current) => current + 1);
           setStatusMessage('Task created. Ready to create another.');
-          globalCreation?.onContinuedCreated(created);
           return;
         }
         onOpenChange(false);
-        onCreated(created);
+        if (globalCreation === undefined) onCreated(created);
       } catch (caught) {
         setError(userErrorMessage(caught, 'Something went wrong creating the task.'));
       } finally {
@@ -349,23 +387,55 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       onOpenChange={onOpenChange}
       heading="New task"
       contextRow={
-        <>
-          {globalCreation ? <WorkspacePicker disabled={creating} /> : null}
-          <TeamPicker
-            teams={teams}
-            value={teamId}
-            onChange={(next) => {
-              setField('teamOverride', next);
-            }}
-            disabled={creating}
-          />
+        globalCreation ? (
+          <>
+            <WorkspacePicker disabled={creating} />
+            {teams.length > 1 ? (
+              <>
+                <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
+                <TeamPicker
+                  teams={teams}
+                  value={teamId}
+                  onChange={changeTeam}
+                  disabled={creating}
+                />
+              </>
+            ) : null}
+            <ComposerTemplateControl
+              orgId={orgId}
+              kind="task"
+              open={open && destinationReady}
+              autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
+              currentActorId={globalCreation.currentActorId}
+              teamId={teamId}
+              leadingSeparator={
+                <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
+              }
+              onApply={(chosen) => {
+                updateDraft((current) =>
+                  templateMerge(current, templatePatch(chosen.payload, 'task'), {
+                    document: 'description',
+                    labels: ['title'],
+                  }),
+                );
+              }}
+              disabled={creating || !destinationReady}
+            />
+          </>
+        ) : undefined
+      }
+      context={
+        globalCreation === undefined && teams.length > 1 ? (
+          <TeamPicker teams={teams} value={teamId} onChange={changeTeam} disabled={creating} />
+        ) : undefined
+      }
+      templateSlot={
+        globalCreation === undefined ? (
           <ComposerTemplateControl
             orgId={orgId}
             kind="task"
             open={open && destinationReady}
-            autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
-            currentActorId={globalCreation?.currentActorId}
-            teamId={globalCreation ? teamId : undefined}
+            autoApplyId={defaultTemplateId}
             onApply={(chosen) => {
               updateDraft((current) =>
                 templateMerge(current, templatePatch(chosen.payload, 'task'), {
@@ -376,20 +446,31 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
             }}
             disabled={creating || !destinationReady}
           />
-        </>
+        ) : undefined
       }
       leadingAction={
         globalCreation ? (
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            disabled={creating || !canSubmit}
+            role="switch"
+            aria-checked={createMore}
+            disabled={creating}
             onClick={() => {
-              void submit(true);
+              setCreateMore((current) => !current);
             }}
+            className="text-on-surface-variant hover:bg-surface-container-high inline-flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium disabled:opacity-50"
           >
+            <span
+              aria-hidden
+              className={cn(
+                'bg-outline-variant inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
+                createMore && 'bg-primary justify-end',
+              )}
+            >
+              <span className="bg-surface h-3 w-3 rounded-full" />
+            </span>
             Create more
-          </Button>
+          </button>
         ) : undefined
       }
       onLeadingAction={
@@ -415,7 +496,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       statusMessage={statusMessage}
       creating={creating}
       canSubmit={canSubmit}
-      onSubmit={() => void submit()}
+      onSubmit={() => void submit(createMore)}
       submitLabel="Create task"
     >
       <TaskComposerPickers
@@ -524,10 +605,18 @@ function GlobalTaskComposerDialog({
   const targetIsOriginalWorkspace = targetWorkspaceId === initialWorkspaceId;
   const taskOrgId = targetWorkspaceId ?? initialWorkspaceId ?? '';
 
-  const invalidateTargetTasks = useCallback(
-    (workspaceId: string | null): void => {
+  const invalidateTargetTaskCaches = useCallback(
+    (workspaceId: string | null, references: TaskCreationReferences): void => {
       if (workspaceId === null) return;
       void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(workspaceId) });
+      if (references.projectId !== null || references.milestoneId !== null) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.projects(workspaceId) });
+      }
+      if (references.cycleId !== null) {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.cycles(workspaceId) });
+      }
+      // `queryKeys.taskGraph` documents this raw prefix as the canonical all-scopes invalidation.
+      void queryClient.invalidateQueries({ queryKey: ['org', workspaceId, 'task-graph'] });
     },
     [queryClient],
   );
@@ -543,13 +632,7 @@ function GlobalTaskComposerDialog({
         onOpenChange={(next) => {
           if (!next) closeCreate();
         }}
-        onCreated={(task) => {
-          invalidateTargetTasks(targetWorkspaceId);
-          request.onCreated?.(task);
-          if (!targetIsOriginalWorkspace || request.sameWorkspaceCompletion === 'open') {
-            router.push(`/orgs/${taskOrgId}/tasks/${task.id}`);
-          }
-        }}
+        onCreated={() => undefined}
         defaultProjectId={targetIsOriginalWorkspace ? request.defaultProjectId : null}
         defaultAssigneeId={targetIsOriginalWorkspace ? request.defaultAssigneeId : null}
         defaultTemplateId={targetIsOriginalWorkspace ? request.defaultTemplateId : null}
@@ -560,9 +643,15 @@ function GlobalTaskComposerDialog({
           loadError: creation.loadError,
           canContribute: creation.permissions.canContribute,
           currentActorId,
-          onContinuedCreated: (task) => {
-            invalidateTargetTasks(targetWorkspaceId);
-            request.onCreated?.(task);
+          onCreated: (task, references, continueCreating) => {
+            invalidateTargetTaskCaches(targetWorkspaceId, references);
+            if (targetIsOriginalWorkspace) request.onCreated?.(task);
+            if (
+              !continueCreating &&
+              (!targetIsOriginalWorkspace || request.sameWorkspaceCompletion === 'open')
+            ) {
+              router.push(`/orgs/${taskOrgId}/tasks/${task.id}`);
+            }
           },
         }}
       />

@@ -238,7 +238,7 @@ export function ComposerShell({
         {contextRow !== undefined ? (
           <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm">{contextRow}</div>
         ) : icon || context || templateSlot ? (
-          <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm">
+          <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm has-[>div:empty]:hidden">
             {icon ? (
               <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4">
                 {icon}
@@ -260,7 +260,7 @@ export function ComposerShell({
           }}
           className={cn(
             'flex flex-col px-6',
-            contextRow !== undefined || icon || context || templateSlot ? 'pt-3' : 'pt-5',
+            contextRow !== undefined || icon || context ? 'pt-3' : 'pt-5',
           )}
         >
           {leadingFields ? <div className="flex flex-col gap-3 pb-4">{leadingFields}</div> : null}

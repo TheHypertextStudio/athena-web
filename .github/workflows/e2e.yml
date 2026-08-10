@@ -149,7 +149,7 @@ jobs:
       # failed, and that is the case with the least other evidence. Both steps only report.
       - name: Server logs
         if: always()
-        run: tail -100 /tmp/web.log /tmp/api.log
+        run: tail -n 100 -- /tmp/web.log /tmp/api.log || true
 
       - uses: actions/upload-artifact@v6
         if: always()

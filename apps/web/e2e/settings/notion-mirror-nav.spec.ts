@@ -50,8 +50,9 @@ test('Connections has a nav row and reaches the real team workspace, not the cal
   await page.goto(orgHref(orgId, 'settings/general'), { waitUntil: 'domcontentloaded' });
   const connectionsLink = page
     .getByRole('navigation', { name: 'Settings sections' })
-    .getByRole('link', { name: 'Connections' });
+    .locator(`a[href="/orgs/${orgId}/settings/connections"]`);
   await expect(connectionsLink).toBeVisible({ timeout: TIMEOUTS.pageReady });
+  await expect(connectionsLink).toHaveAccessibleName('Connections');
   await expect(connectionsLink).toHaveAttribute('href', `/orgs/${orgId}/settings/connections`);
 
   // 2. It reaches the TEAM's own connections, not the redirect's old destination (the caller's

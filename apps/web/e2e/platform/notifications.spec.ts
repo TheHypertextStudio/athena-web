@@ -30,11 +30,10 @@ test.describe('notification settings', () => {
     const quietHours = page.getByRole('checkbox', { name: 'Quiet hours' });
     await quietHours.check();
     await page.getByLabel('Quiet hours start').fill('19:00');
-    await page.getByLabel('Quiet hours end').fill('07:00');
     const quietHoursPatch = waitForApiResponse(page, /\/v1\/me\/notification-preferences(\?|$)/, {
       method: 'PATCH',
     });
-    await page.getByRole('button', { name: 'Save quiet hours' }).click();
+    await page.getByLabel('Quiet hours end').fill('07:00');
     expect((await quietHoursPatch).status()).toBe(200);
     await expect(quietHours).toBeChecked();
 

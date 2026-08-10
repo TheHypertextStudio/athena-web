@@ -44,9 +44,7 @@ test('a person can reach Notion from Connections and create the databases', asyn
   await expect(page.getByRole('link', { name: 'Configure' })).toHaveCount(9);
 
   // And the people surface is reachable rather than landing on a not-found.
-  await page.goto(orgHref(orgId, 'settings/connections/notion/people'), {
-    waitUntil: 'domcontentloaded',
-  });
+  await page.getByRole('link', { name: 'Match people' }).click();
   await expect(page.getByRole('heading', { name: 'People' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });

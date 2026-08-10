@@ -77,7 +77,7 @@ test.describe('progressive enhancement', () => {
     const title = `Enhancement check ${String(Date.now())}`;
     await page.getByPlaceholder('Task title').fill(title);
     await page.getByRole('button', { name: 'Create task' }).click();
-    await expect(page.getByText(title)).toBeVisible();
+    await expect(page.getByRole('link', { name: title }).first()).toBeVisible();
 
     // And an edit of the thing just created, made the same way a person would.
     await page.getByRole('link', { name: title }).first().click();

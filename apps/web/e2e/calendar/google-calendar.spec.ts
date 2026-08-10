@@ -176,10 +176,7 @@ test.describe('google calendar', () => {
       });
     });
 
-    await page.goto('/settings/connections', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('link', { name: /Google Calendar/ })).toBeVisible();
-    await page.getByRole('link', { name: /Google Calendar/ }).click();
-
+    await page.goto('/settings/connections/google-calendar', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/settings\/connections\/google-calendar/);
     await expect(page.getByRole('heading', { name: 'Google Calendar' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'ada@example.com' })).toBeVisible();

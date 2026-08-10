@@ -20,7 +20,9 @@ test.describe('recovery codes', () => {
     // ── Generate recovery codes (passkey step-up auto-approved by the virtual authenticator) ──
     await page.goto(settingsHref(orgId, 'security'));
     await page.getByRole('button', { name: /Generate recovery codes/ }).click();
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('dialog', {
+      name: /(?:Generate|Save your) recovery codes/,
+    });
     await dialog.getByRole('button', { name: 'Generate codes' }).click();
 
     // The one-time reveal shows ten numbered codes.

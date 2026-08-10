@@ -12,9 +12,9 @@ import { test } from '../helpers/fixtures';
  * deliberately so. Offline support has to be installed *before* it is needed, so the worker
  * registers on every route rather than only inside the authenticated shell.
  *
- * The suite runs against `pnpm dev`, which builds a **development** worker. That is the
- * interesting case to pin: a development worker must not cache build output, because Turbopack
- * rebuilds dev chunks in place and caching them would serve stale code and break hot reload.
+ * The suite runs against the same production build shape the deployment serves. That makes the
+ * production worker's complete static precache part of the contract: an offline route can stay in
+ * the running app only when the route's code is already available to the client router.
  *
  * Each spec starts from a clean slate — an installed worker from a previous spec would otherwise
  * decide the result of the next one.
@@ -50,6 +50,49 @@ async function loadControlled(page: Page, path: string): Promise<void> {
     timeout: 20_000,
   });
   await appReload;
+}
+
+/** Wait for the production worker's static manifest to finish populating Cache Storage. */
+async function waitForProductionPrecache(page: Page): Promise<void> {
+  const workerSource = await (await page.request.get('/sw.js')).text();
+  const expected = new Set(
+    [...workerSource.matchAll(/["'](\/_next\/static\/[^"']+)["']/g)]
+      .flatMap((match) => (match[1] ? [match[1]] : []))
+      .filter((path) => !path.endsWith('/')),
+  ).size;
+  expect(expected, 'the production worker should publish a static manifest').toBeGreaterThan(0);
+
+  await expect
+    .poll(
+      async () => {
+        const caches = await cacheContents(page);
+        const staticEntry = Object.entries(caches).find(([name]) =>
+          name.startsWith('docket-static-'),
+        );
+        return staticEntry ? new Set(staticEntry[1]).size : 0;
+      },
+      { message: 'the production worker should finish its static precache', timeout: 30_000 },
+    )
+    .toBe(expected);
+}
+
+/** Load an authenticated shell only after the worker knows its account and its build is ready. */
+async function loadControlledForAccount(page: Page, path: string): Promise<void> {
+  await loadControlled(page, path);
+  await expect
+    .poll(
+      async () =>
+        Object.entries(await cacheContents(page))
+          .filter(([name]) => name === 'docket-identity')
+          .flatMap(([, paths]) => paths),
+      { message: 'the app should publish its account identity to the worker' },
+    )
+    .toContain('/__docket-offline-identity');
+  await waitForProductionPrecache(page);
+
+  // The worker learns the account from the already-rendered shell. Reload once after that signal
+  // so this document navigation can become both the route entry and the account's stand-in shell.
+  await page.reload({ waitUntil: 'domcontentloaded' });
 }
 
 /**
@@ -239,24 +282,9 @@ test.describe('offline behaviour', () => {
       .toEqual([]);
   });
 
-  test('does not cache build output in development', async ({ page }) => {
-    // Turbopack rebuilds dev chunks in place, so caching them would serve stale code. This is what
-    // makes the worker safe to register in development at all.
+  test('precaches build output in production', async ({ page }) => {
     await loadControlled(page, '/sign-in');
-
-    // Reload so the page actually requests its chunks through the now-active worker; a "stays
-    // empty" assertion only means something once the traffic it would have cached has happened.
-    await page.reload();
-
-    await expect
-      .poll(async () => {
-        const caches = await cacheContents(page);
-        const staticEntry = Object.entries(caches).find(([name]) =>
-          name.startsWith('docket-static-'),
-        );
-        return staticEntry ? staticEntry[1].length : 0;
-      })
-      .toBe(0);
+    await waitForProductionPrecache(page);
   });
 });
 
@@ -277,8 +305,8 @@ test.describe('offline with a session', () => {
     // The case that matters most and used to fail: most routes are parameterized, so a route nobody
     // opened online is the normal case rather than the edge one.
     await signUpAndOnboard(page, 'offline-shell');
-    await loadControlled(page, '/today');
-    await expect(page.getByRole('navigation')).toBeVisible();
+    await loadControlledForAccount(page, '/today');
+    await expect(page.getByRole('navigation', { name: 'Home' })).toBeVisible();
 
     await context.setOffline(true);
     try {
@@ -286,7 +314,7 @@ test.describe('offline with a session', () => {
 
       // The shell, not offline.html. The waiting room has no navigation at all, so this single
       // assertion separates the two outcomes.
-      await expect(page.getByRole('navigation')).toBeVisible();
+      await expect(page.getByRole('navigation', { name: 'Home' })).toBeVisible();
       expect(new URL(page.url()).pathname).toBe('/tasks');
     } finally {
       await context.setOffline(false);
@@ -297,7 +325,7 @@ test.describe('offline with a session', () => {
     page,
   }) => {
     await signUpAndOnboard(page, 'offline-key');
-    await loadControlled(page, '/today');
+    await loadControlledForAccount(page, '/today');
 
     await expect
       .poll(
@@ -315,7 +343,7 @@ test.describe('offline with a session', () => {
     // the router falls back to a full navigation. Marking the window and finding the mark still
     // there proves the document survived the click.
     await signUpAndOnboard(page, 'offline-nav');
-    await loadControlled(page, '/today');
+    await loadControlledForAccount(page, '/today');
 
     await context.setOffline(true);
     try {

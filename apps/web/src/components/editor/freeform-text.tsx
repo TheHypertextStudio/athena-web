@@ -324,7 +324,14 @@ export interface EditableFreeformTextProps {
   className?: string;
 }
 
-/** A document body that autosaves on a debounce instead of exposing a Save button. */
+/**
+ * A document body that treats continuous typing as one autosave session.
+ *
+ * @remarks
+ * The draft persists after two seconds of quiet, or immediately when focus leaves the editor or
+ * navigation unmounts it. Those explicit session boundaries keep a task's append-only activity
+ * stream from recording partial sentences while preserving the latest text during navigation.
+ */
 export function EditableFreeformText({
   value,
   placeholder,
@@ -340,14 +347,24 @@ export function EditableFreeformText({
     if (!focused) setDraft(value ?? '');
   }, [value, focused]);
 
-  useDebouncedAutosave({
+  const { flush } = useDebouncedAutosave({
     value: draft,
     baseline: value ?? '',
+    delayMs: 2_000,
     save: (next) => {
       const trimmed = next.trim();
       onSave(trimmed.length > 0 ? trimmed : null);
     },
   });
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  useEffect(
+    () => () => {
+      flushRef.current();
+    },
+    [],
+  );
 
   if (!canEdit)
     return <FreeformText value={value ?? ''} emptyText={placeholder} className={className} />;
@@ -358,8 +375,15 @@ export function EditableFreeformText({
       onFocus={() => {
         setFocused(true);
       }}
-      onBlur={() => {
+      onBlur={(event) => {
+        if (
+          event.relatedTarget instanceof Node &&
+          event.currentTarget.contains(event.relatedTarget)
+        ) {
+          return;
+        }
         setFocused(false);
+        flush();
       }}
     >
       {activeOrgId === null ? (

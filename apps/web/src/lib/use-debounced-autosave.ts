@@ -16,7 +16,7 @@
  * different edit path — e.g. a record whose keys were reordered — is still recognized as unchanged
  * and does not trigger a redundant write or an autosave loop after the query refetches.
  */
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 /**
  * Serialize a value so two structurally-equal values compare equal regardless of object key order.
@@ -53,11 +53,18 @@ export interface DebouncedAutosaveOptions<T> {
   delayMs?: number;
 }
 
+/** Imperative controls for ending an autosave editing session. */
+export interface DebouncedAutosaveControls {
+  /** Persist the latest dirty value immediately and cancel its trailing timer. */
+  flush: () => void;
+}
+
 /**
  * Autosave a draft value on a debounce, only when it actually differs from the persisted baseline.
  *
  * @typeParam T - The shape of the value being edited.
  * @param options - See {@link DebouncedAutosaveOptions}.
+ * @returns A stable control that can flush the latest dirty value at an editing boundary.
  *
  * @example
  * ```typescript
@@ -69,24 +76,60 @@ export interface DebouncedAutosaveOptions<T> {
  * });
  * ```
  */
-export function useDebouncedAutosave<T>(options: DebouncedAutosaveOptions<T>): void {
+export function useDebouncedAutosave<T>(
+  options: DebouncedAutosaveOptions<T>,
+): DebouncedAutosaveControls {
   const { value, baseline, save, ready = true, delayMs = 600 } = options;
 
   // Latest value/save read at fire time so the effect can key only on primitive snapshots.
   const latest = useRef({ value, save });
   latest.current = { value, save };
 
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingKeyRef = useRef<string | null>(null);
+  const lastSavedKeyRef = useRef<string | null>(null);
+
   const valueKey = canonicalize(value);
   const baselineKey = canonicalize(baseline);
   const hasBaseline = baseline !== undefined;
 
+  const cancelTimer = useCallback((): void => {
+    if (timerRef.current === null) return;
+    clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }, []);
+
+  const flush = useCallback((): void => {
+    const pendingKey = pendingKeyRef.current;
+    if (pendingKey === null) return;
+
+    cancelTimer();
+    pendingKeyRef.current = null;
+    lastSavedKeyRef.current = pendingKey;
+    latest.current.save(latest.current.value);
+  }, [cancelTimer]);
+
   useEffect(() => {
-    if (!ready || !hasBaseline || valueKey === baselineKey) return;
-    const handle = setTimeout(() => {
-      latest.current.save(latest.current.value);
+    cancelTimer();
+    if (!ready || !hasBaseline || valueKey === baselineKey) {
+      pendingKeyRef.current = null;
+      if (valueKey === baselineKey) lastSavedKeyRef.current = null;
+      return;
+    }
+    if (lastSavedKeyRef.current === valueKey) {
+      pendingKeyRef.current = null;
+      return;
+    }
+
+    pendingKeyRef.current = valueKey;
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      flush();
     }, delayMs);
     return () => {
-      clearTimeout(handle);
+      cancelTimer();
     };
-  }, [valueKey, baselineKey, hasBaseline, ready, delayMs]);
+  }, [valueKey, baselineKey, hasBaseline, ready, delayMs, cancelTimer, flush]);
+
+  return useMemo(() => ({ flush }), [flush]);
 }

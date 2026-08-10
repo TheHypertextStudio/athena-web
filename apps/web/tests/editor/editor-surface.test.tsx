@@ -248,6 +248,44 @@ describe('clicking an editor-shaped surface starts editing', () => {
   });
 });
 
+describe('description edit sessions', () => {
+  it('flushes the final draft as soon as focus leaves the editor', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    renderEditor(<EntityDocument value="Persisted" canEdit onSave={onSave} />);
+    const surface = await screen.findByRole('textbox', { name: 'Description' });
+
+    fireEvent.mouseDown(surface.closest<HTMLElement>('.entity-document')!);
+    await waitFor(() => expect(surface).toHaveFocus());
+    await user.keyboard(' final');
+    expect(onSave).not.toHaveBeenCalled();
+    const finalDraft = surface.textContent.trim();
+    expect(finalDraft).not.toBe('Persisted');
+
+    fireEvent.blur(surface, { relatedTarget: document.body });
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith(finalDraft);
+  });
+
+  it('flushes the final draft when navigation unmounts the editor', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    const mounted = renderEditor(<EntityDocument value="Persisted" canEdit onSave={onSave} />);
+    const surface = await screen.findByRole('textbox', { name: 'Description' });
+
+    fireEvent.mouseDown(surface.closest<HTMLElement>('.entity-document')!);
+    await waitFor(() => expect(surface).toHaveFocus());
+    await user.keyboard(' final');
+    expect(onSave).not.toHaveBeenCalled();
+    const finalDraft = surface.textContent.trim();
+    expect(finalDraft).not.toBe('Persisted');
+
+    mounted.unmount();
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith(finalDraft);
+  });
+});
+
 describe('editor insets are symmetric', () => {
   /** Repository root, derived from this file rather than the process CWD. */
   const REPO_ROOT = resolve(import.meta.dirname, '../../../..');

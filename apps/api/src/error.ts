@@ -87,6 +87,17 @@ export class ReauthRequiredError extends ApiError {
   }
 }
 
+/** 429 — a durable credential-scoped request window is exhausted. */
+export class RateLimitedError extends ApiError {
+  /** Whole seconds until the current request window rolls over. */
+  readonly retryAfterSeconds: number;
+
+  constructor(retryAfterSeconds: number) {
+    super(429, 'rate_limited', 'Rate limit exceeded');
+    this.retryAfterSeconds = Math.max(1, Math.ceil(retryAfterSeconds));
+  }
+}
+
 /** 409 — account deletion is blocked by unresolved sole-owner shared orgs. */
 export class DeletionBlockedError extends ApiError {
   constructor(message = 'Resolve sole-owned shared workspaces before deleting your account') {
@@ -458,5 +469,8 @@ export function onError(err: Error, c: Context) {
     ...(apiErr instanceof MethodNotAllowedError ? { Allow: apiErr.allow.join(', ') } : {}),
     // §15.5.16 asks a 415 to name what it would have read, and `Accept` is that list.
     ...(apiErr instanceof UnsupportedMediaTypeError ? { Accept: apiErr.accepts.join(', ') } : {}),
+    ...(apiErr instanceof RateLimitedError
+      ? { 'Retry-After': String(apiErr.retryAfterSeconds) }
+      : {}),
   });
 }

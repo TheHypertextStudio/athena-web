@@ -224,6 +224,14 @@ export const timeShareToken = pgTable(
     includeTitle: boolean('include_title').notNull().default(true),
     /** When false the workspace name is withheld even though the title is shown. */
     includeWorkspace: boolean('include_workspace').notNull().default(false),
+    /** Every grant expires even when its owner never explicitly revokes it. */
+    expiresAt: timestamp('expires_at')
+      .notNull()
+      .default(sql`now() + interval '30 days'`),
+    /** Start of the durable fixed request window for this individual grant. */
+    rateWindowStartedAt: timestamp('rate_window_started_at').notNull().defaultNow(),
+    /** Requests observed in the current fixed window. */
+    rateWindowCount: integer('rate_window_count').notNull().default(0),
     lastUsedAt: timestamp('last_used_at'),
     revokedAt: timestamp('revoked_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),

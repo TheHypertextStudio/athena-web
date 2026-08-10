@@ -16,10 +16,10 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { db, hub, organization, task, timeInterval, timeRecord, timeShareToken } from '@docket/db';
 import type { PublicTimerStatusOut, TimeShareTokenCreate, TimeShareTokenOut } from '@docket/types';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 
-import { AuthError, NotFoundError } from '../error';
+import { AuthError, NotFoundError, RateLimitedError } from '../error';
 import { resolveTimeHubId } from './access';
 import { measureIntervals } from './read-models';
 
@@ -28,6 +28,12 @@ type PublicTimerStatusInput = z.input<typeof PublicTimerStatusOut>;
 
 /** How many random bytes back one share token. */
 const SHARE_TOKEN_BYTES = 24;
+
+/** A widget polling every 15 seconds stays far below this durable abuse ceiling. */
+const SHARE_RATE_LIMIT = 120;
+
+/** Fixed request-window length for an individual share credential. */
+const SHARE_RATE_WINDOW_MS = 60_000;
 
 /** The header a widget presents its token in. */
 export const SHARE_TOKEN_HEADER = 'x-docket-share-token';
@@ -56,6 +62,7 @@ function toShareTokenOut(row: typeof timeShareToken.$inferSelect): TimeShareToke
     includeTitle: row.includeTitle,
     includeWorkspace: row.includeWorkspace,
     createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     revokedAt: row.revokedAt?.toISOString() ?? null,
   };
@@ -85,6 +92,7 @@ export async function createTimeShareToken(
 ): Promise<MintedShareToken> {
   const hubId = await resolveTimeHubId(userId);
   const token = randomBytes(SHARE_TOKEN_BYTES).toString('base64url');
+  const now = new Date();
   const rows = await db
     .insert(timeShareToken)
     .values({
@@ -94,6 +102,8 @@ export async function createTimeShareToken(
       label: input.label,
       includeTitle: input.includeTitle,
       includeWorkspace: input.includeWorkspace,
+      expiresAt: new Date(now.getTime() + input.expiresInSeconds * 1000),
+      rateWindowStartedAt: now,
     })
     .returning();
   const row = rows[0];
@@ -143,11 +153,36 @@ export async function readSharedTimerStatus(rawToken: string): Promise<PublicTim
     .select()
     .from(timeShareToken)
     .where(
-      and(eq(timeShareToken.tokenHash, hashShareToken(rawToken)), isNull(timeShareToken.revokedAt)),
+      and(
+        eq(timeShareToken.tokenHash, hashShareToken(rawToken)),
+        isNull(timeShareToken.revokedAt),
+        gt(timeShareToken.expiresAt, now),
+      ),
     )
     .limit(1);
   const grant = grants[0];
   if (!grant) throw new AuthError('Share token is not valid');
+
+  const windowFloor = new Date(now.getTime() - SHARE_RATE_WINDOW_MS);
+  const resetWindow = sql`${timeShareToken.rateWindowStartedAt} <= ${windowFloor}`;
+  const usageRows = await db
+    .update(timeShareToken)
+    .set({
+      rateWindowStartedAt: sql`case when ${resetWindow} then ${now} else ${timeShareToken.rateWindowStartedAt} end`,
+      rateWindowCount: sql`case when ${resetWindow} then 1 else ${timeShareToken.rateWindowCount} + 1 end`,
+    })
+    .where(eq(timeShareToken.id, grant.id))
+    .returning({
+      count: timeShareToken.rateWindowCount,
+      windowStartedAt: timeShareToken.rateWindowStartedAt,
+    });
+  const usage = usageRows[0];
+  /* v8 ignore next -- @preserve the grant row was selected immediately above */
+  if (!usage) throw new AuthError('Share token is not valid');
+  if (usage.count > SHARE_RATE_LIMIT) {
+    const retryAt = usage.windowStartedAt.getTime() + SHARE_RATE_WINDOW_MS;
+    throw new RateLimitedError((retryAt - now.getTime()) / 1000);
+  }
   await db.update(timeShareToken).set({ lastUsedAt: now }).where(eq(timeShareToken.id, grant.id));
 
   const hubRows = await db.select({ id: hub.id }).from(hub).where(eq(hub.id, grant.hubId)).limit(1);
@@ -178,6 +213,7 @@ export async function readSharedTimerStatus(rawToken: string): Promise<PublicTim
       taskTitle: null,
       workspaceName: null,
       startedAt: null,
+      lastTransitionAt: null,
       elapsedMs: 0,
       serverNow: now.toISOString(),
     };
@@ -189,11 +225,16 @@ export async function readSharedTimerStatus(rawToken: string): Promise<PublicTim
       and(eq(timeInterval.timeRecordId, current.record.id), isNull(timeInterval.supersededById)),
     );
   const measures = measureIntervals(intervals, now);
+  const lastTransitionAt = intervals.reduce<Date | null>((latest, interval) => {
+    const transition = interval.endedAt ?? interval.startedAt;
+    return !latest || transition > latest ? transition : latest;
+  }, current.record.startedAt);
   return {
     state: current.record.status === 'open' ? 'running' : 'paused',
     taskTitle: grant.includeTitle ? (current.taskTitle ?? null) : null,
     workspaceName: grant.includeWorkspace ? (current.workspaceName ?? null) : null,
     startedAt: current.record.startedAt?.toISOString() ?? null,
+    lastTransitionAt: lastTransitionAt?.toISOString() ?? null,
     elapsedMs: measures.humanEffortMs,
     serverNow: now.toISOString(),
   };

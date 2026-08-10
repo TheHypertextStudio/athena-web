@@ -37,7 +37,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv, AuthSession } from '../context';
-import { AuthError } from '../error';
+import { AuthError, ReauthRequiredError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -74,6 +74,14 @@ function requireSession(c: { get: (key: 'session') => AuthSession }): NonNullabl
   const session = c.get('session');
   if (!session?.user) throw new AuthError();
   return session;
+}
+
+/** External credential creation is high-risk and requires passkey step-up within five minutes. */
+function requireFreshSession(session: NonNullable<AuthSession>): void {
+  const ageMs = Date.now() - new Date(session.session.createdAt).getTime();
+  if (ageMs > 5 * 60 * 1000) {
+    throw new ReauthRequiredError('Please re-verify your passkey to continue.');
+  }
 }
 
 const recordParam = z.object({ id: z.string() });
@@ -420,7 +428,9 @@ const time = new Hono<AppEnv>()
     }),
     zJson(TimeShareTokenCreate),
     async (c) => {
-      const { user } = requireSession(c);
+      const session = requireSession(c);
+      requireFreshSession(session);
+      const { user } = session;
       const minted = await createTimeShareToken(user.id, c.req.valid('json'));
       // `API_URL` is required, so the configured origin is always present and always authoritative.
       // This used to fall back to the request's own origin for preview and local stacks; those set

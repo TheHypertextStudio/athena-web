@@ -30,6 +30,8 @@ export const TimeShareTokenOut = z
     includeTitle: z.boolean(),
     includeWorkspace: z.boolean(),
     createdAt: z.string(),
+    /** The hard expiry after which the credential cannot be used, even if it was not revoked. */
+    expiresAt: z.string(),
     lastUsedAt: z.string().nullable(),
     revokedAt: z.string().nullable(),
   })
@@ -77,6 +79,14 @@ export const TimeShareTokenCreate = z
     includeTitle: z.boolean().optional().default(true),
     /** Additionally expose the workspace the tracked task belongs to. */
     includeWorkspace: z.boolean().optional().default(false),
+    /** Finite credential lifetime: five minutes through one year; defaults to 30 days. */
+    expiresInSeconds: z
+      .number()
+      .int()
+      .min(5 * 60)
+      .max(365 * 24 * 60 * 60)
+      .optional()
+      .default(30 * 24 * 60 * 60),
   })
   .meta({ id: 'TimeShareTokenCreate', description: 'Mint a current-task share token.' });
 /** Time-share-token-create value. */
@@ -100,6 +110,8 @@ export const PublicTimerStatusOut = z
     workspaceName: z.string().nullable(),
     /** When the current session began, or null when idle. */
     startedAt: z.string().nullable(),
+    /** Latest start, resume, or pause transition in the current session; null when idle. */
+    lastTransitionAt: z.string().nullable(),
     /** Tracked milliseconds in the current session, excluding paused gaps. */
     elapsedMs: z.number().int().nonnegative(),
     /** The server clock at read time, so a widget can tick without re-polling. */

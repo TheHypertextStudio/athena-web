@@ -54,6 +54,7 @@ import { ComposerShell } from '@/components/composer/composer-shell';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
 import { templateMerge, useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { completeCreateObject } from '@/components/create-object/create-object-completion';
 import {
   type CreateTaskRequest,
   useCreateObject,
@@ -558,11 +559,9 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
  * Mount the Task body for the shell-global creation request.
  *
  * @remarks
- * Page launchers still render {@link CreateTaskDialog} directly until their migration lands. This
- * host is deliberately additive: it is the one place where the Task body consumes the Task 1
- * request + destination model, while leaving those page-owned mounts API-compatible. It binds
- * every task-specific read and write to the selected target, and locally owns cross-workspace
- * completion so changing the modal destination never rebinds the page behind it.
+ * The host binds every task-specific read and write to the selected target. Completion is shared
+ * with the other global composers, so changing the modal destination never rebinds the page
+ * behind it or delivers destination data to an origin-page callback.
  *
  * @returns the global Task composer, or `null` while another kind is requested.
  */
@@ -609,22 +608,6 @@ function GlobalTaskComposerDialog({
   const targetIsOriginalWorkspace = targetWorkspaceId === initialWorkspaceId;
   const taskOrgId = targetWorkspaceId ?? initialWorkspaceId ?? '';
 
-  const invalidateTargetTaskCaches = useCallback(
-    (workspaceId: string | null, references: TaskCreationReferences): void => {
-      if (workspaceId === null) return;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(workspaceId) });
-      if (references.projectId !== null || references.milestoneId !== null) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.projects(workspaceId) });
-      }
-      if (references.cycleId !== null) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.cycles(workspaceId) });
-      }
-      // `queryKeys.taskGraph` documents this raw prefix as the canonical all-scopes invalidation.
-      void queryClient.invalidateQueries({ queryKey: ['org', workspaceId, 'task-graph'] });
-    },
-    [queryClient],
-  );
-
   return (
     <VocabularyProvider skin={creation.vocabulary}>
       <CreateTaskDialog
@@ -648,14 +631,32 @@ function GlobalTaskComposerDialog({
           canContribute: creation.permissions.canContribute,
           currentActorId,
           onCreated: (task, references, continueCreating) => {
-            invalidateTargetTaskCaches(targetWorkspaceId, references);
-            if (targetIsOriginalWorkspace) request.onCreated?.(task);
-            if (
-              !continueCreating &&
-              (!targetIsOriginalWorkspace || request.sameWorkspaceCompletion === 'open')
-            ) {
-              router.push(`/orgs/${taskOrgId}/tasks/${task.id}`);
+            const invalidationKeys: (readonly unknown[])[] = [
+              queryKeys.tasks(taskOrgId),
+              // `queryKeys.taskGraph` documents this raw prefix as the canonical all-scopes key.
+              ['org', taskOrgId, 'task-graph'],
+            ];
+            if (references.projectId !== null || references.milestoneId !== null) {
+              invalidationKeys.push(queryKeys.projects(taskOrgId));
             }
+            if (references.cycleId !== null) {
+              invalidationKeys.push(queryKeys.cycles(taskOrgId));
+            }
+            completeCreateObject({
+              created: task,
+              initialWorkspaceId,
+              targetWorkspaceId,
+              sameWorkspaceCompletion: request.sameWorkspaceCompletion,
+              onCreated: request.onCreated,
+              invalidationKeys,
+              invalidate: (queryKey) => {
+                void queryClient.invalidateQueries({ queryKey });
+              },
+              navigationEnabled: !continueCreating,
+              openDestination: () => {
+                router.push(`/orgs/${taskOrgId}/tasks/${task.id}`);
+              },
+            });
           },
         }}
       />

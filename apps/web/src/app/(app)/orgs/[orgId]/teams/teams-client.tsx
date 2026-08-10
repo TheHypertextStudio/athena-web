@@ -12,11 +12,10 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from '@docket/ui/primitives';
-import { type JSX, useCallback, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { type JSX, useCallback, useMemo } from 'react';
 
+import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { type TeamCardMember, TeamCard, TeamCardsSkeleton } from '@/components/teams/team-card';
-import { CreateTeamDialog } from '@/components/teams/create-team';
 import { buildTeamCatalog } from '@/components/teams/team-catalog';
 import { type TeamRow, ListSkeleton, TeamRows } from '@/components/teams/team-list-ui';
 import { applyView } from '@/components/views/apply-view';
@@ -53,14 +52,13 @@ import { userErrorMessage } from '@/lib/problem';
  */
 export default function TeamsListClient(): JSX.Element {
   const { orgId } = useAppParams<{ orgId: string }>();
-  const queryClient = useQueryClient();
+  const { openCreate } = useCreateObject();
 
   const projectNoun = useVocabulary('project').toLowerCase();
   const projectNounPlural = useVocabulary('project', { plural: true }).toLowerCase();
   const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
-  const [createOpen, setCreateOpen] = useState(false);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
   const { layout, setLayout } = useLayoutMode('cards');
 
@@ -230,15 +228,9 @@ export default function TeamsListClient(): JSX.Element {
     ],
   );
 
-  /** Refetch the roster after a create, then close the dialog. */
-  const handleCreated = useCallback(
-    (_created: TeamOut): void => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.teams(orgId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.teamRosters(orgId) });
-      setCreateOpen(false);
-    },
-    [orgId, queryClient],
-  );
+  const openTeamComposer = (): void => {
+    openCreate({ kind: 'team', initialWorkspaceId: orgId });
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
@@ -249,24 +241,11 @@ export default function TeamsListClient(): JSX.Element {
             The units that own your work — each with its own workflow, cycles, and triage queue.
           </p>
         </div>
-        <Button
-          type="button"
-          className="gap-1.5"
-          onClick={() => {
-            setCreateOpen(true);
-          }}
-        >
+        <Button type="button" className="gap-1.5" onClick={openTeamComposer}>
           <Plus aria-hidden="true" className="size-4" />
           New team
         </Button>
       </header>
-
-      <CreateTeamDialog
-        orgId={orgId}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={handleCreated}
-      />
 
       {!loading && !loadError && teams.length > 0 ? (
         <FilterToolbar
@@ -299,9 +278,7 @@ export default function TeamsListClient(): JSX.Element {
           body="Teams are the units that own work — each with its own workflow, cycles, and triage queue. Create one to start organizing your work."
           cta={{
             label: 'Create your first team',
-            onClick: () => {
-              setCreateOpen(true);
-            },
+            onClick: openTeamComposer,
           }}
         />
       ) : applied.rows.length === 0 ? (

@@ -15,10 +15,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 
-import { CreateProgramDialog } from '@/components/programs/create-program';
-import { useComposeRequest } from '@/components/composer/use-compose-param';
+import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { buildProgramCatalog } from '@/components/programs/program-catalog';
 import { statusGlyphType } from '@/components/programs/program-status';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
@@ -71,7 +69,7 @@ export default function ProgramsListClient(): JSX.Element {
   const router = useRouter();
   const params = useAppParams<{ orgId: string }>();
   const orgId = params.orgId;
-  const queryClient = useQueryClient();
+  const { openCreate } = useCreateObject();
   const [lens, setLens] = useState<Lens>('list');
 
   const programLabel = useVocabulary('program');
@@ -81,8 +79,6 @@ export default function ProgramsListClient(): JSX.Element {
   const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const composeTemplateId = useComposeRequest(setCreateOpen);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
 
   // The roster is the primary slice (its load gates the page); projects, tasks, and members
@@ -216,30 +212,20 @@ export default function ProgramsListClient(): JSX.Element {
   /** The active lens's roster renderer — same prop shape either way. */
   const RosterLens = lens === 'list' ? ProgramRows : ProgramCards;
 
-  /**
-   * Refetch the roster from the server (prefix-matched, so this also refreshes any open
-   * program-detail beneath it), then open the freshly-created program's detail.
-   */
-  const handleCreated = useCallback(
-    (created: ProgramOut): void => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.programs(orgId) });
-      router.push(`/orgs/${orgId}/programs/${created.id}`);
-    },
-    [orgId, router, queryClient],
-  );
+  const openProgramComposer = (): void => {
+    openCreate({
+      kind: 'program',
+      initialWorkspaceId: orgId,
+      sameWorkspaceCompletion: 'open',
+    });
+  };
 
   return (
     <ListPageLayout
       title={programsLabel}
       subtitle="Ongoing lines of work — tracked by health, not a finish line."
       actions={
-        <Button
-          type="button"
-          className="min-h-10 gap-1.5"
-          onClick={() => {
-            setCreateOpen(true);
-          }}
-        >
+        <Button type="button" className="min-h-10 gap-1.5" onClick={openProgramComposer}>
           <Plus aria-hidden="true" className="size-4" />
           New {programLabel}
         </Button>
@@ -281,15 +267,6 @@ export default function ProgramsListClient(): JSX.Element {
         ) : null
       }
     >
-      <CreateProgramDialog
-        orgId={orgId}
-        programNoun={programLabel}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={handleCreated}
-        defaultTemplateId={composeTemplateId}
-      />
-
       {loading ? (
         <ListSkeleton />
       ) : loadError ? (
@@ -303,9 +280,7 @@ export default function ProgramsListClient(): JSX.Element {
           body={`${programsLabel} are ongoing lines of work — your funded areas, retainers, or recurring operations. Create one to start tracking its health.`}
           cta={{
             label: `Create your first ${programLabel.toLowerCase()}`,
-            onClick: () => {
-              setCreateOpen(true);
-            },
+            onClick: openProgramComposer,
           }}
         />
       ) : applied.rows.length === 0 ? (

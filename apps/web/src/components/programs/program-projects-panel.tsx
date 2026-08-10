@@ -11,15 +11,15 @@
  * already established: an `EntityPicker` with a permanently-null `value` acts as a stateless
  * "add" trigger, and each row gets its own remove button.
  */
-import type { ProjectOut, TeamOut } from '@docket/types';
+import type { ProjectOut } from '@docket/types';
 import { EntityPicker } from '@docket/ui/components';
 import { Plus, X } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import type { QueryKey } from '@tanstack/react-query';
 import Link from 'next/link';
-import { type JSX, useMemo, useState } from 'react';
+import { type JSX, useMemo } from 'react';
 
-import { CreateProjectDialog } from '@/components/projects/create-project';
+import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { ProjectStatusBadge } from '@/components/projects/project-status';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { useProgramProjects } from '@/lib/use-program-projects';
@@ -31,10 +31,6 @@ export interface ProgramProjectsPanelProps {
   programDetailKey: QueryKey;
   /** Vocabulary-skinned singular project noun (e.g. "Project", "Workstream"). */
   projectNoun: string;
-  /** The teams a newly-created project may be attached to. */
-  teams: readonly TeamOut[];
-  defaultTeamId: string | null;
-  teamsLoading: boolean;
   canEdit: boolean;
   /** Navigate to a project's own detail view. */
   onOpenProject: (projectId: string) => void;
@@ -46,20 +42,17 @@ export function ProgramProjectsPanel({
   programId,
   programDetailKey,
   projectNoun,
-  teams,
-  defaultTeamId,
-  teamsLoading,
   canEdit,
   onOpenProject,
 }: ProgramProjectsPanelProps): JSX.Element {
   const projectNounLower = projectNoun.toLowerCase();
+  const { openCreate } = useCreateObject();
   const options = useComposerOptions(orgId, ['projects'], true);
   const { attach, detach, pending, mutationError } = useProgramProjects(
     orgId,
     programId,
     programDetailKey,
   );
-  const [createOpen, setCreateOpen] = useState(false);
 
   const filed = useMemo<readonly ProjectOut[]>(
     () => options.projects.filter((project) => project.programId === programId),
@@ -101,7 +94,15 @@ export function ProgramProjectsPanel({
               variant="secondary"
               className="gap-1.5"
               onClick={() => {
-                setCreateOpen(true);
+                openCreate({
+                  kind: 'project',
+                  initialWorkspaceId: orgId,
+                  defaultProgramId: programId,
+                  sameWorkspaceCompletion: 'stay',
+                  onCreated: (created) => {
+                    onOpenProject(created.id);
+                  },
+                });
               }}
             >
               <Plus aria-hidden className="size-4" />
@@ -158,21 +159,6 @@ export function ProgramProjectsPanel({
           {mutationError}
         </p>
       ) : null}
-
-      <CreateProjectDialog
-        orgId={orgId}
-        projectNoun={projectNoun}
-        teams={teams}
-        defaultTeamId={defaultTeamId}
-        teamsLoading={teamsLoading}
-        defaultProgramId={programId}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={(created) => {
-          setCreateOpen(false);
-          onOpenProject(created.id);
-        }}
-      />
     </div>
   );
 }

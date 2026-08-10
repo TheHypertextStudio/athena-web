@@ -16,19 +16,16 @@
  * none of them", because the two are different facts and only one of them is fixed by creating
  * work.
  */
-import type { MemberOut, TaskOut } from '@docket/types';
+import type { MemberOut } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
-import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useAppParams } from '@/lib/app-location';
-import { type JSX, useCallback, useMemo, useState } from 'react';
+import { type JSX, useMemo } from 'react';
 
-import { useActiveOrg } from '@/components/active-org';
-import { CreateTaskDialog } from '@/components/tasks/create-task';
-import { useComposeRequest } from '@/components/composer/use-compose-param';
+import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { applyView } from '@/components/views/apply-view';
 import type { FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
@@ -47,13 +44,10 @@ import { useRenameTask } from '@/lib/use-rename-task';
 export default function OrgTasksClient(): JSX.Element {
   const router = useRouter();
   const { orgId } = useAppParams<{ orgId: string }>();
-  const queryClient = useQueryClient();
   const prefetch = usePrefetchApi();
-  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
+  const { openCreate } = useCreateObject();
   const projectNoun = useVocabulary('project');
   const programNoun = useVocabulary('program');
-  const [createOpen, setCreateOpen] = useState(false);
-  const composeTemplateId = useComposeRequest(setCreateOpen);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
 
   const tasksQ = useApiListQuery(
@@ -171,25 +165,20 @@ export default function OrgTasksClient(): JSX.Element {
     [canEdit, catalog, memberById, orgId, renameTask, router],
   );
 
-  const handleCreated = useCallback(
-    (created: TaskOut): void => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.tasks(orgId) });
-      router.push(`/orgs/${orgId}/tasks/${created.id}`);
-    },
-    [orgId, queryClient, router],
-  );
+  const openTaskComposer = (): void => {
+    openCreate({
+      kind: 'task',
+      initialWorkspaceId: orgId,
+      sameWorkspaceCompletion: 'open',
+    });
+  };
 
   return (
     <ListPageLayout
       title="Tasks"
       actions={
         canEdit ? (
-          <Button
-            className="min-h-10 gap-1.5"
-            onClick={() => {
-              setCreateOpen(true);
-            }}
-          >
+          <Button className="min-h-10 gap-1.5" onClick={openTaskComposer}>
             <Plus aria-hidden className="size-4" /> New task
           </Button>
         ) : null
@@ -206,17 +195,6 @@ export default function OrgTasksClient(): JSX.Element {
         ) : null
       }
     >
-      <CreateTaskDialog
-        orgId={orgId}
-        teams={teams}
-        defaultTeamId={defaultTeamId}
-        teamsLoading={teamsLoading}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={handleCreated}
-        defaultTemplateId={composeTemplateId}
-      />
-
       {/* placeholder: the task rows — how many tasks the workspace has and each one's title,
           status, assignee, due date and estimate. The heading, filters and "New task" action above
           are static copy and paint immediately. */}
@@ -239,9 +217,7 @@ export default function OrgTasksClient(): JSX.Element {
             ? {
                 cta: {
                   label: 'Create your first task',
-                  onClick: () => {
-                    setCreateOpen(true);
-                  },
+                  onClick: openTaskComposer,
                 },
               }
             : {})}

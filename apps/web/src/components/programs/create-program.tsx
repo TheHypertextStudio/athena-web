@@ -38,6 +38,7 @@ import { ComposerShell } from '@/components/composer/composer-shell';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
 import { templateMerge, useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { completeCreateObject } from '@/components/create-object/create-object-completion';
 import {
   type CreateProgramRequest,
   useCreateObject,
@@ -362,14 +363,6 @@ function GlobalProgramComposerBody({
     !creation.permissions.loading &&
     creation.loadError === null;
 
-  const invalidateTargetProgramCaches = useCallback(
-    (workspaceId: string | null): void => {
-      if (workspaceId === null) return;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.programs(workspaceId) });
-    },
-    [queryClient],
-  );
-
   return (
     <CreateProgramDialog
       orgId={programOrgId}
@@ -388,11 +381,20 @@ function GlobalProgramComposerBody({
         canManage: creation.permissions.canManage,
         currentActorId,
         onCreated: (program) => {
-          invalidateTargetProgramCaches(targetWorkspaceId);
-          if (targetIsOriginalWorkspace) request.onCreated?.(program);
-          if (!targetIsOriginalWorkspace || request.sameWorkspaceCompletion === 'open') {
-            router.push(`/orgs/${programOrgId}/programs/${program.id}`);
-          }
+          completeCreateObject({
+            created: program,
+            initialWorkspaceId,
+            targetWorkspaceId,
+            sameWorkspaceCompletion: request.sameWorkspaceCompletion,
+            onCreated: request.onCreated,
+            invalidationKeys: [queryKeys.programs(programOrgId)],
+            invalidate: (queryKey) => {
+              void queryClient.invalidateQueries({ queryKey });
+            },
+            openDestination: () => {
+              router.push(`/orgs/${programOrgId}/programs/${program.id}`);
+            },
+          });
         },
       }}
     />

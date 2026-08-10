@@ -44,6 +44,7 @@ import { ComposerShell } from '@/components/composer/composer-shell';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
 import { templateMerge, useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { completeCreateObject } from '@/components/create-object/create-object-completion';
 import {
   type CreateProjectRequest,
   useCreateObject,
@@ -460,21 +461,6 @@ function GlobalProjectComposerBody({
     !creation.permissions.loading &&
     creation.loadError === null;
 
-  const invalidateTargetProjectCaches = useCallback(
-    (workspaceId: string | null, references: ProjectCreationReferences): void => {
-      if (workspaceId === null) return;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects(workspaceId) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.portfolio() });
-      if (references.programId !== null) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.programs(workspaceId) });
-      }
-      if (references.initiativeIds.length > 0) {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.initiatives(workspaceId) });
-      }
-    },
-    [queryClient],
-  );
-
   return (
     <CreateProjectDialog
       orgId={projectOrgId}
@@ -497,11 +483,30 @@ function GlobalProjectComposerBody({
         canContribute: creation.permissions.canContribute,
         currentActorId,
         onCreated: (project, references) => {
-          invalidateTargetProjectCaches(targetWorkspaceId, references);
-          if (targetIsOriginalWorkspace) request.onCreated?.(project);
-          if (!targetIsOriginalWorkspace || request.sameWorkspaceCompletion === 'open') {
-            router.push(`/orgs/${projectOrgId}/projects/${project.id}`);
+          const invalidationKeys: (readonly unknown[])[] = [
+            queryKeys.projects(projectOrgId),
+            queryKeys.portfolio(),
+          ];
+          if (references.programId !== null) {
+            invalidationKeys.push(queryKeys.programs(projectOrgId));
           }
+          if (references.initiativeIds.length > 0) {
+            invalidationKeys.push(queryKeys.initiatives(projectOrgId));
+          }
+          completeCreateObject({
+            created: project,
+            initialWorkspaceId,
+            targetWorkspaceId,
+            sameWorkspaceCompletion: request.sameWorkspaceCompletion,
+            onCreated: request.onCreated,
+            invalidationKeys,
+            invalidate: (queryKey) => {
+              void queryClient.invalidateQueries({ queryKey });
+            },
+            openDestination: () => {
+              router.push(`/orgs/${projectOrgId}/projects/${project.id}`);
+            },
+          });
         },
       }}
     />

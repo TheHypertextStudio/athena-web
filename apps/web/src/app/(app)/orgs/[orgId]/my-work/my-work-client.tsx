@@ -10,10 +10,9 @@ import { type JSX, useState } from 'react';
 
 import { useSession } from '@/lib/auth-client';
 import { entityDragSource } from '@/lib/entity-drag';
-import { useActiveOrg } from '@/components/active-org';
+import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { AgentTaskRow } from '@/components/my-work/agent-task-row';
 import { SplitTabs } from '@/components/my-work/split-tabs';
-import { CreateTaskDialog } from '@/components/tasks/create-task';
 import { useMyWork } from '@/lib/use-my-work';
 
 type WorkTab = 'mine' | 'delegated';
@@ -35,11 +34,10 @@ export default function MyWorkClient(): JSX.Element {
   const { data: authSession } = useSession();
   const userId = authSession?.user.id ?? null;
 
-  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
+  const { openCreate } = useCreateObject();
   const projectNoun = useVocabulary('project');
 
   const [tab, setTab] = useState<WorkTab>('mine');
-  const [composerOpen, setComposerOpen] = useState(false);
 
   const {
     setTasks,
@@ -58,6 +56,18 @@ export default function MyWorkClient(): JSX.Element {
 
   const visible = visibleTasks(tab);
 
+  const openTaskComposer = (): void => {
+    openCreate({
+      kind: 'task',
+      initialWorkspaceId: orgId,
+      sameWorkspaceCompletion: 'stay',
+      defaultAssigneeId: tab === 'mine' ? myActorId : null,
+      onCreated: (created) => {
+        setTasks((current) => [created, ...current]);
+      },
+    });
+  };
+
   const empty =
     tab === 'mine'
       ? {
@@ -75,30 +85,11 @@ export default function MyWorkClient(): JSX.Element {
             Your work and your agents&apos; work, grouped by {projectNoun.toLowerCase()}.
           </p>
         </div>
-        <Button
-          type="button"
-          className="gap-1.5 self-start"
-          onClick={() => {
-            setComposerOpen(true);
-          }}
-        >
+        <Button type="button" className="gap-1.5 self-start" onClick={openTaskComposer}>
           <Plus aria-hidden="true" className="size-4" />
           New task
         </Button>
       </header>
-
-      <CreateTaskDialog
-        orgId={orgId}
-        teams={teams}
-        defaultTeamId={defaultTeamId}
-        teamsLoading={teamsLoading}
-        open={composerOpen}
-        onOpenChange={setComposerOpen}
-        onCreated={(created) => {
-          setTasks((current) => [created, ...current]);
-        }}
-        defaultAssigneeId={tab === 'mine' ? myActorId : null}
-      />
 
       <SplitTabs
         label="Filter your work"
@@ -151,14 +142,7 @@ export default function MyWorkClient(): JSX.Element {
               {empty.body}
             </p>
             {tab === 'mine' ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setComposerOpen(true);
-                }}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={openTaskComposer}>
                 <Plus aria-hidden="true" className="size-4" />
                 New task
               </Button>

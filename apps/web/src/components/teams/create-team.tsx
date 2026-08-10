@@ -28,6 +28,7 @@ import { type JSX, useCallback, useId, useState } from 'react';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { completeCreateObject } from '@/components/create-object/create-object-completion';
 import {
   type CreateTeamRequest,
   useCreateObject,
@@ -301,7 +302,6 @@ function GlobalTeamComposerBody({
   const targetWorkspaceId = creation.targetWorkspaceId;
   const initialWorkspaceId = request.initialWorkspaceId ?? null;
   const teamOrgId = targetWorkspaceId ?? initialWorkspaceId ?? '';
-  const targetIsOriginalWorkspace = targetWorkspaceId === initialWorkspaceId;
   const destinationReady =
     initialWorkspaceId !== null &&
     targetWorkspaceId !== null &&
@@ -309,14 +309,6 @@ function GlobalTeamComposerBody({
     !creation.loading &&
     !creation.permissions.loading &&
     creation.loadError === null;
-
-  const invalidateTargetTeamCaches = useCallback(
-    (workspaceId: string | null): void => {
-      if (workspaceId === null) return;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.teams(workspaceId) });
-    },
-    [queryClient],
-  );
 
   return (
     <CreateTeamDialog
@@ -332,9 +324,20 @@ function GlobalTeamComposerBody({
         loadError: creation.loadError,
         canManage: creation.permissions.canManage,
         onCreated: (team) => {
-          invalidateTargetTeamCaches(targetWorkspaceId);
-          if (targetIsOriginalWorkspace) request.onCreated?.(team);
-          router.push(`/orgs/${teamOrgId}/teams`);
+          completeCreateObject({
+            created: team,
+            initialWorkspaceId,
+            targetWorkspaceId,
+            sameWorkspaceCompletion: 'open',
+            onCreated: request.onCreated,
+            invalidationKeys: [queryKeys.teams(teamOrgId)],
+            invalidate: (queryKey) => {
+              void queryClient.invalidateQueries({ queryKey });
+            },
+            openDestination: () => {
+              router.push(`/orgs/${teamOrgId}/teams`);
+            },
+          });
         },
       }}
     />

@@ -24,7 +24,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { composeHref } from '@/components/composer/use-compose-param';
+import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { sortTemplates, templatesDef } from '@/components/templates/queries';
 import { useApiQuery } from '@/lib/query';
 import { signOutAndPurge } from '@/lib/sign-out';
@@ -33,17 +33,17 @@ import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 import type { PaletteItem, PaletteScope } from './types';
 
 /**
- * The four kinds the palette can create, and the list route that owns each composer.
+ * The four template-backed kinds the palette can create directly.
  *
  * @remarks
  * Labels are resolved through the workspace's vocabulary at build time below, so a workspace that
  * calls Initiatives "Campaigns" gets "New campaign" rather than a term nobody there uses.
  */
 const CREATABLE = [
-  { kind: 'task', path: 'tasks', keywords: ['new', 'create', 'add', 'issue'] },
-  { kind: 'project', path: 'projects', keywords: ['new', 'create', 'add'] },
-  { kind: 'initiative', path: 'initiatives', keywords: ['new', 'create', 'add', 'goal', 'theme'] },
-  { kind: 'program', path: 'programs', keywords: ['new', 'create', 'add', 'stream'] },
+  { kind: 'task', keywords: ['new', 'create', 'add', 'issue'] },
+  { kind: 'project', keywords: ['new', 'create', 'add'] },
+  { kind: 'initiative', keywords: ['new', 'create', 'add', 'goal', 'theme'] },
+  { kind: 'program', keywords: ['new', 'create', 'add', 'stream'] },
 ] as const;
 
 /** The org-scoped sidebar destinations a command can jump to, with labels + glyphs. */
@@ -90,10 +90,8 @@ interface CommandActionsInput {
  *   hidden until the user types (see {@link PaletteItem.requiresQuery}).
  * - **organizations** — one "switch to <org>" command per membership, org-chipped.
  *
- * A create command navigates to the list page that owns that composer and asks it to open, via
- * the `?compose=1` convention in {@link useComposeParam}. The palette does not own a second copy
- * of any create dialog: one implementation, reachable from the header button, the empty state,
- * and here — the same rule `editor/slash-commands.ts` states for the slash menu.
+ * A create command opens the shell-global composer directly. It does not navigate away from the
+ * page under the palette, and template commands carry their template id in the opening request.
  *
  * Every command closes the palette before performing its navigation/effect, so selection
  * feels instant and the overlay never lingers.
@@ -108,6 +106,7 @@ export function useCommandActions({
 }: CommandActionsInput): readonly PaletteItem[] {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { openCreate } = useCreateObject();
   const { orgs, activeOrgId, orgName } = useActiveOrg();
   const { density, setDensity } = useContextState();
   const taskNoun = useVocabulary('task');
@@ -136,6 +135,18 @@ export function useCommandActions({
     const go = (href: string) => () => {
       close();
       router.push(href);
+    };
+
+    /** Open a global composer while preserving the page under the palette. */
+    const create = (kind: (typeof CREATABLE)[number]['kind'], defaultTemplateId?: string) => () => {
+      close();
+      if (!activeOrgId) return;
+      openCreate({
+        kind,
+        initialWorkspaceId: activeOrgId,
+        sameWorkspaceCompletion: 'open',
+        ...(defaultTemplateId === undefined ? {} : { defaultTemplateId }),
+      });
     };
 
     const items: PaletteItem[] = [];
@@ -211,7 +222,7 @@ export function useCommandActions({
           icon: Plus,
           keywords: [...creatable.keywords, noun],
           org: { id: activeOrgId, name },
-          run: go(composeHref(`/orgs/${activeOrgId}/${creatable.path}`)),
+          run: create(creatable.kind),
         });
       }
     }
@@ -258,11 +269,7 @@ export function useCommandActions({
     // ── Templates: one command per template, hidden until the user types ──────
     if (activeOrgId && templateItems) {
       const name = orgName(activeOrgId);
-      const pathFor = new Map(CREATABLE.map((c) => [c.kind, c.path]));
       for (const template of sortTemplates(templateItems)) {
-        const path = pathFor.get(template.targetType);
-        /* v8 ignore next -- @preserve every target type has a route; the map cannot miss */
-        if (!path) continue;
         const noun = nounFor[template.targetType];
         items.push({
           id: `template:${template.id}`,
@@ -273,7 +280,7 @@ export function useCommandActions({
           keywords: [template.name, noun, 'template', 'new', 'create'],
           org: { id: activeOrgId, name },
           requiresQuery: true,
-          run: go(composeHref(`/orgs/${activeOrgId}/${path}`, template.id)),
+          run: create(template.targetType, template.id),
         });
       }
     }
@@ -303,5 +310,6 @@ export function useCommandActions({
     setDensity,
     templateItems,
     nounFor,
+    openCreate,
   ]);
 }

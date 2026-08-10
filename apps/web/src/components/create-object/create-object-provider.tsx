@@ -17,6 +17,8 @@ import { useActiveOrg } from '@/components/active-org';
 
 import { CreationContextProvider } from './creation-context';
 
+export { type CompleteCreateObjectOptions, completeCreateObject } from './create-object-completion';
+
 /** Behavior shared by every supported create request. */
 interface CreateObjectRequestBase {
   /** Destination chosen by the launcher; omitted to snapshot the shell workspace at open time. */

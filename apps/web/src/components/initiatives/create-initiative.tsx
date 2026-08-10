@@ -42,6 +42,7 @@ import { ComposerShell } from '@/components/composer/composer-shell';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
 import { templateMerge, useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { completeCreateObject } from '@/components/create-object/create-object-completion';
 import {
   type CreateInitiativeRequest,
   useCreateObject,
@@ -386,14 +387,6 @@ function GlobalInitiativeComposerBody({
     !creation.permissions.loading &&
     creation.loadError === null;
 
-  const invalidateTargetInitiativeCaches = useCallback(
-    (workspaceId: string | null): void => {
-      if (workspaceId === null) return;
-      void queryClient.invalidateQueries({ queryKey: queryKeys.initiatives(workspaceId) });
-    },
-    [queryClient],
-  );
-
   return (
     <CreateInitiativeDialog
       orgId={initiativeOrgId}
@@ -412,11 +405,20 @@ function GlobalInitiativeComposerBody({
         canContribute: creation.permissions.canContribute,
         currentActorId,
         onCreated: (initiative) => {
-          invalidateTargetInitiativeCaches(targetWorkspaceId);
-          if (targetIsOriginalWorkspace) request.onCreated?.(initiative);
-          if (!targetIsOriginalWorkspace || request.sameWorkspaceCompletion === 'open') {
-            router.push(`/orgs/${initiativeOrgId}/initiatives/${initiative.id}`);
-          }
+          completeCreateObject({
+            created: initiative,
+            initialWorkspaceId,
+            targetWorkspaceId,
+            sameWorkspaceCompletion: request.sameWorkspaceCompletion,
+            onCreated: request.onCreated,
+            invalidationKeys: [queryKeys.initiatives(initiativeOrgId)],
+            invalidate: (queryKey) => {
+              void queryClient.invalidateQueries({ queryKey });
+            },
+            openDestination: () => {
+              router.push(`/orgs/${initiativeOrgId}/initiatives/${initiative.id}`);
+            },
+          });
         },
       }}
     />

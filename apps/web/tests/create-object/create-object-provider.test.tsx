@@ -57,6 +57,7 @@ vi.mock('../../src/lib/auth-client', () => ({
 import { ActiveOrgContext } from '../../src/components/active-org';
 import {
   type CreateInitiativeRequest,
+  completeCreateObject,
   CreateObjectProvider,
   type CreateProgramRequest,
   type CreateProjectRequest,
@@ -95,6 +96,93 @@ const BRAVO_WORKSPACE: OrgSummary = {
 };
 
 const WORKSPACES: readonly OrgSummary[] = [ALPHA_WORKSPACE, BRAVO_WORKSPACE];
+
+describe('completeCreateObject', () => {
+  it('invalidates destination keys and runs a same-workspace stay callback without routing', () => {
+    const invalidate = vi.fn();
+    const onCreated = vi.fn();
+    const openDestination = vi.fn();
+    const created = { id: 'project_1' };
+
+    completeCreateObject({
+      created,
+      initialWorkspaceId: ALPHA_ID,
+      targetWorkspaceId: ALPHA_ID,
+      sameWorkspaceCompletion: 'stay',
+      onCreated,
+      invalidationKeys: [['org', ALPHA_ID, 'projects'], ['portfolio']],
+      invalidate,
+      openDestination,
+    });
+
+    expect(invalidate.mock.calls).toEqual([[['org', ALPHA_ID, 'projects']], [['portfolio']]]);
+    expect(onCreated).toHaveBeenCalledWith(created);
+    expect(openDestination).not.toHaveBeenCalled();
+  });
+
+  it('routes a same-workspace open completion after notifying its launcher', () => {
+    const onCreated = vi.fn();
+    const openDestination = vi.fn();
+    const created = { id: 'program_1' };
+
+    completeCreateObject({
+      created,
+      initialWorkspaceId: ALPHA_ID,
+      targetWorkspaceId: ALPHA_ID,
+      sameWorkspaceCompletion: 'open',
+      onCreated,
+      invalidationKeys: [],
+      invalidate: vi.fn(),
+      openDestination,
+    });
+
+    expect(onCreated).toHaveBeenCalledWith(created);
+    expect(openDestination).toHaveBeenCalledOnce();
+  });
+
+  it('overrides stay for a cross-workspace target and suppresses the origin callback', () => {
+    const invalidate = vi.fn();
+    const onCreated = vi.fn();
+    const openDestination = vi.fn();
+
+    completeCreateObject({
+      created: { id: 'task_1' },
+      initialWorkspaceId: ALPHA_ID,
+      targetWorkspaceId: BRAVO_ID,
+      sameWorkspaceCompletion: 'stay',
+      onCreated,
+      invalidationKeys: [['org', BRAVO_ID, 'tasks']],
+      invalidate,
+      openDestination,
+    });
+
+    expect(invalidate).toHaveBeenCalledWith(['org', BRAVO_ID, 'tasks']);
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(openDestination).toHaveBeenCalledOnce();
+  });
+
+  it('can suppress navigation for create-more while retaining invalidation and callback policy', () => {
+    const invalidate = vi.fn();
+    const onCreated = vi.fn();
+    const openDestination = vi.fn();
+
+    completeCreateObject({
+      created: { id: 'task_2' },
+      initialWorkspaceId: ALPHA_ID,
+      targetWorkspaceId: ALPHA_ID,
+      sameWorkspaceCompletion: 'open',
+      navigationEnabled: false,
+      onCreated,
+      invalidationKeys: [['org', ALPHA_ID, 'tasks']],
+      invalidate,
+      openDestination,
+    });
+
+    expect(invalidate).toHaveBeenCalledOnce();
+    expect(onCreated).toHaveBeenCalledOnce();
+    expect(openDestination).not.toHaveBeenCalled();
+  });
+});
 
 const DETAILS: Readonly<Record<string, OrgOut>> = {
   [ALPHA_ID]: {

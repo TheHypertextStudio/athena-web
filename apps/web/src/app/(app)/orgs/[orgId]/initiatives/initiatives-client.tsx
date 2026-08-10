@@ -22,8 +22,7 @@ import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
-import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
-import { useComposeRequest } from '@/components/composer/use-compose-param';
+import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { formatDate } from '@/components/initiatives/format-date';
 import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
@@ -257,10 +256,9 @@ export default function InitiativesListClient(): JSX.Element {
   const router = useRouter();
   const queryClient = useQueryClient();
   const prefetch = usePrefetchApi();
+  const { openCreate } = useCreateObject();
   const initiativeNoun = useVocabulary('initiative');
   const initiativePlural = useVocabulary('initiative', { plural: true });
-  const [createOpen, setCreateOpen] = useState(false);
-  const composeTemplateId = useComposeRequest(setCreateOpen);
   const [attentionIndex, setAttentionIndex] = useState(0);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
   const catalog = useMemo(() => buildInitiativeCatalog(), []);
@@ -549,38 +547,24 @@ export default function InitiativesListClient(): JSX.Element {
     [createLink, moveLink, detachLink, isSelfOrDescendant],
   );
 
-  const handleCreated = useCallback(
-    (created: { id: string }): void => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.initiatives(orgId) });
-      router.push(`/orgs/${orgId}/initiatives/${created.id}`);
-    },
-    [orgId, queryClient, router],
-  );
+  const openInitiativeComposer = (): void => {
+    openCreate({
+      kind: 'initiative',
+      initialWorkspaceId: orgId,
+      sameWorkspaceCompletion: 'open',
+    });
+  };
 
   return (
     <ListPageLayout
       title={initiativePlural}
       subtitle="Strategic direction, health, and ownership at a glance."
       actions={
-        <Button
-          className="min-h-10 gap-1.5"
-          onClick={() => {
-            setCreateOpen(true);
-          }}
-        >
+        <Button className="min-h-10 gap-1.5" onClick={openInitiativeComposer}>
           <Plus aria-hidden className="size-4" /> New {initiativeNoun.toLowerCase()}
         </Button>
       }
     >
-      <CreateInitiativeDialog
-        orgId={orgId}
-        initiativeNoun={initiativeNoun}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={handleCreated}
-        defaultTemplateId={composeTemplateId}
-      />
-
       {!overview.isPending && !overview.isError ? (
         <section
           className="bg-surface-container-low mb-2 flex flex-col rounded-xl p-4"
@@ -895,9 +879,7 @@ export default function InitiativesListClient(): JSX.Element {
           body="Create a strategic theme to connect ongoing programs and bounded projects."
           cta={{
             label: `Create your first ${initiativeNoun.toLowerCase()}`,
-            onClick: () => {
-              setCreateOpen(true);
-            },
+            onClick: openInitiativeComposer,
           }}
         />
       )}

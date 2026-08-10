@@ -22,10 +22,9 @@ import { useAppParams, useAppPathname, useAppSearchParams } from '@/lib/app-loca
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
-import { CreateProjectDialog } from '@/components/projects/create-project';
-import { useComposeRequest } from '@/components/composer/use-compose-param';
 import { buildProjectCatalog } from '@/components/projects/project-catalog';
 import { buildProjectTimelineCatalog } from '@/components/projects/project-timeline-catalog';
 import { ProjectStatusBadge } from '@/components/projects/project-status';
@@ -350,14 +349,13 @@ function ListLens({
 export default function ProjectsListClient(): JSX.Element {
   const router = useRouter();
   const { orgId } = useAppParams<{ orgId: string }>();
-  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
+  const { teams } = useActiveOrg();
+  const { openCreate } = useCreateObject();
   const queryClient = useQueryClient();
   const prefetch = usePrefetchApi();
   const projectNoun = useVocabulary('project');
   const projectsNoun = useVocabulary('project', { plural: true });
   const teamNoun = useVocabulary('team');
-  const [createOpen, setCreateOpen] = useState(false);
-  const composeTemplateId = useComposeRequest(setCreateOpen);
   const pathname = useAppPathname();
   const searchParams = useAppSearchParams();
   const search = searchParams.toString();
@@ -599,13 +597,13 @@ export default function ProjectsListClient(): JSX.Element {
     [orgId, projectNoun, queryClient],
   );
 
-  const handleCreated = useCallback(
-    (created: ProjectOut): void => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects(orgId) });
-      router.push(`/orgs/${orgId}/projects/${created.id}`);
-    },
-    [orgId, queryClient, router],
-  );
+  const openProjectComposer = (): void => {
+    openCreate({
+      kind: 'project',
+      initialWorkspaceId: orgId,
+      sameWorkspaceCompletion: 'open',
+    });
+  };
 
   const lensOptions = [
     { id: 'list' as const, label: 'List', icon: ListView },
@@ -618,12 +616,7 @@ export default function ProjectsListClient(): JSX.Element {
       title={projectsNoun}
       subtitle="Plan, sequence, and operate bounded work."
       actions={
-        <Button
-          className="min-h-10 gap-1.5"
-          onClick={() => {
-            setCreateOpen(true);
-          }}
-        >
+        <Button className="min-h-10 gap-1.5" onClick={openProjectComposer}>
           <Plus aria-hidden className="size-4" /> New {projectNoun.toLowerCase()}
         </Button>
       }
@@ -683,18 +676,6 @@ export default function ProjectsListClient(): JSX.Element {
       }
       fill={lens !== 'list'}
     >
-      <CreateProjectDialog
-        orgId={orgId}
-        projectNoun={projectNoun}
-        teams={teams}
-        defaultTeamId={defaultTeamId}
-        teamsLoading={teamsLoading}
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onCreated={handleCreated}
-        defaultTemplateId={composeTemplateId}
-      />
-
       {/* placeholder: the project rows — how many projects the workspace has and each one's name,
           status, health, lead, cycle and progress. The heading, filters and "New project" action
           above are static copy and paint immediately. */}
@@ -715,9 +696,7 @@ export default function ProjectsListClient(): JSX.Element {
           body="Create a bounded effort to coordinate people, tasks, dependencies, and delivery."
           cta={{
             label: `Create your first ${projectNoun.toLowerCase()}`,
-            onClick: () => {
-              setCreateOpen(true);
-            },
+            onClick: openProjectComposer,
           }}
         />
       ) : rows.length === 0 ? (

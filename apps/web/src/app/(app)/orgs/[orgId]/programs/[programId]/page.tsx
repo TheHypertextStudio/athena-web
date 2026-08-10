@@ -32,7 +32,6 @@ import { ProgramWorkView } from '@/components/programs/program-work-view';
 import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
 import { PublishAction } from '@/components/publishing/publish-action';
-import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -48,7 +47,6 @@ export default function ProgramDetailPage(): JSX.Element {
   const params = useAppParams<{ orgId: string; programId: string }>();
   const { orgId, programId } = params;
 
-  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
   const programLabel = useVocabulary('program');
   const projectNounCased = useVocabulary('project');
 
@@ -323,9 +321,6 @@ export default function ProgramDetailPage(): JSX.Element {
             programId={programId}
             programDetailKey={detailKey}
             projectNoun={projectNounCased}
-            teams={teams}
-            defaultTeamId={defaultTeamId}
-            teamsLoading={teamsLoading}
             canEdit={canEdit}
             onOpenProject={(projectId) => {
               router.push(`/orgs/${orgId}/projects/${projectId}`);

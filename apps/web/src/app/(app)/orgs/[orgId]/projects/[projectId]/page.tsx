@@ -48,7 +48,7 @@ import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { projectStatusOf } from '@/components/project-detail/project-config';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { useActiveOrg } from '@/components/active-org';
-import { CreateTaskDialog } from '@/components/tasks/create-task';
+import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { api } from '@/lib/api';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
@@ -66,12 +66,12 @@ export default function ProjectDetailPage(): JSX.Element {
   const searchParams = useAppSearchParams();
   const queryClient = useQueryClient();
   const { orgId, projectId } = useAppParams<{ orgId: string; projectId: string }>();
-  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
+  const { defaultTeamId } = useActiveOrg();
+  const { openCreate } = useCreateObject();
   const highlightMilestoneId = searchParams.get('milestoneId');
   const projectNoun = useVocabulary('project');
   const taskNoun = useVocabulary('task').toLowerCase();
   const [tab, setTab] = useState<TabId>('overview');
-  const [taskComposerOpen, setTaskComposerOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const entityMentions = useEntityMentions(orgId, 'project', projectId);
 
@@ -517,7 +517,15 @@ export default function ProjectDetailPage(): JSX.Element {
               router.push(`/orgs/${orgId}/tasks/${taskId}`);
             }}
             onCreate={() => {
-              setTaskComposerOpen(true);
+              openCreate({
+                kind: 'task',
+                initialWorkspaceId: orgId,
+                defaultProjectId: projectId,
+                sameWorkspaceCompletion: 'stay',
+                onCreated: () => {
+                  void detailQ.refetch();
+                },
+              });
             }}
             onQuickAdd={(title) =>
               defaultTeamId
@@ -585,18 +593,6 @@ export default function ProjectDetailPage(): JSX.Element {
         </div>
       ) : null}
 
-      <CreateTaskDialog
-        orgId={orgId}
-        teams={teams}
-        defaultTeamId={defaultTeamId}
-        teamsLoading={teamsLoading}
-        open={taskComposerOpen}
-        onOpenChange={setTaskComposerOpen}
-        defaultProjectId={projectId}
-        onCreated={() => {
-          void detailQ.refetch();
-        }}
-      />
       {displayMutation.error ? (
         <p role="alert" className="text-error text-sm">
           {userErrorMessage(displayMutation.error, 'Could not customize this project.')}

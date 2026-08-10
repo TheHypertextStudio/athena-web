@@ -36,7 +36,14 @@ export function completeCreateObject<Created>(options: CompleteCreateObjectOptio
   for (const queryKey of options.invalidationKeys) options.invalidate(queryKey);
 
   const targetIsOriginalWorkspace = options.targetWorkspaceId === options.initialWorkspaceId;
-  if (targetIsOriginalWorkspace) options.onCreated?.(options.created);
+  if (targetIsOriginalWorkspace && options.onCreated) {
+    try {
+      options.onCreated(options.created);
+    } catch {
+      // Launcher refresh/prepend effects are best-effort after a confirmed create. A page-local
+      // failure must not turn the successful mutation into a composer error or block navigation.
+    }
+  }
 
   if (
     options.navigationEnabled !== false &&

@@ -120,24 +120,51 @@ describe('completeCreateObject', () => {
     expect(openDestination).not.toHaveBeenCalled();
   });
 
-  it('routes a same-workspace open completion after notifying its launcher', () => {
-    const onCreated = vi.fn();
+  it('still routes a same-workspace open completion when its launcher callback throws', () => {
+    const onCreated = vi.fn(() => {
+      throw new Error('origin page callback failed');
+    });
     const openDestination = vi.fn();
     const created = { id: 'program_1' };
 
-    completeCreateObject({
-      created,
-      initialWorkspaceId: ALPHA_ID,
-      targetWorkspaceId: ALPHA_ID,
-      sameWorkspaceCompletion: 'open',
-      onCreated,
-      invalidationKeys: [],
-      invalidate: vi.fn(),
-      openDestination,
-    });
+    expect(() => {
+      completeCreateObject({
+        created,
+        initialWorkspaceId: ALPHA_ID,
+        targetWorkspaceId: ALPHA_ID,
+        sameWorkspaceCompletion: 'open',
+        onCreated,
+        invalidationKeys: [['org', ALPHA_ID, 'programs']],
+        invalidate: vi.fn(),
+        openDestination,
+      });
+    }).not.toThrow();
 
     expect(onCreated).toHaveBeenCalledWith(created);
     expect(openDestination).toHaveBeenCalledOnce();
+  });
+
+  it('returns normally from same-workspace stay when its launcher callback throws', () => {
+    const invalidate = vi.fn();
+    const openDestination = vi.fn();
+
+    expect(() => {
+      completeCreateObject({
+        created: { id: 'task_3' },
+        initialWorkspaceId: ALPHA_ID,
+        targetWorkspaceId: ALPHA_ID,
+        sameWorkspaceCompletion: 'stay',
+        onCreated: () => {
+          throw new Error('origin task list callback failed');
+        },
+        invalidationKeys: [['org', ALPHA_ID, 'tasks']],
+        invalidate,
+        openDestination,
+      });
+    }).not.toThrow();
+
+    expect(invalidate).toHaveBeenCalledOnce();
+    expect(openDestination).not.toHaveBeenCalled();
   });
 
   it('overrides stay for a cross-workspace target and suppresses the origin callback', () => {
@@ -181,6 +208,42 @@ describe('completeCreateObject', () => {
     expect(invalidate).toHaveBeenCalledOnce();
     expect(onCreated).toHaveBeenCalledOnce();
     expect(openDestination).not.toHaveBeenCalled();
+  });
+
+  it('does not swallow destination invalidation failures', () => {
+    const openDestination = vi.fn();
+
+    expect(() => {
+      completeCreateObject({
+        created: { id: 'project_2' },
+        initialWorkspaceId: ALPHA_ID,
+        targetWorkspaceId: ALPHA_ID,
+        sameWorkspaceCompletion: 'open',
+        invalidationKeys: [['org', ALPHA_ID, 'projects']],
+        invalidate: () => {
+          throw new Error('query invalidation failed');
+        },
+        openDestination,
+      });
+    }).toThrow('query invalidation failed');
+
+    expect(openDestination).not.toHaveBeenCalled();
+  });
+
+  it('does not swallow destination routing failures', () => {
+    expect(() => {
+      completeCreateObject({
+        created: { id: 'initiative_2' },
+        initialWorkspaceId: ALPHA_ID,
+        targetWorkspaceId: ALPHA_ID,
+        sameWorkspaceCompletion: 'open',
+        invalidationKeys: [],
+        invalidate: vi.fn(),
+        openDestination: () => {
+          throw new Error('destination routing failed');
+        },
+      });
+    }).toThrow('destination routing failed');
   });
 });
 

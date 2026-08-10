@@ -11,6 +11,7 @@ import type {
 import { createContext, type JSX, type ReactNode, useContext, useMemo } from 'react';
 
 import { api } from '@/lib/api';
+import { useSession } from '@/lib/auth-client';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 
@@ -152,9 +153,12 @@ function ResolvedCreationContext({
   const teams = useMemo<readonly TeamOut[]>(() => teamsQ.data?.items ?? [], [teamsQ.data]);
   const members = useMemo<readonly MemberOut[]>(() => membersQ.data?.items ?? [], [membersQ.data]);
   const roles = useMemo<readonly RoleOut[]>(() => rolesQ.data?.items ?? [], [rolesQ.data]);
-  const canContribute = useOrgCapability(members, roles, 'contribute');
-  const canManage = useOrgCapability(members, roles, 'manage');
-  const permissionsLoading = membersQ.isPending || rolesQ.isPending;
+  const { isPending: identityLoading } = useSession();
+  const resolvedCanContribute = useOrgCapability(members, roles, 'contribute');
+  const resolvedCanManage = useOrgCapability(members, roles, 'manage');
+  const canContribute = !identityLoading && resolvedCanContribute;
+  const canManage = !identityLoading && resolvedCanManage;
+  const permissionsLoading = identityLoading || membersQ.isPending || rolesQ.isPending;
   const canCreate = requestKind === 'program' || requestKind === 'team' ? canManage : canContribute;
   const defaultTeam = teams.find((team) => team.key === DEFAULT_TEAM_KEY) ?? teams[0] ?? null;
   const loading =

@@ -1,5 +1,6 @@
 'use client';
 
+import type { InitiativeOut, ProgramOut, ProjectOut, TaskOut, TeamOut } from '@docket/types';
 import { useContextState } from '@docket/ui/components';
 import {
   createContext,
@@ -22,36 +23,82 @@ interface CreateObjectRequestBase {
   readonly initialWorkspaceId?: string | null;
 }
 
+/**
+ * Same-workspace navigation policy applied after a successful create.
+ *
+ * @remarks
+ * This policy applies only when the selected destination matches the shell workspace. The global
+ * composer owns cross-workspace routing and opens the created object's destination instead. Teams
+ * use their fixed destination-workspace Teams-page behavior rather than this policy.
+ */
+export type SameWorkspaceCompletion = 'stay' | 'open';
+
 /** Open the task composer with optional contextual draft defaults. */
 export interface CreateTaskRequest extends CreateObjectRequestBase {
+  /** Select the task composer. */
   readonly kind: 'task';
+  /** Stay on the invoking surface or open the new task when creation stays in the shell workspace. */
+  readonly sameWorkspaceCompletion: SameWorkspaceCompletion;
+  /** Notify the launcher after the task is created. */
+  readonly onCreated?: (task: TaskOut) => void;
+  /** Preselect a project in the new task draft. */
   readonly defaultProjectId?: string | null;
+  /** Preselect an assignee in the new task draft. */
   readonly defaultAssigneeId?: string | null;
+  /** Apply this task template when the composer opens. */
   readonly defaultTemplateId?: string | null;
 }
 
 /** Open the project composer with optional contextual draft defaults. */
 export interface CreateProjectRequest extends CreateObjectRequestBase {
+  /** Select the project composer. */
   readonly kind: 'project';
+  /** Stay on the invoking surface or open the new project within the shell workspace. */
+  readonly sameWorkspaceCompletion: SameWorkspaceCompletion;
+  /** Notify the launcher after the project is created. */
+  readonly onCreated?: (project: ProjectOut) => void;
+  /** Preselect a program in the new project draft. */
   readonly defaultProgramId?: string | null;
+  /** Apply this project template when the composer opens. */
   readonly defaultTemplateId?: string | null;
 }
 
 /** Open the initiative composer with an optional template. */
 export interface CreateInitiativeRequest extends CreateObjectRequestBase {
+  /** Select the initiative composer. */
   readonly kind: 'initiative';
+  /** Stay on the invoking surface or open the new initiative within the shell workspace. */
+  readonly sameWorkspaceCompletion: SameWorkspaceCompletion;
+  /** Notify the launcher after the initiative is created. */
+  readonly onCreated?: (initiative: InitiativeOut) => void;
+  /** Apply this initiative template when the composer opens. */
   readonly defaultTemplateId?: string | null;
 }
 
 /** Open the program composer with an optional template. */
 export interface CreateProgramRequest extends CreateObjectRequestBase {
+  /** Select the program composer. */
   readonly kind: 'program';
+  /** Stay on the invoking surface or open the new program within the shell workspace. */
+  readonly sameWorkspaceCompletion: SameWorkspaceCompletion;
+  /** Notify the launcher after the program is created. */
+  readonly onCreated?: (program: ProgramOut) => void;
+  /** Apply this program template when the composer opens. */
   readonly defaultTemplateId?: string | null;
 }
 
-/** Open the team composer. */
+/**
+ * Open the team composer.
+ *
+ * @remarks
+ * Teams deliberately have no same-workspace completion option. A successful Team create always
+ * opens the destination workspace's Teams page because Team has no standalone detail route.
+ */
 export interface CreateTeamRequest extends CreateObjectRequestBase {
+  /** Select the team composer. */
   readonly kind: 'team';
+  /** Notify the launcher after the team is created. */
+  readonly onCreated?: (team: TeamOut) => void;
 }
 
 /**

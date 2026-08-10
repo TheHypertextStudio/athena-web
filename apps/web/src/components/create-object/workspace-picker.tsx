@@ -41,6 +41,7 @@ export function WorkspacePicker({
         )}
       >
         <Building className="size-4 shrink-0 opacity-70" aria-hidden="true" />
+        <span className="sr-only">Workspace:</span>
         <span className="max-w-48 truncate">{label}</span>
       </div>
     );

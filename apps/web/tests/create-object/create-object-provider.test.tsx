@@ -2,27 +2,38 @@ import '@testing-library/jest-dom/vitest';
 
 import {
   ActorId,
+  type InitiativeOut,
   type MemberOut,
   type OrgOut,
   type OrgSummary,
   OrganizationId,
+  type ProgramOut,
+  type ProjectOut,
   RoleId,
   type RoleOut,
+  type TaskOut,
   TeamId,
   type TeamOut,
 } from '@docket/types';
-import { ContextProvider } from '@docket/ui/components';
+import { ContextProvider, useContextState } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { JSX } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { membersGet, orgGet, rolesGet, teamsGet } = vi.hoisted(() => ({
-  membersGet: vi.fn(),
-  orgGet: vi.fn(),
-  rolesGet: vi.fn(),
-  teamsGet: vi.fn(),
-}));
+const { membersGet, orgGet, rolesGet, sessionState, teamsGet } = vi.hoisted(() => {
+  const sessionState: {
+    data: null | { user: { id: string } };
+    isPending: boolean;
+  } = { data: null, isPending: true };
+  return {
+    membersGet: vi.fn(),
+    orgGet: vi.fn(),
+    rolesGet: vi.fn(),
+    sessionState,
+    teamsGet: vi.fn(),
+  };
+});
 
 vi.mock('../../src/lib/api', () => ({
   api: {
@@ -40,12 +51,17 @@ vi.mock('../../src/lib/api', () => ({
 }));
 
 vi.mock('../../src/lib/auth-client', () => ({
-  useSession: () => ({ data: { user: { id: 'user_1' } } }),
+  useSession: () => sessionState,
 }));
 
 import { ActiveOrgContext } from '../../src/components/active-org';
 import {
+  type CreateInitiativeRequest,
   CreateObjectProvider,
+  type CreateProgramRequest,
+  type CreateProjectRequest,
+  type CreateTaskRequest,
+  type CreateTeamRequest,
   useCreateObject,
 } from '../../src/components/create-object/create-object-provider';
 import { useCreationContext } from '../../src/components/create-object/creation-context';
@@ -185,17 +201,45 @@ const ROLES: Readonly<Record<string, readonly RoleOut[]>> = {
   ],
 };
 
+const REQUEST_CONTRACT = [
+  {
+    kind: 'task',
+    sameWorkspaceCompletion: 'stay',
+    onCreated: (_created: TaskOut): void => undefined,
+  } satisfies CreateTaskRequest,
+  {
+    kind: 'project',
+    sameWorkspaceCompletion: 'open',
+    onCreated: (_created: ProjectOut): void => undefined,
+  } satisfies CreateProjectRequest,
+  {
+    kind: 'initiative',
+    sameWorkspaceCompletion: 'stay',
+    onCreated: (_created: InitiativeOut): void => undefined,
+  } satisfies CreateInitiativeRequest,
+  {
+    kind: 'program',
+    sameWorkspaceCompletion: 'open',
+    onCreated: (_created: ProgramOut): void => undefined,
+  } satisfies CreateProgramRequest,
+  {
+    kind: 'team',
+    onCreated: (_created: TeamOut): void => undefined,
+  } satisfies CreateTeamRequest,
+] as const;
+
 /** Expose the provider state through user-operable controls, including the workspace picker. */
 function ProviderProbe(): JSX.Element {
   const { request, openCreate, closeCreate } = useCreateObject();
   const creation = useCreationContext();
+  const { activeOrgId: shellWorkspaceId } = useContextState();
 
   return (
     <>
       <button
         type="button"
         onClick={() => {
-          openCreate({ kind: 'project' });
+          openCreate({ kind: 'project', sameWorkspaceCompletion: 'open' });
         }}
       >
         Open project
@@ -203,7 +247,19 @@ function ProviderProbe(): JSX.Element {
       <button
         type="button"
         onClick={() => {
-          openCreate({ kind: 'program' });
+          openCreate({
+            kind: 'project',
+            initialWorkspaceId: BRAVO_ID,
+            sameWorkspaceCompletion: 'stay',
+          });
+        }}
+      >
+        Open targeted project
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          openCreate({ kind: 'program', sameWorkspaceCompletion: 'open' });
         }}
       >
         Open program
@@ -213,6 +269,7 @@ function ProviderProbe(): JSX.Element {
       </button>
 
       <output data-testid="request-kind">{request?.kind ?? 'closed'}</output>
+      <output data-testid="shell-workspace">{shellWorkspaceId ?? 'none'}</output>
       <output data-testid="target-workspace">{creation.targetWorkspaceId ?? 'none'}</output>
       <output data-testid="target-state">{creation.loading ? 'loading' : 'settled'}</output>
       <output data-testid="target-name">{creation.workspace?.name ?? 'none'}</output>
@@ -223,18 +280,21 @@ function ProviderProbe(): JSX.Element {
       </output>
       <output data-testid="default-team">{creation.defaultTeamId ?? 'none'}</output>
       <output data-testid="can-create">{String(creation.permissions.canCreate)}</output>
+      <output data-testid="permissions-loading">{String(creation.permissions.loading)}</output>
       {request ? <WorkspacePicker /> : null}
     </>
   );
 }
 
 /** Render the global provider in the same shell contexts it consumes in production. */
-function renderProvider(workspaces: readonly OrgSummary[] = WORKSPACES): void {
+function renderProvider(workspaces: readonly OrgSummary[] = WORKSPACES): {
+  readonly rerenderProvider: () => void;
+} {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
 
-  render(
+  const frame = (): JSX.Element => (
     <QueryClientProvider client={client}>
       <ContextProvider initialContext={ALPHA_ID}>
         <ActiveOrgContext orgs={workspaces} activeOrgId={null} orgsError={null}>
@@ -243,11 +303,19 @@ function renderProvider(workspaces: readonly OrgSummary[] = WORKSPACES): void {
           </CreateObjectProvider>
         </ActiveOrgContext>
       </ContextProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const rendered = render(frame());
+  return {
+    rerenderProvider: () => {
+      rendered.rerender(frame());
+    },
+  };
 }
 
 beforeEach(() => {
+  sessionState.data = { user: { id: 'user_1' } };
+  sessionState.isPending = false;
   orgGet
     .mockReset()
     .mockImplementation(({ param }: { param: { orgId: string } }) =>
@@ -271,6 +339,23 @@ beforeEach(() => {
 });
 
 describe('CreateObjectProvider', () => {
+  it('carries completion behavior and a kind-typed callback for every supported request', () => {
+    expect(REQUEST_CONTRACT.map((request) => request.kind)).toEqual([
+      'task',
+      'project',
+      'initiative',
+      'program',
+      'team',
+    ]);
+    expect([
+      REQUEST_CONTRACT[0].sameWorkspaceCompletion,
+      REQUEST_CONTRACT[1].sameWorkspaceCompletion,
+      REQUEST_CONTRACT[2].sameWorkspaceCompletion,
+      REQUEST_CONTRACT[3].sameWorkspaceCompletion,
+    ]).toEqual(['stay', 'open', 'stay', 'open']);
+    expect('sameWorkspaceCompletion' in REQUEST_CONTRACT[4]).toBe(false);
+  });
+
   it('opens the requested supported kind', () => {
     renderProvider();
 
@@ -290,6 +375,18 @@ describe('CreateObjectProvider', () => {
     });
   });
 
+  it('prefers an explicit initial destination over the shell workspace', async () => {
+    renderProvider();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open targeted project' }));
+
+    expect(screen.getByTestId('target-workspace')).toHaveTextContent(BRAVO_ID);
+    expect(screen.getByTestId('shell-workspace')).toHaveTextContent(ALPHA_ID);
+    await waitFor(() => {
+      expect(screen.getByTestId('target-name')).toHaveTextContent('Bravo workspace');
+    });
+  });
+
   it('switches among workspaces and resolves the selected target data and permissions', async () => {
     renderProvider();
     fireEvent.click(screen.getByRole('button', { name: 'Open program' }));
@@ -305,6 +402,7 @@ describe('CreateObjectProvider', () => {
     });
 
     expect(screen.getByTestId('target-workspace')).toHaveTextContent(BRAVO_ID);
+    expect(screen.getByTestId('shell-workspace')).toHaveTextContent(ALPHA_ID);
     await waitFor(() => {
       expect(screen.getByTestId('target-name')).toHaveTextContent('Bravo workspace');
       expect(screen.getByTestId('target-vocabulary')).toHaveTextContent('Engagement');
@@ -318,11 +416,34 @@ describe('CreateObjectProvider', () => {
     expect(rolesGet).toHaveBeenCalledWith({ param: { orgId: BRAVO_ID } });
   });
 
+  it('keeps permission resolution loading until the signed-in identity resolves', async () => {
+    sessionState.data = null;
+    sessionState.isPending = true;
+    const { rerenderProvider } = renderProvider();
+    fireEvent.click(screen.getByRole('button', { name: 'Open program' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('target-state')).toHaveTextContent('settled');
+    });
+    expect(screen.getByTestId('permissions-loading')).toHaveTextContent('true');
+    expect(screen.getByTestId('can-create')).toHaveTextContent('false');
+
+    sessionState.data = { user: { id: 'user_1' } };
+    sessionState.isPending = false;
+    rerenderProvider();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('permissions-loading')).toHaveTextContent('false');
+      expect(screen.getByTestId('can-create')).toHaveTextContent('true');
+    });
+  });
+
   it('renders a static workspace label when there is only one destination', () => {
     renderProvider([ALPHA_WORKSPACE]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Open project' }));
 
+    expect(screen.getByText('Workspace:')).toHaveClass('sr-only');
     expect(screen.getByText('Alpha workspace')).toBeVisible();
     expect(screen.queryByRole('combobox', { name: 'Workspace' })).not.toBeInTheDocument();
   });

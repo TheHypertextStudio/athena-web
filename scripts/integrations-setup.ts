@@ -1045,26 +1045,31 @@ async function runGuidedSteps(
       index += 1;
       continue;
     }
+    // A pure informational step (no `.var`) has nothing to collect and nothing to keep/replace —
+    // reading it IS finishing it, so it auto-advances with no gate. `Ctrl-C` still exits (every
+    // clack prompt below reaches `unwrap`'s isCancel handling); Back/Retry/Skip only matter once
+    // there's a value on the line, so they stay on the var-collection branch below.
+    if (!current.var) {
+      index += 1;
+      continue;
+    }
     const action = unwrap(
       await select<'continue' | 'replace' | 'back' | 'retry' | 'skip' | 'exit'>({
-        message: current.var
-          ? alreadyReady
-            ? `${current.var} is ready. Keep it or replace it?`
-            : `${current.var} is ${status}. Enter a value now?`
-          : 'Finished this step?',
+        message: alreadyReady
+          ? `${current.var} is ready. Keep it or replace it?`
+          : `${current.var} is ${status}. Enter a value now?`,
         initialValue: 'continue',
         options: [
           {
             value: 'continue',
-            label: current.var
-              ? alreadyReady && !replaceAll
+            label:
+              alreadyReady && !replaceAll
                 ? 'Keep existing'
                 : current.var in generatedValues
                   ? 'Generate and copy'
-                  : 'Enter value'
-              : 'Done',
+                  : 'Enter value',
           },
-          ...(current.var && alreadyReady && !replaceAll
+          ...(alreadyReady && !replaceAll
             ? [{ value: 'replace' as const, label: 'Replace existing' }]
             : []),
           ...(index > 0 ? [{ value: 'back' as const, label: 'Back' }] : []),

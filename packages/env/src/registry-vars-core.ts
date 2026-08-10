@@ -315,8 +315,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: authServer.NOTION_CLIENT_ID,
-    where:
-      'Notion public-integration OAuth client id (native Better Auth social provider) — funds the two-way Notion connector. Absent → Notion is not offered in the Connections directory.',
+    where: "Connection's Configuration tab — Client ID (not a secret, shown in the OAuth URL too).",
   },
   {
     name: 'NOTION_CLIENT_SECRET',
@@ -325,7 +324,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: authServer.NOTION_CLIENT_SECRET,
-    where: 'Notion public-integration OAuth client secret',
+    where: "Connection's Configuration tab — Client secret (click the eye icon to reveal).",
     sensitive: true,
   },
   {
@@ -336,7 +335,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     required: false,
     zod: authServer.NOTION_WEBHOOK_TOKEN,
     where:
-      'Notion webhook subscription verification token — verifies POST /internal/ingest/notion. Minted per subscription: Notion sends it once in the unsigned handshake delivery (recorded in the inbound_event inbox) and signs every later delivery with it. Absent → the Notion mirror relies on its polling cadence.',
+      'Webhooks tab, after creating a subscription — the one-time verification token from its first delivery. Optional: leave blank and the mirror polls instead.',
     sensitive: true,
   },
   {

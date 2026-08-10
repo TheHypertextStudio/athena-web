@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { VocabularyPreset, VocabularySkin, VocabularyTerm } from '../../src/vocabulary';
+import {
+  resolveVocabularyTerm,
+  VocabularyPreset,
+  VocabularySkin,
+  VocabularyTerm,
+} from '../../src/vocabulary';
 
 describe('VocabularyPreset', () => {
   it('accepts every preset', () => {
@@ -51,5 +56,33 @@ describe('VocabularySkin', () => {
       VocabularySkin.safeParse({ preset: 'startup', overrides: { project: { singular: 'X' } } })
         .success,
     ).toBe(false);
+  });
+});
+
+describe('resolveVocabularyTerm', () => {
+  it('uses the neutral startup term when an organization has no skin', () => {
+    expect(resolveVocabularyTerm(null, 'cycle')).toEqual({
+      singular: 'Cycle',
+      plural: 'Cycles',
+    });
+  });
+
+  it('uses the selected preset when the term has no override', () => {
+    expect(resolveVocabularyTerm({ preset: 'nonprofit' }, 'cycle')).toEqual({
+      singular: 'Season',
+      plural: 'Seasons',
+    });
+  });
+
+  it('prefers an organization override to the selected preset', () => {
+    expect(
+      resolveVocabularyTerm(
+        {
+          preset: 'agency',
+          overrides: { project: { singular: 'Case', plural: 'Cases' } },
+        },
+        'project',
+      ),
+    ).toEqual({ singular: 'Case', plural: 'Cases' });
   });
 });

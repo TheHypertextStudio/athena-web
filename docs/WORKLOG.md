@@ -23,8 +23,10 @@
   label colour picker, the design-token scanner/debt ledger, and the provider bootstrap policy.
 - **Validation**: The local design-token policy passes 8/8, all affected package typechecks pass,
   notification preferences pass 4/4, the UI suite passes 563/563, and the targeted provider policy
-  reproduces the exact GitHub failure before this contract repair. Exact-SHA GitHub CI, E2E, and
-  production verification follow the next fast-forward push.
+  reproduces the exact GitHub failure before this contract repair. The following exact-SHA run
+  found `resolveVocabularyTerm`'s three documented branches untested under the types package's
+  100% threshold; default, preset, and override resolution now have direct regression coverage.
+  Exact-SHA GitHub CI, E2E, and production verification follow the next fast-forward push.
 - **Learnings**: A clean textual rebase can still fail a semantic ratchet when one side replaces
   ledgered files. The production gate also correctly caught Notion being added to the guided
   catalog without updating the contract that enumerates every deployable provider.

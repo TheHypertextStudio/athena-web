@@ -20,7 +20,8 @@
   swatches stable on hover and focus, register the new settings dialog as an overlay, remove stale
   design-debt entries, and add Notion to the provider catalog's closed-set expectation.
 - **Files Changed**: Calendar settings, notification preferences, settings status/navigation, the
-  label colour picker, the design-token scanner/debt ledger, and the provider bootstrap policy.
+  label colour picker, the design-token scanner/debt ledger, the provider bootstrap policy, and
+  behavioral API coverage for the Notion mirror designer, reconciler, and management routes.
 - **Validation**: The local design-token policy passes 8/8, all affected package typechecks pass,
   notification preferences pass 4/4, the UI suite passes 563/563, and the targeted provider policy
   reproduces the exact GitHub failure before this contract repair. The following exact-SHA run
@@ -28,11 +29,20 @@
   100% threshold; default, preset, and override resolution now have direct regression coverage.
   The next coverage run exposed an MCP Apps handshake race under load: the proxy's ready message
   could arrive after iframe commit but before the passive listener was installed. Host setup now
-  uses a layout effect so the listener exists before the iframe can load and signal.
+  uses a layout effect so the listener exists before the iframe can load and signal. Once that
+  race was closed, the API package's 89% branch ratchet revealed that the concurrently landed
+  Notion mirror had added three major server paths with essentially no coverage. The follow-up
+  suite exercises real migrated persistence plus a recorded provider edge across design seeding,
+  previews and validation; two-wave provisioning; create/update/no-op projection; pull, adopt,
+  conflict and trash handling; write budgets and provider no-op responses; sync leases; people
+  resolution; tenant scoping; and the request surface. The three files now contribute more than
+  223 directly exercised branches instead of zero.
   Exact-SHA GitHub CI, E2E, and production verification follow the next fast-forward push.
 - **Learnings**: A clean textual rebase can still fail a semantic ratchet when one side replaces
   ledgered files. The production gate also correctly caught Notion being added to the guided
-  catalog without updating the contract that enumerates every deployable provider.
+  catalog without updating the contract that enumerates every deployable provider. A feature can
+  pass its focused tests while still lowering a package-level ratchet substantially; orchestration
+  coverage needs to land with the feature rather than being discovered by the next release lane.
 
 ---
 

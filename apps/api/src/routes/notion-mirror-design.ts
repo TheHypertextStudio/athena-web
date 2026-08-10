@@ -307,8 +307,13 @@ export interface PreviewResult {
   readonly excludedRows: number;
 }
 
-/** Format a date column the way Notion renders it, so the preview does not lie about width. */
-function formatDate(value: Date | string | null | undefined): string | null {
+/**
+ * Format a date column the way Notion renders it, so the preview does not lie about width.
+ *
+ * @param value - A stored date, provider date string, or absent value.
+ * @returns The ISO calendar date, or null when the value is absent or invalid.
+ */
+export function formatDate(value: Date | string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   const date = typeof value === 'string' ? new Date(value) : value;
   if (Number.isNaN(date.getTime())) return null;
@@ -492,8 +497,19 @@ async function countAndSample(
   }
 }
 
-/** Map one Docket field of one record to the string the preview cell shows. */
-function cellFor(entity: NotionMirrorEntity, field: string, record: EntityRecord): string | null {
+/**
+ * Map one Docket field of one record to the string the preview cell shows.
+ *
+ * @param entity - The record's entity kind, retained for the formatter boundary.
+ * @param field - The designed field to render.
+ * @param record - The database record behind the preview row.
+ * @returns The compact Notion-like cell text, or null for an empty/unresolved value.
+ */
+export function cellFor(
+  entity: NotionMirrorEntity,
+  field: string,
+  record: EntityRecord,
+): string | null {
   const direct = record[field];
   if (typeof direct === 'string') return direct;
   if (typeof direct === 'number') return String(direct);

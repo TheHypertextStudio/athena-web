@@ -1336,6 +1336,8 @@ describe('TabBar', () => {
     const row = within(switcher).getByRole('listitem', { name: /Fix the build/ });
     const close = within(row).getByRole('button', { name: 'Close Fix the build' });
     expect(row).toHaveClass('px-4');
+    expect(close).toHaveClass('h-10', 'w-10');
+    expect(close).toHaveClass('justify-end');
     expect(close.className).not.toMatch(/\bmr-/);
   });
 

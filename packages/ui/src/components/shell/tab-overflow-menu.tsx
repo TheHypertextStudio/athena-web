@@ -224,13 +224,13 @@ export function OverflowMenu({
                       onClose(tab.key);
                     }}
                     className={cn(
-                      CONTROL.xs.height,
-                      CONTROL.xs.width,
-                      'hover:bg-surface-container-high flex shrink-0 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100',
+                      CONTROL.xl.height,
+                      CONTROL.xl.width,
+                      'hover:bg-surface-container-high flex shrink-0 items-center justify-end rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100',
                       menuFocusRing,
                     )}
                   >
-                    <X aria-hidden="true" className={CONTROL.xs.icon} />
+                    <X aria-hidden="true" className={CONTROL.xl.icon} />
                   </button>
                 </div>
               );

@@ -547,6 +547,13 @@
       "when": 1786313778400,
       "tag": "0077_day_cadence_config",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1786382493989,
+      "tag": "0078_natural_miss_america",
+      "breakpoints": true
     }
   ]
 }

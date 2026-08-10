@@ -94,17 +94,8 @@ function terminalJsxTagName(name: ts.JsxTagNameExpression): string | undefined {
   return undefined;
 }
 
-/** Return the supported dialog referenced by a default-export expression, when applicable. */
-function supportedDialogFromExpression(expression: ts.Expression): string | undefined {
-  if (ts.isIdentifier(expression)) return supportedDialogName(expression);
-  if (ts.isPropertyAccessExpression(expression)) return supportedDialogName(expression.name);
-  if (
-    ts.isElementAccessExpression(expression) &&
-    ts.isStringLiteralLike(expression.argumentExpression) &&
-    SUPPORTED_DIALOGS.has(expression.argumentExpression.text)
-  ) {
-    return expression.argumentExpression.text;
-  }
+/** Remove syntax-only wrappers without changing the expression's runtime value. */
+function unwrapTransparentExpression(expression: ts.Expression): ts.Expression {
   if (
     ts.isParenthesizedExpression(expression) ||
     ts.isAsExpression(expression) ||
@@ -112,7 +103,26 @@ function supportedDialogFromExpression(expression: ts.Expression): string | unde
     ts.isSatisfiesExpression(expression) ||
     ts.isNonNullExpression(expression)
   ) {
-    return supportedDialogFromExpression(expression.expression);
+    return unwrapTransparentExpression(expression.expression);
+  }
+  return expression;
+}
+
+/** Return the supported dialog referenced by a default-export expression, when applicable. */
+function supportedDialogFromExpression(expression: ts.Expression): string | undefined {
+  const unwrappedExpression = unwrapTransparentExpression(expression);
+  if (ts.isIdentifier(unwrappedExpression)) return supportedDialogName(unwrappedExpression);
+  if (ts.isPropertyAccessExpression(unwrappedExpression)) {
+    return supportedDialogName(unwrappedExpression.name);
+  }
+  if (ts.isElementAccessExpression(unwrappedExpression)) {
+    const argumentExpression = unwrapTransparentExpression(unwrappedExpression.argumentExpression);
+    if (
+      ts.isStringLiteralLike(argumentExpression) &&
+      SUPPORTED_DIALOGS.has(argumentExpression.text)
+    ) {
+      return argumentExpression.text;
+    }
   }
   return undefined;
 }
@@ -481,6 +491,24 @@ describe('global creation launcher source policy', () => {
       findSupportedDialogViolations({
         path: 'src/components/example-launcher.tsx',
         text: `export default (((dialogs?.['CreateTaskDialog']) as unknown)!);`,
+      }),
+    ).not.toEqual([]);
+  });
+
+  it('rejects an optional element-access dialog with a parenthesized static key', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/example-launcher.tsx',
+        text: `export default dialogs?.[('CreateTaskDialog')];`,
+      }),
+    ).not.toEqual([]);
+  });
+
+  it('rejects an element-access dialog with an as-const static key', () => {
+    expect(
+      findSupportedDialogViolations({
+        path: 'src/components/example-launcher.tsx',
+        text: `export default dialogs['CreateTaskDialog' as const];`,
       }),
     ).not.toEqual([]);
   });

@@ -342,10 +342,16 @@ export function EditableFreeformText({
   const activeOrgId = useActiveOrgIdOptional();
   const [draft, setDraft] = useState(value ?? '');
   const [focused, setFocused] = useState(false);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const updateDraft = useCallback((next: string): void => {
+    draftRef.current = next;
+    setDraft(next);
+  }, []);
 
   useEffect(() => {
-    if (!focused) setDraft(value ?? '');
-  }, [value, focused]);
+    if (!focused) updateDraft(value ?? '');
+  }, [value, focused, updateDraft]);
 
   const { flush } = useDebouncedAutosave({
     value: draft,
@@ -361,7 +367,7 @@ export function EditableFreeformText({
 
   useEffect(
     () => () => {
-      flushRef.current();
+      flushRef.current(draftRef.current);
     },
     [],
   );
@@ -383,13 +389,13 @@ export function EditableFreeformText({
           return;
         }
         setFocused(false);
-        flush();
+        flush(draftRef.current);
       }}
     >
       {activeOrgId === null ? (
         <FreeformTextEditor
           value={draft}
-          onChange={setDraft}
+          onChange={updateDraft}
           placeholder={placeholder}
           ariaLabel="Description"
           className="flex min-h-28 flex-1 flex-col [&>div]:flex-1"
@@ -398,7 +404,7 @@ export function EditableFreeformText({
         <MentionHydrationProvider orgId={activeOrgId}>
           <FreeformTextEditor
             value={draft}
-            onChange={setDraft}
+            onChange={updateDraft}
             placeholder={placeholder}
             ariaLabel="Description"
             className="flex min-h-28 flex-1 flex-col [&>div]:flex-1"

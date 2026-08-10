@@ -54,9 +54,14 @@ export interface DebouncedAutosaveOptions<T> {
 }
 
 /** Imperative controls for ending an autosave editing session. */
-export interface DebouncedAutosaveControls {
-  /** Persist the latest dirty value immediately and cancel its trailing timer. */
-  flush: () => void;
+export interface DebouncedAutosaveControls<T> {
+  /**
+   * Persist the latest dirty value immediately and cancel its trailing timer.
+   *
+   * @param valueOverride - A value captured synchronously by the input before React commits its
+   * next render. Omit it to flush the latest value observed by the hook.
+   */
+  flush: (...valueOverride: readonly [] | readonly [T]) => void;
 }
 
 /**
@@ -78,12 +83,12 @@ export interface DebouncedAutosaveControls {
  */
 export function useDebouncedAutosave<T>(
   options: DebouncedAutosaveOptions<T>,
-): DebouncedAutosaveControls {
+): DebouncedAutosaveControls<T> {
   const { value, baseline, save, ready = true, delayMs = 600 } = options;
 
-  // Latest value/save read at fire time so the effect can key only on primitive snapshots.
-  const latest = useRef({ value, save });
-  latest.current = { value, save };
+  // Latest inputs are read at fire time so the effect can key only on primitive snapshots.
+  const latest = useRef({ value, baseline, save, ready });
+  latest.current = { value, baseline, save, ready };
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingKeyRef = useRef<string | null>(null);
@@ -99,15 +104,27 @@ export function useDebouncedAutosave<T>(
     timerRef.current = null;
   }, []);
 
-  const flush = useCallback((): void => {
-    const pendingKey = pendingKeyRef.current;
-    if (pendingKey === null) return;
+  const flush = useCallback(
+    (...valueOverride: readonly [] | readonly [T]): void => {
+      cancelTimer();
+      pendingKeyRef.current = null;
+      const current = latest.current;
+      if (!current.ready || current.baseline === undefined) return;
 
-    cancelTimer();
-    pendingKeyRef.current = null;
-    lastSavedKeyRef.current = pendingKey;
-    latest.current.save(latest.current.value);
-  }, [cancelTimer]);
+      const nextValue = valueOverride.length === 0 ? current.value : valueOverride[0];
+      const nextKey = canonicalize(nextValue);
+      const currentBaselineKey = canonicalize(current.baseline);
+      if (nextKey === currentBaselineKey) {
+        lastSavedKeyRef.current = null;
+        return;
+      }
+      if (lastSavedKeyRef.current === nextKey) return;
+
+      lastSavedKeyRef.current = nextKey;
+      current.save(nextValue);
+    },
+    [cancelTimer],
+  );
 
   useEffect(() => {
     cancelTimer();

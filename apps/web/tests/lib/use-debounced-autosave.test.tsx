@@ -58,6 +58,29 @@ describe('useDebouncedAutosave', () => {
     expect(save).toHaveBeenCalledTimes(1);
   });
 
+  it('can flush a synchronous draft before React commits its next render', () => {
+    vi.useFakeTimers();
+    const save = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ draft }) =>
+        useDebouncedAutosave({ value: draft, baseline: 'Persisted', save, delayMs: 2_000 }),
+      { initialProps: { draft: 'Persisted' } },
+    );
+
+    rerender({ draft: 'Intermediate render' });
+    act(() => {
+      result.current.flush('Latest synchronous draft');
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith('Latest synchronous draft');
+
+    rerender({ draft: 'Latest synchronous draft' });
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
   it('does not save before a baseline exists, after a revert, or while unchanged', () => {
     vi.useFakeTimers();
     const save = vi.fn();

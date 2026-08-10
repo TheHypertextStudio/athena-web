@@ -599,7 +599,9 @@ function listGcloudProjects(): string[] {
  * the active account can access (current flagged), plus a manual-entry option; falls back to a
  * plain prompt when the list can't be fetched.
  *
- * @param fallback - The default project (e.g. `gcloud config get-value project`).
+ * @param fallback - The default project. Callers should prefer the repo's own `GCP_PROJECT_ID`
+ *   GitHub variable (what `deploy.yml` actually deploys into) over local `gcloud config
+ *   get-value project`, which is unrelated machine state and can point anywhere.
  * @param label - What the project is for (e.g. `'staging'`), shown in the prompt.
  */
 export async function chooseGcloudProject(fallback: string, label = ''): Promise<string> {
@@ -614,7 +616,13 @@ export async function chooseGcloudProject(fallback: string, label = ''): Promise
     );
 
   const projects = listGcloudProjects();
-  if (projects.length === 0) return typeId();
+  if (projects.length === 0) {
+    warn(
+      `Could not list GCP projects for the active account (\`gcloud projects list\` returned ` +
+        `nothing — re-run \`gcloud auth login\` if this persists). Falling back to typed entry.`,
+    );
+    return typeId();
+  }
 
   const chosen = unwrap(
     await select<string>({
@@ -1225,7 +1233,14 @@ async function setupEnvironment(
   } else {
     const repoForCloud =
       repo || unwrap(await text({ message: 'GitHub owner/repo', placeholder: 'owner/repo' }));
-    const project = await chooseGcloudProject(defaultProject, env);
+    // The repo's own `GCP_PROJECT_ID` (the exact value `deploy.yml` ships to) is the source of
+    // truth for which project this environment actually deploys into — prefer it over whatever
+    // project happens to be active in the operator's local `gcloud` config, which is unrelated
+    // machine state and has previously defaulted operators toward the wrong project entirely.
+    const ghProjectDefault = repoForCloud
+      ? readGitHubVariable(repoForCloud, env, 'GCP_PROJECT_ID')
+      : '';
+    const project = await chooseGcloudProject(ghProjectDefault || defaultProject, env);
     if (!repoForCloud || !project) {
       warn(`Cannot configure ${env} without both a GitHub repo and GCP project.`);
       return;

@@ -6,9 +6,11 @@
 > **Status**: shipped 2026-08-05 (`TEMPLATES-001`).
 
 A template is a named, scoped, reusable **pre-filled draft** for creating one of four work kinds:
-Task, Project, Initiative, Program. It is the create-side counterpart to a saved view, and it is
-modelled on `saved_view` on purpose — the repo had already answered "a named, scoped,
-user-authored configuration with a jsonb payload" and there was no reason to answer it twice.
+Task, Project, Initiative, Program. The shell-global creation composer owns five kinds in total:
+Task, Project, Initiative, Program, and Team. Team is deliberately outside the template system.
+Templates are the create-side counterpart to a saved view, and are modelled on `saved_view` on
+purpose — the repo had already answered "a named, scoped, user-authored configuration with a
+jsonb payload" and there was no reason to answer it twice.
 
 Cycles and Teams are not templatable. A cycle is a date window and a team is structural; neither
 has a document to seed.
@@ -108,30 +110,99 @@ by `apps/api/tests/routes/templates.test.ts`.
 
 Three per kind is the whole opinion. Users add as many more as they like; there is no cap.
 
-## The four surfaces
+## Global creation composer
 
-One implementation, several entry points — the rule `editor/slash-commands.ts` already states for
-the slash menu.
+`CreateObjectProvider` is mounted beside the command palette in the authenticated app shell. It
+owns one closed request union and one independently selected destination workspace, so page
+launchers and the command palette open the same composer instead of each retaining a local dialog.
+The supported union is intentionally closed to these five kinds:
+
+| Kind       | Global top row, in order                                           | Permission   |
+| ---------- | ------------------------------------------------------------------ | ------------ |
+| Task       | Workspace → Team when the destination has more than one → Template | `contribute` |
+| Project    | Workspace → Program → Template                                     | `contribute` |
+| Initiative | Workspace → Owner → Template                                       | `contribute` |
+| Program    | Workspace → Owner → Template                                       | `manage`     |
+| Team       | Workspace                                                          | `manage`     |
+
+Cycles and workspace creation remain separate flows. Team has no template control: it is
+structural rather than a template target. The top row is context, not a property strip. A template
+still applies to the whole draft, and the promoted Team, Program, or Owner is the one primary
+relationship most useful before the author starts writing.
+
+### Destination workspace
+
+Opening with no explicit destination snapshots the shell's active workspace. If the shell is still
+resolving, the provider freezes that result once; it never guesses from membership order. Changing
+the Workspace selector changes only the composer target: it does not navigate, change the shell
+workspace, or write the last-workspace preference. With one available workspace it renders as a
+quiet static label; with more it is an accessible native select. Creation is disabled until a
+resolved destination is ready.
+
+While a request is open, `CreationContextProvider` reads the target workspace detail, teams,
+members, and roles under destination-keyed TanStack Query keys. The detail provides the target
+vocabulary skin; the rosters supply composer options and identify the signed-in member's target
+actor; the General team (or first team) supplies the task/project default. Permission is derived
+from the target membership and roles, not from the workspace behind the modal: Task, Project, and
+Initiative require `contribute`; Program and Team require `manage`. A failed destination read uses
+application-owned error copy and prevents submit.
+
+Kind-specific option reads and templates are likewise destination-owned. They are enabled only
+while a ready composer is open, use the selected workspace id, share standard query keys, and use
+static stale time for rosters. The workflow-state loader remains team-keyed. This prevents a
+retargeted composer from displaying or posting options from the workspace underneath it.
+
+On a destination change, portable text, dates, and generic enum choices stay in the draft; foreign
+references do not. Tasks clear team override, workflow state, assignee, project, milestone, cycle,
+and labels, then use the new destination's default team. Projects clear team override, lead,
+program, and initiatives. Initiatives and Programs clear owner. Contextual launcher defaults and
+auto-applied templates apply only while the target remains the opening workspace. This preserves
+the author's work without allowing a person or object id from one workspace to cross into another.
+
+### Completion and repeat creation
+
+Every successful create invalidates destination-owned cache keys. When the destination is the
+opening workspace, the launcher chooses whether to stay or open the created object, and may receive
+its callback. A cross-workspace create always opens the created object in its destination and never
+calls the origin-page callback with foreign data. Team is the exception to detail routing: it always
+opens the destination workspace's Teams page because a newly created team has no standalone create
+completion route.
+
+Task's **Create more** switch is off by default, keeping ordinary Create as the close-and-complete
+path. With it on, Create keeps the dialog open, invalidates as usual, suppresses navigation, clears
+only title and description, resets the rich-text editor document, announces readiness through a
+screen-reader status, and returns focus to the title. Existing field selections remain for fast
+repetition. Cmd/Ctrl+Shift+Enter runs that same continuation exactly once (repeated key events are
+ignored) without changing the switch, so it is a one-shot shortcut rather than a hidden mode.
+
+### Template surfaces
+
+One implementation has several entry points — the rule `editor/slash-commands.ts` already states
+for the slash menu.
 
 ```mermaid
 graph LR
   API["GET /templates?targetType"] --> Q["components/templates/queries.ts"]
-  Q --> MENU["ComposerTemplateControl<br/>(composer top row)"]
+  Q --> MENU["ComposerTemplateControl<br/>(global composer top row)"]
   Q --> SET["Settings → Templates"]
   Q --> PAL["Command palette"]
   SET --> ED["TemplateEditorDialog"]
-  PAL -->|"?compose=1&template=id"| PAGE["list page"]
-  PAGE --> MENU
+  PAL -->|"direct openCreate request"| COMPOSER["Shell-global composer"]
   MENU --> DRAFT["useComposerDraft"]
   ED --> DRAFT
 ```
 
 **1. The composer control** — `components/composer/template-menu.tsx`. A `DropdownMenu` in the
-dialog's top row, opposite the breadcrumb. It is deliberately **not** a suggestion-chip row: a chip
-row suits a fixed set of two or three, and a template list is unbounded, has to show scope, and
-needs a route out to management. It is also deliberately **not** in the property strip — every pill
-there sets one field, and a template reaches the whole draft. See `docs/design/design-system.md`
-§3, which this change revised.
+global dialog's top row. It is deliberately **not** a suggestion-chip row: a chip row suits a fixed
+set of two or three, and a template list is unbounded, has to show scope, and needs a route out to
+management. It is also deliberately **not** in the property strip — every pill there sets one
+field, and a template reaches the whole draft. See `docs/design/design-system.md` §3.
+
+The target workspace's organization templates are always visible. Personal templates are visible
+only to their owning actor in that target workspace; team templates are visible only when their
+team matches the selected Task or Project team. Initiative and Program intentionally pass no team,
+so they do not expose a team-scoped template. The menu groups visible rows as Workspace, Team, and
+Yours.
 
 **2. The draft, and what applying actually does** — `components/composer/use-composer-draft.ts`.
 Each composer holds its fields as one value, and `templateMerge` decides how a template's fields
@@ -174,10 +245,13 @@ so the editor can omit them.
 plus a `Create from template` section that stays hidden until the user types (`requiresQuery` on
 `PaletteItem`), so a dozen seeded rows do not bury the destinations people open the palette for.
 
-The palette owns no second copy of any dialog. A command navigates to the page that already owns
-the composer and asks for it with `?compose=1&template=<id>`; `useComposeRequest`
-(`components/composer/use-compose-param.ts`) consumes it once, copies the template id into state,
-and strips both parameters with `router.replace` so a back-navigation does not reopen the dialog.
+The palette closes and calls `openCreate` directly, retaining the page under the overlay; template
+commands carry `defaultTemplateId` in that request. There is no creation `?compose=1` URL or
+consume-and-strip bridge for global object creation.
+
+Initiative **updates** remain a separate feature. Their existing
+`?tab=updates&compose=1` route opens an update composer for an existing initiative and is not a
+creation launcher, template transport, or exception to this direct-open model.
 
 ## Not built
 

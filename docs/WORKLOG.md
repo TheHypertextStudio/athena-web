@@ -7,6 +7,38 @@
 
 ## Active Tasks
 
+### [FOCUS-001] Turn the timer rail into a working companion and immersive Focus mode
+
+- **Status**: REVIEW
+- **Started**: 2026-08-09
+- **Priority**: P1
+- **Description**: Expand the universal timer rail into a useful working companion, add a
+  chrome-free immersive `/focus` surface, and let interruptions be handed to Personal Athena
+  without inheriting the active task or becoming a chat surface.
+- **Subtasks**:
+  - [x] Default context-free Athena work to the caller's Personal workspace.
+  - [x] Add linked task context, recent time, and the minimal interruption handoff.
+  - [x] Add the authenticated pop-out/same-tab Focus route and idle-after-finish state.
+  - [x] Rebase the Focus slice onto current `main` without replaying superseded work.
+  - [x] Close code-review findings for recency, terminal polling, degraded states, recoverable
+        mutations, cross-window timer synchronization, safe return paths, workflow fidelity, and touch
+        targets.
+  - [x] Prevent lagging controlled editor values from overwriting newer focused input so the
+        current-main coverage gate can flush final drafts deterministically.
+  - [ ] Fast-forward `main`, deploy, and verify production.
+- **Validation**: Independent review found no remaining actionable Focus findings. The focused
+  component, route, API, editor, and Playwright journeys pass, including the resumed-session
+  recency and failed unanchored-name retry regressions. Full exact-tree CI and production proof
+  are the remaining release checks.
+- **Notes**: The repository's `merge=keepours` policy for `docs/WORKLOG.md` drops this branch entry
+  during rebases, so each current-main rebase must preserve or restore it. During closeout,
+  current `main` exposed a real rich-text reconciliation race: a stale parent echo could reset
+  ProseMirror between keystrokes and corrupt the value flushed on blur. The regression drives a
+  deliberately lagging controlled value and proves that only genuine external values may replace
+  newer locally emitted Markdown.
+
+---
+
 ### [WEB-SWITCHER-002] Restore the production gate after integration
 
 - **Status**: REVIEW

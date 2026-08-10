@@ -6,7 +6,7 @@ import { join, relative, resolve } from 'node:path';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CommentOut } from '@docket/types';
-import type { ReactElement } from 'react';
+import { useRef, useState, type ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ComposerShell } from '@/components/composer/composer-shell';
@@ -285,6 +285,41 @@ describe('clicking an editor-shaped surface starts editing', () => {
 });
 
 describe('description edit sessions', () => {
+  it('does not let a lagging controlled value overwrite newer focused input', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    function LaggingControlledEditor(): ReactElement {
+      const [value, setValue] = useState('Persisted');
+      const previousEmission = useRef<string | null>(null);
+
+      return (
+        <FreeformTextEditor
+          value={value}
+          onChange={(next) => {
+            const staleValue = previousEmission.current;
+            previousEmission.current = next;
+            onChange(next);
+            if (staleValue !== null) setValue(staleValue);
+          }}
+          placeholder="Write something"
+          ariaLabel="Description"
+        />
+      );
+    }
+
+    renderEditor(<LaggingControlledEditor />);
+    const surface = await screen.findByRole('textbox', { name: 'Description' });
+    fireEvent.mouseDown(surface.closest<HTMLElement>('[data-editor-surface]')!);
+    await waitFor(() => expect(surface).toHaveFocus());
+    await user.keyboard(' final');
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenLastCalledWith('Persisted final');
+    });
+    expect(surface).toHaveTextContent('Persisted final');
+  });
+
   it('flushes the final draft as soon as focus leaves the editor', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn();

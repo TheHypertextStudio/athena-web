@@ -84,6 +84,9 @@ export function FreeformTextEditor({
   const onChangeRef = useRef(onChange);
   const onSubmitRef = useRef(onSubmit);
   const onCancelRef = useRef(onCancel);
+  // React may deliver controlled values one or more editor transactions late. Keep a bounded
+  // journal so those self-echoes cannot replace newer ProseMirror content mid-keystroke.
+  const pendingLocalValuesRef = useRef<string[]>([]);
   onChangeRef.current = onChange;
   onSubmitRef.current = onSubmit;
   onCancelRef.current = onCancel;
@@ -205,7 +208,13 @@ export function FreeformTextEditor({
       },
     },
     onUpdate: ({ editor: instance }) => {
-      onChangeRef.current(instance.getMarkdown());
+      const next = instance.getMarkdown();
+      const pending = pendingLocalValuesRef.current;
+      if (pending.at(-1) !== next) {
+        pending.push(next);
+        if (pending.length > 100) pending.splice(0, pending.length - 100);
+      }
+      onChangeRef.current(next);
       mentionsRef.current.syncFromEditor(instance);
     },
     onSelectionUpdate: ({ editor: instance }) => {
@@ -224,10 +233,20 @@ export function FreeformTextEditor({
   }, [editor, disabled, readOnly]);
 
   useEffect(() => {
-    if (!editor || editor.getMarkdown() === value) return;
+    if (!editor) return;
+    if (editor.getMarkdown() === value) {
+      pendingLocalValuesRef.current = [];
+      return;
+    }
     // Replacing content destroys the selection, which closes the menu mid-word. A controlled
     // parent that normalizes markdown would otherwise make the picker unusable in composers.
     if (mentions.suppressReconcile.current) return;
+    const localEchoIndex = pendingLocalValuesRef.current.lastIndexOf(value);
+    if (localEchoIndex >= 0) {
+      pendingLocalValuesRef.current = pendingLocalValuesRef.current.slice(localEchoIndex + 1);
+      return;
+    }
+    pendingLocalValuesRef.current = [];
     editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
   }, [editor, value, mentions.suppressReconcile]);
 

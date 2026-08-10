@@ -90,6 +90,26 @@ async function seedApprovalWorkspace(ownerUserId: string): Promise<{ readonly or
   return { orgId: org!.id };
 }
 
+/** Seed the caller's Personal workspace required by a context-free Athena creation. */
+async function seedPersonalWorkspace(ownerUserId: string): Promise<void> {
+  const suffix = Math.random().toString(36).slice(2, 9);
+  const [org] = await schema.db
+    .insert(schema.organization)
+    .values({
+      name: `Personal-${suffix}`,
+      slug: `personal-${suffix}`,
+      isPersonal: true,
+      lifecycleState: 'active',
+    })
+    .returning({ id: schema.organization.id });
+  await schema.db.insert(schema.actor).values({
+    organizationId: org!.id,
+    kind: 'human',
+    displayName: 'Owner',
+    userId: ownerUserId,
+  });
+}
+
 /**
  * Insert one caller-owned Athena session with a durable `waiting` generation — the precondition
  * {@link persistWaitingAthenaWake} enforces before it will queue a wake dispatch.
@@ -148,6 +168,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Async Owner', email: `async-${suffix}@example.com` })
       .returning({ id: schema.user.id });
+    await seedPersonalWorkspace(owner!.id);
     runnerMocks.admit.mockImplementation(async (session, options) => ({
       mode: 'async',
       queued: await enqueueRunGeneration(session, options),
@@ -182,6 +203,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Lifecycle Owner', email: `lifecycle-${suffix}@example.com` })
       .returning({ id: schema.user.id });
+    await seedPersonalWorkspace(owner!.id);
     runnerMocks.admit.mockImplementation(async (session, options) => ({
       mode: 'async',
       queued: await enqueueRunGeneration(session, options),

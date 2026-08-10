@@ -23,7 +23,7 @@ import type {
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import type { z } from 'zod';
 
-import { NotFoundError } from '../error';
+import { ConflictError, NotFoundError } from '../error';
 
 /** A normalized invocation plus the caller's current Actor in its workspace. */
 export interface ResolvedAthenaInvocation {
@@ -567,6 +567,46 @@ export async function resolveAthenaInvocation(
     context: { workspaceId: resolved.workspaceId, source: input.source },
     actorId: resolved.actorId,
   };
+}
+
+/**
+ * Resolve an episodic Athena handoff, defaulting neutral work to the caller's Personal workspace.
+ *
+ * @remarks
+ * Chat may remain genuinely workspace-neutral, but delegated work needs a durable home before it
+ * can create the ordinary Task that tracks what Athena is doing. A person's Personal workspace is
+ * the only safe implicit audience: inheriting whichever shared workspace happens to be visible
+ * would file private interruptions into team work. Explicit invocation context always wins.
+ *
+ * @param userId - The caller who owns the Athena work.
+ * @param input - Optional explicit workspace or source focus.
+ * @returns Validated invocation context with an active human Actor.
+ * @throws {ConflictError} When the account has no active Personal workspace.
+ */
+export async function resolveAthenaWorkInvocation(
+  userId: string,
+  input?: z.input<typeof AthenaInvocationContext>,
+): Promise<ResolvedAthenaInvocation> {
+  if (input) return resolveAthenaInvocation(userId, input);
+  const rows = await db
+    .select({ workspaceId: organization.id })
+    .from(organization)
+    .innerJoin(actor, eq(actor.organizationId, organization.id))
+    .where(
+      and(
+        eq(actor.userId, userId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        eq(organization.isPersonal, true),
+        isNull(organization.archivedAt),
+      ),
+    )
+    .limit(1);
+  const workspaceId = rows[0]?.workspaceId;
+  if (!workspaceId) {
+    throw new ConflictError('Create a Personal workspace before handing work to Athena');
+  }
+  return resolveAthenaInvocation(userId, { workspaceId });
 }
 
 /** Load a canonical label after the invocation resolver has rechecked owner access. */

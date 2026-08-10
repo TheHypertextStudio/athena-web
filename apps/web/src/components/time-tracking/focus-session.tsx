@@ -13,7 +13,7 @@
  * before the clock will run at all. Naming an unanchored session is what creates its ordinary
  * Docket task, so the field is the same control whether it is anchoring or renaming.
  */
-import { Pause, Play, Stop } from '@docket/ui/icons';
+import { Edit, OpenInNew, Pause, Play, Stop } from '@docket/ui/icons';
 import {
   Button,
   ControlGroup,
@@ -22,9 +22,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@docket/ui/primitives';
-import type { JSX } from 'react';
-
-import { EditableTitle } from '@/components/editor/editable-title';
+import Link from 'next/link';
+import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { formatClock, spokenDuration } from './format-duration';
 import type { TimerControls } from './use-timer';
@@ -37,18 +36,26 @@ export interface FocusSessionProps {
   readonly title: string;
   /** True while the session has no task attached yet. */
   readonly unanchored: boolean;
+  /** Owning workspace for an anchored session. */
+  readonly organizationId: string | null;
+  /** Anchored task id, or null while naming creates one. */
+  readonly taskId: string | null;
   /** Tracked milliseconds, ticking while running. */
   readonly elapsedMs: number;
   /** Whether this session was started from a block on the caller's own calendar. */
   readonly fromPlan: boolean;
   /** Shown under the controls when finishing was refused for want of a name. */
   readonly notice: string | null;
+  /** Replace the application-owned status beneath the timer controls. */
+  readonly onNotice: (notice: string | null) => void;
   /** The timer transitions. */
   readonly controls: TimerControls;
   /** Focus the name field — the response to trying to finish something unnamed. */
   readonly onRequestName: () => void;
   /** Ref target for {@link onRequestName}. */
   readonly nameFieldId: string;
+  /** Use full touch targets when the shared card is rendered in immersive mode. */
+  readonly comfortable?: boolean;
 }
 
 /**
@@ -70,14 +77,55 @@ export default function FocusSession({
   running,
   title,
   unanchored,
+  organizationId,
+  taskId,
   elapsedMs,
   fromPlan,
   notice,
+  onNotice,
   controls,
   onRequestName,
   nameFieldId,
+  comfortable = false,
 }: FocusSessionProps): JSX.Element {
   const provenanceText = provenanceLine(fromPlan, unanchored);
+  const [editing, setEditing] = useState(false);
+  const [renameDraft, setRenameDraft] = useState(title);
+  const renameInFlight = useRef(false);
+  const taskHref = organizationId && taskId ? `/orgs/${organizationId}/tasks/${taskId}` : null;
+
+  useEffect(() => {
+    if (!editing) setRenameDraft(title);
+  }, [editing, title]);
+
+  const renameSession = async (): Promise<void> => {
+    if (renameInFlight.current) return;
+    const next = renameDraft.trim();
+    if (next.length === 0 || next === title.trim()) {
+      setRenameDraft(title);
+      setEditing(false);
+      return;
+    }
+    renameInFlight.current = true;
+    onNotice(null);
+    try {
+      await controls.rename(next);
+      setEditing(false);
+    } catch {
+      onNotice('Could not rename the task. Try again.');
+    } finally {
+      renameInFlight.current = false;
+    }
+  };
+
+  const updateTimer = async (operation: () => Promise<void>): Promise<void> => {
+    onNotice(null);
+    try {
+      await operation();
+    } catch {
+      onNotice('Could not update the timer. Try again.');
+    }
+  };
 
   return (
     <div
@@ -107,17 +155,57 @@ export default function FocusSession({
         </Text>
       </div>
 
-      <div id={nameFieldId} className="min-w-0">
-        <EditableTitle
-          value={title}
-          onSave={(next) => {
-            void controls.rename(next);
-          }}
-          canEdit
-          ariaLabel="What you are working on"
-          placeholder="What are you working on?"
-          className="text-on-surface text-body-medium block w-full min-w-0 truncate"
-        />
+      <div id={nameFieldId} className="flex min-w-0 items-center gap-1">
+        {taskHref && !editing ? (
+          <>
+            <Link
+              href={taskHref}
+              className="text-on-surface text-body-medium hover:text-primary focus-visible:outline-primary flex min-h-10 min-w-0 flex-1 items-center truncate rounded-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              {title}
+            </Link>
+            <OpenInNew aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
+            <Button
+              variant="ghost"
+              controlSize="sm"
+              aria-label="Rename tracked task"
+              className="size-10 px-0"
+              onClick={() => {
+                setRenameDraft(title);
+                setEditing(true);
+              }}
+            >
+              <Edit aria-hidden="true" />
+            </Button>
+          </>
+        ) : (
+          <input
+            type="text"
+            value={renameDraft}
+            aria-label="What you are working on"
+            placeholder="What are you working on?"
+            autoFocus={taskHref !== null}
+            onChange={(event) => {
+              setRenameDraft(event.target.value);
+            }}
+            onBlur={(event) => {
+              const related = event.relatedTarget as HTMLElement | null;
+              if (related?.dataset['testid']?.startsWith('timer-')) return;
+              void renameSession();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void renameSession();
+              } else if (event.key === 'Escape') {
+                event.preventDefault();
+                setRenameDraft(title);
+                if (taskHref) setEditing(false);
+              }
+            }}
+            className="text-on-surface text-body-medium focus-visible:outline-primary min-h-10 w-full min-w-0 rounded-sm bg-transparent focus-visible:outline-2 focus-visible:outline-offset-2"
+          />
+        )}
       </div>
 
       {provenanceText ? (
@@ -128,7 +216,7 @@ export default function FocusSession({
 
       {/* One row at every rail width: the labels are hidden below the panel's `@sm` container
           breakpoint rather than allowed to wrap onto a second line. */}
-      <ControlGroup controlSize="sm" className="min-w-0">
+      <ControlGroup controlSize={comfortable ? 'xl' : 'sm'} className="min-w-0">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -136,8 +224,9 @@ export default function FocusSession({
               aria-label={running ? 'Pause timer' : 'Resume timer'}
               data-testid={running ? 'timer-pause' : 'timer-resume'}
               disabled={controls.transitioning}
+              className="min-h-10 min-w-10"
               onClick={() => {
-                void (running ? controls.pause() : controls.resume());
+                void updateTimer(running ? controls.pause : controls.resume);
               }}
             >
               {running ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
@@ -155,12 +244,14 @@ export default function FocusSession({
               aria-label="Finish tracking"
               data-testid="timer-stop"
               disabled={controls.transitioning}
+              className="min-h-10 min-w-10"
               onClick={() => {
-                if (unanchored && title.trim().length === 0) {
+                const unanchoredTitle = renameDraft.trim();
+                if (unanchored && unanchoredTitle.length === 0) {
                   onRequestName();
                   return;
                 }
-                void controls.stop(unanchored ? title.trim() : undefined);
+                void updateTimer(() => controls.stop(unanchored ? unanchoredTitle : undefined));
               }}
             >
               <Stop aria-hidden="true" />

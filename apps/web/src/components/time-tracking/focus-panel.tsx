@@ -14,51 +14,37 @@
  * changing rather than as different screens arriving. The panel owns no chrome of its own beyond
  * its header, per the rail's convention, and never sets its own width.
  */
-import { Text } from '@docket/ui/primitives';
+import { Skeleton, Text } from '@docket/ui/primitives';
 import { type JSX, useId, useState } from 'react';
 
-import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
-import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
-
 import FocusIdle, { type FocusShortcut } from './focus-idle';
+import FocusAthenaHandoff from './focus-athena-handoff';
+import FocusModeLauncher from './focus-mode-launcher';
 import FocusSession from './focus-session';
+import FocusTaskContext from './focus-task-context';
+import FocusToday from './focus-today';
+import { useFocusTask } from './use-focus-task';
+import { useFocusToday } from './use-focus-today';
 import { useTimerControls, useTimerState } from './use-timer';
 
 /** How many earlier tasks the idle state offers as one-click restarts. */
 const SHORTCUT_LIMIT = 4;
 
-/** The current local day as an ISO instant pair, for the timeline read. */
-function todayBounds(): { start: string; end: string } {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return { start: start.toISOString(), end: end.toISOString() };
-}
-
 /** The Focus rail panel. */
 export default function FocusPanel(): JSX.Element {
-  const { record, phase, title, unanchored, elapsedMs, suggestion, nudging } = useTimerState();
+  const { record, phase, title, unanchored, elapsedMs, suggestion, nudging, loading, error } =
+    useTimerState();
   const controls = useTimerControls(record?.id ?? null);
   const [notice, setNotice] = useState<string | null>(null);
   const nameFieldId = useId();
-
-  const bounds = todayBounds();
-  const timelineQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.timeTimeline(`${bounds.start}|${bounds.end}`),
-      () => api.v1.time.timeline.$get({ query: bounds }),
-      'Could not load today’s time.',
-      { staleTime: STALE.volatile },
-    ),
-  );
+  const taskContext = useFocusTask(record?.organizationId ?? null, record?.taskId ?? null);
+  const today = useFocusToday();
 
   // Real sessions only — the shortcut list is a shortcut back into work that actually happened, so
   // an empty day shows nothing rather than plausible-looking suggestions nobody worked on.
   const shortcuts: FocusShortcut[] = [];
   const seen = new Set<string>();
-  for (const item of timelineQ.data?.items ?? []) {
+  for (const item of today.records) {
     if (!item.taskId || item.id === record?.id || seen.has(item.taskId)) continue;
     seen.add(item.taskId);
     shortcuts.push({
@@ -68,10 +54,6 @@ export default function FocusPanel(): JSX.Element {
     });
     if (shortcuts.length === SHORTCUT_LIMIT) break;
   }
-
-  const error = timelineQ.isError
-    ? userErrorMessage(timelineQ.error, 'Could not load today’s time.')
-    : null;
 
   const start = (taskId?: string): void => {
     setNotice(null);
@@ -87,27 +69,46 @@ export default function FocusPanel(): JSX.Element {
         {/* Never the task's name: the card beneath already carries it, and the header repeating
             it cost two lines saying one thing. This line says only what state the timer is in. */}
         <Text token="body-small" tone="muted">
-          {phase === 'running'
-            ? 'Tracking'
-            : phase === 'paused'
-              ? 'Paused'
-              : nudging && suggestion
-                ? 'Your block started'
-                : 'Nothing tracking'}
+          {loading
+            ? 'Loading timer'
+            : error
+              ? 'Timer unavailable'
+              : phase === 'running'
+                ? 'Tracking'
+                : phase === 'paused'
+                  ? 'Paused'
+                  : nudging && suggestion
+                    ? 'Your block started'
+                    : 'Nothing tracking'}
         </Text>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-3 pb-3">
-        {record ? (
+        {loading ? (
+          <div
+            data-testid="timer-loading"
+            className="flex flex-col gap-2"
+            aria-label="Loading timer"
+          >
+            <Skeleton className="h-28 w-full rounded-xl" />
+          </div>
+        ) : error ? (
+          <Text token="body-small" role="alert" className="text-error">
+            {error}
+          </Text>
+        ) : record ? (
           <FocusSession
             running={phase === 'running'}
             title={title}
             unanchored={unanchored}
+            organizationId={record.organizationId}
+            taskId={record.taskId}
             elapsedMs={elapsedMs}
             // The record's own link back to the block that planned it, written at start. The live
             // suggestion answers a different question and is absent while this session runs.
             fromPlan={record.contexts.some((context) => context.role === 'planning_context')}
             notice={notice}
+            onNotice={setNotice}
             controls={controls}
             nameFieldId={nameFieldId}
             onRequestName={() => {
@@ -127,14 +128,43 @@ export default function FocusPanel(): JSX.Element {
           />
         )}
 
+        {taskContext.isPending ? (
+          <div aria-label="Loading task context" className="flex flex-col gap-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : taskContext.task ? (
+          <>
+            <FocusTaskContext
+              task={taskContext.task}
+              workflowState={taskContext.workflowState}
+              workflowStates={taskContext.workflowStates}
+            />
+            {taskContext.error ? (
+              <Text token="body-small" role="status" className="text-on-surface-variant">
+                {taskContext.error}
+              </Text>
+            ) : null}
+          </>
+        ) : taskContext.error ? (
+          <Text token="body-small" role="status" className="text-on-surface-variant">
+            {taskContext.error}
+          </Text>
+        ) : null}
+
+        <FocusToday records={today.records} activeRecordId={record?.id ?? null} />
+
+        <FocusAthenaHandoff />
+
         {/* Degraded rather than replaced: losing today's totals must not take the running clock
             off screen, since that is the one thing this panel exists to keep visible. */}
-        {error ? (
+        {today.error ? (
           <Text token="body-small" role="status" className="text-on-surface-variant">
-            {error}
+            {today.error}
           </Text>
         ) : null}
       </div>
+      <FocusModeLauncher />
     </section>
   );
 }

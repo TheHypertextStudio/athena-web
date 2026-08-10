@@ -4,7 +4,7 @@
 > personal reflection, and recipient-scoped submissions are implemented. Estimate comparisons and
 > richer planning-variance views remain additive projections, not alternate time sources.
 > **Area:** Hub, work, calendar, agents, API, DB, web data layer
-> **Last Updated:** 2026-07-12
+> **Last Updated:** 2026-08-09
 > **Companions:** `data-model.md` (tenant and Hub ownership), `calendar-architecture.md`
 > (planned/contextual time), `calendar-ui.md` (agenda and item workspace), `athena-agent.md`
 > (agent sessions), `activity-feed.md` (typed entity references), and `data-layer.md` (web reads
@@ -321,11 +321,34 @@ visible at the date-boundary layer rather than corrupting raw timing facts.
 
 ### 6.1 Universal tracker
 
-The tracker is the **Focus panel** in the shell's right-hand rail, registered on every surface
-alongside the Agenda and the day plan. It is backed by `GET /v1/time/active` and shows the current
-human record, elapsed time, and relevant active agents. It offers Pause, Switch and Stop without
-navigating away from the current surface. When the rail is collapsed, the panel's activity-bar icon
-carries a status dot and an accessible label, so a running timer is never off screen.
+The tracker is the **Focus working companion** in the shell's right-hand rail, registered on every
+surface alongside the Agenda and the day plan. It is backed by `GET /v1/time/active` and shows the
+current human record and elapsed time. For an anchored record, the title is a semantic one-click
+link to the ordinary Task detail while renaming remains a separate affordance. The companion reads
+the existing typed Task/team and daily timeline contracts to add workflow state, priority, due date,
+description or subtask context when present, today's Human effort total, and at most two recent real
+sessions. It offers Pause and Stop without navigating away from the current surface. When the rail
+is collapsed, the panel's activity-bar icon carries a status dot and an accessible label, so a
+running timer is never off screen.
+
+The rail ends with **Open focus mode**. It prefers one stable named pop-out window for second-monitor
+use, offers **Open in this tab**, uses same-tab mode on mobile, and falls back to same-tab navigation
+when the browser blocks the pop-out. The authenticated `/focus` route shares the same tracker,
+focused Task context, daily summary, and interruption handoff components but omits the application
+shell. Its main column makes the active Task dominant; the timer and supporting context remain
+available without competing with it. Finishing does not close the surface: it returns to a designed
+idle state with the day's real recent work and the normal start suggestions. A validated
+same-origin launch path—not browser-history length—controls in-tab return, and every timer mutation
+publishes a lightweight storage signal so the rail and pop-out reconcile their separate query
+caches immediately.
+
+Both Focus surfaces include one single-line **Hand something to Athena…** field. This is an
+interruption handoff, not an Athena conversation: it creates context-free personal Athena work and
+therefore defaults to the caller's Personal workspace. It never inherits the active timer's Task or
+workspace. Focus retains and synchronizes only the newest handoff id across windows, polls its typed
+detail through terminal state, and renders one application-owned receipt. Replies, transcripts,
+activities, connector names, provider output, and raw error text never appear in Focus; work that
+needs input or fails links out to the complete Athena surface.
 
 **Starting takes no input.** Pressing Start starts the clock. It does not open a dialog, and it
 never requires a name first: `context.label` is optional on `POST /v1/time/records`, and a session

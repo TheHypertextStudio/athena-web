@@ -4,7 +4,7 @@ Every user-facing surface in the launch, one row each: a route for every `page.t
 
 This inventory is the first half of **GEN-10** in `docs/engineering/launch-compliance.json`. It makes "which surfaces exist" a fact rather than a guess. **It does not close GEN-10.** That requirement closes only when every row below carries at least one Craft Rubric scorecard whose five hard gates pass and whose lowest dimension score is at or above the ship bar of 3 (`docs/design/craft-rubric.md`). Scoring the surfaces is design-review work; this file exists to keep the count honest while that work happens.
 
-**Coverage**: 46 of 110 surfaces have at least one scorecard under `docs/design/audits/`; the remaining 64 have none, and driving that number to zero is the open GEN-10 work.
+**Coverage**: 47 of 111 surfaces have at least one scorecard under `docs/design/audits/`; the remaining 64 have none, and driving that number to zero is the open GEN-10 work.
 
 Coverage counts existence, not verdicts — a surface whose only scorecard says `needs-work` is covered but is not shipped. `packages/test-utils/tests/design-policies/scorecard-schema.test.ts` separately forbids a `ship` verdict on any scorecard with a failing gate or a dimension below the bar, which is how the "zero scorecards recording a known-degraded state" half of GEN-10 stays enforced.
 
@@ -22,6 +22,7 @@ GEN-10's acceptance criteria also name the published-brief templates. No publish
 | `briefs-[workspace]-[slug]`                         | `/briefs/[workspace]/[slug]`                         | `apps/web/src/app/(public)/briefs/[workspace]/[slug]/page.tsx`                      | —                                                                                                                                                                                                                  |
 | `calendar`                                          | `/calendar`                                          | `apps/web/src/app/(app)/calendar/page.tsx`                                          | `docs/design/audits/2026-07-13-calendar.md`, `docs/design/audits/2026-08-02-calendar-round-1.md`, `docs/design/audits/2026-08-02-calendar-round-2.md`, `docs/design/audits/2026-08-02-calendar-round-3.md`         |
 | `exports-[exportId]`                                | `/exports/[exportId]`                                | `apps/web/src/app/(app)/exports/[exportId]/page.tsx`                                | —                                                                                                                                                                                                                  |
+| `focus`                                             | `/focus`                                             | `apps/web/src/app/(focus)/focus/page.tsx`                                           | `docs/design/audits/2026-08-09-focus-working-companion.md`                                                                                                                                                         |
 | `inbox`                                             | `/inbox`                                             | `apps/web/src/app/(app)/inbox/page.tsx`                                             | `docs/design/audits/2026-06-10-design-pass.md`, `docs/design/audits/2026-08-02-launch-inbox.md`                                                                                                                    |
 | `oauth-authorize`                                   | `/oauth/authorize`                                   | `apps/web/src/app/(auth)/oauth/authorize/page.tsx`                                  | `docs/design/audits/2026-08-02-oauth-authorize.md`                                                                                                                                                                 |
 | `onboarding`                                        | `/onboarding`                                        | `apps/web/src/app/onboarding/page.tsx`                                              | `docs/design/audits/2026-06-10-design-pass.md`                                                                                                                                                                     |
@@ -127,11 +128,11 @@ GEN-10's acceptance criteria also name the published-brief templates. No publish
 
 The right-hand supplemental panels, registered per route by `apps/web/src/components/app-shell-frame.tsx`. They are a class of their own rather than overlays: at `lg` and above each is a **docked column** beside `<main>`, and only below `lg` is it presented in a Sheet. Every route in the `(app)` group hosts exactly two of them, so they are on screen for more of a session than most rows in this file.
 
-| Surface id        | URL | Source                                                  | Scorecard(s)                                   |
-| ----------------- | --- | ------------------------------------------------------- | ---------------------------------------------- |
-| `agenda`          | —   | `apps/web/src/components/agenda/agenda.tsx`             | `docs/design/audits/2026-08-07-agenda-rail.md` |
-| `day-tasks-panel` | —   | `apps/web/src/components/rail/day-tasks-panel.tsx`      | —                                              |
-| `focus-panel`     | —   | `apps/web/src/components/time-tracking/focus-panel.tsx` | —                                              |
+| Surface id        | URL | Source                                                  | Scorecard(s)                                               |
+| ----------------- | --- | ------------------------------------------------------- | ---------------------------------------------------------- |
+| `agenda`          | —   | `apps/web/src/components/agenda/agenda.tsx`             | `docs/design/audits/2026-08-07-agenda-rail.md`             |
+| `day-tasks-panel` | —   | `apps/web/src/components/rail/day-tasks-panel.tsx`      | —                                                          |
+| `focus-panel`     | —   | `apps/web/src/components/time-tracking/focus-panel.tsx` | `docs/design/audits/2026-08-09-focus-working-companion.md` |
 
 ## MCP App widgets
 

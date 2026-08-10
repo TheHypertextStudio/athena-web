@@ -74,6 +74,7 @@ vi.mock('../../src/lib/query-core', () => ({ unwrap: vi.fn() }));
 import AppGroupLayout from '../../src/app/(app)/layout';
 import SignInPage from '../../src/app/(auth)/sign-in/page';
 import SignUpPage from '../../src/app/(auth)/sign-up/page';
+import FocusGroupLayout from '../../src/app/(focus)/layout';
 import OpenPage from '../../src/app/open/page';
 import { config, isProtectedPath, proxy } from '../../src/proxy';
 
@@ -228,6 +229,30 @@ describe('(app) layout guard', () => {
   });
 });
 
+describe('(focus) layout guard', () => {
+  it('protects the chrome-free route with a callback to Focus', async () => {
+    readServerSessionMock.mockResolvedValue({ state: 'signed-out' });
+    headersMock.mockResolvedValue({
+      get: (name: string) => (name === 'x-docket-pathname' ? '/focus?mode=popout' : null),
+    });
+
+    await expect(FocusGroupLayout({ children: null })).rejects.toBeInstanceOf(RedirectSignal);
+    expect(redirectMock).toHaveBeenCalledWith(
+      `/sign-in?callbackURL=${encodeURIComponent('/focus?mode=popout')}`,
+    );
+  });
+
+  it('keeps rendering on an unknown session and hydrates the organization query', async () => {
+    readServerSessionMock.mockResolvedValue({ state: 'unknown' });
+
+    await expect(FocusGroupLayout({ children: null })).resolves.toBeTruthy();
+    expect(redirectMock).not.toHaveBeenCalled();
+    expect(prefetchQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['me', 'orgs'] }),
+    );
+  });
+});
+
 /**
  * The `AppShellFrame` element's props, found by descending the layout's wrappers.
  *
@@ -282,6 +307,7 @@ describe('/open entry gateway', () => {
 describe('protected-path matcher', () => {
   const SEGMENTS = [
     'today',
+    'focus',
     'inbox',
     'stream',
     'portfolio',

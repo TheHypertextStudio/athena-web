@@ -71,6 +71,7 @@ import {
   resolveAthenaDisplay,
   resolveAthenaDisplays,
   resolveAthenaInvocation,
+  resolveAthenaWorkInvocation,
 } from './me-athena-context';
 
 /** SSE live-tail poll cadence (DB-backed and restart-safe). */
@@ -945,13 +946,13 @@ const meAthena = new Hono<AppEnv>()
       summary: 'Create personal Athena work',
       response: AthenaSessionDetailOut,
       description:
-        'Validate optional workspace/source invocation context, create caller-owned episodic work, and settle it through the existing synchronous runner.',
+        "Validate optional workspace/source invocation context, default context-free work to the caller's Personal workspace, create caller-owned episodic work, and settle it through the existing runner.",
     }),
     zJson(AthenaSessionCreateBody),
     async (c) => {
       const owner = requestOwner(c);
       const body = c.req.valid('json');
-      const invocation = await resolveAthenaInvocation(owner, body.context);
+      const invocation = await resolveAthenaWorkInvocation(owner, body.context);
       const conversation = await resolveCanonicalConversation(
         owner,
         invocation.context?.workspaceId ?? null,

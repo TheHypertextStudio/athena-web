@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**
- * The `(app)` route group's top-level segments — the surfaces that require a session.
+ * Authenticated route-group top-level segments — the surfaces that require a session.
  *
  * @remarks
  * An explicit list rather than a catch-all with exclusions, so marketing (`/`), `/onboarding`,
@@ -12,6 +12,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  */
 const PROTECTED_SEGMENTS: readonly string[] = [
   'today',
+  'focus',
   'inbox',
   'stream',
   'portfolio',
@@ -26,7 +27,7 @@ const PROTECTED_SEGMENTS: readonly string[] = [
 ];
 
 /**
- * Whether `pathname` addresses an authenticated `(app)` surface.
+ * Whether `pathname` addresses an authenticated application or Focus surface.
  *
  * @param pathname - The request pathname, always starting with `/`.
  * @returns `true` when the first path segment is one of the protected `(app)` segments.
@@ -111,7 +112,7 @@ function signInUrl(request: NextRequest, returnPath: string): URL {
  * **Entry gate.** A request for an authenticated surface carrying no session cookie at all is
  * redirected to `/sign-in?callbackURL=…` here, before Next renders anything. That is the cheap,
  * certain half of protected-route enforcement and it costs no network call; the expensive,
- * authoritative half lives in the `(app)` layout, which every other case falls through to.
+ * authoritative half lives in the route-group layout, which every other case falls through to.
  *
  * Every matched protected request also carries its own path forward in `x-docket-pathname`
  * (`pathname` + `search`), because Next gives a layout no other way to learn the request path and
@@ -150,7 +151,7 @@ export function proxy(request: NextRequest): NextResponse {
  *
  * @remarks
  * `/api/auth/*` and `/v1/*` are the reverse-proxied API paths that need the host restored. The rest
- * are the `(app)` route group's top-level segments — each as both the bare path and its subtree —
+ * are authenticated route-group top-level segments — each as both the bare path and its subtree —
  * which need the session gate. Written out as literals because Next statically analyses this export
  * at build time and cannot evaluate a derived array; the two lists are held in sync by
  * `apps/web/tests/auth/entry-gate.test.ts`.
@@ -161,6 +162,8 @@ export const config = {
     '/v1/:path*',
     '/today',
     '/today/:path*',
+    '/focus',
+    '/focus/:path*',
     '/inbox',
     '/inbox/:path*',
     '/stream',

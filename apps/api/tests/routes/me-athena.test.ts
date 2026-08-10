@@ -133,6 +133,63 @@ async function seedPeople(): Promise<Seed> {
   };
 }
 
+/** Give one test user the account invariant context-free personal Athena work relies on. */
+async function seedPersonalWorkspace(person: Person): Promise<{
+  readonly organizationId: string;
+  readonly actorId: string;
+}> {
+  const suffix = Math.random().toString(36).slice(2, 9);
+  const organizationId = one(
+    await db
+      .insert(schema.organization)
+      .values({
+        name: 'Personal',
+        slug: `personal-${suffix}`,
+        isPersonal: true,
+        lifecycleState: 'active',
+      })
+      .returning({ id: schema.organization.id }),
+  ).id;
+  await db.insert(schema.team).values({
+    organizationId,
+    name: 'Personal',
+    key: `P${suffix.slice(-3)}`,
+  });
+  const roleId = one(
+    await db
+      .insert(schema.role)
+      .values({
+        organizationId,
+        key: `owner-${suffix}`,
+        name: 'Owner',
+        capabilities: ['view', 'contribute'],
+      })
+      .returning({ id: schema.role.id }),
+  ).id;
+  const actorId = one(
+    await db
+      .insert(schema.actor)
+      .values({
+        organizationId,
+        kind: 'human',
+        displayName: 'Owner',
+        userId: person.userId,
+        roleId,
+      })
+      .returning({ id: schema.actor.id }),
+  ).id;
+  await db.insert(schema.grant).values({
+    organizationId,
+    subjectKind: 'role',
+    subjectId: roleId,
+    resourceKind: 'organization',
+    resourceId: organizationId,
+    capabilities: ['view', 'contribute'],
+    effect: 'allow',
+  });
+  return { organizationId, actorId };
+}
+
 /** Mount the personal route with only a Better Auth session, never an org actor context. */
 function appFor(person: Person) {
   const app = new Hono<AppEnv>();
@@ -1860,27 +1917,92 @@ describe('personal Athena routes', () => {
     );
   });
 
-  it('creates untracked personal work with no workspace focus, noting it out loud', async () => {
+  it('defaults context-free personal work to the caller’s Personal workspace', async () => {
     const seed = await seedPeople();
-    mockCompletion('Started without a home yet');
+    const personal = await seedPersonalWorkspace(seed.owner);
+    mockCompletion('Appointment captured');
 
     const response = await appFor(seed.owner).request('/sessions', {
       method: 'POST',
       headers: JSON_HEADERS,
-      body: JSON.stringify({ prompt: 'Jot this down for later' }),
+      body: JSON.stringify({ prompt: 'I need to create a dentist appointment' }),
     });
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      context: unknown;
+      id: string;
+      context: { workspaceId?: string } | null;
       activities: { body: { text?: string; author?: string } }[];
     };
-    expect(body.context).toBeNull();
-    expect(
-      body.activities.some((activity) =>
-        activity.body.text?.includes('Started without a tracked task'),
-      ),
-    ).toBe(true);
+    expect(body.context?.workspaceId).toBe(personal.organizationId);
+    expect(body.activities.some((activity) => activity.body.text === 'Appointment captured')).toBe(
+      true,
+    );
+    const [session] = await db
+      .select({
+        contextOrganizationId: schema.agentSession.contextOrganizationId,
+        taskId: schema.agentSession.taskId,
+      })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, body.id));
+    expect(session?.contextOrganizationId).toBe(personal.organizationId);
+    expect(session?.taskId).toBeTruthy();
+    const [createdTask] = await db
+      .select({ organizationId: schema.task.organizationId })
+      .from(schema.task)
+      .where(eq(schema.task.id, session?.taskId ?? ''));
+    expect(createdTask?.organizationId).toBe(personal.organizationId);
+  });
+
+  it('keeps explicit workspace context authoritative over the Personal default', async () => {
+    const seed = await seedPeople();
+    mockCompletion('Shared work captured');
+
+    const response = await appFor(seed.owner).request('/sessions', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        prompt: 'Prepare the team agenda',
+        context: { workspaceId: seed.orgA },
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      id: string;
+      context: { workspaceId?: string } | null;
+    };
+    expect(body.context?.workspaceId).toBe(seed.orgA);
+    const [session] = await db
+      .select({
+        contextOrganizationId: schema.agentSession.contextOrganizationId,
+        taskId: schema.agentSession.taskId,
+      })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, body.id));
+    expect(session?.contextOrganizationId).toBe(seed.orgA);
+    const [createdTask] = await db
+      .select({ organizationId: schema.task.organizationId })
+      .from(schema.task)
+      .where(eq(schema.task.id, session?.taskId ?? ''));
+    expect(createdTask?.organizationId).toBe(seed.orgA);
+  });
+
+  it('returns a recoverable conflict when context-free work has no Personal workspace', async () => {
+    const seed = await seedPeople();
+
+    const response = await appFor(seed.owner).request('/sessions', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ prompt: 'I need to create a dentist appointment' }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      status: 409,
+      code: 'conflict',
+      title: 'That change conflicts with the current state.',
+    });
   });
 
   it('refuses to approve or reject the latest action when none is proposed', async () => {

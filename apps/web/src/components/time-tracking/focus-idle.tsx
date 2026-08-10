@@ -40,6 +40,8 @@ export interface FocusIdleProps {
   readonly starting: boolean;
   /** Begin tracking; called with no task id for a deliberately nameless start. */
   readonly onStart: (taskId?: string) => void;
+  /** Use full touch targets when rendered in immersive mode. */
+  readonly comfortable?: boolean;
 }
 
 /** The one sentence each suggestion source justifies itself with. */
@@ -57,6 +59,7 @@ export default function FocusIdle({
   shortcuts,
   starting,
   onStart,
+  comfortable = false,
 }: FocusIdleProps): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
@@ -78,7 +81,7 @@ export default function FocusIdle({
           </Text>
           <Button
             variant="default"
-            controlSize="sm"
+            controlSize={comfortable ? 'xl' : 'sm'}
             className="w-full"
             data-testid="timer-start-suggested"
             disabled={starting}
@@ -93,7 +96,7 @@ export default function FocusIdle({
       ) : (
         <Button
           variant="secondary"
-          controlSize="sm"
+          controlSize={comfortable ? 'xl' : 'sm'}
           className="w-full"
           aria-label="Start a timer"
           data-testid="timer-start"
@@ -121,7 +124,7 @@ export default function FocusIdle({
                   onClick={() => {
                     onStart(shortcut.taskId);
                   }}
-                  className="bg-surface-container-low hover:bg-surface-container focus-visible:ring-ring flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                  className="bg-surface-container-low hover:bg-surface-container focus-visible:outline-primary flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
                   <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
                     {shortcut.title}

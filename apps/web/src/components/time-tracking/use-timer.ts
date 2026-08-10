@@ -20,13 +20,19 @@
  * re-render the entire application every second while a timer ran.
  */
 import type { TimeActiveOut, TimeAnchorSuggestion, TimeRecordOut } from '@docket/types';
+import { writeStoredValue } from '@docket/ui/lib/browser-storage';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { userErrorMessage } from '@/lib/problem';
 import { STALE, apiQueryOptions, queryKeys, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
 /** How often the shell re-reads the tracker. Focus-gated by {@link useLiveApiQuery}. */
 const TIMER_POLL_MS = 30_000;
+
+/** Cross-window signal that one Focus surface changed the personal timer. */
+export const FOCUS_TIMER_CHANGE_KEY = 'docket.focus.timer-change';
 
 /**
  * How long after a planned block begins the suggestion still reads as "you should be on this".
@@ -53,6 +59,8 @@ export interface TimerStatus {
   readonly nudging: boolean;
   /** Whether the first read has not landed yet. */
   readonly loading: boolean;
+  /** Application-owned timer read failure, or null while the state is usable. */
+  readonly error: string | null;
 }
 
 /** The tracker as the Focus panel needs it: everything in {@link TimerStatus}, plus the clock. */
@@ -125,11 +133,24 @@ function statusOf(active: TimeActiveOut | undefined, loading: boolean): TimerSta
     suggestion,
     nudging: record === null && startedAt !== null && serverNow - startedAt < NUDGE_WINDOW_MS,
     loading,
+    error: null,
   };
 }
 
 /** The one shared tracker query, so every consumer reads the same cache entry. */
 function useActiveTimeQuery() {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const receiveTimerChange = (event: StorageEvent): void => {
+      if (event.key !== FOCUS_TIMER_CHANGE_KEY) return;
+      void queryClient.invalidateQueries({ queryKey: ['me', 'time'] });
+    };
+    window.addEventListener('storage', receiveTimerChange);
+    return () => {
+      window.removeEventListener('storage', receiveTimerChange);
+    };
+  }, [queryClient]);
+
   return useLiveApiQuery(
     apiQueryOptions(
       queryKeys.timeActive(),
@@ -153,7 +174,10 @@ function useActiveTimeQuery() {
  */
 export function useTimerStatus(): TimerStatus {
   const query = useActiveTimeQuery();
-  return statusOf(query.data, query.isPending);
+  return {
+    ...statusOf(query.data, query.isPending),
+    error: query.isError ? userErrorMessage(query.error, 'Could not load your timer.') : null,
+  };
 }
 
 /**
@@ -170,7 +194,10 @@ export function useTimerStatus(): TimerStatus {
 export function useTimerState(): TimerState {
   const query = useActiveTimeQuery();
   const record = query.data?.record ?? null;
-  const status = statusOf(query.data, query.isPending);
+  const status: TimerStatus = {
+    ...statusOf(query.data, query.isPending),
+    error: query.isError ? userErrorMessage(query.error, 'Could not load your timer.') : null,
+  };
   const running = status.phase === 'running';
 
   const [now, setNow] = useState(() => Date.now());
@@ -210,6 +237,12 @@ export function useTimerState(): TimerState {
  */
 export function useTimerControls(recordId: string | null): TimerControls {
   const invalidateKeys = [queryKeys.timeActive(), ['me', 'time']] as const;
+  const signalTimerChange = (): void => {
+    writeStoredValue(
+      FOCUS_TIMER_CHANGE_KEY,
+      `${String(Date.now())}-${Math.random().toString(36).slice(2)}`,
+    );
+  };
 
   const startMutation = useApiMutation({
     mutationFn: async (input: { label?: string; taskId?: string; organizationId?: string }) => {
@@ -226,6 +259,7 @@ export function useTimerControls(recordId: string | null): TimerControls {
       return await response.json();
     },
     invalidateKeys: [...invalidateKeys],
+    onSuccess: signalTimerChange,
   });
 
   const transition = useApiMutation({
@@ -247,6 +281,7 @@ export function useTimerControls(recordId: string | null): TimerControls {
       return await response.json();
     },
     invalidateKeys: [...invalidateKeys],
+    onSuccess: signalTimerChange,
   });
 
   const renameMutation = useApiMutation({
@@ -259,6 +294,7 @@ export function useTimerControls(recordId: string | null): TimerControls {
       return await response.json();
     },
     invalidateKeys: [...invalidateKeys],
+    onSuccess: signalTimerChange,
   });
 
   const act = async (action: 'pause' | 'start' | 'stop', title?: string): Promise<void> => {

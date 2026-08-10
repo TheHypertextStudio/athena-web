@@ -1,5 +1,5 @@
 CREATE TYPE "public"."notion_mirror_entity" AS ENUM('task', 'project', 'initiative', 'program', 'team', 'cycle', 'milestone', 'label', 'person');--> statement-breakpoint
-ALTER TYPE "public"."sync_run_purpose" ADD VALUE 'notion_mirror';--> statement-breakpoint
+ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'notion_mirror';--> statement-breakpoint
 CREATE TABLE "notion_mirror_database" (
 	"id" text PRIMARY KEY NOT NULL,
 	"organization_id" text NOT NULL,

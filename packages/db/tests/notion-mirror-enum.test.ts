@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { NotionMirrorEntity, SyncRunPurpose } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
 import { syncRunPurpose } from '../src/enums';
 import { notionMirrorEntity } from '../src/schema/notion-mirror';
+
+const migration = readFileSync(
+  resolve(import.meta.dirname, '../drizzle/0078_natural_miss_america.sql'),
+  'utf8',
+);
 
 describe('notion_mirror_entity enum', () => {
   it('matches the domain enum in the same order', () => {
@@ -32,5 +40,14 @@ describe('sync_run_purpose enum', () => {
     // `ALTER TYPE ... ADD VALUE` positions a new member relative to existing ones, so the
     // migration and this list have to agree on where it went.
     expect(syncRunPurpose.enumValues.at(-1)).toBe('notion_mirror');
+  });
+
+  it('keeps the migration idempotent with the enum preflight', () => {
+    // The migration runner commits this enum value before Drizzle opens its all-migrations
+    // transaction. Production therefore reaches this generated statement with the label already
+    // present, and a plain ADD VALUE aborts the deployment with PostgreSQL 42710.
+    expect(migration).toContain(
+      `ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'notion_mirror';`,
+    );
   });
 });

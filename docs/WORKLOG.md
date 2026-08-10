@@ -18,10 +18,15 @@
   landed Notion integration.
 - **Approach**: Migrate replacement settings files to named MD3 typography roles, keep colour
   swatches stable on hover and focus, register the new settings dialog as an overlay, remove stale
-  design-debt entries, and add Notion to the provider catalog's closed-set expectation.
+  design-debt entries, and add Notion to the provider catalog's closed-set expectation. After the
+  exact-SHA CI gate passed, repair the generated Notion migration so its enum addition remains
+  idempotent with the migration runner's required pre-commit enum preflight, cover that contract
+  directly, and repeat CI, deployment, E2E, and live production verification on the replacement
+  SHA.
 - **Files Changed**: Calendar settings, notification preferences, settings status/navigation, the
   label colour picker, the design-token scanner/debt ledger, the provider bootstrap policy, and
-  behavioral API coverage for the Notion mirror designer, reconciler, and management routes.
+  behavioral API coverage for the Notion mirror designer, reconciler, and management routes. The
+  Notion mirror migration and enum contract test also carry the production-gate repair.
 - **Validation**: The local design-token policy passes 8/8, all affected package typechecks pass,
   notification preferences pass 4/4, the UI suite passes 563/563, and the targeted provider policy
   reproduces the exact GitHub failure before this contract repair. The following exact-SHA run
@@ -37,12 +42,19 @@
   conflict and trash handling; write budgets and provider no-op responses; sync leases; people
   resolution; tenant scoping; and the request surface. The three files now contribute more than
   223 directly exercised branches instead of zero.
-  Exact-SHA GitHub CI, E2E, and production verification follow the next fast-forward push.
+  Exact-SHA GitHub CI then passed all five gates. Production correctly stopped before rollout when
+  migration 0078 repeated the preflighted `notion_mirror` enum addition without `IF NOT EXISTS`;
+  the regression test reproduced the non-idempotent SQL before the fix, then passed 5/5 afterward.
+  The real migration runner also applied all migrations to a fresh PGlite database, and the DB
+  package typecheck, lint, targeted formatting, and diff checks pass. Replacement exact-SHA CI,
+  deployment, E2E, and live production verification remain before completion.
 - **Learnings**: A clean textual rebase can still fail a semantic ratchet when one side replaces
   ledgered files. The production gate also correctly caught Notion being added to the guided
   catalog without updating the contract that enumerates every deployable provider. A feature can
   pass its focused tests while still lowering a package-level ratchet substantially; orchestration
   coverage needs to land with the feature rather than being discovered by the next release lane.
+  Generated migration SQL still needs review against the runner's transaction workarounds: schema
+  generation cannot infer that an enum value was deliberately committed in a preflight statement.
 
 ---
 

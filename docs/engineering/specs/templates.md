@@ -163,10 +163,12 @@ the author's work without allowing a person or object id from one workspace to c
 
 Every successful create invalidates destination-owned cache keys. When the destination is the
 opening workspace, the launcher chooses whether to stay or open the created object, and may receive
-its callback. A cross-workspace create always opens the created object in its destination and never
-calls the origin-page callback with foreign data. Team is the exception to detail routing: it always
-opens the destination workspace's Teams page because a newly created team has no standalone create
-completion route.
+its callback. For normal completion, a cross-workspace create opens the created object in its
+destination and never calls the origin-page callback with foreign data. A cross-workspace Task
+continuation is the explicit exception: it remains in the global modal while still invalidating
+target caches and suppressing origin callbacks. Team is the exception to detail routing: it always opens the
+destination workspace's Teams page because a newly created team has no standalone create completion
+route.
 
 Task's **Create more** switch is off by default, keeping ordinary Create as the close-and-complete
 path. With it on, Create keeps the dialog open, invalidates as usual, suppresses navigation, clears

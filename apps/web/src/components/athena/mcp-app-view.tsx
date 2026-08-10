@@ -1,6 +1,14 @@
 'use client';
 
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type JSX,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   createMcpAppHost,
   sandboxResourceParams,
@@ -245,7 +253,10 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
     [onCallTool],
   );
 
-  useEffect(() => {
+  // The proxy can finish loading immediately after the iframe enters the DOM. Install the message
+  // listener in the same commit, before paint, so its one-shot `sandbox/proxy-ready` announcement
+  // cannot race a passive effect and leave the widget waiting forever for its resource document.
+  useLayoutEffect(() => {
     const frame = frameRef.current;
     if (!frame) {
       return;

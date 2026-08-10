@@ -26,6 +26,9 @@
   reproduces the exact GitHub failure before this contract repair. The following exact-SHA run
   found `resolveVocabularyTerm`'s three documented branches untested under the types package's
   100% threshold; default, preset, and override resolution now have direct regression coverage.
+  The next coverage run exposed an MCP Apps handshake race under load: the proxy's ready message
+  could arrive after iframe commit but before the passive listener was installed. Host setup now
+  uses a layout effect so the listener exists before the iframe can load and signal.
   Exact-SHA GitHub CI, E2E, and production verification follow the next fast-forward push.
 - **Learnings**: A clean textual rebase can still fail a semantic ratchet when one side replaces
   ledgered files. The production gate also correctly caught Notion being added to the guided

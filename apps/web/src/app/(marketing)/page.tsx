@@ -28,25 +28,25 @@ export default function HomePage(): JSX.Element {
         title="Track tasks"
         description="Tasks keep estimates, schedules, and tracked time together."
         side="right"
-        surface="Task list and task detail"
+        surface="/marketing/task-detail.jpg"
       />
       <FeatureBand
         title="Group work into projects and programs"
         description="Projects end; programs continue."
-        surface="A project beside a program"
+        surface="/marketing/program.jpg"
         tone="paper"
       />
       <FeatureSplit
         title="Align work with initiatives"
         description="Initiatives connect goals to responsible work."
         side="left"
-        surface="An initiative with projects rolling into it"
+        surface="/marketing/initiative.jpg"
       />
       <OrganizationsPair />
       <FeatureBand
         title="Place tasks on the calendar"
         description="Calendar placement shows whether planned work fits."
-        surface="The calendar with tasks scheduled against meetings"
+        surface="/marketing/calendar.jpg"
         tone="ink"
       />
       <AgentsStrip />

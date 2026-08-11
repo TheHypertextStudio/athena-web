@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 
 import { Text } from '@docket/ui/primitives';
 
-import { PlaceholderSurface } from './placeholder-surface';
+import { ProductScreenshot } from './product-screenshot';
 
 /**
  * Let your agents work with you — the shortest section on the page.
@@ -37,10 +37,12 @@ export function AgentsStrip(): JSX.Element {
             Approved AI clients can work from existing Docket records.
           </Text>
         </div>
-        <PlaceholderSurface
-          label="An MCP client connected to Docket"
+        <ProductScreenshot
+          src="/marketing/connected-apps.jpg"
+          alt="Claude Desktop approved in Docket"
           aspect="aspect-[2/1]"
           tone="paper"
+          position="center"
         />
       </div>
     </section>

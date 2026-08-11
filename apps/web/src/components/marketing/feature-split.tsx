@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 
 import { Text } from '@docket/ui/primitives';
 
-import { PlaceholderSurface } from './placeholder-surface';
+import { ProductScreenshot } from './product-screenshot';
 
 /** Props for {@link FeatureSplit}. */
 export interface FeatureSplitProps {
@@ -12,7 +12,7 @@ export interface FeatureSplitProps {
   readonly description: string;
   /** Which side the product plate sits on. Alternated by the caller so the page does not march. */
   readonly side: 'left' | 'right';
-  /** What belongs in the plate. */
+  /** Public path to the product screenshot. */
   readonly surface: string;
 }
 
@@ -55,7 +55,7 @@ export function FeatureSplit({
           </Text>
         </div>
         <div className={side === 'left' ? 'md:order-1' : ''}>
-          <PlaceholderSurface label={surface} aspect="aspect-[4/3]" tone="paper" />
+          <ProductScreenshot src={surface} alt={title} aspect="aspect-[4/3]" tone="paper" />
         </div>
       </div>
     </section>

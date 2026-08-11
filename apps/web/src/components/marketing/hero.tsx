@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 
 import { HeroActions } from './marketing-cta';
-import { PlaceholderSurface } from './placeholder-surface';
+import { ProductScreenshot } from './product-screenshot';
 
 /**
  * Hero — display headline, one supporting line, the action row, then a wide product plate.
@@ -27,10 +27,12 @@ export function Hero(): JSX.Element {
         <HeroActions />
       </div>
       <div className="mt-16 sm:mt-20">
-        <PlaceholderSurface
-          label="Today — the landing view, tasks across every organization"
+        <ProductScreenshot
+          src="/marketing/today.jpg"
+          alt="Today with estimated, scheduled, and tracked tasks"
           aspect="aspect-[16/9]"
           tone="paper"
+          eager
         />
       </div>
     </section>

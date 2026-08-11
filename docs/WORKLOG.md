@@ -60,6 +60,50 @@
   expected the obsolete OAuth-during-install copy and its Notion E2E fixtures created a pending
   record before navigating. The follow-up updates the contract assertion and completes the mock
   Notion connection before its UI navigation assertion.
+### [MARKETING-SHIP-002] Replace product placeholders and prove the production release
+
+- **Status**: BLOCKED
+- **Started**: 2026-08-11
+- **Priority**: P0
+- **Description**: Replace every dashed marketing placeholder with a real Docket screenshot built
+  from a disposable account and plausible product data, then re-run the public-site craft audit and
+  ship the approved copy and Docket Pro purchase path to production. Docket and Docket Pro are
+  separate products with distinct contracts.
+- **Approach**: Add one deterministic marketing-capture flow that signs up through the real local
+  passkey path, creates representative organizations, programs, initiatives, projects, tasks,
+  estimates, daily-plan placements, and time entries through the application API, and captures the
+  product surfaces at the aspect ratios the home page uses. Replace the generic plate component
+  with an accessible image frame, verify desktop/mobile marketing layout and the full public-copy
+  matrix, then inspect the configured production billing and deployment path before promotion.
+- **Subtasks**:
+  - [x] Capture Today, task, program/project, initiative, organization, calendar, and MCP surfaces.
+  - [x] Replace all dashed frames with labeled product screenshots and responsive crops.
+  - [x] Keep current billing and customer documentation product-based.
+  - [x] Re-run copy, responsive, theme, no-placeholder, type, lint, test, and build gates.
+  - [ ] Prove Stripe checkout, webhook activation, access, management, cancellation, and return routing.
+  - [ ] Deploy the validated release and verify the production customer journey.
+- **Files Changed**: Deterministic marketing capture tooling; nine JPEG application captures;
+  marketing screenshot frames and sections; support-contact derivation; MCP OAuth test helper;
+  screenshot component and support-contact tests; the marketing craft scorecard and its twelve
+  viewport/theme captures.
+- **Validation**: The local capture flow completed against a disposable passkey account and real
+  Docket API writes. Home, Pricing, and About were photographed at 1440×900 and 390×844 in light
+  and OS-dark modes; each passed the 320px overflow check and the craft review scored SHIP. The web
+  suite passes 258 files and 2,160 tests, including the 14-case public-copy gate. Repository
+  typecheck passes 20/20, lint passes 20/20, tests pass 20/20, and build passes 4/4.
+- **Blockers**: Production promotion remains gated on live Stripe and legal evidence. The deploy
+  workflow explicitly sets `BILLING_ENABLED=false`, the production `API_SECRET_BINDINGS` map has
+  no Stripe secret or price entries, the available Stripe CLI profiles do not identify a Docket
+  account, and the local Google Cloud session requires interactive reauthentication. Operator and
+  legal approval for Privacy and Terms is also not recorded. Publishing the $8 Docket Pro offer
+  before those conditions are resolved would violate the release contract.
+- **Learnings**: Product screenshots must use the public MCP endpoint even when their data is
+  captured locally. The visual audit also caught two non-copy release defects: the support address
+  was derived from the web CNAME instead of the registrable domain, and the hero image was left as
+  a lazy-loaded LCP candidate. Both now have direct regression coverage.
+
+---
+
 ### [MARKETING-PRO-001] Align public copy and Docket Pro product access
 
 - **Status**: REVIEW
@@ -85,14 +129,15 @@
   path is proven. The repository's latest production evidence currently records billing as disabled;
   this implementation will retain that release gate until live Stripe checkout, webhook activation,
   access, cancellation, billing management, and return routing are verified. Privacy and terms also
-  require operator and legal review. Existing dashed home-page image frames keep the broader craft
-  rubric's no-placeholder gate red; replacing them is outside this copy-focused change.
+  require operator and legal review.
 - **Validation**: Product-capability, billing-lifecycle, CTA-state, onboarding, and copy-gate tests
   pass. `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass. The API suite passes 316
   files and 3,675 tests; the public-copy gate passes 14/14 and the uncached design-token policy
   passes 8/8. The 13 audited surfaces have 52 desktop/mobile, light/dark captures and every binary
   copy property is Aligned. Live production billing-path proof and legal approval remain external
-  release gates, so the revised pricing copy is implemented but must remain unpublished.
+  release gates, so the revised pricing copy is implemented but must remain unpublished. The
+  dashed marketing frames named in the earlier audit have since been replaced and pass the
+  2026-08-11 marketing-release craft review.
 - **Learnings**: Organization lifecycle cannot stand in for product ownership, including in test
   fixtures; paid-feature fixtures now grant Docket Pro explicitly. Running the design-token policy
   without cache caught raw typography in the new billing surfaces and allowed the debt ledger to

@@ -8,10 +8,11 @@
  * configuration through the shared host contract: when the final domain lands, the cutover is an
  * environment change, not an edit to two React components and a rebuild.
  *
- * There is no hard-coded fallback, and that is the point. The address follows whatever apex the
- * app is actually served from (`NEXT_PUBLIC_APP_URL` → `support@<apex>`), so it is already
- * correct today and stays correct after the move without anyone remembering to touch it.
- * `NEXT_PUBLIC_SUPPORT_EMAIL` overrides it when the mailbox is not `support@`.
+ * There is no hard-coded fallback. The address follows the configured public root domain, or the
+ * registrable passkey domain when the root is not repeated in the web deployment. That distinction
+ * matters while the app lives on a subdomain: `support@docket.hypertext.studio` cannot receive
+ * mail when that host is a CNAME, while `support@hypertext.studio` can. An explicit
+ * `NEXT_PUBLIC_SUPPORT_EMAIL` still wins when the mailbox is not `support@`.
  *
  * `NEXT_PUBLIC_` because these are statically rendered marketing pages — the value is inlined at
  * build time and is public by definition (it is printed on the page). See
@@ -35,12 +36,6 @@ import { env } from '@docket/env/web';
 export const SUPPORT_EMAIL: string = (() => {
   const configured = env.NEXT_PUBLIC_SUPPORT_EMAIL;
   if (configured !== undefined) return configured;
-  // Derive `support@<apex>` from the app's own URL. This is not a hard-coded fallback — there is
-  // no address written into this file — it is the rule the module's contract has always stated:
-  // the address follows whatever apex the app is served from, and the variable above only exists
-  // to override it when the mailbox is not `support@`. The derivation was lost with `hosts.ts`,
-  // which made a build with no explicit override fail on the privacy page.
-  // `NEXT_PUBLIC_APP_URL` is required, so there is always an apex to derive from and no branch
-  // here can leave the address unnamed.
-  return `support@${new URL(env.NEXT_PUBLIC_APP_URL).hostname.replace(/^www\./, '')}`;
+  const rootDomain = env.NEXT_PUBLIC_ROOT_DOMAIN ?? env.NEXT_PUBLIC_PASSKEY_RP_ID;
+  return `support@${rootDomain}`;
 })();

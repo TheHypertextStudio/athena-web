@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 
 import { Text } from '@docket/ui/primitives';
 
-import { PlaceholderSurface } from './placeholder-surface';
+import { ProductScreenshot } from './product-screenshot';
 
 /** Props for {@link FeatureBand}. */
 export interface FeatureBandProps {
@@ -10,7 +10,7 @@ export interface FeatureBandProps {
   readonly title: string;
   /** The one supporting sentence under the title. */
   readonly description: string;
-  /** What belongs in the plate. */
+  /** Public path to the product screenshot. */
   readonly surface: string;
   /** Background tone. `ink` inverts the band and is used once, as the page's peak. */
   readonly tone: 'paper' | 'ink';
@@ -48,7 +48,7 @@ export function FeatureBand({ title, description, surface, tone }: FeatureBandPr
           {description}
         </Text>
         <div className="mt-12">
-          <PlaceholderSurface label={surface} aspect="aspect-[16/9]" tone={tone} />
+          <ProductScreenshot src={surface} alt={title} aspect="aspect-[16/9]" tone={tone} />
         </div>
       </div>
     </section>

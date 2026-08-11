@@ -10,6 +10,7 @@ import ActionDomainsProvider from '@/components/actions/action-domains-provider'
 import { ObjectContextMenuProvider } from '@/components/context-menu';
 import { PickerOverlayProvider } from '@/components/pickers/picker-overlay';
 import { InteractionProvider } from '@/lib/actions';
+import { InteractionReceiptProvider } from '@/lib/interactions/receipt-context';
 import { probeSession } from '@/lib/auth-client';
 import { createQueryClient } from '@/lib/query';
 import { SessionExpiredError } from '@/lib/query';
@@ -43,16 +44,19 @@ export interface ProvidersProps {
  * 4. TanStack Query's `QueryClientProvider` — the dynamic-data layer that backs every
  *    read/mutation hook in `@/lib/query`, so data surfaces auto-refetch on window focus
  *    and after mutations instead of needing a manual "Refresh" button.
- * 5. {@link InteractionProvider} — the app's single action registry, drag record, and
+ * 5. {@link InteractionReceiptProvider} — the app's single local receipt lifecycle for semantic,
+ *    painted acknowledgement and local feedback escalation. It is deliberately separate from the
+ *    action registry and sends no production observation data.
+ * 6. {@link InteractionProvider} — the app's single action registry, drag record, and
  *    document-level right-click handler. Mounted exactly once, and here rather than in the
  *    authenticated shell, because "exactly one" is the whole point: two registries would mean two
  *    context menus and two answers to what a gesture does. It is inert until a surface registers
  *    an action domain — with nothing registered, a right-click resolves to no actions and the
  *    browser's own menu is deliberately left alone.
- * 6. {@link PickerOverlayProvider} — the app's one moved "edit labels on N objects" popover,
+ * 7. {@link PickerOverlayProvider} — the app's one moved "edit labels on N objects" popover,
  *    mounted above {@link ActionDomainsProvider} so both the `task.label` registry action and
  *    every task list's `L` hotkey can summon it via `usePickerOverlay().open(...)`.
- * 7. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
+ * 8. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
  *    authenticated shell. Offline support has to be installed before it is needed, and someone
  *    arriving at `/sign-in` is exactly who benefits from the offline page being cached already.
  *
@@ -81,21 +85,23 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
           <AuthenticationInterlockProvider>
             <QueryClientProvider client={queryClient}>
               <UnauthorizedWatcher handlerRef={handleCacheError} />
-              <InteractionProvider>
-                {/*
+              <InteractionReceiptProvider>
+                <InteractionProvider>
+                  {/*
                   The object menu was built and left unplugged: with no domain ever registered,
                   every right-click fell through to the browser. These two providers are what make
                   the app's one contextmenu handler live — one introduces the domains to the
                   registry, the other renders what the registry resolves.
                 */}
-                <PickerOverlayProvider>
-                  <ActionDomainsProvider>
-                    <ObjectContextMenuProvider>
-                      <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
-                    </ObjectContextMenuProvider>
-                  </ActionDomainsProvider>
-                </PickerOverlayProvider>
-              </InteractionProvider>
+                  <PickerOverlayProvider>
+                    <ActionDomainsProvider>
+                      <ObjectContextMenuProvider>
+                        <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+                      </ObjectContextMenuProvider>
+                    </ActionDomainsProvider>
+                  </PickerOverlayProvider>
+                </InteractionProvider>
+              </InteractionReceiptProvider>
             </QueryClientProvider>
           </AuthenticationInterlockProvider>
         </TooltipProvider>

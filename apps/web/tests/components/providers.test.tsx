@@ -41,4 +41,15 @@ describe('Providers', () => {
     expect(screen.getByText('Loaded')).toBeTruthy();
     expect(container.querySelector('script')).toBeNull();
   });
+
+  it('composes the receipt provider inside the query client without replacing the action provider', () => {
+    const { container } = render(
+      <Providers>
+        <main>Receipt-ready</main>
+      </Providers>,
+    );
+
+    expect(screen.getByText('Receipt-ready')).toBeTruthy();
+    expect(container.querySelector('script')).toBeNull();
+  });
 });

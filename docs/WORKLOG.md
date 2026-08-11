@@ -28,7 +28,11 @@
   placement fell back to the shell edge. The new animation-frame placement reads the virtual anchor
   after commit, chooses left/right collision candidates, and stops automatic anchoring after the
   first pointer or keyboard move. Focused tests, 1,957 web tests, repository format/type/lint/build
-  gates, and the two-test responsive Playwright evidence file are green.
+  gates, and the two-test responsive Playwright evidence file are green. The first production E2E
+  workflow exposed a pre-existing mobile calendar-drawer overflow: the Linked tasks heading and
+  its three controls were forced onto one row. The narrow layout now stacks the heading above a
+  wrapping control row; the exact read-only drawer journey passes twice against an isolated
+  production build. Exact-SHA deployment verification remains pending for that gate repair.
 
 ---
 

@@ -39,10 +39,11 @@ the full-height sibling presentation at 820px and 390px and reports no document 
 
 ## Production completion recheck — 2026-08-11
 
-The authenticated production surface was re-inspected after the final review fixes. The 544px
-desktop dialog ended at `1516.48px` while the Agenda began at `1529.61px`; keyboard movement kept
-that exclusion boundary intact. The document overflow delta was `0px`, the Agenda contained one
-vertical schedule scrollport and zero visible lock glyphs, Save was disabled for the untitled draft,
-and no dialog alert rendered. The expanded schedule exposed separate start date, start time, and end
-time controls. Time-zone search returned Los Angeles for `PST`, `Pacific Time`,
-`America/Los_Angeles`, and `Los Angeles`, with combobox/listbox linkage and an active option.
+The authenticated production surface for `2fa33027a53878305ecfe3323096dbe8ed2c1b5f` was
+re-inspected after deployment. The 544px desktop dialog ended at `1511.89px` while the Agenda began
+at `1529.61px`, leaving a `17.72px` exclusion gap. The selected 3:30–3:35 PM draft remained visible
+with a `65.72px` time-gutter gap. Keyboard movement shifted the dialog seven pixels left and kept
+that exclusion boundary intact. Save was disabled for the untitled draft, no dialog alert rendered,
+and cancel removed the local draft without a write. The expanded schedule exposed separate start
+date, start time, and end time controls. Time-zone search returned Los Angeles for `PST`, `Pacific
+Time`, `America/Los_Angeles`, and `Los Angeles`, with combobox/listbox linkage and an active option.

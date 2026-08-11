@@ -60,13 +60,13 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h3 className="text-on-surface text-title-small">Linked tasks</h3>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <Select
             aria-label="New task relationship"
             value={newTaskRole}
-            className="h-8 w-28"
+            className="h-8 min-w-0 flex-1 sm:w-28 sm:flex-none"
             disabled={linkCreatedTask.isPending}
             onChange={(event) => {
               setNewTaskRole(event.target.value as CalendarItemTaskRole);

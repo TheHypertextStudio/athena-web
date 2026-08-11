@@ -1,6 +1,6 @@
 import type { CalendarPreferences } from '@docket/types';
 
-import type { CalendarRegionSelection } from '@/components/calendar/create-block-form';
+import type { CalendarTimedRegionSelection } from '@/components/calendar/calendar-time-draft';
 import type { ScheduleRegionSelection, SchedulingCanvasProps } from '@/components/scheduling';
 
 import type { CalendarAxis } from './calendar-schedule-model';
@@ -9,9 +9,9 @@ import type { CalendarDateAxisState } from './use-calendar-date-axis';
 import type { CalendarPeopleAxisState } from './use-calendar-people-axis';
 
 /** Exact calendar draft bounds paired with their fluid canvas selection geometry. */
-export interface CalendarCanvasRegionSelection extends CalendarRegionSelection {
+export type CalendarCanvasRegionSelection = CalendarTimedRegionSelection & {
   readonly canvasRegion: ScheduleRegionSelection;
-}
+};
 
 /** Props for the shared canvas and its axis-specific status affordances. */
 export interface CalendarSchedulingSurfaceProps {

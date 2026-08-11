@@ -41,6 +41,7 @@ describe('SchedulingDenseOverflow', () => {
     );
 
     const trigger = screen.getByRole('button', { name: 'Show 3 more events in Mon, Jul 13' });
+    expect(trigger).toHaveTextContent('+3 more');
     trigger.focus();
     await user.keyboard('{Enter}');
 

@@ -150,6 +150,8 @@ export interface ScheduleItemRenderContext {
 
 /** Public contract for the pure, callback-driven scheduling canvas. */
 export interface SchedulingCanvasProps {
+  /** Surface-specific chrome while geometry and interactions remain shared. */
+  readonly presentation?: 'calendar' | 'agenda';
   /** IANA timezone shared by labels, item geometry, selection, and mutation conversion. */
   readonly displayTimezone: string;
   /** Arbitrary date/resource lanes. No view mode or fixed lane count is assumed. */
@@ -215,6 +217,10 @@ export interface SchedulingCanvasProps {
   readonly selectedRegionAnchorRef?: Ref<HTMLDivElement>;
   /** Receive a pointer-created time region. */
   readonly onSelectRegion?: (selection: ScheduleRegionSelection) => void;
+  /** Receive an explicit create request from one lane's all-day strip. */
+  readonly onSelectAllDayRegion?: (lane: ScheduleLane) => void;
+  /** Receive a focused-grid day shortcut without teaching shared geometry how dates navigate. */
+  readonly onDateShortcut?: (shortcut: 'previous' | 'next' | 'today') => void;
   /** Receive item activation. */
   readonly onOpenItem?: (request: ScheduleItemOpen) => void;
   /** Receive a proposed lane/time move. */

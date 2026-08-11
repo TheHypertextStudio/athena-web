@@ -12,6 +12,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const agendaState = vi.hoisted(() => ({
+  dayContext: [],
   loading: false,
   error: null as string | null,
   retrying: false,

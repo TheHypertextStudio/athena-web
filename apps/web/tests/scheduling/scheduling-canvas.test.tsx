@@ -681,8 +681,8 @@ describe('SchedulingCanvas', () => {
     );
     expect(firstCard).toHaveStyle({
       top: '0px',
-      left: '4px',
-      width: 'calc(100% - 8px)',
+      left: '1px',
+      width: 'calc(100% - 2px)',
     });
     expect(startGrip).toHaveClass('top-0', 'left-0', 'size-6', '[@media(pointer:coarse)]:size-11');
     expect(startGrip).not.toHaveClass('-top-3', '-left-3', '[@media(pointer:coarse)]:-top-8');
@@ -700,8 +700,8 @@ describe('SchedulingCanvas', () => {
     expect(lastCard.closest('[data-schedule-lane]')).toHaveAttribute('data-schedule-lane', 'last');
     expect(lastCard).toHaveStyle({
       top: '1380px',
-      left: '4px',
-      width: 'calc(100% - 8px)',
+      left: '1px',
+      width: 'calc(100% - 2px)',
       height: '60px',
     });
     expect(endGrip).toHaveClass(
@@ -1732,8 +1732,8 @@ describe('SchedulingCanvas', () => {
       const firstCard = renderedItem(firstItem.id);
       expect(firstCard).toHaveAttribute('data-layout-column', '0');
       expect(firstCard).toHaveAttribute('data-layout-column-count', '2');
-      expect(firstCard).toHaveStyle({ left: '4px' });
-      expect(firstCard.style.width).not.toBe('calc(100% - 8px)');
+      expect(firstCard).toHaveStyle({ left: '1px' });
+      expect(firstCard.style.width).not.toBe('calc(100% - 2px)');
       expect(
         screen.getByRole('button', {
           name: `Show ${String(columnCount - 1)} more events in Dense`,
@@ -1787,7 +1787,7 @@ describe('SchedulingCanvas', () => {
     for (const id of ['early', 'late']) {
       expect(renderedItem(id)).toHaveAttribute('data-layout-column', '0');
       expect(renderedItem(id)).toHaveAttribute('data-layout-column-count', '1');
-      expect(renderedItem(id)).toHaveStyle({ left: '4px', width: 'calc(100% - 8px)' });
+      expect(renderedItem(id)).toHaveStyle({ left: '1px', width: 'calc(100% - 2px)' });
     }
   });
 
@@ -1844,7 +1844,7 @@ describe('SchedulingCanvas', () => {
     expect(renderedItem('busy-a')).toHaveAttribute('data-layout-column-count', '2');
     expect(renderedItem('busy-b')).toHaveAttribute('data-layout-column-count', '2');
     expect(renderedItem('solo-a')).toHaveAttribute('data-layout-column-count', '1');
-    expect(renderedItem('solo-a')).toHaveStyle({ width: 'calc(100% - 8px)' });
+    expect(renderedItem('solo-a')).toHaveStyle({ width: 'calc(100% - 2px)' });
   });
 
   it('uses the 18px minimum height for low-zoom collisions without inflating high zoom', () => {
@@ -2160,13 +2160,16 @@ describe('SchedulingCanvas', () => {
     // hover is never how interactivity is signalled here. The resting and raised fills are two
     // custom properties published by `scheduling-item-surface`, because no single tonal token steps
     // away from the canvas in both themes.
-    expect(renderedItem('focus')).toHaveClass(
-      'hover:z-20',
+    expect(renderedItem('focus')).toHaveClass('hover:z-20');
+    const surface = renderedItem('focus').querySelector('[data-schedule-item-surface]');
+    expect(surface).toHaveClass(
       'bg-(--schedule-item-fill)',
-      'hover:bg-(--schedule-item-fill-raised)',
+      'group-hover:bg-(--schedule-item-fill-raised)',
       'motion-reduce:transition-none',
     );
-    expect(renderedItem('focus').className).not.toMatch(/shadow-|scale-|translate-/);
+    expect(`${renderedItem('focus').className} ${surface?.className ?? ''}`).not.toMatch(
+      /shadow-|scale-|translate-/,
+    );
     expect(renderedItem('focus').style.getPropertyValue('--schedule-item-fill')).toContain(
       'color-mix(in oklab, var(--color-on-surface)',
     );

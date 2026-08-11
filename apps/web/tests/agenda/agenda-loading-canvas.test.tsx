@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type * as SchedulingModule from '../../src/components/scheduling';
 import type { SchedulingCanvasProps } from '../../src/components/scheduling';
 
 const canvas = vi.hoisted<{ props: SchedulingCanvasProps | undefined }>(() => ({
@@ -38,16 +39,26 @@ vi.mock('../../src/components/agenda/agenda-context', () => ({
   useAgenda: () => agendaState,
 }));
 
-vi.mock('../../src/components/scheduling', () => ({
-  isInlineEditableScheduleItem: () => false,
-  scheduleInstantAt: () => null,
-  SchedulingCanvas: (props: SchedulingCanvasProps) => {
-    canvas.props = props;
-    return <div aria-label="Today time grid" />;
-  },
-}));
+vi.mock('../../src/components/scheduling', async (importOriginal) => {
+  const actual = await importOriginal<typeof SchedulingModule>();
+  return {
+    ...actual,
+    isInlineEditableScheduleItem: () => false,
+    scheduleInstantAt: () => null,
+    SchedulingCanvas: (props: SchedulingCanvasProps) => {
+      canvas.props = props;
+      return <div aria-label="Today time grid" />;
+    },
+  };
+});
 
 vi.mock('../../src/components/calendar/calendar-mutations', () => ({
+  useCreateCalendarItem: () => ({
+    mutate: vi.fn(),
+    reset,
+    isError: false,
+    isPending: false,
+  }),
   useUpdateCalendarItemById: () => ({ mutate: vi.fn(), reset, isError: false }),
   useLinkTaskToCalendarItem: () => ({ mutate: vi.fn(), reset, isError: false }),
   useRelateCalendarItems: () => ({ mutate: vi.fn(), reset, isError: false }),
@@ -80,6 +91,8 @@ describe('AgendaCanvas initial loading', () => {
     expect(screen.getByLabelText('Today time grid')).toBeInTheDocument();
     expect(canvas.props?.emptyMessage).toBe('');
     expect(canvas.props?.viewportHeight).toBe('100%');
+    expect(canvas.props?.presentation).toBe('agenda');
+    expect(canvas.props?.gutterSlot).toBeUndefined();
   });
 
   it('does not announce an empty list before the initial read settles', () => {

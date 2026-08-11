@@ -12,9 +12,10 @@
  */
 import { type JSX, type ReactNode } from 'react';
 
-import { Button, Stack } from '@docket/ui/primitives';
+import { Button } from '@docket/ui/primitives';
 
 import AgendaCanvas from './agenda-canvas';
+import AgendaDayContextStrip from './agenda-day-context-strip';
 import AgendaHeader from './agenda-header';
 import { AgendaProvider, useAgenda } from './agenda-context';
 
@@ -28,15 +29,24 @@ export interface AgendaProps {
 export default function Agenda({ initialDate }: AgendaProps): JSX.Element {
   return (
     <AgendaProvider initialDate={initialDate}>
-      <Stack gap={2} className="h-full min-h-0 p-3">
-        <AgendaHeader />
+      <div className="flex h-full min-h-0 flex-col" data-agenda-surface="">
+        <div className="shrink-0 px-3 pt-3 pb-1">
+          <AgendaHeader />
+        </div>
+        <AgendaDayContextHost />
         <AgendaStatusNotice />
         <AgendaViewport>
           <AgendaCanvas />
         </AgendaViewport>
-      </Stack>
+      </div>
     </AgendaProvider>
   );
+}
+
+/** Place semantic day context between navigation and the schedule. */
+function AgendaDayContextHost(): JSX.Element | null {
+  const { dayContext } = useAgenda();
+  return <AgendaDayContextStrip items={dayContext} />;
 }
 
 /** The loading or degraded disclosure, above the canvas rather than inside its scrollport. */
@@ -78,7 +88,7 @@ function AgendaLoadingNotice(): JSX.Element {
   return (
     <div
       role="status"
-      className="bg-surface-container-low text-on-surface-variant text-caption shrink-0 rounded-lg px-3 py-2"
+      className="bg-surface-container-low text-on-surface-variant text-caption mx-3 mb-2 shrink-0 rounded-lg px-3 py-2"
     >
       Loading calendar…
     </div>
@@ -95,7 +105,7 @@ function AgendaDegradedNotice({ onRetry, retrying }: AgendaDegradedNoticeProps):
   return (
     <div
       role="status"
-      className="bg-surface-container-low text-on-surface-variant text-caption flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
+      className="bg-surface-container-low text-on-surface-variant text-caption mx-3 mb-2 flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
     >
       <span>Calendar updates are temporarily unavailable. Showing what we have.</span>
       <Button

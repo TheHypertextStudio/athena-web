@@ -21,6 +21,7 @@ export function SchedulingAllDayLane({
   onDropObjectOnItem,
   relationshipMode,
   onGestureAnnouncementChange,
+  onSelectAllDayRegion,
 }: {
   readonly lane: ScheduleLane;
   readonly laneIndex: number;
@@ -35,6 +36,7 @@ export function SchedulingAllDayLane({
   readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'];
   readonly relationshipMode: SchedulingRelationshipMode;
   readonly onGestureAnnouncementChange: (announcement: string) => void;
+  readonly onSelectAllDayRegion?: SchedulingCanvasProps['onSelectAllDayRegion'];
 }): JSX.Element {
   const allDayItems = lane.items.filter((item) => item.allDay);
   const primary = allDayItems.slice(0, PRIMARY_ALL_DAY_ITEMS);
@@ -82,6 +84,18 @@ export function SchedulingAllDayLane({
             {overflow.map(render)}
           </div>
         </details>
+      ) : null}
+      {onSelectAllDayRegion ? (
+        <button
+          type="button"
+          className="text-primary text-label-medium hover:bg-primary-container focus-visible:ring-ring min-h-7 rounded px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:min-h-10"
+          aria-label={`Create all-day item for ${lane.label}`}
+          onClick={() => {
+            onSelectAllDayRegion(lane);
+          }}
+        >
+          + All day
+        </button>
       ) : null}
     </div>
   );

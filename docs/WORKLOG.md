@@ -7,45 +7,6 @@
 
 ## Active Tasks
 
-### [AGENDA-RAIL-001] Redesign the Agenda rail as a purpose-built single-day companion
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-08-10
-- **Priority**: P1
-- **Description**: Replace the miniature full-calendar structure in the Agenda rail with a
-  purpose-built single-day companion that removes redundant date chrome and outer canvas padding,
-  separates day context from events, improves event legibility and spacing, uses intentional scale
-  steps, supports fast date jumps, and exposes direct click-or-drag creation through a local draft
-  region and responsive quick-create dialog.
-- **Subtasks**:
-  - [x] Inspect the current Agenda, shared scheduling canvas, quick-create path, and design audit.
-  - [x] Confirm the structural direction and direct-creation behavior with the user.
-  - [x] Record the approved design and its validation contract.
-  - [x] Self-review the design for ambiguity, contradictions, and scope.
-  - [x] Write and self-review the test-first implementation plan.
-  - [ ] Preserve provider semantics and separate day context from scheduled events.
-  - [ ] Replace inherited calendar chrome with the purpose-built single-day rail shell.
-  - [ ] Improve event pacing, accents, content density, and permission presentation.
-  - [ ] Connect click, drag, all-day, and keyboard creation to one responsive draft form.
-  - [ ] Validate desktop/mobile light/dark behavior and complete the craft audit.
-- **Blockers**: None.
-- **Notes**: The user approved implementation after reviewing the written structural direction.
-  Execution follows
-  `docs/superpowers/plans/2026-08-10-agenda-rail-structural-redesign.md` with focused red/green
-  cycles before repository-wide validation.
-- **Files Changed**: Design and implementation-plan documents plus this work log; production files
-  will be recorded as each implementation slice lands.
-- **Validation**: The spec and implementation plan have no TODO/TBD placeholders, Prettier passes
-  for all three planning files, and `git diff --check` reports no whitespace errors. Self-review
-  aligned planned test paths with the repository layout, resolved keyboard-shortcut ownership, and
-  ensured one draft cannot render beside a duplicate optimistic item.
-- **Learnings**: The rail's visual defects share one structural cause: a multi-lane calendar host
-  owns single-day presentation decisions. Keeping scheduling geometry shared while moving date,
-  context, scale, event presentation, and responsive draft creation into a rail shell preserves
-  interaction parity without growing a matrix of canvas flags.
-
----
-
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW
@@ -4702,6 +4663,40 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
     during rebases, and the obsolete `launch:verify-prod` script reference should be repaired in a
     separate tooling slice.
 
+---
+
+### [AGENDA-RAIL-001] Redesign the Agenda rail as a purpose-built single-day companion
+
+- **Completed**: 2026-08-10
+- **Duration**: One implementation session
+- **Priority**: P1
+- **Summary**: Replaced the miniature-calendar rail presentation with a purpose-built single-day
+  surface. The rail now has one date control with direct picker and keyboard navigation, three
+  intentional scale steps, semantic working-location context, edge-to-edge timed geometry, paced
+  event cards without resting locks or curved accents, and local click/drag/keyboard/all-day draft
+  creation. The same quick-create fields anchor inward on desktop and open as a mobile bottom
+  dialog; only Save persists.
+- **Files Changed**: Calendar DTO/provider normalization and serializers; Agenda context, header,
+  day-context strip, display menu, canvas, and scale model; shared scheduling presentation and
+  overlap geometry; quick-create draft/form; focused API, DTO, Agenda, scheduling, date-picker,
+  and creation tests; calendar UI spec; accepted design, implementation plan, and craft audit.
+- **Validation**: `pnpm typecheck` passes 20/20 packages; `pnpm lint` passes 20/20; `pnpm test`
+  passes 20/20 packages, including 1,908 web and 3,668 API tests; `pnpm build` passes 4/4 build
+  targets. The authenticated live audit captured desktop/mobile and light/dark states and measured
+  one visible date trigger, one Agenda scrollport, `0px` nested schedule radius, zero visible lock
+  icons, one working-location context chip, a one-pixel minimum event gap, no 320px overflow, one
+  POST only after Save, one matching persisted item, exact drag/all-day bounds, and zero runtime
+  errors. The audit rows were removed from the throwaway local account afterward.
+- **Learnings**: The apparent styling problems had one shared structural cause: a multi-lane
+  calendar host owned single-day rail presentation. Preserving its geometry while giving the rail
+  its own date, context, scale, item, and creation presentation avoided a forked interaction
+  engine. Live validation also caught a controlled-form callback identity loop that component
+  mocks could not reproduce; the stable-callback regression now protects it. The repository-wide
+  date-picker inventory then prevented the all-day editor from becoming a one-off native control.
+- **Retrospective**: The accepted written design kept the wide change coherent, and runtime probes
+  made the requirements objectively checkable. Future controlled editor work should include a
+  real-browser selection test earlier, because effect/callback feedback loops are invisible when
+  the child form is mocked.
 ---
 
 ### [WEB-EDITOR-001] Make Markdown code feel native

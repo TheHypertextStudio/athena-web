@@ -111,6 +111,7 @@ export function SchedulingCanvasHeader({
   todayDate,
   viewportRef,
   compact,
+  presentation,
   gutterSlot,
   gutterWidth,
   contentWidth,
@@ -122,6 +123,7 @@ export function SchedulingCanvasHeader({
   onDropObjectOnItem,
   relationshipMode,
   onGestureAnnouncementChange,
+  onSelectAllDayRegion,
 }: {
   /**
    * Measured by the canvas so an item's own title row knows how far down the scrollport the grid
@@ -136,6 +138,8 @@ export function SchedulingCanvasHeader({
   readonly viewportRef: RefObject<HTMLElement | null>;
   /** Rail-width canvas: stack the lane date and drop the visible `All day` gutter label. */
   readonly compact: boolean;
+  /** Calendar keeps lane headings; Agenda owns its single date outside this shared header. */
+  readonly presentation: 'calendar' | 'agenda';
   /**
    * Consumer-owned chrome rendered in the header's gutter cell, beside the all-day row.
    *
@@ -155,13 +159,18 @@ export function SchedulingCanvasHeader({
   readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'];
   readonly relationshipMode: SchedulingRelationshipMode;
   readonly onGestureAnnouncementChange: (announcement: string) => void;
+  readonly onSelectAllDayRegion?: SchedulingCanvasProps['onSelectAllDayRegion'];
 }): JSX.Element {
   return (
     // No rule under the header at all: the tonal step from `surface-container-low` onto the grid's
     // `surface` is the separation, which is how every other region on this surface is separated.
     // The hairline that used to sit here was the one visible border on the whole calendar that the
     // "there are just so many fucking borders everywhere" complaint could still point at.
-    <header ref={headerRef} className="bg-surface-container-low sticky top-0 z-[60] flex">
+    <header
+      ref={headerRef}
+      className="bg-surface-container-low sticky top-0 z-[60] flex"
+      data-schedule-all-day-header=""
+    >
       <div
         // A rail cannot afford a gutter as wide as the words `All day`, and it does not need one:
         // the chips sit directly under the date and read as all-day from their position, exactly as
@@ -179,16 +188,18 @@ export function SchedulingCanvasHeader({
         {lanes.map((lane, laneIndex) => (
           <div
             key={lane.id}
-            className="min-w-0 shrink-0 px-2 py-2"
+            className={`min-w-0 shrink-0 ${presentation === 'agenda' ? 'px-1 py-1' : 'px-2 py-2'}`}
             data-schedule-lane-header={lane.id}
             style={{ width: laneWidth }}
           >
-            <SchedulingLaneHeading
-              lane={lane}
-              displayTimezone={displayTimezone}
-              todayDate={todayDate}
-              compact={compact}
-            />
+            {presentation === 'calendar' ? (
+              <SchedulingLaneHeading
+                lane={lane}
+                displayTimezone={displayTimezone}
+                todayDate={todayDate}
+                compact={compact}
+              />
+            ) : null}
             <SchedulingAllDayLane
               lane={lane}
               laneIndex={laneIndex}
@@ -203,6 +214,7 @@ export function SchedulingCanvasHeader({
               onDropObjectOnItem={onDropObjectOnItem}
               relationshipMode={relationshipMode}
               onGestureAnnouncementChange={onGestureAnnouncementChange}
+              onSelectAllDayRegion={onSelectAllDayRegion}
             />
           </div>
         ))}

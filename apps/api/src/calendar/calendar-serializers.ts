@@ -24,6 +24,7 @@ import {
 import type { z } from 'zod';
 
 import { defaultItemPermissionsForKind } from './calendar-permissions';
+import { normalizeCalendarProviderEventType } from './calendar-provider-event-type';
 
 type CalendarLayerRow = typeof calendarLayer.$inferSelect;
 type CalendarItemRow = typeof calendarItem.$inferSelect;
@@ -84,6 +85,7 @@ export function toCalendarItemOut(
     connectionId: row.connectionId,
     kind,
     provider: CalendarProvider.nullable().parse(row.provider),
+    providerEventType: normalizeCalendarProviderEventType(row.providerRaw),
     externalCalendarId: row.externalCalendarId,
     externalEventId: row.externalEventId,
     recurringEventId: row.recurringEventId,

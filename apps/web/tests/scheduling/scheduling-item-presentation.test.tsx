@@ -85,6 +85,54 @@ describe('SchedulingCanvas item presentation', () => {
     );
   });
 
+  it('paces adjacent events with a separate surface and a flat inset accent', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane([item('focus', 'Focus block')])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    const card = document.querySelector<HTMLElement>('[data-schedule-item="focus"]')!;
+    const surface = card.querySelector<HTMLElement>('[data-schedule-item-surface]')!;
+    const accent = card.querySelector<HTMLElement>('[data-schedule-item-accent]')!;
+    expect(surface).toHaveClass('bottom-px');
+    expect(accent).toHaveStyle({ width: '2px' });
+    expect(card.style.borderLeftWidth).toBe('');
+    expect(accent.className).not.toMatch(/rounded/);
+  });
+
+  it('keeps read-only state accessible without painting ambient lock glyphs', () => {
+    const timed = { ...item('focus', 'Focus block'), editable: false, readOnlyLabel: 'Read-only' };
+    const allDay = {
+      ...item('offsite', 'Team offsite'),
+      editable: false,
+      readOnlyLabel: 'Read-only',
+      allDay: true,
+      startsAt: '2026-07-01T00:00:00.000Z',
+      endsAt: '2026-07-02T00:00:00.000Z',
+    };
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane([timed, allDay])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onOpenItem={vi.fn()}
+      />,
+    );
+
+    expect(document.querySelector('[data-schedule-lock-icon]')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Focus block/ })).toHaveAccessibleDescription(
+      'Read-only',
+    );
+    expect(screen.getByRole('button', { name: 'Team offsite' })).toHaveAccessibleDescription(
+      'Read-only',
+    );
+  });
+
   it('makes an active direct-manipulation preview visually distinct', () => {
     render(
       <SchedulingCanvas
@@ -102,7 +150,10 @@ describe('SchedulingCanvas item presentation', () => {
 
     // A live preview is marked by a primary ring and a raised tone — never a drop shadow.
     const preview = document.querySelector('[data-schedule-item="focus"]');
-    expect(preview).toHaveClass('ring-2', 'ring-primary', 'bg-surface-container-high', 'z-40');
+    expect(preview).toHaveClass('ring-2', 'ring-primary', 'z-40');
+    expect(preview?.querySelector('[data-schedule-item-surface]')).toHaveClass(
+      'bg-surface-container-high',
+    );
     expect(preview?.className).not.toMatch(/shadow-/);
   });
 

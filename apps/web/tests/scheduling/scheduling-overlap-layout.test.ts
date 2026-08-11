@@ -521,7 +521,11 @@ describe('positionScheduleLaneItems', () => {
 });
 
 describe('scheduleOverlapHorizontalStyle', () => {
-  it('leaves exact four-pixel outer and internal gutters for two and three columns', () => {
+  it('leaves one-pixel outer pacing and two-pixel gaps between concurrent columns', () => {
+    expect(scheduleOverlapHorizontalStyle({ id: 'lone', columnIndex: 0, columnCount: 1 })).toEqual({
+      left: 1,
+      width: 'calc(100% - 2px)',
+    });
     expect(
       [0, 1].map((columnIndex) =>
         scheduleOverlapHorizontalStyle({
@@ -531,8 +535,8 @@ describe('scheduleOverlapHorizontalStyle', () => {
         }),
       ),
     ).toEqual([
-      { left: 4, width: 'calc(50% - 6px)' },
-      { left: 'calc(50% + 2px)', width: 'calc(50% - 6px)' },
+      { left: 1, width: 'calc(50% - 2px)' },
+      { left: 'calc(50% + 1px)', width: 'calc(50% - 2px)' },
     ]);
     expect(
       [0, 1, 2].map((columnIndex) =>
@@ -543,9 +547,9 @@ describe('scheduleOverlapHorizontalStyle', () => {
         }),
       ),
     ).toEqual([
-      { left: 4, width: 'calc(33.333333% - 5.333333px)' },
-      { left: 'calc(33.333333% + 2.666667px)', width: 'calc(33.333333% - 5.333333px)' },
-      { left: 'calc(66.666667% + 1.333333px)', width: 'calc(33.333333% - 5.333333px)' },
+      { left: 1, width: 'calc(33.333333% - 2px)' },
+      { left: 'calc(33.333333% + 1px)', width: 'calc(33.333333% - 2px)' },
+      { left: 'calc(66.666667% + 1px)', width: 'calc(33.333333% - 2px)' },
     ]);
   });
 });

@@ -2,7 +2,7 @@
 
 > **Status**: Implemented — fluid scheduling canvas
 > **Area**: Web app, agenda, settings, task detail
-> **Last Updated**: 2026-07-13
+> **Last Updated**: 2026-08-10
 
 ## Goal
 
@@ -14,16 +14,29 @@ calendar views but retain their source identity and permissions.
 
 ### Agenda Rail
 
-The current portable agenda rail remains the lightweight daily companion.
+The portable Agenda rail is a purpose-built single-day companion over the shared scheduling
+geometry. It is not a miniature full-calendar host.
 
-Changes:
-
-- Render `CalendarItemOut` or an adapter from it instead of Google-specific event entries.
-- Show external events, native blocks, and task timeboxes in one chronological list/timeline.
-- Preserve current day navigation and view switching.
-- Add layer visibility awareness when the global layer state exists.
-- Read-only items open the item workspace rather than navigating directly to the provider by
-  default. Provider deep link remains available in actions.
+- The rail owns exactly one visible date control, with previous/next, Today, a date picker, and
+  focused-grid `Left`/`Right`/`T` shortcuts for rapid movement.
+- Timeline density is one of three named, persisted steps (`1×`, `2×`, `3×`). The rail never
+  exposes or stores a fractional visual scale even though the full calendar retains continuous
+  zoom.
+- Provider semantic event types survive normalization. `working_location` is removed from the
+  timed/all-day event stream and rendered as day context above it; a normal event titled `Home`
+  remains a normal event.
+- The day-context strip, all-day row, and timed grid are separate structural regions. The timed
+  grid is edge-to-edge inside the rail, owns one scrollport, and adds no nested panel radius.
+- Timed items keep at least one visible pixel between adjacent bounds and two pixels between
+  concurrent columns. Accents are flat inset bars; permission remains available to assistive
+  technology and item details without a resting lock glyph on every read-only item.
+- Click, pointer drag, `Enter`/`Space`, and the all-day action create one local selection draft.
+  Nothing is written until Save. Desktop anchors a compact editor inward from the selection;
+  mobile presents the same fields as a bottom dialog. Cancel, Escape, and untouched date changes
+  discard locally, while a dirty draft confirms before navigation.
+- External events, native events, and task timeboxes still share one chronological timeline and
+  open their appropriate item or task workspace. Provider deep links remain actions rather than
+  the default click destination.
 
 ### Full Calendar View
 

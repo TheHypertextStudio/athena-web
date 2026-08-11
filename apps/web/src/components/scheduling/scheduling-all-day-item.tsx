@@ -13,7 +13,8 @@ import {
   SchedulingAllDayResizeControl,
 } from './scheduling-all-day-edit-controls';
 import { isScheduleItemEditable } from './scheduling-date-lanes';
-import { SchedulingLinkIcon, SchedulingLockIcon } from './scheduling-item-icons';
+import { SchedulingLinkIcon } from './scheduling-item-icons';
+import { scheduleItemStripe } from './scheduling-item-surface';
 import {
   SchedulingRelationshipSourceControl,
   SchedulingRelationshipTargetControl,
@@ -123,6 +124,12 @@ export function SchedulingAllDayItem({
         onDropObjectOnItem({ object, targetItem: item, targetLane: lane });
       }}
     >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute top-0.5 bottom-0.5 left-1 w-0.5"
+        data-schedule-item-accent=""
+        style={{ backgroundColor: scheduleItemStripe(item.color) }}
+      />
       <div
         className="contents"
         data-schedule-relationship-covered=""
@@ -134,7 +141,6 @@ export function SchedulingAllDayItem({
             aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
             className={`text-on-secondary-container text-label-medium focus-visible:ring-ring hover:bg-surface-container-high min-w-0 flex-1 touch-none truncate rounded px-1.5 py-0.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:min-h-10 ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
             data-schedule-item-body={item.id}
-            style={item.color ? { borderLeft: `4px solid ${item.color}` } : undefined}
             onPointerDown={gesture.onBodyPointerDown}
             onClick={gesture.onBodyClick}
           >
@@ -148,22 +154,10 @@ export function SchedulingAllDayItem({
             aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
             className="text-on-secondary-container text-label-medium min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left"
             data-schedule-item-body={item.id}
-            style={item.color ? { borderLeft: `4px solid ${item.color}` } : undefined}
           >
             {renderItem?.({ item, lane, allDay: true, density: 'compact' }) ?? item.title}
           </span>
         )}
-        {!editable && item.readOnlyLabel ? (
-          // Same trade as the timed card: on a rail-width chip the word `Read-only` took nearly
-          // half the row and truncated the title to about ten characters. The lock says the same
-          // thing in 16px, and the words still reach a screen reader.
-          <span
-            aria-hidden="true"
-            className="text-on-secondary-container pointer-events-none shrink-0 px-0.5"
-          >
-            <SchedulingLockIcon />
-          </span>
-        ) : null}
         {/* The `id` sits on the text, not on the icon's box, so `aria-describedby` resolves to the
             words alone and a query for those words lands on the described element. */}
         {!editable && item.readOnlyLabel ? (

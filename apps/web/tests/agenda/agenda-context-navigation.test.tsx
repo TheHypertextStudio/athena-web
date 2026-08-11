@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import type { JSX, ReactNode } from 'react';
+import { type JSX, type ReactNode, useEffect } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as QueryModule from '../../src/lib/query';
@@ -131,7 +131,7 @@ function crossZoneMidnightFixture(): CrossZoneMidnightFixture {
 }
 
 function AgendaProbe(): JSX.Element {
-  const { date, entries, isToday, goToNextDay, goToToday } = useAgenda();
+  const { date, entries, isToday, goToDate, goToNextDay, goToToday } = useAgenda();
   return (
     <div>
       <output aria-label="Selected date">{date}</output>
@@ -143,6 +143,14 @@ function AgendaProbe(): JSX.Element {
       </ul>
       <button type="button" onClick={goToNextDay}>
         Next day
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          goToDate('2026-08-24');
+        }}
+      >
+        Jump to August 24
       </button>
       <button type="button" onClick={goToToday}>
         Go to today
@@ -165,6 +173,19 @@ function AgendaRetryProbe(): JSX.Element {
     <button type="button" onClick={retry}>
       Retry agenda reads
     </button>
+  );
+}
+
+function GuardedNavigationProbe({ allow }: { readonly allow: boolean }): JSX.Element {
+  const { date, goToNextDay, registerNavigationGuard } = useAgenda();
+  useEffect(() => registerNavigationGuard(() => allow), [allow, registerNavigationGuard]);
+  return (
+    <div>
+      <output aria-label="Guarded date">{date}</output>
+      <button type="button" onClick={goToNextDay}>
+        Guarded next day
+      </button>
+    </div>
   );
 }
 
@@ -198,6 +219,25 @@ describe('AgendaProvider day navigation', () => {
     expect(screen.getByLabelText('Selected date')).toHaveTextContent(NEXT_DAY);
     expect(screen.queryByText('Previous day task')).not.toBeInTheDocument();
     expect(screen.queryByText('Previous day event')).not.toBeInTheDocument();
+  });
+
+  it('supports direct date selection without repeated day stepping', () => {
+    render(<AgendaProbe />, { wrapper: TestProvider });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to August 24' }));
+
+    expect(screen.getByLabelText('Selected date')).toHaveTextContent('2026-08-24');
+  });
+
+  it('lets an open edited draft veto date navigation', () => {
+    const view = render(<GuardedNavigationProbe allow={false} />, { wrapper: TestProvider });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guarded next day' }));
+    expect(screen.getByLabelText('Guarded date')).toHaveTextContent(DAY);
+
+    view.rerender(<GuardedNavigationProbe allow />);
+    fireEvent.click(screen.getByRole('button', { name: 'Guarded next day' }));
+    expect(screen.getByLabelText('Guarded date')).toHaveTextContent(NEXT_DAY);
   });
 
   it('reconciles an untouched fallback date when preferences recover after an initial error', () => {
@@ -266,20 +306,37 @@ describe('AgendaProvider day navigation', () => {
 
       // The rail's day label now always names the month: it is the only toolbar this canvas has,
       // and the lane heading below it deliberately renders `Wed 5` with no month at all.
-      expect(screen.getByText(/^Today · /, { selector: 'span' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Agenda date — Today · / })).toBeInTheDocument();
 
       act(() => {
         vi.advanceTimersByTime(30_000);
       });
 
-      expect(screen.getByText(/^Yesterday · /, { selector: 'span' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /^Agenda date — Yesterday · / }),
+      ).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Back to today' }));
 
       expect(screen.getByLabelText('Selected date')).toHaveTextContent(NEXT_DAY);
-      expect(screen.getByText(/^Today · /, { selector: 'span' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Agenda date — Today · / })).toBeInTheDocument();
     } finally {
       preferencesState.data = { timezone: 'America/Los_Angeles' };
       vi.useRealTimers();
     }
+  });
+
+  it('uses the shared date picker for a direct calendar jump', () => {
+    render(
+      <>
+        <AgendaHeader />
+        <AgendaProbe />
+      </>,
+      { wrapper: TestProvider },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agenda date — / }));
+    fireEvent.click(screen.getByRole('button', { name: NEXT_DAY }));
+
+    expect(screen.getByLabelText('Selected date')).toHaveTextContent(NEXT_DAY);
   });
 });

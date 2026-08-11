@@ -13,9 +13,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgendaEntry } from '../../src/components/agenda/agenda-model';
 import type * as SchedulingModule from '../../src/components/scheduling';
 import type { SchedulingCanvasProps } from '../../src/components/scheduling';
+import type { CreateBlockFormProps } from '../../src/components/calendar/create-block-form';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 const canvas = vi.hoisted<{ props: SchedulingCanvasProps | undefined }>(() => ({
+  props: undefined,
+}));
+const quickCreate = vi.hoisted<{ props: CreateBlockFormProps | undefined }>(() => ({
   props: undefined,
 }));
 const agendaState = vi.hoisted<{
@@ -26,6 +30,7 @@ const agendaState = vi.hoisted<{
   entries: unknown[];
   setTimebox: ReturnType<typeof vi.fn>;
   clearTimeboxFailure: ReturnType<typeof vi.fn>;
+  registerNavigationGuard: ReturnType<typeof vi.fn>;
   timeboxFailed: boolean;
 }>(() => ({
   date: '2026-07-13',
@@ -35,6 +40,7 @@ const agendaState = vi.hoisted<{
   entries: [],
   setTimebox: vi.fn(),
   clearTimeboxFailure: vi.fn(),
+  registerNavigationGuard: vi.fn(() => () => undefined),
   timeboxFailed: false,
 }));
 const mutationState = vi.hoisted(() => ({
@@ -48,6 +54,11 @@ vi.mock('next/navigation', () => ({ useRouter: () => router }));
 vi.mock('../../src/components/agenda/agenda-context', () => ({
   isTimeboxed: (entry: { startsAt?: string; endsAt?: string }) =>
     entry.startsAt != null && entry.endsAt != null,
+  shiftISODate: (date: string, days: number) => {
+    const next = new Date(`${date}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + days);
+    return next.toISOString().slice(0, 10);
+  },
   useAgenda: () => agendaState,
 }));
 
@@ -101,6 +112,13 @@ vi.mock('../../src/components/calendar/calendar-mutations', () => ({
 vi.mock('../../src/components/calendar/calendar-item-drawer', () => ({
   default: ({ itemId }: { itemId: string | null }) =>
     itemId ? <div aria-label="Calendar item drawer">{itemId}</div> : null,
+}));
+
+vi.mock('../../src/components/calendar/create-block-form', () => ({
+  default: (props: CreateBlockFormProps) => {
+    quickCreate.props = props;
+    return props.selection ? <div aria-label="Agenda quick create">Draft open</div> : null;
+  },
 }));
 
 vi.mock('../../src/components/agenda/agenda-entry-card', () => ({
@@ -198,11 +216,13 @@ function canvasProps(): SchedulingCanvasProps {
 
 beforeEach(() => {
   canvas.props = undefined;
+  quickCreate.props = undefined;
   agendaState.date = '2026-07-13';
   agendaState.entries = [];
   agendaState.view = 'timeline';
   agendaState.setTimebox.mockReset();
   agendaState.clearTimeboxFailure.mockReset();
+  agendaState.registerNavigationGuard.mockReset().mockImplementation(() => () => undefined);
   agendaState.timeboxFailed = false;
   router.push.mockReset();
   mutationState.update.mutate.mockReset();
@@ -224,6 +244,69 @@ afterEach(() => {
 });
 
 describe('Agenda scheduling interactions', () => {
+  it('projects a click-or-drag time selection and opens one local quick-create draft', () => {
+    renderTimeline([]);
+    const props = canvasProps();
+    const lane = props.lanes[0]!;
+
+    act(() => {
+      props.onSelectRegion?.({ lane, startMinutes: 9 * 60, endMinutes: 9 * 60 + 30 });
+    });
+
+    expect(props.onSelectRegion).toBeDefined();
+    expect(canvasProps().selectedRegion).toMatchObject({
+      startMinutes: 540,
+      endMinutes: 570,
+    });
+    expect(screen.getByLabelText('Agenda quick create')).toBeInTheDocument();
+    expect(quickCreate.props?.selection).toEqual({
+      startsAt: '2026-07-13T16:00:00Z',
+      endsAt: '2026-07-13T16:30:00Z',
+    });
+    expect(quickCreate.props?.presentation).toBe('agenda');
+    expect(quickCreate.props?.trigger).toBe('hidden');
+  });
+
+  it('keeps the controlled draft callback stable while projecting edited bounds', () => {
+    renderTimeline([]);
+    const lane = canvasProps().lanes[0]!;
+
+    act(() => {
+      canvasProps().onSelectRegion?.({ lane, startMinutes: 9 * 60, endMinutes: 9 * 60 + 30 });
+    });
+
+    const initialDraftChange = quickCreate.props?.onDraftChange;
+    expect(initialDraftChange).toBeDefined();
+    act(() => {
+      initialDraftChange?.({
+        startsAt: '2026-07-13T16:10:00Z',
+        endsAt: '2026-07-13T16:40:00Z',
+      });
+    });
+
+    expect(quickCreate.props?.onDraftChange).toBe(initialDraftChange);
+    expect(canvasProps().selectedRegion).toMatchObject({
+      startMinutes: 550,
+      endMinutes: 580,
+    });
+  });
+
+  it('opens an all-day draft for the selected Agenda date', () => {
+    renderTimeline([]);
+    const props = canvasProps();
+    const lane = props.lanes[0]!;
+
+    act(() => {
+      props.onSelectAllDayRegion?.(lane);
+    });
+
+    expect(props.onSelectAllDayRegion).toBeDefined();
+    expect(quickCreate.props?.selection).toEqual({
+      allDayStartDate: '2026-07-13',
+      allDayEndDate: '2026-07-14',
+    });
+  });
+
   it('keeps the list view informative when the day has no entries', () => {
     agendaState.view = 'list';
     render(<AgendaCanvas />);

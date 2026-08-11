@@ -22,11 +22,7 @@ import {
   type ScheduleOverlapPlacement,
 } from './scheduling-overlap-layout';
 import { SchedulingItemBody } from './scheduling-item-body';
-import {
-  SchedulingGripIcon,
-  SchedulingLinkIcon,
-  SchedulingLockIcon,
-} from './scheduling-item-icons';
+import { SchedulingGripIcon, SchedulingLinkIcon } from './scheduling-item-icons';
 import {
   scheduleItemFill,
   scheduleItemRaisedFill,
@@ -163,7 +159,7 @@ export function SchedulingItemCard({
       )
     : height;
   const laneTranslation = gesture.preview ? (gesture.preview.laneIndex - laneIndex) * laneWidth : 0;
-  const estimatedWidth = Math.max(0, (laneWidth - 8) / placement.columnCount);
+  const estimatedWidth = Math.max(0, laneWidth / placement.columnCount - 2);
   const density = itemDensity(visibleHeight, estimatedWidth);
   const startsAtDayBoundary = visibleBounds.startMinutes === 0;
   const endsAtDayBoundary = visibleBounds.endMinutes === MINUTES_PER_DAY;
@@ -193,9 +189,8 @@ export function SchedulingItemCard({
 
   return (
     <article
-      // The card carries exactly one intentional border — the left colour bar identifying its
-      // layer. Everything else is tone and ring: no drop shadows at rest, on hover, while dragging,
-      // or while targeted, and never a transform (scale/lift never signals interactivity here).
+      // The card's visual fill is a child surface with one transparent pixel at its bottom. Exact
+      // schedule geometry and hit targets keep the true height while adjacent fills never merge.
       //
       // The resting fill comes from {@link scheduleItemFill} rather than a `bg-*` token, because the
       // tonal ramp has no single container step that moves *away* from the canvas in both themes
@@ -204,10 +199,10 @@ export function SchedulingItemCard({
       // JavaScript hover state.
       className={`${DRAGGABLE} ${
         dropActive
-          ? 'bg-primary-container ring-primary group absolute z-30 overflow-visible rounded-md ring-2'
+          ? 'ring-primary group absolute z-30 overflow-visible rounded-md ring-2'
           : gesture.preview
-            ? 'bg-surface-container-high ring-primary group absolute z-40 overflow-visible rounded-md ring-2'
-            : 'group absolute z-10 overflow-visible rounded-md border-l bg-(--schedule-item-fill) transition-colors focus-within:z-20 focus-within:bg-(--schedule-item-fill-raised) hover:z-20 hover:bg-(--schedule-item-fill-raised) motion-reduce:transition-none'
+            ? 'ring-primary group absolute z-40 overflow-visible rounded-md ring-2'
+            : 'group absolute z-10 overflow-visible rounded-md focus-within:z-20 hover:z-20'
       }`}
       data-item-density={density}
       data-layout-column={placement.columnIndex}
@@ -239,14 +234,28 @@ export function SchedulingItemCard({
           ...horizontalStyle,
           height: visibleHeight,
           transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
-          borderLeftWidth: 4,
-          // The 4px left stripe is the card's single identity marker — no full border.
-          borderLeftColor: scheduleItemStripe(item.color),
           '--schedule-item-fill': scheduleItemFill(item.color),
           '--schedule-item-fill-raised': scheduleItemRaisedFill(item.color),
         } as CSSProperties
       }
     >
+      <span
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-x-0 top-0 bottom-px rounded-md transition-colors motion-reduce:transition-none ${
+          dropActive
+            ? 'bg-primary-container'
+            : gesture.preview
+              ? 'bg-surface-container-high'
+              : 'bg-(--schedule-item-fill) group-focus-within:bg-(--schedule-item-fill-raised) group-hover:bg-(--schedule-item-fill-raised)'
+        }`}
+        data-schedule-item-surface=""
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute top-0.5 bottom-1.5 left-1 z-[1]"
+        data-schedule-item-accent=""
+        style={{ backgroundColor: scheduleItemStripe(item.color), width: '2px' }}
+      />
       <div
         className="contents"
         data-schedule-relationship-covered=""
@@ -281,20 +290,6 @@ export function SchedulingItemCard({
           onPointerDown={gesture.onBodyPointerDown}
           onClick={gesture.onBodyClick}
         />
-        {!editable && item.readOnlyLabel ? (
-          // A glyph, not the word. As a text chip this sat at the title's own type size on an
-          // opaque fill, permanently, and on a narrow lane it pushed the title into truncation —
-          // chrome outranking content on the surface whose job is showing events. It also occupied
-          // the exact coordinates of the hover action slot below, so the two stacked. The lock is
-          // the same treatment the list card already uses, and the words still reach a screen
-          // reader through `aria-describedby`.
-          <span
-            aria-hidden="true"
-            className="text-on-surface-variant pointer-events-none absolute top-1 right-1 z-20 flex size-4 items-center justify-center"
-          >
-            <SchedulingLockIcon />
-          </span>
-        ) : null}
         {/* The `id` sits on the text, not on the icon's box: `aria-describedby` should resolve to
             the words alone, and a query for those words should land on the described element. */}
         {!editable && item.readOnlyLabel ? (

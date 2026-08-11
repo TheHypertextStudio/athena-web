@@ -207,6 +207,17 @@ export const CalendarItemKind = z
 /** Calendar-item-kind value. */
 export type CalendarItemKind = z.infer<typeof CalendarItemKind>;
 
+/** Provider-specific semantic event categories normalized for presentation decisions. */
+export const CalendarProviderEventType = z
+  .enum(['default', 'out_of_office', 'focus_time', 'working_location', 'birthday', 'from_gmail'])
+  .meta({
+    id: 'CalendarProviderEventType',
+    description:
+      'A recognized provider event category normalized independently of provider naming conventions.',
+  });
+/** Calendar provider-event-type value. */
+export type CalendarProviderEventType = z.infer<typeof CalendarProviderEventType>;
+
 /** A calendar item's display/scheduling status. */
 export const CalendarItemStatus = z
   .enum(['confirmed', 'tentative', 'cancelled', 'busy', 'free', 'held', 'conflicted'])
@@ -379,6 +390,9 @@ export const CalendarItemOut = z
     provider: CalendarProvider.nullable().describe(
       'Backing provider; null for Docket-native items.',
     ),
+    providerEventType: CalendarProviderEventType.nullable()
+      .optional()
+      .describe('Recognized provider event semantics; null or omitted when unavailable.'),
     externalCalendarId: z
       .string()
       .nullable()

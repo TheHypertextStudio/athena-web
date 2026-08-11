@@ -5,6 +5,7 @@ import {
   CalendarItemCreate,
   CalendarItemKind,
   CalendarItemOut,
+  CalendarProviderEventType,
   CalendarItemRelationCreate,
   CalendarItemRelationOut,
   CalendarItemTaskRole,
@@ -146,6 +147,20 @@ describe('CalendarItemOut', () => {
     expect(CalendarItemKind.parse('native_event')).toBe('native_event');
     expect(CalendarItemKind.parse('timebox')).toBe('timebox');
     expect(CalendarItemKind.parse('native_block')).toBe('native_block');
+  });
+
+  it('normalizes recognized provider event semantics without accepting arbitrary strings', () => {
+    expect(CalendarProviderEventType.parse('working_location')).toBe('working_location');
+    expect(CalendarProviderEventType.parse('focus_time')).toBe('focus_time');
+    expect(CalendarProviderEventType.safeParse('home').success).toBe(false);
+
+    const parsed = CalendarItemOut.parse({
+      ...baseItem(),
+      providerEventType: 'working_location',
+      allDayStartDate: '2026-06-30',
+      allDayEndDate: '2026-07-01',
+    });
+    expect(parsed.providerEventType).toBe('working_location');
   });
 
   it('parses a timed item', () => {

@@ -3,11 +3,14 @@
 /** `agenda/agenda-canvas` — list and shared-fluid-canvas arrangements of one agenda. */
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@docket/ui/primitives';
 
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
+import CreateBlockForm, {
+  type CalendarRegionSelection,
+} from '@/components/calendar/create-block-form';
 import { formatDay } from '@/components/date-picker';
 import {
   useLinkTaskToCalendarItem,
@@ -19,15 +22,17 @@ import {
   itemBoundsInLane,
   moveScheduleInstantRange,
   resizeScheduleInstantRange,
+  resolveScheduleWallInstant,
   type ScheduleItem,
   type ScheduleLane,
+  type ScheduleRegionSelection,
+  scheduleWallPositionForInstant,
   SchedulingCanvas,
 } from '@/components/scheduling';
 import { useNow } from '@/lib/use-now';
 
-import { type AgendaEntry, useAgenda } from './agenda-context';
+import { type AgendaEntry, shiftISODate, useAgenda } from './agenda-context';
 import { AgendaListArrangement } from './agenda-list-arrangement';
-import AgendaScaleStepper from './agenda-scale-stepper';
 import {
   isAgendaEntryInlineEditable,
   isAgendaRelationshipTarget,
@@ -81,11 +86,21 @@ function TimelineArrangement({
     displayTimezone,
     loading,
     pixelsPerHour,
+    goToPreviousDay,
+    goToNextDay,
+    goToToday,
+    registerNavigationGuard,
     setTimebox,
     timeboxFailed,
     clearTimeboxFailure,
   } = useAgenda();
   const now = useNow().toISOString();
+  const [draftSelection, setDraftSelection] = useState<{
+    readonly selection: CalendarRegionSelection;
+    readonly canvasRegion: ScheduleRegionSelection | null;
+  } | null>(null);
+  const [draftDirty, setDraftDirty] = useState(false);
+  const draftAnchorRef = useRef<HTMLDivElement>(null);
   const updateCalendarItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
   const relateItems = useRelateCalendarItems();
@@ -100,7 +115,23 @@ function TimelineArrangement({
   }, [clearTimeboxFailure, resetCalendarItem, resetLinkTask, resetRelateItems]);
   useEffect(() => {
     clearInlineFailures();
+    setDraftSelection(null);
+    setDraftDirty(false);
   }, [clearInlineFailures, date]);
+  useEffect(() => {
+    if (!draftSelection) return undefined;
+    return registerNavigationGuard(() => {
+      if (
+        draftDirty &&
+        !window.confirm('Discard this unsaved calendar item and view another date?')
+      ) {
+        return false;
+      }
+      setDraftSelection(null);
+      setDraftDirty(false);
+      return true;
+    });
+  }, [draftDirty, draftSelection, registerNavigationGuard]);
   const entryById = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
   const lane = useMemo<ScheduleLane>(
     () => ({
@@ -204,16 +235,72 @@ function TimelineArrangement({
     persistExactBounds(entry, resized.startsAt, resized.endsAt);
   };
 
+  const selectTimedRegion = (canvasRegion: ScheduleRegionSelection): void => {
+    const start = resolveScheduleWallInstant(
+      canvasRegion.lane.date,
+      canvasRegion.startMinutes,
+      displayTimezone,
+    );
+    const end = resolveScheduleWallInstant(
+      canvasRegion.lane.date,
+      canvasRegion.endMinutes,
+      displayTimezone,
+    );
+    if (start.kind !== 'resolved' || end.kind !== 'resolved') return;
+    setDraftSelection({
+      selection: { startsAt: start.instant, endsAt: end.instant },
+      canvasRegion,
+    });
+  };
+
+  const updateDraftProjection = useCallback(
+    (selection: CalendarRegionSelection): void => {
+      if (!('startsAt' in selection)) {
+        setDraftSelection((current) => (current ? { ...current, selection } : current));
+        return;
+      }
+      const start = scheduleWallPositionForInstant(selection.startsAt, displayTimezone);
+      const end = scheduleWallPositionForInstant(selection.endsAt, displayTimezone);
+      if (!start || !end || start.date !== lane.date || end.date !== lane.date) return;
+      setDraftSelection({
+        selection,
+        canvasRegion: {
+          lane,
+          startMinutes: start.wallMinutes,
+          endMinutes: end.wallMinutes,
+        },
+      });
+    },
+    [displayTimezone, lane],
+  );
+
   return (
     <>
       <SchedulingCanvas
+        presentation="agenda"
         displayTimezone={displayTimezone}
         lanes={[lane]}
         pixelsPerHour={pixelsPerHour}
         now={now}
         viewportHeight="100%"
         minimumLaneWidth={180}
-        gutterSlot={<AgendaScaleStepper />}
+        selectedRegion={draftSelection?.canvasRegion}
+        selectedRegionAnchorRef={draftAnchorRef}
+        onSelectRegion={selectTimedRegion}
+        onSelectAllDayRegion={(targetLane) => {
+          setDraftSelection({
+            selection: {
+              allDayStartDate: targetLane.date,
+              allDayEndDate: shiftISODate(targetLane.date, 1),
+            },
+            canvasRegion: null,
+          });
+        }}
+        onDateShortcut={(shortcut) => {
+          if (shortcut === 'previous') goToPreviousDay();
+          else if (shortcut === 'next') goToNextDay();
+          else goToToday();
+        }}
         error={
           timeboxFailed || updateCalendarItem.isError || linkTask.isError || relateItems.isError
             ? INLINE_UPDATE_FAILURE_COPY
@@ -265,6 +352,19 @@ function TimelineArrangement({
               role,
             });
           }
+        }}
+      />
+      <CreateBlockForm
+        presentation="agenda"
+        trigger="hidden"
+        displayTimezone={displayTimezone}
+        selection={draftSelection?.selection}
+        selectionAnchorRef={draftSelection?.canvasRegion ? draftAnchorRef : undefined}
+        onDraftChange={updateDraftProjection}
+        onDirtyChange={setDraftDirty}
+        onSelectionConsumed={() => {
+          setDraftSelection(null);
+          setDraftDirty(false);
         }}
       />
     </>

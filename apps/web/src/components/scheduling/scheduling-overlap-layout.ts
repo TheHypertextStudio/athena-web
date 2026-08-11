@@ -63,7 +63,7 @@ function formatCssNumber(value: number): string {
 }
 
 /**
- * Convert a collision column into inset geometry with four-pixel outer and internal gutters.
+ * Convert a collision column into geometry with one-pixel outer pacing and two-pixel gaps.
  *
  * @param placement - Stable overlap column produced for one item.
  * @returns Explicit left and width values; callers never need a competing right inset.
@@ -73,17 +73,12 @@ export function scheduleOverlapHorizontalStyle(
 ): ScheduleOverlapHorizontalStyle {
   const columnCount = Math.max(1, placement.columnCount);
   const columnIndex = Math.max(0, Math.min(columnCount - 1, placement.columnIndex));
-  if (columnCount === 1) return { left: 4, width: 'calc(100% - 8px)' };
+  if (columnCount === 1) return { left: 1, width: 'calc(100% - 2px)' };
 
   const columnPercentage = 100 / columnCount;
-  const widthReduction = 4 + 4 / columnCount;
-  const leftOffset = 4 - (4 * columnIndex) / columnCount;
   return {
-    left:
-      columnIndex === 0
-        ? 4
-        : `calc(${formatCssNumber(columnPercentage * columnIndex)}% + ${formatCssNumber(leftOffset)}px)`,
-    width: `calc(${formatCssNumber(columnPercentage)}% - ${formatCssNumber(widthReduction)}px)`,
+    left: columnIndex === 0 ? 1 : `calc(${formatCssNumber(columnPercentage * columnIndex)}% + 1px)`,
+    width: `calc(${formatCssNumber(columnPercentage)}% - 2px)`,
   };
 }
 

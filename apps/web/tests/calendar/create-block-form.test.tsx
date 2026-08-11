@@ -31,6 +31,116 @@ afterEach(() => {
 });
 
 describe('CreateBlockForm display timezone', () => {
+  it('uses a triggerless bottom dialog for an Agenda-selected draft', async () => {
+    render(
+      <CreateBlockForm
+        presentation="agenda"
+        trigger="hidden"
+        displayTimezone="UTC"
+        selection={{
+          startsAt: '2026-07-01T16:00:00.000Z',
+          endsAt: '2026-07-01T16:30:00.000Z',
+        }}
+      />,
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Create calendar item' });
+    expect(dialog).toHaveAttribute('data-create-presentation', 'agenda-mobile');
+    expect(dialog).toHaveClass('bottom-0', 'top-auto');
+    expect(screen.queryByRole('button', { name: 'New' })).not.toBeInTheDocument();
+  });
+
+  it('reports exact draft edits and dirty state without persisting', async () => {
+    const onDraftChange = vi.fn();
+    const onDirtyChange = vi.fn();
+    render(
+      <CreateBlockForm
+        displayTimezone="UTC"
+        selection={{
+          startsAt: '2026-07-01T16:00:00.000Z',
+          endsAt: '2026-07-01T16:30:00.000Z',
+        }}
+        onDraftChange={onDraftChange}
+        onDirtyChange={onDirtyChange}
+      />,
+    );
+
+    fireEvent.change(await screen.findByLabelText('Ends'), {
+      target: { value: '2026-07-01T17:00' },
+    });
+
+    await waitFor(() => {
+      expect(onDraftChange).toHaveBeenLastCalledWith({
+        startsAt: '2026-07-01T16:00:00.000Z',
+        endsAt: '2026-07-01T17:00:00Z',
+      });
+      expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    });
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  it('creates an all-day Agenda selection through the existing mutation path', async () => {
+    render(
+      <CreateBlockForm
+        presentation="agenda"
+        trigger="hidden"
+        displayTimezone="UTC"
+        selection={{ allDayStartDate: '2026-07-01', allDayEndDate: '2026-07-02' }}
+      />,
+    );
+
+    fireEvent.change(await screen.findByLabelText('Title'), {
+      target: { value: 'Company holiday' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+
+    expect(mutate).toHaveBeenCalledWith(
+      {
+        intent: 'event',
+        title: 'Company holiday',
+        allDayStartDate: '2026-07-01',
+        allDayEndDate: '2026-07-02',
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('reveals optional details without persisting and includes them only when saved', async () => {
+    render(
+      <CreateBlockForm
+        presentation="agenda"
+        trigger="hidden"
+        displayTimezone="UTC"
+        selection={{
+          startsAt: '2026-07-01T16:00:00.000Z',
+          endsAt: '2026-07-01T16:30:00.000Z',
+        }}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'More details' }));
+    expect(mutate).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Planning review' } });
+    fireEvent.change(screen.getByLabelText('Description'), {
+      target: { value: 'Review the launch plan' },
+    });
+    fireEvent.change(screen.getByLabelText('Location'), { target: { value: 'Conference room' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create event' }));
+
+    expect(mutate).toHaveBeenCalledWith(
+      {
+        intent: 'event',
+        title: 'Planning review',
+        description: 'Review the launch plan',
+        location: 'Conference room',
+        startsAt: '2026-07-01T16:00:00.000Z',
+        endsAt: '2026-07-01T16:30:00.000Z',
+      },
+      expect.any(Object),
+    );
+  });
+
   it('rebases an open untouched toolbar draft and preserves its exact seed instants', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-01T16:10:00Z'));

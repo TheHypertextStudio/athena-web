@@ -9,18 +9,36 @@ import {
   toLocalInputValue,
 } from './datetime-input';
 
-/** Exact draft region supplied by the scheduling canvas or toolbar. */
-export interface CalendarRegionSelection {
+/** Exact timed draft region supplied by the scheduling canvas or toolbar. */
+export interface CalendarTimedRegionSelection {
   /** Inclusive exact start instant. */
   readonly startsAt: string;
   /** Exclusive exact end instant. */
   readonly endsAt: string;
 }
 
+/** Calendar-date draft region supplied by an all-day creation target. */
+export interface CalendarAllDayRegionSelection {
+  /** Inclusive all-day start date. */
+  readonly allDayStartDate: string;
+  /** Exclusive all-day end date. */
+  readonly allDayEndDate: string;
+}
+
+/** One exact timed or all-day local creation region. */
+export type CalendarRegionSelection = CalendarTimedRegionSelection | CalendarAllDayRegionSelection;
+
+/** Narrow a local creation region to exact timed bounds. */
+export function isCalendarTimedRegionSelection(
+  selection: CalendarRegionSelection,
+): selection is CalendarTimedRegionSelection {
+  return 'startsAt' in selection;
+}
+
 /** Exact seeds, rendered wall values, and independent edit ownership for one creation draft. */
 export interface CalendarTimeDraft {
   /** Exact instants that created this draft and remain authoritative for untouched fields. */
-  readonly seed: CalendarRegionSelection;
+  readonly seed: CalendarTimedRegionSelection;
   /** Start wall value rendered in the current display timezone. */
   readonly startsAt: string;
   /** End wall value rendered in the current display timezone. */
@@ -42,7 +60,7 @@ export type ResolvedCalendarTimeDraft =
 
 /** Initialize wall fields and independent edit ownership from exact seed instants. */
 export function calendarTimeDraftFromSeed(
-  seed: CalendarRegionSelection,
+  seed: CalendarTimedRegionSelection,
   displayTimezone: string,
 ): CalendarTimeDraft {
   return {
@@ -102,7 +120,9 @@ export function resolveCalendarTimeDraft(
 }
 
 /** Create the next future half-hour region on the selected timezone's wall clock. */
-export function defaultCalendarRegionSelection(displayTimezone: string): CalendarRegionSelection {
+export function defaultCalendarRegionSelection(
+  displayTimezone: string,
+): CalendarTimedRegionSelection {
   const now = new Date().toISOString();
   const position = scheduleWallPositionForInstant(now, displayTimezone);
   const roundedMinutes = position ? Math.floor(position.wallMinutes / 30) * 30 + 30 : 0;

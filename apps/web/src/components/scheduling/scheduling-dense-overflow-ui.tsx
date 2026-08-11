@@ -64,7 +64,7 @@ export function SchedulingDenseOverflow({
             aria-label={`Show ${label}`}
             className="bg-surface-container-high text-primary text-label-medium hover:bg-primary-container focus-visible:ring-ring size-full rounded-md px-1 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none"
           >
-            +{String(count)}
+            +{String(count)} more
           </button>
         </PopoverTrigger>
         <PopoverContent

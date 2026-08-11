@@ -10,6 +10,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -17,14 +18,9 @@ import { readStoredInteger, writeStoredValue } from '@docket/ui/lib/browser-stor
 
 import { calendarItemsDef } from '@/components/calendar/calendar-data';
 import {
-  clampPixelsPerHour,
-  MAX_PIXELS_PER_HOUR,
-  MIN_PIXELS_PER_HOUR,
   resolveScheduleTimezone,
   scheduleDateRange,
   useScheduleDisplayDate,
-  ZOOM_STEP_IN,
-  ZOOM_STEP_OUT,
 } from '@/components/scheduling';
 import { api } from '@/lib/api';
 import {
@@ -39,6 +35,8 @@ import { useNow } from '@/lib/use-now';
 import { startViewTransition } from '@/lib/view-transition';
 
 import { type AgendaPlanMutations, useAgendaPlanMutations } from './agenda-mutations';
+import { type AgendaDayContext, partitionAgendaDay } from './agenda-day-context';
+import { normalizeAgendaScale } from './agenda-scale';
 import { filterAgendaForDisplayDate } from './agenda-day-filter';
 import {
   type AgendaEntry,
@@ -84,13 +82,11 @@ const RAIL_SCALE_KEY = 'docket.rail.agenda.scale';
  * {@link file://../../../../../packages/ui/src/lib/browser-storage.ts} documents. Read on mount
  * instead, like the shell's own rail state.
  *
- * The clamp is applied here rather than trusted from storage, because a stored number is only
- * proof that *something* wrote it — an older build, a hand-edited value, or a scale whose legal
- * range has since narrowed.
+ * Values from the earlier continuous scale are snapped to the nearest intentional Agenda step.
  */
 function readRailScale(): number | null {
   const stored = readStoredInteger(RAIL_SCALE_KEY);
-  return stored === null ? null : clampPixelsPerHour(stored);
+  return stored === null ? null : normalizeAgendaScale(stored);
 }
 
 interface AgendaContextValue extends AgendaPlanMutations {
@@ -98,23 +94,22 @@ interface AgendaContextValue extends AgendaPlanMutations {
   today: string;
   isToday: boolean;
   entries: AgendaEntry[];
+  dayContext: AgendaDayContext[];
   loading: boolean;
   error: string | null;
   retrying: boolean;
   displayTimezone: string;
   pixelsPerHour: number;
-  /** One step coarser/finer on the shared zoom scale, persisted for this rail alone. */
-  zoomIn: () => void;
-  zoomOut: () => void;
-  /** The rail's density as a multiple of its own resting scale, for the stepper's readout. */
-  scaleMultiplier: number;
-  canZoomIn: boolean;
-  canZoomOut: boolean;
+  /** Select one of the rail's intentional whole-number density steps. */
+  setScale: (pixelsPerHour: number) => void;
   view: AgendaView;
   setView: (view: AgendaView) => void;
   goToPreviousDay: () => void;
   goToNextDay: () => void;
   goToToday: () => void;
+  goToDate: (date: string) => void;
+  /** Register a draft guard that may veto date changes; returns its cleanup function. */
+  registerNavigationGuard: (guard: () => boolean) => () => void;
   retry: () => void;
 }
 
@@ -148,6 +143,7 @@ function calendarDayRange(date: string, displayTimezone: string) {
 
 /** Provide the selected agenda day, normalized entries, and in-place mutations. */
 export function AgendaProvider({ initialDate, children }: AgendaProviderProps): JSX.Element {
+  const navigationGuardRef = useRef<(() => boolean) | null>(null);
   const [view, setViewState] = useState<AgendaView>('timeline');
   const now = useNow().toISOString();
   const preferencesQuery = useApiQuery(
@@ -164,19 +160,19 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
     const stored = readRailScale();
     if (stored !== null) setPixelsPerHour(stored);
   }, []);
-  const zoomBy = useCallback((factor: number) => {
+  const updateScale = useCallback((nextScale: (current: number) => number) => {
     setPixelsPerHour((current) => {
-      const next = clampPixelsPerHour(current * factor);
+      const next = nextScale(current);
       writeStoredValue(RAIL_SCALE_KEY, next);
       return next;
     });
   }, []);
-  const zoomIn = useCallback(() => {
-    zoomBy(ZOOM_STEP_IN);
-  }, [zoomBy]);
-  const zoomOut = useCallback(() => {
-    zoomBy(ZOOM_STEP_OUT);
-  }, [zoomBy]);
+  const setScale = useCallback(
+    (nextScale: number) => {
+      updateScale(() => normalizeAgendaScale(nextScale));
+    },
+    [updateScale],
+  );
   const { date, isToday, today, setDate } = useScheduleDisplayDate({
     initialDate,
     displayTimezone,
@@ -208,7 +204,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
     }
   }, [date, displayTimezone, prefetch]);
 
-  const entries = useMemo(() => {
+  const agendaDay = useMemo(() => {
     const legacyEntries = toAgendaEntries(data).map((entry) => {
       const item = entry.taskId ? planByTask.get(entry.taskId) : undefined;
       return item ? { ...entry, planItemId: item.id, done: item.status === 'done' } : entry;
@@ -222,7 +218,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
     const merged = new Map<string, AgendaEntry>();
     for (const entry of legacyEntries) merged.set(entry.id, entry);
     for (const entry of layeredEntries) merged.set(entry.id, entry);
-    return [...merged.values()];
+    return partitionAgendaDay([...merged.values()]);
   }, [calendarQuery.data, calendarQuery.isPlaceholderData, data, planByTask]);
 
   const mutations = useAgendaPlanMutations(date);
@@ -231,15 +227,28 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       setViewState(next);
     });
   }, []);
+  const registerNavigationGuard = useCallback((guard: () => boolean) => {
+    navigationGuardRef.current = guard;
+    return () => {
+      if (navigationGuardRef.current === guard) navigationGuardRef.current = null;
+    };
+  }, []);
+  const mayNavigate = useCallback(() => navigationGuardRef.current?.() ?? true, []);
   const goToPreviousDay = useCallback(() => {
-    setDate((current) => shiftISODate(current, -1));
-  }, [setDate]);
+    if (mayNavigate()) setDate((current) => shiftISODate(current, -1));
+  }, [mayNavigate, setDate]);
   const goToNextDay = useCallback(() => {
-    setDate((current) => shiftISODate(current, 1));
-  }, [setDate]);
+    if (mayNavigate()) setDate((current) => shiftISODate(current, 1));
+  }, [mayNavigate, setDate]);
   const goToToday = useCallback(() => {
-    setDate(today);
-  }, [setDate, today]);
+    if (mayNavigate()) setDate(today);
+  }, [mayNavigate, setDate, today]);
+  const goToDate = useCallback(
+    (nextDate: string) => {
+      if (nextDate !== date && mayNavigate()) setDate(nextDate);
+    },
+    [date, mayNavigate, setDate],
+  );
   const retry = useCallback(() => {
     void preferencesQuery.refetch();
     void query.refetch();
@@ -252,7 +261,8 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       date,
       today,
       isToday,
-      entries,
+      entries: agendaDay.entries,
+      dayContext: agendaDay.dayContext,
       loading:
         query.isPending ||
         query.isPlaceholderData ||
@@ -269,16 +279,14 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
         planQuery.isFetching,
       displayTimezone,
       pixelsPerHour,
-      zoomIn,
-      zoomOut,
-      scaleMultiplier: pixelsPerHour / RAIL_PIXELS_PER_HOUR,
-      canZoomIn: pixelsPerHour < MAX_PIXELS_PER_HOUR,
-      canZoomOut: pixelsPerHour > MIN_PIXELS_PER_HOUR,
+      setScale,
       view,
       setView,
       goToPreviousDay,
       goToNextDay,
       goToToday,
+      goToDate,
+      registerNavigationGuard,
       retry,
       ...mutations,
     }),
@@ -286,7 +294,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       date,
       today,
       isToday,
-      entries,
+      agendaDay,
       query.isPending,
       query.isPlaceholderData,
       query.isError,
@@ -301,13 +309,14 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       preferencesQuery.isFetching,
       displayTimezone,
       pixelsPerHour,
-      zoomIn,
-      zoomOut,
+      setScale,
       view,
       setView,
       goToPreviousDay,
       goToNextDay,
       goToToday,
+      goToDate,
+      registerNavigationGuard,
       retry,
       mutations,
     ],

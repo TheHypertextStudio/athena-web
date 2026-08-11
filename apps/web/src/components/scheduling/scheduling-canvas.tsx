@@ -42,6 +42,7 @@ const MINIMUM_COARSE_POINTER_PIXELS = 40;
 const ZOOM_GESTURE_DELTA_SCALE = 180;
 /** Render a 24-hour fluid grid while consumers own data, persistence, and policy. */
 export default function SchedulingCanvas({
+  presentation = 'calendar',
   displayTimezone,
   lanes,
   pixelsPerHour,
@@ -64,6 +65,8 @@ export default function SchedulingCanvas({
   selectedRegion,
   selectedRegionAnchorRef,
   onSelectRegion,
+  onSelectAllDayRegion,
+  onDateShortcut,
   onOpenItem,
   onMoveItem,
   onResizeItem,
@@ -228,7 +231,7 @@ export default function SchedulingCanvas({
       // variants were tried and both broke `fluid-scheduling-gestures`. Lane alignment is instead
       // guaranteed where it is actually decided, in `use-scheduling-viewport`'s horizontal anchor:
       // every rendered scroll position is a whole number of lanes, measured across 162 widths.
-      className={`bg-surface relative overflow-auto overscroll-contain rounded-xl ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
+      className={`bg-surface relative overflow-auto overscroll-contain ${presentation === 'calendar' ? 'rounded-xl' : ''} ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
       style={
         {
           '--schedule-sticky-top': `${String(headerHeight)}px`,
@@ -236,6 +239,7 @@ export default function SchedulingCanvas({
         } as CSSProperties
       }
       data-lane-count={lanes.length}
+      data-schedule-presentation={presentation}
       data-visible-lane-count={geometry.visibleLaneCount}
       data-snap-minutes={snapMinutes}
       onScroll={onScroll}
@@ -251,6 +255,7 @@ export default function SchedulingCanvas({
           todayDate={todayDate}
           viewportRef={viewportRef}
           compact={axis.labelStyle === 'hour'}
+          presentation={presentation}
           gutterSlot={gutterSlot}
           gutterWidth={geometry.gutterWidth}
           contentWidth={geometry.contentWidth}
@@ -262,6 +267,7 @@ export default function SchedulingCanvas({
           onDropObjectOnItem={onDropObjectOnItem}
           relationshipMode={relationshipMode}
           onGestureAnnouncementChange={setGestureAnnouncement}
+          onSelectAllDayRegion={onSelectAllDayRegion}
         />
         <div ref={timedGridRef} className="relative">
           <SchedulingTimeGrid
@@ -283,7 +289,59 @@ export default function SchedulingCanvas({
                   // exists to divide days, not to draw a box around the grid.
                   className={`relative shrink-0 touch-none ${laneIndex === lanes.length - 1 ? '' : 'border-outline-variant/30 border-r'}`}
                   data-schedule-lane={lane.id}
+                  tabIndex={onSelectRegion ? 0 : undefined}
                   style={{ width: geometry.laneWidth, height: 24 * effectivePixelsPerHour }}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+                      const shortcut =
+                        event.key === 'ArrowLeft'
+                          ? 'previous'
+                          : event.key === 'ArrowRight'
+                            ? 'next'
+                            : event.key.toLowerCase() === 't'
+                              ? 'today'
+                              : null;
+                      if (shortcut && onDateShortcut) {
+                        event.preventDefault();
+                        onDateShortcut(shortcut);
+                        return;
+                      }
+                    }
+                    if (!onSelectRegion) return;
+                    if (
+                      selectedRegion?.lane.id === lane.id &&
+                      (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+                    ) {
+                      event.preventDefault();
+                      const duration = selectedRegion.endMinutes - selectedRegion.startMinutes;
+                      const direction = event.key === 'ArrowUp' ? -1 : 1;
+                      const startMinutes = Math.min(
+                        24 * 60 - duration,
+                        Math.max(0, selectedRegion.startMinutes + direction * snapMinutes),
+                      );
+                      commitRegionSelection({
+                        lane,
+                        startMinutes,
+                        endMinutes: startMinutes + duration,
+                      });
+                      return;
+                    }
+                    if (event.key !== 'Enter' && event.key !== ' ') return;
+                    event.preventDefault();
+                    const startMinutes = Math.min(
+                      24 * 60 - 30,
+                      Math.max(
+                        0,
+                        Math.round(resolvedInitialScrollMinutes / snapMinutes) * snapMinutes,
+                      ),
+                    );
+                    commitRegionSelection({
+                      lane,
+                      startMinutes,
+                      endMinutes: startMinutes + 30,
+                    });
+                  }}
                   onPointerDown={(event) => {
                     if (event.target === event.currentTarget) setGestureAnnouncement('');
                     regionSelection.onPointerDown(lane, event);

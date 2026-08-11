@@ -4602,6 +4602,23 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [NAVIGATION-RECOVERY-001] Keep failed app navigation inside Docket
+
+- **Completed**: 2026-08-11
+- **Duration**: One implementation session
+- **Priority**: P0
+- **Summary**: Normal authenticated navigation no longer mistakes an App Router layout's retained
+  server pathname for an offline service-worker replay. The app keeps its shell for resolved route
+  errors and not-found states, while the root boundary reconstructs the authenticated shell for
+  otherwise unmatched URLs. Corrected route producers now target real destinations, including
+  graph workspace return, mentions, assignments, search, and task fallbacks. Search deep links
+  resolve their selected record instead of only avoiding a 404.
+- **Validation**: Full web tests (2,138), API tests (3,678), builds, lint, and typechecks passed.
+  The production tooling gate also passes (139 tests), including the current GitHub installer setup
+  instructions that changed during the release rebase.
+
+---
+
 ### [AGENDA-ANCHOR-001] Anchor draggable quick create to its selected draft
 
 - **Completed**: 2026-08-11

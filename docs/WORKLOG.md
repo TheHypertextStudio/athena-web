@@ -4688,8 +4688,8 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   sibling hosting, and right-edge placement. Authenticated Chromium evidence passes 2/2: desktop,
   tablet, and mobile geometry/theme screenshots plus mock-free UI saves of one-zone and split-zone
   events, direct API re-reads, post-save focus, and a cold page reload. Repository validation passes
-  `pnpm typecheck` (20/20 targets), `pnpm lint` (20/20), `pnpm test` (20/20; 1,914 web and
-  3,670 API tests), `pnpm test:coverage` (18/18), `pnpm format:check`, and `pnpm build` (4/4).
+  `pnpm typecheck` (20/20 targets), `pnpm lint` (20/20), `pnpm test` (20/20; 1,953 web and
+  3,672 API tests), `pnpm test:coverage` (18/18), `pnpm format:check`, and `pnpm build` (4/4).
 - **Learnings**: Hosting the desktop dialog in the shell's primary-content layer and replacing the
   narrow Agenda canvas with an Agenda-owned sibling host make non-overlap layout invariants rather
   than offsets. Mock-free save/reload testing caught a controlled projection loop that cleared the

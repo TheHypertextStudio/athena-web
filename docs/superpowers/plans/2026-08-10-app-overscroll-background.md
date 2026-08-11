@@ -139,19 +139,19 @@ as the app shell.
 
 - No source files.
 
-- [ ] **Step 1: Refresh and rebase onto remote main**
+- [x] **Step 1: Refresh and rebase onto remote main**
 
 Run: `git fetch origin main && git rebase origin/main`
 
 Expected: the feature branch is based directly on current `origin/main` with no merge commit.
 
-- [ ] **Step 2: Re-run the targeted and full verification on the rebased result**
+- [x] **Step 2: Re-run the targeted and full verification on the rebased result**
 
 Run the Task 1 targeted tests, Task 2 token-policy test, and all four Task 3 repository gates.
 
 Expected: every command exits 0.
 
-- [ ] **Step 3: Fast-forward local main and push it**
+- [x] **Step 3: Fast-forward local main and push it**
 
 From the clean worktree that owns `main`, run `git merge --ff-only codex/app-overscroll-background`
 and then `git push origin main`.
@@ -159,7 +159,7 @@ and then `git push origin main`.
 Expected: local `main`, `origin/main`, and `codex/app-overscroll-background` resolve to the same
 single-parent tip.
 
-- [ ] **Step 4: Audit the landed state**
+- [x] **Step 4: Audit the landed state**
 
 Run: `git rev-list --merges --count origin/main..codex/app-overscroll-background`
 

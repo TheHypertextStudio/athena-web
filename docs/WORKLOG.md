@@ -4575,6 +4575,27 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [WEB-BACKDROP-001] Match the browser backdrop to the app shell
+
+- **Completed**: 2026-08-11
+- **Duration**: 1 day
+- **Priority**: P2
+- **Summary**: The root document body now uses the same semantic `surface-container` background
+  token as the authenticated app shell, so browser overscroll no longer exposes a mismatched page
+  canvas. The floating in-app page remains on the intentionally distinct `surface` role.
+- **Files Changed**: Root layout, rendered root-layout regression, design and implementation
+  records, and work log.
+- **Validation**: The rendered root-layout contract passed 1/1, the shell contract passed 67/67,
+  and the design-token policy passed 8/8. Repository typechecking, linting, tests, and production
+  build all passed across 20 packages. The initial test run shared resources with the other three
+  full gates and timed out in two PGlite tests; both passed in isolation, and the authoritative
+  uncontended full suite then passed.
+- **Learnings**: Browser overscroll paints the document canvas beneath the application, so the root
+  body and shell canvas must share one semantic token. The page panel remains a separate tonal
+  surface rather than flattening the authenticated hierarchy.
+
+---
+
 ### [WEB-SWITCHER-002] Make open documents searchable, accessible, and release-safe
 
 - **Completed**: 2026-08-10

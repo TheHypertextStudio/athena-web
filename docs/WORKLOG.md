@@ -7,6 +7,29 @@
 
 ## Active Tasks
 
+### [AGENDA-RAIL-002] Refine quick create into a non-overlapping draggable dialog
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-10
+- **Priority**: P1
+- **Description**: Refine the newly shipped Agenda direct-create surface so its dialog never
+  covers the calendar, follows Google Calendar's progressive date/time and timezone disclosure,
+  supports searchable and optional separate start/end timezones, uses highlight-only validation,
+  and restores explicit whole-step zoom controls.
+- **Subtasks**:
+  - [x] Compare non-overlapping dialog placement approaches in the visual companion
+  - [x] Validate the progressive disclosure model against supplied Google Calendar references
+  - [x] Write the approved interaction and persistence contract
+  - [ ] Review and approve the written contract
+  - [ ] Write the implementation plan
+  - [ ] Implement with tests and live browser validation
+- **Blockers**: Written-spec review is required before implementation planning.
+- **Notes**: The existing `timezone` field becomes the start/single zone and a nullable
+  `endTimezone` preserves an optional different end zone. The dialog is mounted at the shell layer,
+  constrained to primary content, and never enters the Agenda rectangle.
+
+---
+
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW

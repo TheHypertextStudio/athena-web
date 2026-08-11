@@ -930,8 +930,8 @@ describe('elicitationTaskHref', () => {
     expect(elicitationTaskHref('org_1', 'task_1')).toBe('/orgs/org_1/tasks/task_1');
   });
 
-  it('links to the personal task page for a workspace-less (personal) question', () => {
-    expect(elicitationTaskHref(null, 'task_1')).toBe('/tasks/task_1');
+  it('links a workspace-less question to the served personal task list', () => {
+    expect(elicitationTaskHref(null, 'task_1')).toBe('/tasks');
   });
 });
 

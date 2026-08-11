@@ -11,7 +11,7 @@ export function entityHref(
 ): string {
   switch (kind) {
     case 'organization':
-      return `/orgs/${organizationId}`;
+      return `/orgs/${organizationId}/my-work`;
     case 'team':
       return `/orgs/${organizationId}/teams`;
     case 'member':
@@ -50,9 +50,10 @@ export function entityHref(
     case 'comment':
     case 'update':
     case 'attachment':
-    case 'calendar_event':
     case 'activity':
       return `/orgs/${organizationId}/search?kind=${kind}&id=${entityId}`;
+    case 'calendar_event':
+      return `/search?kind=calendar_event&id=${entityId}`;
   }
 }
 
@@ -96,7 +97,7 @@ export function calendarEventRoute(calendarEventId: string): SearchRouteDraft {
   return {
     type: 'calendar_event',
     calendarEventId,
-    href: `/agenda?eventId=${calendarEventId}`,
+    href: `/search?kind=calendar_event&id=${calendarEventId}`,
   };
 }
 

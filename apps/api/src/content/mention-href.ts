@@ -33,15 +33,15 @@ export function entityMentionHref(orgId: string, ref: EntityMentionRef): string 
     case 'cycle':
       return `${base}/cycles/${ref.entityId}`;
     case 'milestone':
-      return `${base}/milestones/${ref.entityId}`;
+      return `${base}/projects?milestoneId=${ref.entityId}`;
     case 'team':
       return `${base}/teams/${ref.entityId}`;
     case 'actor':
-      return `${base}/members/${ref.entityId}`;
+      return `${base}/people/${ref.entityId}`;
     case 'agent_session':
       return `${base}/sessions/${ref.entityId}`;
     case 'comment':
     case 'update':
-      return `${base}/activity/${ref.entityId}`;
+      return `${base}/search?kind=${ref.entityKind}&id=${ref.entityId}`;
   }
 }

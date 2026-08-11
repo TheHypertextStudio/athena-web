@@ -76,7 +76,7 @@ export function elicitationPermalink(elicitationId: string): string {
 
 /** The in-app path of the task a question exists to implement. */
 export function elicitationTaskHref(organizationId: string | null, taskId: string): string {
-  return organizationId ? `/orgs/${organizationId}/tasks/${taskId}` : `/tasks/${taskId}`;
+  return organizationId ? `/orgs/${organizationId}/tasks/${taskId}` : '/tasks';
 }
 
 /* -------------------------------------------------------------------------------------------- */

@@ -65,6 +65,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
 
   const [draft, setDraft] = useState(urlFilters.query);
   const [query, setQuery] = useState(urlFilters.query);
+  const [ids, setIds] = useState<readonly string[]>(urlFilters.ids);
   const [cursor, setCursor] = useState<string | null>(null);
   const [families, setFamilies] = useState<readonly SearchDocumentFamily[]>(urlFilters.families);
   const [kinds, setKinds] = useState<readonly SearchDocumentKind[]>(urlFilters.kinds);
@@ -82,6 +83,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
   useEffect(() => {
     setDraft(urlFilters.query);
     setQuery(urlFilters.query);
+    setIds(urlFilters.ids);
     setFamilies(urlFilters.families);
     setKinds(urlFilters.kinds);
     setSources(urlFilters.sources);
@@ -100,6 +102,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
   const filters = useMemo<SearchPageFilters>(
     () => ({
       query,
+      ids,
       families,
       kinds,
       sources,
@@ -118,6 +121,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
       families,
       fromDate,
       healths,
+      ids,
       kinds,
       labelIds,
       ownerIds,
@@ -141,6 +145,8 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
     (patch: Partial<SearchPageFilters>) => {
       const next: SearchPageFilters = {
         query: draft.trim(),
+        // A person who changes the search is no longer following a one-record deep link.
+        ids: [],
         families,
         kinds,
         sources,
@@ -156,6 +162,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
       };
       setDraft(next.query);
       setQuery(next.query);
+      setIds(next.ids);
       setFamilies(next.families);
       setKinds(next.kinds);
       setSources(next.sources);
@@ -190,14 +197,17 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const nextQuery = draft.trim();
+      // Keep an initial `?id=` deep link intact, but clear it once someone starts a new search.
+      const nextIds = nextQuery === query ? ids : [];
       setQuery(nextQuery);
+      setIds(nextIds);
       setCursor(null);
-      replaceFilters({ ...filters, query: nextQuery });
+      replaceFilters({ ...filters, query: nextQuery, ids: nextIds });
     }, DEBOUNCE_MS);
     return () => {
       window.clearTimeout(timer);
     };
-  }, [draft, filters, replaceFilters]);
+  }, [draft, filters, ids, query, replaceFilters]);
 
   const queryArgs = useMemo(
     () => searchPageFiltersToHttpQuery(filters, { limit: PAGE_SIZE, cursor }),
@@ -217,13 +227,14 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
           ? api.v1.orgs[':orgId'].search.$get({ param: { orgId }, query: queryArgs })
           : api.v1.hub.search.$get({ query: queryArgs }),
       'Search failed.',
-      { enabled: query.length > 0 && (scope === 'hub' || Boolean(orgId)) },
+      { enabled: (query.length > 0 || ids.length > 0) && (scope === 'hub' || Boolean(orgId)) },
     ),
   );
 
   const data = searchQ.data ?? null;
-  const loadingInitial = query.length > 0 && searchQ.isPending && cursor === null;
-  const loadingMore = query.length > 0 && searchQ.isPending && cursor !== null;
+  const hasSearchRequest = query.length > 0 || ids.length > 0;
+  const loadingInitial = hasSearchRequest && searchQ.isPending && cursor === null;
+  const loadingMore = hasSearchRequest && searchQ.isPending && cursor !== null;
   const error = searchQ.isError
     ? userErrorMessage(searchQ.error, 'Could not search your work.')
     : null;
@@ -243,6 +254,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
 
   const results = accumulatedResults;
   const hasFilters =
+    ids.length > 0 ||
     families.length > 0 ||
     kinds.length > 0 ||
     sources.length > 0 ||
@@ -270,6 +282,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
               size="sm"
               onClick={() => {
                 commitFilters({
+                  ids: [],
                   families: [],
                   kinds: [],
                   sources: [],
@@ -464,7 +477,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
                 <Skeleton key={i} className="h-20 rounded-lg" />
               ))}
             </Stack>
-          ) : query.length === 0 ? (
+          ) : !hasSearchRequest ? (
             <EmptyState icon={Search} title="Search" body="Results appear as you type." />
           ) : results.length === 0 ? (
             <EmptyState

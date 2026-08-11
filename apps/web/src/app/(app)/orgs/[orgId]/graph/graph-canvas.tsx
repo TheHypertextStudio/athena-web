@@ -42,7 +42,7 @@ function backTarget(scope: TaskGraphScope): { href: string; label: string } {
     return { href: `/orgs/${scope.orgId}/tasks/${scope.rootTaskId}`, label: 'Back to task' };
   if (scope.projectId !== undefined)
     return { href: `/orgs/${scope.orgId}/projects/${scope.projectId}`, label: 'Back to project' };
-  return { href: `/orgs/${scope.orgId}`, label: 'Back to workspace' };
+  return { href: `/orgs/${scope.orgId}/my-work`, label: 'Back to workspace' };
 }
 
 /** The focused, filterable, editable dependency canvas (query + presentation persist to the URL). */

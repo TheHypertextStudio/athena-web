@@ -227,7 +227,9 @@ describe('personal Athena assignments', () => {
           eq(schema.notification.type, 'assignment'),
         ),
       );
-    expect(notices.some((notice) => notice.body['assignmentId'] === assignment.id)).toBe(true);
+    const notice = notices.find((candidate) => candidate.body['assignmentId'] === assignment.id);
+    expect(notice).toBeDefined();
+    expect(notice?.body).toMatchObject({ assignmentId: assignment.id, url: '/athena' });
   });
 
   it('keeps assignment and trigger endpoints owner-only', async () => {

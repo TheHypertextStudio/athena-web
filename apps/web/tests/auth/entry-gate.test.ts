@@ -75,6 +75,7 @@ import AppGroupLayout from '../../src/app/(app)/layout';
 import SignInPage from '../../src/app/(auth)/sign-in/page';
 import SignUpPage from '../../src/app/(auth)/sign-up/page';
 import FocusGroupLayout from '../../src/app/(focus)/layout';
+import RootNotFound from '../../src/app/not-found';
 import OpenPage from '../../src/app/open/page';
 import { config, isProtectedPath, proxy } from '../../src/proxy';
 
@@ -226,6 +227,27 @@ describe('(app) layout guard', () => {
     expect(prefetchQuery).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: ['me', 'orgs'] }),
     );
+  });
+});
+
+describe('root missing-route recovery', () => {
+  it('keeps an authenticated unknown URL in the app shell instead of Next’s root fallback', async () => {
+    readServerSessionMock.mockResolvedValue(AUTHENTICATED);
+
+    const tree = await RootNotFound();
+
+    expect(shellProps(tree).initialSession).toEqual(AUTHENTICATED.user);
+    expect(prefetchQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['me', 'orgs'] }),
+    );
+  });
+
+  it('keeps the shell when the session service is unavailable rather than treating an outage as sign-out', async () => {
+    readServerSessionMock.mockResolvedValue({ state: 'unknown' });
+
+    const tree = await RootNotFound();
+
+    expect(shellProps(tree).initialSession).toBeNull();
   });
 });
 

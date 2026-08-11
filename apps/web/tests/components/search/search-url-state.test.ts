@@ -16,6 +16,7 @@ describe('search page URL state', () => {
 
     expect(filters).toEqual({
       query: 'launch',
+      ids: [],
       families: ['work'],
       kinds: ['task'],
       sources: ['github'],
@@ -36,9 +37,31 @@ describe('search page URL state', () => {
     expect(filters.kinds).toEqual(['calendar_event']);
   });
 
+  it('turns an id-only detail link into the API’s exact-record filter', () => {
+    const params = new URLSearchParams('kind=calendar_event&id=calendar_event_1');
+    const filters = parseSearchPageFilters(params);
+    const query = searchPageFiltersToHttpQuery(filters, { limit: 30 });
+
+    expect(filters).toMatchObject({
+      query: '',
+      kinds: ['calendar_event'],
+      ids: ['calendar_event_1'],
+    });
+    expect(query).toMatchObject({
+      q: '',
+      limit: '30',
+      kinds: 'calendar_event',
+      ids: 'calendar_event_1',
+    });
+    expect(searchPageHref('/search', params, filters)).toBe(
+      '/search?id=calendar_event_1&kinds=calendar_event',
+    );
+  });
+
   it('serializes shareable plural filter params and clears stale cursor/detail params', () => {
     const href = searchPageHref('/search', new URLSearchParams('cursor=old&kind=task&id=cal_1'), {
       query: 'ship',
+      ids: [],
       families: ['work'],
       kinds: ['task', 'project'],
       sources: ['docket'],

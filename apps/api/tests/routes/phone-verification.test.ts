@@ -30,6 +30,7 @@ beforeAll(async () => {
 });
 
 const CODE = '314159';
+let nextPhoneSuffix = 1;
 
 /** A clock the test moves by hand. */
 function fixedClock(start: number): { now: () => Date; advance: (ms: number) => void } {
@@ -44,7 +45,7 @@ function fixedClock(start: number): { now: () => Date; advance: (ms: number) => 
 
 async function seedNumber(
   label: string,
-  e164 = `+1415555${Math.floor(Math.random() * 9000) + 1000}`,
+  e164 = `+1555${String(nextPhoneSuffix++).padStart(7, '0')}`,
 ) {
   const userId = await seedUserWithHub(db, schema, label);
   const [row] = await db

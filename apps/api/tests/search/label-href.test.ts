@@ -9,10 +9,11 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { entityHref } from '../../src/search/routes';
+import { calendarEventRoute, entityHref } from '../../src/search/routes';
 
 const ORG = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const LABEL = '01ARZ3NDEKTSV4RRFFQ69G5FA1';
+const CALENDAR_EVENT = '01ARZ3NDEKTSV4RRFFQ69G5FA2';
 
 describe('label search hit href', () => {
   it('points at the task list with a parseable label filter', () => {
@@ -32,5 +33,21 @@ describe('label search hit href', () => {
     expect(field).toBe('labels');
     expect(op).toBe('eq');
     expect(value).toBe(LABEL);
+  });
+});
+
+describe('other search hit hrefs', () => {
+  it('opens a workspace hit on its served My work page', () => {
+    expect(entityHref(ORG, 'organization', ORG)).toBe(`/orgs/${ORG}/my-work`);
+  });
+
+  it('opens calendar-event entity hits through the global search route', () => {
+    const href = `/search?kind=calendar_event&id=${CALENDAR_EVENT}`;
+    expect(entityHref(ORG, 'calendar_event', CALENDAR_EVENT)).toBe(href);
+  });
+
+  it('opens private calendar-event hits through the global search route', () => {
+    const href = `/search?kind=calendar_event&id=${CALENDAR_EVENT}`;
+    expect(calendarEventRoute(CALENDAR_EVENT).href).toBe(href);
   });
 });

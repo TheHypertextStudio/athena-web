@@ -248,7 +248,7 @@ export async function createAthenaAssignment(input: {
       body: {
         title: `Athena started work on ${access.title}`,
         summary: input.objective,
-        url: `/athena/work/${assignment.id}`,
+        url: '/athena',
         assignmentId: assignment.id,
       },
     });

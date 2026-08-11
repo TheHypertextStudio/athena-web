@@ -46,6 +46,8 @@ interface SearchParamReader {
 /** URL-backed state for the full search page. */
 export interface SearchPageFilters {
   query: string;
+  /** Specific document ids requested by an in-app detail link. */
+  ids: readonly string[];
   families: readonly SearchDocumentFamily[];
   kinds: readonly SearchDocumentKind[];
   sources: readonly SourceSystemKind[];
@@ -64,6 +66,7 @@ export interface SearchHttpQueryParams {
   q: string;
   limit: string;
   cursor?: string;
+  ids?: string;
   families?: string;
   kinds?: string;
   sources?: string;
@@ -83,6 +86,7 @@ export function parseSearchPageFilters(params: SearchParamReader): SearchPageFil
   const legacyKind = enumList<SearchDocumentKind>(params.get('kind'), KIND_SET);
   return {
     query: params.get('q')?.trim() ?? '',
+    ids: csvList(params.get('id') ?? params.get('ids')),
     families: enumList<SearchDocumentFamily>(params.get('families'), FAMILY_SET),
     kinds: kinds.length > 0 ? kinds : legacyKind,
     sources: enumList<SourceSystemKind>(params.get('sources'), SOURCE_SET),
@@ -105,6 +109,7 @@ export function searchPageHref(
 ): string {
   const params = new URLSearchParams(currentParams.toString());
   setParam(params, 'q', filters.query);
+  setCsvParam(params, 'id', filters.ids);
   setCsvParam(params, 'families', filters.families);
   setCsvParam(params, 'kinds', filters.kinds);
   setCsvParam(params, 'sources', filters.sources);
@@ -118,7 +123,7 @@ export function searchPageHref(
   setParam(params, 'to', filters.toDate);
   params.delete('cursor');
   params.delete('href');
-  params.delete('id');
+  params.delete('ids');
   params.delete('kind');
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
@@ -133,6 +138,7 @@ export function searchPageFiltersToHttpQuery(
     q: filters.query,
     limit: String(options.limit),
     ...(options.cursor ? { cursor: options.cursor } : {}),
+    ...(filters.ids.length > 0 ? { ids: filters.ids.join(',') } : {}),
     ...(filters.families.length > 0 ? { families: filters.families.join(',') } : {}),
     ...(filters.kinds.length > 0 ? { kinds: filters.kinds.join(',') } : {}),
     ...(filters.sources.length > 0 ? { sources: filters.sources.join(',') } : {}),

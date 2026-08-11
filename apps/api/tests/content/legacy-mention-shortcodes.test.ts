@@ -34,9 +34,9 @@ describe('rewriteLegacyMentions', () => {
     );
   });
 
-  it('maps the old `person` kind onto the actor vocabulary every other surface uses', () => {
+  it('maps the old `person` kind onto the served actor profile route', () => {
     expect(rewriteLegacyMentions('[mention kind="person" id="m1" label="Ada"]', ORG)).toBe(
-      '[Ada](/orgs/org_1/members/m1 "docket:v1:actor:m1")',
+      '[Ada](/orgs/org_1/people/m1 "docket:v1:actor:m1")',
     );
   });
 

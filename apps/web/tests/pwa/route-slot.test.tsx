@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ReachabilityProvider } from '../../src/components/reachability';
+
 vi.mock('next/navigation', () => ({
   usePathname: () => window.location.pathname,
   useSearchParams: () => new URLSearchParams(window.location.search),
@@ -28,11 +30,18 @@ function at(path: string): void {
   window.history.replaceState(null, '', path);
 }
 
+/** Pretend the browser can, or cannot, start a network navigation. */
+function setOnline(online: boolean): void {
+  Object.defineProperty(navigator, 'onLine', { value: online, configurable: true });
+}
+
 beforeEach(() => {
   at('/today');
+  setOnline(true);
 });
 
 afterEach(() => {
+  setOnline(true);
   vi.clearAllMocks();
 });
 
@@ -64,13 +73,48 @@ describe('RouteSlot', () => {
     expect(screen.getByText('the real page')).toBeInTheDocument();
   });
 
-  it('renders the requested route when the document was replayed under another URL', () => {
+  it('keeps Next’s resolved children during an online soft navigation with a stale document path', () => {
     at('/orgs/o1/tasks/t1');
     render(
       <AppLocationProvider serverPath="/today">
-        <RouteSlot serverPath="/today">
-          <div>the real page</div>
-        </RouteSlot>
+        <ReachabilityProvider reachable>
+          <RouteSlot serverPath="/today">
+            <div>the real page</div>
+          </RouteSlot>
+        </ReachabilityProvider>
+      </AppLocationProvider>,
+    );
+
+    expect(screen.getByText('the real page')).toBeInTheDocument();
+    expect(screen.queryByText('outlet')).not.toBeInTheDocument();
+  });
+
+  it('renders the requested route when the document was replayed while offline', () => {
+    setOnline(false);
+    at('/orgs/o1/tasks/t1');
+    render(
+      <AppLocationProvider serverPath="/today">
+        <ReachabilityProvider reachable>
+          <RouteSlot serverPath="/today">
+            <div>the real page</div>
+          </RouteSlot>
+        </ReachabilityProvider>
+      </AppLocationProvider>,
+    );
+
+    expect(screen.getByText('outlet')).toBeInTheDocument();
+    expect(screen.queryByText('the real page')).not.toBeInTheDocument();
+  });
+
+  it('renders the requested route when the shell cannot reach the server', () => {
+    at('/orgs/o1/tasks/t1');
+    render(
+      <AppLocationProvider serverPath="/today">
+        <ReachabilityProvider reachable={false}>
+          <RouteSlot serverPath="/today">
+            <div>the real page</div>
+          </RouteSlot>
+        </ReachabilityProvider>
       </AppLocationProvider>,
     );
 

@@ -22,28 +22,25 @@ type Kind = (typeof KINDS)[number];
 const ORG = 'org_1';
 const ID = 'e_1';
 
-/** The path segment each kind is served under, written out rather than derived from the kind. */
+/** The served in-app destination for each mention kind, written out rather than derived. */
 const EXPECTED: Readonly<Record<Kind, string>> = {
-  task: 'tasks',
-  project: 'projects',
-  program: 'programs',
-  initiative: 'initiatives',
-  cycle: 'cycles',
-  milestone: 'milestones',
-  team: 'teams',
-  // Not `actors`: a person is served under the workspace's members.
-  actor: 'members',
-  agent_session: 'sessions',
-  // A comment and an update are both read in the activity stream rather than at a page of their
-  // own, so they deliberately share one route.
-  comment: 'activity',
-  update: 'activity',
+  task: `/orgs/${ORG}/tasks/${ID}`,
+  project: `/orgs/${ORG}/projects/${ID}`,
+  program: `/orgs/${ORG}/programs/${ID}`,
+  initiative: `/orgs/${ORG}/initiatives/${ID}`,
+  cycle: `/orgs/${ORG}/cycles/${ID}`,
+  milestone: `/orgs/${ORG}/projects?milestoneId=${ID}`,
+  team: `/orgs/${ORG}/teams/${ID}`,
+  actor: `/orgs/${ORG}/people/${ID}`,
+  agent_session: `/orgs/${ORG}/sessions/${ID}`,
+  comment: `/orgs/${ORG}/search?kind=comment&id=${ID}`,
+  update: `/orgs/${ORG}/search?kind=update&id=${ID}`,
 };
 
 describe('entityMentionHref', () => {
   it.each(KINDS)('routes a %s reference to its own surface', (entityKind) => {
     expect(entityMentionHref(ORG, { kind: 'entity', entityKind, entityId: ID })).toBe(
-      `/orgs/${ORG}/${EXPECTED[entityKind]}/${ID}`,
+      EXPECTED[entityKind],
     );
   });
 

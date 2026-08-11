@@ -1,10 +1,9 @@
 'use client';
 
-import { cn } from '@docket/ui';
-import { buttonVariants } from '@docket/ui/primitives';
-import Link from 'next/link';
 import { useAppParams } from '@/lib/app-location';
 import type { JSX } from 'react';
+
+import { AppContentFallback } from '@/components/app-content-fallback';
 
 /**
  * The in-shell "not found" screen for unmatched org-scoped routes.
@@ -26,19 +25,10 @@ export default function OrgNotFoundPage(): JSX.Element {
   const orgId = params.orgId;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-2xl flex-col items-center justify-center gap-4 p-8 text-center">
-      <p className="text-on-surface-variant text-xs font-semibold">404</p>
-      <h1 className="text-title-large">This page doesn&apos;t exist</h1>
-      <p className="text-on-surface-variant text-body-medium max-w-sm leading-relaxed">
-        The page you were looking for couldn&apos;t be found. It may have moved, or the link may be
-        out of date.
-      </p>
-      <Link
-        href={`/orgs/${orgId}/my-work`}
-        className={cn(buttonVariants({ variant: 'default' }), 'mt-2')}
-      >
-        Back to My Work
-      </Link>
-    </div>
+    <AppContentFallback
+      kind="not-found"
+      returnHref={`/orgs/${orgId}/my-work`}
+      returnLabel="Back to My Work"
+    />
   );
 }

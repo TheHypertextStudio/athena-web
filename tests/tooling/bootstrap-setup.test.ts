@@ -162,7 +162,10 @@ describe('mandatory production provider catalog', () => {
       })
       .flatMap((step) => step.note);
     expect(identityCopy.join('\n')).toContain('Redirect on update');
-    expect(identityCopy.join('\n')).toContain('Setup URL field may turn gray');
+    expect(identityCopy.join('\n')).toContain('clear "Request user authorization (OAuth) during');
+    expect(identityCopy.join('\n')).toContain('/internal/integrations/github/callback');
+    expect(identityCopy.join('\n')).toContain('Any account');
+    expect(identityCopy.join('\n')).not.toContain('Setup URL field may turn gray');
     expect(identityCopy.join('\n')).not.toContain('Expire user authorization tokens');
     expect(connectorCopy.join('\n')).toContain('Permissions & events');
     expect(connectorCopy.join('\n')).toContain('Repository permissions');

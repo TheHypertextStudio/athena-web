@@ -21,6 +21,12 @@ test('a person can reach Notion from Connections and create the databases', asyn
     body: { provider: 'notion', pattern: 'connector' },
   });
   expect(created.ok).toBe(true);
+  const integrationId = (created.body as { id: string }).id;
+  const verified = await apiFetch(page, `/v1/orgs/${orgId}/integrations/${integrationId}/verify`, {
+    method: 'POST',
+  });
+  expect(verified.ok).toBe(true);
+  expect((verified.body as { status?: string }).status).toBe('connected');
 
   // From here on, only clicks.
   await page.goto(orgHref(orgId, 'settings/connections'), { waitUntil: 'domcontentloaded' });
@@ -28,7 +34,7 @@ test('a person can reach Notion from Connections and create the databases', asyn
   await expect(notionCard).toBeVisible({ timeout: TIMEOUTS.pageReady });
 
   // The card must offer a way in. Without this link the page below is URL-only.
-  await notionCard.getByRole('link', { name: /Manage|Set up/ }).click();
+  await notionCard.getByRole('link', { name: 'Manage' }).click();
   await expect(page.getByRole('heading', { name: 'Tables Docket builds for you' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });

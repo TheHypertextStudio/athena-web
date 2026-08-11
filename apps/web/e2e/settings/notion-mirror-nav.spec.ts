@@ -40,10 +40,17 @@ test('Connections has a nav row and reaches the real team workspace, not the cal
   if (!created.ok) throw new Error(`create team org ${String(created.status)}`);
   const orgId = (created.body as { organization: { id: string } }).organization.id;
 
-  await apiFetch(page, `/v1/orgs/${orgId}/integrations`, {
+  const notionConnection = await apiFetch(page, `/v1/orgs/${orgId}/integrations`, {
     method: 'POST',
     body: { provider: 'notion', pattern: 'connector' },
   });
+  if (!notionConnection.ok) throw new Error(`connect Notion ${String(notionConnection.status)}`);
+  const notionId = (notionConnection.body as { id: string }).id;
+  const verified = await apiFetch(page, `/v1/orgs/${orgId}/integrations/${notionId}/verify`, {
+    method: 'POST',
+  });
+  if (!verified.ok) throw new Error(`verify Notion ${String(verified.status)}`);
+  expect((verified.body as { status?: string }).status).toBe('connected');
 
   // 1. The sidebar shows it. This is the direct fix for "where does this even belong" — Connections
   // was previously absent from the team-workspace registry entirely.
@@ -64,9 +71,9 @@ test('Connections has a nav row and reaches the real team workspace, not the cal
   });
   await expect(page.getByText(/This workspace/)).toBeVisible();
 
-  // 3. Notion, reached from that page, one hop deeper.
+  // 3. Notion, reached from that page after its completed connection ceremony, one hop deeper.
   const notionCard = page.locator('li').filter({ hasText: 'Notion' }).first();
-  await notionCard.getByRole('link', { name: /Manage|Set up/ }).click();
+  await notionCard.getByRole('link', { name: 'Manage' }).click();
   await expect(page.getByRole('heading', { name: 'Notion', exact: true })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });

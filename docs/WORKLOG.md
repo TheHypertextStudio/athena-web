@@ -27,6 +27,10 @@
   labels, and setup callback proxy; web typecheck passes. The full local build was stopped rather
   than left running after it spawned a long-running Next worker; CI will validate the production
   build after the direct-main push.
+- **Notes**: The first direct-main CI run passed lint, types, and build, but its tooling test still
+  expected the obsolete OAuth-during-install copy and its Notion E2E fixtures created a pending
+  record before navigating. The follow-up updates the contract assertion and completes the mock
+  Notion connection before its UI navigation assertion.
 
 ---
 

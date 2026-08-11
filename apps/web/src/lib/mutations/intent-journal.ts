@@ -107,7 +107,7 @@ export class IntentJournal<T> {
     const existing = this.fields.get(key);
     if (existing) return existing;
     const created: FieldState<T> = {
-      authoritative: this.authoritative.get(key) ?? initial,
+      authoritative: this.authoritative.has(key) ? (this.authoritative.get(key) as T) : initial,
       authoritativeVersion: this.authoritativeVersions.get(key) ?? 0,
       nextVersion: 0,
       latest: undefined,

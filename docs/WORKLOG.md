@@ -7,35 +7,6 @@
 
 ## Active Tasks
 
-### [AGENDA-ANCHOR-001] Anchor draggable quick create to its selected draft
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-08-11
-- **Priority**: P1
-- **Description**: Replace the shell-edge default for Agenda quick create with Google
-  Calendar-like virtual-anchor placement. The dialog remains portaled into the shell-owned sibling
-  overlay and draggable, but initially sits immediately beside the selected draft with collision
-  fallback and hands positioning authority to the user after the first pointer or keyboard move.
-- **Subtasks**:
-  - [x] Trace the current portal, host, anchor, and clamping coordinate contracts.
-  - [x] Refine the approved positioning design with exact gap, alignment, and fallback rules.
-  - [x] Add red/green unit and integration coverage.
-  - [x] Implement anchor-relative placement and manual-position handoff.
-  - [ ] Deploy and verify the exact production SHA.
-- **Blockers**: None.
-- **Notes**: The existing implementation already portaled into the correct sibling host. The defect
-  was the render-time point calculation: the selected draft ref was not populated until commit, so
-  placement fell back to the shell edge. The new animation-frame placement reads the virtual anchor
-  after commit, chooses left/right collision candidates, and stops automatic anchoring after the
-  first pointer or keyboard move. Focused tests, 1,957 web tests, repository format/type/lint/build
-  gates, and the two-test responsive Playwright evidence file are green. The first production E2E
-  workflow exposed a pre-existing mobile calendar-drawer overflow: the Linked tasks heading and
-  its three controls were forced onto one row. The narrow layout now stacks the heading above a
-  wrapping control row; the exact read-only drawer journey passes twice against an isolated
-  production build. Exact-SHA deployment verification remains pending for that gate repair.
-
----
-
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW
@@ -4603,6 +4574,39 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [AGENDA-ANCHOR-001] Anchor draggable quick create to its selected draft
+
+- **Completed**: 2026-08-11
+- **Duration**: 1 day
+- **Priority**: P1
+- **Summary**: Agenda quick create now remains a true modal portaled into the shell-owned sibling
+  overlay while initially positioning beside its selected timed or all-day draft. Placement resolves
+  after the portal commits, prefers the draft's left side, flips or clamps around collisions, and
+  transfers position ownership after the first pointer or keyboard move. The draft stays visible,
+  Save remains disabled without required information, and no explicit validation message is shown.
+- **Files Changed**: Agenda and shared scheduling anchor propagation, quick-create orchestration,
+  pure anchored/clamped positioning geometry, focused unit/integration/E2E coverage, responsive
+  screenshots, the quick-create craft audit and design/implementation records, plus a narrow drawer
+  containment correction exposed by the production E2E gate.
+- **Validation**: Focused Vitest passed 101 tests across four files; web passed 247 files / 1,957
+  tests; repository formatting, typechecking, linting, tests, and production build passed. The
+  responsive quick-create Playwright evidence passed 2/2. The mobile read-only drawer journey that
+  exposed the rollout overflow passed twice against an isolated production build. For exact product
+  SHA `2b7dc92dc7c30c4c3f28abc23759292778a0740f`, all four GitHub E2E shards and every CI/deployment
+  job passed, Vercel completed, the production web returned HTTP 200, and API health returned
+  `{"status":"ok"}`.
+- **Production evidence**: Authenticated live geometry measured a 544px dialog ending at
+  `1511.89px` before an Agenda beginning at `1529.61px`; the selected draft remained visible across
+  a `65.72px` time gutter. Keyboard movement shifted the dialog seven pixels left without entering
+  Agenda. Save was disabled, no dialog alert rendered, and Cancel removed the local draft without a
+  write.
+- **Learnings**: The portal host was already correct; the defect was reading the selection ref before
+  the draft and portal had committed. Virtual-anchor measurement belongs after commit, while manual
+  movement must permanently supersede automatic placement for that draft. Exact production gates
+  can also expose adjacent responsive defects worth fixing rather than classifying away as flakes.
+
+---
 
 ### [CREATE-OBJECT-001] Global object creation composer
 

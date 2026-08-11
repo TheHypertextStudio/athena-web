@@ -219,7 +219,7 @@ Run: `pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm buil
 
 Expected: every command exits `0`.
 
-- [ ] **Step 5: Complete the worklog and commit atomically**
+- [x] **Step 5: Complete the worklog and commit atomically**
 
 Move `[AGENDA-ANCHOR-001]` from Active Tasks to Completed Tasks with the exact test and browser
 evidence, then commit the implementation, tests, screenshots, audit, plan, and worklog using the
@@ -233,17 +233,17 @@ repository's required clean-index staging chain.
 
 **Interfaces:** Production `main`, GitHub CI/E2E, Vercel, and the public web/API health endpoints.
 
-- [ ] **Step 1: Rebase or fast-forward against current `origin/main`**
+- [x] **Step 1: Rebase or fast-forward against current `origin/main`**
 
 Fetch `origin/main`, verify no upstream drift or merge commits, and fast-forward the canonical main
 worktree to the feature commit.
 
-- [ ] **Step 2: Push `main` and monitor exact-SHA checks**
+- [x] **Step 2: Push `main` and monitor exact-SHA checks**
 
 Require successful CI, all four E2E shards, the production API/admin jobs, scheduler reconciliation,
 and Vercel deployment for the pushed SHA.
 
-- [ ] **Step 3: Verify production runtime**
+- [x] **Step 3: Verify production runtime**
 
 Require HTTP `200` from `https://docket.hypertext.studio/`, `{"status":"ok"}` from
 `https://docket-api.hypertext.studio/v1/health`, and an authenticated browser measurement proving

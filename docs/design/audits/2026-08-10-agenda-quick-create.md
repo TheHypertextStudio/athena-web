@@ -47,3 +47,8 @@ that exclusion boundary intact. Save was disabled for the untitled draft, no dia
 and cancel removed the local draft without a write. The expanded schedule exposed separate start
 date, start time, and end time controls. Time-zone search returned Los Angeles for `PST`, `Pacific
 Time`, `America/Los_Angeles`, and `Los Angeles`, with combobox/listbox linkage and an active option.
+
+Final product SHA `2b7dc92dc7c30c4c3f28abc23759292778a0740f` preserved that quick-create
+implementation and added only the responsive drawer containment correction exposed during rollout.
+All four E2E shards, CI, API/admin deployment, scheduler reconciliation, Vercel promotion, web HTTP
+200, and API health passed for that exact SHA.

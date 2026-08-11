@@ -5,7 +5,9 @@
  * One projection shared by both feed surfaces (cross-org personal + per-workspace). The row
  * carries typed `source` attribution, the canonical `entity`/`actor`, the typed `detail`, and a
  * derived `rendering` hint so heterogeneous origins render through one homogeneous row.
- * `relevance` is the recipient reason on the personal feed, and `null` on the workspace firehose.
+ * `actorIsViewer` compares the resolved Docket actor with the caller's actor ids so the client can
+ * say "You" without guessing from names. `relevance` is retained for compatibility with older
+ * recipient projections and is `null` on context-wide timelines.
  */
 import { db, event } from '@docket/db';
 import type { EventKind, StreamEventOut, StreamRelevance } from '@docket/types';
@@ -60,11 +62,13 @@ function categoryFor(kind: EventKind): string {
  * Project one event row (+ its personal-feed relevance) to the feed DTO.
  *
  * @param row - The event row.
- * @param relevance - The recipient reason (personal feed), or `null` (workspace firehose).
+ * @param relevance - The recipient reason for a legacy projection, or `null` for timelines.
+ * @param viewerActorIds - Docket actor ids that represent the current caller in this context.
  */
 export function toStreamEventOut(
   row: EventRow,
   relevance: StreamRelevance | null,
+  viewerActorIds: ReadonlySet<string> = new Set(),
 ): z.input<typeof StreamEventOut> {
   return {
     id: row.id,
@@ -83,6 +87,7 @@ export function toStreamEventOut(
     entity: row.entity,
     participants: row.participants,
     detail: row.detail,
+    actorIsViewer: Boolean(row.actor?.docketActorId && viewerActorIds.has(row.actor.docketActorId)),
     relevance,
     rendering: { icon: row.kind, category: categoryFor(row.kind) },
     createdAt: row.createdAt.toISOString(),

@@ -45,6 +45,7 @@ const baseEvent = {
     },
   ],
   detail: { schema: 'docket.state_change' as const, fromState: 'In Progress', toState: 'Done' },
+  actorIsViewer: false,
   relevance: 'owned' as const,
   rendering: { icon: 'check', category: 'progress' },
   createdAt: '2026-06-29T17:00:01.000Z',
@@ -83,6 +84,14 @@ describe('StreamEventOut', () => {
       StreamEventOut.safeParse({ ...baseEvent, source: { ...baseEvent.source, system: 'other' } })
         .success,
     ).toBe(false);
+  });
+
+  it('requires an explicit viewer relationship', () => {
+    const withoutViewer = Object.fromEntries(
+      Object.entries(baseEvent).filter(([key]) => key !== 'actorIsViewer'),
+    );
+    expect(StreamEventOut.safeParse(withoutViewer).success).toBe(false);
+    expect(StreamEventOut.safeParse({ ...baseEvent, actorIsViewer: 'yes' }).success).toBe(false);
   });
 
   it('accepts the generic detail variant for unmapped events', () => {

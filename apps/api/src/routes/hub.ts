@@ -6,7 +6,7 @@
  * an active human Actor in and aggregates across them. Read-only projections only — never
  * merges tenant data (fan-out queries per membership, each item carries its own org id).
  */
-import { auditEvent, db, event, eventRecipient, hub as hubTable, notification } from '@docket/db';
+import { auditEvent, db, event, hub as hubTable, notification } from '@docket/db';
 import {
   HubActivityOut,
   HubInboxOut,
@@ -37,7 +37,7 @@ import { zJson, zQuery } from '../lib/validate';
 import { SearchHttpQuery } from '../search/http';
 import { searchWorkspace } from '../search/query';
 
-import { callerOrgIds, toAuditEventOut, toNotificationOut } from './hub-helpers';
+import { callerActorIds, callerOrgIds, toAuditEventOut, toNotificationOut } from './hub-helpers';
 import { toStreamEventOut } from './stream-helpers';
 import { buildHubTodayPayload } from './hub-today';
 import { buildHubPortfolioPayload } from './hub-portfolio';
@@ -209,9 +209,9 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
       tag: 'Hub',
       summary: 'Get the cross-org activity stream',
       response: StreamPageOut,
-      description: `Return the caller's personalized **"concerns me" event stream** across every org they belong to — the feed of external observations (provider activity) that name the caller as a recipient. This is distinct from \`/hub/activity\`'s raw org audit log: it reads the \`observationRecipient\` index (the per-user denormalization of who each observation concerns) joined to its \`observation\`, scoped to the caller (\`observationRecipient.userId = session.user.id\`) and to the caller's org set, so it is the union of "things that pertain to me" rather than everything that happened.
+      description: `Return the complete event timeline across every workspace the caller belongs to. This is a context-wide history rather than a personalized attention queue: every event in the caller's active workspace set is eligible, whether or not it names the caller as a recipient. Each event retains its organization id so workspace boundaries remain explicit, and \`actorIsViewer\` identifies actions performed by the caller without name matching.
 
-**Filtering & pagination:** supports attribute filters (an encoded \`filter\` expression compiled to SQL), plus \`provider\` and \`kind\` narrowing. It is keyset-paginated on the recipient's denormalized \`(occurredAt, observationId)\` — the exact index this table exists to serve — fetching \`limit + 1\` to detect more and returning an opaque \`nextCursor\` (encoded \`occurredAt\`+id) when another page exists; \`order=asc|desc\` flips the sort. Each event carries the \`reason\` it reached the caller. A caller with no memberships gets an empty page. Mounted outside the typed RPC contract (a raw event-stream surface). Session-only, no capability; 401 when unauthenticated.`,
+**Filtering & pagination:** supports attribute filters (an encoded \`filter\` expression compiled to SQL), plus \`system\`, \`kind\`, and \`entityKind\` narrowing. It is keyset-paginated on \`(occurredAt, eventId)\`, fetching \`limit + 1\` to detect more and returning an opaque \`nextCursor\` when another page exists; \`order=asc|desc\` flips the sort. A caller with no memberships gets an empty page. Session-only, no capability; 401 when unauthenticated.`,
     }),
     zQuery(StreamQuery),
     async (c) => {
@@ -220,12 +220,9 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
       const q = c.req.valid('query');
       const orgIds = await callerOrgIds(session.user.id);
       if (orgIds.length === 0) return ok(c, StreamPageOut, { items: [] });
+      const viewerActorIds = new Set(await callerActorIds(session.user.id));
 
-      // Personal "concerns me" feed: the recipient index joined to its event, scoped to
-      // the caller's orgs, attribute-filtered in SQL, keyset-paginated on the recipient's
-      // denormalized (occurredAt, eventId) — the index this table is built for.
       const conds: SQL[] = [
-        eq(eventRecipient.userId, session.user.id),
         inArray(event.organizationId, orgIds),
         ...buildFilterConditions(decodeFilter(q.filter)),
       ];
@@ -233,21 +230,16 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
       if (q.kind) conds.push(eq(event.kind, q.kind));
       if (q.entityKind) conds.push(eq(event.entityKind, q.entityKind));
       const cursor = decodeCursor(q.cursor);
-      if (cursor) {
-        conds.push(
-          cursorCondition(cursor, q.order, eventRecipient.occurredAt, eventRecipient.eventId),
-        );
-      }
+      if (cursor) conds.push(cursorCondition(cursor, q.order));
 
       const orderBy =
         q.order === 'asc'
-          ? [asc(eventRecipient.occurredAt), asc(eventRecipient.eventId)]
-          : [desc(eventRecipient.occurredAt), desc(eventRecipient.eventId)];
+          ? [asc(event.occurredAt), asc(event.id)]
+          : [desc(event.occurredAt), desc(event.id)];
 
       const rows = await db
-        .select({ ev: event, reason: eventRecipient.reason })
-        .from(eventRecipient)
-        .innerJoin(event, eq(event.id, eventRecipient.eventId))
+        .select()
+        .from(event)
         .where(and(...conds))
         .orderBy(...orderBy)
         .limit(q.limit + 1);
@@ -256,8 +248,8 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
       const page = hasMore ? rows.slice(0, q.limit) : rows;
       const last = page[page.length - 1];
       return ok(c, StreamPageOut, {
-        items: page.map((r) => toStreamEventOut(r.ev, r.reason)),
-        ...(hasMore && last ? { nextCursor: encodeCursor(last.ev.occurredAt, last.ev.id) } : {}),
+        items: page.map((row) => toStreamEventOut(row, null, viewerActorIds)),
+        ...(hasMore && last ? { nextCursor: encodeCursor(last.occurredAt, last.id) } : {}),
       });
     },
   )

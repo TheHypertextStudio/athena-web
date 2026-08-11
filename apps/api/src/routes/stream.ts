@@ -2,10 +2,8 @@
  * `@docket/api` — per-workspace stream router (ORG-SCOPED, mounted at `/v1/orgs/:orgId/stream`).
  *
  * @remarks
- * The workspace firehose: every {@link event} in the org, newest-first, attribute-
- * filtered in SQL and keyset-paginated. Unlike the cross-org personal stream (in `hub.ts`,
- * relevance-curated via `event_recipient`), this surface shows all org activity, so
- * `relevance` is always `null`. Reads `orgId` from `orgContextMiddleware`.
+ * The workspace timeline: every {@link event} in the org, newest-first, attribute-filtered in
+ * SQL and keyset-paginated. Reads the workspace and viewer actor from `orgContextMiddleware`.
  */
 import { db, event, savedView } from '@docket/db';
 import { StreamPageOut, StreamQuery } from '@docket/types';
@@ -63,7 +61,7 @@ Filtering & paging: \`?system\` and \`?kind\` are convenience quick-filters; \`?
   }),
   zQuery(StreamQuery),
   async (c) => {
-    const { orgId } = c.get('actorCtx');
+    const { orgId, actorId } = c.get('actorCtx');
     const q = c.req.valid('query');
 
     // `?viewId` was declared on the query schema and validated, then never read — so a client
@@ -99,7 +97,7 @@ Filtering & paging: \`?system\` and \`?kind\` are convenience quick-filters; \`?
     const page = hasMore ? rows.slice(0, q.limit) : rows;
     const last = page[page.length - 1];
     return ok(c, StreamPageOut, {
-      items: page.map((r) => toStreamEventOut(r, null)),
+      items: page.map((r) => toStreamEventOut(r, null, new Set([actorId]))),
       ...(hasMore && last ? { nextCursor: encodeCursor(last.occurredAt, last.id) } : {}),
     });
   },

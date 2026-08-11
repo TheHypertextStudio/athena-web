@@ -56,11 +56,13 @@ export type StreamRendering = z.infer<typeof StreamRendering>;
  *
  * @remarks
  * Reuses the canonical `source`/`actor`/`entity`/`detail` shapes verbatim (one contract,
- * not a parallel one) and adds the feed-only `relevance` + `rendering`. The client derives
- * the coarse origin badge from `source.system === 'docket'`.
+ * not a parallel one) and adds viewer-relative identity plus the feed-only `relevance` and
+ * `rendering`. The client derives the coarse origin badge from `source.system === 'docket'`.
  */
 export const StreamEventOut = EventOut.omit({ userId: true, externalId: true })
   .extend({
+    /** Whether the resolved actor is the caller in this event's workspace. */
+    actorIsViewer: z.boolean(),
     /** Why this reached the caller (personal feed); null in the workspace firehose. */
     relevance: StreamRelevance.nullable(),
     rendering: StreamRendering,

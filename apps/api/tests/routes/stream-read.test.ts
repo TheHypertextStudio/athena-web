@@ -1,12 +1,12 @@
 /**
  * `@docket/api` — unified stream read surfaces: the cross-org personal `/v1/hub/stream`
- * (recipient-curated) and the per-workspace `/v1/orgs/:orgId/stream` firehose, plus the
- * ViewFilter→SQL translation, keyset pagination, relevance labels, and org isolation.
+ * and the per-workspace `/v1/orgs/:orgId/stream`, plus ViewFilter→SQL translation, keyset
+ * pagination, viewer identity, and org isolation.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { EventKind, SourceSystemKind, StreamPageOut } from '@docket/types';
+import type { ActorRef, EventKind, SourceSystemKind, StreamPageOut } from '@docket/types';
 import type { z } from 'zod';
 
 import {
@@ -44,16 +44,19 @@ async function seedUser(): Promise<string> {
   return u!.id;
 }
 
-async function joinOrg(userId: string, orgId: string): Promise<void> {
-  await db
+async function joinOrg(userId: string, orgId: string): Promise<string> {
+  const [membership] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'U', userId });
+    .values({ organizationId: orgId, kind: 'human', displayName: 'U', userId })
+    .returning({ id: schema.actor.id });
+  return membership!.id;
 }
 
 interface EventOpts {
   system?: SourceSystemKind;
   kind?: EventKind;
   title?: string;
+  actor?: ActorRef;
   occurredAt: Date;
 }
 
@@ -67,6 +70,7 @@ async function seedEvent(orgId: string, opts: EventOpts): Promise<string> {
       kind: opts.kind ?? 'status_change',
       occurredAt: opts.occurredAt,
       title: opts.title ?? 'Event',
+      actor: opts.actor,
       dedupeKey: `k-${String(seq)}`,
     })
     .returning({ id: schema.event.id });
@@ -91,7 +95,7 @@ const T1 = new Date('2026-06-29T10:00:00.000Z');
 const T2 = new Date('2026-06-29T11:00:00.000Z');
 const T3 = new Date('2026-06-29T12:00:00.000Z');
 
-/** Seed a user joined to a base org with three recipient events (linear/docket/slack). */
+/** Seed a user joined to a base org with three events (linear/docket/slack). */
 async function seedPersonal(): Promise<{ userId: string; orgId: string }> {
   const userId = await seedUser();
   const { orgId } = await seedBaseOrg(db, schema);
@@ -120,18 +124,36 @@ async function seedPersonal(): Promise<{ userId: string; orgId: string }> {
   return { userId, orgId };
 }
 
-describe('GET /v1/hub/stream (personal, recipient-curated)', () => {
+describe('GET /v1/hub/stream (membership-wide timeline)', () => {
   it('401 without a session', async () => {
     expect((await appWithSession(hub, null).request('/stream')).status).toBe(401);
   });
 
-  it('returns the caller’s events newest-first with source + relevance', async () => {
+  it('returns all events from the caller’s workspaces newest-first', async () => {
     const { userId } = await seedPersonal();
     const res = await appWithSession(hub, fakeSession(userId)).request('/stream');
     const body = await page(res);
     expect(body.items.map((i) => i.kind)).toEqual(['comment', 'status_change', 'mention']);
     expect(body.items.map((i) => i.source.system)).toEqual(['slack', 'docket', 'linear']);
-    expect(body.items.every((i) => i.relevance === 'owned')).toBe(true);
+    expect(body.items.every((i) => i.relevance === null)).toBe(true);
+  });
+
+  it('marks events performed by the caller in that workspace', async () => {
+    const userId = await seedUser();
+    const { orgId } = await seedBaseOrg(db, schema);
+    const actorId = await joinOrg(userId, orgId);
+    const actor: ActorRef = {
+      source: 'docket',
+      externalId: actorId,
+      displayName: 'Willie Chalmers III',
+      avatarUrl: null,
+      docketActorId: actorId,
+    };
+    await seedEvent(orgId, { actor, title: 'Mine', occurredAt: T2 });
+
+    const body = await page(await appWithSession(hub, fakeSession(userId)).request('/stream'));
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]!.actorIsViewer).toBe(true);
   });
 
   it('applies the system quick-filter', async () => {
@@ -170,7 +192,7 @@ describe('GET /v1/hub/stream (personal, recipient-curated)', () => {
 
   it('isolates other orgs the caller is not a member of', async () => {
     const { userId } = await seedPersonal();
-    // A recipient row for the same user in an org they never joined must not leak.
+    // Even a legacy recipient row for the same user must not leak across memberships.
     const other = await seedBaseOrg(db, schema);
     const o = await seedEvent(other.orgId, { kind: 'created', title: 'Other', occurredAt: T3 });
     await recip(o, userId, other.orgId, T3);
@@ -190,6 +212,30 @@ describe('GET /v1/orgs/:orgId/stream (workspace firehose)', () => {
     expect(body.items).toHaveLength(2);
     expect(body.items.map((i) => i.title)).toEqual(['B', 'A']);
     expect(body.items.every((i) => i.relevance === null)).toBe(true);
+  });
+
+  it('marks only events performed by the current workspace actor', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const mine: ActorRef = {
+      source: 'docket',
+      externalId: humanActorId,
+      displayName: 'Willie Chalmers III',
+      avatarUrl: null,
+      docketActorId: humanActorId,
+    };
+    const theirs: ActorRef = {
+      source: 'docket',
+      externalId: 'actor_someone_else',
+      displayName: 'Morgan Lee',
+      avatarUrl: null,
+      docketActorId: null,
+    };
+    await seedEvent(orgId, { actor: mine, title: 'Mine', occurredAt: T2 });
+    await seedEvent(orgId, { actor: theirs, title: 'Theirs', occurredAt: T1 });
+
+    const app = appWithActor(stream, orgId, ['view'], humanActorId);
+    const body = await page(await app.request('/'));
+    expect(body.items.map((item) => item.actorIsViewer)).toEqual([true, false]);
   });
 
   it('applies a saved view’s stored filters', async () => {

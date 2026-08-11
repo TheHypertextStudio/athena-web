@@ -58,13 +58,24 @@ const UPDATE_CHECK_THROTTLE_MS = 60_000;
  */
 const APPLY_FALLBACK_MS = 4_000;
 
+/** How long to leave the final visible acknowledgement before the hard reload fallback. */
+const RELOADING_NOTICE_MS = 250;
+
+/** The visible lifecycle of one offered service-worker update. */
+type UpdatePhase = 'ready' | 'applying' | 'reloading' | 'failed';
+
 /** Published service-worker state. */
 interface ServiceWorkerValue {
   /** Applies the waiting update and reloads, or `null` when no update is waiting. */
   readonly applyUpdate: (() => void) | null;
+  /** The visible phase of the offered update, or `null` without an active offer. */
+  readonly updatePhase: UpdatePhase | null;
 }
 
-const ServiceWorkerContext = createContext<ServiceWorkerValue>({ applyUpdate: null });
+const ServiceWorkerContext = createContext<ServiceWorkerValue>({
+  applyUpdate: null,
+  updatePhase: null,
+});
 
 /** Read the current service-worker update state. */
 export function useServiceWorkerUpdate(): ServiceWorkerValue {
@@ -74,8 +85,15 @@ export function useServiceWorkerUpdate(): ServiceWorkerValue {
 /** Registers the worker and publishes update state to the tree. */
 export function ServiceWorkerProvider({ children }: { children: ReactNode }): JSX.Element {
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
+  const [updatePhase, setUpdatePhase] = useState<UpdatePhase | null>(null);
   const reloadingRef = useRef(false);
   const lastCheckRef = useRef(0);
+  const updatePhaseRef = useRef<UpdatePhase | null>(null);
+
+  const setPhase = useCallback((phase: UpdatePhase | null): void => {
+    updatePhaseRef.current = phase;
+    setUpdatePhase(phase);
+  }, []);
 
   useEffect(() => {
     // A truthiness check, not `'serviceWorker' in navigator`. The `in` form is true whenever the
@@ -110,6 +128,7 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
       worker.addEventListener('statechange', onStateChange);
       offeredListeners.push([worker, onStateChange]);
       setWaiting(worker);
+      setPhase('ready');
     };
 
     const onControllerChange = (): void => {
@@ -179,10 +198,14 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
         worker.removeEventListener('statechange', listener);
       }
     };
-  }, []);
+  }, [setPhase]);
 
   const applyUpdate = useCallback((): void => {
+    if (updatePhaseRef.current === 'applying' || updatePhaseRef.current === 'reloading') {
+      return;
+    }
     if (!waiting) {
+      setPhase('failed');
       return;
     }
     if (waiting.state === 'redundant') {
@@ -190,25 +213,42 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
       // statechange withdrawal normally clears the banner first; this is the belt for the race
       // where the click lands in between.
       setWaiting(null);
+      setPhase('failed');
       return;
     }
+    setPhase('applying');
     // `type`, never `message`: the error-source policy's AST scan flags any property named
     // `message` under `src/`, and the worker matches on `type` accordingly.
-    waiting.postMessage({ type: 'SKIP_WAITING' });
+    try {
+      waiting.postMessage({ type: 'SKIP_WAITING' });
+    } catch {
+      // The worker can become unusable between offering and the click. The card provides the
+      // application-owned recovery instead of surfacing browser-specific exception text.
+      setPhase('failed');
+      return;
+    }
     // No optimistic dismissal: the banner clears by the page reloading (controllerchange), so a
     // failed handshake can never silently swallow the prompt. If activation stalls, force the
     // reload — see APPLY_FALLBACK_MS.
+    window.setTimeout(() => {
+      if (!reloadingRef.current) {
+        setPhase('reloading');
+      }
+    }, APPLY_FALLBACK_MS - RELOADING_NOTICE_MS);
     window.setTimeout(() => {
       if (!reloadingRef.current) {
         reloadingRef.current = true;
         window.location.reload();
       }
     }, APPLY_FALLBACK_MS);
-  }, [waiting]);
+  }, [setPhase, waiting]);
 
   const value = useMemo<ServiceWorkerValue>(
-    () => ({ applyUpdate: waiting ? applyUpdate : null }),
-    [waiting, applyUpdate],
+    () => ({
+      applyUpdate: waiting || updatePhase === 'failed' ? applyUpdate : null,
+      updatePhase: waiting || updatePhase === 'failed' ? updatePhase : null,
+    }),
+    [waiting, updatePhase, applyUpdate],
   );
 
   return <ServiceWorkerContext value={value}>{children}</ServiceWorkerContext>;
@@ -216,26 +256,57 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
 
 /**
  * The "new version ready" prompt: a card docked at the bottom of the sidebar, above the account
- * row. The whole card is the action — one label, one press, no explanatory copy. It wears MD3's
- * secondary-container role, the same tonal-emphasis fill a filled tonal button uses, so it reads
- * as a prompt worth pressing rather than another resting nav row.
+ * row. Its visual state is intentionally separate from the worker handshake: the card makes a
+ * completed click legible while the worker still owns activation and page takeover.
  */
 export function UpdateCard({ onApply }: { readonly onApply: () => void }): JSX.Element {
+  const { updatePhase } = useServiceWorkerUpdate();
+  const phase = updatePhase ?? 'ready';
+  const isApplying = phase === 'applying';
+  const isReloading = phase === 'reloading';
+  const isFailed = phase === 'failed';
+  const actionLabel = isApplying
+    ? 'Applying update…'
+    : isReloading
+      ? 'Reloading…'
+      : isFailed
+        ? 'Retry'
+        : 'Reload now';
+  const title = isApplying
+    ? 'Applying update…'
+    : isReloading
+      ? 'Reloading…'
+      : isFailed
+        ? 'Couldn’t apply update'
+        : 'Update available';
+
   return (
-    <div role="status" aria-live="polite">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy={isApplying || isReloading ? 'true' : undefined}
+      className="bg-secondary-container text-on-secondary-container shadow-level1 rounded-lg px-3 py-2.5"
+    >
+      <p className="text-label-large">{title}</p>
+      {!isApplying && !isReloading && (
+        <p className="text-body-small mt-0.5">Reload to use the latest version</p>
+      )}
       <button
         type="button"
         onClick={onApply}
+        disabled={isApplying || isReloading}
         className={cn(
-          'group bg-secondary-container text-on-secondary-container text-label-large shadow-level1 hover:bg-secondary-container/80 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors',
+          'group text-label-large hover:bg-on-secondary-container/8 mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 transition-colors disabled:cursor-wait disabled:opacity-80',
           focusRing,
         )}
       >
-        <span className="min-w-0 flex-1 truncate text-left">Update ready</span>
-        <ArrowRight
-          aria-hidden="true"
-          className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
-        />
+        <span className="min-w-0 flex-1 truncate text-left">{actionLabel}</span>
+        {!isApplying && !isReloading && (
+          <ArrowRight
+            aria-hidden="true"
+            className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
+          />
+        )}
       </button>
     </div>
   );

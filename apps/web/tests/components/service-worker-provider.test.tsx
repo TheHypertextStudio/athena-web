@@ -15,9 +15,9 @@ import {
  * @remarks
  * jsdom implements no service worker, so these run against a small fake of exactly the surface the
  * provider touches. The invariants under test are the ones whose absence shipped as "the Reload
- * button does nothing": accepting an update must never optimistically dismiss the banner, a
- * missed `controllerchange` must still end in a reload, and an offer whose worker went redundant
- * must withdraw itself.
+ * button does nothing": an accepted update must visibly enter its applying phase, a missed
+ * `controllerchange` must still end in a reload, and a handshake that cannot start must offer an
+ * application-owned retry instead of silently retaining a dead primary action.
  */
 
 type Listener = (event: Event) => void;
@@ -120,10 +120,12 @@ describe('ServiceWorkerProvider', () => {
     expect(screen.getByTestId('no-update')).toBeInTheDocument();
   });
 
-  it('offers a reload when a worker is waiting behind a live controller', async () => {
+  it('renders the ready update title, supporting copy, and action for a waiting worker', async () => {
     container.registration.waiting = new FakeWorker();
     await mount();
-    expect(screen.getByRole('button', { name: 'Update ready' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Update available');
+    expect(screen.getByRole('status')).toHaveTextContent('Reload to use the latest version');
+    expect(screen.getByRole('button', { name: 'Reload now' })).toBeInTheDocument();
   });
 
   it('offers a reload when an update installs mid-session', async () => {
@@ -135,23 +137,27 @@ describe('ServiceWorkerProvider', () => {
       container.registration.emit('updatefound');
       installing.become('installed');
     });
-    expect(screen.getByRole('button', { name: 'Update ready' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload now' })).toBeInTheDocument();
   });
 
-  it('keeps the banner up after accepting — the reload is what dismisses it', async () => {
+  it('immediately replaces the ready card with an applying, busy, blocked trigger', async () => {
     const waiting = new FakeWorker();
     container.registration.waiting = waiting;
     await mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Update ready' }));
+    const card = screen.getByRole('status');
+    const readyMarkup = card.innerHTML;
+    fireEvent.click(screen.getByRole('button', { name: 'Reload now' }));
     expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
-    // No optimistic dismissal: a handshake that stalls must not silently swallow the prompt.
-    expect(screen.getByRole('button', { name: 'Update ready' })).toBeInTheDocument();
+    // Keep the provider mounted and prove the activation changes the actual rendered card.
+    expect(card.innerHTML).not.toBe(readyMarkup);
+    expect(card).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('button', { name: 'Applying update…' })).toBeDisabled();
   });
 
   it('reloads exactly once when the new worker takes over', async () => {
     container.registration.waiting = new FakeWorker();
     await mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Update ready' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reload now' }));
     act(() => {
       container.emit('controllerchange');
       container.emit('controllerchange');
@@ -159,14 +165,19 @@ describe('ServiceWorkerProvider', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to reloading when controllerchange never arrives', async () => {
+  it('announces reloading before the four-second fallback reload when controllerchange never arrives', async () => {
     container.registration.waiting = new FakeWorker();
     await mount();
     vi.useFakeTimers();
-    fireEvent.click(screen.getByRole('button', { name: 'Update ready' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reload now' }));
     expect(reload).not.toHaveBeenCalled();
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(4_000);
+      await vi.advanceTimersByTimeAsync(3_750);
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Reloading…');
+    expect(reload).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
     });
     expect(reload).toHaveBeenCalledTimes(1);
   });
@@ -175,7 +186,7 @@ describe('ServiceWorkerProvider', () => {
     container.registration.waiting = new FakeWorker();
     await mount();
     vi.useFakeTimers();
-    fireEvent.click(screen.getByRole('button', { name: 'Update ready' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reload now' }));
     act(() => {
       container.emit('controllerchange');
     });
@@ -189,23 +200,38 @@ describe('ServiceWorkerProvider', () => {
     const waiting = new FakeWorker();
     container.registration.waiting = waiting;
     await mount();
-    expect(screen.getByRole('button', { name: 'Update ready' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload now' })).toBeInTheDocument();
     act(() => {
       waiting.become('redundant');
     });
     expect(screen.getByTestId('no-update')).toBeInTheDocument();
   });
 
-  it('accepting a worker that raced to redundant clears the offer instead of posting', async () => {
+  it('shows recovery when the waiting worker disappears before activation can start', async () => {
     const waiting = new FakeWorker();
     container.registration.waiting = waiting;
     await mount();
     // The state flips without the statechange event landing first — the exact race applyUpdate
     // guards against.
     waiting.state = 'redundant';
-    fireEvent.click(screen.getByRole('button', { name: 'Update ready' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reload now' }));
     expect(waiting.postMessage).not.toHaveBeenCalled();
-    expect(screen.getByTestId('no-update')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Couldn’t apply update');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('shows recovery when postMessage throws synchronously and retries the same worker', async () => {
+    const waiting = new FakeWorker();
+    waiting.postMessage.mockImplementationOnce(() => {
+      throw new Error('closed');
+    });
+    container.registration.waiting = waiting;
+    await mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Reload now' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Couldn’t apply update');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(waiting.postMessage).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Applying update…' })).toBeDisabled();
   });
 
   it('removes every listener it added on unmount', async () => {

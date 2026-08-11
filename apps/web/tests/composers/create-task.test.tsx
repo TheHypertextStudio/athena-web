@@ -1314,7 +1314,9 @@ describe('CreateTaskDialog — robust composer', () => {
     });
 
     const destination = screen.getByRole('combobox', { name: 'Workspace' });
-    fireEvent.change(destination, { target: { value: ORG_ID } });
+    await act(async () => {
+      fireEvent.change(destination, { target: { value: ORG_ID } });
+    });
     expect(destination).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));

@@ -9,6 +9,7 @@ import {
   project,
   savedView,
   sessionActivity,
+  task,
   team,
   update,
 } from '@docket/db';
@@ -71,11 +72,20 @@ export async function hydrateUpdate(orgId: string, id: string): Promise<unknown>
     .limit(1);
   const u = rows[0];
   if (!u) throw new NotFoundError();
+  const authorRows = u.authorId
+    ? await db
+        .select({ id: actor.id, displayName: actor.displayName })
+        .from(actor)
+        .where(and(eq(actor.id, u.authorId), eq(actor.organizationId, orgId)))
+        .limit(1)
+    : [];
+  const author = authorRows[0] ?? null;
   return {
     id: u.id,
     authorId: u.authorId,
     subjectType: u.subjectType,
     subjectId: u.subjectId,
+    author,
     health: u.health,
     body: u.body,
     createdAt: u.createdAt.toISOString(),
@@ -91,11 +101,20 @@ export async function hydrateComment(orgId: string, id: string): Promise<unknown
     .limit(1);
   const c = rows[0];
   if (!c) throw new NotFoundError();
+  const authorRows = c.authorId
+    ? await db
+        .select({ id: actor.id, displayName: actor.displayName })
+        .from(actor)
+        .where(and(eq(actor.id, c.authorId), eq(actor.organizationId, orgId)))
+        .limit(1)
+    : [];
+  const author = authorRows[0] ?? null;
   return {
     id: c.id,
     authorId: c.authorId,
     subjectType: c.subjectType,
     subjectId: c.subjectId,
+    author,
     body: c.body,
     parentCommentId: c.parentCommentId,
     editedAt: c.editedAt?.toISOString() ?? null,
@@ -113,16 +132,35 @@ export async function hydrateSession(orgId: string, id: string): Promise<unknown
   const s = rows[0];
   if (!s) throw new NotFoundError();
 
-  const activities = await db
-    .select()
-    .from(sessionActivity)
-    .where(eq(sessionActivity.sessionId, id))
-    .orderBy(asc(sessionActivity.createdAt));
+  const [activities, agentRows, taskRows] = await Promise.all([
+    db
+      .select()
+      .from(sessionActivity)
+      .where(eq(sessionActivity.sessionId, id))
+      .orderBy(asc(sessionActivity.createdAt)),
+    s.agentId
+      ? db
+          .select({ id: agent.id, displayName: actor.displayName })
+          .from(agent)
+          .innerJoin(actor, eq(agent.actorId, actor.id))
+          .where(and(eq(agent.id, s.agentId), eq(agent.organizationId, orgId)))
+          .limit(1)
+      : Promise.resolve([]),
+    s.taskId
+      ? db
+          .select({ id: task.id, title: task.title, state: task.state })
+          .from(task)
+          .where(and(eq(task.id, s.taskId), eq(task.organizationId, orgId)))
+          .limit(1)
+      : Promise.resolve([]),
+  ]);
 
   return {
     id: s.id,
     agentId: s.agentId,
     taskId: s.taskId,
+    agent: agentRows[0] ?? null,
+    task: taskRows[0] ?? null,
     trigger: s.trigger,
     status: s.status,
     accountability: { initiatorId: s.initiatorId },
@@ -148,6 +186,11 @@ export async function hydrateAgent(orgId: string, id: string): Promise<unknown> 
     .limit(1);
   const a = rows[0];
   if (!a) throw new NotFoundError();
+  const actorRows = await db
+    .select({ displayName: actor.displayName })
+    .from(actor)
+    .where(and(eq(actor.id, a.actorId), eq(actor.organizationId, orgId)))
+    .limit(1);
   // The connection carries endpoint/protocol only -- credentials live in the boundary
   // layer and are never surfaced over MCP (no token passthrough; mcp-surface.md 4.3).
   const connection = a.connection
@@ -156,6 +199,7 @@ export async function hydrateAgent(orgId: string, id: string): Promise<unknown> 
   return {
     id: a.id,
     actorId: a.actorId,
+    displayName: actorRows[0]?.displayName ?? null,
     connection,
     approvalPolicy: a.approvalPolicy,
     accountableOwnerId: a.accountableOwnerId,

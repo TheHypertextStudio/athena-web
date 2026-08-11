@@ -1039,7 +1039,10 @@ describe('hydrated resources', () => {
       initiativeId: s.initiativeId,
       programId: s.programId,
     });
-    await db.update(schema.task).set({ cycleId: s.cycleId }).where(eq(schema.task.id, s.taskId));
+    await db
+      .update(schema.task)
+      .set({ cycleId: s.cycleId, projectId: s.projectId })
+      .where(eq(schema.task.id, s.taskId));
     const [upd] = await db
       .insert(schema.update)
       .values({
@@ -1148,11 +1151,29 @@ describe('hydrated resources', () => {
     expect((projDto['milestones'] as unknown[]).length).toBe(1);
     expect((projDto['initiatives'] as unknown[]).length).toBe(1);
     expect((projDto['latestUpdate'] as { health: string }).health).toBe('on_track');
+    expect(projDto['tasks']).toEqual([
+      expect.objectContaining({ id: s.taskId, title: 'Ship', state: 'todo' }),
+    ]);
+
+    // Entity cards lead with people and work the reader can recognise. Never make a widget turn an
+    // opaque actor or task id into its own fallback copy just because the resource omitted context.
+    const updateRes = await client.readResource({ uri: `docket://${s.orgId}/update/${upd!.id}` });
+    expect(readJson(updateRes.contents)['author']).toEqual(
+      expect.objectContaining({ id: s.actorId, displayName: 'Ada' }),
+    );
+    const sessionRes = await client.readResource({
+      uri: `docket://${s.orgId}/session/${sess!.id}`,
+    });
+    expect(readJson(sessionRes.contents)).toMatchObject({
+      agent: { id: s.agentId, displayName: 'Athena' },
+      task: { id: s.taskId, title: 'Ship' },
+    });
 
     // The hydrated agent never surfaces credentials, only protocol/endpoint.
     const agentRes = await client.readResource({ uri: `docket://${s.orgId}/agent/${s.agentId}` });
     const agentDto = readJson(agentRes.contents);
     expect((agentDto['connection'] as { protocol: string }).protocol).toBe('mcp');
+    expect(agentDto['displayName']).toBe('Athena');
   });
 
   it('reads an agent with no connection (null branch) + a program with no projects', async () => {

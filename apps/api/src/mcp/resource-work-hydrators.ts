@@ -152,7 +152,7 @@ export async function hydrateProject(orgId: string, id: string): Promise<unknown
   const p = rows[0];
   if (!p) throw new NotFoundError();
 
-  const [milestones, taskCountRows, initiativeRows, latestUpdate] = await Promise.all([
+  const [milestones, taskCountRows, taskRows, initiativeRows, latestUpdate] = await Promise.all([
     db
       .select({ id: milestone.id, name: milestone.name, targetDate: milestone.targetDate })
       .from(milestone)
@@ -162,6 +162,12 @@ export async function hydrateProject(orgId: string, id: string): Promise<unknown
       .select({ id: task.id })
       .from(task)
       .where(and(eq(task.projectId, id), isNull(task.archivedAt))),
+    db
+      .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+      .from(task)
+      .where(and(eq(task.projectId, id), isNull(task.archivedAt)))
+      .orderBy(asc(task.dueDate), asc(task.createdAt))
+      .limit(4),
     db
       .select({ id: initiative.id, name: initiative.name })
       .from(initiativeProject)
@@ -183,6 +189,7 @@ export async function hydrateProject(orgId: string, id: string): Promise<unknown
     startDate: p.startDate?.toISOString() ?? null,
     targetDate: p.targetDate?.toISOString() ?? null,
     taskCount: taskCountRows.length,
+    tasks: taskRows.map(taskRef),
     milestones: milestones.map((m) => ({
       id: m.id,
       name: m.name,

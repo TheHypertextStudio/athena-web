@@ -10,36 +10,27 @@ export function stepCopy(step: OnboardingStep): {
     case 'intent':
       return {
         eyebrow: 'Welcome to Docket',
-        title: 'What brings you to Docket?',
-        subtitle: "We'll tailor your setup to how you work. You can change any of this later.",
-      };
-    case 'personal-welcome':
-      return {
-        eyebrow: 'Your command center',
-        title: 'This is your space{name}',
-        subtitle:
-          'A calm home for everything you’re working on — and a launchpad for shared workspaces when you need them.',
+        title: 'How will you use Docket?',
+        subtitle: 'Choose a personal workspace or a shared organization.',
       };
     case 'name':
       return {
         eyebrow: 'Set up your organization',
         title: 'Name your organization',
-        subtitle:
-          'Give your team’s shared space a name. Don’t overthink it — you can change it later.',
+        subtitle: 'This name identifies the shared organization and its data.',
       };
     case 'connect':
       return {
-        eyebrow: 'Bring in your work',
-        title: 'Start with what you already use',
+        eyebrow: 'Connect a source',
+        title: 'Import existing work',
         subtitle:
-          'Connect a tool to fill your workspace with your real tasks and deadlines. Connect as many as you like — or skip and start fresh.',
+          'Imported records stay linked to their source. You can connect a source or skip this step.',
       };
     case 'passkey':
       return {
         eyebrow: 'Secure your account',
-        title: 'Add a passkey to sign in faster',
-        subtitle:
-          'Skip passwords for good — use Face ID, Touch ID, or a security key to sign in. It only takes a moment, and you can always add one later.',
+        title: 'Add a passkey',
+        subtitle: 'Your device will ask you to confirm. You can skip and add one later.',
       };
   }
 }
@@ -55,7 +46,6 @@ export function stepCopy(step: OnboardingStep): {
 export function primaryLabel(
   step: OnboardingStep,
   isConnectStep: boolean,
-  isPersonal: boolean,
   pending: boolean,
   mirroredTotal: number,
 ): string {
@@ -65,9 +55,9 @@ export function primaryLabel(
   if (isConnectStep) {
     return mirroredTotal > 0 ? 'Enter your workspace' : 'Continue without connecting';
   }
-  if (step === 'name' || step === 'personal-welcome') {
+  if (step === 'name') {
     if (pending) return 'Setting things up…';
-    return isPersonal ? 'Create your space' : 'Create workspace';
+    return 'Create workspace';
   }
   return 'Continue';
 }

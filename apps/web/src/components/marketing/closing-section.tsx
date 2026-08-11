@@ -39,14 +39,14 @@ export function ClosingSection({ pricing }: ClosingSectionProps): JSX.Element {
               tone="inherit"
               className="font-display text-paper max-w-3xl text-balance"
             >
-              Free for one workspace. $8 a month to run more.
+              Docket is free. Docket Pro is $8 per organization each month.
             </Text>
             <Text as="p" token="title-medium" tone="inherit">
               <Link
                 href="/pricing"
                 className="text-paper/75 hover:text-paper decoration-paper/30 underline underline-offset-4 transition-colors"
               >
-                See what each plan includes →
+                Compare the products →
               </Link>
             </Text>
           </div>

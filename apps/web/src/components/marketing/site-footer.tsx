@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import type { JSX } from 'react';
 
-import { TAGLINE } from '@/lib/marketing-copy';
-
 import { FooterEntryLink } from './marketing-cta';
 
 interface FooterColumn {
@@ -51,7 +49,6 @@ export function SiteFooter(): JSX.Element {
           <span className="font-display text-ink wonk text-2xl leading-none font-semibold tracking-tight">
             Docket
           </span>
-          <p className="text-on-surface-variant text-body-medium max-w-sm">{TAGLINE}</p>
         </div>
         {COLUMNS.map((column) => (
           <div key={column.title} className="flex flex-col gap-3">

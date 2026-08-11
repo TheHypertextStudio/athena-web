@@ -2,12 +2,12 @@ import type { Metadata } from 'next';
 import type { JSX } from 'react';
 
 import { ClosingSection } from '@/components/marketing/closing-section';
-import { PricingTiers } from '@/components/marketing/pricing-tiers';
+import { PricingProducts } from '@/components/marketing/pricing-products';
 
 /** Pricing page metadata. */
 export const metadata: Metadata = {
   title: 'Pricing',
-  description: 'Docket is free for one workspace. You pay when you run more than one.',
+  description: 'Docket is free. Docket Pro is $8 per organization each month.',
 };
 
 interface Faq {
@@ -16,39 +16,39 @@ interface Faq {
 }
 
 /**
- * One framing of the price, everywhere: free for one workspace, paid beyond that.
- *
- * @remarks
- * These answers used to contradict the tier cards. The cards said the $8 unlocked multiple
- * workspaces; the FAQ said it triggered when you invited other people. Both cannot be true, and a
- * reader who notices stops believing the rest of the page.
+ * Billing mechanics stated once and without unverified policies.
  */
 const FAQS: readonly Faq[] = [
   {
-    question: 'Do I need a credit card to start?',
+    question: 'What does Docket Pro bill?',
     answer:
-      'No. One workspace is free with no card required. You add billing when you want to run more than one from the same account.',
+      'Docket Pro bills each organization separately at $8 a month. It does not charge by member.',
   },
   {
-    question: 'What counts as a workspace?',
+    question: 'How does the trial work?',
     answer:
-      'One organization, with its own people, settings, and connected tools. Your personal space is a workspace too, and it is the free one.',
+      'An organization can try Docket Pro for 14 days. Starting checkout again does not add another trial.',
   },
   {
-    question: 'Is there a discount for nonprofits?',
-    answer: 'Yes — reach out and we will sort out nonprofit pricing for your organization.',
+    question: 'When does Docket Pro renew?',
+    answer: 'Docket Pro renews monthly on the date shown in the organization billing settings.',
+  },
+  {
+    question: 'What happens after cancellation?',
+    answer:
+      'A personal workspace returns to free Docket and keeps its data. A shared organization receives a 14-day export window before its deletion process begins.',
   },
 ];
 
-/** Pricing page — tiers plus rule-separated FAQ in the editorial register. */
+/** Pricing page — products plus rule-separated billing details. */
 export default function PricingPage(): JSX.Element {
   return (
     <>
-      <PricingTiers />
+      <PricingProducts />
       <section className="border-outline-variant border-t">
         <div className="mx-auto w-full max-w-3xl px-6 py-16">
           <h2 className="font-display text-ink text-3xl tracking-tight text-balance">
-            Questions, answered
+            Billing details
           </h2>
           <dl className="divide-outline-variant mt-8 flex flex-col divide-y">
             {FAQS.map((faq) => (

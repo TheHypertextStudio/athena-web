@@ -22,9 +22,7 @@ export function Hero(): JSX.Element {
           Docket is one tool for planning, scheduling, and tracking every kind of work.
         </h1>
         <p className="text-ink-muted max-w-xl text-lg text-balance">
-          Engineering teams have had software like this for a decade. Everyone else runs a project
-          tracker, a calendar, and a timesheet that never agree. No single tool has all of the
-          information, so there is nothing complete for an agent to work from either.
+          Each task carries its estimate, its place on the calendar, and the hours it took.
         </p>
         <HeroActions />
       </div>

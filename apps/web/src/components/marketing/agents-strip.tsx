@@ -26,7 +26,7 @@ export function AgentsStrip(): JSX.Element {
             tone="inherit"
             className="font-display text-ink text-balance"
           >
-            Let your agents work with you
+            Approved AI clients
           </Text>
           <Text
             as="p"
@@ -34,9 +34,7 @@ export function AgentsStrip(): JSX.Element {
             tone="inherit"
             className="text-ink-muted mt-3 text-balance"
           >
-            Ask an AI assistant about your tasks today and it has nothing to look at unless you copy
-            your list into the chat by hand. An agent connected to Docket over MCP reads your actual
-            projects and updates status directly, so there is nothing to copy.
+            Approved AI clients can work from existing Docket records.
           </Text>
         </div>
         <PlaceholderSurface

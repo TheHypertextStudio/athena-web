@@ -6,7 +6,6 @@ import { FeatureBand } from '@/components/marketing/feature-band';
 import { FeatureSplit } from '@/components/marketing/feature-split';
 import { Hero } from '@/components/marketing/hero';
 import { OrganizationsPair } from '@/components/marketing/organizations-pair';
-import { SecondaryList } from '@/components/marketing/secondary-list';
 
 /**
  * Marketing home page.
@@ -27,31 +26,30 @@ export default function HomePage(): JSX.Element {
       <Hero />
       <FeatureSplit
         title="Track tasks"
-        description="You guess how long something will take and then never find out if you were right. The estimate and the hours you log both belong to the same task, so at the end of a week you can see exactly where you were off."
+        description="Tasks keep estimates, schedules, and tracked time together."
         side="right"
         surface="Task list and task detail"
       />
       <FeatureBand
         title="Group work into projects and programs"
-        description="A membership drive or a support rota never ships. Most tools only know 'project,' so it gets flagged overdue for months at a time. Docket has a separate type for work with no end date, and stops flagging it."
+        description="Projects end; programs continue."
         surface="A project beside a program"
         tone="paper"
       />
       <FeatureSplit
         title="Align work with initiatives"
-        description="A goal like 'grow membership 20% this year' depends on work spread across projects and organizations, and most tools have no place to track that dependency. An initiative in Docket does, so you can tell if you're going to hit the goal instead of finding out after the year ends."
+        description="Initiatives connect goals to responsible work."
         side="left"
         surface="An initiative with projects rolling into it"
       />
       <OrganizationsPair />
       <FeatureBand
-        title="Turn your plan into your week"
-        description="Docket puts your tasks on the calendar you already use, next to the meetings on it. You can tell whether what you planned actually fits before the week starts, not after."
+        title="Place tasks on the calendar"
+        description="Calendar placement shows whether planned work fits."
         surface="The calendar with tasks scheduled against meetings"
         tone="ink"
       />
       <AgentsStrip />
-      <SecondaryList />
       <ClosingSection pricing />
     </>
   );

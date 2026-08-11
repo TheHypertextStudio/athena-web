@@ -199,12 +199,7 @@ export function SignUpClient(): JSX.Element {
       }
       router.push(POST_SIGNUP_DESTINATION);
     } catch (caught) {
-      setError(
-        passkeyErrorMessage(
-          caught,
-          'Something went wrong creating your account. Please try again.',
-        ),
-      );
+      setError(passkeyErrorMessage(caught, 'Docket could not create your account. Try again.'));
     } finally {
       setPending(false);
     }
@@ -223,7 +218,6 @@ export function SignUpClient(): JSX.Element {
   return (
     <AuthShell
       title="Create your account"
-      description="Start with your email. You'll add a passkey in a moment."
       footer={
         <>
           Already have an account?{' '}

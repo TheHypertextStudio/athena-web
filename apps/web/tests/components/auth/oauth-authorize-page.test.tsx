@@ -159,8 +159,8 @@ describe('OAuthAuthorizePage', () => {
     it('renders the requested scopes, the account, and where the browser will be returned', async () => {
       renderSignedRequest();
 
-      expect(await screen.findByRole('button', { name: 'Authorize' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Allow access' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Deny access' })).toBeInTheDocument();
 
       // Scope labels, not raw scope strings.
       expect(screen.getByText('Read your work')).toBeInTheDocument();
@@ -218,7 +218,7 @@ describe('OAuthAuthorizePage', () => {
 
       render(<OAuthAuthorizePage />);
 
-      await screen.findByRole('button', { name: 'Authorize' });
+      await screen.findByRole('button', { name: 'Allow access' });
       for (const scope of OAUTH_ISSUABLE_SCOPES) {
         expect(screen.getByText(OAUTH_SCOPE_COPY[scope].label)).toBeInTheDocument();
         expect(screen.queryByText(scope)).toBeNull();
@@ -230,7 +230,7 @@ describe('OAuthAuthorizePage', () => {
       expect(screen.getByText('Ongoing access')).toBeInTheDocument();
     });
 
-    it('says in plain words what Authorize and Deny each do, naming the app', async () => {
+    it('says in plain words what allowing and denying access do, naming the app', async () => {
       metadataGet.mockResolvedValue({
         ok: true,
         json: async () => ({ name: 'Client Example', icon: null }),
@@ -238,13 +238,13 @@ describe('OAuthAuthorizePage', () => {
 
       renderSignedRequest();
 
-      const explanation = await screen.findByText(/Authorize lets Client Example/);
+      const explanation = await screen.findByText(/Client Example can use only the access/);
       expect(explanation).toBeInTheDocument();
       // Both halves of the decision, and where Deny sends you — the return host the screen
       // already discloses, not a vague "you will be returned".
-      expect(explanation.textContent).toContain('until you disconnect it');
+      expect(explanation.textContent).toContain('until you revoke it');
       expect(explanation.textContent).toContain(
-        'Deny sends you back to callback.example without giving it anything.',
+        'Denying access returns you to callback.example without granting access.',
       );
     });
 
@@ -259,7 +259,7 @@ describe('OAuthAuthorizePage', () => {
       render(<OAuthAuthorizePage />);
 
       expect(
-        screen.getByRole('heading', { name: /wants access to your Docket account/ }),
+        screen.getByRole('heading', { name: /is requesting access to Docket/ }),
       ).toBeInTheDocument();
       expect(screen.getByText('Read your work')).toBeInTheDocument();
       expect(screen.getByText('Stay connected')).toBeInTheDocument();
@@ -267,8 +267,8 @@ describe('OAuthAuthorizePage', () => {
 
       // …and the two things that genuinely need the session are held back rather than guessed at.
       expect(screen.getByText('Checking your account…')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Authorize' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Deny' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Allow access' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Deny access' })).toBeDisabled();
     });
 
     it('keeps the decision reachable when the session read fails outright', async () => {
@@ -289,7 +289,7 @@ describe('OAuthAuthorizePage', () => {
       // on a consent screen is precisely the wrong thing to do.
       renderSignedRequest();
 
-      await screen.findByRole('button', { name: 'Authorize' });
+      await screen.findByRole('button', { name: 'Allow access' });
       expect(screen.queryByText('Verified domain')).not.toBeInTheDocument();
     });
 

@@ -341,7 +341,7 @@ function ConsentPage(): JSX.Element {
           credentials: 'same-origin',
         });
         if (!res.ok) {
-          setError('Could not update authorization. Please try again.');
+          setError('Docket could not record this access decision. Try again.');
           return;
         }
         // The handler answers `{ redirect: true, url }` even though the plugin's own OpenAPI
@@ -351,12 +351,12 @@ function ConsentPage(): JSX.Element {
         const body = (await res.json()) as { url?: string; redirect_uri?: string };
         const destination = body.url ?? body.redirect_uri;
         if (!destination) {
-          setError('Could not complete authorization. Please try connecting again.');
+          setError('Docket did not receive a return address. Restart the connection.');
           return;
         }
         window.location.href = destination;
       } catch {
-        setError('Something went wrong. Please try again.');
+        setError('Docket could not record this access decision. Try again.');
       } finally {
         setPending(null);
       }
@@ -411,10 +411,10 @@ function ConsentPage(): JSX.Element {
   const accountEmail = session?.user.email ?? null;
   const sessionSettled = sessionStatus === 'authenticated';
   const returnTarget = returnHost ?? displayName;
-  const grantSentence =
+  const accessSentence =
     requestedScopes.length > 0
-      ? `Authorize lets ${displayName} do the things listed above until you disconnect it.`
-      : `Authorize connects ${displayName} to your Docket account until you disconnect it.`;
+      ? `${displayName} can use only the access listed here until you revoke it.`
+      : `${displayName} can connect to your Docket account until you revoke it.`;
 
   return (
     <AuthLayout
@@ -423,7 +423,7 @@ function ConsentPage(): JSX.Element {
         <>
           <ConnectionHero displayName={displayName} clientIcon={clientMeta?.icon} />
           <h1 className="text-headline-small text-on-surface font-medium">
-            {displayName} wants access to your Docket account
+            {displayName} is requesting access to Docket
           </h1>
           <dl className="border-outline-variant mt-1 flex flex-col gap-3 border-t pt-4">
             {verifiedHost ? <ContextRow label="Verified domain" value={verifiedHost} /> : null}
@@ -439,7 +439,7 @@ function ConsentPage(): JSX.Element {
     >
       {requestedScopes.length > 0 ? (
         <section aria-label="Requested permissions" className="flex min-w-0 flex-col gap-3">
-          <p className="text-on-surface text-label-large">This app will be able to</p>
+          <p className="text-on-surface text-label-large">Requested access</p>
           {/* One tonal block rather than a card per permission: the list reads as a single object
               being granted. Capped and scrollable because the server accepts arbitrary requested
               scopes, so the row count has no ceiling — without the cap a long list would push the
@@ -462,7 +462,7 @@ function ConsentPage(): JSX.Element {
           a consent screen ask someone to guess whether Deny cancels the connection or cancels the
           whole sign-in, and whether Authorize is permanent. */}
       <p className="text-on-surface-variant text-body-small">
-        {grantSentence} Deny sends you back to {returnTarget} without giving it anything.
+        {accessSentence} Denying access returns you to {returnTarget} without granting access.
       </p>
 
       {/* Reversed so the primary lands on the right at width and first when stacked. */}
@@ -476,7 +476,7 @@ function ConsentPage(): JSX.Element {
             void decide(false);
           }}
         >
-          {pending === 'deny' ? 'Denying…' : 'Deny'}
+          {pending === 'deny' ? 'Returning…' : 'Deny access'}
         </Button>
         <Button
           type="button"
@@ -486,7 +486,7 @@ function ConsentPage(): JSX.Element {
             void decide(true);
           }}
         >
-          {pending === 'accept' ? 'Authorizing…' : 'Authorize'}
+          {pending === 'accept' ? 'Allowing…' : 'Allow access'}
         </Button>
       </div>
 

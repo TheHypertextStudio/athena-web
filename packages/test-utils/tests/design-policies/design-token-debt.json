@@ -272,7 +272,7 @@
   "apps/web/src/components/marketing/marketing-cta.tsx": {
     "raw-type-utility": 5
   },
-  "apps/web/src/components/marketing/pricing-tiers.tsx": {
+  "apps/web/src/components/marketing/pricing-products.tsx": {
     "raw-type-utility": 8,
     "shadow-outside-overlay": 1
   },
@@ -309,12 +309,6 @@
   },
   "apps/web/src/components/onboarding/step-connect-provider-row.tsx": {
     "raw-type-utility": 8
-  },
-  "apps/web/src/components/onboarding/step-passkey.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/web/src/components/onboarding/step-personal-welcome.tsx": {
-    "raw-type-utility": 4
   },
   "apps/web/src/components/onboarding/wizard-shell.tsx": {
     "raw-type-utility": 13

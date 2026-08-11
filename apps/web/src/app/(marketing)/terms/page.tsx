@@ -57,6 +57,20 @@ export default function TermsPage(): JSX.Element {
         </p>
       </TermsSection>
 
+      <TermsSection title="Docket and Docket Pro">
+        <p>
+          Docket is available without charge for a personal workspace with planning, scheduling, and
+          time tracking. Docket Pro costs USD $8 per organization each month and adds shared work,
+          integrations, MCP, and current Athena functionality. A Docket Pro subscription renews
+          monthly until an authorized workspace administrator cancels it.
+        </p>
+        <p>
+          Canceling Docket Pro for a personal workspace removes Docket Pro capabilities but keeps
+          the free workspace and its data. Canceling Docket Pro for a shared workspace begins a
+          14-day period in which its data can be exported before the workspace enters deletion.
+        </p>
+      </TermsSection>
+
       <TermsSection title="Acceptable use">
         <p>
           Do not use Docket to break the law, infringe rights, access accounts without permission,

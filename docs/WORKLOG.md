@@ -60,7 +60,44 @@
   expected the obsolete OAuth-during-install copy and its Notion E2E fixtures created a pending
   record before navigating. The follow-up updates the contract assertion and completes the mock
   Notion connection before its UI navigation assertion.
+### [MARKETING-PRO-001] Align public copy and Docket Pro product access
 
+- **Status**: REVIEW
+- **Started**: 2026-08-11
+- **Priority**: P0
+- **Description**: Replace lifecycle-based feature access with explicit organization-product
+  ownership, sell Docket Pro as the only current paid product at $8 per organization each month,
+  and remove generated-sounding copy from every public, authentication, onboarding, billing,
+  support, and legal surface. Docket remains the free baseline product; Docket Pro has its own
+  product contract.
+- **Approach**: Add a Docket Pro entitlement keyed by organization and product, map its explicit
+  capabilities through one assertion, preserve legacy billing configuration for one release, and
+  make cancellation behavior depend on whether the organization is personal or shared. Then
+  rewrite the named surfaces against the binary copy gate, remove the personal welcome step, and
+  render the pages at desktop and mobile widths before release documentation is completed.
+- **Subtasks**:
+  - [x] Add product entitlement persistence, capability resolution, compatibility errors, and tests.
+  - [x] Align Stripe checkout, webhooks, billing summaries, cancellation, settings, and return routing.
+  - [x] Rewrite marketing, authentication, onboarding, OAuth, support, and legal copy.
+  - [x] Add the binary public-copy audit and render every audited surface at both required widths.
+  - [x] Run the repository validation suite and record external production-billing blockers.
+- **Blockers**: Revised pricing copy must not be released until the production Docket Pro purchase
+  path is proven. The repository's latest production evidence currently records billing as disabled;
+  this implementation will retain that release gate until live Stripe checkout, webhook activation,
+  access, cancellation, billing management, and return routing are verified. Privacy and terms also
+  require operator and legal review. Existing dashed home-page image frames keep the broader craft
+  rubric's no-placeholder gate red; replacing them is outside this copy-focused change.
+- **Validation**: Product-capability, billing-lifecycle, CTA-state, onboarding, and copy-gate tests
+  pass. `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass. The API suite passes 316
+  files and 3,675 tests; the public-copy gate passes 14/14 and the uncached design-token policy
+  passes 8/8. The 13 audited surfaces have 52 desktop/mobile, light/dark captures and every binary
+  copy property is Aligned. Live production billing-path proof and legal approval remain external
+  release gates, so the revised pricing copy is implemented but must remain unpublished.
+- **Learnings**: Organization lifecycle cannot stand in for product ownership, including in test
+  fixtures; paid-feature fixtures now grant Docket Pro explicitly. Running the design-token policy
+  without cache caught raw typography in the new billing surfaces and allowed the debt ledger to
+  shrink instead of accepting new debt. A checkout redirect is not entitlement evidence; the
+  signed webhook remains authoritative.
 ---
 
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering

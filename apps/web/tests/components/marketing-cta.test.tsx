@@ -68,14 +68,14 @@ describe('marketing CTAs', () => {
 
       expect(screen.getByRole('link', { name: 'Open Docket' }).getAttribute('href')).toBe('/open');
       expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
-      expect(screen.queryByRole('link', { name: 'Get started' })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Create free account' })).toBeNull();
     });
 
     it('replaces the hero conversion pair with the workspace', () => {
       render(<HeroActions />);
 
       expect(screen.getByRole('link', { name: 'Open Docket' }).getAttribute('href')).toBe('/open');
-      expect(screen.queryByRole('link', { name: /Get started/ })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Create free account' })).toBeNull();
       expect(screen.queryByRole('link', { name: 'Sign in' })).toBeNull();
     });
 
@@ -83,7 +83,7 @@ describe('marketing CTAs', () => {
       render(<CtaBandActions />);
 
       expect(screen.getByRole('link', { name: 'Open Docket' }).getAttribute('href')).toBe('/open');
-      expect(screen.queryByRole('link', { name: /Get started/ })).toBeNull();
+      expect(screen.queryByRole('link', { name: 'Create free account' })).toBeNull();
     });
 
     it('stops the footer offering the account they already have', () => {
@@ -103,21 +103,27 @@ describe('marketing CTAs', () => {
       render(<HeaderActions />);
 
       expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/sign-in');
-      expect(screen.getByRole('link', { name: 'Get started' }).getAttribute('href')).toBe('/open');
+      expect(screen.getByRole('link', { name: 'Create free account' }).getAttribute('href')).toBe(
+        '/open',
+      );
       expect(screen.queryByRole('link', { name: 'Open Docket' })).toBeNull();
     });
 
     it('keeps the conversion pair in the hero', () => {
       render(<HeroActions />);
 
-      expect(screen.getByRole('link', { name: /Get started/ }).getAttribute('href')).toBe('/open');
+      expect(screen.getByRole('link', { name: 'Create free account' }).getAttribute('href')).toBe(
+        '/open',
+      );
       expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/sign-in');
     });
 
     it('keeps the footer inviting a visitor to start', () => {
       render(<FooterEntryLink className="link" />);
 
-      expect(screen.getByRole('link', { name: 'Get started' }).getAttribute('href')).toBe('/open');
+      expect(screen.getByRole('link', { name: 'Create free account' }).getAttribute('href')).toBe(
+        '/open',
+      );
     });
   });
 

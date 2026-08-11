@@ -7,67 +7,6 @@
 
 ## Active Tasks
 
-### [WEB-SWITCHER-002] Restore the production gate after integration
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-08-10
-- **Priority**: P0
-- **Description**: The open-document switcher and edit-session fixes rebased cleanly onto the
-  current `main`, but the combined settings redesign failed the design-token CI ratchet. The
-  replacement exact-SHA run then exposed a stale guided-provider contract from the concurrently
-  landed Notion integration.
-- **Approach**: Migrate replacement settings files to named MD3 typography roles, keep colour
-  swatches stable on hover and focus, register the new settings dialog as an overlay, remove stale
-  design-debt entries, and add Notion to the provider catalog's closed-set expectation. After the
-  exact-SHA CI gate passed, repair the generated Notion migration so its enum addition remains
-  idempotent with the migration runner's required pre-commit enum preflight, cover that contract
-  directly, and repeat CI, deployment, E2E, and live production verification on the replacement
-  SHA. Close the E2E follow-up by replacing settings selectors made stale by the unified modal,
-  synchronizing the offline suite with the production worker it now runs against, and keeping the
-  reporting-only server-log step from changing a green shard to red.
-- **Files Changed**: Calendar settings, notification preferences, settings status/navigation, the
-  label colour picker, the design-token scanner/debt ledger, the provider bootstrap policy, and
-  behavioral API coverage for the Notion mirror designer, reconciler, and management routes. The
-  Notion mirror migration and enum contract test also carry the production-gate repair. The E2E
-  follow-up covers settings navigation, autosaving notification preferences, production service
-  worker readiness, the workflow's diagnostic log command, and immediate offline link handling.
-- **Validation**: The local design-token policy passes 8/8, all affected package typechecks pass,
-  notification preferences pass 4/4, the UI suite passes 563/563, and the targeted provider policy
-  reproduces the exact GitHub failure before this contract repair. The following exact-SHA run
-  found `resolveVocabularyTerm`'s three documented branches untested under the types package's
-  100% threshold; default, preset, and override resolution now have direct regression coverage.
-  The next coverage run exposed an MCP Apps handshake race under load: the proxy's ready message
-  could arrive after iframe commit but before the passive listener was installed. Host setup now
-  uses a layout effect so the listener exists before the iframe can load and signal. Once that
-  race was closed, the API package's 89% branch ratchet revealed that the concurrently landed
-  Notion mirror had added three major server paths with essentially no coverage. The follow-up
-  suite exercises real migrated persistence plus a recorded provider edge across design seeding,
-  previews and validation; two-wave provisioning; create/update/no-op projection; pull, adopt,
-  conflict and trash handling; write budgets and provider no-op responses; sync leases; people
-  resolution; tenant scoping; and the request surface. The three files now contribute more than
-  223 directly exercised branches instead of zero.
-  Exact-SHA GitHub CI then passed all five gates. Production correctly stopped before rollout when
-  migration 0078 repeated the preflighted `notion_mirror` enum addition without `IF NOT EXISTS`;
-  the regression test reproduced the non-idempotent SQL before the fix, then passed 5/5 afterward.
-  The real migration runner also applied all migrations to a fresh PGlite database, and the DB
-  package typecheck, lint, targeted formatting, and diff checks pass. Exact-SHA CI then passed its
-  full build, lint, types, policy, coverage, tooling, and secret-scan gates. The replacement E2E
-  run made three shards green and reduced the fourth to one real navigation gap: an explicit
-  browser-offline signal arrived before the request-backed reachability state changed, allowing an
-  immediate link click to fall through to Next and replace the document. The focused regression
-  failed before combining that definitive negative signal with request reachability and passes
-  afterward. Replacement deployment, E2E, and live production verification remain before
-  completion.
-- **Learnings**: A clean textual rebase can still fail a semantic ratchet when one side replaces
-  ledgered files. The production gate also correctly caught Notion being added to the guided
-  catalog without updating the contract that enumerates every deployable provider. A feature can
-  pass its focused tests while still lowering a package-level ratchet substantially; orchestration
-  coverage needs to land with the feature rather than being discovered by the next release lane.
-  Generated migration SQL still needs review against the runner's transaction workarounds: schema
-  generation cannot infer that an enum value was deliberately committed in a preflight statement.
-
----
-
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW
@@ -4635,6 +4574,42 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [WEB-SWITCHER-002] Make open documents searchable, accessible, and release-safe
+
+- **Completed**: 2026-08-10
+- **Duration**: 1 day
+- **Priority**: P0
+- **Summary**: The open-document control is now a compact, visually distinct search trigger whose
+  menu has a bounded width, filters as the person types, opens with Command+Shift+A on macOS and
+  Ctrl+Shift+A elsewhere, and supports visible Tab focus. Menu rows use balanced inline spacing,
+  while description edits are grouped into quiet autosave sessions so typing no longer floods the
+  activity stream. Follow-up release repairs preserved the behavior through the combined settings,
+  Notion, offline, and Focus changes that landed concurrently.
+- **Files Changed**: Open-document tabs and menu interaction tests, shared menu spacing, rich-text
+  description edit sessions and activity coverage, settings token surfaces, provider contracts and
+  Notion mirror coverage/migration safety, MCP Apps setup ordering, production service-worker and
+  offline-navigation tests, E2E selectors/workflow diagnostics, and this worklog.
+- **Validation**: Focused switcher and edit-session regressions passed locally, including keyboard
+  opening, type-to-filter, Tab traversal, close-button focus, balanced row spacing, and debounced
+  saves. Exact-SHA CI run 31436780909 passed secret scan, types, format and policy, coverage and
+  tooling, lint, build, database migration, API/admin deployment, and scheduler configuration for
+  `b16296e9090a45b14359e8945e181c13f6c4ed69`. Exact-SHA E2E run 31436780720 passed all four
+  Playwright shards. All three associated production deployment records report success; the live
+  web and admin endpoints return 200 and the production API health endpoint returns `status: ok`.
+- **Learnings**: Popover focus has to be tested from the trigger through real Tab movement, not
+  inferred from focusable markup. Description persistence needs an edit-session boundary as well
+  as a timer so stale server echoes cannot split one typing burst into many activity events. A
+  clean rebase can still violate semantic token, provider, migration, or coverage ratchets when
+  concurrent work changes the contract around an otherwise correct feature.
+- **Retrospective**:
+  - **What went well**: Behavioral tests exposed the focus, stale-echo, migration, and immediate
+    offline-navigation gaps before the final production release.
+  - **What could improve**: Feature slices should carry orchestration coverage and production-worker
+    E2E assumptions from the start so the repository-wide ratchets do not discover them only after
+    integration.
+
+---
 
 ### [FOCUS-001] Turn the timer rail into a working companion and immersive Focus mode
 

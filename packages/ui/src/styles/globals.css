@@ -871,14 +871,60 @@
  * whatever the header is, so collapsing the header collapses the artwork with it for free.
  *
  * Scroll-driven, not state-driven: `animation-timeline: scroll()` ties progress to the scroller's
- * offset with no listener and no re-render per frame, and it cannot oscillate. Driving this from a
- * `collapsed` boolean means the collapse changes the layout height, which can remove the overflow
- * that triggered it, which expands it again — a loop that is easy to write and impossible to tune
- * out.
+ * offset with no listener and no re-render per frame. The nested detail body provides a stable
+ * minimum scroll range, so collapsing header rows cannot clamp the timeline before its endpoint.
  *
  * Everything animated sits inside `@supports`, so a browser without scroll timelines keeps the
  * header at its expanded size. Worse, not broken.
  */
+[data-detail-cover] {
+  --detail-collapse-range: 4rem;
+  --detail-expanded-glyph-row: 3.25rem;
+  --detail-compact-identity-inset: 2.25rem;
+}
+
+[data-detail-cover='absent'] {
+  --detail-collapse-range: 4rem;
+}
+
+[data-detail-cover='present'] {
+  --detail-collapse-range: 6rem;
+}
+
+/*
+ * Short panels still need enough overflow to consume the collapse range. The compact header is
+ * always taller than four rem (identity plus tabs), so this minimum makes the final scroll range at
+ * least the requested collapse distance without adding space above the active panel.
+ */
+.detail-body {
+  min-block-size: calc(100% - 4rem + var(--detail-collapse-range));
+}
+
+/*
+ * One identity tree serves both states. The glyph is independently positioned; expanded title
+ * padding gives it a row of its own, then the title sheds that block padding and gains an inline
+ * inset as the glyph scales into the compact row.
+ */
+.detail-identity {
+  position: relative;
+  min-width: 0;
+}
+
+.detail-glyph {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  width: fit-content;
+  transform-origin: left center;
+}
+
+.detail-title {
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  padding-block-start: var(--detail-expanded-glyph-row);
+}
+
 /*
  * The room the artwork gets above the identity, as a row of the header rather than padding on
  * anything. Its only job is to be that height and then stop being it, so neither the eyebrow row
@@ -895,42 +941,48 @@
 }
 
 @supports (animation-timeline: scroll()) {
-  @media not (prefers-reduced-motion: reduce) {
+  .detail-backdrop-space,
+  .detail-glyph,
+  .detail-title,
+  .detail-secondary {
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: scroll(nearest);
+    animation-range: 0 var(--detail-collapse-range);
+  }
+
+  .detail-backdrop-space {
+    animation-name: detail-backdrop-collapse;
+  }
+
+  .detail-glyph {
+    animation-name: detail-glyph-collapse;
+  }
+
+  .detail-title {
+    animation-name: detail-title-collapse;
+  }
+
+  /* `grid-template-rows: 1fr → 0fr` collapses to the content's real height with no guessed cap. */
+  .detail-secondary {
+    display: grid;
+    grid-template-rows: 1fr;
+    animation-name: detail-secondary-collapse;
+  }
+
+  .detail-secondary > * {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Reduced motion keeps both endpoint states but replaces interpolation with a one-pixel snap. */
+  @media (prefers-reduced-motion: reduce) {
     .detail-backdrop-space,
     .detail-glyph,
     .detail-title,
     .detail-secondary {
-      animation-timing-function: linear;
-      animation-fill-mode: both;
-      animation-timeline: scroll(nearest);
-      /* The collapse finishes over the header's own expanded height, so identity has reached its
-         compact size exactly when the artwork has finished shrinking behind it. */
-      animation-range: 0 var(--detail-collapse-range, 6rem);
-    }
-
-    .detail-backdrop-space {
-      animation-name: detail-backdrop-collapse;
-    }
-
-    .detail-glyph {
-      animation-name: detail-glyph-collapse;
-    }
-
-    .detail-title {
-      animation-name: detail-title-collapse;
-    }
-
-    /* `grid-template-rows: 1fr → 0fr` collapses to the content's real height with no magic number,
-       which `max-height` cannot do without someone guessing one. */
-    .detail-secondary {
-      display: grid;
-      grid-template-rows: 1fr;
-      animation-name: detail-secondary-collapse;
-    }
-
-    .detail-secondary > * {
-      min-height: 0;
-      overflow: hidden;
+      animation-timing-function: steps(1, end);
+      animation-range: 0 1px;
     }
   }
 }
@@ -949,12 +1001,21 @@
 
 @keyframes detail-title-collapse {
   from {
+    padding-block-start: var(--detail-expanded-glyph-row);
+    padding-inline-start: 0;
     font-size: var(--text-headline-medium);
     line-height: var(--text-headline-medium--line-height);
   }
+  99% {
+    white-space: normal;
+  }
   to {
+    padding-block-start: 0;
+    padding-inline-start: var(--detail-compact-identity-inset);
     font-size: var(--text-title-medium);
     line-height: var(--text-title-medium--line-height);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

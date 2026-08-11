@@ -85,6 +85,7 @@ export function EntityDetailLayout({
   return (
     <div
       data-detail-panel-scroll=""
+      data-detail-cover={cover ? 'present' : 'absent'}
       className={cn(
         // Sections are rows of this grid, so the rhythm between them is declared once here rather
         // than by each section spacing itself against its neighbours.
@@ -111,9 +112,9 @@ export function EntityDetailLayout({
 
         {cover ? <div aria-hidden="true" className="detail-backdrop-space" /> : null}
 
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="detail-glyph w-fit shrink-0 origin-left">{icon}</div>
-          <h1 className="detail-title text-on-surface text-headline-medium min-w-0 flex-1 truncate font-medium">
+        <div className="detail-identity">
+          <div className="detail-glyph">{icon}</div>
+          <h1 className="detail-title text-on-surface text-headline-medium min-w-0 font-medium">
             {title}
           </h1>
         </div>
@@ -130,7 +131,9 @@ export function EntityDetailLayout({
         {tabs}
       </header>
 
-      {children}
+      {/* This nested grid preserves the page measure while guaranteeing enough stable block-size
+          for the scroll-linked header to reach its compact endpoint on short panels. */}
+      <div className="detail-body page-bleed page-grid gap-y-4 @2xl:gap-y-5">{children}</div>
     </div>
   );
 }

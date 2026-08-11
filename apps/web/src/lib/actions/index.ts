@@ -50,6 +50,7 @@ export {
   DuplicateDomainRegistrationError,
   MalformedActionIdError,
   MissingActionResponsivenessError,
+  SynchronousActionResponsivenessError,
   UnknownActionError,
 } from './registry';
 export {

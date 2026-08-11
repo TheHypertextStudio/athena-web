@@ -48,6 +48,22 @@ describe('action registry: registration', () => {
     );
   });
 
+  it('rejects receipt metadata on a synchronous action before it can activate a receipt', () => {
+    const registry = createActionRegistry();
+    const invalidSynchronousReceipt = defineActionDomain('task', [
+      {
+        id: 'task.open',
+        label: 'Open',
+        responsiveness: TASK_MUTATION_RECEIPT,
+        run: () => undefined,
+      },
+    ]);
+
+    expect(() => registry.register('task', invalidSynchronousReceipt)).toThrow(
+      'Synchronous action "task.open" must not declare responsiveness metadata.',
+    );
+  });
+
   it('stamps the domain onto every definition and freezes the set', () => {
     const actions = defineActionDomain('task', [
       { id: 'task.complete', label: 'Complete', run: () => undefined },
@@ -253,10 +269,10 @@ describe('action registry: invocation', () => {
     const registry = createActionRegistry({
       receiptRuntime: { begin, observeAsync },
     });
-    const run = vi.fn(async (context: ActionContext) => {
+    const run = async (context: ActionContext): Promise<void> => {
       expect(begin).toHaveBeenCalledTimes(1);
       expect(context.parentInvocationId).toBe('ephemeral-root-invocation');
-    });
+    };
 
     registry.register(
       'task',

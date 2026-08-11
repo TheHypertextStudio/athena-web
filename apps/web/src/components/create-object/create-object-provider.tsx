@@ -43,6 +43,15 @@ export interface CreateTaskRequest extends CreateObjectRequestBase {
   readonly sameWorkspaceCompletion: SameWorkspaceCompletion;
   /** Notify the launcher after the task is created. */
   readonly onCreated?: (task: TaskOut) => void;
+  /**
+   * Run destination-independent follow-up work after every successful Task creation.
+   *
+   * @remarks
+   * Unlike {@link CreateTaskRequest.onCreated}, this continuation also runs after cross-workspace
+   * and repeat creation. It is reserved for domain work that remains valid after retargeting, such
+   * as linking the new Task to an Agenda item; it must not rebind or navigate the invoking page.
+   */
+  readonly afterCreate?: (task: TaskOut) => void | Promise<void>;
   /** Preselect a project in the new task draft. */
   readonly defaultProjectId?: string | null;
   /** Preselect an assignee in the new task draft. */

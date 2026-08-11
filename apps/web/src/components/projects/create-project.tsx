@@ -306,6 +306,9 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
               leadingSeparator={
                 <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
               }
+              onManage={() => {
+                onOpenChange(false);
+              }}
               onApply={(chosen) => {
                 updateDraft((current) =>
                   templateMerge(current, templatePatch(chosen.payload, 'project'), {

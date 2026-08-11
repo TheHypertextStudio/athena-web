@@ -102,6 +102,7 @@ vi.mock('next/navigation', () => ({
 import { CreateTaskDialog, GlobalTaskComposer } from '../../src/components/tasks/create-task';
 import { ComposerShell } from '../../src/components/composer/composer-shell';
 import { ComposerTemplateControl } from '../../src/components/composer/template-menu';
+import { UserFacingError } from '../../src/lib/problem';
 import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse } from '../support/http';
 
@@ -462,6 +463,82 @@ function renderGlobalTask({
   return { closeCreate, onCreated, client };
 }
 
+/** Render the real dialog while an initially-null shell workspace resolves to its opening org. */
+function renderDelayedOpeningTaskDefaults() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+
+  function Harness(): JSX.Element {
+    const [resolved, setResolved] = useState(false);
+    creationState.current = {
+      workspaces: [
+        { id: ORG_ID, name: 'Alpha workspace', slug: 'alpha', avatar: null, isPersonal: true },
+      ],
+      targetWorkspaceId: resolved ? ORG_ID : null,
+      setTargetWorkspaceId: vi.fn(),
+      workspace: resolved
+        ? {
+            id: ORG_ID,
+            name: 'Alpha workspace',
+            vocabulary: { preset: 'startup', overrides: {} },
+          }
+        : null,
+      teams: TEAMS,
+      members: [],
+      roles: [],
+      vocabulary: { preset: 'startup', overrides: {} },
+      defaultTeamId: TEAM_ID,
+      permissions: {
+        canContribute: true,
+        canManage: true,
+        canCreate: true,
+        loading: !resolved,
+      },
+      loading: !resolved,
+      loadError: null,
+    };
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            setResolved(true);
+          }}
+        >
+          Resolve original workspace
+        </button>
+        <CreateTaskDialog
+          orgId={ORG_ID}
+          teams={TEAMS}
+          defaultTeamId={TEAM_ID}
+          teamsLoading={!resolved}
+          open
+          onOpenChange={() => undefined}
+          onCreated={() => undefined}
+          defaultProjectId={APOLLO_ID}
+          defaultAssigneeId={ADA_ID}
+          globalCreation={{
+            targetWorkspaceId: resolved ? ORG_ID : null,
+            initialWorkspaceId: resolved ? ORG_ID : null,
+            ready: resolved,
+            loadError: null,
+            canContribute: true,
+            currentActorId: ADA_ID,
+            onCreated: () => undefined,
+          }}
+        />
+      </>
+    );
+  }
+
+  render(
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>,
+  );
+}
+
 /** Make one task template row without coupling tests to DTO implementation details. */
 function taskTemplate(
   name: string,
@@ -709,6 +786,66 @@ describe('CreateTaskDialog — robust composer', () => {
       expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/tasks/task_delayed_cross`);
     });
     expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('preserves contextual Task defaults when the delayed shell resolves to its opening workspace', async () => {
+    taskPost.mockResolvedValue(
+      jsonResponse(true, { id: 'task_delayed_original', title: 'Delayed' }),
+    );
+    renderDelayedOpeningTaskDefaults();
+
+    expect(workStructureGet).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Resolve original workspace'));
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalled();
+      expect(workStructureGet).toHaveBeenCalledWith(
+        expect.objectContaining({ param: { orgId: ORG_ID } }),
+      );
+      expect(screen.getByRole('button', { name: 'Create task' })).toBeDisabled();
+    });
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Delayed' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(taskPost).toHaveBeenCalledTimes(1);
+    });
+    expect(firstJson(taskPost.mock.calls)).toMatchObject({
+      assigneeId: ADA_ID,
+      projectId: APOLLO_ID,
+    });
+  });
+
+  it('closes the global composer before navigating to template settings', async () => {
+    templatesGet.mockResolvedValue(
+      jsonResponse(true, {
+        items: [taskTemplate('Shared template', 'organization', null, null)],
+      }),
+    );
+    const { closeCreate } = renderGlobalTask();
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Template' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Manage templates…' }));
+
+    expect(closeCreate).toHaveBeenCalledOnce();
+  });
+
+  it('labels a sole personal template group as Yours', async () => {
+    templatesGet.mockResolvedValue(
+      jsonResponse(true, {
+        items: [taskTemplate('My template', 'personal', ADA_ID, null)],
+      }),
+    );
+    renderGlobalTask();
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Template' }), {
+      button: 0,
+    });
+
+    expect(await screen.findByText('Yours')).toBeVisible();
+    expect(screen.getByText('My template')).toBeVisible();
   });
 
   it('clears a prior team workflow and cycle before submitting under the newly selected team', async () => {
@@ -1063,7 +1200,11 @@ describe('CreateTaskDialog — robust composer', () => {
 
   it('routes a normal cross-workspace Task without invoking the origin callback', async () => {
     taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_cross', title: 'Cross task' }));
-    const { closeCreate, onCreated } = renderGlobalTask({ teams: TEAMS });
+    const afterCreate = vi.fn();
+    const { closeCreate, onCreated } = renderGlobalTask({
+      teams: TEAMS,
+      request: { afterCreate },
+    });
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
       target: { value: TARGET_ORG_ID },
@@ -1081,11 +1222,117 @@ describe('CreateTaskDialog — robust composer', () => {
     });
     expect(closeCreate).toHaveBeenCalledOnce();
     expect(onCreated).not.toHaveBeenCalled();
+    expect(afterCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'task_cross', title: 'Cross task' }),
+    );
+  });
+
+  it('awaits destination-independent work before cross-workspace routing', async () => {
+    taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_awaited', title: 'Awaited task' }));
+    let finishContinuation: (() => void) | undefined;
+    const afterCreate = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishContinuation = resolve;
+        }),
+    );
+    const { closeCreate } = renderGlobalTask({
+      teams: TEAMS,
+      request: { afterCreate },
+    });
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: TARGET_ORG_ID },
+    });
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalledWith({
+        param: { orgId: TARGET_ORG_ID, teamId: TARGET_TEAM_ID },
+      });
+    });
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Awaited task' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      expect(afterCreate).toHaveBeenCalledOnce();
+    });
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(closeCreate).not.toHaveBeenCalled();
+
+    finishContinuation?.();
+    await waitFor(() => {
+      expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/tasks/task_awaited`);
+    });
+    expect(closeCreate).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a created Task visible when its destination-independent work fails', async () => {
+    taskPost.mockResolvedValue(
+      jsonResponse(true, {
+        id: 'task_unlinked',
+        organizationId: TARGET_ORG_ID,
+        title: 'Unlinked task',
+      }),
+    );
+    const afterCreate = vi.fn(() => {
+      throw new UserFacingError(
+        'The task was created, but we could not link it to this calendar item. Open the created task to copy its ID, then return to Calendar and use Link.',
+      );
+    });
+    const { client, closeCreate } = renderGlobalTask({
+      teams: TEAMS,
+      request: { afterCreate },
+    });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: TARGET_ORG_ID },
+    });
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalledWith({
+        param: { orgId: TARGET_ORG_ID, teamId: TARGET_TEAM_ID },
+      });
+    });
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Unlinked task' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+
+    expect(
+      await screen.findByText(
+        'The task was created, but we could not link it to this calendar item. Open the created task to copy its ID, then return to Calendar and use Link.',
+      ),
+    ).toBeVisible();
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(closeCreate).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Create task' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open created task' })).toBeEnabled();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks(TARGET_ORG_ID) });
+    expect(screen.getByLabelText('Task title')).toBeDisabled();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Add a description…')).toHaveAttribute(
+        'contenteditable',
+        'false',
+      );
+    });
+
+    const destination = screen.getByRole('combobox', { name: 'Workspace' });
+    fireEvent.change(destination, { target: { value: ORG_ID } });
+    expect(destination).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByText('Discard this draft?')).not.toBeInTheDocument();
+    expect(closeCreate).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open created task' }));
+    expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/tasks/task_unlinked`);
+    expect(closeCreate).toHaveBeenCalledTimes(2);
   });
 
   it('keeps a cross-workspace repeat in the modal without invoking the origin callback', async () => {
     taskPost.mockResolvedValue(jsonResponse(true, { id: 'task_cross_more', title: 'Cross more' }));
-    const { client, closeCreate, onCreated } = renderGlobalTask({ teams: TEAMS });
+    const afterCreate = vi.fn(() => Promise.resolve());
+    const { client, closeCreate, onCreated } = renderGlobalTask({
+      teams: TEAMS,
+      request: { afterCreate },
+    });
     const invalidate = vi.spyOn(client, 'invalidateQueries');
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
@@ -1106,6 +1353,9 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(closeCreate).not.toHaveBeenCalled();
     expect(routerPush).not.toHaveBeenCalled();
     expect(onCreated).not.toHaveBeenCalled();
+    expect(afterCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'task_cross_more', title: 'Cross more' }),
+    );
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks(TARGET_ORG_ID) });
   });
 

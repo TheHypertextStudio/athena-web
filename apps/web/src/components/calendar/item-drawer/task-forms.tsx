@@ -1,14 +1,12 @@
 'use client';
 
-import type { CalendarItemTaskRole } from '@docket/types';
 import { OrganizationId, TaskId } from '@docket/types';
 import { Button, Input, Select } from '@docket/ui/primitives';
 import { type JSX, type SubmitEventHandler, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 
-import { useCreateAndLinkTask, useLinkTaskToItem } from '../calendar-mutations';
-import { TASK_ROLE_LABEL, TASK_ROLE_ORDER } from './presentation';
+import { useLinkTaskToItem } from '../calendar-mutations';
 
 /** Props shared by task forms attached to a calendar item. */
 interface TaskFormProps {
@@ -16,84 +14,6 @@ interface TaskFormProps {
   itemId: string;
   /** Close the form after cancellation or success. */
   onDone: () => void;
-}
-
-/** Props for {@link CreateTaskForm}. */
-export interface CreateTaskFormProps extends TaskFormProps {
-  /** Placeholder shown in the optional task title field. */
-  fallbackTitle: string;
-}
-
-/** Create a new task and attach it to a calendar item. */
-export function CreateTaskForm({
-  itemId,
-  fallbackTitle,
-  onDone,
-}: CreateTaskFormProps): JSX.Element {
-  const { orgs } = useActiveOrg();
-  const create = useCreateAndLinkTask(itemId);
-  const [organizationId, setOrganizationId] = useState(orgs[0]?.id ?? null);
-  const [title, setTitle] = useState('');
-  const [role, setRole] = useState<CalendarItemTaskRole>('related');
-
-  const submit: SubmitEventHandler<HTMLFormElement> = (event) => {
-    event.preventDefault();
-    if (!organizationId) return;
-    create.mutate(
-      { organizationId, title: title.trim() || undefined, role },
-      { onSuccess: onDone },
-    );
-  };
-
-  return (
-    <form
-      onSubmit={submit}
-      className="border-outline-variant flex flex-col gap-2 rounded-md border p-3"
-    >
-      <OrganizationPicker
-        organizationId={organizationId}
-        onChange={setOrganizationId}
-        organizations={orgs}
-      />
-      <label className="text-label-medium flex flex-col gap-1">
-        <span className="text-on-surface-variant">Title (optional)</span>
-        <Input
-          value={title}
-          onChange={(event) => {
-            setTitle(event.target.value);
-          }}
-          placeholder={fallbackTitle}
-        />
-      </label>
-      <label className="text-label-medium flex flex-col gap-1">
-        <span className="text-on-surface-variant">Role</span>
-        <Select
-          value={role}
-          onChange={(event) => {
-            setRole(event.target.value as CalendarItemTaskRole);
-          }}
-        >
-          {TASK_ROLE_ORDER.map((option) => (
-            <option key={option} value={option}>
-              {TASK_ROLE_LABEL[option]}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <TaskFormActions
-        onDone={onDone}
-        pending={create.isPending}
-        disabled={!organizationId}
-        label="Create & link"
-        pendingLabel="Creating…"
-      />
-      {create.isError ? (
-        <p role="alert" className="text-error text-body-small">
-          We couldn&apos;t create and link this task. Please try again.
-        </p>
-      ) : null}
-    </form>
-  );
 }
 
 /** Props for {@link LinkTaskForm}. */

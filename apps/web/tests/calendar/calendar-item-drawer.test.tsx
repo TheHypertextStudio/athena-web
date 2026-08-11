@@ -5,9 +5,8 @@
  * Pins the item workspace's headline contract from the brief:
  *
  * - it shows multiple linked tasks, grouped by role;
- * - creating a task from the drawer calls the create-and-link mutation with the right payload
- *   and, on success, closes the create form (the create-and-link hook is invalidate-only, so a
- *   closed form with no error is the drawer's own signal that the link succeeded);
+ * - creating a task from the drawer opens the shell-global Task composer and links a successful
+ *   same-workspace creation back to the calendar item;
  * - a conflicted item renders both conflict actions ("Open in provider" and "Retry with local
  *   changes").
  */
@@ -19,10 +18,11 @@ import {
   CalendarLayerId,
   type CalendarLayerOut,
   OrganizationId,
+  type TaskOut,
   TaskId,
 } from '@docket/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -34,6 +34,7 @@ const {
   itemPatch,
   itemRelationsGet,
   itemRelationDelete,
+  openCreate,
 } = vi.hoisted(() => ({
   itemGet: vi.fn(),
   layersGet: vi.fn(),
@@ -42,6 +43,7 @@ const {
   itemPatch: vi.fn(),
   itemRelationsGet: vi.fn(),
   itemRelationDelete: vi.fn(),
+  openCreate: vi.fn(),
 }));
 
 vi.mock('../../src/lib/api', () => ({
@@ -72,8 +74,13 @@ vi.mock('../../src/lib/api', () => ({
   },
 }));
 
+vi.mock('../../src/components/create-object/create-object-provider', () => ({
+  useCreateObject: () => ({ request: null, openCreate, closeCreate: vi.fn() }),
+}));
+
 import { ActiveOrgContext } from '../../src/components/active-org';
 import CalendarItemDrawer from '../../src/components/calendar/calendar-item-drawer';
+import { QueuedOfflineWriteError } from '../../src/components/pwa/offline-write';
 
 const ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
@@ -221,6 +228,7 @@ function renderDrawer(
 }
 
 beforeEach(() => {
+  openCreate.mockReset();
   layersGet.mockReset().mockResolvedValue(okResponse({ items: [makeLayer()] }));
   itemGet.mockReset().mockResolvedValue(okResponse(makeItem()));
   itemTasksPost.mockReset().mockResolvedValue(
@@ -449,32 +457,73 @@ describe('CalendarItemDrawer', () => {
       expect(screen.getByText('Prep notes')).toBeInTheDocument();
     });
     expect(screen.getByText('Send recap')).toBeInTheDocument();
-    expect(screen.getByText('Prep')).toBeInTheDocument();
-    expect(screen.getByText('Follow-up')).toBeInTheDocument();
+    expect(screen.getByText('Prep', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByText('Follow-up', { selector: 'p' })).toBeInTheDocument();
   });
 
-  it('creates and links a task from the drawer, closing the form on success', async () => {
+  it('opens the global Task composer and awaits a selected-role link', async () => {
     renderDrawer(ITEM_ID);
 
     await waitFor(() => {
       expect(screen.getByText('Design review')).toBeInTheDocument();
     });
 
+    fireEvent.change(screen.getByRole('combobox', { name: 'New task relationship' }), {
+      target: { value: 'follow_up' },
+    });
     fireEvent.click(screen.getByRole('button', { name: /New/ }));
-    const titleInput = screen.getByPlaceholderText('Design review');
-    fireEvent.change(titleInput, { target: { value: 'Prep the deck' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create & link' }));
+
+    expect(openCreate).toHaveBeenCalledWith({
+      kind: 'task',
+      sameWorkspaceCompletion: 'stay',
+      afterCreate: expect.any(Function),
+    });
+    expect(screen.queryByRole('button', { name: 'Create & link' })).not.toBeInTheDocument();
+
+    const request = openCreate.mock.calls[0]?.[0] as {
+      afterCreate?: (task: TaskOut) => Promise<void>;
+    };
+    await act(async () => {
+      await request.afterCreate?.({
+        id: TASK_A,
+        organizationId: ORG_ID,
+        title: 'Prep the deck',
+      } as TaskOut);
+    });
 
     await waitFor(() => {
       expect(itemTasksPost).toHaveBeenCalledWith({
         param: { id: ITEM_ID },
-        json: { mode: 'create', organizationId: ORG_ID, title: 'Prep the deck', role: 'related' },
+        json: { mode: 'link', organizationId: ORG_ID, taskId: TASK_A, role: 'follow_up' },
       });
     });
-    // The form closes once the mutation succeeds — the drawer's own signal that the task linked.
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Create & link' })).not.toBeInTheDocument();
-    });
+  });
+
+  it('treats an offline-queued link as accepted instead of a hard failure', async () => {
+    itemTasksPost.mockRejectedValueOnce(new QueuedOfflineWriteError('queued-calendar-link'));
+    renderDrawer(ITEM_ID);
+    await screen.findByText('Design review');
+
+    fireEvent.click(screen.getByRole('button', { name: /New/ }));
+    const request = openCreate.mock.calls[0]?.[0] as {
+      afterCreate?: (task: TaskOut) => Promise<void>;
+    };
+
+    await expect(
+      request.afterCreate?.({
+        id: TASK_A,
+        organizationId: ORG_ID,
+        title: 'Queued follow-up',
+      } as TaskOut),
+    ).resolves.toBeUndefined();
+    expect(
+      await screen.findByText(
+        "Saved on this device. Docket will sync it as soon as you're back online.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("The task was created, but we couldn't link it to this calendar item."),
+    ).not.toBeInTheDocument();
   });
 
   it('renders both conflict actions for a conflicted item', async () => {

@@ -19,7 +19,8 @@ test.describe('layered calendar drawer', () => {
       layerId: layer.id,
       title: 'Quarterly planning',
     });
-    await installCalendarRoutes(page, calendarRouteState({ layers: [layer], items: [item] }));
+    const state = calendarRouteState({ layers: [layer], items: [item] });
+    await installCalendarRoutes(page, state);
 
     await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
     const body = scheduleItem(page, item.id).body;
@@ -27,16 +28,26 @@ test.describe('layered calendar drawer', () => {
     await body.click();
     const drawer = page.getByRole('dialog');
 
+    await drawer.getByLabel('New task relationship').selectOption('prep');
     await drawer.getByRole('button', { name: 'New' }).click();
-    await drawer.getByLabel('Title (optional)').fill('Prep the deck');
-    await drawer.getByRole('button', { name: 'Create & link' }).click();
-    await expect(drawer.getByText('Prep the deck')).toBeVisible();
+    const composer = page.getByRole('dialog', { name: 'New task' });
+    await composer.getByLabel('Task title').fill('Prep the deck');
+    await composer.getByRole('button', { name: 'Create task' }).click();
+    await expect(composer).toBeHidden();
+    await expect.poll(() => state.taskLinkPosts.at(-1)?.input.role).toBe('prep');
+    await expect(page).toHaveURL(/\/calendar$/);
 
-    await drawer.getByRole('button', { name: 'Link' }).click();
-    await drawer.getByLabel('Task ID').fill(CALENDAR_IDS.existingTask);
-    await drawer.getByRole('button', { name: 'Link task' }).click();
-    await expect(drawer.getByText('Existing task')).toBeVisible();
-    await expect(drawer.getByText('Prep the deck')).toBeVisible();
+    // The global modal dismisses the underlying modal drawer but honors the launcher's `stay`
+    // policy. Reopen the same item to prove the awaited link invalidation reached its owner.
+    await body.click();
+    const refreshedDrawer = page.getByRole('dialog');
+    await expect(refreshedDrawer.getByText('Prep the deck')).toBeVisible();
+
+    await refreshedDrawer.getByRole('button', { name: 'Link' }).click();
+    await refreshedDrawer.getByLabel('Task ID').fill(CALENDAR_IDS.existingTask);
+    await refreshedDrawer.getByRole('button', { name: 'Link task' }).click();
+    await expect(refreshedDrawer.getByText('Existing task')).toBeVisible();
+    await expect(refreshedDrawer.getByText('Prep the deck')).toBeVisible();
   });
 
   test('editable provider event writes back and reflects a clean sync state', async ({ page }) => {

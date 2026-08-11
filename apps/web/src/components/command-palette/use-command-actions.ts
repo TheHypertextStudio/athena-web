@@ -25,8 +25,14 @@ import { useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
-import { sortTemplates, templatesDef } from '@/components/templates/queries';
-import { useApiQuery } from '@/lib/query';
+import {
+  sortTemplates,
+  templateMatchesContext,
+  templatesDef,
+} from '@/components/templates/queries';
+import { api } from '@/lib/api';
+import { authClient } from '@/lib/auth-client';
+import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
 import { signOutAndPurge } from '@/lib/sign-out';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 
@@ -107,7 +113,8 @@ export function useCommandActions({
   const router = useRouter();
   const queryClient = useQueryClient();
   const { openCreate } = useCreateObject();
-  const { orgs, activeOrgId, orgName } = useActiveOrg();
+  const { orgs, activeOrgId, defaultTeamId, orgName } = useActiveOrg();
+  const { data: session } = authClient.useSession();
   const { density, setDensity } = useContextState();
   const taskNoun = useVocabulary('task');
   const projectNoun = useVocabulary('project');
@@ -119,6 +126,29 @@ export function useCommandActions({
     enabled: open && activeOrgId !== null,
   });
   const templateItems = templatesQuery.data?.items;
+  const membersQuery = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.members(activeOrgId ?? ''),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId: activeOrgId ?? '' } }),
+      'Could not load members.',
+      { enabled: open && activeOrgId !== null, staleTime: STALE.static },
+    ),
+  );
+  const currentActorId =
+    membersQuery.data?.items.find((member) => member.userId === session?.user.id)?.actorId ?? null;
+  const scopedTemplateItems = useMemo(
+    () =>
+      templateItems?.filter((template) =>
+        templateMatchesContext(
+          template,
+          currentActorId,
+          template.targetType === 'task' || template.targetType === 'project'
+            ? defaultTeamId
+            : null,
+        ),
+      ),
+    [currentActorId, defaultTeamId, templateItems],
+  );
 
   const nounFor = useMemo<Record<(typeof CREATABLE)[number]['kind'], string>>(
     () => ({
@@ -267,9 +297,9 @@ export function useCommandActions({
     );
 
     // ── Templates: one command per template, hidden until the user types ──────
-    if (activeOrgId && templateItems) {
+    if (activeOrgId && scopedTemplateItems) {
       const name = orgName(activeOrgId);
-      for (const template of sortTemplates(templateItems)) {
+      for (const template of sortTemplates(scopedTemplateItems)) {
         const noun = nounFor[template.targetType];
         items.push({
           id: `template:${template.id}`,
@@ -308,7 +338,7 @@ export function useCommandActions({
     close,
     density,
     setDensity,
-    templateItems,
+    scopedTemplateItems,
     nounFor,
     openCreate,
   ]);

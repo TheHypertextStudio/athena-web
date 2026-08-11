@@ -129,7 +129,9 @@ export interface TaskGlobalCreation {
     task: TaskOut,
     references: TaskCreationReferences,
     continueCreating: boolean,
-  ) => void;
+  ) => void | Promise<void>;
+  /** Open a committed Task when destination-independent completion work could not finish. */
+  readonly onOpenCreated?: (task: TaskOut) => void;
 }
 
 /** Props for {@link CreateTaskDialog}. */
@@ -189,7 +191,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   const destinationReady = globalCreation?.ready ?? true;
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
-  const { scale: estimationScale } = useEstimationScale(orgId);
+  const { scale: estimationScale } = useEstimationScale(orgId, open && destinationReady);
   const { draft, setField, updateDraft } = useComposerDraft<TaskDraft>({
     title: '',
     description: '',
@@ -208,6 +210,8 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
 
   const [workflowStates, setWorkflowStates] = useState<readonly WorkflowState[]>([]);
   const [creating, setCreating] = useState(false);
+  const [completionFailed, setCompletionFailed] = useState(false);
+  const [completedTask, setCompletedTask] = useState<TaskOut | null>(null);
   const [createMore, setCreateMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -221,8 +225,19 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   // the next one. The effective team immediately falls back to that workspace's default team.
   useEffect(() => {
     if (globalCreation === undefined) return;
-    if (previousWorkspaceId.current === globalCreation.targetWorkspaceId) return;
+    const previousTargetWorkspaceId = previousWorkspaceId.current;
+    if (previousTargetWorkspaceId === globalCreation.targetWorkspaceId) return;
     previousWorkspaceId.current = globalCreation.targetWorkspaceId;
+    // Resolving an initially-null shell workspace to its immutable opening destination is not a
+    // retarget. The contextual Project and assignee defaults were already seeded for that same
+    // workspace and must survive this provider-resolution frame.
+    if (
+      previousTargetWorkspaceId === null &&
+      globalCreation.targetWorkspaceId !== null &&
+      globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId
+    ) {
+      return;
+    }
     setWorkflowStates([]);
     setError(null);
     updateDraft(() => ({
@@ -313,17 +328,23 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     teamId !== null &&
     !teamsLoading &&
     destinationReady &&
+    !completionFailed &&
     (globalCreation?.canContribute ?? true);
 
   /** Create the task with all set properties, optionally continuing into a fresh text draft. */
   const submit = useCallback(
     async (continueCreating = false): Promise<void> => {
+      if (completedTask !== null) {
+        globalCreation?.onOpenCreated?.(completedTask);
+        return;
+      }
       const trimmed = draft.title.trim();
       if (trimmed.length === 0 || !teamId || !canSubmit || submitting.current) return;
       submitting.current = true;
       setCreating(true);
       setError(null);
       setStatusMessage(null);
+      let createdTask: TaskOut | null = null;
       try {
         const trimmedBody = draft.description.trim();
         const res = await api.v1.orgs[':orgId'].tasks.$post({
@@ -356,13 +377,14 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           return;
         }
         const created = await res.json();
+        createdTask = created;
         const references: TaskCreationReferences = {
           projectId: draft.projectId,
           milestoneId: draft.milestoneId,
           cycleId: draft.cycleId,
         };
         if (globalCreation !== undefined) {
-          globalCreation.onCreated(created, references, continueCreating);
+          await globalCreation.onCreated(created, references, continueCreating);
         }
         if (continueCreating) {
           focusTitleAfterContinuation.current = true;
@@ -374,13 +396,27 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         onOpenChange(false);
         if (globalCreation === undefined) onCreated(created);
       } catch (caught) {
+        if (createdTask !== null && globalCreation !== undefined) {
+          setCompletionFailed(true);
+          setCompletedTask(createdTask);
+        }
         setError(userErrorMessage(caught, 'Something went wrong creating the task.'));
       } finally {
         submitting.current = false;
         setCreating(false);
       }
     },
-    [canSubmit, draft, globalCreation, onCreated, onOpenChange, orgId, teamId, updateDraft],
+    [
+      canSubmit,
+      completedTask,
+      draft,
+      globalCreation,
+      onCreated,
+      onOpenChange,
+      orgId,
+      teamId,
+      updateDraft,
+    ],
   );
 
   return (
@@ -391,7 +427,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       contextRow={
         globalCreation ? (
           <>
-            <WorkspacePicker disabled={creating} />
+            <WorkspacePicker disabled={creating || completedTask !== null} />
             {teams.length > 1 ? (
               <>
                 <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
@@ -399,7 +435,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
                   teams={teams}
                   value={teamId}
                   onChange={changeTeam}
-                  disabled={creating}
+                  disabled={creating || completedTask !== null}
                 />
               </>
             ) : null}
@@ -413,6 +449,9 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
               leadingSeparator={
                 <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
               }
+              onManage={() => {
+                onOpenChange(false);
+              }}
               onApply={(chosen) => {
                 updateDraft((current) =>
                   templateMerge(current, templatePatch(chosen.payload, 'task'), {
@@ -421,7 +460,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
                   }),
                 );
               }}
-              disabled={creating || !destinationReady}
+              disabled={creating || completedTask !== null || !destinationReady}
             />
           </>
         ) : undefined
@@ -453,7 +492,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         ) : undefined
       }
       leadingAction={
-        globalCreation ? (
+        globalCreation && completedTask === null ? (
           <button
             type="button"
             role="switch"
@@ -478,7 +517,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         ) : undefined
       }
       onLeadingAction={
-        globalCreation
+        globalCreation && completedTask === null
           ? () => {
               void submit(true);
             }
@@ -498,10 +537,12 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       bodyPlaceholder="Add a description…"
       error={error ?? globalCreation?.loadError ?? null}
       statusMessage={statusMessage}
+      draftCommitted={completedTask !== null}
+      contentDisabled={completedTask !== null}
       creating={creating}
-      canSubmit={canSubmit}
+      canSubmit={completedTask !== null || canSubmit}
       onSubmit={() => void submit(createMore)}
-      submitLabel="Create task"
+      submitLabel={completedTask === null ? 'Create task' : 'Open created task'}
     >
       <TaskComposerPickers
         statusOptions={statusOptions}
@@ -523,7 +564,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         labelOptions={options.labelOptions}
         estimationScale={estimationScale}
         estimate={draft.estimate}
-        creating={creating}
+        creating={creating || completedTask !== null}
         onStateChange={(next) => {
           setField('state', next);
         }}
@@ -630,7 +671,7 @@ function GlobalTaskComposerDialog({
           loadError: creation.loadError,
           canContribute: creation.permissions.canContribute,
           currentActorId,
-          onCreated: (task, references, continueCreating) => {
+          onCreated: async (task, references, continueCreating) => {
             const invalidationKeys: (readonly unknown[])[] = [
               queryKeys.tasks(taskOrgId),
               // `queryKeys.taskGraph` documents this raw prefix as the canonical all-scopes key.
@@ -642,6 +683,15 @@ function GlobalTaskComposerDialog({
             if (references.cycleId !== null) {
               invalidationKeys.push(queryKeys.cycles(taskOrgId));
             }
+            const invalidate = (queryKey: readonly unknown[]): void => {
+              void queryClient.invalidateQueries({ queryKey });
+            };
+            try {
+              await request.afterCreate?.(task);
+            } catch (caught) {
+              for (const queryKey of invalidationKeys) invalidate(queryKey);
+              throw caught;
+            }
             completeCreateObject({
               created: task,
               initialWorkspaceId,
@@ -649,14 +699,16 @@ function GlobalTaskComposerDialog({
               sameWorkspaceCompletion: request.sameWorkspaceCompletion,
               onCreated: request.onCreated,
               invalidationKeys,
-              invalidate: (queryKey) => {
-                void queryClient.invalidateQueries({ queryKey });
-              },
+              invalidate,
               navigationEnabled: !continueCreating,
               openDestination: () => {
                 router.push(`/orgs/${taskOrgId}/tasks/${task.id}`);
               },
             });
+          },
+          onOpenCreated: (task) => {
+            closeCreate();
+            router.push(`/orgs/${task.organizationId}/tasks/${task.id}`);
           },
         }}
       />

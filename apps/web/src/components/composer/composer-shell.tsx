@@ -135,6 +135,10 @@ export interface ComposerShellProps {
   error?: string | null;
   /** Application-owned success copy announced without adding visible chrome to the composer. */
   statusMessage?: string | null;
+  /** Whether the object was committed and the remaining error belongs to post-create work. */
+  draftCommitted?: boolean;
+  /** Disable draft content without disabling a post-create recovery action. */
+  contentDisabled?: boolean;
   /** Whether a create is in flight (disables the form + shows the busy label). */
   creating: boolean;
   /** Whether the form may be submitted (e.g. the title is non-empty + a team resolved). */
@@ -178,6 +182,8 @@ export function ComposerShell({
   children,
   error,
   statusMessage,
+  draftCommitted = false,
+  contentDisabled = false,
   creating,
   canSubmit,
   onSubmit,
@@ -189,8 +195,10 @@ export function ComposerShell({
 
   // A draft worth protecting is one with typed text; bare default property picks are not.
   const isDirty =
-    title.trim().length > 0 || (summary ?? '').trim().length > 0 || body.trim().length > 0;
+    !draftCommitted &&
+    (title.trim().length > 0 || (summary ?? '').trim().length > 0 || body.trim().length > 0);
   const legacyTemplateSlotVisible = templateSlotVisible ?? Boolean(templateSlot);
+  const editDisabled = creating || contentDisabled;
   const hasLegacyIcon = icon !== undefined && icon !== null && icon !== false;
   const hasLegacyContext = context !== undefined && context !== null && context !== false;
   const legacyContextVisible = hasLegacyIcon || hasLegacyContext || legacyTemplateSlotVisible;
@@ -293,7 +301,11 @@ export function ComposerShell({
             contextRow !== undefined || legacyContextVisible ? 'pt-3' : 'pt-5',
           )}
         >
-          {leadingFields ? <div className="flex flex-col gap-3 pb-4">{leadingFields}</div> : null}
+          {leadingFields ? (
+            <fieldset disabled={editDisabled} className="flex flex-col gap-3 pb-4">
+              {leadingFields}
+            </fieldset>
+          ) : null}
 
           {/* Header block: the title, and — when opted in — an inline subtitle, read as one document. */}
           <div className="flex flex-col gap-1 pb-3">
@@ -302,7 +314,7 @@ export function ComposerShell({
               placeholder={titlePlaceholder}
               value={title}
               ref={titleInputRef}
-              disabled={creating}
+              disabled={editDisabled}
               autoFocus
               onChange={(event) => {
                 onTitleChange(event.target.value);
@@ -315,7 +327,7 @@ export function ComposerShell({
                 placeholder={summaryPlaceholder}
                 maxLength={summaryMaxLength}
                 value={summary ?? ''}
-                disabled={creating}
+                disabled={editDisabled}
                 onChange={(event) => {
                   onSummaryChange(event.target.value);
                 }}
@@ -337,7 +349,7 @@ export function ComposerShell({
               <FreeformTextEditor
                 key={bodyResetKey}
                 value={body}
-                disabled={creating}
+                disabled={editDisabled}
                 onChange={onBodyChange}
                 placeholder={bodyPlaceholder}
                 ariaLabel={bodyPlaceholder}

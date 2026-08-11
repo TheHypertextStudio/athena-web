@@ -1,6 +1,10 @@
 'use client';
 
-import type { CalendarItemLinkedTaskOut, CalendarItemOut } from '@docket/types';
+import type {
+  CalendarItemLinkedTaskOut,
+  CalendarItemOut,
+  CalendarItemTaskRole,
+} from '@docket/types';
 import { Link as LinkIcon, Plus } from '@docket/ui/icons';
 import {
   Button,
@@ -11,24 +15,28 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Select,
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useState } from 'react';
 
+import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { queuedOfflineWrite } from '@/components/pwa/offline-write';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
+import { UserFacingError } from '@/lib/problem';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
 
-import { useDetachTaskFromItem } from '../calendar-mutations';
+import { useDetachTaskFromItem, useLinkTaskToItem } from '../calendar-mutations';
 import {
   CANCEL_CLASS,
   DESTRUCTIVE_CONFIRM_CLASS,
   TASK_ROLE_LABEL,
   TASK_ROLE_ORDER,
 } from './presentation';
-import { CreateTaskForm, LinkTaskForm } from './task-forms';
+import { LinkTaskForm } from './task-forms';
 
 /** Props for {@link LinkedTasksSection}. */
 export interface LinkedTasksSectionProps {
@@ -40,8 +48,11 @@ export interface LinkedTasksSectionProps {
 
 /** Grouped linked-task stack with create, link, open, and detach actions. */
 export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps): JSX.Element {
-  const [showCreate, setShowCreate] = useState(false);
   const [showLink, setShowLink] = useState(false);
+  const [newTaskRole, setNewTaskRole] = useState<CalendarItemTaskRole>('related');
+  const { openCreate } = useCreateObject();
+  const linkCreatedTask = useLinkTaskToItem(item.id);
+  const queuedLink = queuedOfflineWrite(linkCreatedTask.error);
   const grouped = TASK_ROLE_ORDER.map((role) => ({
     role,
     links: item.linkedTasks.filter((link) => link.role === role),
@@ -52,12 +63,46 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
       <div className="flex items-center justify-between">
         <h3 className="text-on-surface text-title-small">Linked tasks</h3>
         <div className="flex gap-1">
+          <Select
+            aria-label="New task relationship"
+            value={newTaskRole}
+            className="h-8 w-28"
+            disabled={linkCreatedTask.isPending}
+            onChange={(event) => {
+              setNewTaskRole(event.target.value as CalendarItemTaskRole);
+            }}
+          >
+            {TASK_ROLE_ORDER.map((role) => (
+              <option key={role} value={role}>
+                {TASK_ROLE_LABEL[role]}
+              </option>
+            ))}
+          </Select>
           <Button
             size="sm"
             variant="outline"
+            disabled={linkCreatedTask.isPending}
             onClick={() => {
-              setShowCreate((value) => !value);
               setShowLink(false);
+              openCreate({
+                kind: 'task',
+                sameWorkspaceCompletion: 'stay',
+                afterCreate: async (task) => {
+                  try {
+                    await linkCreatedTask.mutateAsync({
+                      organizationId: task.organizationId,
+                      taskId: task.id,
+                      role: newTaskRole,
+                    });
+                  } catch (cause) {
+                    if (queuedOfflineWrite(cause)) return;
+                    throw new UserFacingError(
+                      'The task was created, but we could not link it to this calendar item. Open the created task to copy its ID, then return to Calendar and use Link.',
+                      { cause },
+                    );
+                  }
+                },
+              });
             }}
           >
             <Plus /> New
@@ -67,7 +112,6 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
             variant="outline"
             onClick={() => {
               setShowLink((value) => !value);
-              setShowCreate(false);
             }}
           >
             <LinkIcon /> Link
@@ -97,14 +141,19 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
         </div>
       )}
 
-      {showCreate ? (
-        <CreateTaskForm
-          itemId={item.id}
-          fallbackTitle={item.title}
-          onDone={() => {
-            setShowCreate(false);
-          }}
-        />
+      {linkCreatedTask.isPending ? (
+        <p role="status" className="text-on-surface-variant text-body-small">
+          Linking task…
+        </p>
+      ) : null}
+      {queuedLink ? (
+        <p role="status" className="text-on-surface-variant text-body-small">
+          {queuedLink.message}
+        </p>
+      ) : linkCreatedTask.isError ? (
+        <p role="alert" className="text-error text-body-small">
+          The task was created, but we couldn&apos;t link it to this calendar item. Please try Link.
+        </p>
       ) : null}
       {showLink ? (
         <LinkTaskForm

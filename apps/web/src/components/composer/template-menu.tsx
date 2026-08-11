@@ -34,7 +34,11 @@ import Link from 'next/link';
 import { type JSX, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
 import { sectionHref } from '@/components/settings/settings-registry';
-import { sortTemplates, templatesOfKindDef } from '@/components/templates/queries';
+import {
+  sortTemplates,
+  templateMatchesContext,
+  templatesOfKindDef,
+} from '@/components/templates/queries';
 import { useApiQuery } from '@/lib/query';
 
 // Keep the legacy shell's visibility state in sync before the browser paints on the client, while
@@ -59,6 +63,8 @@ export interface TemplateMenuProps {
   onApply: (template: TemplateOut) => void;
   /** Where "Manage templates…" leads (the workspace's Templates settings). */
   manageHref: string;
+  /** Close a shell-global composer before the persistent shell navigates to settings. */
+  onManage?: () => void;
   /** Whether the composer is submitting, which disables the control with everything else. */
   disabled: boolean;
 }
@@ -74,6 +80,7 @@ export function TemplateMenu({
   templates,
   onApply,
   manageHref,
+  onManage,
   disabled,
 }: TemplateMenuProps): JSX.Element | null {
   if (templates.length === 0) return null;
@@ -83,10 +90,6 @@ export function TemplateMenu({
     scope,
     items: ordered.filter((template) => template.scope === scope),
   })).filter((group) => group.items.length > 0);
-  // A single group needs no heading: the heading would be the only thing distinguishing rows that
-  // are already alike, which is a label doing no work.
-  const showHeadings = groups.length > 1;
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -105,9 +108,7 @@ export function TemplateMenu({
       <DropdownMenuContent align="end" className="w-72">
         {groups.map((group) => (
           <div key={group.scope}>
-            {showHeadings ? (
-              <DropdownMenuLabel>{SCOPE_LABEL[group.scope]}</DropdownMenuLabel>
-            ) : null}
+            <DropdownMenuLabel>{SCOPE_LABEL[group.scope]}</DropdownMenuLabel>
             {group.items.map((template) => (
               <DropdownMenuItem
                 key={template.id}
@@ -123,7 +124,7 @@ export function TemplateMenu({
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href={manageHref}>
+          <Link href={manageHref} onClick={onManage}>
             <Settings />
             Manage templates…
           </Link>
@@ -180,6 +181,8 @@ export interface ComposerTemplateControlProps {
   autoApplyId?: string | null;
   /** Report whether this data-connected control renders a visible template menu. */
   onVisibilityChange?: (visible: boolean) => void;
+  /** Close a shell-global composer before navigating to template settings. */
+  onManage?: () => void;
   /** Whether the composer is submitting. */
   disabled: boolean;
 }
@@ -205,6 +208,7 @@ export function ComposerTemplateControl({
   leadingSeparator,
   autoApplyId = null,
   onVisibilityChange,
+  onManage,
   disabled,
 }: ComposerTemplateControlProps): JSX.Element | null {
   const query = useApiQuery({ ...templatesOfKindDef(orgId, kind), enabled: open });
@@ -216,11 +220,9 @@ export function ComposerTemplateControl({
     // existing visibility unchanged. A migrated global composer passes both values and makes the
     // server's intentionally broad read safe for the destination currently on screen.
     if (currentActorId === undefined && teamId === undefined) return all;
-    return all.filter((template) => {
-      if (template.scope === 'organization') return true;
-      if (template.scope === 'personal') return template.ownerActorId === currentActorId;
-      return template.teamId === teamId;
-    });
+    return all.filter((template) =>
+      templateMatchesContext(template, currentActorId ?? null, teamId ?? null),
+    );
   }, [currentActorId, items, teamId]);
 
   // Guarded by a ref so a re-render after the merge does not apply the same template twice.
@@ -253,6 +255,7 @@ export function ComposerTemplateControl({
         templates={templates}
         onApply={onApply}
         manageHref={sectionHref(orgId, 'templates')}
+        onManage={onManage}
         disabled={disabled}
       />
     </>

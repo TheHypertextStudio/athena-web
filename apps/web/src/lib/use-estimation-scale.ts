@@ -18,17 +18,19 @@ export interface EstimationScaleState {
  * every open estimate picker without a separate invalidation path.
  *
  * @param orgId - The active organization id.
+ * @param enabled - Whether the destination is resolved and the query may run.
  */
-export function useEstimationScale(orgId: string): EstimationScaleState {
-  const settingsQ = useApiQuery(
-    apiQueryOptions(
+export function useEstimationScale(orgId: string, enabled = true): EstimationScaleState {
+  const settingsQ = useApiQuery({
+    ...apiQueryOptions(
       queryKeys.settings(orgId, 'work-structure'),
       () => api.v1.orgs[':orgId'].settings['work-structure'].$get({ param: { orgId } }),
       'Could not load work structure settings.',
     ),
-  );
+    enabled,
+  });
   return {
     scale: settingsQ.data?.estimationScale ?? null,
-    loading: settingsQ.isPending,
+    loading: enabled && settingsQ.isPending,
   };
 }

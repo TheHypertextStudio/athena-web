@@ -112,6 +112,24 @@ export function templatePatch<K extends TemplateTargetType>(
   ) as TemplatePatch<K>;
 }
 
+/**
+ * Decide whether a broad template row belongs to the selected person/team context.
+ *
+ * @param template - Template returned by the intentionally broad workspace roster.
+ * @param currentActorId - Signed-in member Actor id in that workspace, or `null` when unresolved.
+ * @param teamId - Team currently selected by the composer, or `null` when no team is selected.
+ * @returns Whether the template is safe and applicable in the current creation context.
+ */
+export function templateMatchesContext(
+  template: TemplateOut,
+  currentActorId: string | null,
+  teamId: string | null,
+): boolean {
+  if (template.scope === 'organization') return true;
+  if (template.scope === 'personal') return template.ownerActorId === currentActorId;
+  return template.teamId === teamId;
+}
+
 /** Group templates for a picker or a settings list: shared first, then the caller's own. */
 export function sortTemplates(items: readonly TemplateOut[]): readonly TemplateOut[] {
   const rank: Record<TemplateOut['scope'], number> = { organization: 0, team: 1, personal: 2 };

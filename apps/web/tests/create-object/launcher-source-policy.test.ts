@@ -572,6 +572,23 @@ describe('global creation launcher source policy', () => {
     }
   });
 
+  it('has no page-owned calendar Task creation form', () => {
+    for (const entry of PRODUCTION_SOURCES) {
+      expect(entry.text, entry.path).not.toContain('CreateTaskForm');
+    }
+  });
+
+  it('keeps the legacy create-and-link hook behind its compatibility definition', () => {
+    const allowedDefinitions = new Set([
+      'src/components/calendar/calendar-mutations.ts',
+      'src/components/calendar/calendar-relationship-mutations.ts',
+    ]);
+    for (const entry of PRODUCTION_SOURCES) {
+      if (allowedDefinitions.has(entry.path)) continue;
+      expect(entry.text, entry.path).not.toContain('useCreateAndLinkTask');
+    }
+  });
+
   it('allows only the Initiative update composer compose query', () => {
     const occurrences = findComposeOccurrences(PRODUCTION_SOURCES);
 

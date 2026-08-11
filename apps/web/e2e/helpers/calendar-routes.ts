@@ -3,6 +3,7 @@ import {
   CalendarItemCreate,
   CalendarItemRelationCreate,
   CalendarItemTaskLinkCreate,
+  TaskCreate,
 } from '@docket/types';
 import type {
   AgendaOut,
@@ -16,6 +17,7 @@ import type {
   CalendarLayerUpdate,
   HubPreferences,
   ScheduleComparisonOut,
+  TaskCreate as TaskCreateType,
 } from '@docket/types';
 import type { Page } from '@playwright/test';
 
@@ -31,6 +33,12 @@ export interface CalendarItemPatchRecord {
 export interface CalendarTaskLinkPostRecord {
   readonly itemId: string;
   readonly input: CalendarItemTaskLinkCreateType;
+}
+
+/** One Task create observed from the shell-global composer. */
+export interface CalendarTaskCreateRecord {
+  readonly organizationId: string;
+  readonly input: TaskCreateType;
 }
 
 /** One observed calendar relationship write, including its directed source route. */
@@ -53,6 +61,7 @@ export interface CalendarRouteState {
   readonly itemCreates: CalendarItemCreateType[];
   readonly itemPatches: CalendarItemPatchRecord[];
   readonly taskLinkPosts: CalendarTaskLinkPostRecord[];
+  readonly taskCreates: CalendarTaskCreateRecord[];
   readonly relationGets: string[];
   readonly ownedItemGets: string[];
   readonly relationPosts: CalendarRelationPostRecord[];
@@ -82,6 +91,7 @@ export function calendarRouteState(
     itemCreates: [],
     itemPatches: [],
     taskLinkPosts: [],
+    taskCreates: [],
     relationGets: [],
     ownedItemGets: [],
     relationPosts: [],
@@ -280,6 +290,19 @@ async function installComparisonRoutes(page: Page, state: CalendarRouteState): P
 
 /** Install create-and-link and link-existing task fixtures for the drawer contract. */
 async function installTaskRoutes(page: Page, state: CalendarRouteState): Promise<void> {
+  await page.route('**/v1/orgs/*/tasks', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const organizationId = route.request().url().split('/orgs/')[1]?.split('/tasks')[0] ?? '';
+    const input = TaskCreate.parse(route.request().postDataJSON());
+    state.taskCreates.push({ organizationId, input });
+    await route.fulfill({
+      json: {
+        id: CALENDAR_IDS.createdTask,
+        organizationId,
+        title: input.title,
+      },
+    });
+  });
   await page.route('**/v1/me/calendar/items/*/tasks', async (route) => {
     if (route.request().method() !== 'POST') return route.fallback();
     const itemId = route.request().url().split('/items/')[1]?.split('/tasks')[0];
@@ -287,7 +310,13 @@ async function installTaskRoutes(page: Page, state: CalendarRouteState): Promise
     const input = CalendarItemTaskLinkCreate.parse(route.request().postDataJSON());
     state.taskLinkPosts.push({ itemId: itemId ?? '', input });
     const taskId = input.mode === 'link' ? input.taskId : CALENDAR_IDS.createdTask;
-    const title = input.mode === 'create' ? (input.title ?? 'New task') : 'Existing task';
+    const createdTask = state.taskCreates.find((candidate) => candidate.input.title.length > 0);
+    const title =
+      input.mode === 'create'
+        ? (input.title ?? 'New task')
+        : input.taskId === CALENDAR_IDS.createdTask
+          ? (createdTask?.input.title ?? 'New task')
+          : 'Existing task';
     const link = {
       taskId,
       organizationId: input.organizationId,

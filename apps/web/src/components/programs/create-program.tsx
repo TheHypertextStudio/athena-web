@@ -223,6 +223,9 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
               leadingSeparator={
                 <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
               }
+              onManage={() => {
+                onOpenChange(false);
+              }}
               onApply={(chosen) => {
                 updateDraft((current) =>
                   templateMerge(current, templatePatch(chosen.payload, 'program'), {

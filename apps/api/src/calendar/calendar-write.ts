@@ -429,15 +429,26 @@ function toWritePatch(
   if (patch.title !== undefined) out.title = patch.title;
   if (patch.description !== undefined) out.description = patch.description;
   if (patch.location !== undefined) out.location = patch.location;
-  if (patch.timezone !== undefined) out.timezone = patch.timezone;
-  if (patch.endTimezone !== undefined) {
+  const zoneTouched = patch.timezone !== undefined || patch.endTimezone !== undefined;
+  if (zoneTouched) {
     out.timezone = patch.timezone ?? existing.timezone ?? undefined;
-    out.endTimezone = patch.endTimezone;
+    if (patch.endTimezone !== undefined) out.endTimezone = patch.endTimezone;
+    else if (existing.endTimezone !== null) out.endTimezone = existing.endTimezone;
   }
   if (timePatch.startsAt) out.startsAt = timePatch.startsAt.toISOString();
   if (timePatch.endsAt) out.endsAt = timePatch.endsAt.toISOString();
   if (timePatch.allDayStartDate) out.allDayStartDate = timePatch.allDayStartDate;
   if (timePatch.allDayEndDate) out.allDayEndDate = timePatch.allDayEndDate;
+  if (
+    zoneTouched &&
+    timePatch.startsAt === undefined &&
+    timePatch.endsAt === undefined &&
+    existing.startsAt !== null &&
+    existing.endsAt !== null
+  ) {
+    out.startsAt = existing.startsAt.toISOString();
+    out.endsAt = existing.endsAt.toISOString();
+  }
   return out;
 }
 

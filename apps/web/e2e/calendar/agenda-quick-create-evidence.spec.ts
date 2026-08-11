@@ -2,15 +2,18 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import type { CalendarItemOut } from '@docket/types';
 import type { Locator, Page } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';
 import { CALENDAR_IDS, makeCalendarItem, makeCalendarLayer } from '../helpers/calendar-fixtures';
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
+import { ORIGIN } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { setColorScheme } from '../helpers/ui';
 
 const DAY = '2026-08-10';
+const API_ORIGIN = process.env['API_URL'] ?? `https://api.${new URL(ORIGIN).hostname}`;
 const SHOT_DIR = resolve(
   process.cwd(),
   '../../docs/design/audits/screenshots/2026-08-10-agenda-quick-create',
@@ -61,6 +64,12 @@ test('Agenda quick create stays outside the rail across responsive themes', asyn
   const aside = page.getByRole('complementary', { name: 'Agenda' });
   await expect(aside).toBeVisible();
   await expect(aside.getByRole('group', { name: 'Agenda zoom' })).toContainText('1×');
+  await aside.getByRole('button', { name: 'Agenda display settings, 1×' }).click();
+  await expect(page.getByRole('menuitemradio', { name: 'Timeline' })).toBeChecked();
+  await page.getByRole('menuitemradio', { name: '2×' }).click();
+  await expect(aside.getByRole('group', { name: 'Agenda zoom' })).toContainText('2×');
+  await aside.getByRole('button', { name: 'Agenda display settings, 2×' }).click();
+  await page.getByRole('menuitemradio', { name: '1×' }).click();
   const lane = aside.locator(`[data-schedule-lane="agenda:${DAY}"]`);
   await expect(lane).toBeVisible();
   await createAgendaRegion(lane);
@@ -69,21 +78,22 @@ test('Agenda quick create stays outside the rail across responsive themes', asyn
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
   await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await page.waitForTimeout(300);
   const [dialogBox, asideBox] = await Promise.all([dialog.boundingBox(), aside.boundingBox()]);
   expect(dialogBox).not.toBeNull();
   expect(asideBox).not.toBeNull();
   expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(asideBox!.x);
-  await page.waitForTimeout(300);
-  const handle = dialog.getByRole('button', { name: 'Move create dialog' });
+  const handle = dialog.getByRole('button', { name: 'Move create-event dialog' });
   const handleBox = await handle.boundingBox();
   if (!handleBox) throw new Error('Dialog handle has no browser geometry.');
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(handleBox.x + handleBox.width / 2 + 180, handleBox.y + 80, { steps: 8 });
+  await page.mouse.move(handleBox.x + handleBox.width / 2 - 180, handleBox.y + 80, { steps: 8 });
   await page.mouse.up();
+  await page.waitForTimeout(100);
   const draggedBox = await dialog.boundingBox();
   expect(draggedBox).not.toBeNull();
-  expect(draggedBox!.x).toBeGreaterThan(dialogBox!.x);
+  expect(draggedBox!.x).toBeLessThan(dialogBox!.x);
   expect(draggedBox!.x + draggedBox!.width).toBeLessThanOrEqual(asideBox!.x);
   expect(state.itemCreates).toHaveLength(0);
 
@@ -93,7 +103,7 @@ test('Agenda quick create stays outside the rail across responsive themes', asyn
   await capture(page, 'desktop-dark-overview');
   await setColorScheme(page, 'light');
 
-  await dialog.getByRole('button', { name: 'Edit date and time' }).click();
+  await dialog.getByRole('button', { name: /Edit schedule/ }).click();
   await expect(dialog.getByLabel('Start date')).toBeVisible();
   await expect(dialog.getByLabel('Start time')).toBeVisible();
   await dialog.getByRole('button', { name: 'Time zone' }).click();
@@ -113,11 +123,98 @@ test('Agenda quick create stays outside the rail across responsive themes', asyn
   await expect(mobileLane).toBeVisible();
   await createAgendaRegion(mobileLane);
   await expect(dialog).toHaveAttribute('data-create-presentation', 'agenda-mobile');
+  const mobileHost = mobileAside.locator('[data-agenda-create-host]');
+  await expect(mobileHost).toBeVisible();
+  await expect(mobileLane).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Move create-event dialog' })).toHaveCount(0);
+  expect(
+    await dialog.evaluate(
+      (node) => node.parentElement?.closest('[data-agenda-create-host]') !== null,
+    ),
+  ).toBe(true);
   await setColorScheme(page, 'light');
   await capture(page, 'mobile-light-overview');
   await setColorScheme(page, 'dark');
   await capture(page, 'mobile-dark-overview');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await dialog.getByRole('button', { name: 'Close' }).click();
+
+  await page.setViewportSize({ width: 820, height: 900 });
+  await setColorScheme(page, 'light');
+  const tabletLane = mobileAside.locator(`[data-schedule-lane="agenda:${DAY}"]`);
+  await expect(tabletLane).toBeVisible();
+  await createAgendaRegion(tabletLane);
+  await expect(mobileAside.locator('[data-agenda-create-host]')).toBeVisible();
+  await expect(tabletLane).toHaveCount(0);
+  await capture(page, 'tablet-light-overview');
   await page.setViewportSize({ width: 320, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});
+
+test('quick create persists one-zone and split-zone events through a cold reload', async ({
+  page,
+}) => {
+  await page.clock.setFixedTime('2026-08-10T17:00:00.000Z');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signUpAndOnboard(page, 'AgendaQuickCreatePersistence');
+  await page.goto('/today', { waitUntil: 'domcontentloaded' });
+
+  const aside = page.getByRole('complementary', { name: 'Agenda' });
+  const lane = aside.locator(`[data-schedule-lane="agenda:${DAY}"]`);
+  const dialog = page.getByRole('dialog', { name: 'Create calendar item' });
+  await expect(lane).toBeVisible();
+
+  await createAgendaRegion(lane);
+  await dialog.getByLabel('Title').fill('Local planning block');
+  const oneZoneResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && response.url().endsWith('/v1/me/calendar/items'),
+  );
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  const oneZone = (await (await oneZoneResponse).json()) as CalendarItemOut;
+  expect(oneZone.timezone).toBe('America/Los_Angeles');
+  expect(oneZone.endTimezone ?? null).toBeNull();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (id) => document.activeElement?.getAttribute('data-schedule-item-body') === id,
+        oneZone.id,
+      ),
+    )
+    .toBe(true);
+
+  await createAgendaRegion(lane);
+  await dialog.getByLabel('Title').fill('New York handoff');
+  await dialog.getByRole('button', { name: /Edit schedule/ }).click();
+  await dialog.getByRole('button', { name: 'Time zone' }).click();
+  const zoneDialog = page.getByRole('dialog', { name: 'Event time zone' });
+  await zoneDialog.getByLabel('Use separate start and end time zones').check();
+  await zoneDialog.getByRole('button', { name: /Ends/ }).click();
+  const zoneSearch = zoneDialog.getByRole('combobox', { name: 'Search time zones' });
+  await zoneSearch.fill('America/New_York');
+  await zoneSearch.press('Enter');
+  await zoneDialog.getByRole('button', { name: 'OK' }).click();
+  await dialog.getByLabel('End time').fill('14:00');
+  const splitZoneResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' && response.url().endsWith('/v1/me/calendar/items'),
+  );
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  const splitZone = (await (await splitZoneResponse).json()) as CalendarItemOut;
+  expect(splitZone.timezone).toBe('America/Los_Angeles');
+  expect(splitZone.endTimezone).toBe('America/New_York');
+
+  for (const item of [oneZone, splitZone]) {
+    const response = await page.request.get(`${API_ORIGIN}/v1/me/calendar/items/${item.id}`);
+    expect(response.ok(), `read ${item.title}: ${String(response.status())}`).toBe(true);
+    expect((await response.json()) as CalendarItemOut).toMatchObject({
+      id: item.id,
+      timezone: item.timezone,
+      endTimezone: item.endTimezone ?? null,
+    });
+  }
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(aside.getByText(oneZone.title)).toBeVisible();
+  await expect(aside.getByText(splitZone.title)).toBeVisible();
 });

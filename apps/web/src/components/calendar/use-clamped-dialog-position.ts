@@ -25,6 +25,21 @@ export function clampDialogPoint(
   };
 }
 
+/** Default quick-create placement: hug the Agenda edge and follow the selected region. */
+export function defaultDialogPoint(
+  host: { readonly width: number; readonly height: number },
+  dialog: { readonly width: number; readonly height: number },
+  preferredTop: number,
+  inset = 16,
+): Point {
+  return clampDialogPoint(
+    { x: host.width - dialog.width - inset, y: preferredTop },
+    host,
+    dialog,
+    inset,
+  );
+}
+
 /** Position and drag a dialog within the primary shell column, never across the Agenda boundary. */
 export function useClampedDialogPosition({
   open,
@@ -64,14 +79,7 @@ export function useClampedDialogPosition({
       const hostRect = host.getBoundingClientRect();
       const dialogRect = dialog.getBoundingClientRect();
       setPoint((current) =>
-        preserveEqualPoint(
-          current,
-          clampDialogPoint(
-            { x: (hostRect.width - dialogRect.width) / 2, y: preferredTop },
-            hostRect,
-            dialogRect,
-          ),
-        ),
+        preserveEqualPoint(current, defaultDialogPoint(hostRect, dialogRect, preferredTop)),
       );
     };
     const frame = window.requestAnimationFrame(place);

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { clampDialogPoint } from '../../src/components/calendar/use-clamped-dialog-position';
+import {
+  clampDialogPoint,
+  defaultDialogPoint,
+} from '../../src/components/calendar/use-clamped-dialog-position';
 
 describe('clampDialogPoint', () => {
   it('keeps every dialog edge inside the primary shell host', () => {
@@ -24,5 +27,11 @@ describe('clampDialogPoint', () => {
     expect(
       clampDialogPoint({ x: 80, y: 80 }, { width: 320, height: 240 }, { width: 420, height: 360 }),
     ).toEqual({ x: 16, y: 16 });
+  });
+
+  it('hugs the Agenda boundary while following the selected region vertically', () => {
+    expect(
+      defaultDialogPoint({ width: 1_000, height: 800 }, { width: 420, height: 500 }, 180),
+    ).toEqual({ x: 564, y: 180 });
   });
 });

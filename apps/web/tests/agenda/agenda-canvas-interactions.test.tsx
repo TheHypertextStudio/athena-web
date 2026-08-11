@@ -16,6 +16,7 @@ import type { SchedulingCanvasProps } from '../../src/components/scheduling';
 import type { CreateBlockFormProps } from '../../src/components/calendar/create-block-form';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
+const mediaState = vi.hoisted(() => ({ isDesktop: true }));
 const canvas = vi.hoisted<{ props: SchedulingCanvasProps | undefined }>(() => ({
   props: undefined,
 }));
@@ -50,6 +51,7 @@ const mutationState = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
+vi.mock('@docket/ui/hooks', () => ({ useMediaQuery: () => mediaState.isDesktop }));
 
 vi.mock('../../src/components/agenda/agenda-context', () => ({
   isTimeboxed: (entry: { startsAt?: string; endsAt?: string }) =>
@@ -216,6 +218,7 @@ function canvasProps(): SchedulingCanvasProps {
 
 beforeEach(() => {
   canvas.props = undefined;
+  mediaState.isDesktop = true;
   quickCreate.props = undefined;
   agendaState.date = '2026-07-13';
   agendaState.entries = [];
@@ -305,6 +308,22 @@ describe('Agenda scheduling interactions', () => {
       allDayStartDate: '2026-07-13',
       allDayEndDate: '2026-07-14',
     });
+  });
+
+  it('replaces the mobile timeline with an Agenda-owned sibling create host', () => {
+    mediaState.isDesktop = false;
+    renderTimeline([]);
+    const props = canvasProps();
+    const lane = props.lanes[0]!;
+
+    act(() => {
+      props.onSelectRegion?.({ lane, startMinutes: 9 * 60, endMinutes: 9 * 60 + 30 });
+    });
+
+    const host = document.querySelector<HTMLElement>('[data-agenda-create-host]');
+    expect(host).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Schedule' })).not.toBeInTheDocument();
+    expect(quickCreate.props?.agendaMobileHost).toBe(host);
   });
 
   it('keeps the list view informative when the day has no entries', () => {

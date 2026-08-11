@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildTimezoneSearchIndex,
   searchTimezones,
+  supportedTimezoneIds,
 } from '../../src/components/calendar/timezone-search';
+import { TIMEZONE_INDEX_VERSION } from '../../src/components/calendar/timezone-index';
 
 const ZONES = ['America/Los_Angeles', 'America/Vancouver', 'Pacific/Pitcairn', 'America/New_York'];
 
@@ -36,5 +38,11 @@ describe('timezone search', () => {
   it('returns no suggestions for a blank query and respects the result limit', () => {
     expect(searchTimezones(entries, '   ')).toEqual([]);
     expect(searchTimezones(entries, 'America', 2)).toHaveLength(2);
+  });
+
+  it('uses a versioned, checked-in timezone inventory', () => {
+    expect(TIMEZONE_INDEX_VERSION).toBe('2026-08-10-node-24-icu');
+    expect(supportedTimezoneIds()).toContain('America/Los_Angeles');
+    expect(supportedTimezoneIds().length).toBeGreaterThan(400);
   });
 });

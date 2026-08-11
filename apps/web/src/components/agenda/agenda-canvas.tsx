@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@docket/ui/primitives';
+import { SHELL_DESKTOP_QUERY } from '@docket/ui/components';
+import { useMediaQuery } from '@docket/ui/hooks';
 
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
 import CreateBlockForm, {
@@ -100,6 +102,8 @@ function TimelineArrangement({
     readonly canvasRegion: ScheduleRegionSelection | null;
   } | null>(null);
   const [draftDirty, setDraftDirty] = useState(false);
+  const [mobileCreateHost, setMobileCreateHost] = useState<HTMLDivElement | null>(null);
+  const isDesktop = useMediaQuery(SHELL_DESKTOP_QUERY);
   const draftAnchorRef = useRef<HTMLDivElement>(null);
   const updateCalendarItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
@@ -274,86 +278,96 @@ function TimelineArrangement({
     [displayTimezone, lane],
   );
 
+  const mobileCreateActive = draftSelection !== null && !isDesktop;
+
   return (
-    <>
-      <SchedulingCanvas
-        presentation="agenda"
-        displayTimezone={displayTimezone}
-        lanes={[lane]}
-        pixelsPerHour={pixelsPerHour}
-        now={now}
-        viewportHeight="100%"
-        minimumLaneWidth={180}
-        selectedRegion={draftSelection?.canvasRegion}
-        selectedRegionAnchorRef={draftAnchorRef}
-        onSelectRegion={selectTimedRegion}
-        onSelectAllDayRegion={(targetLane) => {
-          setDraftSelection({
-            selection: {
-              allDayStartDate: targetLane.date,
-              allDayEndDate: shiftISODate(targetLane.date, 1),
-            },
-            canvasRegion: null,
-          });
-        }}
-        onDateShortcut={(shortcut) => {
-          if (shortcut === 'previous') goToPreviousDay();
-          else if (shortcut === 'next') goToNextDay();
-          else goToToday();
-        }}
-        error={
-          timeboxFailed || updateCalendarItem.isError || linkTask.isError || relateItems.isError
-            ? INLINE_UPDATE_FAILURE_COPY
-            : null
-        }
-        emptyMessage={loading ? '' : 'Nothing scheduled.'}
-        emptyAction={
-          loading ? null : (
-            <Button asChild variant="outline" size="sm">
-              <Link href="/calendar">Plan in the calendar</Link>
-            </Button>
-          )
-        }
-        onOpenItem={({ item }) => {
-          const entry = entryById.get(item.id);
-          if (!entry) return;
-          if (entry.taskId && entry.organizationId) {
-            router.push(`/orgs/${entry.organizationId}/tasks/${entry.taskId}`);
-          } else if (entry.calendarItem) {
-            onOpenCalendarItem(entry.calendarItem.id);
-          } else {
-            router.push('/calendar');
-          }
-        }}
-        onMoveItem={({ item, toLane, startMinutes }) => {
-          persistMove(item, toLane, startMinutes);
-        }}
-        onResizeItem={({ item, lane: targetLane, edge, startMinutes, endMinutes }) => {
-          persistResize(item, targetLane, edge, startMinutes, endMinutes);
-        }}
-        onDropObjectOnItem={({ object, targetItem }) => {
-          const targetEntry = entryById.get(targetItem.id);
-          const target = targetEntry?.calendarItem;
-          if (!targetEntry || !target || !isAgendaRelationshipTarget(targetEntry)) return;
-          if (object.kind === 'calendar_item' && object.itemId === target.id) return;
-          clearInlineFailures();
-          const role = target.kind === 'timebox' ? 'contained' : 'related';
-          if (object.kind === 'task') {
-            linkTask.mutate({
-              itemId: target.id,
-              taskId: object.taskId,
-              organizationId: object.organizationId,
-              role,
+    <div className="relative h-full min-h-0">
+      {mobileCreateActive ? (
+        <div
+          ref={setMobileCreateHost}
+          data-agenda-create-host=""
+          className="bg-surface absolute inset-0 isolate"
+        />
+      ) : (
+        <SchedulingCanvas
+          presentation="agenda"
+          displayTimezone={displayTimezone}
+          lanes={[lane]}
+          pixelsPerHour={pixelsPerHour}
+          now={now}
+          viewportHeight="100%"
+          minimumLaneWidth={180}
+          selectedRegion={draftSelection?.canvasRegion}
+          selectedRegionAnchorRef={draftAnchorRef}
+          onSelectRegion={selectTimedRegion}
+          onSelectAllDayRegion={(targetLane) => {
+            setDraftSelection({
+              selection: {
+                allDayStartDate: targetLane.date,
+                allDayEndDate: shiftISODate(targetLane.date, 1),
+              },
+              canvasRegion: null,
             });
-          } else {
-            relateItems.mutate({
-              sourceItemId: target.id,
-              targetItemId: object.itemId,
-              role,
-            });
+          }}
+          onDateShortcut={(shortcut) => {
+            if (shortcut === 'previous') goToPreviousDay();
+            else if (shortcut === 'next') goToNextDay();
+            else goToToday();
+          }}
+          error={
+            timeboxFailed || updateCalendarItem.isError || linkTask.isError || relateItems.isError
+              ? INLINE_UPDATE_FAILURE_COPY
+              : null
           }
-        }}
-      />
+          emptyMessage={loading ? '' : 'Nothing scheduled.'}
+          emptyAction={
+            loading ? null : (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/calendar">Plan in the calendar</Link>
+              </Button>
+            )
+          }
+          onOpenItem={({ item }) => {
+            const entry = entryById.get(item.id);
+            if (!entry) return;
+            if (entry.taskId && entry.organizationId) {
+              router.push(`/orgs/${entry.organizationId}/tasks/${entry.taskId}`);
+            } else if (entry.calendarItem) {
+              onOpenCalendarItem(entry.calendarItem.id);
+            } else {
+              router.push('/calendar');
+            }
+          }}
+          onMoveItem={({ item, toLane, startMinutes }) => {
+            persistMove(item, toLane, startMinutes);
+          }}
+          onResizeItem={({ item, lane: targetLane, edge, startMinutes, endMinutes }) => {
+            persistResize(item, targetLane, edge, startMinutes, endMinutes);
+          }}
+          onDropObjectOnItem={({ object, targetItem }) => {
+            const targetEntry = entryById.get(targetItem.id);
+            const target = targetEntry?.calendarItem;
+            if (!targetEntry || !target || !isAgendaRelationshipTarget(targetEntry)) return;
+            if (object.kind === 'calendar_item' && object.itemId === target.id) return;
+            clearInlineFailures();
+            const role = target.kind === 'timebox' ? 'contained' : 'related';
+            if (object.kind === 'task') {
+              linkTask.mutate({
+                itemId: target.id,
+                taskId: object.taskId,
+                organizationId: object.organizationId,
+                role,
+              });
+            } else {
+              relateItems.mutate({
+                sourceItemId: target.id,
+                targetItemId: object.itemId,
+                role,
+              });
+            }
+          }}
+        />
+      )}
       <CreateBlockForm
         presentation="agenda"
         trigger="hidden"
@@ -362,11 +376,12 @@ function TimelineArrangement({
         selectionAnchorRef={draftSelection?.canvasRegion ? draftAnchorRef : undefined}
         onDraftChange={updateDraftProjection}
         onDirtyChange={setDraftDirty}
+        agendaMobileHost={mobileCreateHost}
         onSelectionConsumed={() => {
           setDraftSelection(null);
           setDraftDirty(false);
         }}
       />
-    </>
+    </div>
   );
 }

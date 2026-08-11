@@ -96,6 +96,16 @@ export function calendarTimeDraftFromSeed(
   };
 }
 
+/** Seed a reversible 9–10am timed draft for an all-day selection. */
+export function calendarTimeDraftForDate(date: string, displayTimezone: string): CalendarTimeDraft {
+  const startsAt = scheduleInstantAt(date, 9 * 60, displayTimezone, 'earlier');
+  const endsAt = scheduleInstantAt(date, 10 * 60, displayTimezone, 'later');
+  return calendarTimeDraftFromSeed(
+    startsAt && endsAt ? { startsAt, endsAt } : defaultCalendarRegionSelection(displayTimezone),
+    displayTimezone,
+  );
+}
+
 /** Replace the start wall field and mark it as user-owned. */
 export function updateCalendarDraftStart(
   draft: CalendarTimeDraft,

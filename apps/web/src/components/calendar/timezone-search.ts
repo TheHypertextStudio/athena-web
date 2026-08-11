@@ -16,27 +16,9 @@ export interface TimezoneSearchEntry {
   readonly searchText: string;
 }
 
-const FALLBACK_TIMEZONES = [
-  'UTC',
-  'America/Los_Angeles',
-  'America/Denver',
-  'America/Chicago',
-  'America/New_York',
-  'Europe/London',
-  'Europe/Paris',
-  'Asia/Kolkata',
-  'Asia/Tokyo',
-  'Australia/Sydney',
-] as const;
+import { TIMEZONE_INDEX } from './timezone-index';
 
-const TIMEZONE_ALIASES: Readonly<Record<string, readonly string[]>> = {
-  'America/Los_Angeles': ['PST', 'PDT', 'Pacific Time'],
-  'America/Vancouver': ['PST', 'PDT', 'Pacific Time'],
-  'America/Denver': ['MST', 'MDT', 'Mountain Time'],
-  'America/Chicago': ['CST', 'CDT', 'Central Time'],
-  'America/New_York': ['EST', 'EDT', 'Eastern Time'],
-  'Pacific/Pitcairn': ['PST', 'Pitcairn Time'],
-};
+const INDEX_BY_ID = new Map(TIMEZONE_INDEX.map((entry) => [entry.id, entry]));
 
 function normalize(value: string): string {
   return value.trim().toLocaleLowerCase('en-US').replaceAll('_', ' ');
@@ -68,12 +50,9 @@ function cityForTimezone(timezone: string): string {
   return segment.replaceAll('_', ' ');
 }
 
-/** Return the runtime timezone inventory, with a small compatibility fallback. */
+/** Return the checked-in timezone inventory used consistently across runtimes. */
 export function supportedTimezoneIds(): readonly string[] {
-  const supportedValuesOf = Intl.supportedValuesOf;
-  return typeof supportedValuesOf === 'function'
-    ? supportedValuesOf('timeZone')
-    : FALLBACK_TIMEZONES;
+  return TIMEZONE_INDEX.map((entry) => entry.id);
 }
 
 /** Build date-aware, locally searchable timezone presentations. */
@@ -83,24 +62,12 @@ export function buildTimezoneSearchIndex(
   zoneIds: readonly string[] = supportedTimezoneIds(),
 ): TimezoneSearchEntry[] {
   const instant = new Date(referenceInstant);
-  const year = instant.getUTCFullYear();
-  const seasonalInstants = [
-    instant,
-    new Date(Date.UTC(year, 0, 15)),
-    new Date(Date.UTC(year, 6, 15)),
-  ];
-
   return zoneIds.map((id) => {
-    const city = cityForTimezone(id);
-    const commonName = timezoneName(instant, id, locale, 'longGeneric');
+    const indexed = INDEX_BY_ID.get(id);
+    const city = indexed?.city ?? cityForTimezone(id);
+    const commonName = indexed?.commonName ?? id;
     const abbreviation = timezoneName(instant, id, locale, 'short');
-    const abbreviations = [
-      ...new Set([
-        abbreviation,
-        ...seasonalInstants.map((date) => timezoneName(date, id, locale, 'short')),
-        ...(TIMEZONE_ALIASES[id] ?? []),
-      ]),
-    ];
+    const abbreviations = [...new Set([abbreviation, ...(indexed?.abbreviations ?? [])])];
     return {
       id,
       city,

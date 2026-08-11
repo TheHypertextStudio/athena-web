@@ -8,7 +8,7 @@ export function CalendarCreateFailureNotice({ visible }: { readonly visible: boo
   return createPortal(
     <div
       role="status"
-      className="bg-inverse-surface text-inverse-on-surface shadow-level3 fixed bottom-6 left-1/2 z-[140] -translate-x-1/2 rounded-lg px-4 py-3 text-sm"
+      className="bg-inverse-surface text-inverse-on-surface border-inverse-on-surface/20 text-body-medium fixed bottom-6 left-1/2 z-[140] -translate-x-1/2 rounded-lg border px-4 py-3"
     >
       Calendar item wasn’t saved. Your draft is still open.
     </div>,

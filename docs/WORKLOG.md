@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-10
+> **Last Updated**: 2026-08-11
 
 ---
 
@@ -4667,31 +4667,35 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ### [AGENDA-RAIL-002] Refine quick create into a non-overlapping draggable dialog
 
-- **Completed**: 2026-08-10
+- **Completed**: 2026-08-11
 - **Duration**: One implementation session
 - **Priority**: P1
 - **Summary**: Moved Agenda quick create into a shell-hosted sibling dialog that stays outside the
   rail and can be repositioned with a pointer or keyboard from its top handle. The compact overview
-  progressively reveals separate start/end dates and times, a focused searchable time-zone dialog,
-  and optional independent start/end zones. Missing fields are highlighted without explicit error
-  prose, Save stays disabled until the draft is valid, persistence failures render outside the
-  dialog, and visible whole-step Agenda zoom controls are restored.
+  progressively reveals separate dates and times, all-day and recurrence controls, a focused
+  searchable time-zone dialog, and optional independent start/end zones. At tablet and mobile
+  widths the timeline stands down for a full-height sibling editor instead of being covered.
+  Missing fields are highlighted without explicit error prose, dirty dismissal is guarded, Save
+  stays disabled until the draft is valid, persistence failures render outside the dialog, and the
+  whole-step zoom readout opens direct scale and view choices.
 - **Files Changed**: Calendar DTO, database schema/migration, API serializers and provider write
   paths; shell overlay hosting and dialog portal primitives; Agenda zoom/header controls; quick
   create form, schedule, time-zone search, drag positioning, and failure notice components; focused
   unit, API, UI, inventory, and browser evidence tests; the calendar UI spec, date-picker inventory,
   accepted design and implementation plan, and craft audit with responsive theme screenshots.
-- **Validation**: `pnpm typecheck`, `pnpm lint`, and `pnpm test` pass all 20 package targets;
-  `pnpm format:check` passes; `pnpm build` passes all 4 targets. The authenticated Chromium evidence
-  test passes 1/1 and confirms the draggable dialog remains outside the Agenda rail, performs no
-  write before Save, exposes whole-number zoom, searches `PST`, and has no horizontal overflow at
-  390px or 320px in light and dark themes. The Docket Craft Rubric audit passes every hard gate and
-  records a SHIP verdict.
-- **Learnings**: Hosting the dialog in the shell's primary-content layer makes non-overlap a layout
-  invariant instead of a best-effort offset. Live interaction testing caught both a controlled
-  draft feedback loop and underlying-text selection during pointer dragging. The enforced picker
-  inventory then caught native date inputs before commit, keeping the progressive editor aligned
-  with the product's keyboard-operable calendar-day contract.
+- **Validation**: Focused API and web regressions pass 53/53, including timezone-only provider
+  patches, controlled schedule projection, dirty dismissal, timezone keyboard semantics, mobile
+  sibling hosting, and right-edge placement. Authenticated Chromium evidence passes 2/2: desktop,
+  tablet, and mobile geometry/theme screenshots plus mock-free UI saves of one-zone and split-zone
+  events, direct API re-reads, post-save focus, and a cold page reload. Repository validation passes
+  `pnpm typecheck` (20/20 targets), `pnpm lint` (20/20), `pnpm test` (20/20; 1,914 web and
+  3,670 API tests), `pnpm test:coverage` (18/18), `pnpm format:check`, and `pnpm build` (4/4).
+- **Learnings**: Hosting the desktop dialog in the shell's primary-content layer and replacing the
+  narrow Agenda canvas with an Agenda-owned sibling host make non-overlap layout invariants rather
+  than offsets. Mock-free save/reload testing caught a controlled projection loop that cleared the
+  title after timezone edits; provider regressions separately caught timezone-only patches being
+  serialized as empty writes. The checked-in timezone index keeps search vocabulary deterministic
+  while runtime `Intl` remains responsible only for date-specific offset and abbreviation.
 - **Retrospective**: The approved interaction contract made the broad persistence and presentation
   changes reviewable as one slice. Future date-bearing controls should begin with the shared picker
   inventory, and draggable overlays should receive pointer-selection and resize-loop probes in their

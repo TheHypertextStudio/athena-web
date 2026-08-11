@@ -17,7 +17,6 @@ import { type JSX, type KeyboardEvent } from 'react';
 import { formatDay } from '@/components/date-picker';
 
 import { shiftISODate, useAgenda } from './agenda-context';
-import AgendaDisplayMenu from './agenda-display-menu';
 import { AgendaScaleControls } from './agenda-scale-controls';
 
 /** Relative day name, when the day has one worth saying. */
@@ -114,7 +113,6 @@ export default function AgendaHeader(): JSX.Element {
               <CalendarToday />
             </Button>
           )}
-          <AgendaDisplayMenu />
         </Row>
       </Row>
       <Row justify="end" className="pr-1">

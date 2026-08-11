@@ -8,7 +8,7 @@ import {
   type CalendarLayerOut,
   type CalendarPreferences,
 } from '@docket/types';
-import { useShellOverlayHost } from '@docket/ui/components';
+import { SHELL_DESKTOP_QUERY, useShellOverlayHost } from '@docket/ui/components';
 import { Plus, X } from '@docket/ui/icons';
 import { useMediaQuery } from '@docket/ui/hooks';
 import {
@@ -28,12 +28,11 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, type SubmitEventHandler, useEffect, useMemo, useRef, useState } from 'react';
 
-import { DatePicker } from '@/components/date-picker';
-
 import { CalendarCreateFailureNotice } from './calendar-create-failure-notice';
 import { useCreateCalendarItem } from './calendar-mutations';
 import {
   type CalendarRegionSelection,
+  calendarTimeDraftForDate,
   calendarTimeDraftFromSeed,
   defaultCalendarRegionSelection,
   isCalendarTimedRegionSelection,
@@ -53,6 +52,29 @@ export type {
 const CALENDAR_CONTROL_CLASS =
   'min-h-9 w-9 min-w-9 shrink gap-1.5 px-2 [&_svg]:size-4 @min-[22rem]:min-h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
 
+function focusCreatedCalendarItem(itemId: string): void {
+  let attempts = 0;
+  const focusWhenRendered = (): void => {
+    const target = document.querySelector<HTMLElement>(`[data-schedule-item-body="${itemId}"]`);
+    if (target) {
+      target.focus();
+      return;
+    }
+    attempts += 1;
+    if (attempts < 120) window.requestAnimationFrame(focusWhenRendered);
+  };
+  window.requestAnimationFrame(focusWhenRendered);
+}
+
+function calendarSelectionKey(
+  selection: CalendarRegionSelection | null | undefined,
+): string | null {
+  if (!selection) return null;
+  return isCalendarTimedRegionSelection(selection)
+    ? `timed\u0000${selection.startsAt}\u0000${selection.endsAt}`
+    : `all-day\u0000${selection.allDayStartDate}\u0000${selection.allDayEndDate}`;
+}
+
 /** Props for {@link CreateBlockForm}. */
 export interface CreateBlockFormProps {
   readonly displayTimezone: string;
@@ -65,6 +87,8 @@ export interface CreateBlockFormProps {
   readonly presentation?: 'calendar' | 'agenda';
   readonly onDraftChange?: (selection: CalendarRegionSelection) => void;
   readonly onDirtyChange?: (dirty: boolean) => void;
+  /** Agenda-owned sibling host used below the shell desktop breakpoint. */
+  readonly agendaMobileHost?: HTMLElement | null;
 }
 
 /** Focus-managed quick create; Agenda uses a draggable sibling hosted outside its rail. */
@@ -79,8 +103,9 @@ export default function CreateBlockForm({
   presentation = 'calendar',
   onDraftChange,
   onDirtyChange,
+  agendaMobileHost,
 }: CreateBlockFormProps): JSX.Element {
-  const agendaDesktop = useMediaQuery('(min-width: 48rem)');
+  const agendaDesktop = useMediaQuery(SHELL_DESKTOP_QUERY);
   const shellOverlayHost = useShellOverlayHost();
   const create = useCreateCalendarItem();
   const resetCreate = create.reset;
@@ -101,6 +126,7 @@ export default function CreateBlockForm({
   const [allDayDraft, setAllDayDraft] = useState<{ start: string; end: string } | null>(null);
   const [dirty, setDirty] = useState(false);
   const previousSelectionKey = useRef<string | null>(null);
+  const projectedSelectionKey = useRef<string | null>(null);
   const previousTimezone = useRef(displayTimezone);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const intentEdited = useRef(false);
@@ -108,6 +134,11 @@ export default function CreateBlockForm({
   const position = useClampedDialogPosition({
     open: open && presentation === 'agenda' && agendaDesktop,
     host: shellOverlayHost,
+    preferredTop:
+      selectionAnchorRef?.current && shellOverlayHost
+        ? selectionAnchorRef.current.getBoundingClientRect().top -
+          shellOverlayHost.getBoundingClientRect().top
+        : 48,
   });
 
   const destinations = useMemo(
@@ -131,11 +162,7 @@ export default function CreateBlockForm({
     title.trim() && (allDayDraft ? allDayValid : resolvedTime && !('invalidField' in resolvedTime)),
   );
 
-  const selectionKey = selection
-    ? isCalendarTimedRegionSelection(selection)
-      ? `timed\u0000${selection.startsAt}\u0000${selection.endsAt}`
-      : `all-day\u0000${selection.allDayStartDate}\u0000${selection.allDayEndDate}`
-    : null;
+  const selectionKey = calendarSelectionKey(selection);
 
   function resetFields(): void {
     setTitle('');
@@ -151,13 +178,17 @@ export default function CreateBlockForm({
   }
 
   useEffect(() => {
-    const newSelection = selection != null && selectionKey !== previousSelectionKey.current;
+    const projectedSelection =
+      selectionKey !== null && selectionKey === projectedSelectionKey.current;
+    const newSelection =
+      selection != null && selectionKey !== previousSelectionKey.current && !projectedSelection;
     const timezoneChanged = displayTimezone !== previousTimezone.current;
     if (newSelection) {
       if (isCalendarTimedRegionSelection(selection)) {
         setDraft(calendarTimeDraftFromSeed(selection, displayTimezone));
         setAllDayDraft(null);
       } else {
+        setDraft(calendarTimeDraftForDate(selection.allDayStartDate, displayTimezone));
         setAllDayDraft({ start: selection.allDayStartDate, end: selection.allDayEndDate });
       }
       resetFields();
@@ -172,6 +203,7 @@ export default function CreateBlockForm({
       }
     }
     previousSelectionKey.current = selectionKey;
+    if (projectedSelection) projectedSelectionKey.current = null;
     previousTimezone.current = displayTimezone;
   }, [configuredLayerAvailable, displayTimezone, open, preferences, selection, selectionKey]);
 
@@ -182,12 +214,16 @@ export default function CreateBlockForm({
   useEffect(() => {
     if (!open || !onDraftChange) return;
     if (allDayDraft) {
-      onDraftChange({
+      const nextSelection = {
         allDayStartDate: allDayDraft.start,
         allDayEndDate: allDayDraft.end,
-      });
+      };
+      projectedSelectionKey.current = calendarSelectionKey(nextSelection);
+      onDraftChange(nextSelection);
     } else if (resolvedStartsAt && resolvedEndsAt) {
-      onDraftChange({ startsAt: resolvedStartsAt, endsAt: resolvedEndsAt });
+      const nextSelection = { startsAt: resolvedStartsAt, endsAt: resolvedEndsAt };
+      projectedSelectionKey.current = calendarSelectionKey(nextSelection);
+      onDraftChange(nextSelection);
     }
   }, [allDayDraft, onDraftChange, open, resolvedEndsAt, resolvedStartsAt]);
 
@@ -198,11 +234,15 @@ export default function CreateBlockForm({
       setAllDayDraft(null);
       resetFields();
     }
-    setOpen(next);
     if (!next) {
+      if (create.isPending) return;
+      if (dirty && !window.confirm('Discard this unsaved calendar item?')) return;
+      setOpen(false);
       resetFields();
       onSelectionConsumed?.();
+      return;
     }
+    setOpen(true);
   }
 
   const submit: SubmitEventHandler<HTMLFormElement> = (event) => {
@@ -228,10 +268,11 @@ export default function CreateBlockForm({
       ...(intent === 'event' && layerId ? { layerId } : {}),
     });
     create.mutate(input, {
-      onSuccess: () => {
+      onSuccess: (item) => {
         setOpen(false);
         resetFields();
         onSelectionConsumed?.();
+        focusCreatedCalendarItem(item.id);
       },
     });
   };
@@ -249,7 +290,7 @@ export default function CreateBlockForm({
             setDirty(true);
           }}
           placeholder="Add title"
-          className="aria-invalid:border-error h-11 rounded-none border-x-0 border-t-0 px-0 text-xl aria-invalid:ring-0"
+          className="aria-invalid:border-error text-title-large h-11 rounded-none border-x-0 border-t-0 px-0 aria-invalid:ring-0"
         />
       </label>
 
@@ -262,37 +303,22 @@ export default function CreateBlockForm({
         }}
       />
 
-      {allDayDraft ? (
-        <div className="grid grid-cols-2 gap-2">
-          {(['start', 'end'] as const).map((edge) => (
-            <div key={edge} className="flex min-w-0 flex-col gap-1">
-              <span className="text-label-medium text-on-surface-variant capitalize">{edge}</span>
-              <DatePicker
-                ariaLabel={`${edge === 'start' ? 'Start' : 'End'} date`}
-                placeholder="Pick a day"
-                triggerVariant="outline"
-                value={allDayDraft[edge]}
-                onChange={(next) => {
-                  setAllDayDraft((current) =>
-                    current ? { ...current, [edge]: next ?? '' } : current,
-                  );
-                  setDirty(true);
-                }}
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <CreateBlockScheduleEditor
-          draft={draft}
-          invalidField={invalidField}
-          onChange={(next) => {
-            setDraft(next);
-            setDirty(true);
-            resetCreate();
-          }}
-        />
-      )}
+      <CreateBlockScheduleEditor
+        draft={draft}
+        allDayDraft={allDayDraft}
+        currentTimezone={displayTimezone}
+        invalidField={invalidField}
+        onChange={(next) => {
+          setDraft(next);
+          setDirty(true);
+          resetCreate();
+        }}
+        onAllDayChange={(next) => {
+          setAllDayDraft(next);
+          setDirty(true);
+          resetCreate();
+        }}
+      />
 
       {intent === 'event' ? (
         <label className="flex flex-col gap-1">
@@ -377,15 +403,21 @@ export default function CreateBlockForm({
   const notice = <CalendarCreateFailureNotice visible={create.isError} />;
 
   if (presentation === 'agenda') {
-    const desktopHosted = agendaDesktop && shellOverlayHost;
+    const desktopHosted = agendaDesktop ? shellOverlayHost : null;
+    const mobileHosted = !agendaDesktop ? (agendaMobileHost ?? null) : null;
+    const portalHost = desktopHosted ?? mobileHosted ?? undefined;
     return (
       <>
         <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogContent
             ref={position.dialogRef}
-            portalContainer={desktopHosted ? shellOverlayHost : undefined}
+            portalContainer={portalHost}
             overlayClassName={
-              desktopHosted ? 'pointer-events-none absolute inset-0 bg-transparent' : undefined
+              desktopHosted
+                ? 'pointer-events-none absolute inset-0 bg-transparent'
+                : mobileHosted
+                  ? 'absolute inset-0 bg-surface'
+                  : undefined
             }
             showClose={false}
             onOpenAutoFocus={(event) => {
@@ -396,22 +428,26 @@ export default function CreateBlockForm({
             className={
               desktopHosted
                 ? 'pointer-events-auto absolute m-0 max-h-[calc(100%-2rem)] w-[min(34rem,calc(100%-2rem))] max-w-none translate-x-0 translate-y-0 gap-3 overflow-y-auto p-5'
-                : 'inset-x-0 top-auto bottom-0 left-0 max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-t-xl rounded-b-none p-4'
+                : mobileHosted
+                  ? 'absolute inset-0 m-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0 gap-3 overflow-y-auto rounded-none border-0 p-4 shadow-none'
+                  : 'inset-x-0 top-auto bottom-0 left-0 max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-t-xl rounded-b-none p-4'
             }
             style={desktopHosted ? position.style : undefined}
             data-create-presentation={desktopHosted ? 'agenda-desktop' : 'agenda-mobile'}
           >
-            <div className="-mx-2 -mt-2 flex h-8 items-center justify-center">
-              <button
-                type="button"
-                aria-label="Move create dialog"
-                onPointerDown={position.handlePointerDown}
-                onKeyDown={position.handleKeyDown}
-                className="group focus-visible:ring-ring flex h-6 w-14 cursor-grab touch-none items-center justify-center rounded-md select-none focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
-              >
-                <span className="bg-outline-variant group-hover:bg-outline h-1 w-10 rounded-full" />
-              </button>
-            </div>
+            {desktopHosted ? (
+              <div className="-mx-2 -mt-2 flex h-8 items-center justify-center">
+                <button
+                  type="button"
+                  aria-label="Move create-event dialog"
+                  onPointerDown={position.handlePointerDown}
+                  onKeyDown={position.handleKeyDown}
+                  className="group focus-visible:ring-ring flex h-6 w-14 cursor-grab touch-none items-center justify-center rounded-md select-none focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
+                >
+                  <span className="bg-outline-variant group-hover:bg-outline h-1 w-10 rounded-full" />
+                </button>
+              </div>
+            ) : null}
             <Button
               type="button"
               variant="ghost"

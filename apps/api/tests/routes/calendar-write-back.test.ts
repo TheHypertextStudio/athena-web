@@ -92,6 +92,8 @@ async function seedProviderEventItem(
     conflict?: CalendarItemConflict | null;
     externalEtag?: string | null;
     title?: string;
+    timezone?: string | null;
+    endTimezone?: string | null;
   },
 ): Promise<{
   connectionId: string;
@@ -183,6 +185,8 @@ async function seedProviderEventItem(
     status: 'confirmed',
     startsAt,
     endsAt,
+    timezone: input.timezone ?? null,
+    endTimezone: input.endTimezone ?? null,
     updatedExternalAt,
     externalEtag,
     syncState: input.syncState ?? 'clean',
@@ -443,6 +447,73 @@ describe('calendar write-back — successful push', () => {
       end: { dateTime: '2026-07-01T16:00:00.000Z', timeZone: 'America/Los_Angeles' },
     });
   });
+
+  it.each([
+    {
+      label: 'start zone only',
+      existingTimezone: 'UTC',
+      existingEndTimezone: null,
+      patch: { timezone: 'America/New_York' },
+      expectedStartTimezone: 'America/New_York',
+      expectedEndTimezone: 'America/New_York',
+    },
+    {
+      label: 'end zone only',
+      existingTimezone: 'America/New_York',
+      existingEndTimezone: null,
+      patch: { endTimezone: 'America/Los_Angeles' },
+      expectedStartTimezone: 'America/New_York',
+      expectedEndTimezone: 'America/Los_Angeles',
+    },
+  ])(
+    'PATCH $label carries effective timed bounds and both zones to Google',
+    async ({
+      existingTimezone,
+      existingEndTimezone,
+      patch,
+      expectedStartTimezone,
+      expectedEndTimezone,
+    }) => {
+      const schema = await getDb();
+      const userId = await seedUserWithHub(schema.db, schema, `ZoneOnly${Math.random()}`);
+      const fixture = await seedProviderEventItem(schema, {
+        userId,
+        timezone: existingTimezone,
+        endTimezone: existingEndTimezone,
+      });
+
+      const calls: FetchCall[] = [];
+      const fetchJson = buildGoogleFetchJson(calls, {
+        eventPatch: (request) => ({
+          id: 'evt-1',
+          status: 'confirmed',
+          summary: 'Design review',
+          start: request['start'],
+          end: request['end'],
+          updated: '2026-07-02T10:00:00.000Z',
+          etag: 'etag-zone-only',
+        }),
+      });
+
+      await updateCalendarItem(schema.db, {
+        userId,
+        itemId: fixture.itemId,
+        patch,
+        syncModules: syncModulesFor(fetchJson),
+      });
+
+      expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
+        start: {
+          dateTime: '2026-07-01T10:00:00.000Z',
+          timeZone: expectedStartTimezone,
+        },
+        end: {
+          dateTime: '2026-07-01T11:00:00.000Z',
+          timeZone: expectedEndTimezone,
+        },
+      });
+    },
+  );
 
   it('PATCH maps an all-day shape switch to a start/end date object (no timeZone)', async () => {
     const schema = await getDb();

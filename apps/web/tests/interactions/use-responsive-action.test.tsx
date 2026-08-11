@@ -1,10 +1,12 @@
-import { act, cleanup, renderHook } from '@testing-library/react';
-import { type JSX, type ReactNode, useState } from 'react';
+import { act, cleanup, render, renderHook } from '@testing-library/react';
+import { type JSX, type ReactNode, useEffect, useRef, useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   InteractionReceiptProvider,
+  type InteractionReceiptContextValue,
   type InteractionTimeout,
+  useInteractionReceipts,
 } from '@/lib/interactions/receipt-context';
 import { useResponsiveAction } from '@/lib/interactions/use-responsive-action';
 
@@ -230,5 +232,76 @@ describe('useResponsiveAction', () => {
       act(frames.runNext);
     }).toThrow('No animation frame is scheduled.');
     vi.useRealTimers();
+  });
+
+  it('abandons acknowledged work when only its owner unmounts and ignores late settlement', async () => {
+    const frames = createFrameQueue();
+    let context: InteractionReceiptContextValue | undefined;
+    let resolve: (() => void) | undefined;
+    const work = new Promise<void>((done) => {
+      resolve = done;
+    });
+
+    function ReceiptProbe({
+      onReady,
+    }: {
+      readonly onReady: (value: InteractionReceiptContextValue) => void;
+    }) {
+      const value = useInteractionReceipts();
+      useEffect(() => {
+        onReady(value);
+      }, [onReady, value]);
+      return null;
+    }
+
+    function ActionOwner(): null {
+      const action = useResponsiveAction({
+        interactionId: 'app.read',
+        category: 'read',
+        routeTemplateId: '/tasks/[taskId]',
+        acknowledgementPredicate: () => true,
+      });
+      const started = useRef(false);
+      useEffect(() => {
+        if (started.current) return;
+        started.current = true;
+        void action.run(() => work);
+      }, [action]);
+      return null;
+    }
+
+    function Harness({ showOwner }: { readonly showOwner: boolean }): JSX.Element {
+      return (
+        <InteractionReceiptProvider
+          requestFrame={frames.requestFrame}
+          cancelFrame={frames.cancelFrame}
+          createInvocationId={() => 'ephemeral-owner-only'}
+        >
+          <ReceiptProbe onReady={(value) => (context = value)} />
+          {showOwner ? <ActionOwner /> : null}
+        </InteractionReceiptProvider>
+      );
+    }
+
+    const view = render(<Harness showOwner />);
+    await act(async () => {
+      frames.runNext();
+    });
+    await act(async () => {
+      frames.runNext();
+    });
+    expect(context?.receiptFor('ephemeral-owner-only')).toMatchObject({ phase: 'acknowledged' });
+
+    view.rerender(<Harness showOwner={false} />);
+    expect(context?.receiptFor('ephemeral-owner-only')).toMatchObject({
+      phase: 'settled',
+      outcome: 'abandoned',
+    });
+
+    await act(async () => {
+      resolve?.();
+      await work;
+    });
+    expect(context?.receiptFor('ephemeral-owner-only')).toMatchObject({ outcome: 'abandoned' });
   });
 });

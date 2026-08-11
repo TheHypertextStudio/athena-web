@@ -94,6 +94,7 @@ export function useResponsiveAction(options: UseResponsiveActionOptions): Respon
     markProgress,
     settleInteraction,
     recoverInteraction,
+    receiptFor,
     scheduleTimeout,
     clearScheduledTimeout,
   } = useInteractionReceipts();
@@ -174,10 +175,20 @@ export function useResponsiveAction(options: UseResponsiveActionOptions): Respon
 
   useEffect(
     () => () => {
+      const invocationId = activeInvocationId.current;
+      const wasAcknowledged = hasAcknowledged.current;
+      activeInvocationId.current = undefined;
+      hasAcknowledged.current = false;
+      pendingSettlement.current = undefined;
+      operation.current = undefined;
       acknowledgement.current?.();
+      acknowledgement.current = undefined;
       clearTimers();
+      if (wasAcknowledged && invocationId && receiptFor(invocationId)?.phase !== 'settled') {
+        settleInteraction(invocationId, 'abandoned');
+      }
     },
-    [clearTimers],
+    [clearTimers, receiptFor, settleInteraction],
   );
 
   const run = useCallback(

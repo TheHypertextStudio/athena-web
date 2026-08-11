@@ -20,6 +20,7 @@ interface FieldState<T> {
 }
 
 const identityKey = (scope: string, field: string): string => `${scope}\u0000${field}`;
+const AUTHORITATIVE_CAP = 512;
 
 /**
  * Pure field-version journal for instant local mutation projection.
@@ -46,8 +47,7 @@ export class IntentJournal<T> {
     // A refresh observed after a request starts outranks that request's response. Reserve the next
     // version for a subsequent local intent, which may then supersede this base explicitly.
     state.authoritativeVersion = state.nextVersion + 1;
-    this.authoritative.set(key, value);
-    this.authoritativeVersions.set(key, state.authoritativeVersion);
+    this.rememberAuthoritative(key, value, state.authoritativeVersion);
     this.emit();
   }
 
@@ -72,7 +72,7 @@ export class IntentJournal<T> {
     }
     const latest = state.latest;
     return {
-      value: latest?.value ?? state.authoritative,
+      value: latest ? latest.value : state.authoritative,
       authoritative: state.authoritative,
       status: latest?.status ?? 'settled',
       version: latest?.version ?? state.nextVersion,
@@ -147,7 +147,7 @@ export class IntentJournal<T> {
       const result = entry.deliver(entry.value, entry.version);
       Promise.resolve(result).then(
         (authoritative) => {
-          this.settle(scope, field, entry, true, authoritative);
+          this.settle(scope, field, entry, true, authoritative, true);
         },
         () => {
           this.settle(scope, field, entry, false);
@@ -164,18 +164,18 @@ export class IntentJournal<T> {
     entry: Entry<T>,
     success: boolean,
     authoritative?: T,
+    hasAuthoritative = false,
   ): void {
     const state = this.fields.get(identityKey(scope, field));
     if (!state?.latest && !state?.inFlight) return;
     if (!entry.active) return;
     entry.active = false;
     if (state.inFlight === entry) state.inFlight = undefined;
-    if (success && entry.version >= state.authoritativeVersion) {
-      if (authoritative !== undefined) state.authoritative = authoritative;
+    if (success && hasAuthoritative && entry.version >= state.authoritativeVersion) {
+      state.authoritative = authoritative as T;
       state.authoritativeVersion = entry.version;
       const key = identityKey(scope, field);
-      this.authoritative.set(key, state.authoritative);
-      this.authoritativeVersions.set(key, entry.version);
+      this.rememberAuthoritative(key, state.authoritative, entry.version);
     }
     if (state.latest === entry) {
       if (success) {
@@ -202,6 +202,19 @@ export class IntentJournal<T> {
   private gc(scope: string, field: string, state: FieldState<T>): void {
     if (!state.latest && !state.queued && !state.inFlight) {
       this.fields.delete(identityKey(scope, field));
+    }
+  }
+
+  private rememberAuthoritative(key: string, value: T, version: number): void {
+    this.authoritative.delete(key);
+    this.authoritativeVersions.delete(key);
+    this.authoritative.set(key, value);
+    this.authoritativeVersions.set(key, version);
+    while (this.authoritative.size > AUTHORITATIVE_CAP) {
+      const oldest = this.authoritative.keys().next().value;
+      if (!oldest) break;
+      this.authoritative.delete(oldest);
+      this.authoritativeVersions.delete(oldest);
     }
   }
 

@@ -57,6 +57,8 @@ export interface InteractionReceiptContextValue {
     outcome: InteractionOutcome,
     recovery?: InteractionRecovery,
   ) => InteractionReceipt;
+  /** Abandon a live receipt without promoting settlement into acknowledgement. */
+  readonly abandonInteraction: (invocationId: string) => InteractionReceipt;
   /** Record an application-owned recovery affordance for an acknowledged interaction. */
   readonly recoverInteraction: (
     invocationId: string,
@@ -234,6 +236,15 @@ export function InteractionReceiptProvider({
     [store],
   );
 
+  const abandonInteraction = useCallback(
+    (invocationId: string): InteractionReceipt => {
+      const receipt = store.abandon(invocationId);
+      receipts.current.set(invocationId, receipt);
+      return receipt;
+    },
+    [store],
+  );
+
   const recoverInteraction = useCallback(
     (invocationId: string, recovery: InteractionRecovery): InteractionReceipt =>
       settleInteraction(invocationId, 'needs_attention', recovery),
@@ -276,6 +287,7 @@ export function InteractionReceiptProvider({
       acknowledgeAfterPaint,
       markProgress,
       settleInteraction,
+      abandonInteraction,
       recoverInteraction,
       receiptFor,
       scheduleTimeout,
@@ -283,6 +295,7 @@ export function InteractionReceiptProvider({
     }),
     [
       acknowledgeAfterPaint,
+      abandonInteraction,
       clearScheduledTimeout,
       markProgress,
       receiptFor,

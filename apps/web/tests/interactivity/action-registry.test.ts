@@ -9,7 +9,7 @@ import {
   MalformedActionIdError,
   UnknownActionError,
 } from '../../src/lib/actions/registry';
-import type { ActionContext } from '../../src/lib/actions/types';
+import type { ActionContext, ActionDefinition } from '../../src/lib/actions/types';
 
 const TASK_MUTATION_RECEIPT = {
   ownership: 'root',
@@ -34,8 +34,8 @@ function contextFor(objects: readonly ObjectRef[]): ActionContext {
 
 describe('action registry: registration', () => {
   it('requires declared receipt metadata for asynchronous actions', () => {
-    const registry = createActionRegistry();
     const missingReceipt = defineActionDomain('task', [
+      // @ts-expect-error Promise-returning actions must declare closed responsiveness metadata.
       {
         id: 'task.complete',
         label: 'Complete',
@@ -43,25 +43,68 @@ describe('action registry: registration', () => {
       },
     ]);
 
-    expect(() => registry.register('task', missingReceipt)).toThrow(
-      'Async action "task.complete" must declare responsiveness metadata.',
-    );
+    expect(missingReceipt[0]?.responsiveness).toBeUndefined();
   });
 
-  it('rejects receipt metadata on a synchronous action before it can activate a receipt', () => {
+  it('accepts promise-returning work that declares receipt metadata without the async keyword', async () => {
     const registry = createActionRegistry();
-    const invalidSynchronousReceipt = defineActionDomain('task', [
+    const definitions = defineActionDomain('task', [
       {
-        id: 'task.open',
+        id: 'task.complete',
+        label: 'Complete',
+        responsiveness: TASK_MUTATION_RECEIPT,
+        run: () => Promise.resolve(),
+      },
+    ]);
+
+    registry.register('task', definitions);
+    await expect(registry.invoke('task.complete', () => contextFor([task]))).resolves.toEqual({
+      status: 'ran',
+    });
+  });
+
+  it('keeps untyped promise work without metadata eligible for the runtime watchdog', async () => {
+    const observeAsync = vi.fn();
+    const registry = createActionRegistry({
+      receiptRuntime: { begin: vi.fn(), observeAsync },
+    });
+    const untypedRun: () => unknown = () => Promise.resolve();
+    const untypedPromise = defineActionDomain('task', [
+      {
+        id: 'task.complete',
+        label: 'Complete',
+        run: untypedRun,
+      },
+    ]);
+
+    registry.register('task', untypedPromise);
+    await registry.invoke('task.complete', () => contextFor([task]));
+
+    expect(observeAsync).toHaveBeenCalledWith('task.complete', undefined, undefined);
+  });
+
+  it('abandons a metadata-bearing synchronous runtime edge after entry activation', async () => {
+    const begin = vi.fn(() => 'ephemeral-root-invocation');
+    const abandon = vi.fn();
+    const receiptRuntime = { begin, observeAsync: vi.fn(), abandon };
+    const registry = createActionRegistry({ receiptRuntime });
+    const invalidSynchronousReceipt = [
+      {
+        id: 'task.open' as const,
+        domain: 'task' as const,
         label: 'Open',
         responsiveness: TASK_MUTATION_RECEIPT,
         run: () => undefined,
       },
-    ]);
+    ] as const;
 
-    expect(() => registry.register('task', invalidSynchronousReceipt)).toThrow(
-      'Synchronous action "task.open" must not declare responsiveness metadata.',
-    );
+    registry.register('task', invalidSynchronousReceipt as unknown as readonly ActionDefinition[]);
+    await expect(registry.invoke('task.open', () => contextFor([task]))).resolves.toEqual({
+      status: 'ran',
+    });
+
+    expect(begin).toHaveBeenCalledTimes(1);
+    expect(abandon).toHaveBeenCalledWith('ephemeral-root-invocation');
   });
 
   it('stamps the domain onto every definition and freezes the set', () => {

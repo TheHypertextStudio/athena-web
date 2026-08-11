@@ -35,9 +35,11 @@ import {
   type ActionDomain,
   type ActionId,
   type ActionInvocationResult,
+  type ActionDefinitionInput,
   type ActionResponsiveness,
   type ActionSection,
   type ResolvedAction,
+  type ValidActionDefinition,
 } from './types';
 
 /** Runtime seam that owns receipt activation and development/test watchdog observation. */
@@ -53,6 +55,8 @@ export interface ActionReceiptRuntime {
     invocationId: string | undefined,
     responsiveness: ActionResponsiveness | undefined,
   ) => ActionAsyncObservation | undefined;
+  /** Settle a receipt that was activated for an invalid synchronous runtime edge. */
+  readonly abandon?: (invocationId: string) => void;
 }
 
 /** Cleanup and settlement hooks returned by an {@link ActionReceiptRuntime} observation. */
@@ -69,23 +73,12 @@ export interface ActionRegistryOptions {
   readonly receiptRuntime?: ActionReceiptRuntime;
 }
 
-/** Thrown when an `async` action fails to declare its receipt ownership metadata. */
-export class MissingActionResponsivenessError extends Error {
-  /** @param actionId - The asynchronous action missing receipt metadata. */
-  constructor(actionId: ActionId) {
-    super(`Async action "${actionId}" must declare responsiveness metadata.`);
-    this.name = 'MissingActionResponsivenessError';
-  }
-}
-
-/** Thrown when synchronous work incorrectly declares an asynchronous receipt lifecycle. */
-export class SynchronousActionResponsivenessError extends Error {
-  /** @param actionId - The synchronous action carrying receipt metadata. */
-  constructor(actionId: ActionId) {
-    super(`Synchronous action "${actionId}" must not declare responsiveness metadata.`);
-    this.name = 'SynchronousActionResponsivenessError';
-  }
-}
+/** Apply return-shape validation to tuple entries without widening them through the array index. */
+type ValidatedActionDefinitions<Actions extends readonly ActionDefinitionInput[]> = {
+  readonly [Index in keyof Actions]: Index extends `${number}`
+    ? ValidActionDefinition<Actions[Index]>
+    : Actions[Index];
+};
 
 /** Thrown when one domain declares the same action id twice. */
 export class DuplicateActionIdError extends Error {
@@ -332,13 +325,6 @@ export function createActionRegistry(options: ActionRegistryOptions = {}): Actio
       if (seenInBatch.has(definition.id) && strictMode()) {
         throw new DuplicateActionIdError(definition.id, domain);
       }
-      const isAsync = definition.run.constructor.name === 'AsyncFunction';
-      if (isAsync && definition.responsiveness === undefined) {
-        throw new MissingActionResponsivenessError(definition.id);
-      }
-      if (!isAsync && definition.responsiveness !== undefined) {
-        throw new SynchronousActionResponsivenessError(definition.id);
-      }
       seenInBatch.add(definition.id);
     }
 
@@ -388,6 +374,8 @@ export function createActionRegistry(options: ActionRegistryOptions = {}): Actio
             undefined;
         }
         await work;
+      } else if (responsiveness?.ownership === 'root' && invocationId !== undefined) {
+        options.receiptRuntime?.abandon?.(invocationId);
       }
       return { status: 'ran' };
     } catch (error) {
@@ -472,9 +460,9 @@ export function createActionRegistry(options: ActionRegistryOptions = {}): Actio
  * ]);
  * ```
  */
-export function defineActionDomain(
+export function defineActionDomain<const Actions extends readonly ActionDefinitionInput[]>(
   domain: ActionDomain,
-  actions: readonly Omit<ActionDefinition, 'domain'>[],
+  actions: Actions & ValidatedActionDefinitions<Actions>,
 ): readonly ActionDefinition[] {
-  return Object.freeze(actions.map((action) => ({ ...action, domain })));
+  return Object.freeze(actions.map((action) => ({ ...action, domain }))) as readonly ActionDefinition[];
 }

@@ -166,7 +166,7 @@ export type ActionContextResolver = () => ActionContext;
  * `run` is the only side-effecting member. Everything else is a pure question the registry asks in
  * order to decide whether to offer the action and how to label it.
  */
-export interface ActionDefinition {
+interface ActionDefinitionBase {
   /** Stable id, `<domain>.<verb>`; must be prefixed by {@link ActionDefinition.domain}. */
   readonly id: ActionId;
   /** The domain that owns and registers this action. */
@@ -217,17 +217,62 @@ export interface ActionDefinition {
    * Application-owned copy, same rule as {@link ActionDefinition.label}.
    */
   readonly disabledReason?: (context: ActionContext) => string | null;
-  /**
-   * Declares how asynchronous work is tied to a privacy-safe interaction receipt.
-   *
-   * @remarks
-   * Required for `async` action functions and checked again at runtime for promise-returning work.
-   * An autonomous exception is intentional and explicit; it never creates a receipt.
-   */
-  readonly responsiveness?: ActionResponsiveness;
-  /** Perform the action. May be async; the registry awaits it and reports the outcome. */
-  readonly run: (context: ActionContext) => void | Promise<void>;
 }
+
+/** A synchronous action function. */
+export type SynchronousActionRun = (context: ActionContext) => void;
+
+/** An asynchronous action function. */
+export type AsynchronousActionRun = (context: ActionContext) => Promise<void>;
+
+/**
+ * One action, defined once by its domain.
+ *
+ * @remarks
+ * The union makes receipt ownership part of an asynchronous action's public shape: promise-returning
+ * definitions declare closed responsiveness metadata, while ordinary synchronous actions cannot.
+ */
+export type ActionDefinition =
+  | (ActionDefinitionBase & {
+      /** Declares the receipt lifecycle that begins before asynchronous work starts. */
+      readonly responsiveness: ActionResponsiveness;
+      /** Perform asynchronous user-initiated work. */
+      readonly run: AsynchronousActionRun;
+    })
+  | (ActionDefinitionBase & {
+      /** Synchronous work has no receipt lifecycle. */
+      readonly responsiveness?: never;
+      /** Perform synchronous work. */
+      readonly run: SynchronousActionRun;
+    });
+
+/** An unvalidated domain declaration accepted only by {@link defineActionDomain}. */
+export type ActionDefinitionInput = Omit<ActionDefinitionBase, 'domain'> & {
+  /** The action implementation whose inferred return type selects its permitted ownership shape. */
+  readonly run: (context: ActionContext) => unknown;
+  /** Closed receipt ownership metadata, mandatory only for inferred promise-returning work. */
+  readonly responsiveness?: ActionResponsiveness;
+};
+
+/** Extract one declaration's inferred implementation result without widening it to the public union. */
+type ActionRunResult<Input extends ActionDefinitionInput> = Input extends {
+  readonly run: (context: ActionContext) => infer Result;
+}
+  ? Result
+  : never;
+
+/** Return whether an inferred action result is `any`, which must remain runtime-checked. */
+type IsAny<Value> = 0 extends 1 & Value ? true : false;
+
+/** Validate one inferred action declaration against its implementation return type. */
+export type ValidActionDefinition<Input extends ActionDefinitionInput> =
+  IsAny<ActionRunResult<Input>> extends true
+    ? Input & { readonly responsiveness?: never }
+    : [ActionRunResult<Input>] extends [never]
+      ? Input & { readonly responsiveness?: never }
+      : [ActionRunResult<Input>] extends [Promise<void>]
+        ? Input & { readonly responsiveness: ActionResponsiveness }
+        : Input & { readonly responsiveness?: never };
 
 /** What happened when an action was invoked. */
 export type ActionInvocationResult =

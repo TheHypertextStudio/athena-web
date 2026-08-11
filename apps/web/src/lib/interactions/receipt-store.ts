@@ -38,6 +38,8 @@ export interface InteractionReceiptStore {
     outcome: InteractionOutcome,
     recovery?: InteractionRecovery,
   ) => InteractionReceipt;
+  /** Abandon a live receipt without treating an invalid synchronous edge as acknowledgement. */
+  abandon: (invocationId: string) => InteractionReceipt;
   /** Return a local-only invocation for child/root correlation; never use this for diagnostics. */
   invocationFor: (invocationId: string) => InteractionInvocation | undefined;
   /** Mark unresolved page-lifetime work as abandoned during teardown. */
@@ -227,6 +229,7 @@ export function createInteractionReceiptStore(
       if (recovery !== undefined) stored.receipt = { ...stored.receipt, recovery };
       return complete(stored, outcome);
     },
+    abandon: (invocationId) => complete(liveReceipt(invocationId), 'abandoned'),
     invocationFor: (invocationId) => {
       const stored = records.get(invocationId);
       return stored ? copyInvocation(stored.invocation) : undefined;

@@ -96,6 +96,9 @@ function useActionReceiptRuntime(): ActionReceiptRuntime | undefined {
           },
         });
       },
+      abandon: (invocationId) => {
+        receipts.abandonInteraction(invocationId);
+      },
     };
   }, [receipts, watchdog]);
 }

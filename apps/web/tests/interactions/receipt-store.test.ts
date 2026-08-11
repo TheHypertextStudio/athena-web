@@ -74,6 +74,18 @@ describe('interaction receipt store', () => {
     });
   });
 
+  it('abandons an activated receipt without treating it as an acknowledgement', () => {
+    const store = createInteractionReceiptStore();
+    store.activate(ROOT_INVOCATION);
+
+    const abandoned = store.abandon(ROOT_INVOCATION.invocationId);
+    expect(abandoned).toMatchObject({
+      phase: 'settled',
+      outcome: 'abandoned',
+    });
+    expect(abandoned).not.toHaveProperty('acknowledgedAt');
+  });
+
   it('links a child invocation to its root only in the ephemeral local trace', () => {
     const store = createInteractionReceiptStore();
     const child = invocation('ephemeral-child-invocation', ROOT_INVOCATION.invocationId);

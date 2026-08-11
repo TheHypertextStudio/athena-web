@@ -49,8 +49,6 @@ export {
   DuplicateActionIdError,
   DuplicateDomainRegistrationError,
   MalformedActionIdError,
-  MissingActionResponsivenessError,
-  SynchronousActionResponsivenessError,
   UnknownActionError,
 } from './registry';
 export {
@@ -66,11 +64,15 @@ export {
   type ActionContext,
   type ActionContextResolver,
   type ActionDefinition,
+  type ActionDefinitionInput,
   type ActionDomain,
   type ActionId,
   type ActionInvocationResult,
   type ActionSection,
+  type AsynchronousActionRun,
   type ActionResponsiveness,
   type ActionSource,
+  type SynchronousActionRun,
+  type ValidActionDefinition,
   type ResolvedAction,
 } from './types';

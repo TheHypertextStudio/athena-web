@@ -121,6 +121,7 @@ const KIND_ACTION: Record<EventKind, string> = {
 
 /** A compact event sentence that does not repeat the episode subject. */
 export function streamEventSentence(row: StreamEventRow): string {
+  if (row.actorIsViewer && row.kind === 'assignment') return 'You assigned yourself';
   return `${streamActorLabel(row)} ${KIND_ACTION[row.kind]}`;
 }
 
@@ -195,6 +196,9 @@ export function streamDescription(row: StreamEventRow): string {
   const actor = streamActorLabel(row);
   const verb = KIND_VERB[row.kind];
   const subject = row.entityTitle;
+  if (row.actorIsViewer && row.kind === 'assignment' && subject) {
+    return `You assigned yourself to ${subject}`;
+  }
   return subject ? `${actor} ${verb} ${subject}` : row.title;
 }
 

@@ -76,6 +76,12 @@ describe('viewer-aware event copy', () => {
     expect(streamEventSentence({ ...mine, kind: 'completed' })).toBe('You completed the task');
   });
 
+  it('describes a viewer assigning themself without saying You assigned you', () => {
+    const mine = toRow(event({ actorIsViewer: true, kind: 'assignment' }));
+    expect(streamEventSentence(mine)).toBe('You assigned yourself');
+    expect(streamDescription(mine)).toBe('You assigned yourself to Ship the beta');
+  });
+
   it('keeps another person’s complete preferred display name', () => {
     const other = toRow(
       event({

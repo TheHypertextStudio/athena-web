@@ -304,3 +304,12 @@ export function useInteractionReceipts(): InteractionReceiptContextValue {
   }
   return context;
 }
+
+/**
+ * Read receipt ownership when an optional integration boundary may be mounted outside this tree.
+ *
+ * @returns The receipt contract, or `null` for isolated action-registry tests and stories.
+ */
+export function useOptionalInteractionReceipts(): InteractionReceiptContextValue | null {
+  return useContext(InteractionReceiptContext);
+}

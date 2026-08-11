@@ -86,3 +86,29 @@ describe('task.label registration', () => {
     expect(open).not.toHaveBeenCalled();
   });
 });
+
+describe('task action responsiveness metadata', () => {
+  it('declares root receipts only for promise-returning task actions', () => {
+    const registry = createActionRegistry();
+    const { client } = makeQueryWrapper();
+    render(
+      <QueryClientProvider client={client}>
+        <InteractionProvider registry={registry}>
+          <TaskActionRegistration />
+        </InteractionProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(registry.get('task.toggleComplete')?.responsiveness).toMatchObject({
+      ownership: 'root',
+      interactionId: 'app.mutation',
+      category: 'mutation',
+      routeTemplateId: '/tasks/[taskId]',
+    });
+    expect(registry.get('task.addSubtask')?.responsiveness).toMatchObject({ ownership: 'root' });
+    expect(registry.get('task.copyLink')?.responsiveness).toMatchObject({ ownership: 'root' });
+    expect(registry.get('task.open')?.responsiveness).toBeUndefined();
+    expect(registry.get('task.label')?.responsiveness).toBeUndefined();
+    expect(registry.get('task.showInGraph')?.responsiveness).toBeUndefined();
+  });
+});

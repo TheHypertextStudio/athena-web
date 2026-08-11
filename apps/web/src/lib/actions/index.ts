@@ -40,12 +40,16 @@ export {
 } from './object';
 export {
   type ActionRegistry,
+  type ActionRegistryOptions,
+  type ActionReceiptRuntime,
+  type ActionAsyncObservation,
   type ActionRegistrySnapshot,
   createActionRegistry,
   defineActionDomain,
   DuplicateActionIdError,
   DuplicateDomainRegistrationError,
   MalformedActionIdError,
+  MissingActionResponsivenessError,
   UnknownActionError,
 } from './registry';
 export {
@@ -65,6 +69,7 @@ export {
   type ActionId,
   type ActionInvocationResult,
   type ActionSection,
+  type ActionResponsiveness,
   type ActionSource,
   type ResolvedAction,
 } from './types';

@@ -19,6 +19,7 @@
 import type { LucideIcon } from '@docket/ui/icons';
 
 import type { ObjectKind, ObjectMeta, ObjectRef } from './object';
+import type { InteractionCategory, InteractionId, RouteTemplateId } from '../interactions';
 
 /**
  * A domain of the app, each of which registers its actions exactly once.
@@ -110,7 +111,42 @@ export interface ActionContext {
    * context stays inspectable and loggable.
    */
   readonly params?: ObjectMeta;
+  /**
+   * The local-only receipt correlation shared with child action work.
+   *
+   * @remarks
+   * This value is never copied into an interaction receipt or diagnostics. It exists only while an
+   * action is executing so an action can hand asynchronous child work to the root receipt owner.
+   */
+  readonly parentInvocationId?: string;
 }
+
+/** The receipt metadata declared by user-initiated asynchronous action work. */
+export type ActionResponsiveness =
+  | {
+      /** Create a receipt at invocation entry and leave painted acknowledgement to its rendered owner. */
+      readonly ownership: 'root';
+      /** The closed receipt identifier. */
+      readonly interactionId: InteractionId;
+      /** The catalogue acknowledgement category for the receipt. */
+      readonly category: InteractionCategory;
+      /** The closed route shape that owns the receipt. */
+      readonly routeTemplateId: RouteTemplateId;
+    }
+  | {
+      /** Reuse the parent's receipt without creating or observing a duplicate activation. */
+      readonly ownership: 'child';
+      /** The closed receipt identifier. */
+      readonly interactionId: InteractionId;
+      /** The catalogue acknowledgement category for the receipt. */
+      readonly category: InteractionCategory;
+      /** The closed route shape that owns the receipt. */
+      readonly routeTemplateId: RouteTemplateId;
+    }
+  | {
+      /** Explicitly declare work that has no user-facing receipt owner. */
+      readonly ownership: 'autonomous';
+    };
 
 /**
  * A call site's promise to produce a context when the action actually runs.
@@ -181,6 +217,14 @@ export interface ActionDefinition {
    * Application-owned copy, same rule as {@link ActionDefinition.label}.
    */
   readonly disabledReason?: (context: ActionContext) => string | null;
+  /**
+   * Declares how asynchronous work is tied to a privacy-safe interaction receipt.
+   *
+   * @remarks
+   * Required for `async` action functions and checked again at runtime for promise-returning work.
+   * An autonomous exception is intentional and explicit; it never creates a receipt.
+   */
+  readonly responsiveness?: ActionResponsiveness;
   /** Perform the action. May be async; the registry awaits it and reports the outcome. */
   readonly run: (context: ActionContext) => void | Promise<void>;
 }

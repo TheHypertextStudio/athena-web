@@ -11,6 +11,13 @@ import {
 } from '../../src/lib/actions/registry';
 import type { ActionContext } from '../../src/lib/actions/types';
 
+const TASK_MUTATION_RECEIPT = {
+  ownership: 'root',
+  interactionId: 'app.mutation',
+  category: 'mutation',
+  routeTemplateId: '/tasks/[taskId]',
+} as const;
+
 const task: ObjectRef = { kind: 'task', id: 't1', organizationId: 'org1', title: 'Write the spec' };
 const otherTask: ObjectRef = { kind: 'task', id: 't2', organizationId: 'org1', title: 'Review it' };
 const project: ObjectRef = {
@@ -26,6 +33,21 @@ function contextFor(objects: readonly ObjectRef[]): ActionContext {
 }
 
 describe('action registry: registration', () => {
+  it('requires declared receipt metadata for asynchronous actions', () => {
+    const registry = createActionRegistry();
+    const missingReceipt = defineActionDomain('task', [
+      {
+        id: 'task.complete',
+        label: 'Complete',
+        run: async () => undefined,
+      },
+    ]);
+
+    expect(() => registry.register('task', missingReceipt)).toThrow(
+      'Async action "task.complete" must declare responsiveness metadata.',
+    );
+  });
+
   it('stamps the domain onto every definition and freezes the set', () => {
     const actions = defineActionDomain('task', [
       { id: 'task.complete', label: 'Complete', run: () => undefined },
@@ -225,6 +247,75 @@ describe('action registry: resolution', () => {
 });
 
 describe('action registry: invocation', () => {
+  it('starts one root receipt before asynchronous work and lets child work share it', async () => {
+    const begin = vi.fn(() => 'ephemeral-root-invocation');
+    const observeAsync = vi.fn();
+    const registry = createActionRegistry({
+      receiptRuntime: { begin, observeAsync },
+    });
+    const run = vi.fn(async (context: ActionContext) => {
+      expect(begin).toHaveBeenCalledTimes(1);
+      expect(context.parentInvocationId).toBe('ephemeral-root-invocation');
+    });
+
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        {
+          id: 'task.complete',
+          label: 'Complete',
+          responsiveness: TASK_MUTATION_RECEIPT,
+          run,
+        },
+      ]),
+    );
+
+    const result = await registry.invoke('task.complete', () => contextFor([task]));
+
+    expect(result).toEqual({ status: 'ran' });
+    expect(begin).toHaveBeenCalledWith(TASK_MUTATION_RECEIPT, undefined);
+    expect(observeAsync).toHaveBeenCalledWith(
+      'task.complete',
+      'ephemeral-root-invocation',
+      TASK_MUTATION_RECEIPT,
+    );
+  });
+
+  it('does not activate or report a second receipt for child asynchronous work', async () => {
+    const begin = vi.fn(() => 'ephemeral-root-invocation');
+    const observeAsync = vi.fn();
+    const registry = createActionRegistry({ receiptRuntime: { begin, observeAsync } });
+    const childReceipt = { ...TASK_MUTATION_RECEIPT, ownership: 'child' as const };
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        {
+          id: 'task.root',
+          label: 'Root',
+          responsiveness: TASK_MUTATION_RECEIPT,
+          run: async () => undefined,
+        },
+        {
+          id: 'task.child',
+          label: 'Child',
+          responsiveness: childReceipt,
+          run: async (context) => {
+            expect(context.parentInvocationId).toBe('ephemeral-root-invocation');
+          },
+        },
+      ]),
+    );
+
+    await registry.invoke('task.root', () => contextFor([task]));
+    await registry.invoke('task.child', () => ({
+      ...contextFor([task]),
+      parentInvocationId: 'ephemeral-root-invocation',
+    }));
+
+    expect(begin).toHaveBeenCalledTimes(1);
+    expect(observeAsync).toHaveBeenCalledTimes(1);
+  });
+
   it('injects the context resolved at invoke time, not at list time', () => {
     const seen: ActionContext[] = [];
     const registry = createActionRegistry();

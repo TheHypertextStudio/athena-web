@@ -31,13 +31,15 @@
  * </QueryClientProvider>
  * ```
  */
-import type { JSX, ReactNode } from 'react';
+import { type JSX, type ReactNode, useMemo } from 'react';
 
 import { ObjectContextMenuProvider } from '@/components/context-menu/object-context-menu';
 import { DragProvider } from '@/components/dnd/drag-context';
+import { createRuntimeWatchdog } from '@/lib/interactions/runtime-watchdog';
+import { useOptionalInteractionReceipts } from '@/lib/interactions/receipt-context';
 
 import { ActionRegistryProvider } from './registry-context';
-import type { ActionRegistry } from './registry';
+import type { ActionReceiptRuntime, ActionRegistry } from './registry';
 import type { ActionId, ActionInvocationResult } from './types';
 
 /** Props for {@link InteractionProvider}. */
@@ -56,6 +58,48 @@ export interface InteractionProviderProps {
   readonly onActionResult?: (id: ActionId, result: ActionInvocationResult) => void;
 }
 
+/** Build the registry bridge without exposing receipt correlation outside the client tree. */
+function useActionReceiptRuntime(): ActionReceiptRuntime | undefined {
+  const receipts = useOptionalInteractionReceipts();
+  const watchdog = useMemo(
+    () =>
+      createRuntimeWatchdog({
+        onFailure: (failure) => {
+          console.error(`Interaction watchdog: ${failure.code} (${failure.actionId}).`);
+        },
+      }),
+    [],
+  );
+
+  return useMemo(() => {
+    if (receipts === null) return undefined;
+    return {
+      begin: (responsiveness, parentInvocationId) => {
+        if (responsiveness.ownership === 'autonomous') return undefined;
+        if (responsiveness.ownership === 'child') return parentInvocationId;
+        return receipts.startInteraction({
+          interactionId: responsiveness.interactionId,
+          category: responsiveness.category,
+          routeTemplateId: responsiveness.routeTemplateId,
+        }).invocationId;
+      },
+      observeAsync: (actionId, invocationId, responsiveness) => {
+        if (responsiveness?.ownership === 'autonomous') {
+          return watchdog.observeAsync(actionId, { autonomous: true });
+        }
+        if (invocationId === undefined) return watchdog.observeAsync(actionId, undefined);
+        return watchdog.observeAsync(actionId, {
+          invocationId,
+          isAcknowledged: () => {
+            const phase = receipts.receiptFor(invocationId)?.phase;
+            return phase === 'acknowledged' || phase === 'progressing';
+          },
+        });
+      },
+    };
+  }, [receipts, watchdog]);
+}
+
 /**
  * Install the app's interaction contract: actions, drag, and the object context menu.
  *
@@ -67,9 +111,11 @@ export function InteractionProvider({
   registry,
   onActionResult,
 }: InteractionProviderProps): JSX.Element {
+  const receiptRuntime = useActionReceiptRuntime();
   return (
     <ActionRegistryProvider
       {...(registry === undefined ? {} : { registry })}
+      {...(receiptRuntime === undefined ? {} : { receiptRuntime })}
       {...(onActionResult === undefined ? {} : { onResult: onActionResult })}
     >
       <DragProvider>

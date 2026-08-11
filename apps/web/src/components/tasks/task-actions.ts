@@ -93,6 +93,12 @@ export function useRegisterTaskActions(): void {
       },
       {
         id: 'task.toggleComplete',
+        responsiveness: {
+          ownership: 'root',
+          interactionId: 'app.mutation',
+          category: 'mutation',
+          routeTemplateId: '/tasks/[taskId]',
+        },
         label: (context) => (allComplete(context) ? 'Reopen' : 'Mark done'),
         icon: CheckCircle2,
         objectKinds: ['task'],
@@ -118,6 +124,12 @@ export function useRegisterTaskActions(): void {
       },
       {
         id: 'task.addSubtask',
+        responsiveness: {
+          ownership: 'root',
+          interactionId: 'app.mutation',
+          category: 'mutation',
+          routeTemplateId: '/tasks/[taskId]',
+        },
         label: 'Add subtask',
         icon: Plus,
         objectKinds: ['task'],
@@ -158,6 +170,12 @@ export function useRegisterTaskActions(): void {
       },
       {
         id: 'task.copyLink',
+        responsiveness: {
+          ownership: 'root',
+          interactionId: 'app.mutation',
+          category: 'mutation',
+          routeTemplateId: '/tasks/[taskId]',
+        },
         label: 'Copy link',
         icon: Link,
         objectKinds: ['task'],

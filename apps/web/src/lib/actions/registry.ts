@@ -35,9 +35,48 @@ import {
   type ActionDomain,
   type ActionId,
   type ActionInvocationResult,
+  type ActionResponsiveness,
   type ActionSection,
   type ResolvedAction,
 } from './types';
+
+/** Runtime seam that owns receipt activation and development/test watchdog observation. */
+export interface ActionReceiptRuntime {
+  /** Start a root receipt or reuse a parent receipt; returns its local-only correlation value. */
+  readonly begin: (
+    responsiveness: ActionResponsiveness,
+    parentInvocationId: string | undefined,
+  ) => string | undefined;
+  /** Observe promise-returning work without putting correlation values into diagnostics. */
+  readonly observeAsync: (
+    actionId: ActionId,
+    invocationId: string | undefined,
+    responsiveness: ActionResponsiveness | undefined,
+  ) => ActionAsyncObservation | void;
+}
+
+/** Cleanup and settlement hooks returned by an {@link ActionReceiptRuntime} observation. */
+export interface ActionAsyncObservation {
+  /** Stop a pending development/test watchdog observation. */
+  readonly cleanup: () => void;
+  /** Finish observation without treating asynchronous settlement as painted acknowledgement. */
+  readonly settle: () => void;
+}
+
+/** Construction options for {@link createActionRegistry}. */
+export interface ActionRegistryOptions {
+  /** Optional receipt/runtime bridge, mounted only in the client provider tree. */
+  readonly receiptRuntime?: ActionReceiptRuntime;
+}
+
+/** Thrown when an `async` action fails to declare its receipt ownership metadata. */
+export class MissingActionResponsivenessError extends Error {
+  /** @param actionId - The asynchronous action missing receipt metadata. */
+  constructor(actionId: ActionId) {
+    super(`Async action "${actionId}" must declare responsiveness metadata.`);
+    this.name = 'MissingActionResponsivenessError';
+  }
+}
 
 /** Thrown when one domain declares the same action id twice. */
 export class DuplicateActionIdError extends Error {
@@ -237,7 +276,7 @@ function sectionRank(section: ActionSection): number {
  * }));
  * ```
  */
-export function createActionRegistry(): ActionRegistry {
+export function createActionRegistry(options: ActionRegistryOptions = {}): ActionRegistry {
   const domains = new Map<ActionDomain, DomainRegistration>();
   const listeners = new Set<() => void>();
   let version = 0;
@@ -284,6 +323,9 @@ export function createActionRegistry(): ActionRegistry {
       if (seenInBatch.has(definition.id) && strictMode()) {
         throw new DuplicateActionIdError(definition.id, domain);
       }
+      if (definition.run.constructor.name === 'AsyncFunction' && definition.responsiveness === undefined) {
+        throw new MissingActionResponsivenessError(definition.id);
+      }
       seenInBatch.add(definition.id);
     }
 
@@ -314,11 +356,31 @@ export function createActionRegistry(): ActionRegistry {
     if (disabledReason !== null) {
       return { status: 'skipped', reason: 'disabled', detail: disabledReason };
     }
+    const responsiveness = definition.responsiveness;
+    const invocationId =
+      responsiveness === undefined
+        ? undefined
+        : responsiveness.ownership === 'child'
+          ? context.parentInvocationId
+        : options.receiptRuntime?.begin(responsiveness, context.parentInvocationId);
+    const actionContext =
+      invocationId === undefined ? context : { ...context, parentInvocationId: invocationId };
+    let observation: ActionAsyncObservation | undefined;
     try {
-      await definition.run(context);
+      const work = definition.run(actionContext);
+      if (work instanceof Promise) {
+        if (responsiveness?.ownership !== 'child' || invocationId === undefined) {
+          observation =
+            options.receiptRuntime?.observeAsync(definition.id, invocationId, responsiveness) ??
+            undefined;
+        }
+        await work;
+      }
       return { status: 'ran' };
     } catch (error) {
       return { status: 'failed', error };
+    } finally {
+      observation?.settle();
     }
   }
 

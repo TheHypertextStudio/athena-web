@@ -28,7 +28,11 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import { type ActionRegistry, createActionRegistry } from './registry';
+import {
+  type ActionReceiptRuntime,
+  type ActionRegistry,
+  createActionRegistry,
+} from './registry';
 import type {
   ActionContextResolver,
   ActionDefinition,
@@ -60,6 +64,8 @@ export interface ActionRegistryProviderProps {
    * the provider create its own, so there is exactly one.
    */
   readonly registry?: ActionRegistry;
+  /** Receipt bridge used by the provider-created production registry. */
+  readonly receiptRuntime?: ActionReceiptRuntime;
   /**
    * Observe every invocation's outcome.
    *
@@ -80,9 +86,10 @@ export interface ActionRegistryProviderProps {
 export function ActionRegistryProvider({
   children,
   registry,
+  receiptRuntime,
   onResult,
 }: ActionRegistryProviderProps): JSX.Element {
-  const [ownRegistry] = useState(() => registry ?? createActionRegistry());
+  const [ownRegistry] = useState(() => registry ?? createActionRegistry({ receiptRuntime }));
   const value = useMemo<ActionRegistryContextValue>(
     () => ({ registry: registry ?? ownRegistry, onResult }),
     [registry, ownRegistry, onResult],

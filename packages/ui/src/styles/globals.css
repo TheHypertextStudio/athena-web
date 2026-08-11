@@ -870,17 +870,23 @@
  * z-index to get wrong, no negative margin to clip, and the artwork has no height of its own. It is
  * whatever the header is, so collapsing the header collapses the artwork with it for free.
  *
- * Scroll-driven, not state-driven: `animation-timeline: scroll()` ties progress to the scroller's
- * offset with no listener and no re-render per frame. The nested detail body provides a stable
- * minimum scroll range, so collapsing header rows cannot clamp the timeline before its endpoint.
+ * Scroll-driven, not state-driven: one passive listener samples the scroller's absolute pixel
+ * offset into a CSS custom property without causing a React render. Native CSS scroll timelines
+ * cannot be the progress source here because changing header height also changes their total
+ * scroll range; the resulting circular percentage can stop before its endpoint. Paused keyframes
+ * preserve CSS interpolation while an absolute offset keeps progress invariant.
  *
- * Everything animated sits inside `@supports`, so a browser without scroll timelines keeps the
- * header at its expanded size. Worse, not broken.
+ * The nested detail body provides enough overflow to reach both endpoints, and scroll anchoring is
+ * disabled because the header's height change is intentional rather than content drift.
  */
 [data-detail-cover] {
   --detail-collapse-range: 4rem;
+  --detail-collapse-progress: 0;
+  --detail-collapse-delay: 0s;
   --detail-expanded-glyph-row: 3.25rem;
   --detail-compact-identity-inset: 2.25rem;
+  container-type: size;
+  overflow-anchor: none;
 }
 
 [data-detail-cover='absent'] {
@@ -897,7 +903,7 @@
  * least the requested collapse distance without adding space above the active panel.
  */
 .detail-body {
-  min-block-size: calc(100% - 4rem + var(--detail-collapse-range));
+  min-block-size: calc(100cqb - 4rem + var(--detail-collapse-range));
 }
 
 /*
@@ -940,51 +946,39 @@
   }
 }
 
-@supports (animation-timeline: scroll()) {
-  .detail-backdrop-space,
-  .detail-glyph,
-  .detail-title,
-  .detail-secondary {
-    animation-timing-function: linear;
-    animation-fill-mode: both;
-    animation-timeline: scroll(nearest);
-    animation-range: 0 var(--detail-collapse-range);
-  }
+.detail-backdrop-space,
+.detail-glyph,
+.detail-title,
+.detail-secondary {
+  animation-delay: var(--detail-collapse-delay);
+  animation-duration: 1s;
+  animation-fill-mode: both;
+  animation-play-state: paused;
+  animation-timing-function: linear;
+}
 
-  .detail-backdrop-space {
-    animation-name: detail-backdrop-collapse;
-  }
+.detail-backdrop-space {
+  animation-name: detail-backdrop-collapse;
+}
 
-  .detail-glyph {
-    animation-name: detail-glyph-collapse;
-  }
+.detail-glyph {
+  animation-name: detail-glyph-collapse;
+}
 
-  .detail-title {
-    animation-name: detail-title-collapse;
-  }
+.detail-title {
+  animation-name: detail-title-collapse;
+}
 
-  /* `grid-template-rows: 1fr → 0fr` collapses to the content's real height with no guessed cap. */
-  .detail-secondary {
-    display: grid;
-    grid-template-rows: 1fr;
-    animation-name: detail-secondary-collapse;
-  }
+/* `grid-template-rows: 1fr → 0fr` collapses to the content's real height with no guessed cap. */
+.detail-secondary {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation-name: detail-secondary-collapse;
+}
 
-  .detail-secondary > * {
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  /* Reduced motion keeps both endpoint states but replaces interpolation with a one-pixel snap. */
-  @media (prefers-reduced-motion: reduce) {
-    .detail-backdrop-space,
-    .detail-glyph,
-    .detail-title,
-    .detail-secondary {
-      animation-timing-function: steps(1, end);
-      animation-range: 0 1px;
-    }
-  }
+.detail-secondary > * {
+  min-height: 0;
+  overflow: hidden;
 }
 
 @keyframes detail-backdrop-collapse {

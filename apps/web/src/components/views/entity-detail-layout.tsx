@@ -16,6 +16,8 @@ import { useOwnPageScroll } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX, ReactNode } from 'react';
 
+import { useDetailHeaderCollapse } from './entity-detail-collapse';
+
 /** Props for {@link EntityDetailLayout}. */
 export interface EntityDetailLayoutProps {
   /**
@@ -81,9 +83,11 @@ export function EntityDetailLayout({
   // can reach the pane's edge. Owning the scroll additionally gives the header something to pin to
   // and a timeline to collapse against, which every detail page benefits from equally.
   useOwnPageScroll();
+  const scrollRef = useDetailHeaderCollapse({ hasCover: Boolean(cover) });
 
   return (
     <div
+      ref={scrollRef}
       data-detail-panel-scroll=""
       data-detail-cover={cover ? 'present' : 'absent'}
       className={cn(

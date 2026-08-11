@@ -127,7 +127,7 @@ export const JOBS: readonly CronJob[] = [
     path: '/internal/cron/athena-triggers',
     schedule: '*/1 * * * *',
     description:
-      'Docket: Athena assignment-trigger sweep (runs every due user-owned scheduled trigger).',
+      'Docket: standing Athena sweep (every due user-owned scheduled trigger, plus the agent-assigned task delegation drain).',
   },
   {
     name: 'docket-elicitation-deadlines',

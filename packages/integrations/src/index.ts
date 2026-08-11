@@ -7,6 +7,7 @@
  */
 export * from './connector';
 export * from './connector-error';
+export * from './delegation';
 export * from './event-detail';
 export * from './fixtures';
 export * from './github-app';
@@ -26,6 +27,7 @@ export * from './safe-fetch';
 export * from './unfurl';
 export * from './mcp-oauth';
 export * from './mock-connector';
+export * from './mock-delegation';
 export * from './mock-notion-mirror';
 export * from './mock-linear-agent';
 export * from './notion-mapping';

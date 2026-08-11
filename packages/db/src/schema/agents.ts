@@ -785,3 +785,102 @@ export const latticeCredential = pgTable(
     }).onDelete('cascade'),
   ],
 );
+
+/** Lifecycle of one hand-off of a Docket task to an external agent execution surface. */
+export type AgentDelegationStatus = 'submitted' | 'completed' | 'failed';
+
+/**
+ * One hand-off of an agent-assigned Docket task to an execution surface outside Docket.
+ *
+ * @remarks
+ * The durable half of the standing drain. A task whose `delegate_id` names an agent Actor is
+ * work someone has already said an agent should do; this row is the record that it actually
+ * left, where it went, and what came back — so the loop is resumable across process restarts
+ * and safe to run on a fixed cadence.
+ *
+ * Two indexes carry the idempotency the drain depends on, and they are constraints rather than
+ * query conventions on purpose: a sweep that runs every minute in more than one process must not
+ * be able to open two units of remote work for one task even if two ticks interleave.
+ *
+ * - `agent_delegation_open_task_uq` is partial on `status <> 'failed'`, so a task can have at
+ *   most one delegation that is either in flight or already answered. Only a delegation that
+ *   failed lets the task be handed out again — succeeding once means the work was done and its
+ *   result is waiting on a person, not that the next tick should grind it a second time.
+ * - `agent_delegation_work_uq` makes the surface's own work id unique, so a duplicated poll
+ *   result cannot be recorded against two rows.
+ *
+ * `result_activity_id` is both provenance and the second idempotency guard: it names the gated
+ * proposal the returned work was posted as, and the claim that sets it is conditional on it
+ * still being null, so a re-run cannot post the same result twice.
+ *
+ * Nothing here holds key material. The surface owns the reply keys that make a result readable;
+ * Docket holds only the work id it was handed back.
+ */
+export const agentDelegation = pgTable(
+  'agent_delegation',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => task.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    /** The person the delegated run acts as; every write back is attributed to them. */
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** The agent Actor the task names as its delegate, kept for provenance after a reassignment. */
+    delegateActorId: text('delegate_actor_id').references(() => actor.id, {
+      onDelete: 'set null',
+    }),
+    /** The session the returned work is posted under, and the one an approval drives. */
+    sessionId: text('session_id').references(() => agentSession.id, { onDelete: 'set null' }),
+    status: text('status').$type<AgentDelegationStatus>().notNull().default('submitted'),
+    /** Which execution surface took the work, e.g. `lattice`. */
+    surface: text('surface').notNull(),
+    /** The surface's own id for this unit of work. */
+    externalWorkId: text('external_work_id').notNull(),
+    /** Identity of the machine that took it. */
+    runtimeId: text('runtime_id'),
+    /** That machine's display name at submission time, so provenance can name it. */
+    runtimeName: text('runtime_name'),
+    /** Last state the surface reported; a `DelegationWorkState`, stored verbatim. */
+    workState: text('work_state').notNull(),
+    /** Terminal `DelegationOutcome`, once there is one. */
+    outcome: text('outcome'),
+    /** The gated proposal the result was posted as. Null until a result has been posted. */
+    resultActivityId: text('result_activity_id').references(() => sessionActivity.id, {
+      onDelete: 'set null',
+    }),
+    /** Stable `DelegationUnavailableReason` code from the last failure; never provider prose. */
+    lastFailureReason: text('last_failure_reason'),
+    /** Diagnostic detail for the last failure. Logged and read by operators, never rendered. */
+    lastFailureDetail: text('last_failure_detail'),
+    pollCount: integer('poll_count').notNull().default(0),
+    lastPolledAt: timestamp('last_polled_at'),
+    deadlineAt: timestamp('deadline_at'),
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('agent_delegation_open_task_uq')
+      .on(t.taskId)
+      .where(sql`status <> 'failed'`),
+    uniqueIndex('agent_delegation_work_uq').on(t.surface, t.externalWorkId),
+    index('agent_delegation_status_idx').on(t.status, t.lastPolledAt),
+    index('agent_delegation_owner_idx').on(t.ownerUserId, t.status),
+    check('agent_delegation_status_check', sql`${t.status} in ('submitted','completed','failed')`),
+    // A row that has left `submitted` has an answer of some kind: either the surface reported a
+    // terminal outcome, or the attempt failed with a reason. A settled row with neither would be
+    // a task the drain has stopped retrying for no recorded cause.
+    check(
+      'agent_delegation_settled_shape_check',
+      sql`${t.status} = 'submitted' OR ${t.outcome} IS NOT NULL OR ${t.lastFailureReason} IS NOT NULL`,
+    ),
+  ],
+);

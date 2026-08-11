@@ -32,6 +32,7 @@ import { sweepLegacyMentions } from '../content/legacy-mention-sweep';
 import { sweepResourceUnfurls } from '../content/unfurl-sweep';
 import { processSearchIndexJobs } from '../search/process-jobs';
 import { sweepAthenaAssignmentTriggers } from '../agent/assignments';
+import { sweepAgentDelegations } from '../agent/delegation';
 import { reapIdleSessions } from '../mcp/session-registry';
 import { sweepElicitations } from '../services/elicitation-service';
 import { sweepExpiredSessions } from './session-sweep';
@@ -192,8 +193,14 @@ const cron = new Hono()
   // persisted owner before every run. The row claim and cooldown make scheduler retries harmless.
   .post('/athena-triggers', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
-    const result = await sweepAthenaAssignmentTriggers(new Date());
-    return c.json({ swept: true, ...result });
+    const now = new Date();
+    const result = await sweepAthenaAssignmentTriggers(now);
+    // The other half of standing Athena, on the same tick: agent-assigned tasks are handed to an
+    // execution surface and finished work comes back as a gated proposal. A separate purpose from
+    // the trigger sweep above, so it is reported separately and a failure in one is never hidden
+    // by the other's success. Every step is claimed in the database, so a retried tick is a no-op.
+    const delegations = await sweepAgentDelegations(now);
+    return c.json({ swept: true, ...result, delegations });
   })
   // Expired-session sweep: deletes every `session` row past its `expiresAt` — Better Auth itself
   // only prunes a row lazily (when that exact expired cookie comes back), so an abandoned browser

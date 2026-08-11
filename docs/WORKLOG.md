@@ -7,6 +7,77 @@
 
 ## Active Tasks
 
+### [CELLO-C5] Drain agent-assigned tasks out to an execution surface and bring the answer back
+
+- **Status**: REVIEW
+- **Started**: 2026-08-11
+- **Priority**: P1
+- **Description**: Docket could already say "an agent should do this" — `task.delegate_id` naming
+  an Actor with `kind = 'agent'` is the data model's own "you own it, the agent does it" — and
+  Lovelace Lattice can already execute delegated agent work. Nothing connected the two, so an
+  agent-assigned task simply sat there forever. The requirement is a standing behavior: on a fixed
+  cadence, check the assigned backlog, hand it out, and post what comes back onto the task.
+- **Approach**:
+
+  **No second scheduler.** The one standing-Athena scheduler in this codebase is user-owned
+  `athena_trigger` rows swept behind `POST /internal/cron/athena-triggers`, provisioned in prod by
+  `scripts/scheduler-setup.ts` as `docket-athena-triggers` at `*/1 * * * *`. The drain rides that
+  same tick as a second purpose, reported separately, exactly the way `sync-connectors` carries
+  the Notion mirror and `expired-sessions-sweep` carries the MCP reaper. Nothing new to provision.
+
+  **The delegation surface is a port, not a client.** `apps/lattice-delegate-mcp` in the
+  `lovelace` repo exposes `delegate`/`status`/`result`/`list_delegated`/`cancel_delegated` over a
+  `DelegateService`, and `lattice-ctl submit task|status|result` is the CLI form. Neither is
+  reachable from a deployed Docket: the relay has no public URL, and submissions are sealed
+  end-to-end against a runtime work key with a reply key the controller mints. So the loop is
+  written against `DelegationPort` — `submit` and `poll`, two methods — whose types restate the
+  real Lattice shapes (`RelayWorkState`, `DelegateOutcome`, `DelegateRequest`,
+  `DelegateAcceptance`) rather than inventing a Docket dialect. `MockDelegation` satisfies it for
+  local and test runs; the container hands back `null` in production until a real adapter exists,
+  and the sweep does nothing rather than failing every task on every tick.
+
+  **Nothing is written to the task directly.** A returned result becomes a gated `action`
+  activity — `approvalStatus: 'proposed'`, carrying a stored `comment` tool call — on a session
+  spawned through `dispatchAthenaWork` (the single admission point for tracked agent work, which
+  `tests/agent/athena-architecture.test.ts` enforces against the source tree). A person approves
+  through the same `approveAndResume` path every other Athena proposal goes through, and only then
+  does a comment land on the task, carrying which machine ran it and which delegation record it
+  came from.
+
+  **Eligibility is the Lattice grant.** A delegated run has to act as somebody, and the recorded
+  answer to "this person authorized their own hardware to carry Athena's work" is
+  `lattice_connection` — per user, not per org. Access is re-authorized against the owner's
+  current Actor on every pass.
+
+  **Idempotency is three overlapping guards**, because a one-minute tick must be free to retry:
+  the candidate query skips tasks with a delegation that has not failed; the partial unique index
+  `agent_delegation_open_task_uq` says the same thing as a constraint so a race is rejected at the
+  insert; and the result claim is conditional on `status = 'submitted' AND result_activity_id IS
+NULL`. Two bugs surfaced while building and were fixed rather than tested around: a completed
+  delegation immediately re-qualified its own task (fixed by widening the index predicate to
+  `status <> 'failed'`), and a failure settled mid-pass was re-submitted in the same pass (fixed
+  with a 15-minute retry cooldown).
+
+- **Files Changed**: `packages/integrations/src/delegation.ts` (new port),
+  `packages/integrations/src/mock-delegation.ts` (new), `packages/integrations/src/index.ts`,
+  `packages/db/src/schema/agents.ts` (`agent_delegation`),
+  `packages/db/drizzle/0080_glossy_living_mummy.sql`,
+  `packages/db/drizzle/0081_aromatic_professor_monster.sql`,
+  `apps/api/src/agent/delegation.ts` (new sweep), `apps/api/src/container.ts`,
+  `apps/api/src/routes/cron.ts`, `apps/api/tests/agent/delegation-loop.test.ts` (new),
+  `scripts/scheduler-setup.ts`, `docs/engineering/deployment.md`.
+- **Blockers**: The drain is inert in production until a reachable delegation surface exists. See
+  "Still owed" below.
+- **Notes**: Still owed for C5 to be live: (1) a real `DelegationPort` adapter, which needs the
+  Lattice relay reachable from Cloud Run and the relay sealing/reply-key crypto available to
+  Docket — neither exists yet; (2) the two generated migrations applied to prod (`deploy.yml`
+  migrates on the unpooled URL); (3) a decision on whether `lattice_connection.enabled` should
+  keep meaning both "run Athena's turns here" and "carry delegated work here", or split into two
+  opt-ins; (4) surfacing `agent_delegation` state in the UI, since today it is only visible in the
+  proposal it produces.
+
+---
+
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW

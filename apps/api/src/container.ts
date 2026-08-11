@@ -26,6 +26,7 @@ import {
   MockLinearAgent,
   MockMcpConnector,
   MockConnector,
+  MockDelegation,
   MockObserver,
   MockUnfurler,
   RealLinearAgentPort,
@@ -46,6 +47,7 @@ import {
 import type {
   Connector,
   ConnectorProvider,
+  DelegationPort,
   LinearAgentPort,
   McpConnector,
   Observer,
@@ -119,6 +121,17 @@ export interface AppContainer {
   readonly voice: VoiceRealtimeProvider;
   readonly blob: BlobStore;
   readonly unfurler: Unfurler;
+  /**
+   * Where agent-assigned work is executed when it is not executed by Docket.
+   *
+   * @remarks
+   * Null when no execution surface is wired up, which is every production deploy today: the
+   * Lattice delegation surface exists (`apps/lattice-delegate-mcp` in the `lovelace` repository)
+   * but has no reachable endpoint, and its submissions are sealed with key material Docket does
+   * not hold. Null rather than a throwing stub on purpose — the standing drain reads this and
+   * does nothing when it is absent, instead of failing every eligible task on every tick.
+   */
+  readonly delegation: DelegationPort | null;
 }
 
 function localMode(runtimeEnv: AppRuntimeEnv): boolean {
@@ -438,6 +451,9 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
   const voice = lazyValue(() => resolveVoiceProvider(runtimeEnv));
   const push = lazyValue(() => buildPushSender(runtimeEnv));
   const unfurler = lazyValue(() => (mock ? new MockUnfurler() : new RealUnfurler()));
+  // Local and test runs get a delegation surface so the standing drain is exercisable end to end;
+  // production gets none until a reachable Lattice relay exists to point a real adapter at.
+  const delegation = lazyValue<DelegationPort | null>(() => (mock ? new MockDelegation() : null));
   const blob = lazyValue(() =>
     mock
       ? new LocalDiskBlob()
@@ -486,6 +502,9 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
     },
     get unfurler() {
       return unfurler();
+    },
+    get delegation() {
+      return delegation();
     },
   };
 

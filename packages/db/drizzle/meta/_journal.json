@@ -561,6 +561,20 @@
       "when": 1786426100044,
       "tag": "0079_orange_triton",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1786474416430,
+      "tag": "0080_glossy_living_mummy",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1786474881293,
+      "tag": "0081_aromatic_professor_monster",
+      "breakpoints": true
     }
   ]
 }

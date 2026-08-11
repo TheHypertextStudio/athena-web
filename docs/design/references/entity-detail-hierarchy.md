@@ -1,57 +1,71 @@
-# Entity-detail layout: what actually renders today
+# Entity-detail layout hierarchy
 
-> **Status**: describes the tree as built, including the parts that are wrong.
-> **Read this before**: changing `EntityDetailLayout` or adding a banner to another detail page.
+> **Status**: describes the shared detail tree and its two expanded geometries.
+> **Read this before**: changing `EntityDetailLayout`, its scroll collapse, or a detail cover.
 
 ## The tree
 
 ```mermaid
 flowchart TD
-  AppShell["AppShell &lt;main&gt;\nbg-surface · lg:rounded-xl\nscroll owner depends on PageScrollProvider"]
-
-  AppShell --> EDL{"EntityDetailLayout\nbranches on the cover prop"}
-
-  EDL -->|no cover| Plain["PageContainer &lt;main&gt;\nmx-auto max-w-7xl · px/py\n(shell scrolls)"]
-  Plain --> P1["eyebrow + actions row"]
-  Plain --> P2["header: icon / title / subtitle"]
-  Plain --> P3["metadata"]
-  Plain --> P4["tabs"]
-  Plain --> P5["children"]
-
-  EDL -->|cover| Cover["CoverDetailLayout\nuseOwnPageScroll → main stops scrolling"]
-  Cover --> C0["div[data-detail-panel-scroll]\nh-full overflow-y-auto ← the scroller"]
-  C0 --> C1["banner div\nh-32/h-44 · relative\ncover + floating eyebrow/actions"]
-  C0 --> C2["masthead div\nrelative z-10 · mx-auto max-w-7xl\nheader -mt-10: icon / title / subtitle / metadata"]
-  C0 --> C3["tab div\nsticky top-0 z-20 · mx-auto max-w-7xl"]
-  C0 --> C4["panel div\nmx-auto max-w-7xl · children"]
+  Shell["AppShell main"] --> Scroll["EntityDetailLayout scroll owner"]
+  Scroll --> Header["Sticky shared header"]
+  Header --> Actions["eyebrow + actions"]
+  Header --> Variant{"cover present?"}
+  Variant -->|yes| Covered["covered expanded geometry · 6rem range"]
+  Variant -->|no| Plain["coverless expanded geometry · 4rem range"]
+  Covered --> Identity["one morphing identity tree"]
+  Plain --> Identity
+  Identity --> Expanded["expanded · icon row, wrapping headline"]
+  Identity --> Compact["compact · icon + truncated title row"]
+  Header --> Secondary["subtitle + metadata collapse away"]
+  Header --> Tabs["tabs remain pinned"]
+  Scroll --> Body["stable nested page grid · active panel"]
 ```
 
-## What is wrong with it
+## One layout, two expanded geometries
 
-**The two branches share nothing.** `EntityDetailLayout` returns one of two unrelated trees. The
-masthead markup — icon, title token, subtitle, metadata — is written twice, once in each. They have
-already drifted: the plain branch puts `actions` in a row with `eyebrow`, the cover branch floats
-them over the banner; the plain branch relies on `PageContainer`, the cover branch re-implements
-`mx-auto max-w-7xl px-3 @2xl:px-6 @4xl:px-8` inline, three times.
+Every core entity route supplies the same slots: optional cover and eyebrow, icon, title, subtitle,
+metadata, actions, tabs, and active panel content. The route does not decide whether the header
+collapses or tune its animation. `EntityDetailLayout` owns one scroll container and marks only
+whether a cover is present.
 
-**`max-w-7xl` and the page gutter are repeated four times** in the cover branch instead of being one
-container. Any change to the measure has to be made in four places or the banner, masthead, tabs and
-panel stop agreeing.
+The coverless state uses a four-rem collapse range. It begins with the icon on its own row above a
+wrapping headline, followed by subtitle, metadata, and tabs. The covered state adds the backdrop
+stage and uses a six-rem range. Both resolve to the same compact identity: scaled glyph beside a
+single-line title, secondary context gone, and tabs pinned beneath it.
 
-**The cover branch does not use `PageContainer`.** It cannot, because `PageContainer` applies padding
-that a full-bleed banner has to escape. That is a real constraint, but the answer is a container that
-knows about full-bleed children, not a second layout that opts out of the system.
+## Stable scroll geometry
 
-**Nothing here is collapse.** The banner has one fixed height and scrolls away; the tab bar pins. The
-identity — icon, title, subtitle — scrolls off and is gone. A collapsing header keeps identity
-present and _shrinks_ it.
+One passive scroll listener converts absolute offset into a zero-to-one fraction, coalesces updates
+through `requestAnimationFrame`, and writes a negative delay for paused CSS keyframes. It does not
+set React state or rerender the tree. The title's font size and placement, glyph scale, secondary
+grid row, and optional backdrop space all read the same progress.
 
-## What it should be
+A native CSS scroll timeline is intentionally not used. Its percentage derives from total scroll
+range, and that range changes while these keyframes reduce the header's height. Runtime verification
+showed the endpoint moving during sampling even after adding overflow; absolute pixel progress does
+not have that circular dependency.
 
-One layout, one container, one masthead, with the header height driven by scroll position rather
-than by which branch was taken. The identity block collapses from the expressive size to a compact
-row and stays pinned; the subtitle and metadata are what fall away.
+Those animated rows reduce the header's layout height. If nothing compensated for that loss, a
+short page could reduce its own maximum scroll offset before reaching the animation endpoint and
+become stranded half-collapsed. The nested `.detail-body` grid therefore has a minimum block size
+derived from the pane height and the selected collapse range. It extends only the end of a short
+panel; it adds no space between the header and the panel. The scroll owner also opts out of scroll
+anchoring so the browser does not counteract this intentional height change. Both variants can
+always reach their compact endpoint while visible content rises beneath the sticky header.
 
-Prefer CSS for the collapse. `animation-timeline: view()` / `scroll()` expresses "shrink the header
-as the panel scrolls" without a scroll listener or React state, which is what makes it smooth and
-what keeps the header out of the re-render path.
+## Motion and fallback
+
+Paused CSS keyframes interpolate the title continuously from the headline token to the compact title
+token. The expanded title may wrap; the compact endpoint truncates to one line. For
+`prefers-reduced-motion`, the sampler selects the expanded endpoint at zero and the compact endpoint
+after the first scroll pixel instead of producing intermediate frames.
+
+## Invariants
+
+- Do not branch the component tree by entity type or duplicate identity content.
+- Do not make page routes provide collapse ranges or compact styles.
+- Keep the glyph above the title when expanded and inline with it when compact.
+- Keep title-size interpolation on the same progress value as the rest of the header.
+- Keep secondary context out of the compact header.
+- Preserve the stable body minimum whenever a collapsing row changes header height.

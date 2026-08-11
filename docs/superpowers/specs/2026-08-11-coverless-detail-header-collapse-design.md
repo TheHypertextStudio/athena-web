@@ -43,10 +43,15 @@ The behavior remains centralized in `EntityDetailLayout`. Entity routes do not o
 provide per-type tuning. The presence of `cover` selects one of two shared expanded geometries and
 sets the corresponding CSS custom properties.
 
-The existing CSS scroll timeline remains the progress source. Its range is backed by stable flow
-geometry rather than the height of elements being collapsed, eliminating the feedback loop without
-adding scroll listeners or render-per-frame state. Browsers without scroll-timeline support retain
-a readable expanded header.
+The CSS keyframes remain the visual model, but their progress comes from absolute scroll distance.
+A passive, animation-frame-coalesced listener writes a negative animation delay directly to the
+scroll owner's style without triggering React renders. Native CSS scroll timelines are not suitable
+for this header: their total timeline range changes when the animated header changes height, so the
+percentage can stop before its endpoint even when extra overflow exists.
+
+The scroll owner establishes a size container, disables scroll anchoring, and gives the nested body
+a block-size based on that invariant container. The header can change height without moving the
+requested collapse endpoint or exhausting the available scroll distance.
 
 For people who request reduced motion, secondary context scrolls away without interpolation and the
 sticky core uses compact typography. The reduced-motion path must not expose a partially faded or
@@ -72,5 +77,6 @@ Behavior-focused coverage will prove that:
 - Reduced-motion behavior remains readable and stable.
 
 The final implementation will be checked with focused automated tests, type checking and linting for
-the affected workspaces, and one explicitly serial browser-level check of covered and coverless
-geometry. Validation must not start watchers, parallel worker pools, or browser MCP processes.
+the affected workspaces, and one explicitly serial, serverless Chromium geometry check of covered
+and coverless states. Validation must not start watchers, parallel worker pools, dev servers, or
+browser MCP processes.

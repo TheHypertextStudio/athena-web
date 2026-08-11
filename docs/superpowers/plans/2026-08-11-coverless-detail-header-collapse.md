@@ -8,321 +8,193 @@
 expanded composition, a continuously resizing title, and an icon that moves from its own row into
 the compact title row.
 
-**Architecture:** Keep the behavior in `EntityDetailLayout` and its shared styles. Mark the covered
-or coverless geometry on the scroll owner, wrap page content in a stable minimum-height body that
-guarantees the scroll timeline can finish, and morph one identity DOM tree through padding, scale,
-typography, and secondary-row animations. No route supplies tuning and no scroll listener runs per
-frame.
+**Architecture:** `EntityDetailLayout` owns one scroll container and two shared ranges selected only
+by cover presence. A passive, animation-frame-coalesced sampler converts absolute scroll offset into
+a stable zero-to-one value and drives paused CSS keyframes without React rerenders. A size-contained
+body runway and disabled scroll anchoring guarantee that short panels can reach the endpoint.
 
-**Tech Stack:** React 19, TypeScript, Tailwind utility classes, shared CSS scroll timelines, Vitest
-source contracts.
+**Tech Stack:** React 19, TypeScript, shared CSS keyframes, Tailwind utilities, Vitest, Playwright
+Chromium.
 
 ---
 
-### Task 1: Lock the shared collapse contract
+## Runtime correction to the proposed approach
+
+The proposed plan used `animation-timeline: scroll(nearest)`. A serial Chromium fixture disproved
+that approach: the body runway supplied ample overflow, but Chrome recomputed the scroll timeline's
+percentage while the same animation reduced header height. The computed endpoint moved during
+sampling and could still stop before one.
+
+The implemented sampler preserves the intended CSS-owned interpolation while making progress a
+function of absolute pixels. Runtime evidence then reached exact endpoints for covered, coverless,
+and reduced-motion states. This correction is part of the plan rather than an unrecorded deviation.
+
+### Task 1: Lock the collapse behavior
 
 **Files:**
 
 - Create: `apps/web/tests/components/entity-detail-collapse-contract.test.ts`
-- Read: `apps/web/src/components/views/entity-detail-layout.tsx`
-- Read: `packages/ui/src/styles/globals.css`
+- Create: `apps/web/tests/components/entity-detail-collapse-progress.test.ts`
 
-- [ ] **Step 1: Write the failing source contract**
+- [x] **Step 1: Add a source contract for shared geometry**
+
+The contract requires:
 
 ```typescript
-import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-
-import { describe, expect, it } from 'vitest';
-
-const root = resolve(import.meta.dirname, '../../../../');
-const layout = readFileSync(
-  join(root, 'apps/web/src/components/views/entity-detail-layout.tsx'),
-  'utf8',
-);
-const css = readFileSync(join(root, 'packages/ui/src/styles/globals.css'), 'utf8');
-
-describe('entity detail collapse contract', () => {
-  it('derives covered and coverless geometry in the shared layout', () => {
-    expect(layout).toContain("data-detail-cover={cover ? 'present' : 'absent'}");
-    expect(css).toContain("[data-detail-cover='absent']");
-    expect(css).toContain("[data-detail-cover='present']");
-    expect(css).toContain('--detail-collapse-range: 4rem');
-    expect(css).toContain('--detail-collapse-range: 6rem');
-  });
-
-  it('keeps enough stable body geometry for the scroll timeline to finish', () => {
-    expect(layout).toContain('detail-body page-bleed page-grid');
-    expect(css).toContain('.detail-body');
-    expect(css).toMatch(/min-block-size:\s*calc\(/);
-    expect(css).toContain('var(--detail-collapse-range)');
-  });
-
-  it('morphs one identity from stacked to compact without duplicating the icon', () => {
-    expect(layout).toContain('className="detail-identity"');
-    expect(layout.match(/className="detail-glyph/g)).toHaveLength(1);
-    expect(layout.indexOf('detail-glyph')).toBeLessThan(layout.indexOf('detail-title'));
-    expect(css).toContain('padding-block-start: var(--detail-expanded-glyph-row)');
-    expect(css).toContain('padding-inline-start: var(--detail-compact-identity-inset)');
-    expect(css).toContain('font-size: var(--text-title-medium)');
-  });
-
-  it('uses a discrete compact state for reduced motion', () => {
-    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
-    expect(css).toContain('animation-timing-function: steps(1, end)');
-    expect(css).toContain('animation-range: 0 1px');
-  });
-});
+expect(layout).toContain("data-detail-cover={cover ? 'present' : 'absent'}");
+expect(layout).toContain('useDetailHeaderCollapse({ hasCover: Boolean(cover) })');
+expect(layout).toContain('detail-body page-bleed page-grid');
+expect(css).toContain('container-type: size');
+expect(css).toContain('overflow-anchor: none');
+expect(css).toMatch(/min-block-size:\s*calc\(100cqb/);
 ```
 
-- [ ] **Step 2: Run only the new test in one worker and verify RED**
+- [x] **Step 2: Add executable progress cases**
+
+```typescript
+expect(resolveDetailCollapseProgress(0, 64, false)).toBe(0);
+expect(resolveDetailCollapseProgress(32, 64, false)).toBe(0.5);
+expect(resolveDetailCollapseProgress(64, 64, false)).toBe(1);
+expect(resolveDetailCollapseProgress(1, 64, true)).toBe(1);
+```
+
+- [x] **Step 3: Verify RED in one Vitest thread**
 
 Run:
 
 ```bash
-pnpm --filter @docket/web exec vitest run tests/components/entity-detail-collapse-contract.test.ts \
-  --maxWorkers=1 --minWorkers=1 --no-file-parallelism
+pnpm --filter @docket/web exec vitest run \
+  tests/components/entity-detail-collapse-contract.test.ts \
+  tests/components/entity-detail-collapse-progress.test.ts \
+  --pool=threads --maxWorkers=1 --no-file-parallelism
 ```
 
-Expected: FAIL because the layout has no cover-state marker or stable body wrapper and the current
-identity is an inline flex row.
+Observed: both suites failed because the behavior module and stable geometry did not exist.
 
-- [ ] **Step 3: Commit the failing behavioral contract**
-
-```bash
-git add apps/web/tests/components/entity-detail-collapse-contract.test.ts
-git commit -F - <<'EOF'
-fix(web): Define the entity header collapse contract
-
-Capture the shared covered and coverless geometry before changing the layout. The focused contract
-requires a stable collapse range, one morphing identity tree, continuous title scaling, and a
-reduced-motion state without introducing route-specific behavior.
-EOF
-```
-
-### Task 2: Implement the stable shared header geometry
+### Task 2: Implement invariant progress and geometry
 
 **Files:**
 
+- Create: `apps/web/src/components/views/entity-detail-collapse.ts`
 - Modify: `apps/web/src/components/views/entity-detail-layout.tsx`
 - Modify: `packages/ui/src/styles/globals.css`
-- Test: `apps/web/tests/components/entity-detail-collapse-contract.test.ts`
 
-- [ ] **Step 1: Mark the variant and give page content a stable body**
+- [x] **Step 1: Resolve bounded progress independently of layout**
 
-On the scroll owner, add the shared variant marker:
-
-```tsx
-data-detail-cover={cover ? 'present' : 'absent'}
+```typescript
+export function resolveDetailCollapseProgress(
+  scrollTop: number,
+  rangePixels: number,
+  reducedMotion: boolean,
+): number {
+  if (!Number.isFinite(scrollTop) || !Number.isFinite(rangePixels) || rangePixels <= 0) return 0;
+  if (reducedMotion) return scrollTop > 0 ? 1 : 0;
+  return Math.min(Math.max(scrollTop / rangePixels, 0), 1);
+}
 ```
 
-Replace the inline identity flex row with one positioned identity tree:
+- [x] **Step 2: Sample scroll without rerendering React**
 
-```tsx
-<div className="detail-identity">
-  <div className="detail-glyph">{icon}</div>
-  <h1 className="detail-title text-on-surface text-headline-medium min-w-0 font-medium">{title}</h1>
-</div>
+`useDetailHeaderCollapse` attaches one passive listener, coalesces it through
+`requestAnimationFrame`, and writes:
+
+```typescript
+scroller.style.setProperty('--detail-collapse-progress', String(progress));
+scroller.style.setProperty('--detail-collapse-delay', `${-progress}s`);
 ```
 
-Wrap the supplied panels after the header so their minimum height supplies the collapse runway while
-the nested page grid preserves the existing measure:
+Coverless uses four rem, covered uses six rem, and reduced motion selects only zero or one.
 
-```tsx
-<div className="detail-body page-bleed page-grid">{children}</div>
-```
-
-- [ ] **Step 2: Define the covered and coverless geometry**
-
-Add shared custom properties and variant ranges:
+- [x] **Step 3: Give short panels stable block geometry**
 
 ```css
 [data-detail-cover] {
-  --detail-collapse-range: 4rem;
-  --detail-expanded-glyph-row: 3.25rem;
-  --detail-compact-identity-inset: 2.25rem;
-}
-
-[data-detail-cover='present'] {
-  --detail-collapse-range: 6rem;
+  container-type: size;
+  overflow-anchor: none;
 }
 
 .detail-body {
-  min-block-size: calc(100% - 4rem + var(--detail-collapse-range));
+  min-block-size: calc(100cqb - 4rem + var(--detail-collapse-range));
 }
+```
 
-.detail-identity {
-  position: relative;
-  min-width: 0;
-}
+The nested `page-grid` keeps route content on the original measure and extends only the end of a
+short active panel.
 
-.detail-glyph {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  width: fit-content;
-  transform-origin: left center;
-}
+- [x] **Step 4: Morph one identity tree through paused keyframes**
 
+The glyph is absolutely positioned at the identity origin. Expanded title block padding puts it on
+its own row; the compact endpoint removes that padding and adds a 2.25rem inline inset. The title
+keyframe interpolates `headline-medium` to `title-medium`, while glyph scale, secondary grid row,
+opacity, and optional backdrop use the same negative delay.
+
+```css
 .detail-title {
-  min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
   padding-block-start: var(--detail-expanded-glyph-row);
 }
-```
 
-The body formula reserves at least the requested animation range after the compact header. It does
-not change the top-of-page spacing and only extends short panels at the end of their content.
-
-- [ ] **Step 3: Morph title, glyph, cover, and secondary context on the same timeline**
-
-Keep one scroll timeline and change the title keyframes to include identity placement:
-
-```css
-@keyframes detail-title-collapse {
-  from {
-    padding-block-start: var(--detail-expanded-glyph-row);
-    padding-inline-start: 0;
-    font-size: var(--text-headline-medium);
-    line-height: var(--text-headline-medium--line-height);
-  }
-  to {
-    overflow: hidden;
-    padding-block-start: 0;
-    padding-inline-start: var(--detail-compact-identity-inset);
-    font-size: var(--text-title-medium);
-    line-height: var(--text-title-medium--line-height);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+.detail-title,
+.detail-glyph,
+.detail-secondary,
+.detail-backdrop-space {
+  animation-delay: var(--detail-collapse-delay);
+  animation-duration: 1s;
+  animation-fill-mode: both;
+  animation-play-state: paused;
+  animation-timing-function: linear;
 }
 ```
 
-The glyph keeps the existing `scale: 0.6` endpoint. The secondary row keeps its `1fr` to `0fr`
-collapse and the covered backdrop keeps its own height collapse. All four use the variant's shared
-range.
+- [x] **Step 5: Verify GREEN in one Vitest thread**
 
-- [ ] **Step 4: Add a reduced-motion snap without a scroll listener**
+Observed: the collapse contract and progress suite passed 7/7 tests.
 
-Apply the same scroll-linked keyframes for all supporting browsers. In the reduced-motion branch,
-override only timing and range:
-
-```css
-@media (prefers-reduced-motion: reduce) {
-  .detail-backdrop-space,
-  .detail-glyph,
-  .detail-title,
-  .detail-secondary {
-    animation-range: 0 1px;
-    animation-timing-function: steps(1, end);
-  }
-}
-```
-
-This leaves the full expanded context at scroll position zero and snaps to the shared compact state
-after the first pixel rather than interpolating motion.
-
-- [ ] **Step 5: Run the focused contract in one worker and verify GREEN**
-
-Run:
-
-```bash
-pnpm --filter @docket/web exec vitest run tests/components/entity-detail-collapse-contract.test.ts \
-  --maxWorkers=1 --minWorkers=1 --no-file-parallelism
-```
-
-Expected: one file passing with no persistent Node process after exit.
-
-- [ ] **Step 6: Commit the implementation**
-
-```bash
-git add apps/web/src/components/views/entity-detail-layout.tsx packages/ui/src/styles/globals.css
-git commit -F - <<'EOF'
-fix(web): Stabilize collapsing entity headers
-
-Give covered and coverless entity pages deliberate expanded geometry while preserving one compact
-destination. A stable short-page body lets the CSS timeline finish, and the identity now moves from
-an icon row and headline into the inline compact title without scroll listeners.
-EOF
-```
-
-### Task 3: Reconcile documentation and validate the completed slice
+### Task 3: Verify browser geometry and affected contracts
 
 **Files:**
 
 - Modify: `docs/design/references/entity-detail-hierarchy.md`
 - Modify: `docs/WORKLOG.md`
-- Verify: `apps/web/src/components/views/entity-detail-layout.tsx`
-- Verify: `packages/ui/src/styles/globals.css`
 
-- [ ] **Step 1: Replace the stale two-branch hierarchy reference**
+- [x] **Step 1: Run a serverless serial Chromium fixture**
 
-Document the current single scroller and shared header:
+The temporary fixture loaded the committed detail CSS directly and used one Chromium session. It
+started no app server, watcher, browser MCP process, or worker pool. Measured results:
 
-```mermaid
-flowchart TD
-  Shell["AppShell main"] --> Scroll["EntityDetailLayout scroll owner"]
-  Scroll --> Header["Sticky shared header"]
-  Header --> Variant{"cover present?"}
-  Variant -->|yes| Covered["covered expanded geometry · 6rem range"]
-  Variant -->|no| Plain["coverless expanded geometry · 4rem range"]
-  Covered --> Compact["shared compact identity + tabs"]
-  Plain --> Compact
-  Scroll --> Body["stable nested page grid · active panel"]
-```
+- Coverless title: 28px at 0, 22px at 32px, 16px at 64px.
+- Covered title: 22px at 48px, 16px at 96px.
+- Expanded icon content preceded the title by 52px; compact title content gained a 36px inline inset.
+- Compact secondary height and opacity both reached zero.
+- Reduced motion reached the compact 16px endpoint after one pixel.
+- Endpoint maximum scroll remained 164px coverless and 196px covered.
 
-Explain that the body minimum height is the stable runway, that the icon is above the expanded
-title and inline when compact, and that routes only supply slots.
+The temporary fixture was deleted after Chromium closed.
 
-- [ ] **Step 2: Run focused serial verification**
-
-Run each command only after the prior one exits:
+- [x] **Step 2: Run affected automated checks serially**
 
 ```bash
 pnpm --filter @docket/web exec vitest run \
   tests/components/entity-detail-collapse-contract.test.ts \
+  tests/components/entity-detail-collapse-progress.test.ts \
   tests/components/projects/projects-experience-contract.test.ts \
   tests/components/initiative-visual-contract.test.ts \
-  --maxWorkers=1 --minWorkers=1 --no-file-parallelism
+  --pool=threads --maxWorkers=1 --no-file-parallelism
 pnpm --filter @docket/web typecheck
 pnpm --filter @docket/ui typecheck
-pnpm exec eslint apps/web/src/components/views/entity-detail-layout.tsx \
-  apps/web/tests/components/entity-detail-collapse-contract.test.ts
-pnpm exec prettier --check packages/ui/src/styles/globals.css \
-  docs/design/references/entity-detail-hierarchy.md docs/WORKLOG.md
+pnpm --filter @docket/web lint
+pnpm --filter @docket/ui lint
 ```
 
-Expected: every command exits zero. Do not run a root build, root test suite, watcher, dev server,
-browser MCP process, or parallel browser worker for this slice.
+Observed: 4 files / 26 tests passed, both typechecks passed, and both package lints passed.
 
-- [ ] **Step 3: Complete the WORKLOG entry**
+- [x] **Step 3: Reconcile the hierarchy reference and work log**
 
-Move `DETAIL-HEADER-001` from Active Tasks to Completed Tasks. Record the two implementation files,
-the new focused contract, the hierarchy reference, exact serial validation results, and the lesson
-that scroll-linked layout changes require invariant scroll geometry.
+The documentation records the shared tree, variant ranges, absolute progress sampler, stable body
+runway, reduced-motion endpoint behavior, serial runtime evidence, and the reason native scroll
+timelines are not used for layout-changing collapse.
 
-- [ ] **Step 4: Review the final diff and process state**
+- [x] **Step 4: Complete final repository-state checks and commit documentation**
 
-Run:
-
-```bash
-git diff --check
-git diff --stat HEAD~2
-ps -axo pid=,ppid=,command= | rg '[Nn]ode|pnpm|vitest|next' || true
-git rev-list --merges --count origin/main..HEAD
-```
-
-Expected: no whitespace errors, no process tied to this worktree, and merge count `0`.
-
-- [ ] **Step 5: Commit documentation and closeout**
-
-```bash
-git add docs/design/references/entity-detail-hierarchy.md docs/WORKLOG.md
-git commit -F - <<'EOF'
-fix(web): Document the shared detail header geometry
-
-Replace the obsolete branched-layout reference with the covered and coverless states that now share
-one scroll owner and compact destination. Close the work log with the focused serial evidence used
-to verify the interaction without leaving persistent worker processes.
-EOF
-```
+Run `git diff --check`, verify no process has this worktree as its current directory, and verify
+`git rev-list --merges --count origin/main..HEAD` returns zero before the closeout commit.

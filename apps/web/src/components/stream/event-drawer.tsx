@@ -41,7 +41,7 @@ export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | n
     <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Event details">
       <button
         type="button"
-        aria-label="Close event details"
+        aria-label="Dismiss event details"
         className="absolute inset-0 bg-black/25"
         onClick={onClose}
       />
@@ -72,9 +72,7 @@ export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | n
 
           {row.entityTitle ? (
             <div className="border-outline-variant mt-5 border-t pt-4">
-              <p className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-                Subject
-              </p>
+              <p className="text-on-surface-variant text-label-small font-medium">Subject</p>
               {href ? (
                 <a
                   href={href}

@@ -205,6 +205,21 @@ function humanValue(value: string | null): string {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
+/** Format a field's display snapshot according to its stable semantic key. */
+function fieldValue(field: string, value: string | null): string {
+  if (value === null) return 'None';
+  if ((field === 'dueDate' || field === 'startDate') && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }
+  return humanValue(value);
+}
+
 /** Render milliseconds as a compact application-owned duration. */
 function durationLabel(elapsedMs: number): string {
   const minutes = Math.floor(elapsedMs / 60_000);
@@ -226,10 +241,15 @@ export function streamEventDetailLabel(row: StreamEventRow): string | null {
   if (!detail) return row.summary;
   switch (detail.schema) {
     case 'docket.state_change':
-      return `${humanValue(detail.fromState)} → ${humanValue(detail.toState)}`;
+      return detail.fromState === null
+        ? `Now ${humanValue(detail.toState)}`
+        : `${humanValue(detail.fromState)} → ${humanValue(detail.toState)}`;
     case 'docket.field_change':
       return detail.changes
-        .map((change) => `${change.label}: ${humanValue(change.from)} → ${humanValue(change.to)}`)
+        .map(
+          (change) =>
+            `${change.label}: ${fieldValue(change.field, change.from)} → ${fieldValue(change.field, change.to)}`,
+        )
         .join(' · ');
     case 'docket.timer':
       return `${detail.trackedLabel} · ${durationLabel(detail.elapsedMs)}`;

@@ -6,7 +6,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { ActorRef, EventKind, SourceSystemKind, StreamPageOut } from '@docket/types';
+import {
+  ActorId,
+  type ActorRef,
+  type EventKind,
+  type SourceSystemKind,
+  type StreamPageOut,
+} from '@docket/types';
 import type { z } from 'zod';
 
 import {
@@ -147,7 +153,7 @@ describe('GET /v1/hub/stream (membership-wide timeline)', () => {
       externalId: actorId,
       displayName: 'Willie Chalmers III',
       avatarUrl: null,
-      docketActorId: actorId,
+      docketActorId: ActorId.parse(actorId),
     };
     await seedEvent(orgId, { actor, title: 'Mine', occurredAt: T2 });
 
@@ -221,7 +227,7 @@ describe('GET /v1/orgs/:orgId/stream (workspace firehose)', () => {
       externalId: humanActorId,
       displayName: 'Willie Chalmers III',
       avatarUrl: null,
-      docketActorId: humanActorId,
+      docketActorId: ActorId.parse(humanActorId),
     };
     const theirs: ActorRef = {
       source: 'docket',

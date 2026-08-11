@@ -22,10 +22,22 @@ import { OPERATOR_LABEL, operatorsForType, optionsFor } from './field-catalog';
 interface AddFilterMenuProps<T> {
   fields: FieldCatalog<T>;
   onAdd: (field: string, op: FilterOperator, value: unknown) => void;
+  /** Visible trigger copy; defaults to the creation-oriented shared-list label. */
+  triggerLabel?: string;
+  /** Keep the trigger copy visible in narrow containers. */
+  alwaysShowLabel?: boolean;
+  /** Number of currently active filters, shown as a compact count when non-zero. */
+  activeCount?: number;
 }
 
 /** AddFilterMenu renders the saved views UI control for its parent workflow. */
-export function AddFilterMenu<T>({ fields, onAdd }: AddFilterMenuProps<T>): JSX.Element {
+export function AddFilterMenu<T>({
+  fields,
+  onAdd,
+  triggerLabel = 'Add filter',
+  alwaysShowLabel = false,
+  activeCount = 0,
+}: AddFilterMenuProps<T>): JSX.Element {
   const [open, setOpen] = useState(false);
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -33,8 +45,10 @@ export function AddFilterMenu<T>({ fields, onAdd }: AddFilterMenuProps<T>): JSX.
         <Button
           variant="outline"
           size="sm"
-          className="min-h-10 gap-1.5 px-2.5 @2xl:min-h-8 @2xl:px-3"
-          aria-label="Add filter"
+          className="text-on-surface min-h-10 gap-1.5 px-2.5 @2xl:min-h-8 @2xl:px-3"
+          aria-label={
+            activeCount > 0 ? `${triggerLabel}, ${String(activeCount)} active` : triggerLabel
+          }
         >
           {/*
            * A funnel rather than a plus. The label is shed on narrow containers so the toolbar
@@ -42,8 +56,19 @@ export function AddFilterMenu<T>({ fields, onAdd }: AddFilterMenuProps<T>): JSX.
            * the one action this control does not perform. The glyph has to carry the meaning on
            * its own at the widths where the word is gone.
            */}
-          <Filter className="size-4" aria-hidden="true" />
-          <span className="hidden @2xl:inline">Add filter</span>
+          <Filter className="text-on-surface size-4" aria-hidden="true" />
+          <span
+            className={
+              alwaysShowLabel ? 'text-on-surface inline' : 'text-on-surface hidden @2xl:inline'
+            }
+          >
+            {triggerLabel}
+          </span>
+          {activeCount > 0 ? (
+            <span className="bg-secondary-container text-on-secondary-container inline-flex min-w-5 items-center justify-center rounded-full px-1 text-[0.6875rem]">
+              {String(activeCount)}
+            </span>
+          ) : null}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" width="md">

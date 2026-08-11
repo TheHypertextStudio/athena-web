@@ -77,6 +77,10 @@ export interface FilterToolbarProps<T> {
   onGroupByChange: (groupBy: ViewGroupTerm | null) => void;
   /** Replace the active sort terms. */
   onSortChange: (sort: readonly ViewSortTerm[]) => void;
+  /** Override the shared "Add filter" trigger copy for surfaces where filtering is persistent. */
+  filterTriggerLabel?: string;
+  /** Keep filter trigger copy visible in narrow containers. */
+  alwaysShowFilterLabel?: boolean;
   /**
    * Extra sections appended inside the **Display** menu — a surface's own presentation options
    * (a timeline's scale, density, and axis navigation, say).
@@ -115,6 +119,8 @@ export function FilterToolbar<T>({
   onFiltersChange,
   onGroupByChange,
   onSortChange,
+  filterTriggerLabel,
+  alwaysShowFilterLabel,
   displayExtras,
   leading,
   saveSlot,
@@ -146,7 +152,15 @@ export function FilterToolbar<T>({
       <div className="flex min-w-0 flex-nowrap items-center gap-2">
         {leading}
 
-        {filterable.length > 0 ? <AddFilterMenu fields={filterable} onAdd={addFilter} /> : null}
+        {filterable.length > 0 ? (
+          <AddFilterMenu
+            fields={filterable}
+            onAdd={addFilter}
+            activeCount={state.filters.length}
+            {...(filterTriggerLabel ? { triggerLabel: filterTriggerLabel } : {})}
+            {...(alwaysShowFilterLabel ? { alwaysShowLabel: true } : {})}
+          />
+        ) : null}
 
         {hasDisplay ? (
           <DropdownMenu>

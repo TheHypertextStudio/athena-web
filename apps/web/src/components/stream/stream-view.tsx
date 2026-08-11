@@ -133,6 +133,8 @@ export function StreamView(props: StreamViewProps): JSX.Element {
         onFiltersChange={props.onFiltersChange}
         onGroupByChange={props.onGroupByChange}
         onSortChange={props.onSortChange}
+        filterTriggerLabel="Filters"
+        alwaysShowFilterLabel
         {...(props.saveSlot ? { saveSlot: props.saveSlot } : {})}
       />
 

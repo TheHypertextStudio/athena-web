@@ -127,6 +127,20 @@ describe('viewer-aware event copy', () => {
     expect(streamEventDetailLabel(changed)).toBe('Due date: Aug 10 → Aug 12');
   });
 
+  it('formats stored ISO date values without exposing their machine representation', () => {
+    const changed = toRow(
+      event({
+        kind: 'field_change',
+        detail: {
+          schema: 'docket.field_change',
+          fields: ['dueDate'],
+          changes: [{ field: 'dueDate', label: 'Due date', from: null, to: '2026-08-19' }],
+        },
+      }),
+    );
+    expect(streamEventDetailLabel(changed)).toBe('Due date: None → Aug 19, 2026');
+  });
+
   it('humanizes canonical state values', () => {
     const changed = toRow(
       event({
@@ -139,6 +153,16 @@ describe('viewer-aware event copy', () => {
       }),
     );
     expect(streamEventDetailLabel(changed)).toBe('In progress → Done');
+  });
+
+  it('does not pretend an unknown prior state was empty', () => {
+    const changed = toRow(
+      event({
+        kind: 'status_change',
+        detail: { schema: 'docket.state_change', fromState: null, toState: 'active' },
+      }),
+    );
+    expect(streamEventDetailLabel(changed)).toBe('Now Active');
   });
 });
 

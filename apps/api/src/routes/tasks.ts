@@ -483,7 +483,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
           actorId: ctx.actorId,
           title: row.title,
           subject,
-          detail: { schema: 'docket.state_change', fromState: null, toState: row.state },
+          detail: { schema: 'docket.state_change', fromState: before.state, toState: row.state },
         });
       }
       if (body.assigneeId) {

@@ -256,6 +256,35 @@ describe('tasks detail (GET /:id)', () => {
 });
 
 describe('tasks patch (PATCH /:id)', () => {
+  it('records the actual before and after states in the Stream event', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(writer, teamId);
+
+    const patched = await writer.request(`/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ state: 'in_progress' }),
+    });
+    expect(patched.status).toBe(200);
+
+    const [streamEvent] = await db
+      .select({ detail: schema.event.detail })
+      .from(schema.event)
+      .where(
+        and(
+          eq(schema.event.organizationId, orgId),
+          eq(schema.event.docketEntityId, id),
+          eq(schema.event.kind, 'status_change'),
+        ),
+      );
+    expect(streamEvent?.detail).toEqual({
+      schema: 'docket.state_change',
+      fromState: 'backlog',
+      toState: 'in_progress',
+    });
+  });
+
   it('updates content fields (every set branch incl. dueDate→null)', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);

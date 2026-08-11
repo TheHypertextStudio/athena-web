@@ -4615,7 +4615,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   resolve their selected record instead of only avoiding a 404.
 - **Validation**: Full web tests (2,138), API tests (3,678), builds, lint, and typechecks passed.
   The production tooling gate also passes (139 tests), including the current GitHub installer setup
-  instructions that changed during the release rebase.
+  instructions that changed during the release rebase. The hosted full-suite gate also exercises a
+  jsdom `matchMedia` contract now supplied by the shared web setup; the previously blocked Cycle
+  detail suite passes 14/14.
 
 ---
 

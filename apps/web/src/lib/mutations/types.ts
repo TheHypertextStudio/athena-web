@@ -18,7 +18,7 @@ export interface FieldIdentity {
 /** Input for a local field patch. */
 export interface ApplyIntent<T> extends FieldIdentity {
   readonly value: T;
-  readonly deliver: (value: T, version: number) => Promise<T> | T;
+  readonly deliver: (value: T, version: number) => Promise<T | undefined> | T | undefined;
 }
 
 /** Handle for the intent version created by {@link IntentJournal.apply}. */

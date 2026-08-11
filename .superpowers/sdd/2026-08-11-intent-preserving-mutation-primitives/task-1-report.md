@@ -26,3 +26,9 @@ subscriber delivery, and settled-entry cleanup.
 - `pnpm --filter @docket/web exec vitest run tests/lib/mutations/intent-journal.test.ts` — 5 passed
 - `pnpm --filter @docket/web typecheck` — passed
 - Scoped ESLint for the five owned source/test files — passed
+
+## Review fix round
+
+Commit `a6e5d1f` adds authoritative-base version guards, allows the field journal's live entries to be
+garbage-collected without losing the cached authoritative value, and ignores manual settlement of queued
+versions. Regression coverage now includes stale authoritative responses and queued-handle settlement.

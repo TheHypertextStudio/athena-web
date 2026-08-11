@@ -12,6 +12,7 @@ interface Entry<T> {
 
 interface FieldState<T> {
   authoritative: T;
+  authoritativeVersion: number;
   nextVersion: number;
   latest: Entry<T> | undefined;
   queued: Entry<T> | undefined;
@@ -28,6 +29,8 @@ const identityKey = (scope: string, field: string): string => `${scope}\u0000${f
  */
 export class IntentJournal<T> {
   private readonly fields = new Map<string, FieldState<T>>();
+  private readonly authoritative = new Map<string, T>();
+  private readonly authoritativeVersions = new Map<string, number>();
   private readonly listeners = new Set<Listener>();
 
   /** Number of fields with a live local intent. */
@@ -37,8 +40,12 @@ export class IntentJournal<T> {
 
   /** Set or refresh the server-authoritative value beneath any local overlay. */
   public setAuthoritative(scope: string, field: string, value: T): void {
+    const key = identityKey(scope, field);
     const state = this.state(scope, field, value);
     state.authoritative = value;
+    state.authoritativeVersion = state.nextVersion;
+    this.authoritative.set(key, value);
+    this.authoritativeVersions.set(key, state.authoritativeVersion);
     this.emit();
   }
 
@@ -51,7 +58,15 @@ export class IntentJournal<T> {
   public getSnapshot(scope: string, field: string): FieldSnapshot<T> {
     const state = this.fields.get(identityKey(scope, field));
     if (!state) {
-      throw new Error(`No authoritative value registered for ${scope}.${field}`);
+      const key = identityKey(scope, field);
+      if (!this.authoritative.has(key))
+        throw new Error(`No authoritative value registered for ${scope}.${field}`);
+      return {
+        value: this.authoritative.get(key) as T,
+        authoritative: this.authoritative.get(key) as T,
+        status: 'settled',
+        version: this.authoritativeVersions.get(key) ?? 0,
+      };
     }
     const latest = state.latest;
     return {
@@ -90,7 +105,8 @@ export class IntentJournal<T> {
     const existing = this.fields.get(key);
     if (existing) return existing;
     const created: FieldState<T> = {
-      authoritative: initial,
+      authoritative: this.authoritative.get(key) ?? initial,
+      authoritativeVersion: this.authoritativeVersions.get(key) ?? 0,
       nextVersion: 0,
       latest: undefined,
       queued: undefined,
@@ -149,10 +165,16 @@ export class IntentJournal<T> {
   ): void {
     const state = this.fields.get(identityKey(scope, field));
     if (!state?.latest && !state?.inFlight) return;
-    if (!entry.active && state.latest !== entry) return;
+    if (!entry.active) return;
     entry.active = false;
     if (state.inFlight === entry) state.inFlight = undefined;
-    if (success && authoritative !== undefined) state.authoritative = authoritative;
+    if (success && entry.version >= state.authoritativeVersion) {
+      if (authoritative !== undefined) state.authoritative = authoritative;
+      state.authoritativeVersion = entry.version;
+      const key = identityKey(scope, field);
+      this.authoritative.set(key, state.authoritative);
+      this.authoritativeVersions.set(key, entry.version);
+    }
     if (state.latest === entry) {
       if (success) {
         entry.status = 'settled';
@@ -176,8 +198,9 @@ export class IntentJournal<T> {
   }
 
   private gc(scope: string, field: string, state: FieldState<T>): void {
-    if (!state.latest && !state.queued && !state.authoritative)
+    if (!state.latest && !state.queued && !state.inFlight) {
       this.fields.delete(identityKey(scope, field));
+    }
   }
 
   private emit(): void {

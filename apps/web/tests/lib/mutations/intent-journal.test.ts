@@ -127,4 +127,31 @@ describe('IntentJournal', () => {
     expect(listener).toHaveBeenCalled();
     expect(journal.size).toBe(0);
   });
+
+  it('does not let an older response replace a newer authoritative value', async () => {
+    const first = deferred<string>();
+    const second = deferred<string>();
+    const journal = createIntentJournal<string>();
+    journal.setAuthoritative(key.scope, key.field, 'Old');
+    journal.apply({ ...key, value: 'A', deliver: () => first.promise });
+    const newer = journal.apply({ ...key, value: 'B', deliver: () => second.promise });
+    first.resolve('Server A');
+    await first.promise;
+    second.resolve('Server B');
+    await second.promise;
+    await Promise.resolve();
+    expect(newer.version).toBe(2);
+    expect(journal.getSnapshot(key.scope, key.field).authoritative).toBe('Server B');
+  });
+
+  it('ignores manual settlement for a queued version', () => {
+    const hold = deferred<string>();
+    const journal = createIntentJournal<string>();
+    journal.setAuthoritative(key.scope, key.field, 'Old');
+    journal.apply({ ...key, value: 'A', deliver: () => hold.promise });
+    const queued = journal.apply({ ...key, value: 'B', deliver: () => Promise.resolve('B') });
+    queued.settleSuccess('wrong');
+    expect(snapshot(journal)).toMatchObject({ value: 'B', status: 'syncing' });
+    hold.resolve('A');
+  });
 });

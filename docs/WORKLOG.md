@@ -20,10 +20,10 @@
   - [x] Compare non-overlapping dialog placement approaches in the visual companion
   - [x] Validate the progressive disclosure model against supplied Google Calendar references
   - [x] Write the approved interaction and persistence contract
-  - [ ] Review and approve the written contract
-  - [ ] Write the implementation plan
+  - [x] Review and approve the written contract
+  - [x] Write the implementation plan
   - [ ] Implement with tests and live browser validation
-- **Blockers**: Written-spec review is required before implementation planning.
+- **Blockers**: None.
 - **Notes**: The existing `timezone` field becomes the start/single zone and a nullable
   `endTimezone` preserves an optional different end zone. The dialog is mounted at the shell layer,
   constrained to primary content, and never enters the Agenda rectangle.

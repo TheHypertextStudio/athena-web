@@ -115,9 +115,21 @@ describe('ui:// widget resources', () => {
     const widgets = (await allResources(client)).filter((r) => r.uri.startsWith('ui://'));
 
     expect(widgets.map((r) => r.uri).sort()).toEqual([
+      'ui://docket/agents',
       'ui://docket/change-report',
+      'ui://docket/comments',
+      'ui://docket/cycles',
       'ui://docket/entity',
+      'ui://docket/initiatives',
+      'ui://docket/organizations',
       'ui://docket/plan',
+      'ui://docket/programs',
+      'ui://docket/projects',
+      'ui://docket/sessions',
+      'ui://docket/tasks',
+      'ui://docket/teams',
+      'ui://docket/updates',
+      'ui://docket/views',
       'ui://docket/work-list',
     ]);
     // The mimeType is how a host tells an app document from an ordinary HTML resource.
@@ -180,12 +192,30 @@ describe('tool → widget linkage', () => {
     expect(uriFor('list_work')).toBe('ui://docket/work-list');
     expect(uriFor('get')).toBe('ui://docket/entity');
     expect(uriFor('plan_day')).toBe('ui://docket/plan');
+    for (const [tool, uri] of [
+      ['get_tasks', 'ui://docket/tasks'],
+      ['get_projects', 'ui://docket/projects'],
+      ['get_programs', 'ui://docket/programs'],
+      ['get_initiatives', 'ui://docket/initiatives'],
+      ['get_cycles', 'ui://docket/cycles'],
+      ['get_teams', 'ui://docket/teams'],
+      ['get_updates', 'ui://docket/updates'],
+      ['get_comments', 'ui://docket/comments'],
+      ['get_sessions', 'ui://docket/sessions'],
+      ['get_agents', 'ui://docket/agents'],
+      ['get_views', 'ui://docket/views'],
+      ['get_organizations', 'ui://docket/organizations'],
+    ] as const) {
+      expect(uriFor(tool), `${tool} should render through its semantic view`).toBe(uri);
+    }
   });
 
   it('never points a tool at a widget that is not registered', async () => {
     const client = await connect(await seedCtx());
-    const registered = new Set(
-      (await allResources(client)).filter((r) => r.uri.startsWith('ui://')).map((r) => r.uri),
+    const registered = new Set<string>(
+      (await allResources(client))
+        .map((resource) => resource.uri)
+        .filter((uri): uri is string => uri.startsWith('ui://')),
     );
 
     for (const tool of await allTools(client)) {
@@ -220,17 +250,19 @@ describe('spec spelling of the tool → widget metadata', () => {
     expect(meta?.[UI_EXTENSION]?.resourceUri).toBe('ui://docket/work-list');
   });
 
-  it('leaves visibility unset, which the spec reads as model and app', async () => {
+  it('keeps semantic tools model-visible while confining legacy get to app callers', async () => {
     const client = await connect(await seedCtx());
     const tools = await allTools(client);
     for (const tool of tools) {
       const meta = tool._meta as Record<string, Record<string, unknown>> | undefined;
       const ui = meta?.['ui'];
       if (!ui) continue;
-      // Every Docket widget tool is one a person could ask for in words, so narrowing visibility
-      // would remove a capability to gain nothing — and the absent field is the spec's own way of
-      // saying `["model", "app"]`.
-      expect(ui['visibility'], `${tool.name} narrows visibility`).toBeUndefined();
+      if (tool.name === 'get') {
+        expect(ui['visibility']).toEqual(['app']);
+      } else {
+        // An absent field is the spec's own way of saying `["model", "app"]`.
+        expect(ui['visibility'], `${tool.name} should be model-visible`).toBeUndefined();
+      }
     }
   });
 });

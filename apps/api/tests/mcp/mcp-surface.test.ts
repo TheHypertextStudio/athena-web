@@ -1106,6 +1106,34 @@ describe('hydrated resources', () => {
       expect(dto['id']).toBe(id === s.orgId && type === 'org' ? s.orgId : id);
     }
 
+    // Each semantic read uses the same hydrated surface as the canonical resource, while adding
+    // a trusted deep link for its widget. Keep this exhaustive so a newly registered tool cannot
+    // silently lose authorization or a presentation route.
+    const semanticTools: readonly [string, string, string][] = [
+      ['task', 'get_tasks', s.taskId],
+      ['project', 'get_projects', s.projectId],
+      ['program', 'get_programs', s.programId],
+      ['initiative', 'get_initiatives', s.initiativeId],
+      ['cycle', 'get_cycles', s.cycleId],
+      ['team', 'get_teams', s.teamId],
+      ['update', 'get_updates', upd!.id],
+      ['comment', 'get_comments', cmt!.id],
+      ['session', 'get_sessions', sess!.id],
+      ['agent', 'get_agents', s.agentId],
+      ['view', 'get_views', view!.id],
+      ['org', 'get_organizations', s.orgId],
+    ];
+    for (const [type, tool, id] of semanticTools) {
+      const result = (await client.callTool({
+        name: tool,
+        arguments: { orgId: s.orgId, refs: [id] },
+      })) as CallToolResult;
+      expect(result.isError).not.toBe(true);
+      const [item] = payload(result)['items'] as Record<string, unknown>[];
+      expect(item?.['id']).toBe(id);
+      expect(item?.['href']).toEqual(expect.stringContaining(`/orgs/${s.orgId}`));
+    }
+
     // The hydrated task carries dependencies + subtasks.
     const taskRes = await client.readResource({ uri: `docket://${s.orgId}/task/${s.taskId}` });
     const taskDto = readJson(taskRes.contents);

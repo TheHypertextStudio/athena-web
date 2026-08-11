@@ -25,6 +25,107 @@ const NAMEABLE: Partial<Record<(typeof READABLE_TYPES)[number], DescriptorKind>>
   team: 'team',
   cycle: 'cycle',
 };
+
+type ReadableType = (typeof READABLE_TYPES)[number];
+
+const entityRefsSchema = z
+  .array(z.string().min(1))
+  .min(1)
+  .max(50)
+  .describe(
+    'The entities to read. Named references are accepted where that entity type supports them.',
+  );
+
+const entityReadOutputSchema = {
+  items: z.array(z.looseObject({ id: z.string(), href: z.string() })),
+  missing: z.array(z.object({ ref: z.string(), reason: z.string() })),
+};
+
+const SEMANTIC_READ_TOOLS = [
+  ['task', 'get_tasks', 'Tasks', WIDGET.tasks],
+  ['project', 'get_projects', 'Projects', WIDGET.projects],
+  ['program', 'get_programs', 'Programs', WIDGET.programs],
+  ['initiative', 'get_initiatives', 'Initiatives', WIDGET.initiatives],
+  ['cycle', 'get_cycles', 'Cycles', WIDGET.cycles],
+  ['team', 'get_teams', 'Teams', WIDGET.teams],
+  ['update', 'get_updates', 'Updates', WIDGET.updates],
+  ['comment', 'get_comments', 'Comments', WIDGET.comments],
+  ['session', 'get_sessions', 'Sessions', WIDGET.sessions],
+  ['agent', 'get_agents', 'Agents', WIDGET.agents],
+  ['view', 'get_views', 'Views', WIDGET.views],
+  ['org', 'get_organizations', 'Organizations', WIDGET.organizations],
+] as const satisfies readonly [ReadableType, string, string, string][];
+
+/** Build the first-party route once on the trusted server, never in a widget. */
+function entityHref(orgId: string, type: ReadableType, id: string): string {
+  switch (type) {
+    case 'task':
+      return `/orgs/${orgId}/tasks/${id}`;
+    case 'project':
+      return `/orgs/${orgId}/projects/${id}`;
+    case 'program':
+      return `/orgs/${orgId}/programs/${id}`;
+    case 'initiative':
+      return `/orgs/${orgId}/initiatives/${id}`;
+    case 'cycle':
+      return `/orgs/${orgId}/cycles/${id}`;
+    case 'session':
+      return `/orgs/${orgId}/sessions/${id}`;
+    case 'team':
+      return `/orgs/${orgId}/teams`;
+    case 'agent':
+      return `/orgs/${orgId}/agents`;
+    case 'view':
+      return `/orgs/${orgId}/views?viewId=${id}`;
+    case 'update':
+    case 'comment':
+      return `/orgs/${orgId}/search?kind=${type}&id=${id}`;
+    case 'org':
+      return `/orgs/${orgId}`;
+  }
+}
+
+/** Add presentation-safe navigation to an otherwise unchanged hydrated read DTO. */
+function withEntityHref(
+  value: unknown,
+  orgId: string,
+  type: ReadableType,
+): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ApiError(500, 'internal', 'Internal error');
+  }
+  const item = value as Record<string, unknown>;
+  const id = typeof item['id'] === 'string' ? item['id'] : null;
+  if (!id) throw new ApiError(500, 'internal', 'Internal error');
+  return { ...item, href: entityHref(orgId, type, id) };
+}
+
+/** Read a same-type batch with the same resolution and authorization semantics as legacy `get`. */
+async function readEntities(
+  ctx: McpContext,
+  orgId: string,
+  type: ReadableType,
+  refs: readonly string[],
+): Promise<Record<string, unknown>> {
+  const kind = NAMEABLE[type];
+  const settled = await Promise.all(
+    refs.map(async (ref) => {
+      try {
+        const id = kind ? await resolveDescriptor(orgId, kind, ref, 'refs') : ref;
+        return {
+          ok: true as const,
+          value: withEntityHref(await readEntity(ctx, orgId, type, id), orgId, type),
+        };
+      } catch (err) {
+        return { ok: false as const, ref, reason: err instanceof ApiError ? err.code : 'internal' };
+      }
+    }),
+  );
+  return {
+    items: settled.filter((row) => row.ok).map((row) => row.value),
+    missing: settled.filter((row) => !row.ok).map(({ ref, reason }) => ({ ref, reason })),
+  };
+}
 import { listWork, listWorkFilters, WORK_ENTITIES, WorkRow } from './list-work';
 import { decodeWorkCursor, orgIdParam, pageWorkRows } from './tools-shared';
 
@@ -188,30 +289,47 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
     listWorkTool,
   );
 
+  for (const [type, name, title, widget] of SEMANTIC_READ_TOOLS) {
+    server.registerTool(
+      name,
+      {
+        title: `Get ${title}`,
+        description: `Read one or more ${title.toLowerCase()} in full. Results render through Docket's ${title.toLowerCase()} view.`,
+        inputSchema: { orgId: orgIdParam, refs: entityRefsSchema },
+        outputSchema: entityReadOutputSchema,
+        _meta: widgetMeta(widget),
+        annotations: {
+          title: `Get ${title}`,
+          readOnlyHint: true,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      (input) =>
+        runTool(async () => jsonResult(await readEntities(ctx, input.orgId, type, input.refs))),
+    );
+  }
+
   server.registerTool(
     'get',
     {
       title: 'Get',
       description:
-        'Read one or more entities in full — a task with its dependencies and subtasks, a project with its milestones and latest update, a session with its whole activity stream. Pass several ids to fetch them in one call. Anything you cannot see is reported in `missing` rather than failing the batch, so one unreadable id never costs you the rest.',
+        'Legacy generic entity read. Prefer a type-specific `get_*` tool so Docket can render the right semantic view.',
       inputSchema: {
         orgId: orgIdParam,
         type: z
           .enum(READABLE_TYPES)
           .describe('What kind of entity the refs name. All refs in one call share a type.'),
-        refs: z
-          .array(z.string().min(1))
-          .min(1)
-          .max(50)
-          .describe(
-            `The entities to read. Projects, programs, initiatives, teams, and cycles also accept names. ${DESCRIPTOR_HINT}`,
-          ),
+        refs: entityRefsSchema.describe(
+          `The entities to read. Projects, programs, initiatives, teams, and cycles also accept names. ${DESCRIPTOR_HINT}`,
+        ),
       },
-      outputSchema: {
-        items: z.array(z.looseObject({ id: z.string() })),
-        missing: z.array(z.object({ ref: z.string(), reason: z.string() })),
-      },
-      _meta: widgetMeta(WIDGET.entity),
+      outputSchema: entityReadOutputSchema,
+      // Direct callers retain a stable endpoint, but a model should choose a view whose name and
+      // widget carry the resource's semantics rather than a generic type switch.
+      _meta: widgetMeta(WIDGET.entity, ['app']),
       annotations: {
         title: 'Get',
         readOnlyHint: true,
@@ -221,33 +339,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
       },
     },
     (input) =>
-      runTool(async () => {
-        // Loop-invariant: the type is fixed for the batch, so the descriptor kind is looked up once.
-        const kind = NAMEABLE[input.type];
-        // Concurrent, but still authorized per entity — `readEntity` runs the same `view` gate a
-        // single resource read runs, so batching shares the waiting, never the permission check.
-        const settled = await Promise.all(
-          input.refs.map(async (ref) => {
-            try {
-              const id = kind ? await resolveDescriptor(input.orgId, kind, ref, 'refs') : ref;
-              return {
-                ok: true as const,
-                value: await readEntity(ctx, input.orgId, input.type, id),
-              };
-            } catch (err) {
-              return {
-                ok: false as const,
-                ref,
-                reason: err instanceof ApiError ? err.code : 'internal',
-              };
-            }
-          }),
-        );
-        return jsonResult({
-          items: settled.filter((r) => r.ok).map((r) => r.value),
-          missing: settled.filter((r) => !r.ok).map(({ ref, reason }) => ({ ref, reason })),
-        });
-      }),
+      runTool(async () => jsonResult(await readEntities(ctx, input.orgId, input.type, input.refs))),
   );
 
   server.registerTool(

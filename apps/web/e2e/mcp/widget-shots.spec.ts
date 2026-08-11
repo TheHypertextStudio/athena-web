@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 
 import { CHANGE_REPORT_HTML } from '../../../api/src/mcp/apps/change-report';
-import { ENTITY_HTML } from '../../../api/src/mcp/apps/entity';
+import { entityDocument, ENTITY_HTML } from '../../../api/src/mcp/apps/entity';
 import { PLAN_HTML } from '../../../api/src/mcp/apps/plan';
 import { WORK_LIST_HTML } from '../../../api/src/mcp/apps/work-list';
 
@@ -339,8 +339,8 @@ const CASES: readonly WidgetCase[] = [
   },
   {
     name: 'entity-populated',
-    tool: 'get',
-    html: ENTITY_HTML,
+    tool: 'get_tasks',
+    html: entityDocument('task'),
     input: { orgId: 'org_1' },
     result: {
       structuredContent: {
@@ -348,6 +348,7 @@ const CASES: readonly WidgetCase[] = [
           {
             id: 't_1',
             title: 'Draft the Q3 service change memo',
+            href: '/orgs/org_1/tasks/t_1',
             state: 'doing',
             stateType: 'started',
             // Deliberately a team that renamed everything: the picker has to offer these labels
@@ -365,6 +366,318 @@ const CASES: readonly WidgetCase[] = [
             origin: { client: 'Claude', at: '2026-08-01T10:00:00Z' },
           },
         ],
+      },
+    },
+  },
+  {
+    name: 'entity-projects-batch',
+    tool: 'get_projects',
+    html: entityDocument('project'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'p_1',
+            name: 'Bus Buddies',
+            status: 'active',
+            health: 'on_track',
+            taskCount: 12,
+            href: '/orgs/org_1/projects/p_1',
+          },
+          {
+            id: 'p_2',
+            name: 'Corridor Fellowship',
+            status: 'active',
+            health: 'at_risk',
+            taskCount: 7,
+            href: '/orgs/org_1/projects/p_2',
+          },
+          {
+            id: 'p_3',
+            name: 'Urbanist Book Club',
+            status: 'planned',
+            taskCount: 3,
+            href: '/orgs/org_1/projects/p_3',
+          },
+        ],
+        missing: [{ ref: 'Old program', reason: 'not_found' }],
+      },
+    },
+  },
+  {
+    name: 'entity-legacy-projects-batch',
+    tool: 'get',
+    html: ENTITY_HTML,
+    input: { orgId: 'org_1', type: 'project' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'p_1',
+            name: 'Bus Buddies',
+            status: 'active',
+            health: 'on_track',
+            taskCount: 12,
+            href: '/orgs/org_1/projects/p_1',
+          },
+          {
+            id: 'p_2',
+            name: 'Corridor Fellowship',
+            status: 'active',
+            health: 'at_risk',
+            taskCount: 7,
+            href: '/orgs/org_1/projects/p_2',
+          },
+          {
+            id: 'p_3',
+            name: 'Urbanist Book Club',
+            status: 'planned',
+            taskCount: 3,
+            href: '/orgs/org_1/projects/p_3',
+          },
+        ],
+      },
+    },
+  },
+  {
+    name: 'entity-project',
+    tool: 'get_projects',
+    html: entityDocument('project'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'p_1',
+            name: 'Bus Buddies',
+            summary: 'Pairs riders with reliable transit guidance.',
+            status: 'active',
+            health: 'on_track',
+            targetDate: '2026-11-01',
+            taskCount: 12,
+            milestones: [{ id: 'm_1', name: 'Volunteer launch', targetDate: '2026-09-01' }],
+            initiatives: [{ id: 'i_1', name: 'Transit access' }],
+            latestUpdate: { body: 'Recruiting is on schedule.' },
+            href: '/orgs/org_1/projects/p_1',
+          },
+        ],
+        missing: [],
+      },
+    },
+  },
+  {
+    name: 'entity-program',
+    tool: 'get_programs',
+    html: entityDocument('program'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'pg_1',
+            name: 'Community access',
+            summary: 'Practical access to transit.',
+            status: 'active',
+            health: 'on_track',
+            rollup: { projects: 3, tasks: 22 },
+            projects: [{ id: 'p_1', name: 'Bus Buddies' }],
+            initiatives: [{ id: 'i_1', name: 'Transit access' }],
+            latestUpdate: { body: 'The program is on schedule.' },
+            href: '/orgs/org_1/programs/pg_1',
+          },
+        ],
+        missing: [],
+      },
+    },
+  },
+  {
+    name: 'entity-initiative',
+    tool: 'get_initiatives',
+    html: entityDocument('initiative'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'i_1',
+            name: 'Transit access',
+            summary: 'A city where everyone can get where they need to go.',
+            status: 'active',
+            health: 'on_track',
+            targetDate: '2027-01-01',
+            childMix: { projects: 2, programs: 1 },
+            projects: [{ id: 'p_1', name: 'Bus Buddies' }],
+            programs: [{ id: 'pg_1', name: 'Community access' }],
+            href: '/orgs/org_1/initiatives/i_1',
+          },
+        ],
+        missing: [],
+      },
+    },
+  },
+  {
+    name: 'entity-cycle',
+    tool: 'get_cycles',
+    html: entityDocument('cycle'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'c_1',
+            displayName: 'August cycle',
+            status: 'active',
+            startsAt: '2026-08-01',
+            endsAt: '2026-08-31',
+            tasks: [{ id: 't_1', title: 'Publish volunteer guide' }],
+            href: '/orgs/org_1/cycles/c_1',
+          },
+        ],
+        missing: [],
+      },
+    },
+  },
+  {
+    name: 'entity-team',
+    tool: 'get_teams',
+    html: entityDocument('team'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'tm_1',
+            name: 'Programs',
+            key: 'PROG',
+            description: 'Runs public programs.',
+            triageEnabled: true,
+            workflowStates: [{ key: 'todo', name: 'Ready' }],
+            members: [{ id: 'a_1', name: 'Ada' }],
+            href: '/orgs/org_1/teams',
+          },
+        ],
+        missing: [],
+      },
+    },
+  },
+  {
+    name: 'entity-update',
+    tool: 'get_updates',
+    html: entityDocument('update'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'u_1',
+            body: 'Volunteer recruitment is ahead of schedule.',
+            health: 'on_track',
+            createdAt: '2026-08-01T12:00:00Z',
+            href: '/orgs/org_1/search?kind=update&id=u_1',
+          },
+        ],
+        missing: [],
+      },
+    },
+  },
+  {
+    name: 'entity-comment',
+    tool: 'get_comments',
+    html: entityDocument('comment'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'cm_1',
+            body: 'The library can host the next meeting.',
+            createdAt: '2026-08-02T12:00:00Z',
+            editedAt: '2026-08-03T12:00:00Z',
+            href: '/orgs/org_1/search?kind=comment&id=cm_1',
+          },
+        ],
+        missing: [],
+      },
+    },
+  },
+  {
+    name: 'entity-session',
+    tool: 'get_sessions',
+    html: entityDocument('session'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 's_1',
+            status: 'waiting',
+            trigger: 'manual',
+            startedAt: '2026-08-04T12:00:00Z',
+            activities: [{ id: 'a_1', type: 'message' }],
+            href: '/orgs/org_1/sessions/s_1',
+          },
+        ],
+        missing: [],
+      },
+    },
+  },
+  {
+    name: 'entity-agent',
+    tool: 'get_agents',
+    html: entityDocument('agent'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'ag_1',
+            guidance: 'Keep riders informed about service changes.',
+            approvalPolicy: 'act_with_approval',
+            connection: { protocol: 'mcp' },
+            href: '/orgs/org_1/agents',
+          },
+        ],
+        missing: [],
+      },
+    },
+  },
+  {
+    name: 'entity-view',
+    tool: 'get_views',
+    html: entityDocument('view'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'v_1',
+            name: 'Volunteer follow-up',
+            scope: 'organization',
+            grouping: 'project',
+            href: '/orgs/org_1/views?viewId=v_1',
+          },
+        ],
+        missing: [],
+      },
+    },
+  },
+  {
+    name: 'entity-organization',
+    tool: 'get_organizations',
+    html: entityDocument('org'),
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        items: [
+          {
+            id: 'org_1',
+            name: 'Las Vegans for Transit',
+            counts: { teams: 3, projects: 7, programs: 2 },
+            href: '/orgs/org_1',
+          },
+        ],
+        missing: [],
       },
     },
   },
@@ -454,6 +767,7 @@ const CONTEXT = ${JSON.stringify(context)};
 const INPUT = ${JSON.stringify(testCase.input)};
 const RESULT = ${JSON.stringify(testCase.result)};
 const CANCELLED = ${JSON.stringify(Boolean(testCase.cancelled))};
+window.receivedLinks = [];
 
 window.addEventListener('message', (event) => {
   if (event.source !== view.contentWindow) {
@@ -496,6 +810,11 @@ window.addEventListener('message', (event) => {
     // The spec allows the answer to differ from the request, and requires the host to return the
     // mode it actually applied. This harness always grants, but it must still say so.
     post({ jsonrpc: '2.0', id: msg.id, result: { mode: msg.params.mode } });
+    return;
+  }
+  if (msg.method === 'ui/open-link') {
+    window.receivedLinks.push(msg.params.url);
+    post({ jsonrpc: '2.0', id: msg.id, result: {} });
     return;
   }
   if (msg.id !== undefined) {
@@ -583,6 +902,42 @@ for (const palette of PALETTES) {
               // nothing. This is the case with the most controls, so it is the one that proves the
               // check is looking at something.
               expect(await controls.count()).toBeGreaterThanOrEqual(3);
+              await body.getByRole('button', { name: 'Open in Docket' }).click();
+              expect(await page.evaluate(() => window.receivedLinks)).toEqual([
+                '/orgs/org_1/tasks/t_1',
+              ]);
+            }
+            if (
+              testCase.name === 'entity-projects-batch' ||
+              testCase.name === 'entity-legacy-projects-batch'
+            ) {
+              // The motivating regression: generic `get` silently rendered only its first item.
+              // Both the semantic project view and the compatibility document must leave every
+              // requested project visible and hand each one to its own Docket route.
+              await expect(body).toContainText('Bus Buddies');
+              await expect(body).toContainText('Corridor Fellowship');
+              await expect(body).toContainText('Urbanist Book Club');
+              await expect(body).toContainText('Some requested items could not be shown.');
+              const openBusBuddies = body.getByRole('button', {
+                name: 'Open Bus Buddies in Docket',
+              });
+              const openCorridorFellowship = body.getByRole('button', {
+                name: 'Open Corridor Fellowship in Docket',
+              });
+              const openUrbanistBookClub = body.getByRole('button', {
+                name: 'Open Urbanist Book Club in Docket',
+              });
+              expect(await openBusBuddies.count()).toBe(1);
+              expect(await openCorridorFellowship.count()).toBe(1);
+              expect(await openUrbanistBookClub.count()).toBe(1);
+              await openBusBuddies.click();
+              await openCorridorFellowship.click();
+              await openUrbanistBookClub.click();
+              expect(await page.evaluate(() => window.receivedLinks)).toEqual([
+                '/orgs/org_1/projects/p_1',
+                '/orgs/org_1/projects/p_2',
+                '/orgs/org_1/projects/p_3',
+              ]);
             }
             const unnamed = await controls.evaluateAll((nodes) =>
               nodes

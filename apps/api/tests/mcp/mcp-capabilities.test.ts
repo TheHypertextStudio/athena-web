@@ -583,6 +583,45 @@ describe('capability: find any object', () => {
     })) as { items: { name?: string }[] };
     expect(out.items).toHaveLength(1);
   });
+
+  it('reads named projects through the semantic tool with a server-owned deep link', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    await call(client, 'organize', {
+      orgId: s.orgId,
+      items: [{ ref: 'p', kind: 'project', title: 'Bus Buddies' }],
+    });
+
+    const out = (await call(client, 'get_projects', {
+      orgId: s.orgId,
+      refs: ['Bus Buddies'],
+    })) as { items: { id: string; name: string; href: string }[]; missing: unknown[] };
+
+    expect(out.items).toHaveLength(1);
+    expect(out.items[0]).toMatchObject({
+      name: 'Bus Buddies',
+      href: `/orgs/${s.orgId}/projects/${out.items[0]!.id}`,
+    });
+    expect(out.missing).toEqual([]);
+  });
+
+  it('preserves the requested task order in a semantic batch', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    const first = await call(client, 'capture', { orgId: s.orgId, text: 'First task' });
+    const second = await call(client, 'capture', { orgId: s.orgId, text: 'Second task' });
+
+    const out = (await call(client, 'get_tasks', {
+      orgId: s.orgId,
+      refs: [String(second['id']), String(first['id'])],
+    })) as { items: { id: string; href: string }[] };
+
+    expect(out.items.map((item) => item.id)).toEqual([String(second['id']), String(first['id'])]);
+    expect(out.items.map((item) => item.href)).toEqual([
+      `/orgs/${s.orgId}/tasks/${String(second['id'])}`,
+      `/orgs/${s.orgId}/tasks/${String(first['id'])}`,
+    ]);
+  });
 });
 
 describe('capability: list everything for a scope', () => {

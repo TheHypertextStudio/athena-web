@@ -22,7 +22,7 @@ import { MCP_UI_META_KEY, type McpUiResourceMeta } from '@docket/types';
 
 import type { McpRegistrar } from '../catalog';
 import { CHANGE_REPORT_HTML } from './change-report';
-import { ENTITY_HTML } from './entity';
+import { entityDocument, ENTITY_HTML } from './entity';
 import { PLAN_HTML } from './plan';
 import { UI_EXTENSION, UI_MIME_TYPE } from './runtime';
 import { WORK_LIST_HTML } from './work-list';
@@ -34,6 +34,18 @@ export const WIDGET = {
   changeReport: 'ui://docket/change-report',
   workList: 'ui://docket/work-list',
   entity: 'ui://docket/entity',
+  tasks: 'ui://docket/tasks',
+  projects: 'ui://docket/projects',
+  programs: 'ui://docket/programs',
+  initiatives: 'ui://docket/initiatives',
+  cycles: 'ui://docket/cycles',
+  teams: 'ui://docket/teams',
+  updates: 'ui://docket/updates',
+  comments: 'ui://docket/comments',
+  sessions: 'ui://docket/sessions',
+  agents: 'ui://docket/agents',
+  views: 'ui://docket/views',
+  organizations: 'ui://docket/organizations',
   plan: 'ui://docket/plan',
 } as const;
 
@@ -54,8 +66,12 @@ export const WIDGET = {
  * @param resourceUri - The widget's `ui://` uri.
  * @returns the `_meta` object to spread into a tool config.
  */
-export function widgetMeta(resourceUri: string): Record<string, unknown> {
-  return { [MCP_UI_META_KEY]: { resourceUri }, [UI_EXTENSION]: { resourceUri } };
+export function widgetMeta(
+  resourceUri: string,
+  visibility?: readonly ('model' | 'app')[],
+): Record<string, unknown> {
+  const value = { resourceUri, ...(visibility ? { visibility } : {}) };
+  return { [MCP_UI_META_KEY]: value, [UI_EXTENSION]: value };
 }
 
 /** Every widget document, by uri. */
@@ -76,6 +92,62 @@ const DOCUMENTS: Readonly<Record<string, { title: string; description: string; h
     description:
       'One piece of work with its current state, what is blocking it, and where it came from.',
     html: ENTITY_HTML,
+  },
+  [WIDGET.tasks]: { title: 'Tasks', description: 'Task details.', html: entityDocument('task') },
+  [WIDGET.projects]: {
+    title: 'Projects',
+    description: 'Project outcome, health, milestones, and latest update.',
+    html: entityDocument('project'),
+  },
+  [WIDGET.programs]: {
+    title: 'Programs',
+    description: 'Program health, rollup, and associated planning work.',
+    html: entityDocument('program'),
+  },
+  [WIDGET.initiatives]: {
+    title: 'Initiatives',
+    description: 'Initiative outcome, health, and associated programs and projects.',
+    html: entityDocument('initiative'),
+  },
+  [WIDGET.cycles]: {
+    title: 'Cycles',
+    description: 'Cycle window and work.',
+    html: entityDocument('cycle'),
+  },
+  [WIDGET.teams]: {
+    title: 'Teams',
+    description: 'Team workflow and membership.',
+    html: entityDocument('team'),
+  },
+  [WIDGET.updates]: {
+    title: 'Updates',
+    description: 'Status updates.',
+    html: entityDocument('update'),
+  },
+  [WIDGET.comments]: {
+    title: 'Comments',
+    description: 'Comments.',
+    html: entityDocument('comment'),
+  },
+  [WIDGET.sessions]: {
+    title: 'Sessions',
+    description: 'Agent session activity.',
+    html: entityDocument('session'),
+  },
+  [WIDGET.agents]: {
+    title: 'Agents',
+    description: 'Agent policy and guidance.',
+    html: entityDocument('agent'),
+  },
+  [WIDGET.views]: {
+    title: 'Views',
+    description: 'Saved view definitions.',
+    html: entityDocument('view'),
+  },
+  [WIDGET.organizations]: {
+    title: 'Organizations',
+    description: 'Organization summary and counts.',
+    html: entityDocument('org'),
   },
   [WIDGET.plan]: {
     title: 'Day plan',

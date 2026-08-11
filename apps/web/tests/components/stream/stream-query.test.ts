@@ -25,13 +25,13 @@ describe('streamQueryFromViewState', () => {
     ]);
   });
 
-  it('maps the occurredAt sort term to order', () => {
+  it('keeps the timeline newest-first even when stale URL state names another sort', () => {
     const state: ViewState = {
       filters: [],
       groupBy: null,
       sort: [{ field: 'occurredAt', dir: 'asc' }],
     };
-    expect(streamQueryFromViewState(state).order).toBe('asc');
+    expect(streamQueryFromViewState(state).order).toBe('desc');
   });
 
   it('round-trips a unicode filter value', () => {

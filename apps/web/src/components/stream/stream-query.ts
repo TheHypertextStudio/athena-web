@@ -5,9 +5,9 @@
  * Unlike the entity lists (which filter in memory via `applyView`), the stream is a firehose
  * filtered SERVER-side. This pure adapter turns the same `ViewState` the shared `FilterToolbar`
  * edits into the API's query: the attribute predicates are encoded as a base64url `JSON
- * ViewFilter[]` (the exact stored shape the server's `view-filter-sql` translator decodes), and
- * the `occurredAt` sort becomes `order`. The serialized params also key the TanStack query so
- * each filter variant caches apart.
+ * ViewFilter[]` (the exact stored shape the server's `view-filter-sql` translator decodes).
+ * Chronology is a Stream invariant, so stale or hand-edited URL sort state cannot reverse it.
+ * The serialized params also key the TanStack query so each filter variant caches apart.
  */
 import type { ViewState } from '@/components/views/field-catalog';
 
@@ -30,15 +30,14 @@ function toBase64Url(value: string): string {
 /**
  * Build the stream query params from the active view state.
  *
- * @param state - The toolbar's view state (filters + sort).
+ * @param state - The toolbar's view state; only its filters affect Stream.
  * @returns the `{ filter?, order }` params for the stream read endpoint.
  */
 export function streamQueryFromViewState(state: ViewState): StreamQueryParams {
-  const order = state.sort.find((s) => s.field === 'occurredAt')?.dir ?? 'desc';
-  if (state.filters.length === 0) return { order };
+  if (state.filters.length === 0) return { order: 'desc' };
   // ViewFilterTerm is byte-compatible with the stored `ViewFilter` the server decodes.
   const predicates = state.filters.map((t) => ({ field: t.field, op: t.op, value: t.value }));
-  return { filter: toBase64Url(JSON.stringify(predicates)), order };
+  return { filter: toBase64Url(JSON.stringify(predicates)), order: 'desc' };
 }
 
 /** A stable string of the params (minus cursor) for the TanStack query key. */

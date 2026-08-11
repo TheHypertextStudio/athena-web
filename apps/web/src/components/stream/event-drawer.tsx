@@ -1,115 +1,109 @@
 'use client';
 
-/**
- * `stream` — the expanded-event right drawer.
- *
- * @remarks
- * Opening a row slides this drawer over a dimmed scrim: full event detail (actor, title, body,
- * timestamp) plus the action cluster. The Ask-Athena *drafted-plan approval* panel is added in
- * milestone D (it wires to the agent-session approval endpoints); the "Ask Athena" affordance is
- * already present here via the shared action cluster.
- */
-import { X } from '@docket/ui/icons';
+/** `stream` — auditable exact-event inspection without timeline repetition. */
+import { OpenInNew, X } from '@docket/ui/icons';
+import { focusRing } from '@docket/ui/primitives';
+import { cn } from '@docket/ui';
 import type { JSX } from 'react';
 
-import { ActorAvatar } from './actor-avatar';
 import { AthenaPlan } from './athena-plan';
 import { ProviderBadge } from './provider-badge';
-import { StreamEventActions, type StreamRowActions } from './stream-event-actions';
-import { kindGlyph, relevanceLabel, streamDescription, type StreamEventRow } from './stream-meta';
+import {
+  KIND_LABEL,
+  streamDescription,
+  streamEventDetailLabel,
+  streamHref,
+  type StreamEventRow,
+} from './stream-meta';
 
 /** Build the agent brief from an event for the drafted-plan panel. */
 function planPrompt(row: StreamEventRow): string {
-  const parts = [streamDescription(row)];
-  if (row.summary) parts.push(row.summary);
-  if (row.permalink) parts.push(`Link: ${row.permalink}`);
+  const parts = [streamDescription(row), streamEventDetailLabel(row), row.summary].filter(
+    (part): part is string => Boolean(part),
+  );
+  const href = streamHref(row);
+  if (href) parts.push(`Link: ${href}`);
   return parts.join('. ');
 }
 
 /** Props for {@link EventDrawer}. */
 export interface EventDrawerProps {
-  /** The selected row, or `null` to close. */
   readonly row: StreamEventRow | null;
-  /** Close the drawer. */
   readonly onClose: () => void;
-  /** Row action callbacks. */
-  readonly actions: StreamRowActions;
-  /** Whether a mutation for this row is in flight. */
-  readonly pending?: boolean;
 }
 
-/** The expanded-event drawer (renders nothing when no row is selected). */
-export function EventDrawer({
-  row,
-  onClose,
-  actions,
-  pending,
-}: EventDrawerProps): JSX.Element | null {
+/** The expanded exact-event drawer, including source, local timestamp, detail, and Athena. */
+export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | null {
   if (!row) return null;
-  const glyph = kindGlyph(row.kind);
-  const relevance = relevanceLabel(row.relevance);
+  const href = streamHref(row);
+  const detail = streamEventDetailLabel(row);
   return (
-    <div className="fixed inset-0 z-40" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Event details">
       <button
         type="button"
-        aria-label="Close"
+        aria-label="Close event details"
         className="absolute inset-0 bg-black/25"
         onClick={onClose}
       />
       <aside className="bg-surface border-outline-variant absolute top-0 right-0 flex h-full w-[420px] max-w-[92vw] flex-col border-l shadow-xl">
-        <header className="border-outline-variant flex items-center gap-2 border-b px-4 py-3">
+        <header className="border-outline-variant flex min-h-14 items-center gap-2 border-b px-4 py-3">
           <ProviderBadge system={row.system} />
-          <span className="text-on-surface-variant text-xs capitalize">
-            {row.kind.replace(/_/g, ' ')}
-          </span>
-          {relevance ? (
-            <span className="bg-primary-container/50 text-on-primary-container inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium">
-              {relevance}
-            </span>
-          ) : null}
+          <span className="text-on-surface-variant text-xs">{KIND_LABEL[row.kind]}</span>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
-            className="text-on-surface-variant hover:bg-surface-container ml-auto flex h-7 w-7 items-center justify-center rounded-md"
+            aria-label="Close event details"
+            className={cn(
+              'text-on-surface-variant hover:bg-surface-container ml-auto flex size-10 items-center justify-center rounded-full outline-none',
+              focusRing,
+            )}
           >
-            <X className="h-4 w-4" />
+            <X className="size-4" aria-hidden="true" />
           </button>
         </header>
 
-        <div className="flex-1 overflow-auto p-4">
-          <div className="flex items-start gap-3">
-            <ActorAvatar
-              name={row.actorName}
-              avatarUrl={row.actorAvatarUrl}
-              glyph={glyph}
-              seed={row.actorName ?? row.id}
-            />
-            <div className="min-w-0">
-              <p className="text-on-surface leading-snug font-medium">{streamDescription(row)}</p>
-              <p className="text-on-surface-variant mt-0.5 text-xs">
-                {new Date(row.occurredAt).toLocaleString()}
-              </p>
-            </div>
-          </div>
+        <div className="flex-1 overflow-auto p-5">
+          <h2 className="text-on-surface text-title-medium leading-snug">
+            {streamDescription(row)}
+          </h2>
+          <time dateTime={row.occurredAt} className="text-on-surface-variant mt-1 block text-xs">
+            {new Date(row.occurredAt).toLocaleString()}
+          </time>
 
           {row.entityTitle ? (
-            <p className="text-on-surface mt-4 text-base font-semibold">{row.entityTitle}</p>
-          ) : null}
-          {row.summary ? (
-            <p className="text-on-surface/80 bg-surface-container mt-3 rounded-lg p-3 text-sm whitespace-pre-wrap">
-              {row.summary}
-            </p>
+            <div className="border-outline-variant mt-5 border-t pt-4">
+              <p className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
+                Subject
+              </p>
+              {href ? (
+                <a
+                  href={href}
+                  className={cn(
+                    'text-primary mt-1 inline-flex min-h-10 items-center gap-1 rounded-sm text-sm font-medium outline-none',
+                    focusRing,
+                  )}
+                >
+                  {row.entityTitle}
+                  <OpenInNew className="size-4" aria-hidden="true" />
+                </a>
+              ) : (
+                <p className="text-on-surface mt-1 text-sm font-medium">{row.entityTitle}</p>
+              )}
+            </div>
           ) : null}
 
-          <div className="border-outline-variant mt-4 border-t pt-4">
+          {detail ? (
+            <div className="bg-surface-container-low mt-4 rounded-lg p-3">
+              <p className="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">
+                {detail}
+              </p>
+            </div>
+          ) : null}
+
+          <div className="border-outline-variant mt-5 border-t pt-5">
             <AthenaPlan orgId={row.organizationId} prompt={planPrompt(row)} />
           </div>
         </div>
-
-        <footer className="border-outline-variant border-t p-3">
-          <StreamEventActions row={row} actions={actions} pending={pending} />
-        </footer>
       </aside>
     </div>
   );

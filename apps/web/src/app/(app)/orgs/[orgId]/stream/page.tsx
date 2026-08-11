@@ -21,13 +21,12 @@ export default function WorkspaceStreamPage(): JSX.Element {
   const [selected, setSelected] = useState<StreamEventRow | null>(null);
   return (
     <>
-      <StreamView {...data} actions={{}} onSelect={setSelected} />
+      <StreamView {...data} onSelect={setSelected} />
       <EventDrawer
         row={selected}
         onClose={() => {
           setSelected(null);
         }}
-        actions={{}}
       />
     </>
   );

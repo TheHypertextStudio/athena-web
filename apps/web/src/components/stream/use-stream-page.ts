@@ -11,7 +11,7 @@
  * half of {@link StreamViewProps}; the page supplies the drawer `onSelect` + row `actions`.
  */
 import type { StreamPageOut } from '@docket/types';
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import type { FieldOption } from '@/components/views/field-catalog';
@@ -22,6 +22,7 @@ import { apiInfiniteQueryOptions, queryKeys, STALE, useLiveInfiniteApiQuery } fr
 import { buildStreamCatalog } from './stream-catalog';
 import { toRow } from './stream-meta';
 import { streamQueryFromViewState, streamQueryKeyPart } from './stream-query';
+import { mergeStreamSnapshot, revealStreamSnapshot, type StreamSnapshot } from './stream-snapshot';
 import type { StreamViewProps } from './stream-view';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -42,7 +43,7 @@ type StreamPageData = Omit<StreamViewProps, 'actions' | 'onSelect' | 'saveSlot' 
 /** Wire the filter state + live cursor read for a stream scope. */
 export function useStreamPage(args: UseStreamPageArgs): StreamPageData {
   const { state, setFilters, setGroupBy, setSort } = useViewState();
-  const { orgs } = useActiveOrg();
+  const { orgs, activeOrg } = useActiveOrg();
 
   const resolveOrgName = useMemo(() => {
     const byId = new Map<string, string>(orgs.map((o) => [o.id, o.name]));
@@ -87,19 +88,36 @@ export function useStreamPage(args: UseStreamPageArgs): StreamPageData {
   }, [args.scope, orgId, keyPart, params]);
 
   const q = useLiveInfiniteApiQuery(def, STREAM_POLL_MS);
-  const events = useMemo(
+  const fetchedEvents = useMemo(
     () => (q.data?.pages ?? []).flatMap((page) => page.items.map(toRow)),
     [q.data],
   );
+  const snapshotKey = `${args.scope}:${orgId}:${keyPart}`;
+  const [snapshot, setSnapshot] = useState<StreamSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!q.data) return;
+    setSnapshot((current) => mergeStreamSnapshot(current, fetchedEvents, snapshotKey));
+  }, [fetchedEvents, q.data, snapshotKey]);
+
+  const showNewEvents = useCallback(() => {
+    setSnapshot((current) => (current ? revealStreamSnapshot(current) : current));
+  }, []);
+
+  const events = snapshot?.queryKey === snapshotKey ? snapshot.visible : fetchedEvents;
+  const newEventCount = snapshot?.queryKey === snapshotKey ? snapshot.pending.length : 0;
 
   return {
     scope: args.scope,
+    ...(activeOrg ? { contextName: activeOrg.name } : {}),
     catalog,
     state,
     onFiltersChange: setFilters,
     onGroupByChange: setGroupBy,
     onSortChange: setSort,
     events,
+    newEventCount,
+    onShowNewEvents: showNewEvents,
     loading: q.isLoading,
     error: q.isError ? userErrorMessage(q.error, 'Could not load the activity stream.') : null,
     onRetry: () => void q.refetch(),

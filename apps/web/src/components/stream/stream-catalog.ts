@@ -2,8 +2,9 @@
  * `stream` — the field catalog for the unified stream (the analogue of `task-catalog.ts`).
  *
  * @remarks
- * Declares the stream's filterable/groupable/sortable fields so the shared {@link FilterToolbar}
- * + URL state work over events. The field `key`s deliberately MATCH the server's
+ * Declares Stream's filterable fields so the shared {@link FilterToolbar} + URL state work over
+ * events without offering display controls that would undermine fixed chronology. The field
+ * `key`s deliberately MATCH the server's
  * `view-filter-sql` whitelist (`system` / `kind` / `entityKind` / `actor` / `occurredAt` /
  * `organizationId`) so a toolbar-built predicate translates straight to SQL. The cross-org
  * personal stream adds a Workspace field; the per-workspace firehose omits it.
@@ -92,7 +93,6 @@ export function buildStreamCatalog(deps: StreamCatalogDeps): FieldCatalog<Stream
       label: 'Source',
       type: 'enum',
       accessor: (r) => r.system,
-      groupable: true,
       options: SYSTEM_OPTIONS,
     },
     {
@@ -100,7 +100,6 @@ export function buildStreamCatalog(deps: StreamCatalogDeps): FieldCatalog<Stream
       label: 'Kind',
       type: 'enum',
       accessor: (r) => r.kind,
-      groupable: true,
       options: KIND_OPTIONS,
     },
     {
@@ -121,7 +120,6 @@ export function buildStreamCatalog(deps: StreamCatalogDeps): FieldCatalog<Stream
       label: 'Time',
       type: 'date',
       accessor: (r) => r.occurredAt,
-      sortable: true,
     },
   ];
 
@@ -131,7 +129,6 @@ export function buildStreamCatalog(deps: StreamCatalogDeps): FieldCatalog<Stream
       label: 'Workspace',
       type: 'relation',
       accessor: (r) => r.organizationId,
-      groupable: true,
       ...(deps.orgOptions ? { resolveOptions: deps.orgOptions } : {}),
       ...(deps.resolveOrgName ? { resolveLabel: deps.resolveOrgName } : {}),
     });

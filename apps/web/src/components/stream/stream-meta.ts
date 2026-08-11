@@ -36,8 +36,13 @@ export interface StreamEventRow {
   readonly title: string;
   readonly summary: string | null;
   readonly permalink: string | null;
+  readonly actorSource: SourceSystemKind | null;
+  readonly actorExternalId: string | null;
+  readonly actorDocketId: string | null;
   readonly actorName: string | null;
   readonly actorAvatarUrl: string | null;
+  /** Explicit server-derived relationship; clients must never infer this from a name. */
+  readonly actorIsViewer: boolean;
   readonly entityKind: CanonicalEntityKind | null;
   readonly entityTitle: string | null;
   readonly entityExternalId: string | null;
@@ -61,8 +66,12 @@ export function toRow(event: StreamEventOut): StreamEventRow {
     title: event.title,
     summary: event.summary,
     permalink: event.permalink,
+    actorSource: event.actor?.source ?? null,
+    actorExternalId: event.actor?.externalId ?? null,
+    actorDocketId: event.actor?.docketActorId ?? null,
     actorName: event.actor?.displayName ?? null,
     actorAvatarUrl: event.actor?.avatarUrl ?? null,
+    actorIsViewer: event.actorIsViewer,
     entityKind: event.entity?.kind ?? null,
     entityTitle: event.entity?.title ?? null,
     entityExternalId: event.entity?.externalId ?? null,
@@ -72,6 +81,47 @@ export function toRow(event: StreamEventOut): StreamEventRow {
     rendering: event.rendering,
     detail: event.detail,
   };
+}
+
+/** Actor label for timeline prose, using only the API's explicit viewer relationship. */
+export function streamActorLabel(row: StreamEventRow): string {
+  if (row.actorIsViewer) return 'You';
+  return row.actorName ?? detailActorName(row.detail) ?? 'Someone';
+}
+
+/** Subject-free action phrase used beneath an episode's already-visible entity title. */
+const KIND_ACTION: Record<EventKind, string> = {
+  message: 'sent a message',
+  mention: 'mentioned you',
+  assignment: 'assigned you',
+  task_assignment: 'changed the assignment',
+  status_change: 'changed the status',
+  comment: 'commented',
+  reaction: 'reacted',
+  created: 'created this item',
+  completed: 'completed the task',
+  calendar_invite: 'sent a calendar invitation',
+  calendar_update: 'updated the schedule',
+  timer_started: 'started tracking time',
+  timer_paused: 'paused time tracking',
+  timer_resumed: 'resumed time tracking',
+  timer_switched: 'switched time tracking',
+  timer_stopped: 'stopped tracking time',
+  email_received: 'sent an email',
+  elicitation_requested: 'asked a question',
+  elicitation_answered: 'answered a question',
+  elicitation_expired: 'stopped waiting for an answer',
+  agent_started: 'started working',
+  agent_progress: 'reported progress',
+  agent_blocked: 'reported a blocker',
+  agent_completed: 'finished working',
+  agent_failed: 'could not finish',
+  field_change: 'updated details',
+};
+
+/** A compact event sentence that does not repeat the episode subject. */
+export function streamEventSentence(row: StreamEventRow): string {
+  return `${streamActorLabel(row)} ${KIND_ACTION[row.kind]}`;
 }
 
 /** Verb phrase per kind, written to read after an actor name ("{actor} {verb} {subject}"). */
@@ -142,10 +192,71 @@ export const KIND_LABEL: Record<EventKind, string> = {
  * there's no subject to name (e.g. a workspace-level update), and to "Someone" with no actor.
  */
 export function streamDescription(row: StreamEventRow): string {
-  const actor = row.actorName ?? detailActorName(row.detail) ?? 'Someone';
+  const actor = streamActorLabel(row);
   const verb = KIND_VERB[row.kind];
   const subject = row.entityTitle;
   return subject ? `${actor} ${verb} ${subject}` : row.title;
+}
+
+/** Convert stable enum-like values to sentence case for display. */
+function humanValue(value: string | null): string {
+  if (value === null || value.trim() === '') return 'None';
+  const normalized = value.replaceAll('_', ' ').trim();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+/** Render milliseconds as a compact application-owned duration. */
+function durationLabel(elapsedMs: number): string {
+  const minutes = Math.floor(elapsedMs / 60_000);
+  if (minutes < 60) return `${String(minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder === 0 ? `${String(hours)} hr` : `${String(hours)} hr ${String(remainder)} min`;
+}
+
+/**
+ * Display-ready typed detail for an inline event line.
+ *
+ * @remarks
+ * Uses application-owned labels and content only. Machine field keys and agent failure codes are
+ * never rendered, and unknown provider detail degrades to its safe summary rather than raw errors.
+ */
+export function streamEventDetailLabel(row: StreamEventRow): string | null {
+  const detail = row.detail;
+  if (!detail) return row.summary;
+  switch (detail.schema) {
+    case 'docket.state_change':
+      return `${humanValue(detail.fromState)} → ${humanValue(detail.toState)}`;
+    case 'docket.field_change':
+      return detail.changes
+        .map((change) => `${change.label}: ${humanValue(change.from)} → ${humanValue(change.to)}`)
+        .join(' · ');
+    case 'docket.timer':
+      return `${detail.trackedLabel} · ${durationLabel(detail.elapsedMs)}`;
+    case 'docket.agent_milestone':
+      return detail.progress === null
+        ? detail.milestone
+        : `${detail.milestone} · ${String(detail.progress)}%`;
+    case 'docket.elicitation':
+      return detail.answer ?? detail.autoResolvedValue ?? detail.question;
+    case 'docket.inbound_email':
+      return detail.snippet ?? detail.subject;
+    case 'docket.email_suggestion':
+      return detail.snippet || detail.subject;
+    case 'linear.issue':
+      return detail.stateName;
+    case 'github.pull_request':
+      return detail.merged
+        ? 'Merged'
+        : detail.draft
+          ? 'Draft'
+          : `Pull request #${String(detail.number)}`;
+    case 'slack.message':
+    case 'discord.message':
+      return detail.text;
+    case 'generic':
+      return detail.summary ?? detail.title;
+  }
 }
 
 /**

@@ -80,6 +80,7 @@ const SAMPLE_EVENT: StreamEvent = {
   participants: [],
   detail: null,
   createdAt: '2026-08-02T12:00:00.000Z',
+  actorIsViewer: false,
   relevance: null,
   rendering: { icon: 'task', category: 'progress' },
 };

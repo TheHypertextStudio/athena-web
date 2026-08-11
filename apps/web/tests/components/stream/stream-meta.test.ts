@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { type StreamEventOut as StreamEventOutType, StreamEventOut } from '@docket/types';
 
-import { kindGlyph, streamDescription, streamHref, toRow } from '@/components/stream/stream-meta';
+import {
+  kindGlyph,
+  streamActorLabel,
+  streamDescription,
+  streamEventDetailLabel,
+  streamEventSentence,
+  streamHref,
+  toRow,
+} from '@/components/stream/stream-meta';
 
 const OBS = '01KW8H4PYWAZECQC0GJPABN60X';
 const ORG = '01KW8H4PY49X0PCHXY0G8Y68PX';
@@ -40,6 +48,7 @@ function event(over: Record<string, unknown> = {}): StreamEventOutType {
     },
     participants: [],
     detail: null,
+    actorIsViewer: false,
     relevance: 'mention',
     rendering: { icon: 'mention', category: 'social' },
     createdAt: '2026-06-29T12:00:00.000Z',
@@ -55,6 +64,81 @@ describe('toRow', () => {
     expect(r.entityKind).toBe('work_item');
     expect(r.entityTitle).toBe('Ship the beta');
     expect(r.origin).toBe('external');
+    expect(r.actorExternalId).toBe('u_maya');
+    expect(r.actorIsViewer).toBe(false);
+  });
+});
+
+describe('viewer-aware event copy', () => {
+  it('uses You only from the explicit viewer relationship', () => {
+    const mine = toRow(event({ actorIsViewer: true }));
+    expect(streamActorLabel(mine)).toBe('You');
+    expect(streamEventSentence({ ...mine, kind: 'completed' })).toBe('You completed the task');
+  });
+
+  it('keeps another person’s complete preferred display name', () => {
+    const other = toRow(
+      event({
+        actor: {
+          source: 'linear',
+          externalId: 'u_willie',
+          displayName: 'Willie Chalmers III',
+          avatarUrl: null,
+          docketActorId: null,
+        },
+      }),
+    );
+    expect(streamActorLabel(other)).toBe('Willie Chalmers III');
+  });
+
+  it('uses a known email sender instead of Someone', () => {
+    const email = toRow(
+      event({
+        actor: null,
+        kind: 'email_received',
+        detail: {
+          schema: 'docket.inbound_email',
+          messageId: 'message-1',
+          threadId: null,
+          fromAddress: 'maya@example.com',
+          fromName: 'Maya',
+          subject: 'Launch copy',
+          snippet: 'Ready for review',
+          hasAttachments: false,
+          capturedEntityKind: null,
+          capturedEntityId: null,
+        },
+      }),
+    );
+    expect(streamEventSentence(email)).toBe('Maya sent an email');
+  });
+
+  it('renders application-owned before and after labels', () => {
+    const changed = toRow(
+      event({
+        kind: 'field_change',
+        detail: {
+          schema: 'docket.field_change',
+          fields: ['dueDate'],
+          changes: [{ field: 'dueDate', label: 'Due date', from: 'Aug 10', to: 'Aug 12' }],
+        },
+      }),
+    );
+    expect(streamEventDetailLabel(changed)).toBe('Due date: Aug 10 → Aug 12');
+  });
+
+  it('humanizes canonical state values', () => {
+    const changed = toRow(
+      event({
+        kind: 'status_change',
+        detail: {
+          schema: 'docket.state_change',
+          fromState: 'in_progress',
+          toState: 'done',
+        },
+      }),
+    );
+    expect(streamEventDetailLabel(changed)).toBe('In progress → Done');
   });
 });
 

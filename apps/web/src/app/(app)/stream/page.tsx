@@ -1,6 +1,6 @@
 'use client';
 
-/** Cross-org personal Stream — everything concerning the caller across all workspaces. */
+/** Cross-org Stream — the complete timeline across the caller's workspaces. */
 import { type JSX, useState } from 'react';
 
 import { AthenaContextAction } from '@/components/athena/athena-context-action';
@@ -10,8 +10,8 @@ import { StreamView } from '@/components/stream/stream-view';
 import { useStreamPage } from '@/components/stream/use-stream-page';
 
 /**
- * The cross-org personal Stream route — the relevance-curated feed of everything concerning
- * the caller across all their workspaces, with a click-to-open event drawer.
+ * The cross-org Stream route — every event in the caller's workspace context, with exact-event
+ * inspection in a drawer.
  *
  * @returns the personal Stream page.
  */
@@ -34,13 +34,12 @@ export default function StreamPage(): JSX.Element {
           variant="ghost"
         />
       </div>
-      <StreamView {...data} actions={{}} onSelect={setSelected} />
+      <StreamView {...data} onSelect={setSelected} />
       <EventDrawer
         row={selected}
         onClose={() => {
           setSelected(null);
         }}
-        actions={{}}
       />
     </div>
   );

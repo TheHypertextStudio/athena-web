@@ -7,6 +7,47 @@
 
 ## Active Tasks
 
+### [CREATE-OBJECT-001] Global object creation composer
+
+- **Status**: REVIEW
+- **Started**: 2026-08-09
+- **Priority**: P1
+- **Description**: Replace page-owned creation dialogs for Task, Project, Initiative, Program, and
+  Team with one app-shell composer system. Every launcher opens a kind-specific request while the
+  composer owns destination workspace selection, workspace-scoped vocabulary and references,
+  templates, permissions, invalidation, routing, and repeat Task creation.
+- **Approach**: Added a discriminated `CreateObjectRequest` provider beside the command palette and
+  mounted one global host for each supported object. The shared leading row presents Workspace and
+  each kind's contextual field before Template, defaults to the shell workspace, and rebinds every
+  scoped roster when the destination changes. Foreign references are cleared on retarget while
+  portable draft content is retained. Launchers now use `openCreate` directly, including collection
+  pages, empty states, My Work, project/program detail, command-palette templates, and the calendar
+  item drawer. Completion is centralized so same-workspace callbacks retain their prior behavior,
+  cross-workspace creation routes into the destination, and every affected cache is invalidated.
+  Task creation adds a default-off Create more switch plus `Cmd/Ctrl+Shift+Enter`; successful repeat
+  creation clears authored content, preserves applied fields, and refocuses the title.
+- **Notes**: Final review also closed delayed shell-default loss, template visibility leaks, the
+  persistent Manage Templates modal, embedded calendar task creation, queued offline linking, and
+  recoverability after a task commits but relationship linking fails. The committed-task recovery
+  state freezes every draft and destination field, avoids a discard prompt, and opens the created
+  task by its immutable destination workspace.
+- **Files Changed**: Global creation context/completion modules and five composer hosts under
+  `apps/web/src/components`, all supported launcher surfaces and command-palette actions, calendar
+  task-link integration, composer/provider/source-policy/unit/E2E tests, and
+  `docs/engineering/specs/templates.md`.
+- **Validation**: On Node 24.19.0, root `pnpm typecheck` and `pnpm lint` passed 20/20 Turbo tasks;
+  root `pnpm test` passed tooling 139/139, web 254 files / 2,122 tests, API 317 files / 3,675 tests,
+  and 20/20 Turbo tasks; root `pnpm build` passed 4/4 tasks and produced the production service
+  worker. The branch-isolated canonical calendar drawer Playwright journey passed 3/3. Final
+  read-only review approved the implementation with no Critical or Important findings.
+- **Blockers**: None. Production landing and exact-SHA verification remain in progress.
+- **Learnings**: A global composer cannot be proven by replacing visible dialogs alone. The policy
+  boundary must cover indirect creation hooks and contextual drawers, while success handling must
+  distinguish object commitment from follow-up relationship writes so a committed object is never
+  presented as a retryable blank draft.
+
+---
+
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW

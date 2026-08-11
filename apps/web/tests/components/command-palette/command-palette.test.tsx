@@ -46,6 +46,12 @@ vi.mock('@/components/active-org', () => ({
   }),
 }));
 
+// The app shell normally provides creation context. These tests isolate label-search sub-modes,
+// so keep create actions inert while retaining the command palette's real action composition.
+vi.mock('@/components/create-object/create-object-provider', () => ({
+  useCreateObject: () => ({ request: null, openCreate: vi.fn(), closeCreate: vi.fn() }),
+}));
+
 const SEARCH_GET = vi.fn().mockResolvedValue({
   ok: true,
   status: 200,

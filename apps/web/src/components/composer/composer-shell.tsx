@@ -250,7 +250,7 @@ export function ComposerShell({
         {/* A migrated composer owns the order of its whole context row. Older page-owned composers
             retain their breadcrumb + right-pinned template layout until their own migration lands. */}
         {contextRow !== undefined ? (
-          <div className="flex flex-wrap items-center justify-start gap-2 px-6 pt-5 pr-16 text-sm">
+          <div className="text-label-large flex flex-wrap items-center justify-start gap-2 px-6 pt-5 pr-16">
             {contextRow}
           </div>
         ) : icon || context || templateSlot ? (

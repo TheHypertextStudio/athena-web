@@ -91,6 +91,13 @@ vi.mock('../../src/components/authentication-interlock', () => ({
       action(),
 }));
 
+// This integration test renders the initiative page below the app shell because its concern is
+// hierarchy mutation. The real shell supplies creation context; keep that unrelated launcher
+// inert here so the page can be exercised at the boundary the test owns.
+vi.mock('../../src/components/create-object/create-object-provider', () => ({
+  useCreateObject: () => ({ request: null, openCreate: vi.fn(), closeCreate: vi.fn() }),
+}));
+
 import InitiativesListClient from '../../src/app/(app)/orgs/[orgId]/initiatives/initiatives-client';
 import { queryKeys } from '../../src/lib/query';
 

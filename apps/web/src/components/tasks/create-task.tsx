@@ -462,7 +462,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
             onClick={() => {
               setCreateMore((current) => !current);
             }}
-            className="text-on-surface-variant hover:bg-surface-container-high inline-flex h-8 items-center gap-2 rounded-md px-2 text-sm font-medium disabled:opacity-50"
+            className="text-on-surface-variant hover:bg-surface-container-high text-label-large inline-flex h-8 items-center gap-2 rounded-md px-2 disabled:opacity-50"
           >
             <span
               aria-hidden

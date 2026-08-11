@@ -5,14 +5,16 @@ import type { JSX } from 'react';
 import { IntegrationActionButton } from './integration-action-button';
 import { STATUS_LABEL } from './integrations-config';
 
-/** The re-authorize button label for a not-yet-healthy integration. */
-function reconnectLabel(status: IntegrationOut['status'], busy: boolean): string {
-  if (busy) return 'Connecting…';
-  return status === 'pending' ? 'Finish connecting' : 'Reconnect';
+/** The repair/install button label for a not-yet-healthy integration. */
+function reconnectLabel(provider: string, status: IntegrationOut['status'], busy: boolean): string {
+  if (busy) return provider === 'github' ? 'Opening GitHub…' : 'Connecting…';
+  return provider === 'github' ? 'Retry GitHub installation' : 'Reconnect';
 }
 
 /** Props for {@link IntegrationRowActions}. */
 export interface IntegrationRowActionsProps {
+  /** Provider id, used where a provider owns a distinct authorization ceremony. */
+  provider: string;
   /** The connection's server status (drives the badge and which actions apply). */
   status: IntegrationOut['status'];
   /** Whether the viewer may manage this connection at all. */
@@ -53,6 +55,7 @@ export interface IntegrationRowActionsProps {
  * `status` + the capability flags, so both callers get one consistent control set.
  */
 export function IntegrationRowActions({
+  provider,
   status,
   canManage,
   syncable,
@@ -69,7 +72,8 @@ export function IntegrationRowActions({
   onToggleConfig,
 }: IntegrationRowActionsProps): JSX.Element {
   const isConnected = status === 'connected';
-  const needsConnect = status === 'pending' || status === 'error' || status === 'disconnected';
+  const needsConnect = status === 'error' || status === 'disconnected';
+  const canChangeGithubInstallation = canManage && isConnected && provider === 'github';
   return (
     <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
       <Badge variant={STATUS_LABEL[status].variant} className="font-normal">
@@ -81,7 +85,16 @@ export function IntegrationRowActions({
           disabled={disabled || busyReconnect}
           onClick={onReconnect}
         >
-          {reconnectLabel(status, busyReconnect)}
+          {reconnectLabel(provider, status, busyReconnect)}
+        </IntegrationActionButton>
+      ) : null}
+      {canChangeGithubInstallation ? (
+        <IntegrationActionButton
+          tone="primary"
+          disabled={disabled || busyReconnect}
+          onClick={onReconnect}
+        >
+          {busyReconnect ? 'Opening GitHub…' : 'Change GitHub installation'}
         </IntegrationActionButton>
       ) : null}
       {canManage && isConnected && !isMigration && syncable ? (

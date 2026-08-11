@@ -150,8 +150,11 @@ export function useConnectionsController({
                 key: existing?.id ?? provider.provider,
                 provider,
                 existing,
-                actionLabel: 'Connect',
-                connectHint: 'Keep it in sync',
+                actionLabel: provider.provider === 'github' ? 'Install GitHub App' : 'Connect',
+                connectHint:
+                  provider.provider === 'github'
+                    ? 'Choose the GitHub account and repositories Docket can access'
+                    : 'Keep it in sync',
                 effect: copy.effect,
                 mechanics: copy.mechanics,
                 configurable: hasInlineConfigPanel(provider.provider),

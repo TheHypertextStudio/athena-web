@@ -44,7 +44,7 @@ import {
   useLiveApiQuery,
 } from '@/lib/query';
 
-import { socialProviderForConnector } from './integrations-config';
+import { REDIRECT_CONNECT_PROVIDERS, socialProviderForConnector } from './integrations-config';
 
 /** How a feature wants a new connection created (the fundamental Connections↔Import difference). */
 export interface ConnectPattern {
@@ -180,12 +180,28 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
   );
 
   /**
-   * Validate (or repair) a connection: in production launch the provider's OAuth consent redirect
-   * (returning with `?verify=<id>`); in local/mock dev validate directly. Only a successful
-   * validation lets the card read as connected.
+   * Complete one connection ceremony.
+   *
+   * GitHub owns repository/account selection in its App installer, so it uses its signed install
+   * URL instead of linking a generic social identity. Other OAuth-backed connectors return with a
+   * `verify` token and are then validated here. A pending row is therefore redirect bookkeeping,
+   * never a user-visible state that needs a second action.
    */
   const finishConnection = useCallback(
     async (id: string, provider: string, useLinkedIdentity = false): Promise<void> => {
+      if (REDIRECT_CONNECT_PROVIDERS.has(provider)) {
+        const result = await recoverAuthentication(() =>
+          unwrap(
+            () =>
+              api.v1.orgs[':orgId'].integrations[':id']['connect-url'].$get({
+                param: { orgId, id },
+              }),
+            'Could not open the GitHub installation.',
+          ),
+        );
+        window.location.assign(result.url);
+        return;
+      }
       if (!useLinkedIdentity && connectorOAuthConfigured(config, provider)) {
         await authClient.linkSocial({
           provider: socialProviderForConnector(provider),
@@ -314,6 +330,17 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
     });
   }, [verifyReturnId, router]);
 
+  // GitHub's App installer writes the final connection server-side, then returns this same
+  // settings route with a short outcome marker. Refresh the source of truth and remove the marker
+  // so the user lands directly on Connected (or a durable error) rather than an interim screen.
+  const githubInstallReturn = searchParams.get('github');
+  useEffect(() => {
+    if (!githubInstallReturn) return;
+    void refreshIntegrations().finally(() => {
+      router.replace(window.location.pathname);
+    });
+  }, [githubInstallReturn, refreshIntegrations, router]);
+
   const syncMutation = useApiMutation({
     mutationFn: (id: string) =>
       unwrap(
@@ -371,6 +398,7 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
   const availableLinearIdentities = useMemo(() => {
     const bound = new Set(
       (byProvider.get('linear') ?? [])
+        .filter((connection) => connection.status !== 'pending')
         .map((connection) => connection.externalAccountId)
         .filter((id): id is string => Boolean(id)),
     );
@@ -382,7 +410,9 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
     [config],
   );
   const isVisible = useCallback(
-    (provider: string) => isAvailable(provider) || (byProvider.get(provider)?.length ?? 0) > 0,
+    (provider: string) =>
+      isAvailable(provider) ||
+      (byProvider.get(provider)?.some((connection) => connection.status !== 'pending') ?? false),
     [isAvailable, byProvider],
   );
 

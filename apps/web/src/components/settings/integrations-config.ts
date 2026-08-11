@@ -27,7 +27,7 @@ export const PROVIDER_ICON: Record<string, LucideIcon> = {
  * rather than a Better Auth social-link. The callback returns to settings with
  * `?<provider>=connected|error`.
  */
-export const REDIRECT_CONNECT_PROVIDERS: ReadonlySet<string> = new Set();
+export const REDIRECT_CONNECT_PROVIDERS: ReadonlySet<string> = new Set(['github']);
 
 /** providerIcon returns the icon component for an integration provider. */
 export function providerIcon(provider: string): LucideIcon {

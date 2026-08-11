@@ -15,6 +15,7 @@ import {
   CONNECTOR_COPY,
   connectorCopy,
   hasInlineConfigPanel,
+  REDIRECT_CONNECT_PROVIDERS,
 } from '../../../src/components/settings/integrations-config';
 
 describe('connectorCopy', () => {
@@ -80,5 +81,11 @@ describe('hasInlineConfigPanel', () => {
 
   it('is false for a provider with no config panel at all', () => {
     expect(hasInlineConfigPanel('github')).toBe(false);
+  });
+});
+
+describe('redirect-based connection providers', () => {
+  it('starts GitHub through its signed App installer instead of a generic social-account link', () => {
+    expect(REDIRECT_CONNECT_PROVIDERS.has('github')).toBe(true);
   });
 });

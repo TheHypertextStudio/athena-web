@@ -57,8 +57,7 @@ interface IntegrationProviderCardProps {
   manageHref?: string | null;
   /** Connect this provider on the current surface (pattern is fixed by the surface). */
   onConnect: () => void;
-  /** Finish (pending) or repair (error) a connection — validates the credential, launching the
-   * provider's OAuth consent when one is required. */
+  /** Repair a failed connection, or change a provider-owned installation. */
   onReconnect: () => void;
   onSync: () => void;
   onDisconnect: () => void;
@@ -71,7 +70,6 @@ interface IntegrationProviderCardProps {
  * that wasn't validated: only a `connected` integration reads "Connected".
  */
 function statusSubtitle(existing: IntegrationOut): string {
-  if (existing.status === 'pending') return 'Setup not finished';
   if (existing.status === 'error') return 'Connection needs attention';
   if (existing.status === 'disconnected') return 'Disconnected';
   if (existing.lastSyncedAt)
@@ -129,10 +127,12 @@ export function IntegrationProviderCard({
   onDisconnect,
   onToggleConfig,
 }: IntegrationProviderCardProps): JSX.Element {
+  // Pending records exist only while the browser is away at a provider. Do not turn a canceled or
+  // interrupted redirect into a half-connected card: Connect starts the full ceremony again.
+  const visibleIntegration = existing?.status === 'pending' ? undefined : existing;
   const ProviderIcon = providerIcon(provider.provider);
-  const showPendingHint = existing?.status === 'pending';
-  const showSyncFeedback = existing?.status === 'connected' && Boolean(syncFeedback);
-  const identityLabel = connectionLabel(existing);
+  const showSyncFeedback = visibleIntegration?.status === 'connected' && Boolean(syncFeedback);
+  const identityLabel = connectionLabel(visibleIntegration);
 
   return (
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
@@ -145,23 +145,24 @@ export function IntegrationProviderCard({
             <span className="text-on-surface-variant truncate text-xs">{identityLabel}</span>
           ) : null}
           <span className="text-on-surface-variant text-xs">
-            {existing ? statusSubtitle(existing) : (mechanics ?? connectHint)}
+            {visibleIntegration ? statusSubtitle(visibleIntegration) : (mechanics ?? connectHint)}
           </span>
         </div>
-        {existing && manageHref ? (
+        {visibleIntegration && manageHref ? (
           <NextLink
             href={manageHref}
             className="text-primary text-label-large shrink-0 hover:underline"
           >
-            {existing.status === 'connected' ? 'Manage' : 'Set up'}
+            {visibleIntegration.status === 'connected' ? 'Manage' : 'Set up'}
           </NextLink>
         ) : null}
-        {existing ? (
+        {visibleIntegration ? (
           <IntegrationRowActions
-            status={existing.status}
+            provider={provider.provider}
+            status={visibleIntegration.status}
             canManage={canManage}
             syncable={provider.syncable}
-            isMigration={existing.pattern === 'migration'}
+            isMigration={visibleIntegration.pattern === 'migration'}
             configurable={configurable}
             configOpen={configOpen}
             busyReconnect={busy}
@@ -183,7 +184,7 @@ export function IntegrationProviderCard({
       </div>
 
       {/* Persistent connection error from the server (survives reload), never ephemeral state. */}
-      {existing?.status === 'error' ? (
+      {visibleIntegration?.status === 'error' ? (
         <CardAlert
           message="This connection needs attention. Reconnect it to restore syncing."
           detail={
@@ -194,11 +195,7 @@ export function IntegrationProviderCard({
         />
       ) : null}
 
-      {showPendingHint ? (
-        <CardNote tone="muted">Finish connecting to validate access and start syncing.</CardNote>
-      ) : null}
-
-      {existing && actionError ? <CardNote tone="error">{actionError}</CardNote> : null}
+      {visibleIntegration && actionError ? <CardNote tone="error">{actionError}</CardNote> : null}
 
       {showSyncFeedback && syncFeedback ? <CardNote tone="muted">{syncFeedback}</CardNote> : null}
 

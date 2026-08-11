@@ -49,11 +49,16 @@ export function groupDirectoryByCategory(
  * Linear is intentionally multi-account and returns every row. Legacy single-card providers keep
  * their first row (or one empty slot for the connect affordance), preserving their existing UI.
  */
-export function visibleProviderConnections<T>(
+export function visibleProviderConnections(
   provider: string,
-  connections: readonly T[],
-): readonly (T | undefined)[] {
-  return provider === 'linear' ? connections : [connections[0]];
+  connections: readonly IntegrationOut[],
+): readonly (IntegrationOut | undefined)[] {
+  // A pending row exists only to carry a redirect-safe server-side ceremony. It is not a
+  // connection a person can use or repair yet, so rendering it would create the misleading
+  // second "Finish connecting" action. Returning to Connect restarts the ceremony against the
+  // same idempotent server row instead.
+  const completed = connections.filter((connection) => connection.status !== 'pending');
+  return provider === 'linear' ? completed : [completed[0]];
 }
 
 /** Return linked Linear identities not already bound to a visible org connection. */
@@ -63,6 +68,7 @@ export function availableLinearAccounts(
 ): readonly IdentityOut[] {
   const bound = new Set(
     connections
+      .filter((connection) => connection.status !== 'pending')
       .map((connection) => connection.externalAccountId)
       .filter((id): id is string => Boolean(id)),
   );

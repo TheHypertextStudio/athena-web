@@ -85,7 +85,10 @@ export function LinearAgentInstallCard({
   const existing = items.find((item) => item.provider === 'linear_agent');
   const status = existing?.status;
   const isConnected = status === 'connected';
-  const isPending = install.isPending || status === 'pending';
+  // A persisted pending row only means a prior browser redirect did not come back. It must not
+  // strand the workspace behind a disabled second step; a fresh click starts Linear's complete
+  // installer again and lands on either Installed or a durable error.
+  const isPending = install.isPending;
   const isErrored = !install.isPending && status === 'error';
   const workspaceName = existing?.connection.externalWorkspaceName;
 

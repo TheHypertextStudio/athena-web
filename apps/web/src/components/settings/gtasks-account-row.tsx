@@ -48,6 +48,7 @@ export function GtasksAccountRow({
           </div>
         </div>
         <IntegrationRowActions
+          provider="gtasks"
           status={account.status}
           canManage={canManage}
           syncable

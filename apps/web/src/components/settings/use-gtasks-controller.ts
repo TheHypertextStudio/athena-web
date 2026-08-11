@@ -150,10 +150,16 @@ export function useGtasksController({
     () => (identitiesQ.data?.items ?? []).filter((i) => i.provider === 'google'),
     [identitiesQ.data],
   );
+  // A pending row only records an interrupted OAuth return. Keeping it out of the account list
+  // means the picker remains the one action to start (or retry) a complete connection.
+  const visibleAccounts = useMemo(
+    () => accounts.filter((account) => account.status !== 'pending'),
+    [accounts],
+  );
   const available = useMemo(() => {
-    const bound = new Set(accounts.map((a) => a.externalAccountId).filter(Boolean));
+    const bound = new Set(visibleAccounts.map((a) => a.externalAccountId).filter(Boolean));
     return googleIdentities.filter((i) => !bound.has(i.accountId));
-  }, [googleIdentities, accounts]);
+  }, [googleIdentities, visibleAccounts]);
 
   /** Create a connection bound to a chosen identity, then validate it. */
   const connectIdentity = useCallback(
@@ -266,7 +272,7 @@ export function useGtasksController({
 
   const rows = useMemo<readonly GtasksRowModel[]>(
     () =>
-      accounts.map((account) => ({
+      visibleAccounts.map((account) => ({
         account,
         label: accountLabel(account),
         summary: resourceSummary(account),
@@ -289,7 +295,7 @@ export function useGtasksController({
           },
         },
       })),
-    [accounts, busy, actionError, feedback, openConfigId, runReconnect, runSync],
+    [visibleAccounts, busy, actionError, feedback, openConfigId, runReconnect, runSync],
   );
 
   const picker = useMemo<GtasksPickerModel>(

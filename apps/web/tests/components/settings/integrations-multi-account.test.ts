@@ -12,8 +12,9 @@ function connection(
   id: string,
   provider: string,
   externalAccountId: string | null,
+  status: IntegrationOut['status'] = 'connected',
 ): IntegrationOut {
-  return { id, provider, externalAccountId } as IntegrationOut;
+  return { id, provider, externalAccountId, status } as IntegrationOut;
 }
 
 /** Minimal linked-identity fixture for the pure settings selectors. */
@@ -50,6 +51,24 @@ describe('multi-account integration settings selectors', () => {
     const connections = [connection('int-one', 'linear', 'lin-one')];
 
     expect(availableLinearAccounts(identities, connections)).toEqual([identities[1]]);
+  });
+
+  it('keeps unfinished redirect attempts out of every visible connection state', () => {
+    const pendingLinear = connection('int-pending', 'linear', 'lin-one', 'pending');
+    const connectedLinear = connection('int-connected', 'linear', 'lin-two');
+    const pendingGithub = connection('int-github-pending', 'github', null, 'pending');
+
+    expect(visibleProviderConnections('linear', [pendingLinear, connectedLinear])).toEqual([
+      connectedLinear,
+    ]);
+    expect(visibleProviderConnections('github', [pendingGithub])).toEqual([undefined]);
+  });
+
+  it('does not reserve a linked Linear identity for a canceled unfinished attempt', () => {
+    const identities = [identity('lin-one', 'linear')];
+    const pending = [connection('int-pending', 'linear', 'lin-one', 'pending')];
+
+    expect(availableLinearAccounts(identities, pending)).toEqual(identities);
   });
 });
 

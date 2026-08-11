@@ -130,16 +130,20 @@ connector and webhook firehose are optional follow-on settings in the same app. 
 providers. On a re-run, the wizard classifies existing values as ready, placeholder, missing, or
 unreadable and offers Keep, Repair, or Replace instead of repeating completed setup.
 
-The GitHub identity section registers each environment's product-origin callbacks:
-`…/api/auth/callback/github` (sign-in) and `…/internal/integrations/github/callback` (install/connect).
-Select **Request user authorization (OAuth) during installation** and **Redirect on update** under
-**Post installation**. Selecting OAuth-during-install can gray out the Setup URL field; that is
-expected and the field should be left unchanged. When the optional connector is enabled, open
-**Permissions & events** in the GitHub sidebar, set Issues and Pull requests to read-only, grant
-Email addresses read-only, and subscribe to Issues, Issue comment, Pull request, and Pull request
-review comment. The optional webhook uses `…/internal/ingest/github` on the public API host; local
-setup skips it because `APP_MODE=local` selects the mock observer. To exercise the real firehose
-locally, use the persistent cloudflared tunnel that `pnpm bootstrap` (Phase 1) sets up.
+The GitHub identity section registers only the product-origin sign-in callback:
+`…/api/auth/callback/github`. Under **Post installation**, clear **Request user authorization
+(OAuth) during installation**, set **Setup URL** to `…/internal/integrations/github/callback`, and
+select **Redirect on update**. The setup URL is a distinct GitHub App lifecycle callback: after a
+person chooses the GitHub account or organization and repository scope, it receives the
+installation id and records the workspace connection. The web app proxies that path to the API, so
+the URL remains on the canonical product origin. Configure **Where can this GitHub App be
+installed?** as **Any account**, allowing each Docket workspace to choose its GitHub destination.
+When the optional connector is enabled, open **Permissions & events** in the GitHub sidebar, set
+Issues and Pull requests to read-only, grant Email addresses read-only, and subscribe to Issues,
+Issue comment, Pull request, and Pull request review comment. The optional webhook uses
+`…/internal/ingest/github` on the public API host; local setup skips it because `APP_MODE=local`
+selects the mock observer. To exercise the real firehose locally, use the persistent cloudflared
+tunnel that `pnpm bootstrap` (Phase 1) sets up.
 
 **Linear `genericOAuth` config values (constants in `@docket/auth`, not env):** `authorizationUrl = https://linear.app/oauth/authorize`, `tokenUrl = https://api.linear.app/oauth/token`, `userInfoUrl = https://api.linear.app/graphql` (resolve identity via the `viewer` GraphQL query in `getUserInfo`), `scopes = ["read"]` for login (request `["read","write","issues:create"]` only on the migration connect flow), `pkce: true`, comma-separated scope serialization (Linear quirk — pass scopes as a single comma-joined string).
 
@@ -447,13 +451,15 @@ schema-validated and sensitive values are masked.
   Docket-owned `GOOGLE_OAUTH_PUBLIC` and `GOOGLE_OAUTH_TEST_EMAILS` policy values separately.
 - **GitHub:** create a **GitHub App** under the org at
   `https://github.com/organizations/<org>/settings/apps` (not an OAuth App). The identity section
-  registers the product-origin sign-in and connect callbacks, selects Request user authorization
-  during installation, and selects Redirect on update under Post installation. OAuth-during-install
-  can gray the Setup URL field; leave it unchanged. If the optional connector is selected, use the
-  sidebar's **Permissions & events** section for read-only Issues/Pull requests/Email access and
-  Issues, Issue comment, Pull request, and Pull request review comment events; configure the webhook
-  at `<…/internal/ingest/github>`. Prompt `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`
-  for sign-in first, then optionally collect App ID, slug, private key, and webhook secret.
+  registers only the product-origin sign-in callback; under Post installation, clear Request user
+  authorization during installation, set Setup URL to
+  `<…/internal/integrations/github/callback>`, and select Redirect on update. Configure the app for
+  **Any account** so a workspace can choose its GitHub account or organization and repositories.
+  If the optional connector is selected, use the sidebar's **Permissions & events** section for
+  read-only Issues/Pull requests/Email access and Issues, Issue comment, Pull request, and Pull
+  request review comment events; configure the webhook at `<…/internal/ingest/github>`. Prompt
+  `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` for sign-in first, then optionally collect
+  App ID, slug, private key, and webhook secret.
 - **Linear:** open Linear's supported pre-populated application form with the public/private
   distribution, Docket identity, `/api/auth/callback/linear` redirect URIs, authorization-code
   grant, and Issue/Comment webhook already filled. The operator reviews and submits the form, then

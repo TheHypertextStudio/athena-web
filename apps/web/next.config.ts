@@ -165,6 +165,10 @@ const nextConfig: NextConfig = {
     return [
       { source: '/v1/:path*', destination: `${API_ORIGIN}/v1/:path*` },
       { source: '/api/auth/:path*', destination: `${API_ORIGIN}/api/auth/:path*` },
+      {
+        source: '/internal/integrations/github/:path*',
+        destination: `${API_ORIGIN}/internal/integrations/github/:path*`,
+      },
     ];
   },
 };

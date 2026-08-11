@@ -7,6 +7,29 @@
 
 ## Active Tasks
 
+### [GITHUB-INSTALL-002] Complete every provider connection in one ceremony
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-11
+- **Priority**: P0
+- **Description**: GitHub Connections was routed through Better Auth's generic social-link flow
+  even though the API already exposed a signed GitHub App installation URL and callback. Connect
+  created a pending row, never opened GitHub's account/repository installer, and exposed a
+  misleading second "Finish connecting" action. More broadly, every provider could render a
+  pending redirect record as though it were an actionable partial connection.
+- **Approach**: Route GitHub through its signed App installer so Connect and Change installation
+  choose the GitHub account or organization and repository scope in GitHub's native flow. Treat
+  pending records as internal redirect bookkeeping for all providers: canceled first attempts
+  return to Connect, while durable errors remain repairable. Proxy the browser-facing GitHub Setup
+  URL to the API handler and configure the GitHub App to use that setup lifecycle rather than
+  OAuth during installation.
+- **Validation**: Focused tests cover the installer route, invisible pending rows, GitHub action
+  labels, and setup callback proxy; web typecheck passes. The full local build was stopped rather
+  than left running after it spawned a long-running Next worker; CI will validate the production
+  build after the direct-main push.
+
+---
+
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW

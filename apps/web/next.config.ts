@@ -13,6 +13,16 @@ if (!apiUrl) {
 const API_ORIGIN = validatedApiOrigin(apiUrl, process.env['NEXT_PUBLIC_APP_URL']);
 
 /**
+ * Retired product-domain alias that must never become a second browser origin.
+ *
+ * @remarks
+ * Better Auth uses its API URL for a host outside `BETTER_AUTH_ALLOWED_HOSTS`. Leaving this alias
+ * live would therefore produce an API-host OAuth callback instead of Docket's registered browser
+ * callback. The dots are escaped because Next treats `has.value` as a regex-like matcher.
+ */
+const LEGACY_ATHENA_HOST = 'athena\\.hypertext\\.studio';
+
+/**
  * Extra allowed dev origins taken from the auth allowlist.
  *
  * @remarks
@@ -95,6 +105,14 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // Redirects run before rewrites, so this prevents the legacy alias from reaching the
+      // `/api/auth/*` proxy and lets Docket choose the canonical GitHub callback origin instead.
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: LEGACY_ATHENA_HOST }],
+        destination: 'https://docket.hypertext.studio/:path*',
+        permanent: true,
+      },
       // NOTE: `connections` and its `google-calendar` child are deliberately NOT redirected here,
       // unlike every other entry below. Those redirects predate the org-scoped Connections page
       // being real: `ConnectionsPanel` renders a "This workspace" section stating outright that a

@@ -144,6 +144,18 @@ describe('IntentJournal', () => {
     expect(journal.getSnapshot(key.scope, key.field).authoritative).toBe('Server B');
   });
 
+  it('keeps a fresh authoritative refresh above the in-flight response it supersedes', async () => {
+    const response = deferred<string>();
+    const journal = createIntentJournal<string>();
+    journal.setAuthoritative(key.scope, key.field, 'Old');
+    journal.apply({ ...key, value: 'Local', deliver: () => response.promise });
+    journal.reconcile(key.scope, key.field, 'Fresh');
+    response.resolve('Stale response');
+    await response.promise;
+    await Promise.resolve();
+    expect(journal.getSnapshot(key.scope, key.field).authoritative).toBe('Fresh');
+  });
+
   it('ignores manual settlement for a queued version', () => {
     const hold = deferred<string>();
     const journal = createIntentJournal<string>();

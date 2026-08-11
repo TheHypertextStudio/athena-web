@@ -43,7 +43,9 @@ export class IntentJournal<T> {
     const key = identityKey(scope, field);
     const state = this.state(scope, field, value);
     state.authoritative = value;
-    state.authoritativeVersion = state.nextVersion;
+    // A refresh observed after a request starts outranks that request's response. Reserve the next
+    // version for a subsequent local intent, which may then supersede this base explicitly.
+    state.authoritativeVersion = state.nextVersion + 1;
     this.authoritative.set(key, value);
     this.authoritativeVersions.set(key, state.authoritativeVersion);
     this.emit();

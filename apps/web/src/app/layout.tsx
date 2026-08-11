@@ -41,6 +41,9 @@ const mono = IBM_Plex_Mono({
  * Imports the design-token stylesheet (`@docket/ui` globals, re-exported by
  * `./globals.css`) and mounts the global client {@link Providers} (active context, vocabulary)
  * around every route. Browser color-scheme handling is pure CSS in `@docket/ui` tokens.
+ * The document body deliberately shares `surface-container` with `AppShell`, so browser
+ * overscroll reveals the shell canvas rather than a mismatched default page colour. The shell's
+ * floating `main` remains on the distinct `surface` role.
  *
  * The tree is wrapped in MUI's {@link AppRouterCacheProvider}, which collects Emotion's
  * runtime styles during SSR and flushes them into `<head>` instead of emitting a
@@ -95,7 +98,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
-      <body>
+      <body className="bg-surface-container">
         <AppRouterCacheProvider options={{ key: 'mui', enableCssLayer: true }}>
           <Providers>{children}</Providers>
         </AppRouterCacheProvider>

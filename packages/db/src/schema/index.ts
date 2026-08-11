@@ -6,6 +6,7 @@
 export * from '../enums';
 export * from './auth';
 export * from './identity';
+export * from './billing';
 export * from './crosscutting';
 export * from './notion-mirror';
 export * from './work';

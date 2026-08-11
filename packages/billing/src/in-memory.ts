@@ -80,17 +80,18 @@ export class InMemoryBillingGateway implements BillingGateway {
   /** {@inheritDoc BillingGateway.createCheckoutSession} */
   async createCheckoutSession(input: CheckoutSessionInput): Promise<CheckoutSessionResult> {
     const sessionId = this.nextId('cs');
-    // Simulate the customer completing checkout: create a trialing subscription.
+    // Simulate the customer completing checkout. A zero-day trial is an immediate paid start.
     const trialDays = input.trialDays ?? 14;
+    const hasTrial = trialDays > 0;
     const sub: Subscription = {
       id: this.nextId('sub'),
       referenceId: input.referenceId,
-      status: 'trialing',
-      currentPeriodEnd: addHours(this.now, trialDays * 24),
-      trialEnd: addHours(this.now, trialDays * 24),
+      status: hasTrial ? 'trialing' : 'active',
+      currentPeriodEnd: addHours(this.now, (hasTrial ? trialDays : 30) * 24),
+      ...(hasTrial ? { trialEnd: addHours(this.now, trialDays * 24) } : {}),
     };
     this.subscriptions.set(input.referenceId, sub);
-    this.lifecycleStep.set(input.referenceId, 0);
+    this.lifecycleStep.set(input.referenceId, hasTrial ? 0 : 1);
     this.events.push({
       id: this.nextId('evt'),
       type: 'checkout.completed',

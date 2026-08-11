@@ -838,12 +838,17 @@ describe('integrations router (CRUD; import covered elsewhere)', () => {
 });
 
 describe('billing router (GET status only; checkout/portal covered elsewhere)', () => {
-  it('returns null before any subscription', async () => {
+  it('returns an empty active-product summary before any purchase', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const w = appWithActor(r['billing'], `${orgId}_none`, ['view']);
+    const emptyOrgId = `${orgId}_none`;
+    const w = appWithActor(r['billing'], emptyOrgId, ['view']);
     const res = await w.request('/', { method: 'GET' });
     expect(res.status).toBe(200);
-    expect(await res.json()).toBeNull();
+    expect(await res.json()).toEqual({
+      organizationId: emptyOrgId,
+      products: [],
+      canManageBilling: false,
+    });
   });
 });
 

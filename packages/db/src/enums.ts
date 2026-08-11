@@ -9,6 +9,20 @@
  */
 import { pgEnum } from 'drizzle-orm/pg-core';
 
+/** Billing state for one organization product. */
+export const productEntitlementStatus = pgEnum('product_entitlement_status', [
+  'trialing',
+  'active',
+  'past_due',
+  'canceled',
+]);
+
+/** Origin of an organization product grant. */
+export const productEntitlementSource = pgEnum('product_entitlement_source', [
+  'stripe',
+  'complimentary',
+]);
+
 /**
  * The three kinds of Actor: human, agent, or team.
  *

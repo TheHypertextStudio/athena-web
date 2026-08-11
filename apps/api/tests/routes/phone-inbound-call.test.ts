@@ -18,6 +18,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DirectoryModule from '../../src/routes/phone-directory';
 import type * as TwilioModule from '../../src/routes/twilio-voice';
 import type * as VoiceServiceModule from '../../src/routes/voice-session-service';
+import { grantDocketPro } from '../support/db';
 import { addMember, getDb, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
@@ -43,20 +44,16 @@ function nextNumber(): string {
 /**
  * Seed a person with a personal workspace, a team to file work into, and a phone number.
  *
- * @param options - Whether the number is verified, whether calling is on, and the plan state.
+ * @param options - Whether the number is verified, calling is on, and Docket Pro is active.
  */
 async function seedCaller(options: {
   readonly status?: 'pending' | 'verified' | 'blocked';
   readonly callingEnabled?: boolean;
-  readonly lifecycleState?: 'trialing' | 'active' | 'past_due';
+  readonly withDocketPro?: boolean;
   readonly e164?: string;
 }) {
   const userId = await seedUserWithHub(db, schema, `Caller${String(++seq)}`);
-  const orgId = await seedOrg(db, schema, true);
-  await db
-    .update(schema.organization)
-    .set({ lifecycleState: options.lifecycleState ?? 'active' })
-    .where(eq(schema.organization.id, orgId));
+  const orgId = await seedOrg(db, schema, true, options.withDocketPro ?? true);
   await addMember(db, schema, orgId, userId, 'owner');
   await db.insert(schema.team).values({
     organizationId: orgId,
@@ -158,7 +155,7 @@ describe('caller id resolution', () => {
 
 describe('inbound call disposition', () => {
   it('connects an entitled caller and binds the call to their one conversation', async () => {
-    const caller = await seedCaller({ lifecycleState: 'active' });
+    const caller = await seedCaller({});
     const decision = await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_connect_1' });
 
     expect(decision.disposition).toBe('connected');
@@ -194,7 +191,7 @@ describe('inbound call disposition', () => {
   });
 
   it('gates an unentitled caller and creates absolutely nothing', async () => {
-    const caller = await seedCaller({ lifecycleState: 'past_due' });
+    const caller = await seedCaller({ withDocketPro: false });
     const before = await footprint(caller.userId);
 
     const decision = await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_gated_1' });
@@ -211,27 +208,24 @@ describe('inbound call disposition', () => {
     expect(after.activities).toBe(0);
   });
 
-  it('lifts the gate once the plan is active, on the very next call', async () => {
-    const caller = await seedCaller({ lifecycleState: 'past_due' });
+  it('lifts the gate once Docket Pro is active, on the very next call', async () => {
+    const caller = await seedCaller({ withDocketPro: false });
     expect(
       (await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_cycle_1' })).disposition,
     ).toBe('plan-required');
 
-    await db
-      .update(schema.organization)
-      .set({ lifecycleState: 'active' })
-      .where(eq(schema.organization.id, caller.orgId));
+    await grantDocketPro(schema, caller.orgId);
     const second = await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_cycle_2' });
     expect(second.disposition).toBe('connected');
     if (second.voiceSessionId) {
       await voiceService.closeVoiceSession(second.voiceSessionId, 'caller_hung_up');
     }
 
-    // …and drops again when the plan lapses.
+    // …and drops again when Docket Pro lapses.
     await db
-      .update(schema.organization)
-      .set({ lifecycleState: 'past_due' })
-      .where(eq(schema.organization.id, caller.orgId));
+      .update(schema.organizationProductEntitlement)
+      .set({ status: 'canceled', currentPeriodEnd: new Date() })
+      .where(eq(schema.organizationProductEntitlement.organizationId, caller.orgId));
     expect(
       (await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_cycle_3' })).disposition,
     ).toBe('plan-required');

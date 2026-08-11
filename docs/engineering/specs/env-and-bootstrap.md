@@ -472,10 +472,10 @@ Each pasted value is validated against its own `@docket/env` registry schema bef
 Verified commands; run against **test mode** for dev and **live mode** for prod (the CLI uses the active key; bootstrap can pass `--api-key` per mode).
 
 1. Authenticate: `stripe login` (or pass `--api-key`).
-2. Create product + prices with stable lookup keys (idempotent: list first, reuse if present):
-   - `stripe products create --name "Docket Team" --output json` → capture product id.
-   - `stripe prices create --product <prod_id> --currency usd --unit-amount <amount> --recurring.interval month --lookup-key team_monthly --output json` → sets `DOCKET_PRICE_LOOKUP_TEAM = team_monthly`, captures `price_…` → `STRIPE_PRICE_TEAM` (fallback).
-   - Optional annual: `--recurring.interval year --lookup-key team_annual`.
+2. Create the product and monthly price with stable lookup keys (idempotent: list first, reuse if present):
+   - `stripe products create --name "Docket Pro" --output json` → capture product id.
+   - `stripe prices create --product <prod_id> --currency usd --unit-amount 800 --recurring.interval month --lookup-key docket_pro_monthly --output json` → sets `DOCKET_PRICE_LOOKUP_DOCKET_PRO = docket_pro_monthly`, captures `price_…` → `STRIPE_PRICE_DOCKET_PRO` (fallback).
+   - `DOCKET_PRICE_LOOKUP_TEAM` and `STRIPE_PRICE_TEAM` are accepted as one-release compatibility aliases. Do not create new Stripe configuration with them.
 3. Webhook endpoints:
    - **Dev:** do **not** create a Dashboard endpoint; instead instruct the operator to run `stripe listen --forward-to localhost:8787/api/auth/stripe/webhook` in a side terminal, and capture `STRIPE_WEBHOOK_SECRET` via `stripe listen --print-secret`.
    - **Prod:** create the real endpoint → `stripe webhook_endpoints create --url https://docket-api.hypertext.studio/api/auth/stripe/webhook --enabled-events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_failed,invoice.paid,invoice.payment_action_required,customer.subscription.trial_will_end --output json` → capture the returned signing secret into prod `STRIPE_WEBHOOK_SECRET`.

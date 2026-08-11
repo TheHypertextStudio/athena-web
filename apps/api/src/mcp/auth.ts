@@ -15,6 +15,7 @@ import { actor, db, oauthClient, oauthConsent, user as userTable } from '@docket
 import { and, eq } from 'drizzle-orm';
 
 import { env } from '../env';
+import { assertProductCapability } from '../billing/entitlement';
 import { AuthError, NotFoundError } from '../error';
 import { MCP_SCOPES } from './scope';
 
@@ -364,6 +365,7 @@ export async function resolveMcpContext(headers: Headers): Promise<McpContext> {
 export async function resolveActor(ctx: McpContext, orgId: string): Promise<McpActor> {
   if (ctx.principal.kind === 'agent') {
     if (ctx.principal.orgId !== orgId) throw new NotFoundError();
+    await assertProductCapability(orgId, 'mcp');
     return { orgId, actorId: ctx.principal.agentActorId };
   }
 
@@ -381,6 +383,8 @@ export async function resolveActor(ctx: McpContext, orgId: string): Promise<McpA
 
   const row = rows[0];
   if (!row) throw new NotFoundError();
+
+  await assertProductCapability(orgId, 'mcp');
 
   return { orgId, actorId: row.id };
 }

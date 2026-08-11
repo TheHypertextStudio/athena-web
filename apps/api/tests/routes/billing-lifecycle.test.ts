@@ -65,6 +65,38 @@ describe('billing lifecycle: GET /lifecycle', () => {
   });
 });
 
+describe('billing: GET /', () => {
+  it('returns owned products and the caller billing-management permission', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    await db
+      .update(schema.organizationProductEntitlement)
+      .set({
+        status: 'trialing',
+        trialEndsAt: new Date('2026-08-25T00:00:00.000Z'),
+        currentPeriodEnd: new Date('2026-08-25T00:00:00.000Z'),
+      })
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+
+    const app = appWithActor(billing, orgId, ['view']);
+    const res = await app.request('/', { method: 'GET' });
+    expect(res.status).toBe(200);
+    expect(await json(res)).toEqual({
+      organizationId: orgId,
+      canManageBilling: false,
+      products: [
+        {
+          productKey: 'docket_pro',
+          name: 'Docket Pro',
+          status: 'trialing',
+          source: 'stripe',
+          trialEndsAt: '2026-08-25T00:00:00.000Z',
+          renewalDate: '2026-08-25T00:00:00.000Z',
+        },
+      ],
+    });
+  });
+});
+
 describe('billing lifecycle: POST /lifecycle/start-export-window', () => {
   it('opens the export window with both lifecycle timestamps stamped', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
@@ -101,6 +133,28 @@ describe('billing lifecycle: POST /lifecycle/start-export-window', () => {
     const app = appWithActor(billing, MISSING_ULID, ['manage']);
     const res = await app.request('/lifecycle/start-export-window', { method: 'POST' });
     expect(res.status).toBe(404);
+  });
+
+  it('cancels Docket Pro on a personal organization without starting deletion', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    await db
+      .update(schema.organization)
+      .set({ isPersonal: true })
+      .where(eq(schema.organization.id, orgId));
+
+    const app = appWithActor(billing, orgId, ['manage']);
+    const res = await app.request('/lifecycle/start-export-window', { method: 'POST' });
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({
+      lifecycleState: 'active',
+      exportReadyAt: null,
+      deleteAfterAt: null,
+    });
+    const [product] = await db
+      .select({ status: schema.organizationProductEntitlement.status })
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(product?.status).toBe('canceled');
   });
 });
 

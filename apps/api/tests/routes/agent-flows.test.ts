@@ -20,7 +20,7 @@ import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type integrationsRouter from '../../src/routes/integrations';
 import '../support/auth-mock';
-import { getMigratedDb } from '../support/db';
+import { getMigratedDb, grantDocketPro } from '../support/db';
 import { fakeSession } from '../support/routes-harness';
 
 let db!: typeof DbType;
@@ -32,6 +32,7 @@ let task!: typeof TaskTable;
 let integration!: typeof IntegrationTable;
 let agentSession!: typeof AgentSessionTable;
 let sessionActivity!: typeof SessionActivityTable;
+let dbModule!: Awaited<ReturnType<typeof getMigratedDb>>;
 let agentSessions!: typeof agentSessionsRouter;
 let integrations!: typeof integrationsRouter;
 
@@ -56,6 +57,7 @@ function appFor(
 
 beforeAll(async () => {
   const dbmod = await getMigratedDb();
+  dbModule = dbmod;
   db = dbmod.db;
   organization = dbmod.organization;
   team = dbmod.team;
@@ -86,6 +88,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
   const orgId = org!.id;
+  await grantDocketPro(dbModule, orgId);
 
   const [t] = await db
     .insert(team)

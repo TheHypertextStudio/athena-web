@@ -202,8 +202,13 @@ export const stripeServer = {
   /** Browser-safe Stripe key returned through `/v1/config`; stored server-side for runtime deploys. */
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  DOCKET_PRICE_LOOKUP_DOCKET_PRO: z.string().optional(),
+  STRIPE_PRICE_DOCKET_PRO: z.string().optional(),
+  /** @deprecated One-release compatibility alias for DOCKET_PRICE_LOOKUP_DOCKET_PRO. */
   DOCKET_PRICE_LOOKUP_TEAM: z.string().optional(),
+  /** @deprecated Annual Docket Team prices are no longer offered. */
   DOCKET_PRICE_LOOKUP_TEAM_ANNUAL: z.string().optional(),
+  /** @deprecated One-release compatibility alias for STRIPE_PRICE_DOCKET_PRO. */
   STRIPE_PRICE_TEAM: z.string().optional(),
   STRIPE_BILLING_PORTAL_CONFIG_ID: z.string().optional(),
   BILLING_ENABLED: boolFromString(),

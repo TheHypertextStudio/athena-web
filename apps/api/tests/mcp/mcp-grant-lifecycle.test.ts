@@ -36,7 +36,7 @@ import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type * as ScopeModule from '../../src/mcp/scope';
 import type * as ServerModule from '../../src/mcp/server';
 import { getSession, resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
-import { getMigratedDb } from '../support/db';
+import { getMigratedDb, grantDocketPro } from '../support/db';
 import { seedConsentedClient } from '../support/oauth-grant';
 import type * as RoutesHarness from '../support/routes-harness';
 
@@ -111,6 +111,7 @@ async function seedWorkspace(capabilities: readonly Capability[]): Promise<Works
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id }),
   ).id;
+  await grantDocketPro(schema, orgId);
 
   const roleId = harness.one(
     await db

@@ -22,7 +22,7 @@ import {
   resetAuthMocks,
   verifyAccessToken,
 } from '../support/auth-mock';
-import { getMigratedDb } from '../support/db';
+import { getMigratedDb, grantDocketPro } from '../support/db';
 import { seedConsentedClient, seedSkipConsentClient } from '../support/oauth-grant';
 
 let schema!: typeof DbModule;
@@ -67,6 +67,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = org!.id;
+  await grantDocketPro(schema, orgId);
 
   const [r] = await db
     .insert(schema.role)

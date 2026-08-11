@@ -311,10 +311,11 @@ users reconnect personal services after the required reset.
 
 ## 12. Entitlement (slice 6 — shipped)
 
-`assertAgentSessionsEntitled(orgId)` at `driveSession` first-run — the single choke point
-covering REST, the `trigger_agent` MCP tool, and proactive sweeps. Entitled =
-`organization.lifecycleState ∈ {trialing, active}` (the trial IS the funnel). Typed
-`AgentPlanRequiredError` (402, `agent_plan_required`) for the web upsell.
+`assertProductCapability(orgId, 'athena')` at `driveSession` first-run is the single choke point
+covering REST, the `trigger_agent` MCP tool, and proactive sweeps. Access requires an active or
+trialing product that grants Athena; Docket Pro is the only such product currently shipped.
+Failures use HTTP 402 `product_required`. `agent_plan_required` remains a recognized legacy Problem
+code for existing clients during the compatibility window.
 
 ## 13. Personal ambient experience
 

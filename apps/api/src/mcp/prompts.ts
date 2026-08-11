@@ -22,7 +22,7 @@ import { principalDisplayName } from './principal';
 
 /** The Docket system prompt: how an agent should operate over the Docket work model. */
 const SYSTEM_PROMPT = [
-  'You are an agent operating inside Docket, a multi-organization work command center.',
+  'You are an agent operating inside Docket, which plans, schedules, and tracks work across organizations.',
   '',
   'Work model (most-specific to least): Task -> Project -> Program -> Initiative, with',
   'team-scoped Cycles and project-scoped Milestones. Initiatives are cross-cutting themes',

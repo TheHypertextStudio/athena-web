@@ -35,6 +35,10 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
     load: async () => (await import('@/app/(app)/athena/page')).default,
   },
   {
+    pattern: '/billing/return',
+    load: async () => (await import('@/app/(app)/billing/return/page')).default,
+  },
+  {
     pattern: '/calendar',
     load: async () => (await import('@/app/(app)/calendar/calendar-client')).default,
   },
@@ -113,6 +117,10 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   {
     pattern: '/orgs/[orgId]/settings/automations',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/automations/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/settings/billing',
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/billing/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/settings/connections/google-calendar',

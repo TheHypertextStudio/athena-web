@@ -2,8 +2,8 @@
  * `@docket/api` — the things Athena says on the phone before a conversation can start.
  *
  * @remarks
- * Two announcements, both written as **copy**, both tested as copy. A caller who does not have a
- * plan, and a caller Docket does not recognize, each get a spoken sentence rather than a tone, a
+ * Two announcements, both written as **copy**, both tested as copy. A caller whose organization
+ * does not own Docket Pro, and a caller Docket does not recognize, each get a spoken sentence rather than a tone, a
  * silence, or an error read aloud.
  *
  * ## Tone is a requirement, not a preference
@@ -16,7 +16,7 @@
  *
  * ## The URL is dictated, not gestured at
  *
- * "Visit our website" is a dead end when you are holding a phone to your ear. The plan
+ * "Visit our website" is a dead end when you are holding a phone to your ear. The product
  * announcement speaks the exact address, host and path, with the path spoken as "slash pricing" so
  * it survives text-to-speech. The host comes from the host-config contract
  * (`WEB_URL`), so the address the caller hears follows the product's own host and
@@ -24,8 +24,8 @@
  */
 import { apiHosts, requireEnvOrigin } from '@docket/env/api';
 
-/** The path on the web app that lists purchasable plans. */
-export const PLANS_PATH = '/pricing';
+/** The path on the web app that explains Docket and Docket Pro. */
+export const PRICING_PATH = '/pricing';
 
 /** Words a gating announcement must never contain. */
 export const forbiddenAnnouncementWords: readonly string[] = [
@@ -46,8 +46,8 @@ export const forbiddenAnnouncementWords: readonly string[] = [
  *
  * @returns e.g. `https://docket.place/pricing`.
  */
-export function plansUrl(): string {
-  return `${requireEnvOrigin(apiHosts.app, 'WEB_URL')}${PLANS_PATH}`;
+export function pricingUrl(): string {
+  return `${requireEnvOrigin(apiHosts.app, 'WEB_URL')}${PRICING_PATH}`;
 }
 
 /**
@@ -68,24 +68,23 @@ export function speakableUrl(url: string): string {
 }
 
 /**
- * What a caller hears when their account has no entitled plan.
+ * What a caller hears when their organization does not own Docket Pro.
  *
  * @remarks
- * Opens with a greeting, states the one fact that matters (a plan is needed, and sign-up is on the
+ * Opens with a greeting, states the one fact that matters (Docket Pro is needed, and purchase is on the
  * web), dictates the address twice — once spoken for the ear, once written for the transcript and
  * for any provider that renders it — and closes with a next step. Nothing about what went wrong,
  * because nothing went wrong.
  *
  * @returns the announcement script.
  */
-export function planRequiredAnnouncement(): string {
-  const url = plansUrl();
+export function productRequiredAnnouncement(): string {
+  const url = pricingUrl();
   return [
     'Hi, this is Athena from Docket.',
-    'Calling me is part of a Docket subscription plan, and it looks like your account is not on one yet.',
-    `You can sign up on the web at ${speakableUrl(url)}. That is ${url}.`,
-    'Once your plan is active, call this number back and we can pick up right where you left off.',
-    'Talk soon.',
+    'Calling Athena requires Docket Pro, and this organization does not have it.',
+    `A workspace administrator can add Docket Pro at ${speakableUrl(url)}. That is ${url}.`,
+    'After Docket Pro is active, call this number again.',
   ].join(' ');
 }
 

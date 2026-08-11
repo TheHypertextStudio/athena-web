@@ -7,6 +7,7 @@ import type * as AgentRuntimeModule from '@docket/agent-runtime';
 import type { getContainer as GetContainer } from '../../src/container';
 import type cronRouter from '../../src/routes/cron';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
+import { grantDocketPro } from '../support/db';
 import { getDb, one } from '../support/routes-harness';
 
 const AUTH = { authorization: 'Bearer test-cron-secret' };
@@ -71,6 +72,7 @@ async function seedSessionWithRun(
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id }),
   );
+  await grantDocketPro(schema, org.id);
   const u = one(
     await db
       .insert(schema.user)

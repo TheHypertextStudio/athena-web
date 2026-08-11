@@ -34,7 +34,7 @@ import { HubPreferences } from '@docket/types';
 import type { AthenaApprovalMode, SessionApprovalDecision, TurnContentBlock } from '@docket/types';
 import { and, asc, desc, eq } from 'drizzle-orm';
 
-import { assertAgentSessionsEntitled } from '../billing/entitlement';
+import { assertProductCapability } from '../billing/entitlement';
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
 import { internalUserContext } from '../mcp/internal-session';
@@ -441,7 +441,7 @@ async function driveSessionWithAdmission(
   // already-started session are deliberately exempt so an approval arriving after a
   // plan lapse still lands the work the user already reviewed.
   if (session.startedAt === null) {
-    if (contextOrganizationId) await assertAgentSessionsEntitled(contextOrganizationId);
+    if (contextOrganizationId) await assertProductCapability(contextOrganizationId, 'athena');
   }
 
   let lease =

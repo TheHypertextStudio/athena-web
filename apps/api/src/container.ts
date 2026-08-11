@@ -66,6 +66,8 @@ export interface AppRuntimeEnv {
   readonly APP_MODE?: 'local' | 'test' | 'production';
   readonly STRIPE_SECRET_KEY?: string;
   readonly STRIPE_WEBHOOK_SECRET?: string;
+  readonly STRIPE_PRICE_DOCKET_PRO?: string;
+  readonly DOCKET_PRICE_LOOKUP_DOCKET_PRO?: string;
   readonly STRIPE_PRICE_TEAM?: string;
   readonly DOCKET_PRICE_LOOKUP_TEAM?: string;
   readonly STRIPE_BILLING_PORTAL_CONFIG_ID?: string;
@@ -102,6 +104,16 @@ export interface AppRuntimeEnv {
   readonly VOICE_REALTIME_VOICE?: string;
 }
 
+/** Resolve Docket Pro pricing, preferring current configuration over one-release aliases. */
+export function resolveDocketProPriceKey(runtimeEnv: AppRuntimeEnv): string | undefined {
+  return (
+    runtimeEnv.STRIPE_PRICE_DOCKET_PRO ??
+    runtimeEnv.DOCKET_PRICE_LOOKUP_DOCKET_PRO ??
+    runtimeEnv.STRIPE_PRICE_TEAM ??
+    runtimeEnv.DOCKET_PRICE_LOOKUP_TEAM
+  );
+}
+
 /** Service dependencies shared by API route handlers and background execution paths. */
 export interface AppContainer {
   readonly billing: BillingGateway;
@@ -134,7 +146,7 @@ function required(name: string, value: string | undefined): string {
  * Project the container's runtime configuration onto the model-backend seam's own input.
  *
  * @remarks
- * The seam reads a deliberately small slice — which tier, which endpoint, which credential — so
+ * The seam reads a deliberately small slice — runtime mode, endpoint, and credential — so
  * that adding a backend never means widening this container's environment surface.
  */
 export function toModelBackendEnv(runtimeEnv: AppRuntimeEnv): ModelBackendEnv {
@@ -164,10 +176,18 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     APP_MODE: env.APP_MODE,
     ...(env.STRIPE_SECRET_KEY ? { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY } : {}),
     ...(env.STRIPE_WEBHOOK_SECRET ? { STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET } : {}),
+    ...(env.STRIPE_PRICE_DOCKET_PRO
+      ? { STRIPE_PRICE_DOCKET_PRO: env.STRIPE_PRICE_DOCKET_PRO }
+      : {}),
+    ...(env.DOCKET_PRICE_LOOKUP_DOCKET_PRO
+      ? { DOCKET_PRICE_LOOKUP_DOCKET_PRO: env.DOCKET_PRICE_LOOKUP_DOCKET_PRO }
+      : {}),
+    /* eslint-disable @typescript-eslint/no-deprecated -- preserve one-release aliases in the runtime boundary */
     ...(env.STRIPE_PRICE_TEAM ? { STRIPE_PRICE_TEAM: env.STRIPE_PRICE_TEAM } : {}),
     ...(env.DOCKET_PRICE_LOOKUP_TEAM
       ? { DOCKET_PRICE_LOOKUP_TEAM: env.DOCKET_PRICE_LOOKUP_TEAM }
       : {}),
+    /* eslint-enable @typescript-eslint/no-deprecated */
     ...(env.STRIPE_BILLING_PORTAL_CONFIG_ID
       ? { STRIPE_BILLING_PORTAL_CONFIG_ID: env.STRIPE_BILLING_PORTAL_CONFIG_ID }
       : {}),
@@ -395,7 +415,7 @@ function buildPushSender(runtimeEnv: AppRuntimeEnv): PushSender {
  */
 export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
   const mock = localMode(runtimeEnv);
-  const priceKey = runtimeEnv.STRIPE_PRICE_TEAM ?? runtimeEnv.DOCKET_PRICE_LOOKUP_TEAM;
+  const priceKey = resolveDocketProPriceKey(runtimeEnv);
   const billing = lazyValue(() =>
     mock
       ? new InMemoryBillingGateway()

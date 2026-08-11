@@ -22,6 +22,7 @@ import type {
 } from '../../src/mcp/internal-session';
 import type { buildServer as BuildServer } from '../../src/mcp/server';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
+import { grantDocketPro } from '../support/db';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -68,6 +69,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = org!.id;
+  await grantDocketPro(schema, orgId);
 
   const [u] = await db
     .insert(schema.user)

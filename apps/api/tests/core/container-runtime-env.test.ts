@@ -14,6 +14,8 @@ const FULL_ENV = {
   APP_MODE: 'production' as const,
   STRIPE_SECRET_KEY: 'sk_live_x',
   STRIPE_WEBHOOK_SECRET: 'whsec_x',
+  STRIPE_PRICE_DOCKET_PRO: 'price_pro',
+  DOCKET_PRICE_LOOKUP_DOCKET_PRO: 'docket_pro_monthly',
   STRIPE_PRICE_TEAM: 'price_team',
   DOCKET_PRICE_LOOKUP_TEAM: 'lookup_team',
   STRIPE_BILLING_PORTAL_CONFIG_ID: 'bpc_x',

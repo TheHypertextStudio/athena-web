@@ -1,4 +1,10 @@
-import { billingExemption, db, lifecycleHold, organization } from '@docket/db';
+import {
+  billingExemption,
+  db,
+  lifecycleHold,
+  organization,
+  organizationProductEntitlement,
+} from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 
@@ -127,7 +133,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       response: AdminBillingExemptionOut,
       description: `Grants an organization a permanent, free, Stripe-independent bypass of the agent-session entitlement gate — the operator mechanism for comping internal or gifted accounts.
 
-**Behavior.** Verifies the org exists (else \`404 not_found\`), then inserts a \`billing_exemption\` row with the required free-text \`reason\` and \`grantedBy = \` the acting operator. A partial unique index enforces at most one active (\`revokedAt IS NULL\`) grant per org; attempting a second concurrent grant returns \`409 conflict\`. Once granted, \`assertAgentSessionsEntitled\` treats the org as entitled regardless of \`lifecycleState\`, indefinitely, until revoked.
+**Behavior.** Verifies the org exists (else \`404 not_found\`), records the required free-text \`reason\` and acting operator in the historical \`billing_exemption\` audit log, and creates or reactivates a complimentary Docket Pro entitlement. A partial unique index enforces at most one active audit grant per org; attempting a second concurrent grant returns \`409 conflict\`. The complimentary product grants Docket Pro capabilities until revoked.
 
 **Side effects.** Creates the exemption **and** writes a \`billing.exemption_granted\` operator audit event (subject = the org) capturing the exemption id and reason.
 
@@ -159,6 +165,26 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       const exemption = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
       if (!exemption) throw new NotFoundError('Exemption insert returned no row');
+      await db
+        .insert(organizationProductEntitlement)
+        .values({
+          organizationId: id,
+          productKey: 'docket_pro',
+          status: 'active',
+          source: 'complimentary',
+        })
+        .onConflictDoUpdate({
+          target: [
+            organizationProductEntitlement.organizationId,
+            organizationProductEntitlement.productKey,
+          ],
+          set: {
+            status: 'active',
+            source: 'complimentary',
+            canceledAt: null,
+            updatedAt: new Date(),
+          },
+        });
       await audit(db, staffUserId, 'billing.exemption_granted', 'organization', id, {
         exemptionId: exemption.id,
         reason,
@@ -194,6 +220,16 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         .returning();
       const exemption = revoked[0];
       if (!exemption) throw new NotFoundError('Active billing exemption not found');
+      await db
+        .update(organizationProductEntitlement)
+        .set({ status: 'canceled', canceledAt: new Date() })
+        .where(
+          and(
+            eq(organizationProductEntitlement.organizationId, id),
+            eq(organizationProductEntitlement.productKey, 'docket_pro'),
+            eq(organizationProductEntitlement.source, 'complimentary'),
+          ),
+        );
       await audit(db, staffUserId, 'billing.exemption_revoked', 'organization', id, {
         exemptionId: exemption.id,
       });

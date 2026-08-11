@@ -64,7 +64,9 @@ through them:
 1. **Docket is not a developer tool.** It is a multi-organization personal command centre — the
    place someone runs their whole working life from. Names that read as infrastructure (`-hq`,
    `-io`, `-dev`, `-stack`, `-ops`, `-cli`) are out, however available they are.
-2. **The tagline is "Run every organization from one calm place."** The name should sit next to
+2. **The positioning statement is "Docket is one tool for planning, scheduling, and tracking every
+   kind of work."** It appears once on the home page; supporting copy adds facts rather than
+   repeating it. The name should sit next to
    that sentence without fighting it. Calm, plain, and a little domestic beats clever.
 3. **Athena is the agent.** It is strongly interconnected with Docket but not strictly coupled to
    it: Athena has her own identity, her own inbound mail address, and could plausibly be spoken

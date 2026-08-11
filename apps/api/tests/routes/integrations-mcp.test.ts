@@ -17,6 +17,7 @@ import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import type { sealCredential as Seal, unsealCredential as Unseal } from '../../src/lib/credentials';
 import type { getContainer as GetContainer } from '../../src/container';
+import { grantDocketPro } from '../support/db';
 import { fakeSession } from '../support/routes-harness';
 
 vi.hoisted(() => {
@@ -76,6 +77,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  await grantDocketPro(schema, org!.id);
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })

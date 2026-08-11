@@ -48,6 +48,7 @@ import type {
   answerElicitation as AnswerElicitation,
   materializeElicitations as MaterializeElicitations,
 } from '../../src/services/elicitation-service';
+import { grantDocketPro } from '../support/db';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -120,6 +121,7 @@ async function seedRegisteredAgentSession(
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = org!.id;
+  await grantDocketPro(schema, orgId);
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
@@ -182,6 +184,7 @@ async function seedAthenaSession(
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  await grantDocketPro(schema, org!.id);
   const [role] = await db
     .insert(schema.role)
     .values({

@@ -24,8 +24,8 @@ import {
 import { announcementTwiml, escapeXml, relayTwiml } from '../../src/routes/twilio-voice';
 import {
   forbiddenAnnouncementWords,
-  planRequiredAnnouncement,
-  plansUrl,
+  pricingUrl,
+  productRequiredAnnouncement,
   speakableUrl,
   unrecognizedCallerAnnouncement,
 } from '../../src/routes/voice-announcements';
@@ -243,24 +243,24 @@ describe('websocket frame codec', () => {
 });
 
 describe('announcements', () => {
-  it('tells a caller without a plan that a plan is needed and where to get it', () => {
-    const script = planRequiredAnnouncement();
-    expect(script.toLowerCase()).toContain('subscription plan');
-    expect(script.toLowerCase()).toContain('on the web');
+  it('tells a caller without Docket Pro what is needed and where to add it', () => {
+    const script = productRequiredAnnouncement();
+    expect(script).toContain('requires Docket Pro');
+    expect(script).toContain('does not have it');
     // The exact URL, dictated — not "our website".
-    expect(script).toContain(plansUrl());
-    expect(script).toContain(speakableUrl(plansUrl()));
+    expect(script).toContain(pricingUrl());
+    expect(script).toContain(speakableUrl(pricingUrl()));
     expect(script.toLowerCase()).not.toContain('our website');
   });
 
   it('opens with a greeting and closes with a next step', () => {
-    const script = planRequiredAnnouncement();
+    const script = productRequiredAnnouncement();
     expect(script.startsWith('Hi,')).toBe(true);
-    expect(script.trimEnd().endsWith('Talk soon.')).toBe(true);
+    expect(script.trimEnd().endsWith('call this number again.')).toBe(true);
   });
 
   it('contains no error vocabulary, status text, or codes', () => {
-    for (const script of [planRequiredAnnouncement(), unrecognizedCallerAnnouncement()]) {
+    for (const script of [productRequiredAnnouncement(), unrecognizedCallerAnnouncement()]) {
       const lower = script.toLowerCase();
       for (const word of forbiddenAnnouncementWords) {
         expect(lower).not.toContain(word);

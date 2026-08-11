@@ -1,5 +1,5 @@
 import { InMemoryBillingGateway } from '@docket/billing';
-import { type Database, organization } from '@docket/db';
+import { type Database, organization, organizationProductEntitlement } from '@docket/db';
 import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -45,6 +45,16 @@ async function readOrg(id: string) {
     .where(eq(organization.id, id))
     .limit(1);
   return rows[0]!;
+}
+
+/** Read the organization's Docket Pro entitlement. */
+async function readDocketPro(id: string) {
+  const rows = await db
+    .select()
+    .from(organizationProductEntitlement)
+    .where(eq(organizationProductEntitlement.organizationId, id))
+    .limit(1);
+  return rows[0];
 }
 
 beforeAll(async () => {
@@ -193,6 +203,12 @@ describe('applyBillingEvent (BillingEvent → lifecycle)', () => {
     const effect = await applyBillingEvent(db, checkout, NOW);
     expect(effect).toBe('active');
     expect((await readOrg(id)).lifecycleState).toBe('active');
+    expect(await readDocketPro(id)).toMatchObject({
+      productKey: 'docket_pro',
+      status: 'trialing',
+      source: 'stripe',
+      stripeSubscriptionId: checkout.subscription?.id,
+    });
   });
 
   it('a past_due event marks the org past_due', async () => {
@@ -234,6 +250,29 @@ describe('applyBillingEvent (BillingEvent → lifecycle)', () => {
     expect(org.deleteAfterAt?.getTime()).toBe(
       new Date(NOW).getTime() + EXPORT_WINDOW_DAYS * DAY_MS,
     );
+    expect((await readDocketPro(id))?.status).toBe('canceled');
+  });
+
+  it('removes Pro without deleting a personal organization or its data', async () => {
+    const id = await makeOrg('active', { isPersonal: true });
+    const gateway = new InMemoryBillingGateway({ now: NOW });
+    await gateway.createCheckoutSession({
+      referenceId: id,
+      priceKey: 'docket_pro_monthly',
+      successUrl: 'a',
+      cancelUrl: 'b',
+    });
+    await gateway.cancelSubscription(id);
+    const canceled = gateway.events.find(
+      (e) => e.type === 'subscription.canceled' && e.referenceId === id,
+    )!;
+
+    expect(await applyBillingEvent(db, canceled, NOW)).toBe('personal_fallback');
+    const org = await readOrg(id);
+    expect(org.lifecycleState).toBe('active');
+    expect(org.exportReadyAt).toBeNull();
+    expect(org.deleteAfterAt).toBeNull();
+    expect((await readDocketPro(id))?.status).toBe('canceled');
   });
 
   it('replaying the same canceled event is idempotent (same terminal state)', async () => {

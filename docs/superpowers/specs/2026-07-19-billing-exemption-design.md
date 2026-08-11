@@ -1,5 +1,9 @@
 # Billing Exemption Design
 
+> **Superseded 2026-08-11.** Staff exceptions are now complimentary Docket Pro product grants.
+> See `docs/engineering/specs/product-billing.md`. The material below is retained as historical
+> design context only.
+
 ## Goal
 
 Let staff grant specific organizations permanent, free, unlimited access to agent sessions — for internal use and comped users — without touching Stripe, without per-user cost scaling, and with a durable audit trail of who granted what and why.

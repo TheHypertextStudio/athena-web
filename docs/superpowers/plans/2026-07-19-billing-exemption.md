@@ -1,5 +1,9 @@
 # Billing Exemption Implementation Plan
 
+> **Superseded 2026-08-11.** Staff exceptions are now complimentary Docket Pro product grants.
+> See `docs/engineering/specs/product-billing.md`. The material below is retained as historical
+> implementation context only.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let `superadmin` staff grant a specific organization permanent, free, unlimited agent-session access — bypassing the Stripe-driven `lifecycleState` gate entirely — with a durable, auditable grant/revoke record.

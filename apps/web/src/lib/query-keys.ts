@@ -96,6 +96,7 @@ export const queryKeys = {
   // so each embed caches apart; the coarse `['org',orgId,'task-graph']` prefix invalidates all.
   taskGraph: (orgId: string, scopeKey: string) => ['org', orgId, 'task-graph', scopeKey] as const,
   settings: (orgId: string, tab: string) => ['org', orgId, 'settings', tab] as const,
+  billing: (orgId: string) => ['org', orgId, 'settings', 'billing'] as const,
   connectedApps: () => ['me', 'connected-apps'] as const,
   identities: () => ['me', 'identities'] as const,
   publicConfig: () => ['public-config'] as const,

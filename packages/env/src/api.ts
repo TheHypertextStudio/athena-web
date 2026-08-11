@@ -156,8 +156,17 @@ function assertCrossFieldRules(e: typeof env): void {
 
   if (e.BILLING_ENABLED) {
     if (!e.STRIPE_SECRET_KEY) fail('BILLING_ENABLED=true requires STRIPE_SECRET_KEY.');
-    if (!e.STRIPE_PRICE_TEAM && !e.DOCKET_PRICE_LOOKUP_TEAM) {
-      fail('BILLING_ENABLED=true requires STRIPE_PRICE_TEAM or DOCKET_PRICE_LOOKUP_TEAM.');
+    if (
+      !e.STRIPE_PRICE_DOCKET_PRO &&
+      !e.DOCKET_PRICE_LOOKUP_DOCKET_PRO &&
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- one-release configuration compatibility
+      !e.STRIPE_PRICE_TEAM &&
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- one-release configuration compatibility
+      !e.DOCKET_PRICE_LOOKUP_TEAM
+    ) {
+      fail(
+        'BILLING_ENABLED=true requires STRIPE_PRICE_DOCKET_PRO or DOCKET_PRICE_LOOKUP_DOCKET_PRO.',
+      );
     }
   }
 

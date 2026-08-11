@@ -8,7 +8,7 @@ import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';
 import { getContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import './auth-mock';
-import { getMigratedDb } from './db';
+import { getMigratedDb, grantDocketPro } from './db';
 
 type Db = typeof DbModule.db;
 
@@ -96,6 +96,7 @@ export async function seedBaseOrg(
     .returning({ id: schema.organization.id });
   if (!org) throw new Error('seedBaseOrg failed to create an organization');
   const orgId = org.id;
+  await grantDocketPro(schema, orgId);
 
   const [t] = await db
     .insert(schema.team)
@@ -193,6 +194,7 @@ export async function seedOrg(
   db: Db,
   schema: typeof DbModule,
   isPersonal = false,
+  withDocketPro = true,
 ): Promise<string> {
   const slug = `org-${Math.random().toString(36).slice(2, 10)}`;
   const o = one(
@@ -201,6 +203,7 @@ export async function seedOrg(
       .values({ name: slug, slug, isPersonal })
       .returning({ id: schema.organization.id }),
   );
+  if (withDocketPro) await grantDocketPro(schema, o.id);
   return o.id;
 }
 

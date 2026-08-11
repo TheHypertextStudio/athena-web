@@ -20,8 +20,8 @@ import { actor, db, organization, sessionActivity, user, voiceSession } from '@d
 import type { VoiceChannel, VoiceEndReason, VoiceTurnOut } from '@docket/types';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 
-import { assertAgentSessionsEntitled } from '../billing/entitlement';
-import { AgentPlanRequiredError, NotFoundError } from '../error';
+import { assertProductCapability } from '../billing/entitlement';
+import { NotFoundError, ProductRequiredError } from '../error';
 
 import { loadTranscript } from '../agent/transcript';
 import { getContainer } from '../container';
@@ -122,7 +122,7 @@ export async function resolveVoiceWorkspace(
  * The phone channel needs the *answer*, not an exception: an unentitled caller is routed to a
  * friendly announcement, which is a normal outcome rather than an error. The web channel wants
  * the throw, because a 402 is what the upsell renders from. Both read the same rule — this
- * wraps {@link assertAgentSessionsEntitled} rather than reimplementing the lifecycle states, so
+ * wraps {@link assertProductCapability} rather than reimplementing product ownership, so
  * the two can never drift.
  *
  * @param organizationId - The workspace whose plan is being checked.
@@ -131,10 +131,10 @@ export async function resolveVoiceWorkspace(
 export async function isAthenaEntitled(organizationId: string | null): Promise<boolean> {
   if (!organizationId) return false;
   try {
-    await assertAgentSessionsEntitled(organizationId);
+    await assertProductCapability(organizationId, 'voice');
     return true;
   } catch (error) {
-    if (error instanceof AgentPlanRequiredError || error instanceof NotFoundError) return false;
+    if (error instanceof ProductRequiredError || error instanceof NotFoundError) return false;
     throw error;
   }
 }
@@ -148,11 +148,11 @@ export async function isAthenaEntitled(organizationId: string | null): Promise<b
  *
  * @param input - Who is calling, on which channel, from where.
  * @returns the opened session plus the material a greeting and instructions are built from.
- * @throws {AgentPlanRequiredError} When the workspace's plan does not entitle Athena.
+ * @throws {ProductRequiredError} When the workspace does not own Docket Pro.
  */
 export async function openVoiceSession(input: OpenVoiceSessionInput): Promise<OpenedVoiceSession> {
   const organizationId = await resolveVoiceWorkspace(input.userId, input.organizationId);
-  await assertAgentSessionsEntitled(requireWorkspace(organizationId));
+  await assertProductCapability(requireWorkspace(organizationId), 'voice');
 
   const conversation = await resolveCanonicalConversation(input.userId, organizationId);
   const [row] = await db

@@ -20,6 +20,7 @@ import type {
 import type { approveAndResume as ApproveAndResume } from '../../src/agent/loop';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import type { replyToElicitation as ReplyToElicitation } from '../../src/routes/agent-session-approval';
+import { grantDocketPro } from '../support/db';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -69,6 +70,7 @@ async function seedSession(policy?: 'suggest' | 'act_with_approval' | 'autonomou
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = org!.id;
+  await grantDocketPro(schema, orgId);
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })

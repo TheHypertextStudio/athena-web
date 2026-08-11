@@ -4,6 +4,7 @@
  */
 export * from './primitives';
 export * from './capability';
+export * from './billing';
 export * from './errors';
 export * from './passkey-errors';
 export * from './settings-image';

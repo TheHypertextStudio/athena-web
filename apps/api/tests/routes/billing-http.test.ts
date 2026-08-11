@@ -170,11 +170,15 @@ describe('POST /cron/lifecycle-sweep', () => {
 describe('billing router (org-scoped, via the BillingGateway port)', () => {
   const ORG = 'org_billing_router';
 
-  it('GET / returns null before any subscription exists', async () => {
+  it('GET / returns baseline Docket before any paid product exists', async () => {
     const app = billingApp(`${ORG}_none`, ['view']);
     const res = await app.request('/', { method: 'GET' });
     expect(res.status).toBe(200);
-    expect(await res.json()).toBeNull();
+    expect(await res.json()).toEqual({
+      organizationId: `${ORG}_none`,
+      products: [],
+      canManageBilling: false,
+    });
   });
 
   it('POST /checkout requires manage (403 for a view-only member)', async () => {
@@ -187,7 +191,7 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('POST /checkout returns a hosted url, after which GET / reflects the trialing sub', async () => {
+  it('POST /checkout returns a hosted URL without treating the redirect as activation', async () => {
     const app = billingApp(ORG, ['manage']);
     const checkout = await app.request('/checkout', {
       method: 'POST',
@@ -198,11 +202,13 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     const created = (await checkout.json()) as { url: string };
     expect(created.url).toMatch(/^https?:\/\//);
 
-    // The memoized container shares one InMemoryBillingGateway, so the status read sees it.
+    // Product access is webhook-driven. A checkout redirect alone does not write an entitlement.
     const status = await app.request('/', { method: 'GET' });
-    const sub = (await status.json()) as { referenceId: string; status: string } | null;
-    expect(sub?.referenceId).toBe(ORG);
-    expect(sub?.status).toBe('trialing');
+    expect(await status.json()).toEqual({
+      organizationId: ORG,
+      products: [],
+      canManageBilling: true,
+    });
   });
 
   it('POST /portal returns a hosted portal url for a manager', async () => {

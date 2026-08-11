@@ -21,6 +21,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type inboundMailRouter from '../../src/routes/inbound-mail';
 import type athenaMailRouter from '../../src/routes/athena-mail';
 import type { ensureMailbox as EnsureMailbox } from '../../src/routes/athena-mail-store';
+import { grantDocketPro } from '../support/db';
 import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
@@ -67,6 +68,7 @@ async function seedOwner(): Promise<Fixture> {
     .insert(schema.organization)
     .values({ name: `Workspace ${slug}`, slug })
     .returning({ id: schema.organization.id });
+  await grantDocketPro(schema, org!.id);
   await db.insert(schema.actor).values({
     organizationId: org!.id,
     kind: 'human',

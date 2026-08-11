@@ -230,11 +230,20 @@ describe('orgs router', () => {
 
     // It is seeded with the same machinery: a default team + an owning human actor.
     const rows = await db
-      .select({ isPersonal: schema.organization.isPersonal })
+      .select({
+        isPersonal: schema.organization.isPersonal,
+        lifecycleState: schema.organization.lifecycleState,
+      })
       .from(schema.organization)
       .where(eq(schema.organization.id, result.organization.id))
       .limit(1);
     expect(rows[0]?.isPersonal).toBe(true);
+    expect(rows[0]?.lifecycleState).toBe('active');
+    const personalProducts = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, result.organization.id));
+    expect(personalProducts).toEqual([]);
     expect(result.defaultTeam.id).toBeTruthy();
     expect(result.ownerActorId).toBeTruthy();
   });
@@ -302,6 +311,25 @@ describe('orgs router', () => {
     expect(
       (await body<{ organization: { isPersonal: boolean } }>(team)).organization.isPersonal,
     ).toBe(false);
+    const teamId = (
+      await body<{ organization: { id: string } }>(
+        await orgsApp(fakeSession(userId)).request('/', {
+          method: 'POST',
+          headers: J,
+          body: JSON.stringify({ name: 'Second Team Org' }),
+        }),
+      )
+    ).organization.id;
+    const [product] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, teamId));
+    expect(product).toMatchObject({
+      productKey: 'docket_pro',
+      status: 'trialing',
+      source: 'stripe',
+    });
+    expect(product?.trialEndsAt).toBeInstanceOf(Date);
   });
 
   it('POST / rejects a team org with no name (422)', async () => {

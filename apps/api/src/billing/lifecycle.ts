@@ -17,7 +17,7 @@
  */
 import type { BillingEvent } from '@docket/billing';
 import type { Database } from '@docket/db';
-import { organization } from '@docket/db';
+import { organization, organizationProductEntitlement } from '@docket/db';
 import { and, eq, inArray, isNotNull, lte, notInArray } from 'drizzle-orm';
 
 /** The organization data-lifecycle state union, derived from the schema column. */
@@ -213,7 +213,7 @@ export async function sweepLifecycle(db: Database, now: string): Promise<SweepRe
 }
 
 /** Map a {@link BillingEvent}'s subscription status onto the org lifecycle effect. */
-type LifecycleEffect = 'active' | 'past_due' | 'export_window' | 'none';
+type LifecycleEffect = 'active' | 'past_due' | 'export_window' | 'personal_fallback' | 'none';
 
 /** Decide the lifecycle effect a billing event implies (pure; no I/O). */
 function effectFor(event: BillingEvent): LifecycleEffect {
@@ -241,6 +241,57 @@ function effectFor(event: BillingEvent): LifecycleEffect {
   }
 }
 
+/** Persist the Stripe subscription snapshot as Docket Pro ownership. */
+async function syncDocketProEntitlement(
+  db: Database,
+  event: BillingEvent,
+  now: string,
+): Promise<void> {
+  const status =
+    event.subscription?.status ??
+    (event.type === 'subscription.past_due'
+      ? 'past_due'
+      : event.type === 'subscription.canceled'
+        ? 'canceled'
+        : event.type === 'subscription.trial_will_end'
+          ? null
+          : 'active');
+  if (!status) return;
+
+  const canceledAt = status === 'canceled' ? new Date(now) : null;
+  await db
+    .insert(organizationProductEntitlement)
+    .values({
+      organizationId: event.referenceId,
+      productKey: 'docket_pro',
+      status,
+      source: 'stripe',
+      stripeSubscriptionId: event.subscription?.id,
+      trialEndsAt: event.subscription?.trialEnd ? new Date(event.subscription.trialEnd) : null,
+      currentPeriodEnd: event.subscription?.currentPeriodEnd
+        ? new Date(event.subscription.currentPeriodEnd)
+        : null,
+      canceledAt,
+    })
+    .onConflictDoUpdate({
+      target: [
+        organizationProductEntitlement.organizationId,
+        organizationProductEntitlement.productKey,
+      ],
+      set: {
+        status,
+        source: 'stripe',
+        stripeSubscriptionId: event.subscription?.id,
+        trialEndsAt: event.subscription?.trialEnd ? new Date(event.subscription.trialEnd) : null,
+        currentPeriodEnd: event.subscription?.currentPeriodEnd
+          ? new Date(event.subscription.currentPeriodEnd)
+          : null,
+        canceledAt,
+        updatedAt: new Date(now),
+      },
+    });
+}
+
 /**
  * Fold a normalized billing webhook event into the org's lifecycle state.
  *
@@ -263,6 +314,7 @@ export async function applyBillingEvent(
 ): Promise<LifecycleEffect> {
   const effect = effectFor(event);
   const orgId = event.referenceId;
+  await syncDocketProEntitlement(db, event, now);
   switch (effect) {
     case 'active':
       await onReactivated(db, orgId);
@@ -270,8 +322,23 @@ export async function applyBillingEvent(
     case 'past_due':
       await onPastDue(db, orgId);
       return effect;
-    case 'export_window':
+    case 'export_window': {
+      const rows = await db
+        .select({ isPersonal: organization.isPersonal })
+        .from(organization)
+        .where(eq(organization.id, orgId))
+        .limit(1);
+      if (rows[0]?.isPersonal) {
+        await db
+          .update(organization)
+          .set({ lifecycleState: 'active', exportReadyAt: null, deleteAfterAt: null })
+          .where(eq(organization.id, orgId));
+        return 'personal_fallback';
+      }
       await onTrialOrPaymentTerminal(db, orgId, now);
+      return effect;
+    }
+    case 'personal_fallback':
       return effect;
     case 'none':
       return effect;

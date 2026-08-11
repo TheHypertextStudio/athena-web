@@ -14,7 +14,7 @@ import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import { getSession, resetAuthMocks } from '../support/auth-mock';
-import { getMigratedDb } from '../support/db';
+import { getMigratedDb, grantDocketPro } from '../support/db';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -52,6 +52,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = org!.id;
+  await grantDocketPro(schema, orgId);
 
   const [r] = await db
     .insert(schema.role)

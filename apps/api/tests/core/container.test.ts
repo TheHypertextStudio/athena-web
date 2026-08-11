@@ -30,6 +30,7 @@ import {
   buildConnector,
   buildLinearAgentClient,
   buildObserver,
+  resolveDocketProPriceKey,
   toModelBackendEnv,
   type AppRuntimeEnv,
 } from '../../src/container';
@@ -37,6 +38,21 @@ import { MockRealtimeProvider, OpenAiRealtimeProvider } from '../../src/routes/v
 
 const LOCAL: AppRuntimeEnv = { APP_MODE: 'local' };
 const PROD_BASE: AppRuntimeEnv = { APP_MODE: 'production' };
+
+describe('resolveDocketProPriceKey', () => {
+  it('prefers the Docket Pro configuration name', () => {
+    expect(
+      resolveDocketProPriceKey({
+        STRIPE_PRICE_DOCKET_PRO: 'price_pro',
+        STRIPE_PRICE_TEAM: 'price_legacy',
+      }),
+    ).toBe('price_pro');
+  });
+
+  it('accepts the former Docket Team configuration name for one release', () => {
+    expect(resolveDocketProPriceKey({ STRIPE_PRICE_TEAM: 'price_legacy' })).toBe('price_legacy');
+  });
+});
 
 describe('toModelBackendEnv', () => {
   it('carries every configured field through', () => {
@@ -185,7 +201,7 @@ describe('buildAppContainer', () => {
     const container = buildAppContainer({
       APP_MODE: 'production',
       STRIPE_SECRET_KEY: 'sk_live_x',
-      STRIPE_PRICE_TEAM: 'price_x',
+      STRIPE_PRICE_DOCKET_PRO: 'price_x',
       STRIPE_WEBHOOK_SECRET: 'whsec_x',
       STRIPE_BILLING_PORTAL_CONFIG_ID: 'bpc_x',
       ANTHROPIC_API_KEY: 'sk-ant-x',

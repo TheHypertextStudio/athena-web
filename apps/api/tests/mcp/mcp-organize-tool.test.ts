@@ -10,7 +10,7 @@ import type * as DbModule from '@docket/db';
 import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
-import { getMigratedDb } from '../support/db';
+import { getMigratedDb, grantDocketPro } from '../support/db';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -37,6 +37,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = org!.id;
+  await grantDocketPro(schema, orgId);
 
   const [role] = await db
     .insert(schema.role)

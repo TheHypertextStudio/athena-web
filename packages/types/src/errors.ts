@@ -31,6 +31,7 @@ export const ProblemCode = z
     'deletion_blocked',
     'card_required',
     'billing_frozen',
+    'product_required',
     'agent_plan_required',
     'domain_already_claimed',
     'public_name_taken',
@@ -60,6 +61,8 @@ export const ProblemCode = z
       '- `deletion_blocked` (HTTP 409): account deletion is blocked by unresolved sole-owner shared orgs that must be transferred or deleted first.',
       '- `card_required` (HTTP 402): the action needs payment details / an active subscription that is not on file.',
       "- `billing_frozen` (HTTP 402): the org's billing lifecycle currently blocks writes (e.g. past-due/export-window) — reads still work.",
+      '- `product_required` (HTTP 402): the requested capability requires an active organization product.',
+      '- `agent_plan_required` (HTTP 402): legacy compatibility code for clients that predate product-based access.',
       '- `domain_already_claimed` (HTTP 409): the custom domain is already claimed by a workspace, so it cannot be claimed again — one host belongs to exactly one workspace.',
       '- `public_name_taken` (HTTP 409): the requested public name (a workspace name or a brief path) is already in use or is a reserved system name.',
       '- `internal` (HTTP 500): an unexpected server error; safe to retry.',
@@ -108,16 +111,69 @@ export const PUBLIC_PROBLEM_TITLES = {
   deletion_blocked: 'Resolve workspace ownership before deleting your account.',
   card_required: 'Payment details are required to continue.',
   billing_frozen: 'Billing currently prevents this change.',
-  agent_plan_required: 'An active plan is required to use Athena.',
+  product_required: 'Docket Pro is required for this action.',
+  agent_plan_required: 'Docket Pro is required to use Athena.',
   domain_already_claimed: 'That domain is already claimed by a workspace.',
   public_name_taken: 'That name is already taken.',
-  internal: 'Something went wrong on our side.',
+  internal: 'Docket could not complete the request.',
 } as const satisfies Record<ProblemCode, string>;
 
 /** Return the safe public summary for a machine-readable problem code. */
 export function publicProblemTitle(code: ProblemCode): string {
   return PUBLIC_PROBLEM_TITLES[code];
 }
+
+/** Specific state and consequence for each occurrence-safe problem page. */
+export const PUBLIC_PROBLEM_SUMMARIES = {
+  validation_error: 'One or more submitted fields were not accepted. Review the marked fields.',
+  unauthorized: 'Docket could not confirm an active session. Sign in before trying again.',
+  forbidden:
+    'Your current workspace access does not allow this action. Ask a workspace administrator if your access should change.',
+  not_found:
+    'The item may have been removed or may not be visible to your account. Return to Docket and choose another item.',
+  conflict:
+    'The item changed or already reached a state that prevents this request. Review its current state before trying again.',
+  identity_in_use:
+    'A connection still depends on this account. Disconnect or reassign that connection before removing the account.',
+  account_selection_required:
+    'More than one connected account can supply this connection. Choose the account Docket should use.',
+  linear_workspace_already_connected:
+    'This Linear workspace already belongs to a Docket connection in the organization. Manage the existing connection instead.',
+  linear_write_scope_required:
+    'The current Linear authorization is read-only. Reconnect Linear and approve write access for two-way sync.',
+  task_already_linked:
+    'The task already has this relationship. Review the existing link instead of creating another one.',
+  idempotency_key_reuse:
+    'The same request identifier was used with different information. Retry the action as a new request.',
+  dependency_cycle:
+    'This dependency would make a task depend on itself through other tasks. Choose a different dependency.',
+  last_owner_guard:
+    'This change would leave the workspace without an owner. Assign another owner first.',
+  current_session:
+    'The session making this request cannot revoke itself from the session list. Sign out to end it.',
+  self_escalation:
+    'Accounts cannot grant themselves more workspace access. Ask another administrator to make the change.',
+  personal_org_no_invites:
+    'A personal workspace has one member and cannot accept invitations. Use a shared workspace for shared work.',
+  reauth_required:
+    'The session is too old for this sensitive action. Verify your identity, then repeat the action.',
+  deletion_blocked:
+    'Your account is the sole owner of one or more shared workspaces. Transfer ownership or delete those workspaces first.',
+  card_required:
+    'This purchase needs a valid payment method. Open billing settings to add or update one.',
+  billing_frozen:
+    'The shared workspace is in a billing recovery or export period. Open billing settings before making changes.',
+  product_required:
+    'This capability belongs to Docket Pro. A workspace administrator can add Docket Pro in billing settings.',
+  agent_plan_required:
+    'This client uses the former Athena billing code. Docket Pro is the current product required for access.',
+  domain_already_claimed:
+    'Another workspace already uses this domain. Choose a different domain or remove it from the other workspace.',
+  public_name_taken:
+    'Another page or workspace already uses this public name. Choose a different name.',
+  internal:
+    'Docket could not complete the request. Retry it; contact support if the same action fails again.',
+} as const satisfies Record<ProblemCode, string>;
 
 /** Occurrence-safe public definition used by the stable problem-help pages. */
 export interface ProblemDefinition {
@@ -150,6 +206,7 @@ const PROBLEM_RECOVERY: Record<ProblemCode, ProblemRecovery> = {
   deletion_blocked: 'review',
   card_required: 'billing',
   billing_frozen: 'billing',
+  product_required: 'billing',
   agent_plan_required: 'billing',
   domain_already_claimed: 'review',
   public_name_taken: 'review',
@@ -178,6 +235,7 @@ const PROBLEM_STATUS: Record<ProblemCode, number> = {
   deletion_blocked: 409,
   card_required: 402,
   billing_frozen: 402,
+  product_required: 402,
   agent_plan_required: 402,
   domain_already_claimed: 409,
   public_name_taken: 409,
@@ -195,7 +253,7 @@ export const PROBLEM_CATALOG: Readonly<Record<ProblemCode, ProblemDefinition>> =
       code,
       status: PROBLEM_STATUS[code],
       title: PUBLIC_PROBLEM_TITLES[code],
-      summary: `${PUBLIC_PROBLEM_TITLES[code]} Follow the general recovery guidance below.`,
+      summary: PUBLIC_PROBLEM_SUMMARIES[code],
       recovery: PROBLEM_RECOVERY[code],
     },
   ]),

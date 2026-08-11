@@ -9,6 +9,7 @@ import type { AppEnv } from '../../src/context';
 import type { getContainer as GetContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import type meAthenaRouter from '../../src/routes/me-athena';
+import { grantDocketPro } from '../support/db';
 import { fakeSession, getDb, one } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
@@ -50,8 +51,8 @@ afterEach(() => {
 /** Seed two users who share two workspaces, so context never becomes ownership. */
 async function seedPeople(): Promise<Seed> {
   const suffix = Math.random().toString(36).slice(2, 9);
-  const makeOrg = async (label: string) =>
-    one(
+  const makeOrg = async (label: string): Promise<string> => {
+    const orgId = one(
       await db
         .insert(schema.organization)
         .values({
@@ -61,6 +62,9 @@ async function seedPeople(): Promise<Seed> {
         })
         .returning({ id: schema.organization.id }),
     ).id;
+    await grantDocketPro(schema, orgId);
+    return orgId;
+  };
   const orgA = await makeOrg('Alpha');
   const orgB = await makeOrg('Beta');
   const teamA = one(
@@ -150,6 +154,7 @@ async function seedPersonalWorkspace(person: Person): Promise<{
       })
       .returning({ id: schema.organization.id }),
   ).id;
+  await grantDocketPro(schema, organizationId);
   await db.insert(schema.team).values({
     organizationId,
     name: 'Personal',

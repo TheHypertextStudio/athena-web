@@ -22,7 +22,7 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type { processSearchIndexJobs as ProcessSearchIndexJobs } from '../../src/search/process-jobs';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
-import { getMigratedDb } from '../support/db';
+import { getMigratedDb, grantDocketPro } from '../support/db';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -55,6 +55,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: `Acme ${slug}`, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = org!.id;
+  await grantDocketPro(schema, orgId);
 
   const [role] = await db
     .insert(schema.role)
@@ -160,6 +161,7 @@ async function joinOrg(userId: string, lifecycleState?: OrgLifecycleState): Prom
     displayName: 'Ada',
     userId,
   });
+  await grantDocketPro(schema, org!.id);
   return org!.id;
 }
 

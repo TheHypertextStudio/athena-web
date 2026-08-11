@@ -13,8 +13,8 @@
  * 2. **Do we recognize the number?** {@link resolveCaller} matches the caller id against numbers
  *    that are verified *and* calling-enabled. Anything else hears
  *    {@link unrecognizedCallerAnnouncement} and reaches no account.
- * 3. **Does that account have a plan?** {@link isAthenaEntitled}. An unentitled caller hears
- *    {@link planRequiredAnnouncement} — which names the exact sign-up URL — and the call ends.
+ * 3. **Does that organization own Docket Pro?** {@link isAthenaEntitled}. An unentitled caller hears
+ *    {@link productRequiredAnnouncement} — which names the exact purchase URL — and the call ends.
  *    **No voice session is opened and no conversation turn is written**, which is the property
  *    that makes "gated before reaching the agent" true rather than merely intended.
  * 4. Only then is a session opened and the call connected to the live agent.
@@ -37,7 +37,7 @@ import { env } from '../env';
 import { recordCallFrom, resolveCaller } from './phone-directory';
 import {
   callerGreeting,
-  planRequiredAnnouncement,
+  productRequiredAnnouncement,
   unrecognizedCallerAnnouncement,
 } from './voice-announcements';
 import { TWILIO_RELAY_PROVIDER_ID } from './voice-provider';
@@ -187,7 +187,7 @@ export async function decideInboundCall(
   if (!entitled) {
     return {
       disposition: 'plan-required',
-      twiml: announcementTwiml(planRequiredAnnouncement()),
+      twiml: announcementTwiml(productRequiredAnnouncement()),
       status: 200,
     };
   }

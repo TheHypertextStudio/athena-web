@@ -34,6 +34,7 @@ import type {
 import type { getContainer as GetContainer } from '../../src/container';
 import type { openToolbox as OpenToolbox } from '../../src/agent/toolbox';
 import { enqueueRunGeneration } from '../../src/agent/run-generation';
+import { grantDocketPro } from '../support/db';
 import { appWithSession, fakeSession, getDb, one } from '../support/routes-harness';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
@@ -94,6 +95,7 @@ async function seed(): Promise<Seed> {
       lifecycleState: 'active',
     })
     .returning({ id: schema.organization.id });
+  await grantDocketPro(schema, org!.id);
   const [role] = await db
     .insert(schema.role)
     .values({

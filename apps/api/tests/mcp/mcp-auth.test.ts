@@ -6,7 +6,7 @@ import { ApiError } from '../../src/error';
 import type * as AuthModule from '../../src/mcp/auth';
 import type * as ResultModule from '../../src/mcp/result';
 import { getSession, resetAuthMocks } from '../support/auth-mock';
-import { getMigratedDb } from '../support/db';
+import { getMigratedDb, grantDocketPro } from '../support/db';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -105,6 +105,7 @@ describe('resolveActor', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
+    await grantDocketPro(schema, org!.id);
     const [u] = await db
       .insert(schema.user)
       .values({ name: 'A', email: `${slug}@e.com` })
@@ -129,6 +130,7 @@ describe('resolveActor', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
+    await grantDocketPro(schema, org!.id);
     await expect(
       authMod.resolveActor(
         {

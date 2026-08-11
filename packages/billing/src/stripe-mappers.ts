@@ -180,13 +180,14 @@ export function buildBaseCheckoutParams(
   price: string,
   trialDays: number,
 ): Stripe.Checkout.SessionCreateParams {
+  const resolvedTrialDays = input.trialDays ?? trialDays;
   return {
     mode: 'subscription',
     line_items: [{ price, quantity: 1 }],
     client_reference_id: input.referenceId,
     ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
     subscription_data: {
-      trial_period_days: input.trialDays ?? trialDays,
+      ...(resolvedTrialDays > 0 ? { trial_period_days: resolvedTrialDays } : {}),
       metadata: { referenceId: input.referenceId },
     },
     metadata: { referenceId: input.referenceId },

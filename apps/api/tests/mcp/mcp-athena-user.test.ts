@@ -8,7 +8,7 @@ import type * as DbModule from '@docket/db';
 
 import type { internalUserContext as InternalUserContext } from '../../src/mcp/internal-session';
 import type { openToolbox as OpenToolbox } from '../../src/agent/toolbox';
-import { getMigratedDb } from '../support/db';
+import { getMigratedDb, grantDocketPro } from '../support/db';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -36,6 +36,7 @@ async function seedUserWorkspace(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  await grantDocketPro(schema, org!.id);
   const [role] = await db
     .insert(schema.role)
     .values({

@@ -13,6 +13,7 @@ import {
   grant,
   initiativeHierarchyLink,
   organization,
+  organizationProductEntitlement,
   role,
   team,
   teamMember,
@@ -33,6 +34,7 @@ import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { assertProductCapability } from '../billing/entitlement';
 import { AuthError, ConflictError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
@@ -213,11 +215,22 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
             slug,
             purpose: body.purpose,
             isPersonal,
+            lifecycleState: isPersonal ? 'active' : 'trialing',
             vocabulary: { preset: body.vocabulary },
           })
           .returning();
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!org) throw new Error('organization insert returned no row');
+
+        if (!isPersonal) {
+          await tx.insert(organizationProductEntitlement).values({
+            organizationId: org.id,
+            productKey: 'docket_pro',
+            status: 'trialing',
+            source: 'stripe',
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          });
+        }
 
         const insertedRoles = await tx
           .insert(role)
@@ -450,6 +463,29 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
     },
   )
   .use('/:orgId/*', orgContextMiddleware)
+  .use('/:orgId/*', async (c, next) => {
+    const { orgId } = c.get('actorCtx');
+    const path = c.req.path;
+    // Billing and export remain reachable after Docket Pro cancellation. The shared workspace's
+    // ordinary work surface requires the product; a personal workspace keeps baseline Docket.
+    if (!path.includes(`/orgs/${orgId}/billing`)) {
+      const rows = await db
+        .select({ isPersonal: organization.isPersonal })
+        .from(organization)
+        .where(eq(organization.id, orgId))
+        .limit(1);
+      if (rows[0]?.isPersonal === false) {
+        await assertProductCapability(orgId, 'shared_work');
+      }
+    }
+    if (path.includes(`/orgs/${orgId}/integrations`)) {
+      await assertProductCapability(orgId, 'integrations');
+    }
+    if (path.includes(`/orgs/${orgId}/integrations/mcp`)) {
+      await assertProductCapability(orgId, 'mcp');
+    }
+    await next();
+  })
   .route('/:orgId/teams', teams)
   .route('/:orgId/projects', projects)
   .route('/:orgId/projects', projectRollup)

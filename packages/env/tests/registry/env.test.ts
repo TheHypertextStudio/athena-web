@@ -427,7 +427,7 @@ describe('api composition', () => {
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
         STRIPE_SECRET_KEY: 'sk_test_123',
-        STRIPE_PRICE_TEAM: 'price_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
       })) {
         vi.stubEnv(key, value);
       }
@@ -440,7 +440,7 @@ describe('api composition', () => {
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
         STRIPE_SECRET_KEY: 'sk_test_123',
-        DOCKET_PRICE_LOOKUP_TEAM: 'team_monthly',
+        DOCKET_PRICE_LOOKUP_DOCKET_PRO: 'docket_pro_monthly',
       })) {
         vi.stubEnv(key, value);
       }
@@ -452,7 +452,7 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
-        STRIPE_PRICE_TEAM: 'price_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
       })) {
         vi.stubEnv(key, value);
       }
@@ -470,8 +470,22 @@ describe('api composition', () => {
         vi.stubEnv(key, value);
       }
       await expect(import('../../src/api')).rejects.toThrow(
-        'BILLING_ENABLED=true requires STRIPE_PRICE_TEAM or DOCKET_PRICE_LOOKUP_TEAM',
+        'BILLING_ENABLED=true requires STRIPE_PRICE_DOCKET_PRO or DOCKET_PRICE_LOOKUP_DOCKET_PRO',
       );
+    });
+
+    it('accepts the former Docket Team price name for one compatibility release', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'true',
+        STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_PRICE_TEAM: 'price_legacy',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      const mod = await import('../../src/api');
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- proves the one-release alias still parses
+      expect(mod.env.STRIPE_PRICE_TEAM).toBe('price_legacy');
     });
   });
 

@@ -34,13 +34,32 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'DOCKET_PRICE_LOOKUP_DOCKET_PRO',
+    slice: 'stripe',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: stripeServer.DOCKET_PRICE_LOOKUP_DOCKET_PRO,
+    where: 'Stripe price lookup_key for Docket Pro monthly billing',
+  },
+  {
+    name: 'STRIPE_PRICE_DOCKET_PRO',
+    slice: 'stripe',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: stripeServer.STRIPE_PRICE_DOCKET_PRO,
+    where: 'Stripe price id (price_...) for Docket Pro monthly billing',
+  },
+  {
     name: 'DOCKET_PRICE_LOOKUP_TEAM',
     slice: 'stripe',
     scope: 'server',
     targets: ['api'],
     required: false,
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the registry must document the one-release alias
     zod: stripeServer.DOCKET_PRICE_LOOKUP_TEAM,
-    where: 'Stripe price lookup_key for the Team plan',
+    where: 'Legacy one-release alias for DOCKET_PRICE_LOOKUP_DOCKET_PRO',
   },
   {
     name: 'DOCKET_PRICE_LOOKUP_TEAM_ANNUAL',
@@ -48,6 +67,7 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     scope: 'server',
     targets: ['api'],
     required: false,
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the registry must document the retired annual alias
     zod: stripeServer.DOCKET_PRICE_LOOKUP_TEAM_ANNUAL,
     where: 'Stripe price lookup_key for the annual Team plan',
   },
@@ -57,8 +77,9 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     scope: 'server',
     targets: ['api'],
     required: false,
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the registry must document the one-release alias
     zod: stripeServer.STRIPE_PRICE_TEAM,
-    where: 'Stripe price id (price_...) — alternative to the lookup key',
+    where: 'Legacy one-release alias for STRIPE_PRICE_DOCKET_PRO',
   },
   {
     name: 'STRIPE_BILLING_PORTAL_CONFIG_ID',

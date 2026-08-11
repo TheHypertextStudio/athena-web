@@ -29,7 +29,7 @@ import { onError } from '../../src/error';
 import type { getContainer as GetContainer } from '../../src/container';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
-import { getMigratedDb } from '../support/db';
+import { getMigratedDb, grantDocketPro } from '../support/db';
 import { fakeSession } from '../support/routes-harness';
 
 let db!: typeof DbType;
@@ -44,6 +44,7 @@ let agentSessions!: typeof agentSessionsRouter;
 let ensureDefaultAgent!: typeof EnsureDefaultAgent;
 let DEFAULT_AGENT_NAME!: string;
 let getContainer!: typeof GetContainer;
+let dbModule!: Awaited<ReturnType<typeof getMigratedDb>>;
 
 /** Mount the sessions router behind an injected actor context with the given capabilities. */
 function appFor(orgId: string, capabilities: readonly string[], actorId = 'actor_test') {
@@ -68,6 +69,7 @@ function appFor(orgId: string, capabilities: readonly string[], actorId = 'actor
 
 beforeAll(async () => {
   const dbmod = await getMigratedDb();
+  dbModule = dbmod;
   db = dbmod.db;
   organization = dbmod.organization;
   team = dbmod.team;
@@ -97,6 +99,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
   const orgId = org!.id;
+  await grantDocketPro(dbModule, orgId);
   await db.insert(team).values({ organizationId: orgId, name: 'Core', key: 'CORE' });
   const [owner] = await db
     .insert(user)

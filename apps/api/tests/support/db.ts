@@ -43,3 +43,19 @@ export async function getMigratedDb(): Promise<typeof DbModule> {
   })();
   return migratedDb;
 }
+
+/** Give a test organization the currently sold Docket Pro product. */
+export async function grantDocketPro(
+  dbmod: typeof DbModule,
+  organizationId: string,
+): Promise<void> {
+  await dbmod.db
+    .insert(dbmod.organizationProductEntitlement)
+    .values({
+      organizationId,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'stripe',
+    })
+    .onConflictDoNothing();
+}

@@ -18,6 +18,7 @@ import {
   AtSign,
   Cable,
   Calendar,
+  CreditCard,
   Download,
   Globe,
   Inbox,
@@ -151,6 +152,15 @@ const GENERAL_SECTION: SettingsSection = {
   href: 'general',
 };
 
+/** Show the products owned by this workspace and provide the available billing action. */
+const BILLING_SECTION: SettingsSection = {
+  key: 'billing',
+  label: 'Billing',
+  description: 'View Docket Pro status, renewal dates, and billing actions.',
+  icon: CreditCard,
+  href: 'billing',
+};
+
 /** Manage who belongs to this workspace — shared orgs only, there is no roster otherwise. */
 const MEMBERS_SECTION: SettingsSection = {
   key: 'members',
@@ -228,7 +238,7 @@ const PUBLISHING_SECTION: SettingsSection = {
 export const WORKSPACE_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
   {
     label: 'Workspace',
-    sections: [GENERAL_SECTION, MEMBERS_SECTION],
+    sections: [GENERAL_SECTION, MEMBERS_SECTION, BILLING_SECTION],
   },
   {
     label: 'Work configuration',
@@ -250,7 +260,7 @@ export const WORKSPACE_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] 
 export const PERSONAL_WORKSPACE_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
   {
     label: 'Workspace',
-    sections: [GENERAL_SECTION],
+    sections: [GENERAL_SECTION, BILLING_SECTION],
   },
   {
     label: 'Work configuration',

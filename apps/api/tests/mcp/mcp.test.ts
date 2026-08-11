@@ -23,7 +23,7 @@ import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import '../support/auth-mock';
-import { getMigratedDb } from '../support/db';
+import { getMigratedDb, grantDocketPro } from '../support/db';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -36,9 +36,11 @@ let user!: typeof UserTable;
 let registerTools!: typeof RegisterTools;
 let registerResources!: typeof RegisterResources;
 let mcpHandler!: typeof McpHandler;
+let dbModule!: Awaited<ReturnType<typeof getMigratedDb>>;
 
 beforeAll(async () => {
   const dbmod = await getMigratedDb();
+  dbModule = dbmod;
   db = dbmod.db;
   organization = dbmod.organization;
   team = dbmod.team;
@@ -74,6 +76,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
   const orgId = org!.id;
+  await grantDocketPro(dbModule, orgId);
 
   const [r] = await db
     .insert(role)

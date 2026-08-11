@@ -20,7 +20,7 @@ const CANDIDATES: readonly ParentCandidate[] = [
     id: 'prj_pricing',
     kind: 'project',
     title: 'Pricing page rewrite',
-    description: 'New pricing tiers, copy and the checkout flow.',
+    description: 'New pricing products, copy and the checkout flow.',
   },
   {
     id: 'ini_platform',
@@ -63,7 +63,7 @@ const FIXTURE: readonly {
 }[] = [
   { request: 'Draft the newsletter template for next week', expected: 'prj_newsletter' },
   { request: 'Import the old Substack archive into the newsletter', expected: 'prj_newsletter' },
-  { request: 'Rewrite the pricing tiers copy on the pricing page', expected: 'prj_pricing' },
+  { request: 'Rewrite the product copy on the pricing page', expected: 'prj_pricing' },
   { request: 'Fix the checkout flow on pricing', expected: 'prj_pricing' },
   { request: 'Plan the zero downtime Postgres upgrade rehearsal', expected: 'prj_migration' },
   { request: 'Move the primary database off the old Postgres box', expected: 'prj_migration' },

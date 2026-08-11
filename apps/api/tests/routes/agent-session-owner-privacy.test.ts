@@ -13,6 +13,7 @@ import type { ActorCtx, AppEnv } from '../../src/context';
 import type { getContainer as GetContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
+import { grantDocketPro } from '../support/db';
 import { fakeSession, getDb, one } from '../support/routes-harness';
 
 const runnerMocks = vi.hoisted(() => ({
@@ -79,6 +80,7 @@ async function seedWorkspace(): Promise<Seed> {
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id }),
   );
+  await grantDocketPro(schema, org.id);
   const team = one(
     await db
       .insert(schema.team)

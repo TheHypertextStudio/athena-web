@@ -13,6 +13,7 @@ import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { getContainer as GetContainer } from '../../src/container';
+import { grantDocketPro } from '../support/db';
 import { fakeSession } from '../support/routes-harness';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
@@ -52,6 +53,7 @@ async function seedOrg(): Promise<{ userId: string; orgId: string; humanActorId:
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  await grantDocketPro(schema, org!.id);
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })

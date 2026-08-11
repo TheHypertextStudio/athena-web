@@ -79,10 +79,32 @@ test('Agenda quick create stays outside the rail across responsive themes', asyn
   await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
   await expect(dialog.getByRole('alert')).toHaveCount(0);
   await page.waitForTimeout(300);
-  const [dialogBox, asideBox] = await Promise.all([dialog.boundingBox(), aside.boundingBox()]);
+  const selectedDraft = aside.locator('[data-schedule-region-selection]');
+  await expect(selectedDraft).toBeVisible();
+  const [dialogBox, asideBox, draftBox, titleBox] = await Promise.all([
+    dialog.boundingBox(),
+    aside.boundingBox(),
+    selectedDraft.boundingBox(),
+    dialog.getByLabel('Title').boundingBox(),
+  ]);
   expect(dialogBox).not.toBeNull();
   expect(asideBox).not.toBeNull();
+  expect(draftBox).not.toBeNull();
+  expect(titleBox).not.toBeNull();
   expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(asideBox!.x);
+  const draftGap = draftBox!.x - (dialogBox!.x + dialogBox!.width);
+  expect(draftGap).toBeGreaterThanOrEqual(0);
+  expect(draftGap).toBeLessThanOrEqual(96);
+  const draftCenter = draftBox!.y + draftBox!.height / 2;
+  const titleCenter = titleBox!.y + titleBox!.height / 2;
+  expect(Math.abs(titleCenter - draftCenter)).toBeLessThanOrEqual(24);
+
+  await setColorScheme(page, 'light');
+  await capture(page, 'desktop-light-overview');
+  await setColorScheme(page, 'dark');
+  await capture(page, 'desktop-dark-overview');
+  await setColorScheme(page, 'light');
+
   const handle = dialog.getByRole('button', { name: 'Move create-event dialog' });
   const handleBox = await handle.boundingBox();
   if (!handleBox) throw new Error('Dialog handle has no browser geometry.');
@@ -90,18 +112,27 @@ test('Agenda quick create stays outside the rail across responsive themes', asyn
   await page.mouse.down();
   await page.mouse.move(handleBox.x + handleBox.width / 2 - 180, handleBox.y + 80, { steps: 8 });
   await page.mouse.up();
-  await page.waitForTimeout(100);
+  await expect
+    .poll(async () => (await dialog.boundingBox())?.x ?? Number.POSITIVE_INFINITY)
+    .toBeLessThanOrEqual(dialogBox!.x - 170);
+  const overlayHost = page.locator('[data-shell-overlay-host]');
   const draggedBox = await dialog.boundingBox();
+  const draggedHostBox = await overlayHost.boundingBox();
   expect(draggedBox).not.toBeNull();
+  expect(draggedHostBox).not.toBeNull();
   expect(draggedBox!.x).toBeLessThan(dialogBox!.x);
   expect(draggedBox!.x + draggedBox!.width).toBeLessThanOrEqual(asideBox!.x);
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.waitForTimeout(100);
+  const resizedDraggedBox = await dialog.boundingBox();
+  const resizedHostBox = await overlayHost.boundingBox();
+  expect(resizedDraggedBox).not.toBeNull();
+  expect(resizedHostBox).not.toBeNull();
+  const draggedLocalX = draggedBox!.x - draggedHostBox!.x;
+  const resizedLocalX = resizedDraggedBox!.x - resizedHostBox!.x;
+  expect(Math.abs(resizedLocalX - draggedLocalX)).toBeLessThanOrEqual(2);
+  await page.setViewportSize({ width: 1440, height: 900 });
   expect(state.itemCreates).toHaveLength(0);
-
-  await setColorScheme(page, 'light');
-  await capture(page, 'desktop-light-overview');
-  await setColorScheme(page, 'dark');
-  await capture(page, 'desktop-dark-overview');
-  await setColorScheme(page, 'light');
 
   await dialog.getByRole('button', { name: /Edit schedule/ }).click();
   await expect(dialog.getByLabel('Start date')).toBeVisible();

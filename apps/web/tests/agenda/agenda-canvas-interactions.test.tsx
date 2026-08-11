@@ -268,6 +268,7 @@ describe('Agenda scheduling interactions', () => {
     });
     expect(quickCreate.props?.presentation).toBe('agenda');
     expect(quickCreate.props?.trigger).toBe('hidden');
+    expect(quickCreate.props?.selectionAnchorRef).toBe(canvasProps().selectedRegionAnchorRef);
   });
 
   it('keeps the controlled draft callback stable while projecting edited bounds', () => {
@@ -298,9 +299,10 @@ describe('Agenda scheduling interactions', () => {
     renderTimeline([]);
     const props = canvasProps();
     const lane = props.lanes[0]!;
+    const anchor = document.createElement('button');
 
     act(() => {
-      props.onSelectAllDayRegion?.(lane);
+      props.onSelectAllDayRegion?.(lane, anchor);
     });
 
     expect(props.onSelectAllDayRegion).toBeDefined();
@@ -308,6 +310,7 @@ describe('Agenda scheduling interactions', () => {
       allDayStartDate: '2026-07-13',
       allDayEndDate: '2026-07-14',
     });
+    expect(quickCreate.props?.selectionAnchorRef?.current).toBe(anchor);
   });
 
   it('replaces the mobile timeline with an Agenda-owned sibling create host', () => {

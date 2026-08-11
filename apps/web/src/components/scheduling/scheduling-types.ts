@@ -218,7 +218,7 @@ export interface SchedulingCanvasProps {
   /** Receive a pointer-created time region. */
   readonly onSelectRegion?: (selection: ScheduleRegionSelection) => void;
   /** Receive an explicit create request from one lane's all-day strip. */
-  readonly onSelectAllDayRegion?: (lane: ScheduleLane) => void;
+  readonly onSelectAllDayRegion?: (lane: ScheduleLane, anchor: HTMLElement) => void;
   /** Receive a focused-grid day shortcut without teaching shared geometry how dates navigate. */
   readonly onDateShortcut?: (shortcut: 'previous' | 'next' | 'today') => void;
   /** Receive item activation. */

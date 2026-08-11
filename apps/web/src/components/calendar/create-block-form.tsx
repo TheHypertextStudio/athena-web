@@ -134,11 +134,8 @@ export default function CreateBlockForm({
   const position = useClampedDialogPosition({
     open: open && presentation === 'agenda' && agendaDesktop,
     host: shellOverlayHost,
-    preferredTop:
-      selectionAnchorRef?.current && shellOverlayHost
-        ? selectionAnchorRef.current.getBoundingClientRect().top -
-          shellOverlayHost.getBoundingClientRect().top
-        : 48,
+    anchorRef: selectionAnchorRef,
+    anchorKey: calendarSelectionKey(selection),
   });
 
   const destinations = useMemo(

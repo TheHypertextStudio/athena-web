@@ -19,13 +19,16 @@
 - **Subtasks**:
   - [x] Trace the current portal, host, anchor, and clamping coordinate contracts.
   - [x] Refine the approved positioning design with exact gap, alignment, and fallback rules.
-  - [ ] Add red/green unit and integration coverage.
-  - [ ] Implement anchor-relative placement and manual-position handoff.
-  - [ ] Capture responsive browser evidence and deploy the verified exact SHA.
+  - [x] Add red/green unit and integration coverage.
+  - [x] Implement anchor-relative placement and manual-position handoff.
+  - [ ] Deploy and verify the exact production SHA.
 - **Blockers**: None.
-- **Notes**: The existing implementation already portals into the correct sibling host. The defect
-  is the default point calculation: it consumes only the host size and anchor top, so the selected
-  region is not the actual two-dimensional positioning reference.
+- **Notes**: The existing implementation already portaled into the correct sibling host. The defect
+  was the render-time point calculation: the selected draft ref was not populated until commit, so
+  placement fell back to the shell edge. The new animation-frame placement reads the virtual anchor
+  after commit, chooses left/right collision candidates, and stops automatic anchoring after the
+  first pointer or keyboard move. Focused tests, 1,957 web tests, repository format/type/lint/build
+  gates, and the two-test responsive Playwright evidence file are green.
 
 ---
 

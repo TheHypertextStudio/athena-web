@@ -105,6 +105,7 @@ function TimelineArrangement({
   const [mobileCreateHost, setMobileCreateHost] = useState<HTMLDivElement | null>(null);
   const isDesktop = useMediaQuery(SHELL_DESKTOP_QUERY);
   const draftAnchorRef = useRef<HTMLDivElement>(null);
+  const allDayDraftAnchorRef = useRef<HTMLElement>(null);
   const updateCalendarItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
   const relateItems = useRelateCalendarItems();
@@ -119,6 +120,7 @@ function TimelineArrangement({
   }, [clearTimeboxFailure, resetCalendarItem, resetLinkTask, resetRelateItems]);
   useEffect(() => {
     clearInlineFailures();
+    allDayDraftAnchorRef.current = null;
     setDraftSelection(null);
     setDraftDirty(false);
   }, [clearInlineFailures, date]);
@@ -131,6 +133,7 @@ function TimelineArrangement({
       ) {
         return false;
       }
+      allDayDraftAnchorRef.current = null;
       setDraftSelection(null);
       setDraftDirty(false);
       return true;
@@ -251,6 +254,7 @@ function TimelineArrangement({
       displayTimezone,
     );
     if (start.kind !== 'resolved' || end.kind !== 'resolved') return;
+    allDayDraftAnchorRef.current = null;
     setDraftSelection({
       selection: { startsAt: start.instant, endsAt: end.instant },
       canvasRegion,
@@ -300,7 +304,8 @@ function TimelineArrangement({
           selectedRegion={draftSelection?.canvasRegion}
           selectedRegionAnchorRef={draftAnchorRef}
           onSelectRegion={selectTimedRegion}
-          onSelectAllDayRegion={(targetLane) => {
+          onSelectAllDayRegion={(targetLane, anchor) => {
+            allDayDraftAnchorRef.current = anchor;
             setDraftSelection({
               selection: {
                 allDayStartDate: targetLane.date,
@@ -373,11 +378,18 @@ function TimelineArrangement({
         trigger="hidden"
         displayTimezone={displayTimezone}
         selection={draftSelection?.selection}
-        selectionAnchorRef={draftSelection?.canvasRegion ? draftAnchorRef : undefined}
+        selectionAnchorRef={
+          draftSelection
+            ? draftSelection.canvasRegion
+              ? draftAnchorRef
+              : allDayDraftAnchorRef
+            : undefined
+        }
         onDraftChange={updateDraftProjection}
         onDirtyChange={setDraftDirty}
         agendaMobileHost={mobileCreateHost}
         onSelectionConsumed={() => {
+          allDayDraftAnchorRef.current = null;
           setDraftSelection(null);
           setDraftDirty(false);
         }}

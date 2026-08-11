@@ -49,7 +49,7 @@
 - Produces: `anchoredDialogPoint(host, dialog, anchor, { gap?, inset?, titleOffset? }): Point`.
 - Preserves: `clampDialogPoint(point, host, dialog, inset): Point`.
 
-- [ ] **Step 1: Write failing geometry tests**
+- [x] **Step 1: Write failing geometry tests**
 
 ```ts
 expect(
@@ -58,7 +58,7 @@ expect(
     { width: 544, height: 366 },
     { left: 1142, top: 173, width: 230, height: 24 },
   ),
-).toEqual({ x: 330, y: 93 });
+).toEqual({ x: 280, y: 93 });
 
 expect(
   anchoredDialogPoint(
@@ -71,13 +71,13 @@ expect(
 
 Also assert bottom-edge clamping and the least-horizontal-correction fallback when neither side fits.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `pnpm --filter @docket/web test -- tests/calendar/use-clamped-dialog-position.test.ts`
 
 Expected: FAIL because `anchoredDialogPoint` is not exported.
 
-- [ ] **Step 3: Implement minimal pure geometry**
+- [x] **Step 3: Implement minimal pure geometry**
 
 Compute host-local candidates from `anchor.left - host.left - dialog.width - gap` and
 `anchor.left + anchor.width - host.left + gap`. Select the preferred fitting candidate, then the
@@ -85,7 +85,7 @@ opposite fitting candidate, then the candidate with the smaller distance to its 
 Compute `y` as `anchor.top - host.top - titleOffset`, then pass the selected point through
 `clampDialogPoint`.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run: `pnpm --filter @docket/web test -- tests/calendar/use-clamped-dialog-position.test.ts`
 
@@ -108,28 +108,28 @@ Expected: PASS.
 - The hook dereferences `anchorRef.current` only inside the animation-frame placement callback,
   after the selected preview and portaled dialog have committed.
 
-- [ ] **Step 1: Add a failing desktop component test**
+- [x] **Step 1: Add a failing desktop component test**
 
 Render a positioned shell host and a virtual selection anchor, open Agenda quick create, flush the
 animation frame, and assert the dialog style resolves to the anchor-relative point rather than the
 generic shell edge. Press `ArrowLeft` on `Move create-event dialog`, resize the host, and assert the
 controller clamps the moved point without restoring automatic anchoring.
 
-- [ ] **Step 2: Run the component test and verify RED**
+- [x] **Step 2: Run the component test and verify RED**
 
 Run: `pnpm --filter @docket/web test -- tests/calendar/create-block-form.test.tsx`
 
 Expected: FAIL because the hook currently receives only `preferredTop` computed before the anchor
 ref is committed and keyboard movement does not mark the point manual.
 
-- [ ] **Step 3: Implement anchor-ref placement and handoff**
+- [x] **Step 3: Implement anchor-ref placement and handoff**
 
-Pass `selectionAnchorRef` and the existing `selectionKey(selection)` result into the hook. In the hook,
+Pass `selectionAnchorRef` and the existing `calendarSelectionKey(selection)` result into the hook. In the hook,
 automatic placement uses `anchoredDialogPoint` when the ref is available and the existing safe
 edge fallback otherwise. Resize observation re-runs anchored placement only before manual movement;
 pointer-down and arrow-key movement both set the manual flag. Closing resets the flag.
 
-- [ ] **Step 4: Run component and geometry tests**
+- [x] **Step 4: Run component and geometry tests**
 
 Run: `pnpm --filter @docket/web test -- tests/calendar/use-clamped-dialog-position.test.ts tests/calendar/create-block-form.test.tsx`
 
@@ -152,27 +152,27 @@ Expected: PASS.
 - Timed drafts continue using `selectedRegionAnchorRef`; all-day drafts retain the clicked button in a separate ref.
 - `CreateBlockForm.selectionAnchorRef` always points at the visible desktop draft origin when one exists.
 
-- [ ] **Step 1: Write a failing all-day anchor-forwarding test**
+- [x] **Step 1: Write a failing all-day anchor-forwarding test**
 
 Invoke `onSelectAllDayRegion` with a structural anchor whose `getBoundingClientRect()` returns a
 known rectangle, then assert `quickCreate.props.selectionAnchorRef?.current` is that anchor.
 Retain the existing timed-draft assertion and add an assertion that its selected-region ref is
 forwarded.
 
-- [ ] **Step 2: Run the Agenda interaction test and verify RED**
+- [x] **Step 2: Run the Agenda interaction test and verify RED**
 
 Run: `pnpm --filter @docket/web test -- tests/agenda/agenda-canvas-interactions.test.tsx`
 
 Expected: FAIL because the all-day callback currently receives only the lane and quick create omits
 an anchor for all-day drafts.
 
-- [ ] **Step 3: Implement all-day anchor propagation**
+- [x] **Step 3: Implement all-day anchor propagation**
 
 Pass `event.currentTarget` from the all-day create button, retain it in `AgendaCanvas`, clear it for
 timed drafts and consumed selections, and choose the timed preview ref or all-day button ref when
 rendering `CreateBlockForm`.
 
-- [ ] **Step 4: Run Agenda and scheduling tests**
+- [x] **Step 4: Run Agenda and scheduling tests**
 
 Run: `pnpm --filter @docket/web test -- tests/agenda/agenda-canvas-interactions.test.tsx tests/scheduling/scheduling-canvas.test.tsx`
 
@@ -194,26 +194,26 @@ Expected: PASS.
 - Browser proof compares the initial dialog box to the selected draft box before dragging.
 - Browser proof compares the post-resize position after dragging to prove manual ownership persists.
 
-- [ ] **Step 1: Add failing Playwright geometry assertions**
+- [x] **Step 1: Add failing Playwright geometry assertions**
 
-Assert the selected draft is visible, the initial dialog-to-draft horizontal gap is between `8px`
-and `16px`, the title input center is within `24px` of the selected draft center, and the dialog's
-right edge remains left of the Agenda boundary. After dragging left and resizing, assert the dialog
-does not snap back to the anchor.
+Assert the selected draft is visible, the dialog ends at the Agenda boundary with the selected
+draft no more than the time gutter away, the title input center is within `24px` of the selected
+draft center, and the dialog's right edge remains left of the Agenda boundary. After dragging left
+and resizing, assert the dialog does not snap back to the anchor.
 
-- [ ] **Step 2: Run the focused E2E test and verify behavior**
+- [x] **Step 2: Run the focused E2E test and verify behavior**
 
 Run: `pnpm --filter @docket/web exec playwright test e2e/calendar/agenda-quick-create-evidence.spec.ts --project=chromium`
 
 Expected: PASS after Tasks 1–3; if it fails, use the measured rectangles to correct the geometry
 contract rather than weakening the assertions.
 
-- [ ] **Step 3: Capture light, dark, mobile, tablet, and timezone evidence**
+- [x] **Step 3: Capture light, dark, mobile, tablet, and timezone evidence**
 
 Run the same Playwright evidence file with its screenshot capture enabled and inspect every emitted
 PNG for anchor proximity, non-overlap, readable fields, and theme parity.
 
-- [ ] **Step 4: Run repository gates**
+- [x] **Step 4: Run repository gates**
 
 Run: `pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm build`
 

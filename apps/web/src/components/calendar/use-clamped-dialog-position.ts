@@ -8,6 +8,24 @@ interface Point {
   readonly y: number;
 }
 
+/** Minimal viewport rectangle needed to relate a portaled dialog to its virtual anchor. */
+export interface DialogRect {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+interface AnchorPlacementOptions {
+  readonly gap?: number;
+  readonly inset?: number;
+  readonly titleOffset?: number;
+}
+
+interface DialogAnchorRef {
+  readonly current: { readonly getBoundingClientRect: () => DOMRect } | null;
+}
+
 function preserveEqualPoint(current: Point, next: Point): Point {
   return current.x === next.x && current.y === next.y ? current : next;
 }
@@ -40,14 +58,47 @@ export function defaultDialogPoint(
   );
 }
 
+/** Place a portaled dialog beside its virtual anchor, then resolve shell collisions. */
+export function anchoredDialogPoint(
+  host: DialogRect,
+  dialog: { readonly width: number; readonly height: number },
+  anchor: DialogRect,
+  { gap = 12, inset = 16, titleOffset = 72 }: AnchorPlacementOptions = {},
+): Point {
+  const minX = inset;
+  const maxX = Math.max(inset, host.width - dialog.width - inset);
+  const left = anchor.left - host.left - dialog.width - gap;
+  const right = anchor.left + anchor.width - host.left + gap;
+  const fits = (x: number): boolean => x >= minX && x <= maxX;
+  const clampX = (x: number): number => Math.min(Math.max(x, minX), maxX);
+  const preferredX = fits(left)
+    ? left
+    : fits(right)
+      ? right
+      : Math.abs(left - clampX(left)) <= Math.abs(right - clampX(right))
+        ? left
+        : right;
+
+  return clampDialogPoint(
+    { x: preferredX, y: anchor.top - host.top - titleOffset },
+    host,
+    dialog,
+    inset,
+  );
+}
+
 /** Position and drag a dialog within the primary shell column, never across the Agenda boundary. */
 export function useClampedDialogPosition({
   open,
   host,
+  anchorRef,
+  anchorKey,
   preferredTop = 48,
 }: {
   readonly open: boolean;
   readonly host: HTMLElement | null;
+  readonly anchorRef?: DialogAnchorRef;
+  readonly anchorKey?: string | null;
   readonly preferredTop?: number;
 }): {
   readonly dialogRef: React.RefObject<HTMLDivElement | null>;
@@ -78,21 +129,33 @@ export function useClampedDialogPosition({
       if (!dialog || manuallyPositionedRef.current) return;
       const hostRect = host.getBoundingClientRect();
       const dialogRect = dialog.getBoundingClientRect();
+      const anchorRect = anchorRef?.current?.getBoundingClientRect();
       setPoint((current) =>
-        preserveEqualPoint(current, defaultDialogPoint(hostRect, dialogRect, preferredTop)),
+        preserveEqualPoint(
+          current,
+          anchorRect
+            ? anchoredDialogPoint(hostRect, dialogRect, anchorRect)
+            : defaultDialogPoint(hostRect, dialogRect, preferredTop),
+        ),
       );
     };
     const frame = window.requestAnimationFrame(place);
     const observer = new ResizeObserver(() => {
-      setPoint((current) => preserveEqualPoint(current, clamp(current)));
+      if (manuallyPositionedRef.current) {
+        setPoint((current) => preserveEqualPoint(current, clamp(current)));
+      } else {
+        place();
+      }
     });
     observer.observe(host);
     if (dialogRef.current) observer.observe(dialogRef.current);
+    const anchor = anchorRef?.current;
+    if (anchor instanceof Element) observer.observe(anchor);
     return () => {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [clamp, host, open, preferredTop]);
+  }, [anchorKey, anchorRef, clamp, host, open, preferredTop]);
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>): void => {
@@ -141,6 +204,7 @@ export function useClampedDialogPosition({
                 : null;
       if (!offset) return;
       event.preventDefault();
+      manuallyPositionedRef.current = true;
       setPoint((current) =>
         preserveEqualPoint(current, clamp({ x: current.x + offset.x, y: current.y + offset.y })),
       );

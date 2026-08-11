@@ -196,7 +196,7 @@ describe('ServiceWorkerProvider', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it('withdraws the offer when the waiting worker goes redundant', async () => {
+  it('keeps recovery visible when the waiting worker disappears through statechange', async () => {
     const waiting = new FakeWorker();
     container.registration.waiting = waiting;
     await mount();
@@ -204,7 +204,25 @@ describe('ServiceWorkerProvider', () => {
     act(() => {
       waiting.become('redundant');
     });
-    expect(screen.getByTestId('no-update')).toBeInTheDocument();
+    expect(waiting.postMessage).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Couldn’t apply update');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('keeps a newer waiting offer ready when its superseded worker becomes redundant', async () => {
+    const superseded = new FakeWorker();
+    container.registration.waiting = superseded;
+    await mount();
+    const replacement = new FakeWorker();
+    replacement.state = 'installing';
+    container.registration.installing = replacement;
+    act(() => {
+      container.registration.emit('updatefound');
+      replacement.become('installed');
+      superseded.become('redundant');
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Update available');
+    expect(screen.getByRole('button', { name: 'Reload now' })).toBeInTheDocument();
   });
 
   it('shows recovery when the waiting worker disappears before activation can start', async () => {
@@ -229,6 +247,7 @@ describe('ServiceWorkerProvider', () => {
     await mount();
     fireEvent.click(screen.getByRole('button', { name: 'Reload now' }));
     expect(screen.getByRole('status')).toHaveTextContent('Couldn’t apply update');
+    expect(screen.getByRole('status')).not.toHaveTextContent('Reload to use the latest version');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(waiting.postMessage).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: 'Applying update…' })).toBeDisabled();

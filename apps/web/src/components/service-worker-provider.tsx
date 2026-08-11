@@ -88,6 +88,7 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
   const [updatePhase, setUpdatePhase] = useState<UpdatePhase | null>(null);
   const reloadingRef = useRef(false);
   const lastCheckRef = useRef(0);
+  const waitingRef = useRef<ServiceWorker | null>(null);
   const updatePhaseRef = useRef<UpdatePhase | null>(null);
 
   const setPhase = useCallback((phase: UpdatePhase | null): void => {
@@ -118,15 +119,17 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
       }
       // An offered worker can go redundant before anyone clicks Reload — superseded by a newer
       // install during a rolling deploy, or activated from another tab (where controllerchange
-      // handles the reload). Withdraw the offer then, or the banner outlives the worker it
-      // promises to activate and the button goes dead.
+      // handles the reload). Preserve an application-owned recovery card instead of letting the
+      // primary action disappear without explaining why it can no longer start.
       const onStateChange = (): void => {
-        if (worker.state === 'redundant') {
-          setWaiting((current) => (current === worker ? null : current));
-        }
+        if (worker.state !== 'redundant' || waitingRef.current !== worker) return;
+        waitingRef.current = null;
+        setWaiting(null);
+        setPhase('failed');
       };
       worker.addEventListener('statechange', onStateChange);
       offeredListeners.push([worker, onStateChange]);
+      waitingRef.current = worker;
       setWaiting(worker);
       setPhase('ready');
     };
@@ -210,8 +213,9 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
     }
     if (waiting.state === 'redundant') {
       // A deploy raced the click: this worker was superseded before it could activate. The
-      // statechange withdrawal normally clears the banner first; this is the belt for the race
-      // where the click lands in between.
+      // statechange recovery normally reaches the card first; this is the belt for the race where
+      // the click lands in between.
+      waitingRef.current = null;
       setWaiting(null);
       setPhase('failed');
       return;
@@ -288,7 +292,7 @@ export function UpdateCard({ onApply }: { readonly onApply: () => void }): JSX.E
       className="bg-secondary-container text-on-secondary-container shadow-level1 rounded-lg px-3 py-2.5"
     >
       <p className="text-label-large">{title}</p>
-      {!isApplying && !isReloading && (
+      {!isApplying && !isReloading && !isFailed && (
         <p className="text-body-small mt-0.5">Reload to use the latest version</p>
       )}
       <button

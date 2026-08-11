@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import {
   createContext,
   type JSX,
@@ -76,6 +77,7 @@ export function ResponsiveNavigationProvider({
   navigate,
   children,
 }: ResponsiveNavigationProviderProps): JSX.Element {
+  const router = useRouter();
   const receipts = useOptionalInteractionReceipts();
   const [requestedHref, setRequestedHref] = useState<string | null>(null);
   const intentRef = useRef<NavigationIntent | null>(null);
@@ -103,6 +105,15 @@ export function ResponsiveNavigationProvider({
       }
     },
     [receipts],
+  );
+
+  const navigateWithRouter = useCallback(
+    (href: string, replace: boolean, options?: ResponsiveNavigationOptions): void => {
+      const nextOptions = options?.scroll === undefined ? undefined : { scroll: options.scroll };
+      if (replace) router.replace(href, nextOptions);
+      else router.push(href, nextOptions);
+    },
+    [router],
   );
 
   const request = useCallback(
@@ -135,8 +146,7 @@ export function ResponsiveNavigationProvider({
       }
 
       try {
-        if (navigate === undefined) return false;
-        navigate(href, replace, options);
+        (navigate ?? navigateWithRouter)(href, replace, options);
         return true;
       } catch {
         if (intentRef.current.id === id) {
@@ -147,12 +157,18 @@ export function ResponsiveNavigationProvider({
         return true;
       }
     },
-    [abandonIntent, canonicalHref, navigate, receipts, supersedeIntent],
+    [abandonIntent, canonicalHref, navigate, navigateWithRouter, receipts, supersedeIntent],
   );
 
   useEffect(() => {
     const intent = intentRef.current;
-    if (intent?.href !== canonicalHref) return;
+    if (intent === null) return;
+    if (intent.href !== canonicalHref) {
+      intentRef.current = null;
+      setRequestedHref(null);
+      supersedeIntent(intent);
+      return;
+    }
 
     intentRef.current = null;
     setRequestedHref(null);
@@ -166,7 +182,7 @@ export function ResponsiveNavigationProvider({
         receipts.settleInteraction(invocationId, 'succeeded');
       }
     });
-  }, [canonicalHref, receipts]);
+  }, [canonicalHref, receipts, supersedeIntent]);
 
   useEffect(
     () => () => {

@@ -6,6 +6,7 @@ import { ReachabilityProvider } from '../../src/components/reachability';
 vi.mock('next/navigation', () => ({
   usePathname: () => window.location.pathname,
   useSearchParams: () => new URLSearchParams(window.location.search),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
 // The outlet loads a route's chunk and reads the query cache; neither is what this file is about.

@@ -94,6 +94,18 @@ afterEach(() => {
 });
 
 describe('responsive navigation', () => {
+  it('uses Next router transport when the app-location provider supplies no override', () => {
+    render(
+      <ResponsiveNavigationProvider canonicalHref="/today">
+        <NavigationProbe />
+      </ResponsiveNavigationProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open projects' }));
+
+    expect(push).toHaveBeenCalledWith('/projects', undefined);
+  });
+
   it('publishes a requested destination while held navigation keeps the current content and focus', () => {
     const view = render(
       <NavigationHarness canonicalHref="/today">
@@ -172,6 +184,25 @@ describe('responsive navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
 
     expect(screen.getByTestId('replacement')).toHaveTextContent('settled');
+  });
+
+  it('abandons a pending destination when a different canonical route wins', () => {
+    const view = render(
+      <NavigationHarness canonicalHref="/today">
+        <main>Today content</main>
+      </NavigationHarness>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open projects' }));
+    expect(screen.getByTestId('requested')).toHaveTextContent('/projects');
+
+    view.rerender(
+      <NavigationHarness canonicalHref="/calendar">
+        <main>Calendar content</main>
+      </NavigationHarness>,
+    );
+
+    expect(screen.getByTestId('requested')).toHaveTextContent('settled');
   });
 
   it('acknowledges online pointer and keyboard links without falsely declaring the destination current', () => {

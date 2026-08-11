@@ -418,6 +418,11 @@ export const CalendarItemOut = z
       'All-day exclusive end date; null for timed items.',
     ),
     timezone: z.string().nullable().describe('Item timezone id, when known.'),
+    endTimezone: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Timed item end timezone when it differs from `timezone`; null otherwise.'),
     organizer: CalendarEventOrganizer.nullable().describe('Item organizer details, if applicable.'),
     attendees: z.array(CalendarEventAttendee).describe('Item attendees, if applicable.'),
     permissions: CalendarItemPermission.describe(
@@ -510,6 +515,10 @@ const CalendarItemCreateFields = z.object({
   description: z.string().optional().describe('Optional description/body for the block.'),
   location: z.string().optional().describe('Optional location for the block.'),
   timezone: z.string().optional().describe('Optional timezone id for the block.'),
+  endTimezone: z
+    .string()
+    .optional()
+    .describe('Optional timed end timezone; omitted uses `timezone`.'),
   startsAt: z
     .string()
     .optional()
@@ -586,6 +595,11 @@ export const CalendarItemUpdate = z
         'New location. An empty string clears it (mapped to NULL server-side). Omit to leave unchanged.',
       ),
     timezone: z.string().optional().describe('New timezone id. Omit to leave unchanged.'),
+    endTimezone: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('New timed end timezone; null clears the separate end-zone override.'),
     startsAt: z
       .string()
       .optional()
@@ -611,6 +625,7 @@ export const CalendarItemUpdate = z
       v.description !== undefined ||
       v.location !== undefined ||
       v.timezone !== undefined ||
+      v.endTimezone !== undefined ||
       v.startsAt !== undefined ||
       v.endsAt !== undefined ||
       v.allDayStartDate !== undefined ||
@@ -639,6 +654,11 @@ export const CalendarItemWritePatch = z
     description: z.string().optional().describe("New description; '' clears it."),
     location: z.string().optional().describe("New location; '' clears it."),
     timezone: z.string().optional().describe('New timezone id for a timed shape.'),
+    endTimezone: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('New timed end timezone; null uses `timezone`.'),
     startsAt: z.string().optional().describe('New timed start timestamp (ISO 8601).'),
     endsAt: z.string().optional().describe('New timed end timestamp (ISO 8601).'),
     allDayStartDate: DateString.optional().describe('New all-day start date.'),

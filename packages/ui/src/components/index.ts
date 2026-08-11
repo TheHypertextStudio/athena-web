@@ -133,6 +133,7 @@ export {
   SHELL_SIDEBAR_EXPAND_MIN_PX,
   shellMainInlineSize,
 } from './shell/AppShell';
+export { useShellOverlayHost } from './shell/ShellOverlayContext';
 export {
   PageScrollProvider,
   type PageScrollOwner,

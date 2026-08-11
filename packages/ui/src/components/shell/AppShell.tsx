@@ -100,6 +100,7 @@ import {
 import { usePageScrollOwner } from './page-scroll';
 import { ShellDrawerProvider } from './ShellDrawerContext';
 import { ShellSidebarProvider } from './ShellSidebarContext';
+import { ShellOverlayProvider } from './ShellOverlayContext';
 
 /** localStorage keys for the shell-owned rail state (active panel + collapsed), persisted across sessions. */
 const RAIL_ACTIVE_KEY = 'docket.rail.active';
@@ -378,6 +379,7 @@ export function AppShell({
   const isDesktop = useMediaQuery(SHELL_DESKTOP_QUERY);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [overlayPanelOpen, setOverlayPanelOpen] = React.useState(false);
+  const [overlayHost, setOverlayHost] = React.useState<HTMLDivElement | null>(null);
 
   // Rail state is shell-owned and persisted across sessions: which native panel is active, and
   // whether the panel host is collapsed (the activity bar always stays visible). The persisted
@@ -489,210 +491,217 @@ export function AppShell({
   }, [activePanel, isDesktop, railCollapsed]);
 
   return (
-    <div
-      data-density={density}
-      style={orgAccent ? ({ '--org-accent': orgAccent } as React.CSSProperties) : undefined}
-      className={cn(
-        // The tinted MD3 canvas: the whole app sits on `surface-container`. Below `lg` the shell
-        // is a vertical stack (mobile top bar over the content) with no gutter so the main panel
-        // goes full-bleed; at `lg` and up it becomes a horizontal row with a uniform gutter (p-2)
-        // so the blended sidebar + floating main panel inset from the window edges.
-        // `h-dvh`, not `h-screen`: `100vh` is the *largest* viewport height, so on mobile browsers
-        // it sits behind the collapsing URL bar and the shell overflows by exactly that bar's
-        // height. The dynamic unit tracks the visible viewport instead.
-        //
-        // The horizontal safe-area insets matter only once Docket is installed and running without
-        // browser chrome: in landscape on a notched device the sidebar would otherwise slide under
-        // the notch. They resolve to `0px` everywhere else, so this is inert in a browser tab.
-        // Top and bottom insets are applied to the mobile bar and `<main>` rather than here, so the
-        // canvas colour still bleeds edge to edge behind the status bar.
-        'bg-surface-container text-on-surface flex h-dvh w-full flex-col overflow-hidden pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] lg:flex-row lg:gap-2 lg:p-2',
-        className,
-      )}
-    >
-      {/* Skip-to-content — the first focusable element, visually hidden until focused. Lets a
+    <ShellOverlayProvider host={overlayHost}>
+      <div
+        data-density={density}
+        style={orgAccent ? ({ '--org-accent': orgAccent } as React.CSSProperties) : undefined}
+        className={cn(
+          // The tinted MD3 canvas: the whole app sits on `surface-container`. Below `lg` the shell
+          // is a vertical stack (mobile top bar over the content) with no gutter so the main panel
+          // goes full-bleed; at `lg` and up it becomes a horizontal row with a uniform gutter (p-2)
+          // so the blended sidebar + floating main panel inset from the window edges.
+          // `h-dvh`, not `h-screen`: `100vh` is the *largest* viewport height, so on mobile browsers
+          // it sits behind the collapsing URL bar and the shell overflows by exactly that bar's
+          // height. The dynamic unit tracks the visible viewport instead.
+          //
+          // The horizontal safe-area insets matter only once Docket is installed and running without
+          // browser chrome: in landscape on a notched device the sidebar would otherwise slide under
+          // the notch. They resolve to `0px` everywhere else, so this is inert in a browser tab.
+          // Top and bottom insets are applied to the mobile bar and `<main>` rather than here, so the
+          // canvas colour still bleeds edge to edge behind the status bar.
+          'bg-surface-container text-on-surface flex h-dvh w-full flex-col overflow-hidden pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] lg:flex-row lg:gap-2 lg:p-2',
+          className,
+        )}
+      >
+        {/* Skip-to-content — the first focusable element, visually hidden until focused. Lets a
           keyboard user jump past the workspace switcher + full nav + open document tabs straight
           to the page content (the `<main>` region below is a focus target via `tabIndex={-1}`). */}
-      <a
-        href="#main-content"
-        className="bg-surface text-on-surface border-outline-variant focus-visible:ring-ring text-body-medium sr-only z-50 rounded-md border px-3 py-2 font-medium shadow-sm transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:ring-2 focus-visible:outline-none"
-      >
-        Skip to content
-      </a>
+        <a
+          href="#main-content"
+          className="bg-surface text-on-surface border-outline-variant focus-visible:ring-ring text-body-medium sr-only z-50 rounded-md border px-3 py-2 font-medium shadow-sm transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:ring-2 focus-visible:outline-none"
+        >
+          Skip to content
+        </a>
 
-      {/* Mobile top bar — shown only below `lg`; opens the sidebar drawer. */}
-      {/* `min-h-12` + a top safe-area inset rather than a fixed `h-12`: installed on a notched
+        {/* Mobile top bar — shown only below `lg`; opens the sidebar drawer. */}
+        {/* `min-h-12` + a top safe-area inset rather than a fixed `h-12`: installed on a notched
           device the bar must grow by the inset so its controls clear the status bar, instead of
           keeping a 48px box and hiding the menu button underneath it. The inset is `0px` in a
           browser tab, where this stays exactly the 48px bar it was. */}
-      <div className="border-outline-variant flex min-h-12 shrink-0 items-center gap-2 border-b px-2 pt-[env(safe-area-inset-top)] lg:hidden">
-        <button
-          type="button"
-          aria-label="Open navigation"
-          aria-expanded={drawerOpen}
-          onClick={() => {
-            setDrawerOpen(true);
-          }}
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        >
-          <Menu aria-hidden="true" className="size-5" />
-        </button>
-        <div className="flex min-w-0 flex-1 items-center">
-          {mobileBrand ?? <span className="text-body-medium truncate font-semibold">Docket</span>}
-        </div>
-        {mobileActions}
-        {/* Mobile rail trigger — opens the panels as a right sheet. Uses the active panel's glyph. */}
-        {activePanel ? (
+        <div className="border-outline-variant flex min-h-12 shrink-0 items-center gap-2 border-b px-2 pt-[env(safe-area-inset-top)] lg:hidden">
           <button
             type="button"
-            aria-label={`Show ${activePanel.label}`}
-            aria-controls={SHELL_ASIDE_SHEET_ID}
-            aria-expanded={overlayPanelOpen}
+            aria-label="Open navigation"
+            aria-expanded={drawerOpen}
             onClick={() => {
-              setOverlayPanelOpen(true);
+              setDrawerOpen(true);
             }}
-            className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
+            className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
           >
-            {activePanel.icon}
+            <Menu aria-hidden="true" className="size-5" />
           </button>
-        ) : null}
-      </div>
+          <div className="flex min-w-0 flex-1 items-center">
+            {mobileBrand ?? <span className="text-body-medium truncate font-semibold">Docket</span>}
+          </div>
+          {mobileActions}
+          {/* Mobile rail trigger — opens the panels as a right sheet. Uses the active panel's glyph. */}
+          {activePanel ? (
+            <button
+              type="button"
+              aria-label={`Show ${activePanel.label}`}
+              aria-controls={SHELL_ASIDE_SHEET_ID}
+              aria-expanded={overlayPanelOpen}
+              onClick={() => {
+                setOverlayPanelOpen(true);
+              }}
+              className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
+            >
+              {activePanel.icon}
+            </button>
+          ) : null}
+        </div>
 
-      {/* Off-canvas navigation drawer — the SAME sidebar node, shown below `lg` on demand. */}
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent
-          side="left"
-          aria-label="Navigation"
-          aria-describedby={undefined}
-          className="lg:hidden"
-        >
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
+        {/* Off-canvas navigation drawer — the SAME sidebar node, shown below `lg` on demand. */}
+        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <SheetContent
+            side="left"
+            aria-label="Navigation"
+            aria-describedby={undefined}
+            className="lg:hidden"
+          >
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <ShellSidebarProvider value={sidebarState}>
+              <ShellDrawerProvider dismiss={closeDrawer}>{sidebar}</ShellDrawerProvider>
+            </ShellSidebarProvider>
+          </SheetContent>
+        </Sheet>
+
+        {/* Static desktop rail — the canvas-blended sidebar, shown at `lg` and up. */}
+        <div className="hidden lg:block">
           <ShellSidebarProvider value={sidebarState}>
-            <ShellDrawerProvider dismiss={closeDrawer}>{sidebar}</ShellDrawerProvider>
+            <ShellDrawerProvider dismiss={null}>{sidebar}</ShellDrawerProvider>
           </ShellSidebarProvider>
-        </SheetContent>
-      </Sheet>
+        </div>
 
-      {/* Static desktop rail — the canvas-blended sidebar, shown at `lg` and up. */}
-      <div className="hidden lg:block">
-        <ShellSidebarProvider value={sidebarState}>
-          <ShellDrawerProvider dismiss={null}>{sidebar}</ShellDrawerProvider>
-        </ShellSidebarProvider>
-      </div>
-
-      {/*
+        {/*
         The content column stacks the optional tab strip over the main panel. A column gap floats
         a real gutter BETWEEN the two so the detached tab pills read as their own layer on the
         canvas rather than fusing to the rounded panel below — the gap only materialises between
         siblings, so it costs nothing when no tab bar is present. Mobile stays full-bleed (no gap)
         so the panel uses the entire width; the gutter appears at `lg` to match the shell rhythm.
       */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:gap-2">
-        {tabBar}
-        {banner}
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className={cn(
-            // The bottom safe-area inset pads the scroll content so the last row of a list clears
-            // the iOS home indicator when installed. It resolves to `0px` in a browser tab and on
-            // desktop, so `<main>`'s "a page's `h-full` means all the space `<main>` has left"
-            // contract is unchanged there — and still holds when inset, just `inset` px shorter.
-            //
-            // pb-28/lg:pb-6 additionally reserves room for the floating Athena launcher
-            // (fixed bottom-[4.75rem] on mobile, lg:bottom-6 on desktop — see
-            // athena-panel-provider.tsx), so it never sits on top of a page's last section.
-            //
-            // No border and no shadow: the tonal step from the `surface-container` canvas onto
-            // `surface` is the separation, exactly as every other panel in the shell does it. A
-            // border plus a drop shadow on the outermost frame drew a second box around content
-            // that already had one.
-            'bg-surface @container min-h-0 flex-1 outline-none lg:rounded-xl',
-            // The default: `<main>` is the shell's one scroll container, with a stable gutter so
-            // content does not shift when it grows past the viewport, and bottom padding clearing
-            // the floating Athena launcher.
-            pageScrollOwner === 'shell' &&
-              'scrollbar-gutter-stable overflow-auto pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:pb-[calc(env(safe-area-inset-bottom)+1.5rem)]',
-            // A page that scrolls itself gets the box whole: no scrolling here, so no reserved
-            // gutter stealing the right edge, and no bottom padding — the page owns both.
-            pageScrollOwner === 'page' && 'overflow-hidden',
-            rebinding && 'animate-org-rebind',
-          )}
-        >
-          {children}
-        </main>
-      </div>
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col lg:gap-2">
+          {tabBar}
+          {banner}
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className={cn(
+              // The bottom safe-area inset pads the scroll content so the last row of a list clears
+              // the iOS home indicator when installed. It resolves to `0px` in a browser tab and on
+              // desktop, so `<main>`'s "a page's `h-full` means all the space `<main>` has left"
+              // contract is unchanged there — and still holds when inset, just `inset` px shorter.
+              //
+              // pb-28/lg:pb-6 additionally reserves room for the floating Athena launcher
+              // (fixed bottom-[4.75rem] on mobile, lg:bottom-6 on desktop — see
+              // athena-panel-provider.tsx), so it never sits on top of a page's last section.
+              //
+              // No border and no shadow: the tonal step from the `surface-container` canvas onto
+              // `surface` is the separation, exactly as every other panel in the shell does it. A
+              // border plus a drop shadow on the outermost frame drew a second box around content
+              // that already had one.
+              'bg-surface @container min-h-0 flex-1 outline-none lg:rounded-xl',
+              // The default: `<main>` is the shell's one scroll container, with a stable gutter so
+              // content does not shift when it grows past the viewport, and bottom padding clearing
+              // the floating Athena launcher.
+              pageScrollOwner === 'shell' &&
+                'scrollbar-gutter-stable overflow-auto pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:pb-[calc(env(safe-area-inset-bottom)+1.5rem)]',
+              // A page that scrolls itself gets the box whole: no scrolling here, so no reserved
+              // gutter stealing the right edge, and no bottom padding — the page owns both.
+              pageScrollOwner === 'page' && 'overflow-hidden',
+              rebinding && 'animate-org-rebind',
+            )}
+          >
+            {children}
+          </main>
+          <div
+            ref={setOverlayHost}
+            data-shell-overlay-host=""
+            className="pointer-events-none absolute inset-0 z-[109] overflow-hidden"
+          />
+        </div>
 
-      {/* Right-hand rail. Both columns are rendered at EVERY width whenever the route offers panels
+        {/* Right-hand rail. Both columns are rendered at EVERY width whenever the route offers panels
           and hide themselves below `lg` in CSS — no JS gate, no conditional mount. That is what
           holds the desktop chrome at a constant 328px across the whole desktop range: when the host
           was mounted conditionally its flex gap alone cost `<main>` 7px the moment the condition
           flipped, and the panel itself cost 352px more. Collapsed the host is still here, at zero
           width, so collapsing and expanding move exactly one number. */}
-      {activePanel ? (
-        <>
-          <ShellAside panel={activePanel} collapsed={railCollapsed} />
-          <ShellActivityBar
-            panels={panels}
-            activeId={activePanelIdResolved}
-            collapsed={railCollapsed}
-            onIconClick={handlePanelIconClick}
-          />
-        </>
-      ) : null}
+        {activePanel ? (
+          <>
+            <ShellAside panel={activePanel} collapsed={railCollapsed} />
+            <ShellActivityBar
+              panels={panels}
+              activeId={activePanelIdResolved}
+              collapsed={railCollapsed}
+              onIconClick={handlePanelIconClick}
+            />
+          </>
+        ) : null}
 
-      {/* The same panels as a right-anchored modal Sheet below `lg`, opened from the mobile top-bar
+        {/* The same panels as a right-anchored modal Sheet below `lg`, opened from the mobile top-bar
           trigger — the only presentation there, since the docked columns are CSS-hidden at those
           widths. Mounted only when the desktop query does *not* match, so Radix's focus trap and
           scroll-lock never activate over a docked rail; it carries its own id
           ({@link SHELL_ASIDE_SHEET_ID}) because the docked host is now in the DOM at every width and
           the two can no longer share one. A compact horizontal switcher stands in for the activity
           bar. Escape/backdrop dismiss closes it. */}
-      <Sheet
-        open={activePanel != null && !isDesktop && overlayPanelOpen}
-        onOpenChange={(next) => {
-          if (!next) setOverlayPanelOpen(false);
-        }}
-      >
-        <SheetContent
-          side="right"
-          id={SHELL_ASIDE_SHEET_ID}
-          aria-label={activePanel?.label}
-          aria-describedby={undefined}
-          className="@container flex w-[22rem] max-w-[90vw] flex-col overflow-hidden"
+        <Sheet
+          open={activePanel != null && !isDesktop && overlayPanelOpen}
+          onOpenChange={(next) => {
+            if (!next) setOverlayPanelOpen(false);
+          }}
         >
-          <SheetTitle className="sr-only">{activePanel?.label}</SheetTitle>
-          {panels.length > 1 && !isDesktop ? (
-            <div role="tablist" aria-label="Panels" className="flex shrink-0 gap-1 px-2 pb-2">
-              {panels.map((panel) => {
-                const isActive = panel.id === activePanelIdResolved;
-                return (
-                  <button
-                    key={panel.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    onClick={() => {
-                      setRail((current) => ({ ...current, activeId: panel.id }));
-                      writeRailState(RAIL_ACTIVE_KEY, panel.id);
-                    }}
-                    className={cn(
-                      'focus-visible:ring-ring flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-4',
-                      isActive
-                        ? 'bg-surface-container-highest text-on-surface'
-                        : 'text-on-surface-variant hover:bg-surface-container-high',
-                    )}
-                  >
-                    {panel.icon}
-                    {panel.label}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
-          <div className="min-h-0 flex-1 overflow-auto">{activePanel?.node}</div>
-        </SheetContent>
-      </Sheet>
-    </div>
+          <SheetContent
+            side="right"
+            id={SHELL_ASIDE_SHEET_ID}
+            aria-label={activePanel?.label}
+            aria-describedby={undefined}
+            className="@container flex w-[22rem] max-w-[90vw] flex-col overflow-hidden"
+          >
+            <SheetTitle className="sr-only">{activePanel?.label}</SheetTitle>
+            {panels.length > 1 && !isDesktop ? (
+              <div role="tablist" aria-label="Panels" className="flex shrink-0 gap-1 px-2 pb-2">
+                {panels.map((panel) => {
+                  const isActive = panel.id === activePanelIdResolved;
+                  return (
+                    <button
+                      key={panel.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() => {
+                        setRail((current) => ({ ...current, activeId: panel.id }));
+                        writeRailState(RAIL_ACTIVE_KEY, panel.id);
+                      }}
+                      className={cn(
+                        'focus-visible:ring-ring flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-4',
+                        isActive
+                          ? 'bg-surface-container-highest text-on-surface'
+                          : 'text-on-surface-variant hover:bg-surface-container-high',
+                      )}
+                    >
+                      {panel.icon}
+                      {panel.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            <div className="min-h-0 flex-1 overflow-auto">{activePanel?.node}</div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </ShellOverlayProvider>
   );
 }

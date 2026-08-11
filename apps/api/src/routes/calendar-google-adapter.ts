@@ -142,6 +142,7 @@ interface GoogleCalendarListResponse {
 interface GoogleEventDate {
   dateTime?: string;
   date?: string;
+  timeZone?: string;
 }
 
 interface GoogleEventPerson {
@@ -240,6 +241,11 @@ function toItemSnapshot(
     endsAt: event.end?.dateTime ? new Date(event.end.dateTime) : null,
     allDayStartDate: event.start?.date ?? null,
     allDayEndDate: event.end?.date ?? null,
+    timezone: event.start?.timeZone ?? null,
+    endTimezone:
+      event.end?.timeZone && event.end.timeZone !== event.start?.timeZone
+        ? event.end.timeZone
+        : null,
     organizer,
     attendees,
     updatedExternalAt: event.updated ? new Date(event.updated) : null,
@@ -343,9 +349,12 @@ function toEventPatchBody(patch: CalendarItemWritePatch): Record<string, unknown
   // `CalendarItemWritePatch`'s remarks) — so `start`/`end` are always built together,
   // giving Google a shape-consistent object even across a timed<->all-day switch.
   if (patch.startsAt !== undefined || patch.endsAt !== undefined) {
-    const timeZone = patch.timezone !== undefined ? { timeZone: patch.timezone } : {};
-    body['start'] = { dateTime: patch.startsAt, ...timeZone };
-    body['end'] = { dateTime: patch.endsAt, ...timeZone };
+    const startTimeZone = patch.timezone !== undefined ? { timeZone: patch.timezone } : {};
+    const effectiveEndTimezone = patch.endTimezone ?? patch.timezone;
+    const endTimeZone =
+      effectiveEndTimezone !== undefined ? { timeZone: effectiveEndTimezone } : {};
+    body['start'] = { dateTime: patch.startsAt, ...startTimeZone };
+    body['end'] = { dateTime: patch.endsAt, ...endTimeZone };
   } else if (patch.allDayStartDate !== undefined || patch.allDayEndDate !== undefined) {
     body['start'] = { date: patch.allDayStartDate };
     body['end'] = { date: patch.allDayEndDate };

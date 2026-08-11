@@ -8,21 +8,15 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { useAgenda } from './agenda-context';
-import { AGENDA_SCALE_STEPS } from './agenda-scale';
 
 /** Agenda view and density settings kept behind one narrow-rail affordance. */
 export default function AgendaDisplayMenu(): JSX.Element {
-  const { view, setView, pixelsPerHour, setScale } = useAgenda();
-
-  function selectScale(next: string): void {
-    setScale(Number(next));
-  }
+  const { view, setView } = useAgenda();
 
   return (
     <DropdownMenu>
@@ -47,15 +41,6 @@ export default function AgendaDisplayMenu(): JSX.Element {
             <ListView className="size-4" aria-hidden="true" />
             List
           </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>Scale</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={String(pixelsPerHour)} onValueChange={selectScale}>
-          {AGENDA_SCALE_STEPS.map((scale, index) => (
-            <DropdownMenuRadioItem key={scale} value={String(scale)}>
-              {index + 1}×
-            </DropdownMenuRadioItem>
-          ))}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>

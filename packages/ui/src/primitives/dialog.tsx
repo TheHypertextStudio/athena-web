@@ -125,12 +125,18 @@ export function DialogContent({
   className,
   children,
   showClose = true,
+  portalContainer,
+  overlayClassName,
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   /** Render the built-in top-right close button (default `true`). */
   showClose?: boolean;
+  /** Optional in-shell portal host; its rectangle can exclude persistent sibling rails. */
+  portalContainer?: HTMLElement | null;
+  /** Additional backdrop geometry/treatment for hosted dialog presentations. */
+  overlayClassName?: string;
 }): React.JSX.Element {
   // The element focused when the panel opened — the dialog's opener — so focus can return to it
   // on close even when there is no Radix `DialogTrigger` to restore it for us.
@@ -165,8 +171,8 @@ export function DialogContent({
   );
 
   return (
-    <DialogPortal>
-      <DialogOverlay />
+    <DialogPortal container={portalContainer ?? undefined}>
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         className={cn(
           // `w-[calc(100%-2rem)]` keeps a 1rem gutter on each side at small viewports so the

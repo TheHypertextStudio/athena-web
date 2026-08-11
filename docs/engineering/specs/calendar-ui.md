@@ -31,9 +31,20 @@ geometry. It is not a miniature full-calendar host.
   concurrent columns. Accents are flat inset bars; permission remains available to assistive
   technology and item details without a resting lock glyph on every read-only item.
 - Click, pointer drag, `Enter`/`Space`, and the all-day action create one local selection draft.
-  Nothing is written until Save. Desktop anchors a compact editor inward from the selection;
-  mobile presents the same fields as a bottom dialog. Cancel, Escape, and untouched date changes
-  discard locally, while a dirty draft confirms before navigation.
+  Nothing is written until Save. Desktop opens a focus-managed dialog in the shell's primary-column
+  overlay host, which makes the dialog and Agenda structural siblings: its portal and drag bounds
+  end before the rail begins, so it cannot cover the calendar even when moved. The top grip is the
+  only pointer drag target and also supports arrow-key movement. Mobile presents the same draft as
+  a bottom dialog. Cancel, Escape, and untouched date changes discard locally, while a dirty draft
+  confirms before navigation.
+- Timed quick create starts with one readable schedule summary. Activating it progressively reveals
+  separate start/end date and time controls. The overview keeps timezone as quiet metadata;
+  `Time zone` appears only in the expanded editor and opens a focused child dialog whose local
+  search matches abbreviations, common names, IANA identifiers, and cities. A timed item may retain
+  one zone or independently persist start and end zones without changing its wall values.
+- Validation is visual and non-verbal inside quick create: missing title or invalid time fields use
+  `aria-invalid` and the Save action remains disabled. Persistence failures are announced by an
+  app-level notice outside the dialog while the local draft remains open.
 - External events, native events, and task timeboxes still share one chronological timeline and
   open their appropriate item or task workspace. Provider deep links remain actions rather than
   the default click destination.

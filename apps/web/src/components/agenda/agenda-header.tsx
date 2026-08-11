@@ -18,6 +18,7 @@ import { formatDay } from '@/components/date-picker';
 
 import { shiftISODate, useAgenda } from './agenda-context';
 import AgendaDisplayMenu from './agenda-display-menu';
+import { AgendaScaleControls } from './agenda-scale-controls';
 
 /** Relative day name, when the day has one worth saying. */
 function relativeAgendaDay(iso: string, today: string): string | null {
@@ -67,57 +68,58 @@ export default function AgendaHeader(): JSX.Element {
     // else may shrink, wrap, or leave. The previous `w-28` floor on that child was what turned a
     // too-narrow rail into a *control* pushed out of the row — the same failure round 3 fixed on
     // the calendar toolbar by deleting its heading's `min-w-16`.
-    <Row
-      justify="between"
-      className="shrink-0 flex-nowrap gap-1 px-1 pb-1"
-      onKeyDown={handleKeyDown}
-    >
-      <Row gap={1} className="min-w-0 flex-1 flex-nowrap">
-        <Button
-          variant="ghost"
-          iconOnly
-          controlSize="sm"
-          aria-label="Previous day"
-          onClick={goToPreviousDay}
-        >
-          <ChevronLeft />
-        </Button>
-        <DatePicker
-          value={date}
-          onChange={(nextDate) => {
-            if (nextDate) goToDate(nextDate);
-          }}
-          placeholder="Choose date"
-          formatLabel={(value) => (value ? formatAgendaDate(value, today) : undefined)}
-          ariaLabel="Agenda date"
-          triggerClassName="text-title-small min-w-0 flex-1 justify-center px-1"
-        />
-        <Button
-          variant="ghost"
-          iconOnly
-          controlSize="sm"
-          aria-label="Next day"
-          onClick={goToNextDay}
-        >
-          <ChevronRight />
-        </Button>
-      </Row>
-      <Row gap={1} className="shrink-0 flex-nowrap">
-        {/* Icon, not the word, exactly as the calendar toolbar collapses its own Today control:
-            the label costs ~50px in a row that has ~256px to spend. */}
-        {isToday ? null : (
+    <div className="flex shrink-0 flex-col gap-1 px-1 pb-1" onKeyDown={handleKeyDown}>
+      <Row justify="between" className="flex-nowrap gap-1">
+        <Row gap={1} className="min-w-0 flex-1 flex-nowrap">
           <Button
             variant="ghost"
             iconOnly
             controlSize="sm"
-            aria-label="Back to today"
-            onClick={goToToday}
+            aria-label="Previous day"
+            onClick={goToPreviousDay}
           >
-            <CalendarToday />
+            <ChevronLeft />
           </Button>
-        )}
-        <AgendaDisplayMenu />
+          <DatePicker
+            value={date}
+            onChange={(nextDate) => {
+              if (nextDate) goToDate(nextDate);
+            }}
+            placeholder="Choose date"
+            formatLabel={(value) => (value ? formatAgendaDate(value, today) : undefined)}
+            ariaLabel="Agenda date"
+            triggerClassName="text-title-small min-w-0 flex-1 justify-center px-1"
+          />
+          <Button
+            variant="ghost"
+            iconOnly
+            controlSize="sm"
+            aria-label="Next day"
+            onClick={goToNextDay}
+          >
+            <ChevronRight />
+          </Button>
+        </Row>
+        <Row gap={1} className="shrink-0 flex-nowrap">
+          {/* Icon, not the word, exactly as the calendar toolbar collapses its own Today control:
+            the label costs ~50px in a row that has ~256px to spend. */}
+          {isToday ? null : (
+            <Button
+              variant="ghost"
+              iconOnly
+              controlSize="sm"
+              aria-label="Back to today"
+              onClick={goToToday}
+            >
+              <CalendarToday />
+            </Button>
+          )}
+          <AgendaDisplayMenu />
+        </Row>
       </Row>
-    </Row>
+      <Row justify="end" className="pr-1">
+        <AgendaScaleControls />
+      </Row>
+    </div>
   );
 }

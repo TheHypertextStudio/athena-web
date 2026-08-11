@@ -261,6 +261,7 @@ export const calendarItem = pgTable(
     allDayStartDate: date('all_day_start_date'),
     allDayEndDate: date('all_day_end_date'),
     timezone: text('timezone'),
+    endTimezone: text('end_timezone'),
     organizer: jsonb('organizer').$type<CalendarEventOrganizer>(),
     attendees: jsonb('attendees')
       .$type<CalendarEventAttendee[]>()

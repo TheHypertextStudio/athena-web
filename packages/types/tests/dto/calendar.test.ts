@@ -168,8 +168,11 @@ describe('CalendarItemOut', () => {
       ...baseItem(),
       startsAt: '2026-06-30T16:00:00.000Z',
       endsAt: '2026-06-30T17:00:00.000Z',
+      timezone: 'America/Los_Angeles',
+      endTimezone: 'America/New_York',
     });
     expect(parsed.startsAt).toContain('T16:00');
+    expect(parsed.endTimezone).toBe('America/New_York');
   });
 
   it('parses an all-day item', () => {
@@ -275,6 +278,8 @@ describe('CalendarItemCreate', () => {
       title: 'Design review',
       startsAt: '2026-06-30T16:00:00.000Z',
       endsAt: '2026-06-30T17:00:00.000Z',
+      timezone: 'America/Los_Angeles',
+      endTimezone: 'America/New_York',
     });
     const timebox = CalendarItemCreate.parse({
       intent: 'timebox',
@@ -284,6 +289,7 @@ describe('CalendarItemCreate', () => {
     });
 
     expect(event.intent).toBe('event');
+    expect(event.endTimezone).toBe('America/New_York');
     expect(timebox.intent).toBe('timebox');
   });
 
@@ -330,6 +336,11 @@ describe('CalendarItemUpdate', () => {
   it('accepts an empty string to clear a clearable field', () => {
     const parsed = CalendarItemUpdate.parse({ description: '' });
     expect(parsed.description).toBe('');
+  });
+
+  it('accepts null to clear a separate end timezone', () => {
+    const parsed = CalendarItemUpdate.parse({ endTimezone: null });
+    expect(parsed.endTimezone).toBeNull();
   });
 
   it('rejects an empty patch (no fields present)', () => {

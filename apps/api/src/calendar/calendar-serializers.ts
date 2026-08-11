@@ -100,6 +100,7 @@ export function toCalendarItemOut(
     allDayStartDate: row.allDayStartDate,
     allDayEndDate: row.allDayEndDate,
     timezone: row.timezone,
+    endTimezone: row.endTimezone,
     organizer: row.organizer,
     attendees: row.attendees,
     permissions,

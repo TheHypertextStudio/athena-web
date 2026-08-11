@@ -79,6 +79,8 @@ function providerSnapshotToRecord(snapshot: ProviderItemSnapshot | null): Record
     endsAt: snapshot.endsAt?.toISOString() ?? null,
     allDayStartDate: snapshot.allDayStartDate,
     allDayEndDate: snapshot.allDayEndDate,
+    timezone: snapshot.timezone ?? null,
+    endTimezone: snapshot.endTimezone ?? null,
   };
 }
 
@@ -108,6 +110,8 @@ async function persistApplied(
         htmlLink: snapshot.htmlLink,
         organizer: snapshot.organizer,
         attendees: snapshot.attendees,
+        timezone: snapshot.timezone ?? null,
+        endTimezone: snapshot.endTimezone ?? null,
         providerRaw: snapshot.raw,
         permissions: snapshot.permissions,
         externalEtag: snapshot.externalEtag,

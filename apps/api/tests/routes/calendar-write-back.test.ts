@@ -401,7 +401,7 @@ describe('calendar write-back — successful push', () => {
         description: 'New desc',
         location: 'New loc',
         start: { dateTime: '2026-07-01T15:00:00.000Z', timeZone: 'America/New_York' },
-        end: { dateTime: '2026-07-01T16:00:00.000Z', timeZone: 'America/New_York' },
+        end: { dateTime: '2026-07-01T16:00:00.000Z', timeZone: 'America/Los_Angeles' },
         updated: '2026-07-02T10:00:00.000Z',
         etag: 'etag-2',
       }),
@@ -415,6 +415,7 @@ describe('calendar write-back — successful push', () => {
         description: 'New desc',
         location: 'New loc',
         timezone: 'America/New_York',
+        endTimezone: 'America/Los_Angeles',
         startsAt: '2026-07-01T15:00:00.000Z',
         endsAt: '2026-07-01T16:00:00.000Z',
       },
@@ -439,7 +440,7 @@ describe('calendar write-back — successful push', () => {
       description: 'New desc',
       location: 'New loc',
       start: { dateTime: '2026-07-01T15:00:00.000Z', timeZone: 'America/New_York' },
-      end: { dateTime: '2026-07-01T16:00:00.000Z', timeZone: 'America/New_York' },
+      end: { dateTime: '2026-07-01T16:00:00.000Z', timeZone: 'America/Los_Angeles' },
     });
   });
 

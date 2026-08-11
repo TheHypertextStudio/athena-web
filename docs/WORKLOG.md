@@ -7,29 +7,6 @@
 
 ## Active Tasks
 
-### [AGENDA-RAIL-002] Refine quick create into a non-overlapping draggable dialog
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-08-10
-- **Priority**: P1
-- **Description**: Refine the newly shipped Agenda direct-create surface so its dialog never
-  covers the calendar, follows Google Calendar's progressive date/time and timezone disclosure,
-  supports searchable and optional separate start/end timezones, uses highlight-only validation,
-  and restores explicit whole-step zoom controls.
-- **Subtasks**:
-  - [x] Compare non-overlapping dialog placement approaches in the visual companion
-  - [x] Validate the progressive disclosure model against supplied Google Calendar references
-  - [x] Write the approved interaction and persistence contract
-  - [x] Review and approve the written contract
-  - [x] Write the implementation plan
-  - [ ] Implement with tests and live browser validation
-- **Blockers**: None.
-- **Notes**: The existing `timezone` field becomes the start/single zone and a nullable
-  `endTimezone` preserves an optional different end zone. The dialog is mounted at the shell layer,
-  constrained to primary content, and never enters the Agenda rectangle.
-
----
-
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW
@@ -4688,6 +4665,40 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ---
 
+### [AGENDA-RAIL-002] Refine quick create into a non-overlapping draggable dialog
+
+- **Completed**: 2026-08-10
+- **Duration**: One implementation session
+- **Priority**: P1
+- **Summary**: Moved Agenda quick create into a shell-hosted sibling dialog that stays outside the
+  rail and can be repositioned with a pointer or keyboard from its top handle. The compact overview
+  progressively reveals separate start/end dates and times, a focused searchable time-zone dialog,
+  and optional independent start/end zones. Missing fields are highlighted without explicit error
+  prose, Save stays disabled until the draft is valid, persistence failures render outside the
+  dialog, and visible whole-step Agenda zoom controls are restored.
+- **Files Changed**: Calendar DTO, database schema/migration, API serializers and provider write
+  paths; shell overlay hosting and dialog portal primitives; Agenda zoom/header controls; quick
+  create form, schedule, time-zone search, drag positioning, and failure notice components; focused
+  unit, API, UI, inventory, and browser evidence tests; the calendar UI spec, date-picker inventory,
+  accepted design and implementation plan, and craft audit with responsive theme screenshots.
+- **Validation**: `pnpm typecheck`, `pnpm lint`, and `pnpm test` pass all 20 package targets;
+  `pnpm format:check` passes; `pnpm build` passes all 4 targets. The authenticated Chromium evidence
+  test passes 1/1 and confirms the draggable dialog remains outside the Agenda rail, performs no
+  write before Save, exposes whole-number zoom, searches `PST`, and has no horizontal overflow at
+  390px or 320px in light and dark themes. The Docket Craft Rubric audit passes every hard gate and
+  records a SHIP verdict.
+- **Learnings**: Hosting the dialog in the shell's primary-content layer makes non-overlap a layout
+  invariant instead of a best-effort offset. Live interaction testing caught both a controlled
+  draft feedback loop and underlying-text selection during pointer dragging. The enforced picker
+  inventory then caught native date inputs before commit, keeping the progressive editor aligned
+  with the product's keyboard-operable calendar-day contract.
+- **Retrospective**: The approved interaction contract made the broad persistence and presentation
+  changes reviewable as one slice. Future date-bearing controls should begin with the shared picker
+  inventory, and draggable overlays should receive pointer-selection and resize-loop probes in their
+  first browser pass.
+
+---
+
 ### [AGENDA-RAIL-001] Redesign the Agenda rail as a purpose-built single-day companion
 
 - **Completed**: 2026-08-10
@@ -4720,6 +4731,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   made the requirements objectively checkable. Future controlled editor work should include a
   real-browser selection test earlier, because effect/callback feedback loops are invisible when
   the child form is mocked.
+
 ---
 
 ### [WEB-EDITOR-001] Make Markdown code feel native

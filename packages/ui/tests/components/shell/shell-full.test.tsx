@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Home } from '../../../src/icons';
 import { AppShell } from '../../../src/components/shell/AppShell';
+import { useShellOverlayHost } from '../../../src/components/shell/ShellOverlayContext';
 import {
   ContextProvider,
   useContextState,
@@ -97,6 +98,11 @@ function ContextRebindControls(): React.JSX.Element {
   );
 }
 
+function OverlayHostProbe(): React.JSX.Element {
+  const host = useShellOverlayHost();
+  return <output data-testid="overlay-host-probe">{host ? 'ready' : 'missing'}</output>;
+}
+
 describe('ContextProvider / useContextState', () => {
   it('defaults to no bound org with no accent and comfortable density', () => {
     const { result } = renderHook(() => useContextState(), { wrapper: ctxWrapper(null) });
@@ -131,6 +137,23 @@ describe('ContextProvider / useContextState', () => {
 });
 
 describe('AppShell', () => {
+  it('provides a primary-column overlay host outside main content', async () => {
+    const { container } = render(
+      <ContextProvider initialContext={null}>
+        <AppShell sidebar={<nav aria-label="Navigation" />}>
+          <OverlayHostProbe />
+        </AppShell>
+      </ContextProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('overlay-host-probe')).toHaveTextContent('ready'),
+    );
+    const host = container.querySelector<HTMLElement>('[data-shell-overlay-host]');
+    expect(host).toBeInTheDocument();
+    expect(screen.getByRole('main')).not.toContainElement(host);
+    expect(host?.parentElement).toContainElement(screen.getByRole('main'));
+  });
+
   it('keeps the first resolved org steady and cross-fades a later org switch', async () => {
     render(
       <ContextProvider initialContext={null}>

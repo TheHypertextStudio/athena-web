@@ -35,88 +35,162 @@ export function isCalendarTimedRegionSelection(
   return 'startsAt' in selection;
 }
 
-/** Exact seeds, rendered wall values, and independent edit ownership for one creation draft. */
-export interface CalendarTimeDraft {
-  /** Exact instants that created this draft and remain authoritative for untouched fields. */
-  readonly seed: CalendarTimedRegionSelection;
-  /** Start wall value rendered in the current display timezone. */
-  readonly startsAt: string;
-  /** End wall value rendered in the current display timezone. */
-  readonly endsAt: string;
-  /** Whether the user owns the current start wall value. */
-  readonly startsEdited: boolean;
-  /** Whether the user owns the current end wall value. */
-  readonly endsEdited: boolean;
-  /** Explicit occurrence represented by a repeated start wall value. */
-  readonly startsOccurrence: LocalInputOccurrence | null;
-  /** Explicit occurrence represented by a repeated end wall value. */
-  readonly endsOccurrence: LocalInputOccurrence | null;
+/** One separate date/time wall field in a creation draft. */
+export interface CalendarWallDraftField {
+  readonly date: string;
+  readonly time: string;
+  readonly edited: boolean;
+  readonly occurrence: LocalInputOccurrence | null;
 }
 
-/** Exact range resolved from a creation draft, or application-owned correction guidance. */
-export type ResolvedCalendarTimeDraft =
-  | { readonly startsAt: string; readonly endsAt: string }
-  | { readonly error: string };
+/** Exact seeds, separate wall fields, and independently selected timezones. */
+export interface CalendarTimeDraft {
+  readonly seed: CalendarTimedRegionSelection;
+  readonly start: CalendarWallDraftField;
+  readonly end: CalendarWallDraftField;
+  readonly startTimezone: string;
+  readonly endTimezone: string;
+  readonly timezoneEdited: boolean;
+}
 
-/** Initialize wall fields and independent edit ownership from exact seed instants. */
+/** Exact range resolved from a creation draft, or the field whose state is incomplete. */
+export type ResolvedCalendarTimeDraft =
+  | {
+      readonly startsAt: string;
+      readonly endsAt: string;
+      readonly timezone: string;
+      readonly endTimezone: string;
+    }
+  | { readonly invalidField: 'start' | 'end' | 'range' };
+
+function wallFieldForInstant(
+  instant: string,
+  timezone: string,
+  edited = false,
+): CalendarWallDraftField {
+  const value = toLocalInputValue(instant, timezone);
+  return {
+    date: value.slice(0, 10),
+    time: value.slice(11),
+    edited,
+    occurrence: localInputOccurrenceForInstant(instant, timezone),
+  };
+}
+
+function wallInput(field: CalendarWallDraftField): string {
+  return `${field.date}T${field.time}`;
+}
+
+/** Initialize separate wall fields and timezone metadata from exact seed instants. */
 export function calendarTimeDraftFromSeed(
   seed: CalendarTimedRegionSelection,
   displayTimezone: string,
 ): CalendarTimeDraft {
   return {
     seed,
-    startsAt: toLocalInputValue(seed.startsAt, displayTimezone),
-    endsAt: toLocalInputValue(seed.endsAt, displayTimezone),
-    startsEdited: false,
-    endsEdited: false,
-    startsOccurrence: localInputOccurrenceForInstant(seed.startsAt, displayTimezone),
-    endsOccurrence: localInputOccurrenceForInstant(seed.endsAt, displayTimezone),
+    start: wallFieldForInstant(seed.startsAt, displayTimezone),
+    end: wallFieldForInstant(seed.endsAt, displayTimezone),
+    startTimezone: displayTimezone,
+    endTimezone: displayTimezone,
+    timezoneEdited: false,
   };
 }
 
-/** Re-render untouched exact seeds in a newly selected display timezone. */
+/** Replace the start wall field and mark it as user-owned. */
+export function updateCalendarDraftStart(
+  draft: CalendarTimeDraft,
+  value: {
+    readonly date: string;
+    readonly time: string;
+    readonly occurrence?: LocalInputOccurrence;
+  },
+): CalendarTimeDraft {
+  return {
+    ...draft,
+    start: {
+      date: value.date,
+      time: value.time,
+      edited: true,
+      occurrence: value.occurrence ?? null,
+    },
+  };
+}
+
+/** Replace the end wall field and mark it as user-owned. */
+export function updateCalendarDraftEnd(
+  draft: CalendarTimeDraft,
+  value: {
+    readonly date: string;
+    readonly time: string;
+    readonly occurrence?: LocalInputOccurrence;
+  },
+): CalendarTimeDraft {
+  return {
+    ...draft,
+    end: {
+      date: value.date,
+      time: value.time,
+      edited: true,
+      occurrence: value.occurrence ?? null,
+    },
+  };
+}
+
+/** Preserve wall fields while assigning one or two explicit timezones. */
+export function applyCalendarDraftTimezones(
+  draft: CalendarTimeDraft,
+  startTimezone: string,
+  endTimezone: string,
+): CalendarTimeDraft {
+  return {
+    ...draft,
+    start: { ...draft.start, edited: true, occurrence: null },
+    end: { ...draft.end, edited: true, occurrence: null },
+    startTimezone,
+    endTimezone,
+    timezoneEdited: true,
+  };
+}
+
+/** Re-render untouched exact seeds when the Agenda display timezone changes. */
 export function rebaseCalendarTimeDraft(
   draft: CalendarTimeDraft,
   displayTimezone: string,
 ): CalendarTimeDraft {
+  if (draft.timezoneEdited) return draft;
   return {
     ...draft,
-    startsAt: draft.startsEdited
-      ? draft.startsAt
-      : toLocalInputValue(draft.seed.startsAt, displayTimezone),
-    endsAt: draft.endsEdited ? draft.endsAt : toLocalInputValue(draft.seed.endsAt, displayTimezone),
-    startsOccurrence: draft.startsEdited
-      ? draft.startsOccurrence
-      : localInputOccurrenceForInstant(draft.seed.startsAt, displayTimezone),
-    endsOccurrence: draft.endsEdited
-      ? draft.endsOccurrence
-      : localInputOccurrenceForInstant(draft.seed.endsAt, displayTimezone),
+    start: draft.start.edited
+      ? draft.start
+      : wallFieldForInstant(draft.seed.startsAt, displayTimezone),
+    end: draft.end.edited ? draft.end : wallFieldForInstant(draft.seed.endsAt, displayTimezone),
+    startTimezone: displayTimezone,
+    endTimezone: displayTimezone,
   };
 }
 
-/** Resolve exact creation bounds while requiring choices only for edited repeated wall times. */
-export function resolveCalendarTimeDraft(
-  draft: CalendarTimeDraft,
-  displayTimezone: string,
-): ResolvedCalendarTimeDraft {
-  const startError = draft.startsEdited
-    ? localInputResolutionError(draft.startsAt, displayTimezone, draft.startsOccurrence, 'start')
-    : null;
-  const endError = draft.endsEdited
-    ? localInputResolutionError(draft.endsAt, displayTimezone, draft.endsOccurrence, 'end')
-    : null;
-  if (startError || endError) return { error: startError ?? endError ?? 'Choose valid times.' };
+/** Resolve exact bounds in the independently selected start and end timezones. */
+export function resolveCalendarTimeDraft(draft: CalendarTimeDraft): ResolvedCalendarTimeDraft {
+  const startValue = wallInput(draft.start);
+  const endValue = wallInput(draft.end);
+  if (localInputResolutionError(startValue, draft.startTimezone, draft.start.occurrence, 'start')) {
+    return { invalidField: 'start' };
+  }
+  if (localInputResolutionError(endValue, draft.endTimezone, draft.end.occurrence, 'end')) {
+    return { invalidField: 'end' };
+  }
 
-  const startsAt = draft.startsEdited
-    ? fromLocalInputValue(draft.startsAt, displayTimezone, draft.startsOccurrence)
-    : draft.seed.startsAt;
-  const endsAt = draft.endsEdited
-    ? fromLocalInputValue(draft.endsAt, displayTimezone, draft.endsOccurrence)
-    : draft.seed.endsAt;
-  const rangeError = calendarRangeError(startsAt, endsAt);
-  return rangeError || !startsAt || !endsAt
-    ? { error: rangeError ?? 'Choose valid start and end times in your calendar timezone.' }
-    : { startsAt, endsAt };
+  const startsAt = fromLocalInputValue(startValue, draft.startTimezone, draft.start.occurrence);
+  const endsAt = fromLocalInputValue(endValue, draft.endTimezone, draft.end.occurrence);
+  if (!startsAt) return { invalidField: 'start' };
+  if (!endsAt) return { invalidField: 'end' };
+  if (calendarRangeError(startsAt, endsAt)) return { invalidField: 'range' };
+  return {
+    startsAt,
+    endsAt,
+    timezone: draft.startTimezone,
+    endTimezone: draft.endTimezone,
+  };
 }
 
 /** Create the next future half-hour region on the selected timezone's wall clock. */

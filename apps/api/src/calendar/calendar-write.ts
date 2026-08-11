@@ -202,6 +202,7 @@ export async function createNativeBlock(
       ...(body.description !== undefined ? { description: body.description } : {}),
       ...(body.location !== undefined ? { location: body.location } : {}),
       ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+      ...(body.endTimezone !== undefined ? { endTimezone: body.endTimezone } : {}),
       ...(body.startsAt !== undefined ? { startsAt: new Date(body.startsAt) } : {}),
       ...(body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : {}),
       ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
@@ -221,6 +222,7 @@ function createWritePatch(body: CalendarItemCreate): CalendarItemWritePatch {
     ...(body.description !== undefined ? { description: body.description } : {}),
     ...(body.location !== undefined ? { location: body.location } : {}),
     ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+    ...(body.endTimezone !== undefined ? { endTimezone: body.endTimezone } : {}),
     ...(body.startsAt !== undefined ? { startsAt: body.startsAt } : {}),
     ...(body.endsAt !== undefined ? { endsAt: body.endsAt } : {}),
     ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
@@ -292,6 +294,7 @@ export async function createCalendarItem(
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.location !== undefined ? { location: body.location } : {}),
         ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+        ...(body.endTimezone !== undefined ? { endTimezone: body.endTimezone } : {}),
         ...(body.startsAt !== undefined ? { startsAt: new Date(body.startsAt) } : {}),
         ...(body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : {}),
         ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
@@ -337,6 +340,7 @@ export async function createCalendarItem(
       ...(body.description !== undefined ? { description: body.description } : {}),
       ...(body.location !== undefined ? { location: body.location } : {}),
       ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+      ...(body.endTimezone !== undefined ? { endTimezone: body.endTimezone } : {}),
       ...(body.startsAt !== undefined ? { startsAt: new Date(body.startsAt) } : {}),
       ...(body.endsAt !== undefined ? { endsAt: new Date(body.endsAt) } : {}),
       ...(body.allDayStartDate !== undefined ? { allDayStartDate: body.allDayStartDate } : {}),
@@ -419,12 +423,17 @@ function problemForReadOnlyReason(reason: CalendarItemPermission['readOnlyReason
 function toWritePatch(
   patch: CalendarItemUpdate,
   timePatch: TimeShapePatch,
+  existing: CalendarItemRow,
 ): CalendarItemWritePatch {
   const out: CalendarItemWritePatch = {};
   if (patch.title !== undefined) out.title = patch.title;
   if (patch.description !== undefined) out.description = patch.description;
   if (patch.location !== undefined) out.location = patch.location;
   if (patch.timezone !== undefined) out.timezone = patch.timezone;
+  if (patch.endTimezone !== undefined) {
+    out.timezone = patch.timezone ?? existing.timezone ?? undefined;
+    out.endTimezone = patch.endTimezone;
+  }
   if (timePatch.startsAt) out.startsAt = timePatch.startsAt.toISOString();
   if (timePatch.endsAt) out.endsAt = timePatch.endsAt.toISOString();
   if (timePatch.allDayStartDate) out.allDayStartDate = timePatch.allDayStartDate;
@@ -584,6 +593,7 @@ async function applyNativeBlockPatch(
     patchValues.location = patch.location === '' ? null : patch.location;
   }
   if (patch.timezone !== undefined) patchValues.timezone = patch.timezone;
+  if (patch.endTimezone !== undefined) patchValues.endTimezone = patch.endTimezone;
 
   const updated = await db
     .update(calendarItem)
@@ -675,6 +685,7 @@ export async function updateCalendarItem(
     patchValues.location = patch.location === '' ? null : patch.location;
   }
   if (patch.timezone !== undefined) patchValues.timezone = patch.timezone;
+  if (patch.endTimezone !== undefined) patchValues.endTimezone = patch.endTimezone;
 
   const updatedRows = await db
     .update(calendarItem)
@@ -693,7 +704,7 @@ export async function updateCalendarItem(
       connectionId: connection.id,
       provider: connection.provider,
       operation: 'update',
-      patch: toWritePatch(patch, timePatch),
+      patch: toWritePatch(patch, timePatch, loaded.item),
       baseExternalEtag: loaded.item.externalEtag,
       baseUpdatedExternalAt: loaded.item.updatedExternalAt,
       status: 'pending',

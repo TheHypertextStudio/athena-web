@@ -43,6 +43,7 @@ describe('normalizeCalendarProviderEventType', () => {
       allDayStartDate: '2026-08-10',
       allDayEndDate: '2026-08-11',
       timezone: 'America/Los_Angeles',
+      endTimezone: 'America/New_York',
       organizer: null,
       attendees: [],
       providerRaw: { eventType: 'workingLocation' },
@@ -62,6 +63,8 @@ describe('normalizeCalendarProviderEventType', () => {
       updatedAt: new Date('2026-08-10T08:00:00.000Z'),
     } as unknown as Parameters<typeof toCalendarItemOut>[0];
 
-    expect(toCalendarItemOut(row, { linkedTasks: [] }).providerEventType).toBe('working_location');
+    const serialized = toCalendarItemOut(row, { linkedTasks: [] });
+    expect(serialized.providerEventType).toBe('working_location');
+    expect(serialized.endTimezone).toBe('America/New_York');
   });
 });

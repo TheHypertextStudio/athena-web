@@ -1,0 +1,1 @@
+ALTER TABLE "calendar_item" ADD COLUMN "end_timezone" text;

@@ -81,6 +81,8 @@ export interface ProviderItemSnapshot {
   readonly endsAt: Date | null;
   readonly allDayStartDate: string | null;
   readonly allDayEndDate: string | null;
+  readonly timezone?: string | null;
+  readonly endTimezone?: string | null;
   readonly organizer: CalendarEventOrganizer | null;
   readonly attendees: CalendarEventAttendee[];
   readonly updatedExternalAt: Date | null;
@@ -608,6 +610,8 @@ async function upsertProviderItem(
     endsAt: snapshot.endsAt,
     allDayStartDate: snapshot.allDayStartDate,
     allDayEndDate: snapshot.allDayEndDate,
+    timezone: snapshot.timezone ?? null,
+    endTimezone: snapshot.endTimezone ?? null,
     organizer: snapshot.organizer,
     attendees: snapshot.attendees,
     providerRaw: snapshot.raw,

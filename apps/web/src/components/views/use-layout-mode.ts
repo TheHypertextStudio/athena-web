@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 
 import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
+import { useImmediateUrlState } from '@/lib/interactions/immediate-url-state';
 
 /** The layouts a list can draw itself in. */
 export type LayoutMode = 'cards' | 'list';
@@ -48,13 +49,15 @@ export function useLayoutMode(fallback: LayoutMode): UseLayoutModeResult {
   const searchParams = useAppSearchParams();
   const search = searchParams.toString();
 
-  const layout = useMemo<LayoutMode>(() => {
+  const canonicalLayout = useMemo<LayoutMode>(() => {
     const raw = new URLSearchParams(search).get(LAYOUT_PARAM);
     return raw === 'cards' || raw === 'list' ? raw : fallback;
   }, [search, fallback]);
+  const [layout, setImmediateLayout] = useImmediateUrlState(canonicalLayout);
 
   const setLayout = useCallback(
     (next: LayoutMode): void => {
+      setImmediateLayout(next);
       const params = new URLSearchParams(search);
       // The default stays out of the URL, so a link to an untouched hub has no layout param to
       // explain and the fallback remains the single place the default is stated.
@@ -66,7 +69,7 @@ export function useLayoutMode(fallback: LayoutMode): UseLayoutModeResult {
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
-    [fallback, pathname, router, search],
+    [fallback, pathname, router, search, setImmediateLayout],
   );
 
   return { layout, setLayout };

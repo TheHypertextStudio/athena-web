@@ -13,6 +13,7 @@ import {
 } from 'react';
 
 import { ROUTE_PATTERNS } from './offline-routes.generated';
+import { ResponsiveNavigationProvider } from './interactions/navigation';
 import { matchRoutes } from './route-match';
 
 /**
@@ -172,6 +173,8 @@ export function AppLocationProvider({
   const serverHref =
     serverPath ??
     (routerSearch.size > 0 ? `${routerPathname}?${routerSearch.toString()}` : routerPathname);
+  const canonicalHref =
+    routerSearch.size > 0 ? `${routerPathname}?${routerSearch.toString()}` : routerPathname;
 
   useEffect(() => {
     syncLocation();
@@ -185,7 +188,13 @@ export function AppLocationProvider({
     };
   }, []);
 
-  return <ServerHrefContext.Provider value={serverHref}>{children}</ServerHrefContext.Provider>;
+  return (
+    <ServerHrefContext.Provider value={serverHref}>
+      <ResponsiveNavigationProvider canonicalHref={canonicalHref}>
+        {children}
+      </ResponsiveNavigationProvider>
+    </ServerHrefContext.Provider>
+  );
 }
 
 /**

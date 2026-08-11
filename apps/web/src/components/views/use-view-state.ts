@@ -21,6 +21,7 @@
  */
 import { useRouter } from 'next/navigation';
 import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
+import { useImmediateUrlState } from '@/lib/interactions/immediate-url-state';
 import { useCallback, useMemo } from 'react';
 
 import {
@@ -81,20 +82,30 @@ export function useViewState(): UseViewStateResult {
   // `useSearchParams` returns a stable `ReadonlyURLSearchParams`; key the parse on its string form
   // so the memo only recomputes when the query actually changes.
   const search = searchParams.toString();
-  const state = useMemo<ViewState>(() => parseViewState(new URLSearchParams(search)), [search]);
-  const display = useMemo<ViewDisplayState>(
+  const canonicalState = useMemo<ViewState>(
+    () => parseViewState(new URLSearchParams(search)),
+    [search],
+  );
+  const canonicalDisplay = useMemo<ViewDisplayState>(
     () => parseViewDisplay(new URLSearchParams(search)),
     [search],
+  );
+  const [state, setImmediateState] = useImmediateUrlState(canonicalState, sameSerializedValue);
+  const [display, setImmediateDisplay] = useImmediateUrlState(
+    canonicalDisplay,
+    sameSerializedValue,
   );
 
   const commit = useCallback(
     (next: ViewState, nextDisplay: ViewDisplayState): void => {
+      setImmediateState(next);
+      setImmediateDisplay(nextDisplay);
       const params = serializeViewState(next, new URLSearchParams(search));
       serializeViewDisplay(nextDisplay, params);
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
-    [pathname, router, search],
+    [pathname, router, search, setImmediateDisplay, setImmediateState],
   );
 
   const setFilters = useCallback(
@@ -126,4 +137,9 @@ export function useViewState(): UseViewStateResult {
   }, [commit]);
 
   return { state, display, setFilters, setGroupBy, setSort, setDisplay, reset };
+}
+
+/** Compare URL-codec values without treating a fresh parse of the same query as a new intent. */
+function sameSerializedValue<T>(left: T, right: T): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }

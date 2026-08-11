@@ -194,8 +194,8 @@ export function resolveActiveOrg(
  *
  * @remarks
  * {@link DocketLink} rather than `next/link`, because these are the links a person reaches for
- * *first* when the connection drops. Offline, a `next/link` click here would fail its RSC fetch and
- * fall back to a full document navigation, tearing down the very shell this function is drawing.
+ * *first* when the connection drops. Offline, it preserves the existing history navigation; online,
+ * its shared navigation owner publishes the requested destination before Next commits the route.
  */
 export function renderLink(href: string, content: ReactNode, className?: string): ReactNode {
   return (

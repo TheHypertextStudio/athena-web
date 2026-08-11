@@ -6,6 +6,7 @@ import type { ComponentProps, JSX, MouseEvent } from 'react';
 
 import { useServerReachable } from '@/components/reachability';
 import { navigateWithoutRouter } from '@/lib/app-location';
+import { useOptionalResponsiveRouter } from '@/lib/interactions/navigation';
 import { useOfflineAvailability } from '@/lib/offline-availability';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
@@ -46,18 +47,29 @@ export default function DocketLink({ onClick, ...props }: DocketLinkProps): JSX.
   const serverReachable = useServerReachable();
   const online = useOnlineStatus();
   const routerReachable = serverReachable && online;
+  const responsiveRouter = useOptionalResponsiveRouter();
   const href = typeof props.href === 'string' ? props.href : null;
   const availability = useOfflineAvailability(href, !routerReachable);
+  const navigationPending = responsiveRouter?.requestedHref === href;
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
     onClick?.(event);
-    if (routerReachable || event.defaultPrevented) {
+    if (event.defaultPrevented) {
       return;
     }
     if (!isPlainLeftClick(event)) {
       return;
     }
     if (href?.startsWith('/') !== true) {
+      return;
+    }
+    if (routerReachable) {
+      if (responsiveRouter === null) return;
+      const options = props.scroll === undefined ? undefined : { scroll: props.scroll };
+      const handled = props.replace
+        ? responsiveRouter.replace(href, options)
+        : responsiveRouter.push(href, options);
+      if (handled) event.preventDefault();
       return;
     }
     event.preventDefault();
@@ -84,7 +96,15 @@ export default function DocketLink({ onClick, ...props }: DocketLinkProps): JSX.
     );
   }
 
-  return <Link {...props} onClick={handleClick} />;
+  return (
+    <Link
+      {...props}
+      aria-current={navigationPending ? undefined : props['aria-current']}
+      aria-busy={navigationPending || undefined}
+      data-navigation-pending={navigationPending || undefined}
+      onClick={handleClick}
+    />
+  );
 }
 
 /**

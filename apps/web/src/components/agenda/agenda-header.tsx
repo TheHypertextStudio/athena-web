@@ -31,11 +31,9 @@ function relativeAgendaDay(iso: string, today: string): string | null {
  * Format a `YYYY-MM-DD` day for the rail, always naming the month.
  *
  * @remarks
- * The relative name alone used to be the whole label. Combined with the lane heading below — which
- * renders `Wed 5` and deliberately omits the month because
- * {@link file://../scheduling/scheduling-canvas-header.tsx} assumes "the surface's own toolbar owns
- * the month and year" — that left the rail rendering the month **zero** times. The rail is that
- * toolbar, so it says the month.
+ * The relative name alone used to be the whole label. Agenda now deliberately suppresses the
+ * shared lane heading, so this trigger is the rail's one visible date representation and must
+ * carry enough absolute context for direct navigation.
  */
 function formatAgendaDate(iso: string, today: string): string {
   const absolute = formatDay(iso, { month: 'short', day: 'numeric' }) ?? iso;

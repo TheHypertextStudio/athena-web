@@ -304,8 +304,8 @@ describe('AgendaProvider day navigation', () => {
         { wrapper: TestProvider },
       );
 
-      // The rail's day label now always names the month: it is the only toolbar this canvas has,
-      // and the lane heading below it deliberately renders `Wed 5` with no month at all.
+      // The rail's one visible date representation always names the month; Agenda suppresses the
+      // shared scheduling lane heading so the selected day is never repeated inside the canvas.
       expect(screen.getByRole('button', { name: /^Agenda date — Today · / })).toBeInTheDocument();
 
       act(() => {

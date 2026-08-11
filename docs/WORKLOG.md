@@ -4692,7 +4692,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   3,672 API tests), `pnpm test:coverage` (18/18), `pnpm format:check`, and `pnpm build` (4/4).
   The post-release scheduling audit also passes 10/10 targeted browser journeys after aligning the
   legacy create-dialog, timezone-persistence, touch-selection, and collision-gutter assertions with
-  the shipped quick-create contract.
+  the shipped quick-create contract. A final authenticated production recheck reconfirmed the hard
+  Agenda exclusion boundary, zero document overflow, quiet validation, progressive date/time
+  controls, whole-step zoom, and timezone search by code, name, identifier, and city.
 - **Learnings**: Hosting the desktop dialog in the shell's primary-content layer and replacing the
   narrow Agenda canvas with an Agenda-owned sibling host make non-overlap layout invariants rather
   than offsets. Mock-free save/reload testing caught a controlled projection loop that cleared the

@@ -27,3 +27,13 @@ Gates: A11y ✅ · Responsive ✅ · Theme parity ✅ · No placeholder ✅ · S
    and does not intersect the dialog or Agenda geometry.
 
 Verdict: **SHIP** — every dimension meets the crafted bar and all hard gates are green.
+
+## Production completion recheck — 2026-08-11
+
+The authenticated production surface was re-inspected after the final review fixes. The 544px
+desktop dialog ended at `1516.48px` while the Agenda began at `1529.61px`; keyboard movement kept
+that exclusion boundary intact. The document overflow delta was `0px`, the Agenda contained one
+vertical schedule scrollport and zero visible lock glyphs, Save was disabled for the untitled draft,
+and no dialog alert rendered. The expanded schedule exposed separate start date, start time, and end
+time controls. Time-zone search returned Los Angeles for `PST`, `Pacific Time`,
+`America/Los_Angeles`, and `Los Angeles`, with combobox/listbox linkage and an active option.

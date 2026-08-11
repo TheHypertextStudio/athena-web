@@ -7,6 +7,28 @@
 
 ## Active Tasks
 
+### [AGENDA-ANCHOR-001] Anchor draggable quick create to its selected draft
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-11
+- **Priority**: P1
+- **Description**: Replace the shell-edge default for Agenda quick create with Google
+  Calendar-like virtual-anchor placement. The dialog remains portaled into the shell-owned sibling
+  overlay and draggable, but initially sits immediately beside the selected draft with collision
+  fallback and hands positioning authority to the user after the first pointer or keyboard move.
+- **Subtasks**:
+  - [x] Trace the current portal, host, anchor, and clamping coordinate contracts.
+  - [x] Refine the approved positioning design with exact gap, alignment, and fallback rules.
+  - [ ] Add red/green unit and integration coverage.
+  - [ ] Implement anchor-relative placement and manual-position handoff.
+  - [ ] Capture responsive browser evidence and deploy the verified exact SHA.
+- **Blockers**: None.
+- **Notes**: The existing implementation already portals into the correct sibling host. The defect
+  is the default point calculation: it consumes only the host size and anchor top, so the selected
+  region is not the actual two-dimensional positioning reference.
+
+---
+
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
 
 - **Status**: REVIEW

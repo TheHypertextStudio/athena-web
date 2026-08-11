@@ -1,6 +1,6 @@
 # Agenda Quick-Create Dialog Refinement
 
-> **Status**: Approved visual direction; written contract pending review
+> **Status**: Approved; anchored-portal positioning refined 2026-08-11
 > **Date**: 2026-08-10
 > **Area**: Agenda rail, calendar quick create, timezone-aware scheduling
 > **Refines**: `2026-08-10-agenda-rail-structural-redesign-design.md`
@@ -56,9 +56,26 @@ and would only fix the initial position rather than the overlap problem itself.
 ### 1. Draft selection and dialog placement
 
 Click, drag, keyboard, and all-day selection continue creating one local draft with no write. On
-desktop, the shell-level dialog opens in the primary-content area immediately beside the Agenda.
-Its initial vertical position follows the selected region where practical, then clamps to the
-viewport. Its initial horizontal position hugs the Agenda boundary without crossing it.
+desktop, the selected region is the dialog's virtual anchor even though the dialog portals into the
+shell-owned primary-content overlay. Portal ownership solves stacking and clipping; the position
+controller separately resolves the selected region's viewport rectangle into host-local
+coordinates.
+
+Initial placement follows Google Calendar's spatial relationship:
+
+- prefer the primary-content side immediately left of the selected region with a `12px` gap;
+- align the selected region with the title-entry area by placing the dialog top `72px` above the
+  anchor top;
+- if the preferred side does not fit, try the opposite side before choosing the candidate that
+  requires the least horizontal correction;
+- shift the result only as much as necessary to keep every dialog edge inside the primary-content
+  host's `16px` inset and outside the Agenda;
+- recompute from the anchor while the dialog is still automatic and its host or dimensions change;
+- stop automatic anchoring after the first pointer or keyboard move so later resize work only
+  clamps the user-selected position.
+
+The event draft remains visible throughout. The anchor is an initial-placement input, not a DOM
+parent and not a reason for the dialog to enter the Agenda scrollport.
 
 The dialog's top grip is its only drag initiation surface. Dragging:
 
@@ -174,8 +191,9 @@ continue creating single-zone events.
 - **Agenda selection controller** owns the local selected region and draft projection.
 - **Shell overlay host** publishes the primary-content and Agenda rectangles and mounts the
   quick-create dialog as their sibling.
-- **Dialog position controller** owns default placement, clamped pointer/keyboard dragging, resize
-  observation, and focus restoration. It knows geometry, not calendar fields.
+- **Dialog position controller** owns virtual-anchor placement, host-local coordinate conversion,
+  collision fallback, clamped pointer/keyboard dragging, resize observation, and focus restoration.
+  It knows geometry, not calendar fields.
 - **Quick-create overview** owns intent, title, collapsed/expanded schedule presentation, optional
   fields, destination, validation state, and save orchestration.
 - **Date/time editor** owns separate date and clock values, all-day conversion, recurrence exposure,

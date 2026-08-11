@@ -365,9 +365,11 @@ export function createActionRegistry(options: ActionRegistryOptions = {}): Actio
     const actionContext =
       invocationId === undefined ? context : { ...context, parentInvocationId: invocationId };
     let observation: ActionAsyncObservation | undefined;
+    let asynchronousWorkStarted = false;
     try {
       const work = definition.run(actionContext);
       if (work instanceof Promise) {
+        asynchronousWorkStarted = true;
         if (responsiveness?.ownership !== 'child' || invocationId === undefined) {
           observation =
             options.receiptRuntime?.observeAsync(definition.id, invocationId, responsiveness) ??
@@ -379,6 +381,13 @@ export function createActionRegistry(options: ActionRegistryOptions = {}): Actio
       }
       return { status: 'ran' };
     } catch (error) {
+      if (
+        !asynchronousWorkStarted &&
+        responsiveness?.ownership === 'root' &&
+        invocationId !== undefined
+      ) {
+        options.receiptRuntime?.abandon?.(invocationId);
+      }
       return { status: 'failed', error };
     } finally {
       observation?.settle();

@@ -107,6 +107,34 @@ describe('action registry: registration', () => {
     expect(abandon).toHaveBeenCalledWith('ephemeral-root-invocation');
   });
 
+  it('abandons a root receipt once when invalid synchronous work throws after activation', async () => {
+    const begin = vi.fn(() => 'ephemeral-root-invocation');
+    const abandon = vi.fn();
+    const failure = new Error('private failure');
+    const registry = createActionRegistry({ receiptRuntime: { begin, observeAsync: vi.fn(), abandon } });
+    const invalidThrowingReceipt = [
+      {
+        id: 'task.open' as const,
+        domain: 'task' as const,
+        label: 'Open',
+        responsiveness: TASK_MUTATION_RECEIPT,
+        run: () => {
+          throw failure;
+        },
+      },
+    ] as const;
+
+    registry.register('task', invalidThrowingReceipt);
+
+    await expect(registry.invoke('task.open', () => contextFor([task]))).resolves.toEqual({
+      status: 'failed',
+      error: failure,
+    });
+    expect(begin).toHaveBeenCalledTimes(1);
+    expect(abandon).toHaveBeenCalledTimes(1);
+    expect(abandon).toHaveBeenCalledWith('ephemeral-root-invocation');
+  });
+
   it('stamps the domain onto every definition and freezes the set', () => {
     const actions = defineActionDomain('task', [
       { id: 'task.complete', label: 'Complete', run: () => undefined },

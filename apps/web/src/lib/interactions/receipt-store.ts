@@ -18,7 +18,7 @@ export const MAX_COMPLETED_RECEIPTS = 512;
 export interface InteractionReceiptStoreOptions {
   /** Clock used to stamp lifecycle changes; injectable for deterministic tests. */
   readonly now?: () => number;
-  /** Receives a metadata-only diagnostic failure in development and test builds. */
+  /** Observes the metadata-only failure emitted by the built-in development/test reporter. */
   readonly onLeak?: (failure: InteractionLeakFailure) => void;
   /** Explicit runtime mode, primarily for deterministic development/test diagnostics. */
   readonly environment?: 'development' | 'production' | 'test';
@@ -53,6 +53,7 @@ interface StoredReceipt {
 
 const INVALID_INVOCATION = 'Invalid interaction invocation.';
 const INVALID_TRANSITION = 'Invalid interaction receipt transition.';
+const LIVE_CAPACITY_LEAK_MESSAGE = 'Interaction receipt live capacity exceeded.';
 const OUTCOMES = new Set<InteractionOutcome>([
   'succeeded',
   'needs_attention',
@@ -114,13 +115,19 @@ function reportsLeaks(environment: InteractionReceiptStoreOptions['environment']
   return (environment ?? process.env.NODE_ENV) !== 'production';
 }
 
+/** Emit the fixed, metadata-free development/test failure for an exhausted live receipt trace. */
+function reportLiveCapacityLeak(): void {
+  console.error(LIVE_CAPACITY_LEAK_MESSAGE);
+}
+
 /**
  * Create an isolated, bounded interaction-receipt lifecycle store.
  *
  * @remarks
  * The store is intentionally local and side-effect-free except for its explicit development/test
- * leak callback. It copies only allowlisted fields into receipts and snapshots, so callers cannot
- * accidentally put user-controlled payloads or ephemeral correlation identifiers in diagnostics.
+ * built-in development/test leak reporter and optional observer. It copies only allowlisted fields
+ * into receipts and snapshots, so callers cannot accidentally put user-controlled payloads or
+ * ephemeral correlation identifiers in diagnostics.
  *
  * @param options - Clock and development/test diagnostic configuration.
  * @returns A page-lifetime receipt store.
@@ -172,7 +179,11 @@ export function createInteractionReceiptStore(
         const oldest = live[0];
         if (!oldest) throw new Error(INVALID_TRANSITION);
         complete(oldest, 'timed_out');
-        if (reportsLeaks(options.environment)) options.onLeak?.({ code: 'live-capacity-exceeded' });
+        if (reportsLeaks(options.environment)) {
+          const failure = { code: 'live-capacity-exceeded' } as const;
+          reportLiveCapacityLeak();
+          options.onLeak?.(failure);
+        }
       }
 
       const invocation = copyInvocation(input);

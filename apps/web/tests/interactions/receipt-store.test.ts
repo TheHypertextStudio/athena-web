@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   MAX_COMPLETED_RECEIPTS,
@@ -160,19 +160,39 @@ describe('interaction receipt store', () => {
 
   it('times out the oldest live receipt and reports a generic leak at the live bound', () => {
     const leakCodes: string[] = [];
+    const reportLeak = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const store = createInteractionReceiptStore({
       onLeak: (failure) => leakCodes.push(failure.code),
     });
 
-    for (let index = 0; index <= MAX_LIVE_RECEIPTS; index += 1) {
-      store.activate(invocation(`ephemeral-live-${index}`));
-    }
+    try {
+      for (let index = 0; index <= MAX_LIVE_RECEIPTS; index += 1) {
+        store.activate(invocation(`ephemeral-live-${index}`));
+      }
 
-    expect(store.snapshot().live).toHaveLength(MAX_LIVE_RECEIPTS);
-    expect(store.snapshot().completed).toEqual([
-      expect.objectContaining({ outcome: 'timed_out', phase: 'settled' }),
-    ]);
-    expect(leakCodes).toEqual(['live-capacity-exceeded']);
+      expect(store.snapshot().live).toHaveLength(MAX_LIVE_RECEIPTS);
+      expect(store.snapshot().completed).toEqual([
+        expect.objectContaining({ outcome: 'timed_out', phase: 'settled' }),
+      ]);
+      expect(leakCodes).toEqual(['live-capacity-exceeded']);
+    } finally {
+      reportLeak.mockRestore();
+    }
+  });
+
+  it('emits a development leak failure even without a caller-provided callback', () => {
+    const reportLeak = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const store = createInteractionReceiptStore({ environment: 'test' });
+
+    try {
+      for (let index = 0; index <= MAX_LIVE_RECEIPTS; index += 1) {
+        store.activate(invocation(`ephemeral-default-reporter-${index}`));
+      }
+
+      expect(reportLeak).toHaveBeenCalledWith('Interaction receipt live capacity exceeded.');
+    } finally {
+      reportLeak.mockRestore();
+    }
   });
 
   it('abandons only unresolved work during teardown while retaining an earlier handoff', () => {

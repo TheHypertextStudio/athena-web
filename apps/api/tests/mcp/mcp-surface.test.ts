@@ -1126,7 +1126,7 @@ describe('hydrated resources', () => {
       ['view', 'get_views', view!.id],
       ['org', 'get_organizations', s.orgId],
     ];
-    for (const [type, tool, id] of semanticTools) {
+    for (const [, tool, id] of semanticTools) {
       const result = (await client.callTool({
         name: tool,
         arguments: { orgId: s.orgId, refs: [id] },

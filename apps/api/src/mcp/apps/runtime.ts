@@ -642,6 +642,75 @@ body[data-state='error'] .skeleton { display: none; }
   font-weight: var(--font-weight-semibold);
 }
 .muted { color: var(--color-text-secondary); }
+
+/* Entity documents have their own rhythm. Facts, prose, related work, and batch results are
+   different kinds of information; the generic row utility below is deliberately not their
+   layout system. */
+.entity-header { display: grid; gap: 6px; }
+.entity-kicker {
+  font-size: var(--font-text-sm-size);
+  line-height: var(--font-text-sm-line-height);
+  font-weight: var(--font-weight-medium);
+}
+.entity-title {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  font-weight: var(--font-weight-semibold);
+}
+.entity-narrative,
+.entity-section-narrative { margin: 0; max-width: 68ch; line-height: 1.55; }
+.entity-context { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
+.entity-context-item {
+  padding: 3px 8px;
+  border-radius: var(--border-radius-full);
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-text-sm-size);
+  line-height: var(--font-text-sm-line-height);
+}
+.entity-facts { display: grid; grid-template-columns: minmax(6rem, 0.35fr) minmax(0, 1fr); gap: 6px 16px; }
+.entity-fact { display: contents; }
+.entity-fact-label { color: var(--color-text-secondary); }
+.entity-fact-value { min-width: 0; font-weight: var(--font-weight-medium); }
+.entity-sections { display: grid; gap: 18px; }
+.entity-section { display: grid; gap: 8px; }
+.entity-section-title {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-text-sm-size);
+  line-height: var(--font-text-sm-line-height);
+  font-weight: var(--font-weight-semibold);
+}
+.entity-preview-list { display: grid; gap: 6px; }
+.entity-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-secondary);
+}
+.entity-preview-copy,
+.batch-copy { min-width: 0; flex: 1 1 auto; }
+.entity-preview-title,
+.batch-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--font-weight-medium); }
+.entity-preview-secondary,
+.batch-context { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-text-sm-size); line-height: var(--font-text-sm-line-height); }
+.entity-preview-action { flex: 0 0 auto; }
+.batch-list { display: grid; gap: 8px; }
+.batch-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-secondary);
+}
+.batch-action { min-height: 2rem; }
 .rows { display: flex; flex-direction: column; gap: 6px; }
 .row {
   display: flex;
@@ -786,6 +855,17 @@ input[type='date']:disabled { opacity: 0.5; }
   .field { width: 100%; }
   .field select,
   .field input[type='date'] { flex: 1 1 auto; min-height: 2.5rem; }
+  .entity-title { font-size: 1.125rem; }
+  .entity-facts { grid-template-columns: 1fr; gap: 2px; }
+  .entity-fact { display: grid; gap: 1px; padding-block: 5px; }
+  .entity-preview,
+  .batch-item { align-items: stretch; grid-template-columns: 1fr; gap: 8px; }
+  .entity-preview-title,
+  .entity-preview-secondary,
+  .batch-title,
+  .batch-context { overflow: visible; text-overflow: clip; white-space: normal; }
+  .entity-preview-action,
+  .batch-action { width: 100%; min-height: 2.5rem; }
 }
 `;
 

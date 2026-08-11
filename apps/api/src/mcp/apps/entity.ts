@@ -2,10 +2,9 @@
  * `@docket/api` — semantic entity widgets.
  *
  * @remarks
- * A model should choose the tool that names the thing it needs — `get_projects`, not an untyped
- * `get` plus a type switch. The documents still share this renderer because their lifecycle,
- * batching behaviour, and security boundary are identical; only the facts that deserve space
- * differ by entity type.
+ * Entity tools share a safe MCP App runtime, never a generic information architecture. A project
+ * needs a briefing; a comment needs its writing; a session needs the work in motion. This document
+ * factory therefore shares responsive primitives while every entity owns its composition.
  */
 import { appDocument } from './runtime';
 
@@ -25,10 +24,14 @@ export type EntityDocumentType =
   | 'org';
 
 const BODY = `
-<div class="headline" id="title" aria-live="polite"></div>
-<div class="muted" id="summary" hidden></div>
-<div class="rows" id="details"></div>
-<div id="related"></div>
+<section class="entity-header">
+  <div class="entity-kicker muted" id="kicker" hidden></div>
+  <h1 class="entity-title" id="title" aria-live="polite"></h1>
+  <p class="entity-narrative" id="narrative" hidden></p>
+  <div class="entity-context" id="context" hidden></div>
+</section>
+<div class="entity-facts" id="details" hidden></div>
+<div class="entity-sections" id="related"></div>
 <div class="edits" id="edits" hidden>
   <label class="field">
     <span class="field-label" id="state-label">State</span>
@@ -42,7 +45,7 @@ const BODY = `
 <div class="actions" id="single-actions">
   <button id="open" class="quiet" hidden>Open in Docket</button>
 </div>
-<div class="rows" id="batch" hidden></div>
+<div class="batch-list" id="batch" hidden></div>
 <p class="muted" id="missing" hidden></p>`;
 
 function scriptFor(entityType?: EntityDocumentType): string {
@@ -60,12 +63,12 @@ function scriptFor(entityType?: EntityDocumentType): string {
     agent: 'Agent', view: 'Saved view', org: 'Organization',
   };
 
-  function label() {
-    return labelFor[type] || 'Docket item';
-  }
-
   function text(value) {
     return value === null || value === undefined || value === '' ? '' : String(value);
+  }
+
+  function label() {
+    return labelFor[type] || 'Docket item';
   }
 
   function nameOf(item) {
@@ -77,143 +80,280 @@ function scriptFor(entityType?: EntityDocumentType): string {
     return raw ? window.docket.label(raw.slice(0, 10)) : '';
   }
 
-  function fact(labelText, value) {
-    const raw = text(value);
-    if (!raw) return null;
-    const row = document.createElement('div');
-    row.className = 'row';
-    const key = document.createElement('span');
-    key.className = 'muted';
-    key.textContent = labelText;
-    const valueEl = document.createElement('span');
-    valueEl.className = 'name';
-    valueEl.textContent = raw;
-    row.append(key, valueEl);
-    return row;
-  }
-
   function stateText(item) {
     const state = item && (item.state || item.status);
     return state ? window.docket.label(state) : '';
   }
 
-  function summaryFor(item) {
-    if (!item) return '';
-    if (type === 'update' || type === 'comment') return text(item.body);
-    if (type === 'agent') return text(item.guidance);
-    return text(item.summary || item.description);
+  function appendText(parent, className, value) {
+    const raw = text(value);
+    if (!raw) return null;
+    const node = document.createElement('div');
+    node.className = className;
+    node.textContent = raw;
+    parent.appendChild(node);
+    return node;
   }
 
-  function batchSummary(item) {
+  function renderHeader(title, narrative, context, kicker) {
+    el('title').textContent = title || label();
+    el('kicker').textContent = text(kicker);
+    el('kicker').hidden = !text(kicker);
+    el('narrative').textContent = text(narrative);
+    el('narrative').hidden = !text(narrative);
+    const root = el('context');
+    root.replaceChildren();
+    for (const item of context || []) {
+      const value = text(item);
+      if (value) appendText(root, 'entity-context-item', value);
+    }
+    root.hidden = root.childElementCount === 0;
+  }
+
+  function addFact(labelText, value) {
+    const raw = text(value);
+    if (!raw) return;
+    const root = el('details');
+    const item = document.createElement('div');
+    item.className = 'entity-fact';
+    const key = document.createElement('span');
+    key.className = 'entity-fact-label';
+    key.textContent = labelText;
+    const detail = document.createElement('span');
+    detail.className = 'entity-fact-value';
+    detail.textContent = raw;
+    item.append(key, detail);
+    root.appendChild(item);
+    root.hidden = false;
+  }
+
+  function previewContext(value) {
+    if (!value || typeof value !== 'object') return '';
     const parts = [];
-    const state = stateText(item);
+    const state = stateText(value);
     if (state) parts.push(state);
-    if (item.health) parts.push(window.docket.label(item.health));
+    if (value.health) parts.push(window.docket.label(value.health));
+    if (value.targetDate) parts.push(date(value.targetDate));
+    if (value.dueDate) parts.push(date(value.dueDate));
+    return parts.join(' · ');
+  }
+
+  function appendSection(heading, values, options) {
+    const visible = (values || []).filter(Boolean);
+    if (visible.length === 0) return;
+    const section = document.createElement('section');
+    section.className = 'entity-section';
+    const title = document.createElement('h2');
+    title.className = 'entity-section-title';
+    title.textContent = heading;
+    section.appendChild(title);
+    const list = document.createElement('div');
+    list.className = 'entity-preview-list';
+    for (const value of visible) {
+      const item = document.createElement('div');
+      item.className = 'entity-preview';
+      const copy = document.createElement('div');
+      copy.className = 'entity-preview-copy';
+      const name = document.createElement('div');
+      name.className = 'entity-preview-title';
+      name.textContent = typeof value === 'string' ? value : nameOf(value);
+      copy.appendChild(name);
+      const secondary = typeof value === 'object' && options && options.secondary
+        ? options.secondary(value)
+        : previewContext(value);
+      if (secondary) appendText(copy, 'entity-preview-secondary', secondary);
+      item.appendChild(copy);
+      if (typeof value === 'object' && value.href) {
+        const open = document.createElement('button');
+        open.className = 'quiet entity-preview-action';
+        open.textContent = 'Open';
+        open.setAttribute('aria-label', 'Open ' + nameOf(value) + ' in Docket');
+        open.addEventListener('click', () => window.docket.link(value.href));
+        item.appendChild(open);
+      }
+      list.appendChild(item);
+    }
+    section.appendChild(list);
+    el('related').appendChild(section);
+  }
+
+  function appendNarrativeSection(heading, body) {
+    const raw = text(body);
+    if (!raw) return;
+    const section = document.createElement('section');
+    section.className = 'entity-section';
+    const title = document.createElement('h2');
+    title.className = 'entity-section-title';
+    title.textContent = heading;
+    const prose = document.createElement('p');
+    prose.className = 'entity-section-narrative';
+    prose.textContent = raw;
+    section.append(title, prose);
+    el('related').appendChild(section);
+  }
+
+  function clearDetail() {
+    el('details').replaceChildren();
+    el('details').hidden = true;
+    el('related').replaceChildren();
+  }
+
+  function renderProject(item) {
+    renderHeader(nameOf(item), item.description || item.summary, [
+      stateText(item), item.health && window.docket.label(item.health), item.targetDate && 'Target ' + date(item.targetDate),
+    ], 'Project');
+    appendSection('Active work', item.tasks);
+    appendSection('Milestones', item.milestones, { secondary: (value) => value.targetDate ? 'Target ' + date(value.targetDate) : '' });
+    appendSection('Initiatives', item.initiatives);
+    appendNarrativeSection('Latest update', item.latestUpdate && item.latestUpdate.body);
+    if (typeof item.taskCount === 'number') addFact('Work items', item.taskCount + ' tasks');
+  }
+
+  function renderProgram(item) {
+    renderHeader(nameOf(item), item.description || item.summary, [
+      stateText(item), item.health && window.docket.label(item.health),
+    ], 'Program');
+    appendSection('Projects', item.projects);
+    appendSection('Initiatives', item.initiatives);
+    appendNarrativeSection('Latest update', item.latestUpdate && item.latestUpdate.body);
+    if (item.rollup) addFact('Portfolio', item.rollup.projects + ' projects · ' + item.rollup.tasks + ' tasks');
+  }
+
+  function renderInitiative(item) {
+    renderHeader(nameOf(item), item.description || item.summary, [
+      stateText(item), item.health && window.docket.label(item.health), item.targetDate && 'Target ' + date(item.targetDate),
+    ], 'Initiative');
+    appendSection('Projects', item.projects);
+    appendSection('Programs', item.programs);
+  }
+
+  function renderTask(item) {
+    renderHeader(nameOf(item), item.description, [stateText(item)], 'Task');
+    if (!Array.isArray(item.stateOptions)) addFact('State', stateText(item));
+    addFact('Priority', item.priority && item.priority !== 'none' ? window.docket.label(item.priority) : '');
+    if (!Array.isArray(item.stateOptions)) addFact('Due', date(item.dueDate));
+    appendSection('Blocking', item.blocking);
+    appendSection('Subtasks', item.subtasks);
+  }
+
+  function renderCycle(item) {
+    renderHeader(nameOf(item), '', [
+      stateText(item), item.startsAt && (date(item.startsAt) + (item.endsAt ? ' – ' + date(item.endsAt) : '')),
+    ], 'Cycle');
+    appendSection('Current work', item.tasks);
+  }
+
+  function renderTeam(item) {
+    renderHeader(nameOf(item), item.description, [], 'Team');
+    appendSection('People', item.members);
+    appendSection('Workflow', (item.workflowStates || []).map((state) => ({ name: state.name || state.key })));
+    addFact('Triage', item.triageEnabled ? 'Enabled' : 'Disabled');
+  }
+
+  function renderUpdate(item) {
+    renderHeader('Update', item.body, [
+      item.author && item.author.displayName && 'By ' + item.author.displayName,
+      item.health && window.docket.label(item.health),
+      item.createdAt && date(item.createdAt),
+    ], 'Status update');
+  }
+
+  function renderComment(item) {
+    renderHeader('Comment', item.body, [
+      item.author && item.author.displayName && 'By ' + item.author.displayName,
+      item.createdAt && date(item.createdAt),
+      item.editedAt && 'Edited ' + date(item.editedAt),
+    ], 'Comment');
+  }
+
+  function renderSession(item) {
+    const taskTitle = item.task && item.task.title;
+    const agentName = item.agent && item.agent.displayName;
+    renderHeader(taskTitle || 'Agent session', agentName ? agentName + ' is working on this.' : '', [
+      stateText(item), item.trigger && window.docket.label(item.trigger), item.startedAt && 'Started ' + date(item.startedAt),
+    ], 'Session');
+    appendSection('Recent activity', (item.activities || []).slice(-4).map((activity) => ({
+      name: window.docket.label(activity.type),
+      summary: activity.body && activity.body.text,
+    })), { secondary: (activity) => text(activity.summary) });
+  }
+
+  function renderAgent(item) {
+    renderHeader(nameOf(item), item.guidance, [
+      item.approvalPolicy && window.docket.label(item.approvalPolicy),
+      item.connection && item.connection.protocol && window.docket.label(item.connection.protocol),
+    ], 'Agent');
+  }
+
+  function renderView(item) {
+    renderHeader(nameOf(item), item.grouping ? 'Grouped by ' + window.docket.label(item.grouping) + '.' : '', [
+      item.scope && window.docket.label(item.scope),
+    ], 'Saved view');
+  }
+
+  function renderOrg(item) {
+    renderHeader(nameOf(item), '', [], 'Organization');
+    if (item.counts) addFact('Planning work', item.counts.teams + ' teams · ' + item.counts.projects + ' projects · ' + item.counts.programs + ' programs');
+  }
+
+  function renderEntity(item) {
+    clearDetail();
+    switch (type) {
+      case 'project': return renderProject(item);
+      case 'program': return renderProgram(item);
+      case 'initiative': return renderInitiative(item);
+      case 'task': return renderTask(item);
+      case 'cycle': return renderCycle(item);
+      case 'team': return renderTeam(item);
+      case 'update': return renderUpdate(item);
+      case 'comment': return renderComment(item);
+      case 'session': return renderSession(item);
+      case 'agent': return renderAgent(item);
+      case 'view': return renderView(item);
+      case 'org': return renderOrg(item);
+      default: return renderHeader(nameOf(item), item.summary || item.description, [], label());
+    }
+  }
+
+  function batchContext(item) {
+    const narrative = text(item.description || item.summary || (item.latestUpdate && item.latestUpdate.body));
+    if (narrative) return narrative;
+    const parts = [stateText(item), item.health && window.docket.label(item.health)];
     if (type === 'project' && typeof item.taskCount === 'number') parts.push(item.taskCount + ' tasks');
     if (type === 'program' && item.rollup) parts.push(item.rollup.projects + ' projects · ' + item.rollup.tasks + ' tasks');
     if (type === 'initiative' && item.childMix) parts.push(item.childMix.projects + ' projects · ' + item.childMix.programs + ' programs');
     if (type === 'cycle' && Array.isArray(item.tasks)) parts.push(item.tasks.length + ' tasks');
     if (type === 'session' && Array.isArray(item.activities)) parts.push(item.activities.length + ' activities');
     if (type === 'org' && item.counts) parts.push(item.counts.projects + ' projects · ' + item.counts.programs + ' programs');
-    return parts.join(' · ') || summaryFor(item);
+    return parts.filter(Boolean).join(' · ');
   }
 
-  function appendGroup(labelText, values) {
-    const visible = (values || []).filter(Boolean);
-    if (visible.length === 0) return;
-    const root = el('related');
-    const heading = document.createElement('div');
-    heading.className = 'group-label';
-    heading.textContent = labelText;
-    root.appendChild(heading);
-    const rows = document.createElement('div');
-    rows.className = 'rows';
-    for (const value of visible) {
-      const row = document.createElement('div');
-      row.className = 'row';
-      const name = document.createElement('span');
-      name.className = 'name';
-      name.textContent = typeof value === 'string' ? value : nameOf(value);
-      row.appendChild(name);
-      const when = value && typeof value === 'object' && value.targetDate ? date(value.targetDate) : '';
-      if (when) {
-        const meta = document.createElement('span');
-        meta.className = 'muted';
-        meta.textContent = when;
-        row.appendChild(meta);
+  function renderBatch(items) {
+    const batch = el('batch');
+    batch.replaceChildren();
+    for (const item of items) {
+      const row = document.createElement('article');
+      row.className = 'batch-item';
+      const copy = document.createElement('div');
+      copy.className = 'batch-copy';
+      const name = document.createElement('div');
+      name.className = 'batch-title';
+      name.textContent = nameOf(item);
+      copy.appendChild(name);
+      const context = batchContext(item);
+      if (context) appendText(copy, 'batch-context muted', context);
+      row.appendChild(copy);
+      if (item.href) {
+        const open = document.createElement('button');
+        open.className = 'quiet batch-action';
+        open.textContent = 'Open';
+        open.setAttribute('aria-label', 'Open ' + nameOf(item) + ' in Docket');
+        open.addEventListener('click', () => window.docket.link(item.href));
+        row.appendChild(open);
       }
-      rows.appendChild(row);
+      batch.appendChild(row);
     }
-    root.appendChild(rows);
-  }
-
-  function renderFacts(item) {
-    const details = el('details');
-    details.replaceChildren();
-    el('related').replaceChildren();
-    const add = (key, value) => {
-      const row = fact(key, value);
-      if (row) details.appendChild(row);
-    };
-
-    switch (type) {
-      case 'task':
-        if (!Array.isArray(item.stateOptions)) add('State', stateText(item));
-        add('Priority', item.priority && item.priority !== 'none' ? window.docket.label(item.priority) : '');
-        if (!Array.isArray(item.stateOptions)) add('Due', date(item.dueDate));
-        add('Blocked by', Array.isArray(item.blockedBy) && item.blockedBy.length ? item.blockedBy.length + ' task' + (item.blockedBy.length === 1 ? '' : 's') : '');
-        appendGroup('Blocking', item.blocking);
-        appendGroup('Subtasks', item.subtasks);
-        break;
-      case 'project':
-        add('Status', stateText(item)); add('Health', item.health && window.docket.label(item.health));
-        add('Target', date(item.targetDate)); add('Work', typeof item.taskCount === 'number' ? item.taskCount + ' tasks' : '');
-        appendGroup('Milestones', item.milestones); appendGroup('Initiatives', item.initiatives);
-        if (item.latestUpdate && item.latestUpdate.body) add('Latest update', item.latestUpdate.body);
-        break;
-      case 'program':
-        add('Status', stateText(item)); add('Health', item.health && window.docket.label(item.health));
-        if (item.rollup) add('Work', item.rollup.projects + ' projects · ' + item.rollup.tasks + ' tasks');
-        appendGroup('Projects', item.projects); appendGroup('Initiatives', item.initiatives);
-        if (item.latestUpdate && item.latestUpdate.body) add('Latest update', item.latestUpdate.body);
-        break;
-      case 'initiative':
-        add('Status', stateText(item)); add('Health', item.health && window.docket.label(item.health));
-        add('Target', date(item.targetDate));
-        if (item.childMix) add('Associated work', item.childMix.projects + ' projects · ' + item.childMix.programs + ' programs');
-        appendGroup('Projects', item.projects); appendGroup('Programs', item.programs);
-        break;
-      case 'cycle':
-        add('Status', stateText(item)); add('Window', date(item.startsAt) + (item.endsAt ? ' – ' + date(item.endsAt) : ''));
-        appendGroup('Tasks', item.tasks);
-        break;
-      case 'team':
-        add('Key', item.key); add('Triage', item.triageEnabled ? 'Enabled' : 'Disabled');
-        appendGroup('Workflow states', (item.workflowStates || []).map((state) => ({ name: state.name || state.key })));
-        appendGroup('Members', item.members);
-        break;
-      case 'update':
-        add('Health', item.health && window.docket.label(item.health)); add('Published', date(item.createdAt));
-        break;
-      case 'comment':
-        add('Published', date(item.createdAt)); add('Edited', date(item.editedAt));
-        break;
-      case 'session':
-        add('Status', stateText(item)); add('Trigger', item.trigger && window.docket.label(item.trigger));
-        add('Started', date(item.startedAt)); add('Finished', date(item.endedAt));
-        appendGroup('Activity', (item.activities || []).map((activity) => ({ name: window.docket.label(activity.type) })));
-        break;
-      case 'agent':
-        add('Approval policy', item.approvalPolicy && window.docket.label(item.approvalPolicy));
-        add('Connection', item.connection && item.connection.protocol && window.docket.label(item.connection.protocol));
-        break;
-      case 'view':
-        add('Scope', item.scope && window.docket.label(item.scope)); add('Grouping', item.grouping && window.docket.label(item.grouping));
-        break;
-      case 'org':
-        if (item.counts) add('Workspaces', item.counts.teams + ' teams · ' + item.counts.projects + ' projects · ' + item.counts.programs + ' programs');
-        break;
-    }
+    batch.hidden = false;
   }
 
   function isTask() {
@@ -234,8 +374,7 @@ function scriptFor(entityType?: EntityDocumentType): string {
     const glyph = entity && window.docket.stateGlyph(entity.stateType);
     if (glyph) stateLabel.appendChild(glyph);
     stateLabel.appendChild(document.createTextNode('State'));
-    const due = el('due');
-    due.value = entity && entity.dueDate ? String(entity.dueDate).slice(0, 10) : '';
+    el('due').value = entity && entity.dueDate ? String(entity.dueDate).slice(0, 10) : '';
     el('edits').hidden = !isTask();
   }
 
@@ -276,43 +415,32 @@ function scriptFor(entityType?: EntityDocumentType): string {
     if (entity && entity.href) window.docket.link(entity.href);
   });
 
-  function renderBatch(items) {
-    const batch = el('batch');
-    batch.replaceChildren();
-    for (const item of items) {
-      const row = document.createElement('div'); row.className = 'row';
-      const name = document.createElement('span'); name.className = 'name'; name.textContent = nameOf(item);
-      row.appendChild(name);
-      const summary = batchSummary(item);
-      if (summary) { const meta = document.createElement('span'); meta.className = 'muted'; meta.textContent = summary; row.appendChild(meta); }
-      if (item.href) {
-        const open = document.createElement('button'); open.className = 'quiet'; open.textContent = 'Open';
-        open.setAttribute('aria-label', 'Open ' + nameOf(item) + ' in Docket');
-        open.addEventListener('click', () => window.docket.link(item.href)); row.appendChild(open);
-      }
-      batch.appendChild(row);
-    }
-    batch.hidden = false;
-  }
-
   window.docket.onData((data) => {
     const items = Array.isArray(data.items) ? data.items : [];
     type = entityType || window.docket.input.type || type;
     el('missing').hidden = !Array.isArray(data.missing) || data.missing.length === 0;
     if (!el('missing').hidden) el('missing').textContent = 'Some requested items could not be shown.';
     if (items.length === 0) {
-      el('title').textContent = 'Nothing to show'; el('summary').hidden = false;
-      el('summary').textContent = 'Nothing here matches that any more.'; return;
+      renderHeader('Nothing to show', 'Nothing here matches that any more.', [], '');
+      clearDetail();
+      return;
     }
     if (items.length > 1) {
-      entity = null; el('title').textContent = items.length + ' ' + label().toLowerCase() + (items.length === 1 ? '' : 's');
-      el('summary').hidden = true; el('details').hidden = true; el('related').hidden = true; el('edits').hidden = true;
-      el('single-actions').hidden = true; renderBatch(items); return;
+      entity = null;
+      renderHeader(items.length + ' ' + label().toLowerCase() + (items.length === 1 ? '' : 's'), '', [], '');
+      el('details').hidden = true;
+      el('related').replaceChildren();
+      el('edits').hidden = true;
+      el('single-actions').hidden = true;
+      renderBatch(items);
+      return;
     }
-    entity = items[0]; el('batch').hidden = true; el('details').hidden = false; el('related').hidden = false; el('single-actions').hidden = false;
-    el('title').textContent = nameOf(entity);
-    const summary = summaryFor(entity); el('summary').textContent = summary; el('summary').hidden = !summary;
-    renderFacts(entity); renderEdits(); el('open').hidden = !entity.href;
+    entity = items[0];
+    el('batch').hidden = true;
+    el('single-actions').hidden = false;
+    renderEntity(entity);
+    renderEdits();
+    el('open').hidden = !entity.href;
   });
 })();`
   );

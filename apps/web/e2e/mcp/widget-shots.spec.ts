@@ -380,6 +380,7 @@ const CASES: readonly WidgetCase[] = [
           {
             id: 'p_1',
             name: 'Bus Buddies',
+            summary: 'Pairs riders with reliable transit guidance.',
             status: 'active',
             health: 'on_track',
             taskCount: 12,
@@ -388,6 +389,7 @@ const CASES: readonly WidgetCase[] = [
           {
             id: 'p_2',
             name: 'Corridor Fellowship',
+            summary: 'Supports people making a difference along the corridor.',
             status: 'active',
             health: 'at_risk',
             taskCount: 7,
@@ -396,6 +398,7 @@ const CASES: readonly WidgetCase[] = [
           {
             id: 'p_3',
             name: 'Urbanist Book Club',
+            summary: 'A monthly place to learn and plan together.',
             status: 'planned',
             taskCount: 3,
             href: '/orgs/org_1/projects/p_3',
@@ -416,6 +419,7 @@ const CASES: readonly WidgetCase[] = [
           {
             id: 'p_1',
             name: 'Bus Buddies',
+            summary: 'Pairs riders with reliable transit guidance.',
             status: 'active',
             health: 'on_track',
             taskCount: 12,
@@ -424,6 +428,7 @@ const CASES: readonly WidgetCase[] = [
           {
             id: 'p_2',
             name: 'Corridor Fellowship',
+            summary: 'Supports people making a difference along the corridor.',
             status: 'active',
             health: 'at_risk',
             taskCount: 7,
@@ -432,6 +437,7 @@ const CASES: readonly WidgetCase[] = [
           {
             id: 'p_3',
             name: 'Urbanist Book Club',
+            summary: 'A monthly place to learn and plan together.',
             status: 'planned',
             taskCount: 3,
             href: '/orgs/org_1/projects/p_3',
@@ -456,6 +462,7 @@ const CASES: readonly WidgetCase[] = [
             health: 'on_track',
             targetDate: '2026-11-01',
             taskCount: 12,
+            tasks: [{ id: 't_1', title: 'Recruit volunteer navigators', state: 'doing' }],
             milestones: [{ id: 'm_1', name: 'Volunteer launch', targetDate: '2026-09-01' }],
             initiatives: [{ id: 'i_1', name: 'Transit access' }],
             latestUpdate: { body: 'Recruiting is on schedule.' },
@@ -574,6 +581,7 @@ const CASES: readonly WidgetCase[] = [
             body: 'Volunteer recruitment is ahead of schedule.',
             health: 'on_track',
             createdAt: '2026-08-01T12:00:00Z',
+            author: { id: 'a_1', displayName: 'Marisol' },
             href: '/orgs/org_1/search?kind=update&id=u_1',
           },
         ],
@@ -594,6 +602,7 @@ const CASES: readonly WidgetCase[] = [
             body: 'The library can host the next meeting.',
             createdAt: '2026-08-02T12:00:00Z',
             editedAt: '2026-08-03T12:00:00Z',
+            author: { id: 'a_1', displayName: 'Marisol' },
             href: '/orgs/org_1/search?kind=comment&id=cm_1',
           },
         ],
@@ -614,7 +623,11 @@ const CASES: readonly WidgetCase[] = [
             status: 'waiting',
             trigger: 'manual',
             startedAt: '2026-08-04T12:00:00Z',
-            activities: [{ id: 'a_1', type: 'message' }],
+            agent: { id: 'ag_1', displayName: 'Marisol' },
+            task: { id: 't_1', title: 'Publish volunteer guide' },
+            activities: [
+              { id: 'a_1', type: 'message', body: { text: 'Waiting for the final venue notes.' } },
+            ],
             href: '/orgs/org_1/sessions/s_1',
           },
         ],
@@ -632,6 +645,7 @@ const CASES: readonly WidgetCase[] = [
         items: [
           {
             id: 'ag_1',
+            displayName: 'Marisol',
             guidance: 'Keep riders informed about service changes.',
             approvalPolicy: 'act_with_approval',
             connection: { protocol: 'mcp' },
@@ -903,9 +917,20 @@ for (const palette of PALETTES) {
               // check is looking at something.
               expect(await controls.count()).toBeGreaterThanOrEqual(3);
               await body.getByRole('button', { name: 'Open in Docket' }).click();
-              expect(await page.evaluate(() => window.receivedLinks)).toEqual([
-                '/orgs/org_1/tasks/t_1',
-              ]);
+              await expect
+                .poll(() => page.evaluate(() => window.receivedLinks))
+                .toEqual(['/orgs/org_1/tasks/t_1']);
+            }
+            if (testCase.name === 'entity-project') {
+              await expect(body.locator('.entity-title')).toHaveText('Bus Buddies');
+              await expect(body.locator('.entity-narrative')).toContainText(
+                'Pairs riders with reliable transit guidance.',
+              );
+              await expect(
+                body.locator('.entity-section', { hasText: 'Active work' }),
+              ).toContainText('Recruit volunteer navigators');
+              await expect(body.locator('.entity-facts')).not.toContainText('Associated work');
+              await expect(body.locator('#state')).toBeHidden();
             }
             if (
               testCase.name === 'entity-projects-batch' ||
@@ -915,9 +940,14 @@ for (const palette of PALETTES) {
               // Both the semantic project view and the compatibility document must leave every
               // requested project visible and hand each one to its own Docket route.
               await expect(body).toContainText('Bus Buddies');
+              await expect(body).toContainText('Pairs riders with reliable transit guidance.');
               await expect(body).toContainText('Corridor Fellowship');
               await expect(body).toContainText('Urbanist Book Club');
-              await expect(body).toContainText('Some requested items could not be shown.');
+              if (testCase.name === 'entity-projects-batch') {
+                await expect(body).toContainText('Some requested items could not be shown.');
+              } else {
+                await expect(body).not.toContainText('Some requested items could not be shown.');
+              }
               const openBusBuddies = body.getByRole('button', {
                 name: 'Open Bus Buddies in Docket',
               });
@@ -933,11 +963,13 @@ for (const palette of PALETTES) {
               await openBusBuddies.click();
               await openCorridorFellowship.click();
               await openUrbanistBookClub.click();
-              expect(await page.evaluate(() => window.receivedLinks)).toEqual([
-                '/orgs/org_1/projects/p_1',
-                '/orgs/org_1/projects/p_2',
-                '/orgs/org_1/projects/p_3',
-              ]);
+              await expect
+                .poll(() => page.evaluate(() => window.receivedLinks))
+                .toEqual([
+                  '/orgs/org_1/projects/p_1',
+                  '/orgs/org_1/projects/p_2',
+                  '/orgs/org_1/projects/p_3',
+                ]);
             }
             const unnamed = await controls.evaluateAll((nodes) =>
               nodes

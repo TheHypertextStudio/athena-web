@@ -4690,6 +4690,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   events, direct API re-reads, post-save focus, and a cold page reload. Repository validation passes
   `pnpm typecheck` (20/20 targets), `pnpm lint` (20/20), `pnpm test` (20/20; 1,953 web and
   3,672 API tests), `pnpm test:coverage` (18/18), `pnpm format:check`, and `pnpm build` (4/4).
+  The post-release scheduling audit also passes 10/10 targeted browser journeys after aligning the
+  legacy create-dialog, timezone-persistence, touch-selection, and collision-gutter assertions with
+  the shipped quick-create contract.
 - **Learnings**: Hosting the desktop dialog in the shell's primary-content layer and replacing the
   narrow Agenda canvas with an Agenda-owned sibling host make non-overlap layout invariants rather
   than offsets. Mock-free save/reload testing caught a controlled projection loop that cleared the

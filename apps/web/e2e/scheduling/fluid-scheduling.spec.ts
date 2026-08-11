@@ -202,7 +202,7 @@ test.describe('fluid scheduling interaction contract', () => {
     await expect(committedSelection).toBeVisible();
     await expect(committedSelection).toHaveAttribute('data-start-minutes', '600');
     await expect(committedSelection).toHaveAttribute('data-end-minutes', '690');
-    const createDialog = page.getByRole('dialog');
+    const createDialog = page.getByRole('dialog', { name: 'Create calendar item' });
     await expect(createDialog).toBeVisible();
     await expect
       .poll(() =>
@@ -213,15 +213,19 @@ test.describe('fluid scheduling interaction contract', () => {
         ),
       )
       .toBeGreaterThan(300);
-    const typeGroup = page.getByRole('group', { name: 'Calendar item type' });
+    const typeGroup = createDialog.getByRole('group', { name: 'Calendar item type' });
     await expect(typeGroup.getByRole('button', { name: 'timebox' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
-    await expect(page.getByLabel('Starts')).toHaveValue(`${ANCHOR_DATE}T10:00`);
-    await expect(page.getByLabel('Ends')).toHaveValue(`${ANCHOR_DATE}T11:30`);
-    await page.getByLabel('Title').fill('Deep work window');
-    await page.getByRole('button', { name: 'Create timebox' }).click();
+    await createDialog.getByRole('button', { name: /Edit schedule/ }).click();
+    await expect(createDialog.getByRole('button', { name: /^Start date/ })).toContainText(
+      'Jul 13, 2026',
+    );
+    await expect(createDialog.getByLabel('Start time')).toHaveValue('10:00');
+    await expect(createDialog.getByLabel('End time')).toHaveValue('11:30');
+    await createDialog.getByLabel('Title').fill('Deep work window');
+    await createDialog.getByRole('button', { name: 'Save' }).click();
 
     await expect.poll(() => state.itemCreates.length).toBe(1);
     await expect(committedSelection).toHaveCount(0);
@@ -231,6 +235,7 @@ test.describe('fluid scheduling interaction contract', () => {
       title: 'Deep work window',
       startsAt: `${ANCHOR_DATE}T10:00:00Z`,
       endsAt: `${ANCHOR_DATE}T11:30:00Z`,
+      timezone: 'UTC',
     });
     const createdItem = state.items.at(-1);
     if (!createdItem) throw new Error('The selected timebox was not added to fixture state.');
@@ -439,9 +444,11 @@ test.describe('touch scheduling interaction contract', () => {
     await touch('touchMove', startY + 72);
     await touch('touchEnd');
 
-    await expect(page.getByRole('group', { name: 'Calendar item type' })).toBeVisible();
-    await expect(page.getByLabel('Starts')).not.toHaveValue(
-      await page.getByLabel('Ends').inputValue(),
+    const createDialog = page.getByRole('dialog', { name: 'Create calendar item' });
+    await expect(createDialog.getByRole('group', { name: 'Calendar item type' })).toBeVisible();
+    await createDialog.getByRole('button', { name: /Edit schedule/ }).click();
+    await expect(createDialog.getByLabel('Start time')).not.toHaveValue(
+      await createDialog.getByLabel('End time').inputValue(),
     );
   });
 });

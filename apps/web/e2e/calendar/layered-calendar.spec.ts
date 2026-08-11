@@ -160,8 +160,9 @@ test.describe('layered calendar', () => {
     // Creating one fixture-backed event invalidates the server-hydrated layers key immediately;
     // this replaces the obsolete 31-second staleness wait and Week-mode query-key trick.
     await page.getByRole('button', { name: 'New', exact: true }).click();
-    await page.getByLabel('Title').fill('Refresh layer controls');
-    await page.getByRole('button', { name: 'Create event' }).click();
+    const createDialog = page.getByRole('dialog', { name: 'Create calendar item' });
+    await createDialog.getByLabel('Title').fill('Refresh layer controls');
+    await createDialog.getByRole('button', { name: 'Save' }).click();
     // Layer controls live in the toolbar's Calendars popover now — a permanent side column for
     // them was costing the schedule a fifth of the page width.
     const calendars = page.getByRole('button', { name: /^Calendars/ });
@@ -196,8 +197,9 @@ test.describe('layered calendar', () => {
 
     await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: 'New', exact: true }).click();
-    await page.getByLabel('Title').fill('Focus block');
-    await page.getByRole('button', { name: 'Create event' }).click();
+    const createDialog = page.getByRole('dialog', { name: 'Create calendar item' });
+    await createDialog.getByLabel('Title').fill('Focus block');
+    await createDialog.getByRole('button', { name: 'Save' }).click();
 
     const body = scheduleItem(page, CALENDAR_IDS.createdNativeItem).body;
     await expect(body).toBeVisible();

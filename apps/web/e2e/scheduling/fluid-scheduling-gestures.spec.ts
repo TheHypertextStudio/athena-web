@@ -162,8 +162,9 @@ test.describe('fluid scheduling interaction contract', () => {
     expect(collisionBoxes.every(Boolean)).toBe(true);
     const [first, second, third] = collisionBoxes;
     if (!first || !second || !third) throw new Error('Collision cards have no browser geometry.');
-    expect(second.x - (first.x + first.width)).toBeCloseTo(4, 0);
-    expect(third.x - (second.x + second.width)).toBeCloseTo(4, 0);
+    // Collision columns preserve the schedule's intentional two-pixel gutter.
+    expect(second.x - (first.x + first.width)).toBeCloseTo(2, 0);
+    expect(third.x - (second.x + second.width)).toBeCloseTo(2, 0);
 
     await dragScheduleItemToLane(page, movable.id, NEXT_DATE);
     await expect.poll(() => state.itemPatches.length).toBe(1);

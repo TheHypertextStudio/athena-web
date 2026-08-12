@@ -618,10 +618,15 @@ export default function InitiativesListClient(): JSX.Element {
           heading, the "New initiative" action and the sort control above render immediately from
           static copy. */}
       {overview.isPending ? (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }, (_, index) => (
-            <Skeleton key={index} className="h-11 w-full" />
-          ))}
+        // The same recessed container the loaded roster sits in. Without it the rows appeared to
+        // gain a surface around them the moment they arrived, which is a layout change dressed up
+        // as a load.
+        <div className="bg-surface-container-low relative rounded-xl p-2">
+          <div className="space-y-2">
+            {Array.from({ length: 5 }, (_, index) => (
+              <Skeleton key={index} className="h-11 w-full" />
+            ))}
+          </div>
         </div>
       ) : overview.isError ? (
         <p role="alert" className="text-error text-sm">

@@ -198,6 +198,12 @@ export function ComposerShell({
     !draftCommitted &&
     (title.trim().length > 0 || (summary ?? '').trim().length > 0 || body.trim().length > 0);
   const legacyTemplateSlotVisible = templateSlotVisible ?? Boolean(templateSlot);
+  // The draft is locked while its own create is in flight, and that is the correct behavior for a
+  // one-draft composer: this request is *about* these values, so a field edited after submitting
+  // would show a change the created object does not have. What was missing was not the ability to
+  // keep typing — it was any indication of why the form had gone quiet, which `aria-busy` below
+  // now supplies. Letting the next draft start before this one settles needs the pending-insert
+  // lifecycle, not a relaxed `disabled`.
   const editDisabled = creating || contentDisabled;
   const hasLegacyIcon = icon !== undefined && icon !== null && icon !== false;
   const hasLegacyContext = context !== undefined && context !== null && context !== false;
@@ -230,6 +236,9 @@ export function ComposerShell({
       <DialogContent
         className="max-w-3xl gap-0 p-0"
         aria-describedby={undefined}
+        // The whole form goes inert while a create is in flight. Without this, assistive tech has
+        // no way to tell that apart from a form that is simply not editable.
+        aria-busy={creating}
         onKeyDownCapture={(event) => {
           if (
             !onLeadingAction ||
@@ -398,7 +407,10 @@ export function ComposerShell({
               <Button
                 type="submit"
                 form={formId}
+                // Blocked only against submitting the same draft twice; `aria-busy` is what says
+                // the first one is under way, so the state is announced rather than merely drawn.
                 disabled={creating || !canSubmit}
+                aria-busy={creating}
                 className={leadingAction ? undefined : 'ml-auto'}
               >
                 {creating ? 'Creating…' : submitLabel}

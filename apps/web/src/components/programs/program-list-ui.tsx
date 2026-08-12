@@ -461,14 +461,23 @@ export function ProgramCards({
   );
 }
 
-/** Loading placeholder: plain row-height skeleton blocks, matching the Projects/Initiatives lists. */
+/**
+ * Loading placeholder for the program list.
+ *
+ * @returns Placeholder cards laid out on the list's own grid.
+ *
+ * @remarks
+ * The same container-query grid and card height the loaded list uses. It used to be a stack of
+ * full-width bars, so a single column of placeholders became two or three columns of cards on
+ * resolve — the list did not fill in so much as rearrange itself.
+ */
 export function ListSkeleton(): JSX.Element {
   // placeholder: the program rows — how many programs the workspace has and each one's name,
   // status, health and rolled-up project counts. The list's heading and actions are static.
   return (
-    <div className="space-y-2" aria-hidden="true">
+    <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @6xl:grid-cols-3" aria-hidden="true">
       {Array.from({ length: 6 }, (_, i) => (
-        <Skeleton key={i} className="h-[72px] w-full" />
+        <Skeleton key={i} className="h-[8.5rem] w-full rounded-xl" />
       ))}
     </div>
   );

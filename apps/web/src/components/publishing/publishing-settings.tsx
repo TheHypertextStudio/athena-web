@@ -28,7 +28,7 @@ import type { WorkspaceDomainOut } from '@docket/types';
 import { Globe } from '@docket/ui/icons';
 import { Button, ControlGroup, Field, Input, Skeleton, Text } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 
 import { api } from '@/lib/api';
 import { SectionHeader } from '@/components/settings/section-header';
@@ -102,6 +102,17 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
   const livePublications = publications.filter((publication) => publication.published);
   const briefHost = env.NEXT_PUBLIC_BRIEF_HOST;
   const workspaceSlug = orgQ.data?.slug;
+  const verifiedDomains = domains.filter((domain) => domain.verified);
+  // A verified custom domain answers at its own root — no workspace segment, since the domain
+  // already belongs to exactly this workspace — so it wins over the shared brief host, which
+  // still needs the identity slug to disambiguate the many workspaces that share it.
+  const reachableUrl =
+    verifiedDomains[0] !== undefined
+      ? `https://${verifiedDomains[0].host}/`
+      : briefHost !== undefined && workspaceSlug !== undefined
+        ? `https://${briefHost}/${workspaceSlug}/`
+        : undefined;
+  const extraVerifiedDomains = verifiedDomains[0] !== undefined ? verifiedDomains.length - 1 : 0;
 
   return (
     <div className="flex max-w-2xl flex-col gap-10">
@@ -115,14 +126,26 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
           <Text as="h3" id="workspace-address" token="title-small">
             Workspace address
           </Text>
-          <Text as="p" token="body-medium" tone="muted">
-            {briefHost === undefined
-              ? 'No shared brief host is configured for this deployment.'
-              : 'Every workspace has one — set it in General settings.'}
-          </Text>
+          {reachableUrl === undefined ? (
+            <Text as="p" token="body-medium" tone="muted">
+              Not reachable yet.
+            </Text>
+          ) : (
+            <Text as="p" token="body-medium">
+              <a
+                href={reachableUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                {reachableUrl}
+              </a>
+              {extraVerifiedDomains > 0 ? ` +${String(extraVerifiedDomains)} more` : null}
+            </Text>
+          )}
         </div>
 
-        <Field label="Address" description="Edited in Settings → General.">
+        <Field label="Identity" description="Edited in Settings → General.">
           <Input
             controlSize="lg"
             readOnly
@@ -145,8 +168,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
             Custom domains
           </Text>
           <Text as="p" token="body-medium" tone="muted">
-            Serve published pages from a domain you own. A domain works only after DNS proves you
-            own it, and a domain can belong to one workspace.
+            Serve published pages from a domain you own.
           </Text>
         </div>
 
@@ -267,6 +289,14 @@ function DomainRow({
   const remove = useRemoveDomainMutation(orgId);
   const failure = verify.data?.failure ?? domain.lastFailure;
 
+  useEffect(() => {
+    // A "Verified" badge is a claim about DNS *right now*, not whenever someone last happened to
+    // click a button — so re-confirm automatically on every view. If the record was removed since
+    // the last check, the API's own verify handler already clears `verifiedAt`, and this row
+    // re-renders into its unverified state (with the reason and the record to re-add) on its own.
+    if (domain.verified) verify.mutate(domain.id);
+  }, [domain.id]);
+
   return (
     <li className="bg-surface-container flex flex-col gap-3 rounded-xl p-4">
       <div className="flex items-center justify-between gap-3">
@@ -302,15 +332,17 @@ function DomainRow({
       ) : null}
 
       <ControlGroup controlSize="md">
-        <Button
-          variant="secondary"
-          disabled={verify.isPending}
-          onClick={() => {
-            verify.mutate(domain.id);
-          }}
-        >
-          {domain.verified ? 'Re-check' : 'Check DNS'}
-        </Button>
+        {domain.verified ? null : (
+          <Button
+            variant="secondary"
+            disabled={verify.isPending}
+            onClick={() => {
+              verify.mutate(domain.id);
+            }}
+          >
+            Check DNS
+          </Button>
+        )}
         <Button
           variant="ghost"
           disabled={remove.isPending}

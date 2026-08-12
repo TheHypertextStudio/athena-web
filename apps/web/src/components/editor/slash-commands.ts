@@ -116,9 +116,7 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     keywords: ['todo', 'task', 'check', 'checkbox', 'list'],
     icon: ListChecks,
     run: (editor, range) => {
-      // The checklist is not in this editor's schema, so it is written as the Markdown a task
-      // list round-trips through. Ticking happens where tasks live, not inside a brief.
-      replacing(editor, range).insertContent('- [ ] ').run();
+      replacing(editor, range).toggleTaskList().run();
     },
   },
   {

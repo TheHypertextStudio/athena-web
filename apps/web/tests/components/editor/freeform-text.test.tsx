@@ -43,4 +43,15 @@ describe('FreeformTextEditor', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(writing.closest('.opacity-60')).toBeNull();
   });
+
+  it('renders GFM checklist markdown as real, interactive checkboxes rather than literal [ ] text', () => {
+    renderEditor(<FreeformText value={'- [ ] first\n- [x] second'} emptyText="Nothing here." />);
+
+    const boxes = screen.getAllByRole('checkbox');
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0]).not.toBeChecked();
+    expect(boxes[1]).toBeChecked();
+    expect(screen.queryByText('[ ]', { exact: false })).toBeNull();
+    expect(screen.queryByText('[x]', { exact: false })).toBeNull();
+  });
 });

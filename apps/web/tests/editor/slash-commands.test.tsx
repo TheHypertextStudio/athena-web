@@ -164,6 +164,18 @@ describe('the slash insert menu', () => {
     expect(surface.textContent).not.toContain('/quo');
   });
 
+  it('the Checklist command inserts a real, interactive checkbox — not literal [ ] text', async () => {
+    const { user, surface } = await openEditor();
+    await user.keyboard('/check');
+    await screen.findByRole('listbox', { name: 'Insert a block' });
+    await user.keyboard('{Enter}');
+    await waitFor(() => {
+      expect(surface.querySelector('li[data-checked]')).not.toBeNull();
+    });
+    expect(surface.querySelector('input[type="checkbox"]')).not.toBeNull();
+    expect(surface.textContent).not.toContain('[ ]');
+  });
+
   it('closes on Escape and leaves the typed text exactly where it was', async () => {
     const { user, surface } = await openEditor();
     await user.keyboard('/quo');

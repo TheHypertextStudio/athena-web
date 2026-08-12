@@ -273,6 +273,11 @@ export function useNotionSetup(orgId: string, integrationId: string): NotionSetu
     invalidateKeys: [
       queryKeys.notionMirrorDatabases(orgId, integrationId),
       queryKeys.notionMirrorPeople(orgId, integrationId),
+      // The integrations list too, because provisioning writes the container page into
+      // `integration.config` and that list is where the hub reads it from. Without this the
+      // "Where this lives" row cannot appear until something else happens to refetch — the
+      // surface would report success and then fail to show what it just created.
+      queryKeys.integrations(orgId),
     ],
     onSuccess: (run: { status: string }) => {
       // A failed run still arrives as a 200. Reporting it as success is exactly the dishonesty

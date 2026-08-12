@@ -13,8 +13,11 @@
  *
  * The RPC client is mocked so these assert real behavior without touching the live API.
  */
+import type { QueryClient } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { queryKeys } from '@/lib/query-keys';
 
 import { choosePickerOption } from '../../support/pickers';
 import { makeQueryWrapper, okResponse } from '../../support/query';
@@ -62,9 +65,10 @@ const PAGE = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-function renderCard(): void {
-  const { wrapper } = makeQueryWrapper();
+function renderCard(): QueryClient {
+  const { client, wrapper } = makeQueryWrapper();
   render(<NotionSetupCard orgId={ORG_ID} integrationId={INTEGRATION_ID} />, { wrapper });
+  return client;
 }
 
 beforeEach(() => {
@@ -142,6 +146,29 @@ describe('NotionSetupCard', () => {
 
     fireEvent.click(share);
     expect(linkSocial).toHaveBeenCalledWith(expect.objectContaining({ provider: 'notion' }));
+  });
+
+  it('refetches the connection itself, not just its databases, after provisioning', async () => {
+    // Provisioning writes the container page into `integration.config`, and the hub reads it from
+    // the integrations list — a different query. Without invalidating that too, the surface
+    // reports success and then cannot show the page it just created, because the list it reads
+    // from still holds the config from before the write.
+    parentPagesGet.mockResolvedValue(okResponse({ items: [PAGE()] }));
+    const client = renderCard();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    fireEvent.click(await screen.findByRole('button', { name: /Notion page/ }));
+    await screen.findByRole('option', { name: /Team wiki/ });
+    choosePickerOption(/Team wiki/);
+    fireEvent.click(await screen.findByRole('button', { name: 'Create in Notion' }));
+
+    await waitFor(() => {
+      expect(provisionPost).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      const keys = invalidate.mock.calls.map((call) => JSON.stringify(call[0]?.queryKey));
+      expect(keys).toContain(JSON.stringify(queryKeys.integrations(ORG_ID)));
+    });
   });
 
   it('reports a failed run as a failure, even though it arrives as a 200', async () => {

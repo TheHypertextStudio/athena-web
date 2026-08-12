@@ -29,7 +29,12 @@ import { useActiveOrg } from '@/components/active-org';
 import { useAppPathname } from '@/lib/app-location';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 
-import { DEFAULT_WORKSPACE_SETTINGS_SECTION, sectionHref } from './settings-registry';
+import {
+  DEFAULT_PERSONAL_SETTINGS_SECTION,
+  DEFAULT_WORKSPACE_SETTINGS_SECTION,
+  personalSectionHref,
+  sectionHref,
+} from './settings-registry';
 import { SettingsShellNav, useSettingsShellWorkspace } from './settings-shell-nav';
 
 /** The pathname to fall back to when settings was opened with no prior page (a direct link). */
@@ -76,7 +81,7 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
       if (!(event.metaKey || event.ctrlKey) || event.key !== ',') return;
       if (isEditableTarget(event.target)) return;
       event.preventDefault();
-      router.push('/settings');
+      router.push(personalSectionHref(DEFAULT_PERSONAL_SETTINGS_SECTION));
     }
     document.addEventListener('keydown', handleKeyDown);
     return () => {

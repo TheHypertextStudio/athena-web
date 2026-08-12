@@ -18,6 +18,10 @@ import { useRouter } from 'next/navigation';
 import type { JSX } from 'react';
 
 import { signOutAndPurge } from '@/lib/sign-out';
+import {
+  DEFAULT_PERSONAL_SETTINGS_SECTION,
+  personalSectionHref,
+} from '@/components/settings/settings-registry';
 
 /** The display identity already resolved by the authenticated shell. */
 export interface AccountMenuIdentity {
@@ -104,7 +108,7 @@ export default function AccountMenu({
         <DropdownMenuItem
           onSelect={() => {
             dismissDrawer?.();
-            router.push('/settings');
+            router.push(personalSectionHref(DEFAULT_PERSONAL_SETTINGS_SECTION));
           }}
         >
           <Settings aria-hidden="true" className="size-4" />

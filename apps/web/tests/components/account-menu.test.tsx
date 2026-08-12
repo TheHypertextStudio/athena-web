@@ -79,6 +79,9 @@ describe('AccountMenu', () => {
     );
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
 
-    expect(navigation.push).toHaveBeenCalledWith('/settings');
+    // The resolved destination, not the `/settings` hop. `/settings` only redirects server-side,
+    // and a server redirect is not reliably observed across a client-side router transition —
+    // which parked the menu on a Settings dialog with no section selected.
+    expect(navigation.push).toHaveBeenCalledWith('/settings/profile');
   });
 });

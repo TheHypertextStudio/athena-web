@@ -170,7 +170,8 @@ does not trust it.
    once and nothing is cut over yet.
 2. Deploy. Confirm the API answers on `api.<docket-apex>` and that the old host still works.
 3. Flip `WEB_URL`, `API_URL`, `ADMIN_URL`. Deploy. `BETTER_AUTH_TRUSTED_ORIGINS` and
-   `MCP_ALLOWED_ORIGINS` derive from `WEB_URL` inside `deploy.yml`, so they follow automatically.
+   MCP issuer, resource, and sign-in URLs derive from `API_URL` and `WEB_URL` inside the runtime
+   environment. `/mcp` is Bearer-only and has no client-origin deployment list to cut over.
 4. Only then §5 — the passkey RP ID.
 5. Last, prune the old hosts from `BETTER_AUTH_ALLOWED_HOSTS`.
 

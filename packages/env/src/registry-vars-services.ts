@@ -120,16 +120,6 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     where: 'Canonical MCP resource URL (defaults to ${API_URL}/mcp)',
   },
   {
-    name: 'MCP_ALLOWED_ORIGINS',
-    slice: 'mcp',
-    scope: 'server',
-    targets: ['api'],
-    required: false,
-    zod: mcpServer.MCP_ALLOWED_ORIGINS,
-    where:
-      'CSV of allowed browser Origins for /mcp (DNS-rebinding guard) — a security allowlist, never derived',
-  },
-  {
     name: 'OIDC_LOGIN_PAGE_URL',
     slice: 'mcp',
     scope: 'server',
@@ -146,24 +136,6 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     required: true,
     zod: mcpServer.MCP_TASKS_ENABLED,
     where: 'true|false — enable the MCP Tasks utility (requires MCP_SESSION_STORE_URL)',
-  },
-  {
-    name: 'MCP_CIMD_TRUST_ALLOWLIST',
-    slice: 'mcp',
-    scope: 'server',
-    targets: ['api'],
-    required: false,
-    zod: mcpServer.MCP_CIMD_TRUST_ALLOWLIST,
-    where: 'CSV of trusted client-id metadata document origins',
-  },
-  {
-    name: 'MCP_CIMD_STRICT',
-    slice: 'mcp',
-    scope: 'server',
-    targets: ['api'],
-    required: true,
-    zod: mcpServer.MCP_CIMD_STRICT,
-    where: 'true|false — strict CIMD validation (default true)',
   },
   {
     name: 'MCP_SESSION_STORE_URL',

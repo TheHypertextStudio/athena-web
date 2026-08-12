@@ -262,9 +262,8 @@ const UNCONFIGURED_PROBLEM_BASE = 'https://docket.invalid';
  * It reads `process.env` directly rather than importing `@docket/env/api`, and that is deliberate:
  * this module is imported by nearly every route and by most test harnesses, and an `import { env }`
  * here would evaluate the whole env slice the instant anything touched an error type. Suites that
- * legitimately configure env in `beforeAll` (`tests/mcp/mcp-auth.test.ts` stubs
- * `MCP_ALLOWED_ORIGINS` before importing the modules that read it) would then be reading a frozen
- * snapshot taken before their own setup ran. Nothing is bypassed by reading raw: `WEB_URL` is a
+ * legitimately configure env in `beforeAll` would then be reading a frozen snapshot taken before
+ * their own setup ran. Nothing is bypassed by reading raw: `WEB_URL` is a
  * required `z.string().min(1)` in `packages/env`'s `sharedServer` slice, so a process serving
  * traffic has already refused to boot on a missing or malformed value.
  *

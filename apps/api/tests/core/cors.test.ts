@@ -32,10 +32,11 @@ describe('buildCorsMiddleware — session-cookie routes', () => {
     expect(res.headers.get('Access-Control-Allow-Credentials')).toBe('true');
   });
 
-  it('gates /mcp behind the same strict allowlist (it authenticates via session/bearer, not client credentials)', async () => {
+  it('keeps /mcp credential-free so any OAuth client can use its bearer token', async () => {
     const app = appWith(['https://docket.hypertext.studio']);
     const res = await app.request('/mcp', { headers: { origin: 'https://claude.ai' } });
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(res.headers.get('Access-Control-Allow-Credentials')).toBeNull();
   });
 });
 

@@ -55,10 +55,13 @@ const SHARE_TOKEN_HEADER = 'X-Docket-Share-Token';
  */
 const PUBLIC_SHARE_PATHS: ReadonlySet<string> = new Set(['/v1/public/time/status']);
 
+/** OAuth bearer-token resource that never accepts a Docket browser session cookie. */
+const PUBLIC_MCP_PATHS: ReadonlySet<string> = new Set(['/mcp']);
+
 /**
  * Build the root server's CORS middleware: a strict, credentialed allowlist
  * ({@link trustedOrigins}) for every session-cookie route, and an open, credential-free
- * policy for {@link PUBLIC_OAUTH_PATHS} and {@link PUBLIC_SHARE_PATHS}.
+ * policy for {@link PUBLIC_OAUTH_PATHS}, {@link PUBLIC_SHARE_PATHS}, and the MCP resource.
  */
 export function buildCorsMiddleware(trustedOrigins: readonly string[]): MiddlewareHandler<AppEnv> {
   const sessionCors = cors({
@@ -73,7 +76,9 @@ export function buildCorsMiddleware(trustedOrigins: readonly string[]): Middlewa
     exposeHeaders: ['Authorization', 'WWW-Authenticate'],
   });
   return (c, next) =>
-    PUBLIC_OAUTH_PATHS.has(c.req.path) || PUBLIC_SHARE_PATHS.has(c.req.path)
+    PUBLIC_OAUTH_PATHS.has(c.req.path) ||
+    PUBLIC_SHARE_PATHS.has(c.req.path) ||
+    PUBLIC_MCP_PATHS.has(c.req.path)
       ? publicOAuthCors(c, next)
       : sessionCors(c, next);
 }

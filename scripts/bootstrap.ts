@@ -660,7 +660,6 @@ BETTER_AUTH_PASSKEY_RP_NAME=Docket (local)
 CRON_SECRET=${cronSecret}
 BILLING_ENABLED=false
 MCP_TASKS_ENABLED=false
-MCP_CIMD_STRICT=false
 
 # Client (picked up by Next.js apps)
 NEXT_PUBLIC_API_URL=https://api.docket.localhost

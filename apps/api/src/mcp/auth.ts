@@ -2,25 +2,22 @@
  * `@docket/api` — MCP request authentication + per-org actor resolution.
  *
  * @remarks
- * The MCP endpoint reuses the exact Docket auth stack: it validates the request
- * Origin (a DNS-rebinding guard that allows the configured `MCP_ALLOWED_ORIGINS`
- * plus localhost in dev), resolves a Better Auth session from the request headers
- * (cookie OR `Authorization: Bearer …`), and — per tool/resource call — loads the
+ * The MCP endpoint validates the request Origin, resolves an OAuth access token from
+ * `Authorization: Bearer …`, and — per tool/resource call — loads the
  * caller's human {@link actor} within a target org so the handlers can authorize via
  * {@link canActor} before touching data. Nothing here bypasses the permission engine;
  * it only establishes *who* is asking, exactly like {@link orgContextMiddleware}.
  */
-import { auth, verifyAccessToken } from '@docket/auth';
+import { verifyAccessToken } from '@docket/auth';
 import { actor, db, oauthClient, oauthConsent, user as userTable } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 
 import { env } from '../env';
 import { assertProductCapability } from '../billing/entitlement';
-import { AuthError, NotFoundError } from '../error';
-import { MCP_SCOPES } from './scope';
+import { AuthError, CapabilityError, NotFoundError } from '../error';
 
 /**
- * Who an MCP call is executing as: an authenticated human user (cookie/Bearer paths)
+ * Who an MCP call is executing as: an authenticated human user (OAuth Bearer path)
  * or an internal agent principal (Athena's in-process loop; see
  * {@link import('./internal-session').internalAgentContext}).
  *
@@ -68,9 +65,8 @@ export interface McpContext {
   /** Who is asking. */
   readonly principal: McpPrincipal;
   /**
-   * The verified OAuth scopes the caller carries (mcp-surface.md §2.2). A first-party
-   * cookie session carries the full set (it has already consented to the whole app); a
-   * Bearer access token carries only its granted, audience-bound scopes; an internal
+   * The verified OAuth scopes the caller carries (mcp-surface.md §2.2). A Bearer access
+   * token carries only its granted, audience-bound scopes; an internal
    * agent principal carries the fixed agent-session set (never `connectors:link`).
    */
   readonly scopes: readonly string[];
@@ -78,8 +74,8 @@ export interface McpContext {
    * The registered OAuth client the call arrived through (the token's verified `azp`).
    *
    * @remarks
-   * Set ONLY by the Bearer path, where a registered client actually exists; absent for a
-   * first-party cookie session and for the internal agent path, so "no client" has one
+   * Set ONLY by the Bearer path, where a registered client actually exists; absent for the
+   * internal agent path, so "no client" has one
    * spelling and {@link resolveBearerContext} stays the field's only writer. Consumers read
    * it as `ctx.clientId ?? null`.
    *
@@ -103,32 +99,19 @@ export interface McpActor {
   readonly actorId: string;
 }
 
-/** Whether a host string denotes localhost (any port), used to allow dev origins. */
+/** Whether a host string denotes localhost (any port), used to allow local development. */
 function isLocalhostHost(host: string): boolean {
   return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
 }
 
 /**
- * Build the set of explicitly allowed origins from `MCP_ALLOWED_ORIGINS`.
- *
- * @returns the trimmed, non-empty configured origins (empty when unset).
- */
-function configuredOrigins(): string[] {
-  return (
-    env.MCP_ALLOWED_ORIGINS?.split(',')
-      .map((s) => s.trim())
-      .filter(Boolean) ?? []
-  );
-}
-
-/**
- * Validate the request `Origin` header (DNS-rebinding protection).
+ * Validate the request `Origin` header without identifying client vendors.
  *
  * @remarks
- * A missing Origin is allowed (non-browser MCP clients — e.g. CLIs — send none).
- * When present, the origin must either be in `MCP_ALLOWED_ORIGINS` or, outside
- * production (`NODE_ENV !== 'production'`), point at localhost. Anything else is
- * rejected so a malicious page cannot drive the local server via DNS rebinding.
+ * A missing Origin is allowed because native MCP clients do not send one. A browser
+ * origin must be a syntactically exact HTTPS origin. Local development additionally
+ * permits HTTP loopback origins outside production. Client identity is established by
+ * OAuth, not by a deployment-time list of vendor domains.
  *
  * @param headers - The incoming request headers.
  * @returns true when the origin is acceptable.
@@ -137,18 +120,16 @@ export function isOriginAllowed(headers: Headers): boolean {
   const origin = headers.get('origin');
   if (!origin) return true;
 
-  if (configuredOrigins().includes(origin)) return true;
-
-  if (env.NODE_ENV !== 'production') {
-    try {
-      const { hostname } = new URL(origin);
-      if (isLocalhostHost(hostname)) return true;
-    } catch {
-      return false;
-    }
+  try {
+    const url = new URL(origin);
+    if (url.origin !== origin || url.username || url.password) return false;
+    if (url.protocol === 'https:') return true;
+    return (
+      env.NODE_ENV !== 'production' && url.protocol === 'http:' && isLocalhostHost(url.hostname)
+    );
+  } catch {
+    return false;
   }
-
-  return false;
 }
 
 /** Whether the request presents an OAuth `Authorization: Bearer …` access token. */
@@ -308,42 +289,22 @@ async function resolveBearerContext(token: string): Promise<McpContext> {
  * Resolve the authenticated Docket caller from request headers, or throw 401.
  *
  * @remarks
- * Two paths (mcp-surface.md §2.5):
- * - **OAuth Bearer** — when an `Authorization: Bearer …` token is present, it is validated
- *   as an audience-bound MCP access token via {@link resolveBearerContext}; the caller's
- *   scope set is exactly what the token carries (the scope layer then gates each call).
- * - **First-party cookie session** — a Better Auth session cookie (the same resolver the
- *   RPC {@link sessionMiddleware} uses) authenticates first-party clients (Docket web,
- *   Athena planner) that have already consented to the whole app; they carry the FULL
- *   scope set, so the scope layer is a no-op and only the per-org grant cascade gates.
- *
- * The Origin guard (DNS-rebinding) is applied first in both cases.
+ * The OAuth Bearer token is validated as an audience-bound MCP access token via
+ * {@link resolveBearerContext}; the caller's scope set is exactly what the token carries.
+ * Browser session cookies are deliberately ignored on this public resource. Docket's
+ * in-process Athena runtime uses its separate internal principal path.
  *
  * @param headers - The incoming request headers.
  * @returns the resolved {@link McpContext} (incl. verified scopes).
- * @throws {AuthError} When the Origin is rejected or no valid token/session is present.
+ * @throws {CapabilityError} When a present Origin is invalid.
+ * @throws {AuthError} When no valid bearer token is present.
  */
 export async function resolveMcpContext(headers: Headers): Promise<McpContext> {
-  if (!isOriginAllowed(headers)) throw new AuthError('Origin not allowed');
+  if (!isOriginAllowed(headers)) throw new CapabilityError('Origin not allowed');
 
   const token = bearerToken(headers);
   if (token) return resolveBearerContext(token);
-
-  const session = await auth.api.getSession({ headers });
-  if (!session?.user) throw new AuthError();
-
-  return {
-    principal: {
-      kind: 'user',
-      userId: session.user.id,
-      userName: session.user.name || null,
-      userEmail: session.user.email,
-    },
-    // A consented first-party session is granted the full scope set; the granular per-org
-    // grant cascade remains the binding authorization layer for it. No `clientId`: there is
-    // no registered OAuth client on this path, and the field's absence is what says so.
-    scopes: [...MCP_SCOPES],
-  };
+  throw new AuthError();
 }
 
 /**

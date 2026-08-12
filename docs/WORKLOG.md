@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-11
+> **Last Updated**: 2026-08-12
 
 ---
 
@@ -89,7 +89,7 @@
         application-owned error-copy violations.
   - [x] Remove the public claim that Docket approves particular MCP clients; the screenshot now
         describes the product capability without presenting a vendor permission model.
-  - [ ] Replace the MCP vendor allowlists with OAuth-bound, client-neutral interoperability.
+  - [x] Replace the MCP vendor allowlists with OAuth-bound, client-neutral interoperability.
   - [ ] Add idempotent Stripe sandbox and production provisioning to the standard bootstrap path.
   - [ ] Prove Stripe checkout, webhook activation, access, management, cancellation, and return routing.
   - [ ] Deploy the validated release and verify the production customer journey.
@@ -120,6 +120,11 @@
   Current main added root error and missing-page surfaces after the debt snapshot; removing their
   redundant type overrides and the stale unmatched-route exemption restored the ratchet without
   changing recovery behavior or copy.
+  The MCP failure was architectural rather than editorial: `/mcp` accepted browser cookies and
+  used configured client domains as an authorization boundary. It is now Bearer-only with open,
+  credential-free CORS; present Origins are validated structurally, and CIMD retains its HTTPS,
+  DNS, public-address, size, timeout, redirect, PKCE, scope, consent, audience, and revocation
+  checks without a client-vendor allowlist.
 
 ---
 

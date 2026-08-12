@@ -218,11 +218,8 @@ export const stripeServer = {
 export const mcpServer = {
   MCP_ISSUER_URL: z.string().optional(),
   MCP_RESOURCE_URL: z.string().optional(),
-  MCP_ALLOWED_ORIGINS: z.string().optional(),
   OIDC_LOGIN_PAGE_URL: z.string().optional(),
   MCP_TASKS_ENABLED: boolFromString(),
-  MCP_CIMD_TRUST_ALLOWLIST: z.string().optional(),
-  MCP_CIMD_STRICT: boolFromString(),
   MCP_SESSION_STORE_URL: z.string().optional(),
 };
 

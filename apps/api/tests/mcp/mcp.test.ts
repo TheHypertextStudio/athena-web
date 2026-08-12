@@ -292,14 +292,14 @@ describe('Origin + auth guard', () => {
     expect(problem.code).toBe('unauthorized');
   });
 
-  it('rejects a disallowed Origin before any session check (401)', async () => {
+  it('does not treat an unknown HTTPS client origin as an authorization decision', async () => {
     const app = mcpApp();
     const res = await app.request('/mcp', {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
-        origin: 'https://evil.example.com',
+        origin: 'https://new-client.example.com',
       },
       body: INITIALIZE_BODY,
     });

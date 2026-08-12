@@ -21,7 +21,7 @@ Discovery documents (what OAuth-aware clients fetch automatically):
 
 The server is an OAuth 2.1 resource server; Better Auth (mounted at `/api/auth/*` on the same origin) is the authorization server. A connecting client:
 
-1. **Registers** — either classic Dynamic Client Registration (`POST /api/auth/mcp/register`) or a URL-form `client_id` pointing at a Client ID Metadata Document (CIMD). CIMD hosts are allowlisted via `MCP_CIMD_TRUST_ALLOWLIST` when `MCP_CIMD_STRICT` is on.
+1. **Registers** — either classic Dynamic Client Registration (`POST /api/auth/mcp/register`) or a URL-form `client_id` pointing at a Client ID Metadata Document (CIMD). Any public HTTPS metadata host can register; Docket validates the document and blocks private-network fetches instead of maintaining a vendor list.
 2. **Authorizes** — the browser opens Docket's sign-in (`/sign-in` on the web origin) and the consent screen (`/oauth/authorize`), where you approve the requested scopes.
 3. **Exchanges the code** for an access token (PKCE, 15-minute expiry, 30-day refresh token) audience-bound to the `/mcp` resource URL (RFC 8707).
 
@@ -149,11 +149,11 @@ The authoritative surface contract is [`specs/mcp-surface.md`](specs/mcp-surface
 
 ## Self-hosting: the server is on by default
 
-The OAuth AS/RS is core functionality — it is **always on**, in every deploy, with no MCP-specific configuration required. Its URLs derive from the base config every deploy already sets: `MCP_ISSUER_URL` from `API_URL`, `MCP_RESOURCE_URL` from `${API_URL}/mcp`, and `OIDC_LOGIN_PAGE_URL` from `${WEB_URL}/sign-in`. Set one of those three only to override its derivation (e.g. a non-standard sign-in route). `MCP_ALLOWED_ORIGINS` is a distinct security allowlist (browser Origins permitted to hit `/mcp`) and is always set explicitly per environment — see [deployment.md](deployment.md) and `.env.example`.
+The OAuth AS/RS is core functionality — it is **always on**, in every deploy, with no MCP-specific configuration required. Its URLs derive from the base config every deploy already sets: `MCP_ISSUER_URL` from `API_URL`, `MCP_RESOURCE_URL` from `${API_URL}/mcp`, and `OIDC_LOGIN_PAGE_URL` from `${WEB_URL}/sign-in`. Set one of those three only to override its derivation (e.g. a non-standard sign-in route). `/mcp` accepts OAuth bearer tokens only; Docket browser cookies are not credentials on this public resource.
 
 Dynamic client registration, token exchange, introspection, revocation, the JWKS, and the AS/RS
 discovery documents are public by RFC 7591/6749/7662/7009/8414/9728 design — a client
 authenticates itself, never with a session cookie — so they run under an open, credential-free
-CORS policy (`apps/api/src/cors.ts`) rather than `BETTER_AUTH_TRUSTED_ORIGINS`. Any MCP client's
-web UI can call them without an origin ever being added to a list; nothing needs to change here
-for a new one to work.
+CORS policy (`apps/api/src/cors.ts`) rather than `BETTER_AUTH_TRUSTED_ORIGINS`. The `/mcp`
+resource uses the same credential-free policy. A present Origin must be a valid HTTPS origin
+(HTTP loopback is allowed in development), but its hostname is never an authorization input.

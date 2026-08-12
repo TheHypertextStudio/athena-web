@@ -51,7 +51,6 @@ function validApiEnv(): Record<string, string> {
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
     MCP_TASKS_ENABLED: 'false',
-    MCP_CIMD_STRICT: 'true',
   };
 }
 
@@ -148,8 +147,6 @@ describe('slices', () => {
     expect(stripeServer.BILLING_ENABLED.parse('true')).toBe(true);
     expect(stripeServer.BILLING_ENABLED.parse('false')).toBe(false);
 
-    expect(() => mcpServer.MCP_CIMD_STRICT.parse(undefined)).toThrow();
-    expect(mcpServer.MCP_CIMD_STRICT.parse('true')).toBe(true);
     expect(mcpServer.MCP_TASKS_ENABLED.parse('false')).toBe(false);
 
     // Anything outside the enum is rejected.
@@ -294,7 +291,6 @@ describe('api composition', () => {
     expect(mod.env.NODE_ENV).toBe('development');
     expect(mod.env.BILLING_ENABLED).toBe(false);
     expect(mod.env.STRIPE_PUBLISHABLE_KEY).toBeUndefined();
-    expect(mod.env.MCP_CIMD_STRICT).toBe(true);
     expect(mod.env.MCP_ISSUER_URL).toBe('http://localhost:4000');
     expect(mod.env.MCP_RESOURCE_URL).toBe('http://localhost:4000/mcp');
     expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('http://localhost:3000/sign-in');
@@ -314,14 +310,6 @@ describe('api composition', () => {
     expect(mod.env.MCP_ISSUER_URL).toBe('https://issuer.example.com');
     expect(mod.env.MCP_RESOURCE_URL).toBe('https://api.example.com/mcp');
     expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('https://login.example.com/start');
-  });
-
-  it('does not derive MCP_ALLOWED_ORIGINS from the base web URL', async () => {
-    for (const [key, value] of Object.entries(validApiEnv())) {
-      vi.stubEnv(key, value);
-    }
-    const mod = await import('../../src/api');
-    expect(mod.env.MCP_ALLOWED_ORIGINS).toBeUndefined();
   });
 
   it('throws fail-fast when a required var is missing', async () => {
@@ -619,14 +607,6 @@ describe('api composition', () => {
       expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('https://custom.example.com/login');
       // The un-overridden URL still derives.
       expect(mod.env.MCP_RESOURCE_URL).toBe(`${validApiEnv()['API_URL']}/mcp`);
-    });
-
-    it('never derives MCP_ALLOWED_ORIGINS (it is a security allowlist, set explicitly)', async () => {
-      for (const [key, value] of Object.entries(validApiEnv())) {
-        vi.stubEnv(key, value);
-      }
-      const mod = await import('../../src/api');
-      expect(mod.env.MCP_ALLOWED_ORIGINS).toBeUndefined();
     });
   });
 });

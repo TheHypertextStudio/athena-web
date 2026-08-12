@@ -43,7 +43,6 @@ export NEXT_PUBLIC_PASSKEY_RP_ID=docket.localhost
 export BETTER_AUTH_TRUSTED_ORIGINS="$APP_URL,http://$PREFIX.admin.docket.localhost:$PORT"
 export MCP_ISSUER_URL="$API_URL"
 export MCP_RESOURCE_URL="$API_URL/mcp"
-export MCP_ALLOWED_ORIGINS="$APP_URL"
 export OIDC_LOGIN_PAGE_URL="$APP_URL/sign-in"
 export GOOGLE_OAUTH_PUBLIC=false
 

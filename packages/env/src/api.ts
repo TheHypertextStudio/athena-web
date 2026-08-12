@@ -59,9 +59,9 @@ const stripSlash = (url: string): string => url.replace(/\/$/, '');
  * - `OIDC_LOGIN_PAGE_URL` ⇒ `${WEB_URL}/sign-in` (the product sign-in route)
  *
  * Setting a var overrides its derivation (e.g. a non-standard sign-in route).
- * `MCP_ALLOWED_ORIGINS` is deliberately NOT derived: it is the /mcp DNS-rebinding
- * security allowlist, a distinct semantic from any other origin list — it stays
- * explicit per environment. The conditional spreads keep `SKIP_ENV_VALIDATION` runs
+ * The public MCP resource uses standards-based OAuth client registration and does not
+ * carry deployment-time client or Origin allowlists. The conditional spreads keep
+ * `SKIP_ENV_VALIDATION` runs
  * (tests) faithful: absent base config derives nothing, so unconfigured-branch tests
  * still exercise those paths.
  */

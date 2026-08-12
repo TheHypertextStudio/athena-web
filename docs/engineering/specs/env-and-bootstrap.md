@@ -174,12 +174,11 @@ this spec (a design doc predating the build), the derivation itself lives in
 write into `.env` — a deploy with only the required `API_URL`/`WEB_URL` set mounts the MCP OAuth
 server with no MCP-specific config at all.
 
-| Name                  | Apps | Scope  | D/P            | What it is                                                                                                                                                                                 | Where to obtain                                       |
-| --------------------- | ---- | ------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| `MCP_ISSUER_URL`      | api  | server | D=P (optional) | OIDC/OAuth 2.1 issuer (Authorization Server). **= `API_URL`** (single AS, Better Auth `mcp()`).                                                                                            | Derived from `API_URL` at boot; set only to override. |
-| `MCP_RESOURCE_URL`    | api  | server | D=P (optional) | Canonical MCP resource identifier for audience binding (`resource=` param; tokens whose `aud` ≠ this are rejected). **= `${API_URL}/mcp`**.                                                | Derived from `API_URL` at boot; set only to override. |
-| `MCP_ALLOWED_ORIGINS` | api  | server | D=P            | Comma-separated `Origin` allowlist for DNS-rebinding protection on `/mcp` (the app origins + any first-party agent host). **Never derived** — a security allowlist, always set explicitly. | Composed from §0 domains; set per environment.        |
-| `OIDC_LOGIN_PAGE_URL` | api  | server | D=P (optional) | Where `mcp()` redirects for the consent/login UI (a route in `apps/web`). **= `${WEB_URL}/sign-in`** (the consent screen itself lives at `/oauth/authorize`, reached after sign-in).       | Derived from `WEB_URL` at boot; set only to override. |
+| Name                  | Apps | Scope  | D/P            | What it is                                                                                                                                                                           | Where to obtain                                       |
+| --------------------- | ---- | ------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `MCP_ISSUER_URL`      | api  | server | D=P (optional) | OIDC/OAuth 2.1 issuer (Authorization Server). **= `API_URL`** (single AS, Better Auth `mcp()`).                                                                                      | Derived from `API_URL` at boot; set only to override. |
+| `MCP_RESOURCE_URL`    | api  | server | D=P (optional) | Canonical MCP resource identifier for audience binding (`resource=` param; tokens whose `aud` ≠ this are rejected). **= `${API_URL}/mcp`**.                                          | Derived from `API_URL` at boot; set only to override. |
+| `OIDC_LOGIN_PAGE_URL` | api  | server | D=P (optional) | Where `mcp()` redirects for the consent/login UI (a route in `apps/web`). **= `${WEB_URL}/sign-in`** (the consent screen itself lives at `/oauth/authorize`, reached after sign-in). | Derived from `WEB_URL` at boot; set only to override. |
 
 > Downstream connector tokens (GitHub/Drive/Linear) are **separately issued** and **never** the client's MCP token (engineering §4 MUST). Those connector OAuth credentials reuse the §1.3 provider apps — no additional MCP-specific env beyond the above.
 
@@ -412,7 +411,7 @@ For each of `neonctl`, `stripe`, `vercel`: detect presence (`--version`); if mis
 ### 3.2 Step 1–3 — Target, domains, secrets
 
 - **Target multiselect:** `dev` and/or `prod`. Dev is the default for first run.
-- **Domains:** show the §0 defaults; allow overrides. From the API origin derive `BETTER_AUTH_URL`, `MCP_ISSUER_URL = API_URL`, `MCP_RESOURCE_URL = ${API_URL}/mcp`, `OIDC_LOGIN_PAGE_URL`, and the `BETTER_AUTH_TRUSTED_ORIGINS`/`MCP_ALLOWED_ORIGINS` CSVs from the web/marketing/admin origins. Set `BETTER_AUTH_PASSKEY_RP_ID` = `localhost` (dev) or the apex of the prod web origin.
+- **Domains:** show the §0 defaults; allow overrides. From the API origin derive `BETTER_AUTH_URL`, `MCP_ISSUER_URL = API_URL`, `MCP_RESOURCE_URL = ${API_URL}/mcp`, and `OIDC_LOGIN_PAGE_URL`. Compose `BETTER_AUTH_TRUSTED_ORIGINS` from the web/marketing/admin origins for cookie-bearing application routes. `/mcp` is Bearer-only and does not use a client-origin allowlist. Set `BETTER_AUTH_PASSKEY_RP_ID` = `localhost` (dev) or the apex of the prod web origin.
 - **Secrets:** generate `BETTER_AUTH_SECRET` (`crypto.randomBytes(32).toString("base64")`) and `CRON_SECRET` (`randomBytes(32).toString("hex")`). **Different value per target** (dev secret ≠ prod secret).
 
 ### 3.3 Step 4 — Neon Postgres (automated via `neonctl`)

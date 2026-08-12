@@ -47,7 +47,6 @@ jobs:
       BETTER_AUTH_TRUSTED_ORIGINS: http://docket.localhost:3000
       MCP_ISSUER_URL: http://api.docket.localhost:4000
       MCP_RESOURCE_URL: http://api.docket.localhost:4000/mcp
-      MCP_ALLOWED_ORIGINS: http://docket.localhost:3000
       OIDC_LOGIN_PAGE_URL: http://docket.localhost:3000/sign-in
       AGENT_MAX_TURNS: '24'
       GOOGLE_OAUTH_PUBLIC: 'false'

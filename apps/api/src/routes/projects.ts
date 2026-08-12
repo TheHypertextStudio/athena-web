@@ -30,7 +30,9 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
+import { deferAfterResponse } from '../lib/after-response';
 import { clearableTextPatch } from '../lib/clearable-text';
+import { guardsInOrder } from '../lib/guards-in-order';
 import { replaceLabels, resolveLabelSet } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
@@ -191,9 +193,14 @@ const projects = new Hono<AppEnv>()
       // The bare FK references each table's global PK, so without this a CREATE could attach
       // another tenant's actor/team/program to this project — exactly the gap PATCH already
       // closes. Omitted fields are no-ops inside the helper.
-      await assertRefInOrg(actor, orgId, body.leadId, 'Lead not found');
-      await assertRefInOrg(team, orgId, body.teamId, 'Team not found');
-      await assertRefInOrg(program, orgId, body.programId, 'Program not found');
+      //
+      // Independent reads, so they run together rather than as three serial round trips;
+      // `guardsInOrder` keeps the reported failure the earliest-listed one either way.
+      await guardsInOrder([
+        assertRefInOrg(actor, orgId, body.leadId, 'Lead not found'),
+        assertRefInOrg(team, orgId, body.teamId, 'Team not found'),
+        assertRefInOrg(program, orgId, body.programId, 'Program not found'),
+      ]);
 
       // `initiativeIds` writes `initiative_project` association rows; validate each lives in
       // the caller's org BEFORE the transaction so a bad id rejects the whole create.
@@ -243,14 +250,24 @@ const projects = new Hono<AppEnv>()
         return created;
       });
 
-      await emitEvent({
-        organizationId: orgId,
-        kind: 'created',
-        actorId,
-        title: row.name,
-        subject: { type: 'project', id: row.id, title: row.name },
-      });
-      await enqueueSearchUpsert(orgId, 'project', row.id);
+      // Both effects run after the row is committed and neither contributes to the response, so
+      // the caller does not wait for them. That matters here more than anywhere: emitting an
+      // event opens its own transaction and fans out to recipients, automations and indexing
+      // jobs, which is most of what a create used to cost. A brand-new project also has no
+      // inbound mentions to reconcile and no search row anyone is about to read, so there is
+      // nothing for deferring to race — unlike an edit to existing prose, which stays awaited.
+      deferAfterResponse('project-created-event', () =>
+        emitEvent({
+          organizationId: orgId,
+          kind: 'created',
+          actorId,
+          title: row.name,
+          subject: { type: 'project', id: row.id, title: row.name },
+        }),
+      );
+      deferAfterResponse('project-created-search-upsert', () =>
+        enqueueSearchUpsert(orgId, 'project', row.id),
+      );
       return ok(c, ProjectOut, toOut(row));
     },
   )

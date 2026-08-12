@@ -27,6 +27,8 @@ import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { CapabilityError, CycleError, NotFoundError, ValidationError } from '../error';
+import { deferAfterResponse } from '../lib/after-response';
+import { guardsInOrder } from '../lib/guards-in-order';
 import { labelsForSubject, labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../lib/task-audit';
@@ -140,24 +142,34 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       const teamRow = teamRows[0];
       if (!teamRow) throw new NotFoundError('Team not found');
 
-      // Tenant isolation: every body-provided reference must live in the caller's org.
-      await assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found');
-      await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
-      await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
-      await assertMilestoneInOrg(orgId, body.milestoneId, body.projectId);
-      if (body.parentTaskId !== undefined) await loadTask(orgId, body.parentTaskId);
+      // Tenant isolation: every body-provided reference must live in the caller's org. These are
+      // independent reads, so they go out together instead of as five serial round trips;
+      // `guardsInOrder` keeps the reported failure the earliest-listed one regardless of timing.
+      await guardsInOrder([
+        assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found'),
+        assertRefInOrg(project, orgId, body.projectId, 'Project not found'),
+        assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found'),
+        assertMilestoneInOrg(orgId, body.milestoneId, body.projectId),
+        ...(body.parentTaskId !== undefined ? [loadTask(orgId, body.parentTaskId)] : []),
+      ]);
 
       // resolveStateTransition validates the state key and derives terminal timestamps so
       // a task created directly in a `completed`/`canceled` state lands with correct fields.
+      // Labels were accepted by the DTO and silently dropped here until now; resolved against the
+      // task's own team so a team-limited label is offerable, and left for the shared write path
+      // to collapse any exclusive-group collision. Neither read depends on the other.
       const firstState = teamRow.workflowStates[0];
-      const { state, completedAt, canceledAt } = firstState
-        ? await resolveStateTransition(orgId, body.teamId, body.state ?? firstState.key)
-        : { state: body.state ?? 'backlog', completedAt: null, canceledAt: null };
-
-      // Labels were accepted by the DTO and silently dropped here until now. Resolve against the
-      // task's own team so a team-limited label is offerable, and let the shared write path
-      // collapse any exclusive-group collision.
-      const resolvedLabels = await resolveLabelSet(orgId, body.labels, { teamId: body.teamId });
+      const [transition, resolvedLabels] = await Promise.all([
+        firstState
+          ? resolveStateTransition(orgId, body.teamId, body.state ?? firstState.key)
+          : Promise.resolve({
+              state: body.state ?? 'backlog',
+              completedAt: null,
+              canceledAt: null,
+            }),
+        resolveLabelSet(orgId, body.labels, { teamId: body.teamId }),
+      ]);
+      const { state, completedAt, canceledAt } = transition;
 
       const inserted = await db
         .insert(task)
@@ -191,27 +203,33 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
         await db.transaction((tx) => replaceLabels(tx, 'task', row.id, orgId, resolvedLabels));
       }
 
-      // Stream: record the creation, plus an assignment event when it lands on someone.
+      // Stream: record the creation, plus an assignment event when it lands on someone. Both are
+      // post-commit effects the response does not read, and emitting an event is itself a
+      // transaction plus recipient routing, automations and indexing — the bulk of what creating
+      // a task used to cost the person waiting on it. Deferred as one unit so `created` still
+      // lands before `assignment`; the feed's order is part of its meaning.
       const subject = { type: 'task', id: row.id, title: row.title };
-      await emitEvent({
-        organizationId: orgId,
-        kind: 'created',
-        actorId,
-        title: row.title,
-        subject,
-      });
-      if (row.assigneeId) {
+      deferAfterResponse('task-created-events', async () => {
         await emitEvent({
           organizationId: orgId,
-          kind: 'assignment',
+          kind: 'created',
           actorId,
           title: row.title,
           subject,
         });
-      }
+        if (row.assigneeId) {
+          await emitEvent({
+            organizationId: orgId,
+            kind: 'assignment',
+            actorId,
+            title: row.title,
+            subject,
+          });
+        }
+      });
       // No creation entry is written: the row's own `createdAt`/`createdBy` are that record, and
       // the activity endpoint projects the entry from them (see `lib/task-audit.ts`).
-      await enqueueTaskSearchIndex(orgId, row.id);
+      deferAfterResponse('task-created-search-index', () => enqueueTaskSearchIndex(orgId, row.id));
       return ok(c, TaskOut, toOut(row, await labelsForSubject('task', orgId, row.id)));
     },
   )

@@ -22,6 +22,7 @@ import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { labelsForSubjects, type LabelRefRow } from '../lib/labels';
+import { deferAfterResponse } from '../lib/after-response';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -153,14 +154,19 @@ const programs = new Hono<AppEnv>()
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('program insert returned no row');
       // Stream: record the creation (mirrors projects.ts) so it surfaces to owners/followers.
-      await emitEvent({
-        organizationId: orgId,
-        kind: 'created',
-        actorId,
-        title: row.name,
-        subject: { type: 'program', id: row.id, title: row.name },
-      });
-      await enqueueSearchUpsert(orgId, 'program', row.id);
+      // Post-commit and unread by the response, so it runs after the caller has been answered.
+      deferAfterResponse('program-created-event', () =>
+        emitEvent({
+          organizationId: orgId,
+          kind: 'created',
+          actorId,
+          title: row.name,
+          subject: { type: 'program', id: row.id, title: row.name },
+        }),
+      );
+      deferAfterResponse('program-created-search-upsert', () =>
+        enqueueSearchUpsert(orgId, 'program', row.id),
+      );
       return ok(c, ProgramOut, toOut(row));
     },
   )

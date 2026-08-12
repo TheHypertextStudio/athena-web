@@ -14,7 +14,7 @@ interface TestJwtPayload {
 }
 
 const mocks = vi.hoisted(() => ({
-  getSession: vi.fn<() => Promise<TestSession | null>>(async () => null),
+  getSession: vi.fn<(options?: unknown) => Promise<TestSession | null>>(async () => null),
   // Rejects by default (no bearer token configured) - matches `verifyAccessToken` throwing on
   // any unverifiable token, which `resolveBearerContext` catches and turns into an AuthError.
   verifyAccessToken: vi.fn<(token: string, opts: unknown) => Promise<TestJwtPayload>>(async () => {
@@ -32,7 +32,14 @@ vi.mock('@docket/auth', async (importOriginal) => {
       ...actual.auth,
       api: {
         ...actual.auth.api,
-        getSession: mocks.getSession,
+        // Better Auth's `getSession` is overloaded on `returnHeaders`: asked for headers it
+        // answers `{ headers, response }`, otherwise the session itself. Tests configure the
+        // session through `mocks.getSession`; this wrapper reproduces the overload so a caller
+        // that forwards refreshed cookies sees the same shape it does in production.
+        getSession: async (options?: { readonly returnHeaders?: boolean }) => {
+          const session = await mocks.getSession(options);
+          return options?.returnHeaders ? { headers: new Headers(), response: session } : session;
+        },
       },
       handler: mocks.handler,
     },

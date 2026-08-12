@@ -49,6 +49,7 @@ import { createNotificationPreferenceRoutes } from './routes/notification-prefer
 import { createNotificationsRoutes } from './routes/notifications';
 import oauthClients from './routes/oauth-clients';
 import orgs from './routes/orgs';
+import { authoritativeSessionMiddleware } from './auth/session-middleware';
 import { requireAuth } from './permissions/require-auth';
 import { AdminNotificationService } from './services/notifications/admin-service';
 import { NotificationContactPointService } from './services/notifications/contact-point-service';
@@ -61,6 +62,22 @@ export const app = new Hono<AppEnv>().basePath('/v1');
 
 /** The type of the `/v1` {@link app} instance (used to type the OpenAPI generator input). */
 export type AppInstance = typeof app;
+
+// Sessions are normally served from a signed cookie that can outlive the row by up to the cache
+// window (see `SESSION_COOKIE_CACHE_MAX_AGE_S`). On these surfaces that staleness would be the
+// bug rather than a momentary lag — signing a device out, deleting the account, minting recovery
+// codes — so they re-resolve against the database. Registered BEFORE `requireAuth` so the gate
+// below sees the authoritative answer too, and scoped narrowly: everything else keeps the cache.
+for (const path of [
+  '/me/sessions',
+  '/me/sessions/*',
+  '/me/account',
+  '/me/account/*',
+  '/me/recovery-codes',
+  '/me/recovery-codes/*',
+]) {
+  app.use(path, authoritativeSessionMiddleware);
+}
 
 // Defense-in-depth authentication: gate EVERY `/v1` route on a session (except the public
 // allowlist) before the route chain, so auth is opt-out, not opt-in. Registered before the

@@ -40,6 +40,7 @@ import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { replaceLabels, resolveLabelSet } from '../lib/labels';
+import { deferAfterResponse } from '../lib/after-response';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -139,14 +140,19 @@ const initiatives = new Hono<AppEnv>()
         }
         return created;
       });
-      await emitEvent({
-        organizationId: orgId,
-        kind: 'created',
-        actorId,
-        title: row.name,
-        subject: { type: 'initiative', id: row.id, title: row.name },
-      });
-      await enqueueSearchUpsert(orgId, 'initiative', row.id);
+      // Post-commit and unread by the response, so it runs after the caller has been answered.
+      deferAfterResponse('initiative-created-event', () =>
+        emitEvent({
+          organizationId: orgId,
+          kind: 'created',
+          actorId,
+          title: row.name,
+          subject: { type: 'initiative', id: row.id, title: row.name },
+        }),
+      );
+      deferAfterResponse('initiative-created-search-upsert', () =>
+        enqueueSearchUpsert(orgId, 'initiative', row.id),
+      );
       return ok(c, InitiativeOut, toOut(row));
     },
   )

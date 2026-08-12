@@ -19,6 +19,7 @@ import { sessionMiddleware } from './auth/session-middleware';
 import type { AppEnv } from './context';
 import { buildCorsMiddleware } from './cors';
 import { getContainer } from './container';
+import { flushDeferredWork } from './lib/after-response';
 import { startDevScheduler } from './dev-scheduler';
 import { env } from './env';
 import { onError } from './error';
@@ -178,6 +179,12 @@ console.log(`▶ Docket API listening on :${String(env.PORT)}`);
 if (env.APP_MODE === 'local') startDevScheduler();
 
 // Cloud Run sends SIGTERM before SIGKILL; finish in-flight requests then exit cleanly.
+// Work a request deferred (activity events, search indexing, mention reconciliation — see
+// `lib/after-response`) outlives the response by design, so the drain has to include it: exiting
+// as soon as the sockets close would discard exactly the writes that were moved off the
+// critical path.
 process.on('SIGTERM', () => {
-  nodeServer.close(() => process.exit(0));
+  nodeServer.close(() => {
+    void flushDeferredWork().finally(() => process.exit(0));
+  });
 });

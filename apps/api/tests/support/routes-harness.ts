@@ -7,6 +7,7 @@ import { and, eq } from 'drizzle-orm';
 import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';
 import { getContainer } from '../../src/container';
 import { onError } from '../../src/error';
+import { flushDeferredWork } from '../../src/lib/after-response';
 import './auth-mock';
 import { getMigratedDb } from './db';
 
@@ -29,6 +30,29 @@ export async function getDb(): Promise<typeof DbModule> {
   return dbmod;
 }
 
+/**
+ * Make `app.request(...)` settle only once the work the request deferred has finished.
+ *
+ * @param app - The harness app to wrap.
+ * @returns The same instance, with `request` awaiting the deferred queue.
+ *
+ * @remarks
+ * Handlers answer before their activity events, search indexing, and mention reconciliation run
+ * (see `src/lib/after-response`) — that is the whole point of deferring them. In production the
+ * gap is invisible; in a test it would be a race, with an assertion about an emitted event
+ * running against a queue that has not drained yet. Draining here keeps every existing
+ * "create then read the event" test meaningful without each one having to know the work moved.
+ */
+function drainingDeferredWork<T extends Hono<AppEnv>>(app: T): T {
+  const request = app.request.bind(app);
+  app.request = async (...args: Parameters<typeof request>) => {
+    const res = await request(...args);
+    await flushDeferredWork();
+    return res;
+  };
+  return app;
+}
+
 /** Mount a router behind an injected actor context (and optional session). */
 export function appWithActor(
   router: unknown,
@@ -47,7 +71,7 @@ export function appWithActor(
   // The router default export is a Hono instance; route it under root.
   app.route('/', router as never);
   app.onError(onError);
-  return app;
+  return drainingDeferredWork(app);
 }
 
 /** Mount a router behind an injected session only (top-level personal surfaces). */
@@ -59,7 +83,7 @@ export function appWithSession(router: unknown, session: AuthSession) {
   });
   app.route('/', router as never);
   app.onError(onError);
-  return app;
+  return drainingDeferredWork(app);
 }
 
 /** Build a minimal fake Better Auth session for a user id. */

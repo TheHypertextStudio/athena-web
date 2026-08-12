@@ -340,6 +340,25 @@ const SESSION_UPDATE_AGE_S = 60 * 60 * 24;
 const SESSION_FRESH_AGE_S = 60 * 5;
 
 /**
+ * How long a signed session payload stays servable from its own cookie (1 minute).
+ *
+ * @remarks
+ * Without this, resolving the session is a database read on **every** authenticated request — a
+ * cost that multiplies by a screen's request fan-out rather than being paid once, since a single
+ * entity detail page issues a dozen parallel reads and therefore a dozen session lookups before
+ * any handler runs.
+ *
+ * The trade is that a session revoked from another device keeps validating from the cookie until
+ * the cached copy expires, so this window is deliberately short. One minute already collapses a
+ * page's simultaneous fan-out onto a single lookup — the whole point — while keeping the interval
+ * in which a revoked device still works down to something a person would read as immediate.
+ * Operations where that is still too long (account deletion, recovery-code minting, revoking a
+ * session) re-read authoritatively via `disableCookieCache`; see `readAuthoritativeSession` in
+ * `apps/api/src/auth/session-middleware.ts`.
+ */
+const SESSION_COOKIE_CACHE_MAX_AGE_S = 60;
+
+/**
  * Connector rows funded by each Better Auth identity provider.
  *
  * @remarks
@@ -816,6 +835,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       expiresIn: SESSION_EXPIRES_IN_S,
       updateAge: SESSION_UPDATE_AGE_S,
       freshAge: SESSION_FRESH_AGE_S,
+      cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_MAX_AGE_S },
     },
     // Every Docket user is created with `emailVerified: true` (signup proves inbox ownership
     // before an account ever exists — see `resolvePasskeyUser` above), so this callback is not

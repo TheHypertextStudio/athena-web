@@ -24,8 +24,9 @@
 - **Validation**: API MCP surface, capability, and widget tests pass. The widget evidence suite
   captures all entity fixtures at 320px and 720px in light/dark and bare/themed host variants;
   the three-project batch asserts every route and its status/health/work line. Production CI run
-  `31549913262` deployed commit `4b0b0ff1` successfully; the web, admin, and API health routes
-  return 200.
+  `31552026638` deployed commit `d239e353` successfully; the web, admin, and API health routes
+  return 200. The Athena host's fullscreen boundary returns attempted background focus to its
+  visible Close control, covered by `mcp-app-view.test.tsx`.
 - **Blockers**: A real authenticated third-party MCP host capture remains unavailable in this
   environment. Both available browsers are unauthenticated, and Docket's host endpoints are
   deliberately owner-scoped to a signed-in user with a personal MCP connection. The audit is

@@ -234,6 +234,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
   } = props;
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const containerRef = useRef<HTMLElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const hostRef = useRef<McpAppHost | null>(null);
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [displayMode, setDisplayMode] = useState<McpUiDisplayMode>('inline');
@@ -464,6 +465,28 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
     };
   }, [displayMode]);
 
+  // The frame is an opaque origin, so the host cannot see individual controls inside it to
+  // implement a conventional first/last-element loop. It can still enforce the modal boundary:
+  // when Tab leaves the iframe (or an assistive-technology shortcut reaches background chrome),
+  // the document's capture-phase focus event returns the person to the visible Close control.
+  // Focus inside the iframe remains untouched because the outer frame is a descendant here.
+  useEffect(() => {
+    if (displayMode !== 'fullscreen') {
+      return;
+    }
+    const keepFocusInside = (event: FocusEvent): void => {
+      const container = containerRef.current;
+      if (!container || !(event.target instanceof Node) || container.contains(event.target)) {
+        return;
+      }
+      closeButtonRef.current?.focus();
+    };
+    document.addEventListener('focusin', keepFocusInside, true);
+    return () => {
+      document.removeEventListener('focusin', keepFocusInside, true);
+    };
+  }, [displayMode]);
+
   if (failure) {
     return (
       <div className="bg-surface-container rounded-xl px-4 py-3" data-testid="mcp-app-view-failure">
@@ -502,6 +525,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
         // hidden if the host withdraws the mode, which would leave no visible way out at all.
         <div className="flex justify-end p-2">
           <button
+            ref={closeButtonRef}
             type="button"
             autoFocus
             className="text-on-surface-variant hover:bg-surface-container text-label-large rounded-md px-3 py-1.5"

@@ -8,7 +8,7 @@
  * response, and the fact that a widget's link and message requests reach the host callbacks.
  * Messages are posted at the component exactly as the proxy would post them.
  */
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MCP_UI_METHODS, MCP_UI_MIME_TYPE, MCP_UI_PROTOCOL_VERSION } from '@docket/types';
@@ -82,7 +82,10 @@ function mount(overrides: Partial<Parameters<typeof McpAppView>[0]> = {}) {
 }
 
 /** Play the view's half of the handshake through the proxy. */
-async function handshake(harness: ReturnType<typeof mount>): Promise<void> {
+async function handshake(
+  harness: ReturnType<typeof mount>,
+  appCapabilities: Record<string, unknown> = {},
+): Promise<void> {
   harness.fromProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.sandboxProxyReady, params: {} });
   await waitFor(() => {
     expect(
@@ -95,7 +98,7 @@ async function handshake(harness: ReturnType<typeof mount>): Promise<void> {
     method: MCP_UI_METHODS.initialize,
     params: {
       appInfo: { name: 'acme-release-view', version: '1.0.0' },
-      appCapabilities: {},
+      appCapabilities,
       protocolVersion: MCP_UI_PROTOCOL_VERSION,
     },
   });
@@ -326,24 +329,58 @@ describe('McpAppView bridge', () => {
   it('follows the height the widget reports instead of scrolling inside a fixed box', async () => {
     const harness = mount();
     await handshake(harness);
-    harness.fromProxy({
-      jsonrpc: '2.0',
-      method: MCP_UI_METHODS.sizeChanged,
-      params: { width: 400, height: 322 },
+    await act(async () => {
+      harness.fromProxy({
+        jsonrpc: '2.0',
+        method: MCP_UI_METHODS.sizeChanged,
+        params: { width: 400, height: 322 },
+      });
     });
     await waitFor(() => {
       expect(harness.frame.style.height).toBe('322px');
     });
 
     // …but never past the cap, so a runaway widget cannot take over the transcript.
-    harness.fromProxy({
-      jsonrpc: '2.0',
-      method: MCP_UI_METHODS.sizeChanged,
-      params: { height: 99999 },
+    await act(async () => {
+      harness.fromProxy({
+        jsonrpc: '2.0',
+        method: MCP_UI_METHODS.sizeChanged,
+        params: { height: 99999 },
+      });
     });
     await waitFor(() => {
       expect(harness.frame.style.height).toBe('640px');
     });
+  });
+
+  it('returns attempted background focus to the fullscreen card', async () => {
+    const outside = document.createElement('button');
+    outside.textContent = 'Background control';
+    document.body.append(outside);
+
+    try {
+      const harness = mount();
+      await handshake(harness, { availableDisplayModes: ['inline', 'fullscreen'] });
+      await act(async () => {
+        harness.fromProxy({
+          jsonrpc: '2.0',
+          id: 'full-1',
+          method: MCP_UI_METHODS.requestDisplayMode,
+          params: { mode: 'fullscreen' },
+        });
+      });
+
+      const close = await screen.findByRole('button', { name: 'Close' });
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveAttribute('aria-modal', 'true');
+
+      outside.focus();
+      fireEvent.focusIn(outside);
+
+      expect(close).toHaveFocus();
+    } finally {
+      outside.remove();
+    }
   });
 
   it('restyles in place when the theme flips, with no reload', async () => {

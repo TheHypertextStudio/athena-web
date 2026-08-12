@@ -325,7 +325,9 @@ describe('global creation launcher source policy', () => {
     expect(paths.length).toBeGreaterThan(700);
     expect(new Set(paths).size).toBe(paths.length);
     expect(paths).toContain('src/components/create-object/create-object-provider.tsx');
-    expect(paths).toContain('src/app/(app)/orgs/[orgId]/projects/[projectId]/page.tsx');
+    expect(paths).toContain(
+      'src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx',
+    );
     expect(paths.every((path) => path.startsWith('src/') && /\.tsx?$/.test(path))).toBe(true);
   });
 

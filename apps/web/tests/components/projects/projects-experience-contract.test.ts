@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest';
 
 const root = resolve(import.meta.dirname, '../../../../../');
 const overviewPath = join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx');
-const detailPath = join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/page.tsx');
+const detailPath = join(
+  root,
+  'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx',
+);
 const documentPath = join(root, 'apps/web/src/components/editor/entity-document.tsx');
 const editorPath = join(root, 'apps/web/src/components/editor/freeform-text.tsx');
 const pageLayoutPath = join(root, 'apps/web/src/components/views/page-layout.tsx');

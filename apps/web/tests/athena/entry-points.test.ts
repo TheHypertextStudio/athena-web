@@ -8,9 +8,9 @@ const read = (path: string): string => readFileSync(resolve(root, path), 'utf8')
 describe('ambient Athena entry points', () => {
   it.each([
     'apps/web/src/app/(app)/tasks/all-tasks-client.tsx',
-    'apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/page.tsx',
-    'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/page.tsx',
-    'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/page.tsx',
+    'apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx',
+    'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx',
+    'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
     'apps/web/src/app/(app)/stream/page.tsx',
     'apps/web/src/app/(app)/calendar/calendar-client.tsx',
     'apps/web/src/app/(app)/inbox/inbox-client.tsx',
@@ -20,7 +20,7 @@ describe('ambient Athena entry points', () => {
 
   it('keeps Athena available as a contextual task-menu action instead of a page button', () => {
     const controls = read('apps/web/src/components/task-detail/task-header-controls.tsx');
-    const detail = read('apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/page.tsx');
+    const detail = read('apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx');
     expect(controls).toContain('AthenaContextMenuItem');
     expect(controls).toContain('Have Athena handle this');
     expect(detail).toContain("source: { type: 'task'");

@@ -64,7 +64,7 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/initiatives/[initiativeId]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/page')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client')).default,
   },
   {
     pattern: '/orgs/[orgId]/initiatives',
@@ -88,7 +88,7 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/programs/[programId]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/programs/[programId]/page')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client')).default,
   },
   {
     pattern: '/orgs/[orgId]/programs',
@@ -96,7 +96,7 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/projects/[projectId]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/projects/[projectId]/page')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client')).default,
   },
   {
     pattern: '/orgs/[orgId]/projects',
@@ -176,7 +176,7 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/tasks/[taskId]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/tasks/[taskId]/page')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client')).default,
   },
   {
     pattern: '/orgs/[orgId]/tasks',

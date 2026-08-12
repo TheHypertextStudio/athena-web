@@ -45,6 +45,24 @@ export default async function AppGroupLayout({
 }: {
   children: ReactNode;
 }): Promise<JSX.Element> {
+  // Both of these are round trips from this server back through the app's own origin, and
+  // neither needs the other's answer — the workspace read authenticates from the request's own
+  // cookie, not from the resolved session. Run one after the other and every authenticated
+  // document pays both latencies in series before it can start rendering.
+  //
+  // Started together, awaited separately. A signed-out caller redirects below having wasted one
+  // request that would have failed anyway; `prefetchQuery` swallows its own failures, and the
+  // explicit catch keeps a rejection from going unhandled when `redirect` unwinds past it.
+  const queryClient = getServerQueryClient();
+  const workspacesPrefetched = (async () => {
+    const api = await getServerApi();
+    await queryClient.prefetchQuery({
+      queryKey: queryKeys.orgs(),
+      queryFn: () => unwrap(() => api.v1.orgs.$get(), 'Could not load your organizations.'),
+    });
+  })();
+  workspacesPrefetched.catch(() => undefined);
+
   const session = await readServerSession();
   // The path this document is being rendered for. Read once and handed to the client, because it is
   // the only thing that can tell a replayed document from a fresh one: offline the worker answers a
@@ -58,12 +76,7 @@ export default async function AppGroupLayout({
     );
   }
 
-  const queryClient = getServerQueryClient();
-  const api = await getServerApi();
-  await queryClient.prefetchQuery({
-    queryKey: queryKeys.orgs(),
-    queryFn: () => unwrap(() => api.v1.orgs.$get(), 'Could not load your organizations.'),
-  });
+  await workspacesPrefetched;
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

@@ -10,7 +10,7 @@ const overviewPath = join(
 );
 const detailPath = join(
   root,
-  'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/page.tsx',
+  'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
 );
 const typographyPath = join(root, 'packages/ui/src/styles/globals.css');
 const buttonPath = join(root, 'packages/ui/src/primitives/button.tsx');

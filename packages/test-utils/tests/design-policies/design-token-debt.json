@@ -48,7 +48,7 @@
   "apps/web/src/app/(app)/orgs/[orgId]/cycles/[cycleId]/page.tsx": {
     "raw-type-utility": 1
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/page.tsx": {
+  "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx": {
     "raw-type-utility": 15
   },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx": {
@@ -57,13 +57,13 @@
   "apps/web/src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx": {
     "raw-type-utility": 3
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/programs/[programId]/page.tsx": {
+  "apps/web/src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx": {
     "raw-type-utility": 3
   },
   "apps/web/src/app/(app)/orgs/[orgId]/programs/programs-client.tsx": {
     "raw-type-utility": 3
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/page.tsx": {
+  "apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx": {
     "raw-type-utility": 9
   },
   "apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx": {
@@ -75,7 +75,7 @@
   "apps/web/src/app/(app)/orgs/[orgId]/settings/connections/error.tsx": {
     "raw-type-utility": 3
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/page.tsx": {
+  "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx": {
     "raw-type-utility": 4
   },
   "apps/web/src/app/(app)/orgs/[orgId]/teams/teams-client.tsx": {

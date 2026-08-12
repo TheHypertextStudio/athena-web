@@ -41,7 +41,7 @@ export function ProductScreenshot({
     <figure
       className={`relative overflow-hidden rounded-lg border ${aspect} ${
         ink ? 'border-paper/25 bg-paper/10' : 'border-ink/15 bg-paper-deep'
-      } shadow-[var(--mk-shadow-plate)]`}
+      }`}
     >
       <Image
         src={src}
@@ -52,7 +52,7 @@ export function ProductScreenshot({
         className={`object-cover ${position === 'center' ? 'object-center' : 'object-top'}`}
       />
       <figcaption
-        className={`absolute right-2 bottom-2 rounded-sm border px-2 py-1 font-mono text-[10px] tracking-wide backdrop-blur-sm ${
+        className={`text-label-small absolute right-2 bottom-2 rounded-sm border px-2 py-1 backdrop-blur-sm ${
           ink
             ? 'border-paper/25 bg-ink/80 text-paper/80'
             : 'border-ink/15 bg-paper/90 text-ink-muted'

@@ -495,21 +495,11 @@
     "raw-type-utility": 9
   },
   "apps/web/src/components/stream/event-drawer.tsx": {
-    "raw-type-utility": 9,
     "shadow-outside-overlay": 1
   },
   "apps/web/src/components/stream/provider-badge.tsx": {
     "hardcoded-color": 6,
     "raw-type-utility": 1
-  },
-  "apps/web/src/components/stream/stream-event-detail.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/web/src/components/stream/stream-event-row.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/web/src/components/stream/stream-view.tsx": {
-    "raw-type-utility": 5
   },
   "apps/web/src/components/task-detail/CommentActivityFeed.tsx": {
     "raw-type-utility": 8

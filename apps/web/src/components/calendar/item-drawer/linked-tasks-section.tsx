@@ -22,7 +22,7 @@ import { type JSX, useState } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { queuedOfflineWrite } from '@/components/pwa/offline-write';
+import { QUEUED_OFFLINE_WRITE_MESSAGE, queuedOfflineWrite } from '@/components/pwa/offline-write';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
 import { UserFacingError } from '@/lib/problem';
@@ -148,7 +148,7 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
       ) : null}
       {queuedLink ? (
         <p role="status" className="text-on-surface-variant text-body-small">
-          {queuedLink.message}
+          {QUEUED_OFFLINE_WRITE_MESSAGE}
         </p>
       ) : linkCreatedTask.isError ? (
         <p role="alert" className="text-error text-body-small">

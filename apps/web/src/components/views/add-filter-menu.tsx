@@ -65,7 +65,7 @@ export function AddFilterMenu<T>({
             {triggerLabel}
           </span>
           {activeCount > 0 ? (
-            <span className="bg-secondary-container text-on-secondary-container inline-flex min-w-5 items-center justify-center rounded-full px-1 text-[0.6875rem]">
+            <span className="bg-secondary-container text-on-secondary-container text-label-small inline-flex min-w-5 items-center justify-center rounded-full px-1">
               {String(activeCount)}
             </span>
           ) : null}

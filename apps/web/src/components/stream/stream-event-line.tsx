@@ -26,20 +26,18 @@ export function StreamEventLine({
   const content = (
     <>
       <span className="min-w-0">
-        <span className={cn('block leading-snug', quiet ? 'text-body-small' : 'text-body-medium')}>
+        <span className={cn('block', quiet ? 'text-body-small' : 'text-body-medium')}>
           {streamEventSentence(row)}
         </span>
         {detail ? (
-          <span className="text-on-surface-variant mt-0.5 block text-xs leading-relaxed">
-            {detail}
-          </span>
+          <span className="text-on-surface-variant text-body-small mt-0.5 block">{detail}</span>
         ) : null}
       </span>
       <time
         dateTime={row.occurredAt}
         title={exactTime}
         aria-label={exactTime}
-        className="text-on-surface-variant shrink-0 text-xs max-sm:col-start-1 max-sm:mt-1"
+        className="text-on-surface-variant text-label-small shrink-0 max-sm:col-start-1 max-sm:mt-1"
       >
         {relativeTime(row.occurredAt)}
       </time>

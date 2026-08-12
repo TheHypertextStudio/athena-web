@@ -5,6 +5,10 @@ import { UserFacingError } from '@/lib/problem';
 import { isQueueableWrite } from './outbox-model';
 import { enqueueWrite } from './outbox';
 
+/** Application-owned status copy for a write accepted by the local replay queue. */
+export const QUEUED_OFFLINE_WRITE_MESSAGE =
+  "Saved on this device. Docket will sync it as soon as you're back online.";
+
 /**
  * The seam where an undeliverable write becomes a queued one.
  *
@@ -41,7 +45,7 @@ export class QueuedOfflineWriteError extends UserFacingError {
   readonly entryId: string;
 
   constructor(entryId: string) {
-    super("Saved on this device. Docket will sync it as soon as you're back online.", {
+    super(QUEUED_OFFLINE_WRITE_MESSAGE, {
       status: 0,
     });
     this.name = 'QueuedOfflineWriteError';

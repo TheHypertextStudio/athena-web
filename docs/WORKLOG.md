@@ -82,6 +82,8 @@
   - [x] Re-run copy, responsive, theme, no-placeholder, type, lint, test, and build gates.
   - [x] Replace the hard-disabled billing deploy with a production-variable gate that fails closed
         unless the complete Stripe runtime and Docket Pro price bindings exist.
+  - [x] Run the release policies without Turbo cache and clear the resulting design-token and
+        application-owned error-copy violations.
   - [ ] Prove Stripe checkout, webhook activation, access, management, cancellation, and return routing.
   - [ ] Deploy the validated release and verify the production customer journey.
 - **Files Changed**: Deterministic marketing capture tooling; nine JPEG application captures;
@@ -91,8 +93,9 @@
 - **Validation**: The local capture flow completed against a disposable passkey account and real
   Docket API writes. Home, Pricing, and About were photographed at 1440×900 and 390×844 in light
   and OS-dark modes; each passed the 320px overflow check and the craft review scored SHIP. The web
-  suite passes 258 files and 2,160 tests, including the 14-case public-copy gate. Repository
-  typecheck passes 20/20, lint passes 20/20, tests pass 20/20, and build passes 4/4.
+  suite passes 258 files and 2,160 tests, including the 14-case public-copy gate. The forced
+  uncached repository suite passes 20/20 tasks, including 317 API files and 3,688 API tests;
+  typecheck passes 20/20, lint passes 20/20, and build passes 4/4.
 - **Blockers**: Production promotion remains gated on live Stripe and legal evidence. The deploy
   workflow now reads the production `BILLING_ENABLED` variable and refuses billing-enabled releases
   unless the Stripe secret key, publishable key, webhook secret, and Docket Pro price are all mounted
@@ -104,7 +107,9 @@
 - **Learnings**: Product screenshots must use the public MCP endpoint even when their data is
   captured locally. The visual audit also caught two non-copy release defects: the support address
   was derived from the web CNAME instead of the registrable domain, and the hero image was left as
-  a lazy-loaded LCP candidate. Both now have direct regression coverage.
+  a lazy-loaded LCP candidate. Both now have direct regression coverage. A cached repository test
+  pass can conceal policy drift after rebasing; the release pass now forces package tests so the
+  committed design-debt ledger and production source are compared directly.
 
 ---
 
@@ -135,8 +140,8 @@
   access, cancellation, billing management, and return routing are verified. Privacy and terms also
   require operator and legal review.
 - **Validation**: Product-capability, billing-lifecycle, CTA-state, onboarding, and copy-gate tests
-  pass. `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass. The API suite passes 316
-  files and 3,675 tests; the public-copy gate passes 14/14 and the uncached design-token policy
+  pass. `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass. The API suite passes 317
+  files and 3,688 tests; the public-copy gate passes 14/14 and the uncached design-token policy
   passes 8/8. The 13 audited surfaces have 52 desktop/mobile, light/dark captures and every binary
   copy property is Aligned. Live production billing-path proof and legal approval remain external
   release gates, so the revised pricing copy is implemented but must remain unpublished. The

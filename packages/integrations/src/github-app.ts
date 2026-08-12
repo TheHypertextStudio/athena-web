@@ -16,6 +16,9 @@
  * The private key is stored in env as a single-line **base64 PEM** (so it survives line-based
  * `.env` files); {@link decodeAppPrivateKey} turns it back into a PEM before signing.
  *
+ * A third app-JWT-authenticated call, {@link uninstallInstallation}, revokes an installation
+ * outright (used when an org disconnects GitHub in Docket) rather than reading or minting against it.
+ *
  * Pure except for the network call, which goes through the injected {@link HttpClient} —
  * `buildAppJwt` and the cache logic are directly unit-testable with a generated keypair.
  */
@@ -160,6 +163,29 @@ export async function resolveInstallationAccount(
   const http = appHttp(config, nowSeconds);
   const res = await http.getJson<InstallationResponse>(`/app/installations/${installationId}`);
   return res.account?.login;
+}
+
+/**
+ * Uninstall a GitHub App installation — revokes Docket's access on GitHub's side outright.
+ *
+ * @remarks
+ * Used when an org disconnects GitHub in Docket: without this, the app installation (and its
+ * repository access) survives on GitHub after Docket forgets about it, so a later reconnect
+ * silently reuses the stale installation instead of going through a fresh install.
+ *
+ * @param config - The app id, private key, and optional transport.
+ * @param installationId - The installation to uninstall.
+ * @param nowSeconds - Current time in seconds (drives the app JWT).
+ * @throws {ConnectorError} when the call fails. A `status` of 404 means the installation was
+ *   already removed on GitHub's side — callers should treat that as success, not an error.
+ */
+export async function uninstallInstallation(
+  config: GitHubAppConfig,
+  installationId: string,
+  nowSeconds: number,
+): Promise<void> {
+  const http = appHttp(config, nowSeconds);
+  await http.deleteVoid(`/app/installations/${installationId}`);
 }
 
 /**

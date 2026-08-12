@@ -8,6 +8,7 @@ import {
   decodeAppPrivateKey,
   mintInstallationToken,
   resolveInstallationAccount,
+  uninstallInstallation,
 } from '../../src/github-app';
 import { ConnectorError } from '../../src/connector-error';
 
@@ -99,6 +100,32 @@ describe('resolveInstallationAccount', () => {
       return new Response(JSON.stringify({ account: { login: 'octocat' } }), { status: 200 });
     });
     expect(await resolveInstallationAccount({ ...APP, http }, '99', NOW_S)).toBe('octocat');
+  });
+});
+
+describe('uninstallInstallation', () => {
+  it('DELETEs the installation with app-JWT auth', async () => {
+    const http = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe('https://api.github.com/app/installations/99');
+      expect(init?.method).toBe('DELETE');
+      const auth = new Headers(init?.headers).get('authorization') ?? '';
+      expect(auth.startsWith('Bearer ')).toBe(true);
+      return new Response(null, { status: 204 });
+    });
+    await expect(uninstallInstallation({ ...APP, http }, '99', NOW_S)).resolves.toBeUndefined();
+    expect(http).toHaveBeenCalledOnce();
+  });
+
+  it('throws a ConnectorError with status 404 when the installation is already gone', async () => {
+    const http = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ message: 'Not Found' }), {
+          status: 404,
+        }),
+    );
+    const err = await uninstallInstallation({ ...APP, http }, '99', NOW_S).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConnectorError);
+    expect((err as ConnectorError).status).toBe(404);
   });
 });
 

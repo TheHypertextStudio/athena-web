@@ -1,5 +1,7 @@
+import { generateKeyPairSync } from 'node:crypto';
+
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
@@ -19,7 +21,23 @@ import {
  * `GITHUB_APP_SLUG` for the duration of one case (always restored in `afterEach`) to reach
  * branches the default test-mode short-circuit never exercises.
  */
-const mutableEnv = env as { APP_MODE: string; GITHUB_APP_SLUG: string | undefined };
+const mutableEnv = env as {
+  APP_MODE: string;
+  GITHUB_APP_SLUG: string | undefined;
+  GITHUB_APP_ID: string | undefined;
+  GITHUB_APP_PRIVATE_KEY: string | undefined;
+};
+
+// A throwaway RSA keypair, base64-encoded the way `GITHUB_APP_PRIVATE_KEY` is stored in env —
+// only used to exercise `githubAppConfigFromEnv()`'s "configured" branch; never signed against
+// a real GitHub app.
+const { privateKey: UNINSTALL_TEST_PRIVATE_KEY } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+});
+const UNINSTALL_TEST_PEM_B64 = Buffer.from(
+  UNINSTALL_TEST_PRIVATE_KEY.export({ type: 'pkcs8', format: 'pem' }),
+  'utf8',
+).toString('base64');
 
 /**
  * Edge-branch tests for `integrations.ts` not reached by `group-b.test.ts`/`group-e.test.ts`/
@@ -317,6 +335,175 @@ describe('GET /:id/connect-url', () => {
     expect(res.status).toBe(200);
     const { url } = await body<{ url: string }>(res);
     expect(url).toContain('docket-test-app');
+  });
+});
+
+describe('DELETE /:id — GitHub App uninstall-on-disconnect', () => {
+  afterEach(() => {
+    mutableEnv.GITHUB_APP_ID = undefined;
+    mutableEnv.GITHUB_APP_PRIVATE_KEY = undefined;
+    vi.unstubAllGlobals();
+  });
+
+  it('uninstalls the GitHub App installation before deleting the row', async () => {
+    mutableEnv.GITHUB_APP_ID = 'app_123';
+    mutableEnv.GITHUB_APP_PRIVATE_KEY = UNINSTALL_TEST_PEM_B64;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe('https://api.github.com/app/installations/install_1');
+      expect(init?.method).toBe('DELETE');
+      return new Response(null, { status: 204 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'github',
+          pattern: 'connector',
+          roles: ['code'],
+          createdBy: humanActorId,
+          connection: { externalWorkspaceId: 'install_1' },
+        })
+        .returning(),
+    );
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request(`/${row.id}`, { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('still deletes the row when GitHub answers 404 (already uninstalled)', async () => {
+    mutableEnv.GITHUB_APP_ID = 'app_123';
+    mutableEnv.GITHUB_APP_PRIVATE_KEY = UNINSTALL_TEST_PEM_B64;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ message: 'Not Found' }), { status: 404 })),
+    );
+
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'github',
+          pattern: 'connector',
+          roles: ['code'],
+          createdBy: humanActorId,
+          connection: { externalWorkspaceId: 'install_1' },
+        })
+        .returning(),
+    );
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request(`/${row.id}`, { method: 'DELETE' });
+    expect(res.status).toBe(200);
+  });
+
+  it('still deletes the row when the GitHub call fails outright (best-effort, never blocking)', async () => {
+    mutableEnv.GITHUB_APP_ID = 'app_123';
+    mutableEnv.GITHUB_APP_PRIVATE_KEY = UNINSTALL_TEST_PEM_B64;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('server error', { status: 500 })),
+    );
+
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'github',
+          pattern: 'connector',
+          roles: ['code'],
+          createdBy: humanActorId,
+          connection: { externalWorkspaceId: 'install_1' },
+        })
+        .returning(),
+    );
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request(`/${row.id}`, { method: 'DELETE' });
+    expect(res.status).toBe(200);
+  });
+
+  it('skips the GitHub call when the integration has no recorded installation id', async () => {
+    mutableEnv.GITHUB_APP_ID = 'app_123';
+    mutableEnv.GITHUB_APP_PRIVATE_KEY = UNINSTALL_TEST_PEM_B64;
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'github',
+          pattern: 'connector',
+          roles: ['code'],
+          createdBy: humanActorId,
+          // no `connection` override -> defaults to `{}`, no externalWorkspaceId
+        })
+        .returning(),
+    );
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request(`/${row.id}`, { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('skips the GitHub call for a non-github provider', async () => {
+    mutableEnv.GITHUB_APP_ID = 'app_123';
+    mutableEnv.GITHUB_APP_PRIVATE_KEY = UNINSTALL_TEST_PEM_B64;
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'linear',
+          pattern: 'connector',
+          roles: ['work'],
+          createdBy: humanActorId,
+          connection: { externalWorkspaceId: 'install_1' },
+        })
+        .returning(),
+    );
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request(`/${row.id}`, { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('skips gracefully when the GitHub App is not configured', async () => {
+    // GITHUB_APP_ID/GITHUB_APP_PRIVATE_KEY left unset -> githubAppConfigFromEnv() is null.
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'github',
+          pattern: 'connector',
+          roles: ['code'],
+          createdBy: humanActorId,
+          connection: { externalWorkspaceId: 'install_1' },
+        })
+        .returning(),
+    );
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request(`/${row.id}`, { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

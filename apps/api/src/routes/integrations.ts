@@ -13,7 +13,7 @@ import {
   SyncRunOut,
   TaskOut,
 } from '@docket/types';
-import type { ImportedItem } from '@docket/integrations';
+import { isConnectorError, uninstallInstallation, type ImportedItem } from '@docket/integrations';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -24,7 +24,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
 import { zJson, zParam } from '../lib/validate';
-import { buildInstallUrl, signInstallState } from '../lib/github-app';
+import { buildInstallUrl, githubAppConfigFromEnv, signInstallState } from '../lib/github-app';
 import { seedDefaultAutomationRules } from '../lib/automation/rules-store';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -497,19 +497,41 @@ Requires \`manage\` — it touches live provider credentials and configures sync
       summary: 'Disconnect an integration',
       capability: 'manage',
       response: IntegrationOut,
-      description: `Disconnect (delete) an integration from the organization, returning the deleted {@link IntegrationOut} as it was just before removal. A missing/cross-tenant id 404s (\`Integration not found\`). Requires \`manage\` — severing an external data source is an administrative decision. Removing the integration drops the org's link to that provider; tasks already mirrored into Docket persist as rows but their \`sourceIntegrationId\` no longer resolves to a live connection (a subsequent reconnect of the same provider/account reuses a fresh integration id). Related: \`POST /\` (reconnect), \`PATCH /:id\` (reconfigure instead of disconnecting).`,
+      description: `Disconnect (delete) an integration from the organization, returning the deleted {@link IntegrationOut} as it was just before removal. A missing/cross-tenant id 404s (\`Integration not found\`). Requires \`manage\` — severing an external data source is an administrative decision. Removing the integration drops the org's link to that provider; tasks already mirrored into Docket persist as rows but their \`sourceIntegrationId\` no longer resolves to a live connection (a subsequent reconnect of the same provider/account reuses a fresh integration id). For \`github\`, this also best-effort uninstalls the GitHub App installation on GitHub's side (never blocks the disconnect on that call's outcome) — without it, a stale installation survives on GitHub and a later reconnect silently reuses it instead of prompting a fresh install. Related: \`POST /\` (reconnect), \`PATCH /:id\` (reconfigure instead of disconnecting), \`GET /:id/connect-url\` (the install ceremony this reverses).`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const row = await loadIntegration(orgId, id);
+
+      if (row.provider === 'github' && row.connection.externalWorkspaceId) {
+        const config = githubAppConfigFromEnv();
+        if (config) {
+          try {
+            await uninstallInstallation(
+              config,
+              row.connection.externalWorkspaceId,
+              Math.floor(Date.now() / 1000),
+            );
+          } catch (err) {
+            // Best-effort: a 404 means GitHub already lost the installation (nothing to
+            // revoke); any other failure is logged but must never block the Docket-side
+            // disconnect from succeeding.
+            if (!(isConnectorError(err) && err.status === 404)) {
+              console.error('github uninstall-on-disconnect failed', { integrationId: id, err });
+            }
+          }
+        }
+      }
+
       const deleted = await db
         .delete(integration)
         .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
         .returning();
-      const row = deleted[0];
-      if (!row) throw new NotFoundError('Integration not found');
-      return ok(c, IntegrationOut, toOut(row));
+      const deletedRow = deleted[0];
+      if (!deletedRow) throw new NotFoundError('Integration not found');
+      return ok(c, IntegrationOut, toOut(deletedRow));
     },
   )
   .post(

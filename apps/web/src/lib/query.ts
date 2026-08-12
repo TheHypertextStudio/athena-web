@@ -208,6 +208,20 @@ export interface ApiMutationOptions<TData, TVariables, TContext> extends Omit<
    * affects so they re-fetch the authoritative server state.
    */
   invalidateKeys?: readonly QueryKey[];
+  /**
+   * Hold the mutation open until the invalidated queries have finished refetching.
+   *
+   * @remarks
+   * Off by default, and rarely the right thing. Invalidation reconciles the cache with the
+   * server; it is not part of the write, and waiting for it means the mutation stays `pending`
+   * for a second round trip after the change is already saved — with every control bound to
+   * `isPending` disabled for the duration.
+   *
+   * Turn it on only for a caller that must not act again until the refreshed data is on the
+   * client — a flow that immediately reads what it just wrote, or a confirmation step gated on
+   * server-derived state.
+   */
+  awaitInvalidation?: boolean;
 }
 
 /**
@@ -252,7 +266,14 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
 ): UseMutationResult<TData, DefaultError, TVariables, TContext> {
   const queryClient = useQueryClient();
   const recoverAuthentication = useOptionalAuthenticationRecovery();
-  const { invalidateKeys, mutationFn, onError, onSettled, ...rest } = options;
+  const {
+    awaitInvalidation = false,
+    invalidateKeys,
+    mutationFn,
+    onError,
+    onSettled,
+    ...rest
+  } = options;
   return useMutation<TData, DefaultError, TVariables, TContext>({
     ...rest,
     mutationFn: async (variables) => {
@@ -276,11 +297,16 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
     onSettled: async (data, error, variables, onMutateResult, context) => {
       if (queuedOfflineWrite(error)) return;
       await onSettled?.(data, error, variables, onMutateResult, context);
-      if (invalidateKeys && invalidateKeys.length > 0) {
-        await Promise.all(
-          invalidateKeys.map((key) => queryClient.invalidateQueries({ queryKey: key })),
-        );
-      }
+      if (!invalidateKeys || invalidateKeys.length === 0) return;
+      // Started, not awaited. `invalidateQueries` resolves only once every matching active query
+      // has refetched, and the mutation does not leave `pending` until this callback returns — so
+      // awaiting it kept every control bound to `isPending` disabled for a second round trip
+      // after the write had already succeeded. The refetch still happens and still reconciles the
+      // cache; the person who made the change is simply no longer waiting on it.
+      const reconciled = Promise.all(
+        invalidateKeys.map((key) => queryClient.invalidateQueries({ queryKey: key })),
+      );
+      if (awaitInvalidation) await reconciled;
     },
   });
 }

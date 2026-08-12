@@ -312,6 +312,16 @@ export interface AppShellProps {
    */
   banner?: React.ReactNode;
   /**
+   * Optional overlay pinned to the top of the content column, above the tab strip and main panel.
+   *
+   * @remarks
+   * For chrome that reports on the shell itself rather than on any page — the navigation progress
+   * bar. Rendered as a positioned overlay inside the content column, so it costs no layout: the
+   * tab bar and `<main>` keep the exact geometry they have without it, and nothing shifts when it
+   * appears or goes away.
+   */
+  contentOverlay?: React.ReactNode;
+  /**
    * Optional brand content for the **mobile top bar** (shown below `lg`), e.g. the active
    * workspace name/avatar. Rendered between the hamburger and the trailing actions; defaults to
    * the product name when omitted.
@@ -365,6 +375,7 @@ export function AppShell({
   sidebar,
   tabBar,
   banner,
+  contentOverlay,
   mobileBrand,
   mobileActions,
   aside,
@@ -591,6 +602,7 @@ export function AppShell({
         so the panel uses the entire width; the gutter appears at `lg` to match the shell rhythm.
       */}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col lg:gap-2">
+          {contentOverlay}
           {tabBar}
           {banner}
           <main

@@ -47,9 +47,9 @@ import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
@@ -666,7 +666,10 @@ function GlobalTaskComposerDialog({
   const creation = useCreationContext();
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const router = useRouter();
+  // The responsive seam rather than Next's router: it publishes the requested destination
+  // immediately, which is what lets the shell acknowledge the click while the route payload
+  // is still in flight. Navigation itself is unchanged.
+  const router = useAppRouter();
 
   const targetWorkspaceId = creation.targetWorkspaceId;
   const initialWorkspaceId = request.initialWorkspaceId ?? null;

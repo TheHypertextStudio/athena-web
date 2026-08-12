@@ -234,3 +234,39 @@ export function useResponsiveRouter(): ResponsiveRouter {
 export function useOptionalResponsiveRouter(): ResponsiveRouter | null {
   return useContext(ResponsiveNavigationContext);
 }
+
+/**
+ * Navigate through the responsive seam when one is mounted, and through Next's router otherwise.
+ *
+ * @returns A router whose `push`/`replace` publish navigation intent where that is possible.
+ *
+ * @remarks
+ * For components that navigate but do not belong to the app shell — the create composers, say.
+ * Inside the shell they get intent publication, which is what lets a click be acknowledged before
+ * the route payload arrives. Rendered anywhere else — a focused test, a surface outside the
+ * authenticated shell — they still navigate, rather than refusing to render because a piece of
+ * chrome they never asked for is absent.
+ */
+export function useAppRouter(): ResponsiveRouter {
+  const responsive = useOptionalResponsiveRouter();
+  const router = useRouter();
+  const fallback = useMemo<ResponsiveRouter>(
+    () => ({
+      requestedHref: null,
+      // Called with one argument when there are no options, matching what a direct
+      // `router.push(href)` looks like — a trailing `undefined` is not the same call.
+      push: (href, options) => {
+        if (options?.scroll === undefined) router.push(href);
+        else router.push(href, { scroll: options.scroll });
+        return true;
+      },
+      replace: (href, options) => {
+        if (options?.scroll === undefined) router.replace(href);
+        else router.replace(href, { scroll: options.scroll });
+        return true;
+      },
+    }),
+    [router],
+  );
+  return responsive ?? fallback;
+}

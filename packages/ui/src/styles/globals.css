@@ -988,6 +988,20 @@
   overflow: hidden;
 }
 
+/*
+ * The indeterminate sweep of the navigation progress bar. Indeterminate because a route payload
+ * reports no progress, so a bar that filled to a percentage would be inventing one. The global
+ * reduced-motion rule caps iteration count, which parks the sweep rather than removing the mark.
+ */
+@keyframes navigation-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+
 @keyframes detail-backdrop-collapse {
   to {
     height: 0.5rem;

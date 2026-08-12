@@ -27,6 +27,7 @@ import {
   useApiMutation,
   useApiQuery,
 } from '../../src/lib/query';
+import { deferred } from '../support/deferred';
 import { makeQueryWrapper, okResponse, problemResponse } from '../support/query';
 
 afterEach(cleanup);
@@ -239,6 +240,157 @@ describe('useApiMutation', () => {
     ]);
     // Related key was invalidated on settle so dependent surfaces refetch.
     expect(invalidate).toHaveBeenCalledWith({ queryKey: listKey });
+  });
+
+  it('settles as soon as the write lands, without waiting for the refetch it triggers', async () => {
+    const { client, wrapper } = makeQueryWrapper();
+    const listKey = queryKeys.projects('org_1');
+    const refetchStarted = deferred<undefined>();
+    const releaseRefetch = deferred<undefined>();
+    // Held only once the write is in flight, so an incidental mount refetch cannot be mistaken
+    // for the one the invalidation triggers.
+    let holdNextRead = false;
+    renderHook(
+      () =>
+        useApiQuery(
+          apiQueryOptions(
+            listKey,
+            async () => {
+              if (holdNextRead) {
+                refetchStarted.resolve(undefined);
+                await releaseRefetch.promise;
+              }
+              return okResponse<readonly ProjectShape[]>([{ id: 'p1', name: 'Server name' }]);
+            },
+            'Could not load.',
+          ),
+        ),
+      { wrapper },
+    );
+    await waitFor(() => {
+      expect(client.getQueryData(listKey)).toBeDefined();
+    });
+
+    const { result } = renderHook(
+      () =>
+        useApiMutation<ProjectShape, { id: string; name: string }>({
+          mutationFn: (vars) => Promise.resolve(okResponse<ProjectShape>(vars).json()),
+          invalidateKeys: [listKey],
+        }),
+      { wrapper },
+    );
+
+    holdNextRead = true;
+    act(() => {
+      result.current.mutate({ id: 'p1', name: 'New name' });
+    });
+    await refetchStarted.promise;
+    // Long enough for the write to settle if nothing is holding it, while the refetch it kicked
+    // off is still deliberately unfinished.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+
+    // The write is done; the reconciling read is not, and is nobody's business but the cache's.
+    // Awaiting it here is what kept `isPending` true — and every control bound to it disabled,
+    // every composer frozen — for a second round trip after the change was already saved.
+    expect(result.current.isPending).toBe(false);
+    releaseRefetch.resolve(undefined);
+  });
+
+  it('holds the write open when a caller opts into awaiting the refetch', async () => {
+    const { client, wrapper } = makeQueryWrapper();
+    const listKey = queryKeys.projects('org_1');
+    const refetchStarted = deferred<undefined>();
+    const releaseRefetch = deferred<undefined>();
+    let holdNextRead = false;
+    renderHook(
+      () =>
+        useApiQuery(
+          apiQueryOptions(
+            listKey,
+            async () => {
+              if (holdNextRead) {
+                refetchStarted.resolve(undefined);
+                await releaseRefetch.promise;
+              }
+              return okResponse<readonly ProjectShape[]>([{ id: 'p1', name: 'Server name' }]);
+            },
+            'Could not load.',
+          ),
+        ),
+      { wrapper },
+    );
+    await waitFor(() => {
+      expect(client.getQueryData(listKey)).toBeDefined();
+    });
+
+    const { result } = renderHook(
+      () =>
+        useApiMutation<ProjectShape, { id: string; name: string }>({
+          mutationFn: (vars) => Promise.resolve(okResponse<ProjectShape>(vars).json()),
+          invalidateKeys: [listKey],
+          awaitInvalidation: true,
+        }),
+      { wrapper },
+    );
+
+    holdNextRead = true;
+    act(() => {
+      result.current.mutate({ id: 'p1', name: 'New name' });
+    });
+    await refetchStarted.promise;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+
+    // The escape hatch for a caller that genuinely must not proceed until the refreshed data is
+    // on the client. It has to keep working, or "opt in" means nothing.
+    expect(result.current.isPending).toBe(true);
+    releaseRefetch.resolve(undefined);
+    await waitFor(() => {
+      expect(result.current.isPending).toBe(false);
+    });
+  });
+
+  it('still reconciles the cache with the server after settling', async () => {
+    const { client, wrapper } = makeQueryWrapper();
+    const listKey = queryKeys.projects('org_1');
+    renderHook(
+      () =>
+        useApiQuery(
+          apiQueryOptions(
+            listKey,
+            () =>
+              Promise.resolve(
+                okResponse<readonly ProjectShape[]>([{ id: 'p1', name: 'Server name' }]),
+              ),
+            'Could not load.',
+          ),
+        ),
+      { wrapper },
+    );
+
+    const { result } = renderHook(
+      () =>
+        useApiMutation<ProjectShape, { id: string; name: string }>({
+          mutationFn: (vars) => Promise.resolve(okResponse<ProjectShape>(vars).json()),
+          invalidateKeys: [listKey],
+        }),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await result.current.mutateAsync({ id: 'p1', name: 'New name' });
+    });
+
+    // Not awaiting the refetch changes when the caller is released, not whether the
+    // reconciliation happens.
+    await waitFor(() => {
+      expect(client.getQueryData<readonly ProjectShape[]>(listKey)).toEqual([
+        { id: 'p1', name: 'Server name' },
+      ]);
+    });
   });
 
   it('rolls back the optimistic write via onError when the mutation fails', async () => {

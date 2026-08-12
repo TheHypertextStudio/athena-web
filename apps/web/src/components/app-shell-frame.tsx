@@ -36,6 +36,7 @@ import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
 import { OfflineBanner, OfflineContent } from '@/components/offline-state';
+import { NavigationProgress } from '@/components/navigation-progress';
 import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/components/pwa';
 import { QueryPersistence } from '@/components/query-persistence';
 import { ReachabilityProvider } from '@/components/reachability';
@@ -756,6 +757,10 @@ function AppShellInner({
             tabBar={tabBar}
             mobileBrand={mobileBrand}
             mobileActions={mobileActions}
+            // Between clicking a document and its route payload arriving, the previous screen
+            // stays exactly as it was — which is indistinguishable from a click that did not
+            // register. This is the acknowledgement, and it costs no layout.
+            contentOverlay={<NavigationProgress />}
             // The shell banner slot is a sibling of `<main>`, so these never disturb a page's
             // `h-full` sizing the way page-level content would. Offline outranks the update prompt:
             // reloading for a new version is pointless — and would land on the offline page —

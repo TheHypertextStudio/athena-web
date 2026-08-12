@@ -22,9 +22,9 @@ import { Check } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Input } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useId, useState } from 'react';
 
+import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { withComposerReset } from '@/components/composer/reset-on-open';
@@ -296,7 +296,10 @@ function GlobalTeamComposerBody({
 }: GlobalTeamComposerDialogProps): JSX.Element {
   const creation = useCreationContext();
   const queryClient = useQueryClient();
-  const router = useRouter();
+  // The responsive seam rather than Next's router: it publishes the requested destination
+  // immediately, which is what lets the shell acknowledge the click while the route payload
+  // is still in flight. Navigation itself is unchanged.
+  const router = useAppRouter();
   const teamNoun = useVocabulary('team');
 
   const targetWorkspaceId = creation.targetWorkspaceId;

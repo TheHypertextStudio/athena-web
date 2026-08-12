@@ -9,6 +9,13 @@ import type { MaterializationPolicy, RecurrenceSchedule } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
 import {
+  addCalendarDays,
+  addCalendarMonths,
+  daysInMonth,
+  formatCalendarDate,
+  parseCalendarDate,
+} from '../../src/lib/recurrence/calendar-date';
+import {
   expandCalendarSchedule,
   materializationWindow,
   type RecurrenceDateExceptions,
@@ -261,6 +268,112 @@ describe('expandCalendarSchedule', () => {
       expandCalendarSchedule(schedule, { from: '2026-08-12', through: '2026-09-09' }),
     ).toThrow(/completion event/i);
   });
+
+  it('rejects unsafe generation bounds and ambiguous occurrence exceptions', () => {
+    const invalidInterval = {
+      kind: 'daily',
+      interval: 0,
+      startDate: '2026-08-12',
+      timezone,
+      end: { kind: 'never' },
+    } as RecurrenceSchedule;
+    expect(() =>
+      expandCalendarSchedule(invalidInterval, { from: '2026-08-12', through: '2026-08-13' }),
+    ).toThrow(/positive safe integer/i);
+
+    const daily = {
+      kind: 'daily',
+      interval: 1,
+      startDate: '2026-08-12',
+      timezone,
+      end: { kind: 'never' },
+    } satisfies RecurrenceSchedule;
+    expect(() =>
+      expandCalendarSchedule(daily, { from: '2026-08-13', through: '2026-08-12' }),
+    ).toThrow(/start.*horizon/i);
+    expect(() =>
+      expandCalendarSchedule(daily, {
+        from: '2026-08-12',
+        through: '2026-08-13',
+        minimumOccurrences: -1,
+      }),
+    ).toThrow(/nonnegative safe integer/i);
+    expect(() =>
+      expandCalendarSchedule(daily, {
+        from: '2026-08-12',
+        through: '2026-08-13',
+        exceptions: {
+          reschedule: [
+            { from: '2026-08-12', to: '2026-08-14' },
+            { from: '2026-08-12', to: '2026-08-15' },
+          ],
+        },
+      }),
+    ).toThrow(/more than one reschedule/i);
+    expect(() =>
+      expandCalendarSchedule(daily, {
+        from: '2026-08-12',
+        through: '2026-08-13',
+        exceptions: {
+          exclude: ['2026-08-12'],
+          reschedule: [{ from: '2026-08-12', to: '2026-08-14' }],
+        },
+      }),
+    ).toThrow(/excluded and rescheduled/i);
+  });
+
+  it('omits nonexistent fifth weekdays and replacements outside the visible window', () => {
+    const fifthMonday = {
+      kind: 'monthly',
+      interval: 1,
+      startDate: '2026-02-01',
+      timezone,
+      pattern: { kind: 'nth_weekday', ordinal: 5, weekday: 'monday' },
+      end: { kind: 'after_count', count: 1 },
+    } satisfies RecurrenceSchedule;
+    expect(
+      expandCalendarSchedule(fifthMonday, {
+        from: '2026-02-01',
+        through: '2026-02-28',
+        exceptions: { include: ['2026-01-31', '2026-03-01'] },
+      }),
+    ).toEqual([]);
+
+    const daily = {
+      kind: 'daily',
+      interval: 1,
+      startDate: '2026-08-12',
+      timezone,
+      end: { kind: 'after_count', count: 1 },
+    } satisfies RecurrenceSchedule;
+    expect(
+      expandCalendarSchedule(daily, {
+        from: '2026-08-12',
+        through: '2026-08-13',
+        exceptions: { reschedule: [{ from: '2026-08-12', to: '2026-08-11' }] },
+      }),
+    ).toEqual([]);
+  });
+
+  it('stops yearly expansion at the supported calendar limit', () => {
+    const schedule = {
+      kind: 'yearly',
+      interval: 1,
+      startDate: '9999-01-01',
+      timezone,
+      month: 1,
+      day: 1,
+      overflow: 'skip',
+      end: { kind: 'never' },
+    } satisfies RecurrenceSchedule;
+    expect(
+      expandCalendarSchedule(schedule, {
+        from: '9999-01-01',
+        through: '9999-01-01',
+        minimumOccurrences: 2,
+      }),
+    ).toEqual(['9999-01-01']);
+  });
 });
 
 describe('materializationWindow', () => {
@@ -271,5 +384,34 @@ describe('materializationWindow', () => {
       through: '2026-09-09',
       minimumOccurrences: 2,
     });
+  });
+
+  it('rejects nonpositive or unsafe rolling policy values', () => {
+    expect(() =>
+      materializationWindow('2026-08-12', {
+        horizonDays: 0,
+        minimumOccurrences: 2,
+      }),
+    ).toThrow(/horizon.*positive safe integer/i);
+    expect(() =>
+      materializationWindow('2026-08-12', {
+        horizonDays: 28,
+        minimumOccurrences: Number.POSITIVE_INFINITY,
+      }),
+    ).toThrow(/minimum.*positive safe integer/i);
+  });
+});
+
+describe('calendar-date arithmetic boundaries', () => {
+  it('rejects invalid fields and unsafe arithmetic before computing a date', () => {
+    expect(() => daysInMonth(-1, 1)).toThrow(/year/i);
+    expect(() => daysInMonth(2026, 13)).toThrow(/month/i);
+    expect(() => parseCalendarDate('August 12, 2026')).toThrow(/invalid calendar date/i);
+    expect(() => formatCalendarDate({ year: 2026, month: 2, day: 30 })).toThrow(/invalid/i);
+    expect(() => addCalendarDays('2026-08-12', Number.NaN)).toThrow(/safe integer/i);
+    expect(() => addCalendarMonths('2026-08-12', Number.POSITIVE_INFINITY)).toThrow(
+      /safe integer/i,
+    );
+    expect(() => addCalendarMonths('9999-12-01', 1)).toThrow(/out of range/i);
   });
 });

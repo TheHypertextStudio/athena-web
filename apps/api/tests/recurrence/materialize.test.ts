@@ -16,6 +16,7 @@ import {
   processOccurrence,
   processRevision,
   processStep,
+  program,
   project,
   projectLabel,
   recurrenceSeries,
@@ -27,10 +28,12 @@ import {
   type Database,
 } from '@docket/db';
 import {
+  ActorId,
   CycleId,
   LabelId,
   MilestoneId,
   type ProcessDefinitionCreate,
+  ProgramId,
   ProjectId,
   TaskId,
   TeamId,
@@ -43,9 +46,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   appendPublishedProcessRevision,
+  archiveProcessDefinition,
   createPublishedProcessDefinition,
   createProcessDefinitionFromProject,
   loadProcessDefinitionDetail,
+  updateProcessDefinitionMetadata,
   validateProcessDefinitionGraph,
 } from '../../src/lib/recurrence/process-definition';
 import { materializeOccurrence } from '../../src/lib/recurrence/materialize';
@@ -256,6 +261,90 @@ describe('process materialization', () => {
     ).toHaveLength(5);
   });
 
+  it('reconstructs minimal and fully qualified process fields from normalized storage', async () => {
+    const minimal = await createPublishedProcessDefinition(db, {
+      organizationId,
+      actorId,
+      definition: {
+        name: 'Daily recovery walk',
+        creationMode: 'all_at_once',
+        milestones: [],
+        tasks: [
+          {
+            key: 'walk',
+            title: 'Take a recovery walk',
+            teamId,
+            priority: 'none',
+            labelIds: [],
+            timing: { kind: 'on_trigger' },
+          },
+        ],
+        dependencies: [],
+      },
+    });
+    const minimalDetail = await loadProcessDefinitionDetail(
+      db,
+      organizationId,
+      minimal.definitionId,
+    );
+    expect(minimalDetail.revision.project).toBeUndefined();
+    expect(minimalDetail.revision.milestones).toEqual([]);
+    expect(minimalDetail.revision.dependencies).toEqual([]);
+    expect(minimalDetail.revision.tasks).toEqual([
+      {
+        key: 'walk',
+        title: 'Take a recovery walk',
+        teamId,
+        priority: 'none',
+        labelIds: [],
+        timing: { kind: 'on_trigger' },
+      },
+    ]);
+
+    const [owningProgram] = await db
+      .insert(program)
+      .values({ organizationId, name: 'Urbanist Book Club Program' })
+      .returning();
+    const qualified = bookClubDefinition();
+    qualified.project = {
+      ...qualified.project!,
+      description: 'A complete reusable season for one book.',
+      leadId: ActorId.parse(actorId),
+      programId: ProgramId.parse(owningProgram!.id),
+      health: 'on_track',
+    };
+    qualified.tasks[0] = {
+      ...qualified.tasks[0]!,
+      description: 'Publish the announcement with the registration link.',
+      state: 'todo',
+      assigneeId: ActorId.parse(actorId),
+      estimate: 3,
+      startOffsetDays: -16,
+      dueOffsetDays: -14,
+    };
+    const full = await createPublishedProcessDefinition(db, {
+      organizationId,
+      actorId,
+      definition: qualified,
+    });
+    const fullDetail = await loadProcessDefinitionDetail(db, organizationId, full.definitionId);
+    expect(fullDetail.revision.project).toMatchObject({
+      description: 'A complete reusable season for one book.',
+      leadId: actorId,
+      programId: owningProgram!.id,
+      health: 'on_track',
+    });
+    expect(fullDetail.revision.tasks[0]).toMatchObject({
+      description: 'Publish the announcement with the registration link.',
+      state: 'todo',
+      assigneeId: actorId,
+      estimate: 3,
+      estimateMinutes: 30,
+      startOffsetDays: -16,
+      dueOffsetDays: -14,
+    });
+  });
+
   it('snapshots an existing project into a reusable relative process', async () => {
     const [sourceProject] = await db
       .insert(project)
@@ -325,6 +414,162 @@ describe('process materialization', () => {
     expect(detail.revision.dependencies).toEqual([
       { blockingStepKey: 'task-1', blockedStepKey: 'task-2' },
     ]);
+  });
+
+  it('snapshots an undated minimal project from the supplied planning date', async () => {
+    const [sourceProject] = await db
+      .insert(project)
+      .values({ organizationId, name: 'Transit meetup', status: 'planned' })
+      .returning();
+    await db.insert(task).values({
+      organizationId,
+      teamId,
+      projectId: sourceProject!.id,
+      title: 'Host meetup',
+      state: 'backlog',
+    });
+
+    const created = await createProcessDefinitionFromProject(db, {
+      organizationId,
+      actorId,
+      now: new Date('2026-10-15T18:00:00.000Z'),
+      input: {
+        projectId: ProjectId.parse(sourceProject!.id),
+        name: 'Transit meetup process',
+        creationMode: 'all_at_once',
+      },
+    });
+    const detail = await loadProcessDefinitionDetail(db, organizationId, created.definitionId);
+
+    expect(detail.name).toBe('Transit meetup process');
+    expect(detail.description).toBeNull();
+    expect(detail.revision.project).toEqual({
+      key: 'project',
+      name: 'Transit meetup · {date}',
+      status: 'planned',
+      startOffsetDays: 0,
+      labelIds: [],
+      timing: { kind: 'on_trigger' },
+    });
+    expect(detail.revision.tasks).toEqual([
+      {
+        key: 'task-1',
+        title: 'Host meetup',
+        teamId,
+        priority: 'none',
+        projectKey: 'project',
+        labelIds: [],
+        timing: { kind: 'on_trigger' },
+      },
+    ]);
+  });
+
+  it('rejects a missing project or a project without tasks as a reusable process', async () => {
+    await expect(
+      createProcessDefinitionFromProject(db, {
+        organizationId,
+        actorId,
+        input: {
+          projectId: ProjectId.parse('01J00000000000000000000000'),
+          creationMode: 'all_at_once',
+        },
+      }),
+    ).rejects.toThrow(/project not found/i);
+
+    const [emptyProject] = await db
+      .insert(project)
+      .values({ organizationId, name: 'Empty workshop' })
+      .returning();
+    await expect(
+      createProcessDefinitionFromProject(db, {
+        organizationId,
+        actorId,
+        input: {
+          projectId: ProjectId.parse(emptyProject!.id),
+          creationMode: 'all_at_once',
+        },
+      }),
+    ).rejects.toThrow(/at least one task/i);
+  });
+
+  it('rejects invalid states and team-scoped labels before publishing generated work', async () => {
+    const invalidState = bookClubDefinition();
+    invalidState.tasks[0] = { ...invalidState.tasks[0]!, state: 'not-a-workflow-state' };
+    await expect(
+      createPublishedProcessDefinition(db, { organizationId, actorId, definition: invalidState }),
+    ).rejects.toThrow(/state.*not available/i);
+
+    const terminalState = bookClubDefinition();
+    terminalState.tasks[0] = { ...terminalState.tasks[0]!, state: 'done' };
+    await expect(
+      createPublishedProcessDefinition(db, { organizationId, actorId, definition: terminalState }),
+    ).rejects.toThrow(/non-terminal/i);
+
+    const [otherTeam] = await db
+      .insert(team)
+      .values({ organizationId, name: 'Other team', key: `OTHER-${Date.now()}` })
+      .returning();
+    const [otherTeamLabel] = await db
+      .insert(label)
+      .values({ organizationId, teamId: otherTeam!.id, name: 'Other team only', color: 'gray' })
+      .returning();
+    const invalidTaskLabel = bookClubDefinition();
+    invalidTaskLabel.tasks[0] = {
+      ...invalidTaskLabel.tasks[0]!,
+      labelIds: [LabelId.parse(otherTeamLabel!.id)],
+    };
+    await expect(
+      createPublishedProcessDefinition(db, {
+        organizationId,
+        actorId,
+        definition: invalidTaskLabel,
+      }),
+    ).rejects.toThrow(/task label/i);
+
+    const invalidProjectLabel = bookClubDefinition();
+    invalidProjectLabel.project = {
+      ...invalidProjectLabel.project!,
+      labelIds: [LabelId.parse(otherTeamLabel!.id)],
+    };
+    await expect(
+      createPublishedProcessDefinition(db, {
+        organizationId,
+        actorId,
+        definition: invalidProjectLabel,
+      }),
+    ).rejects.toThrow(/project label/i);
+  });
+
+  it('updates mutable metadata and refuses to revise an archived process', async () => {
+    const authored = await createPublishedProcessDefinition(db, {
+      organizationId,
+      actorId,
+      definition: bookClubDefinition(),
+    });
+    const updated = await updateProcessDefinitionMetadata(db, {
+      organizationId,
+      definitionId: authored.definitionId,
+      patch: { description: 'A revised explanation without changing execution.' },
+    });
+    expect(updated.name).toBe('Book Club Season');
+    expect(updated.description).toBe('A revised explanation without changing execution.');
+
+    await archiveProcessDefinition(db, organizationId, authored.definitionId);
+    await expect(
+      appendPublishedProcessRevision(db, {
+        organizationId,
+        actorId,
+        definitionId: authored.definitionId,
+        revision: bookClubDefinition('A revision that must not publish'),
+      }),
+    ).rejects.toThrow(/archived.*cannot change/i);
+    await expect(
+      updateProcessDefinitionMetadata(db, {
+        organizationId,
+        definitionId: authored.definitionId,
+        patch: { name: 'Hidden update' },
+      }),
+    ).rejects.toThrow(/not found/i);
   });
 
   it('materializes a fixed plan atomically and returns the same entities on retry', async () => {
@@ -499,6 +744,15 @@ describe('process materialization', () => {
       actorId,
       definition,
     });
+    const detail = await loadProcessDefinitionDetail(db, organizationId, authored.definitionId);
+    expect(detail.revision.tasks[0]).toMatchObject({
+      projectId: fixedProject.id,
+      milestoneId: fixedMilestone.id,
+      cycleId: fixedCycle.id,
+      parentTaskId: fixedParent.id,
+      startOffsetDays: 1,
+      dueOffsetDays: 2,
+    });
     const series = await calendarSeries(authored.definitionId, authored.revisionId, '2026-09-10');
 
     const materialized = await materializeOccurrence(db, {
@@ -599,6 +853,151 @@ describe('process materialization', () => {
         .from(processInstanceTask)
         .where(eq(processInstanceTask.instanceId, initial.instanceId)),
     ).toHaveLength(2);
+  });
+
+  it('dates all-at-once project, milestone, and task work from actual prerequisite completion', async () => {
+    const definition: ProcessDefinitionCreate = {
+      name: 'Coordinator onboarding',
+      creationMode: 'all_at_once',
+      project: {
+        key: 'onboarding',
+        name: 'Coordinator onboarding · {date}',
+        status: 'planned',
+        labelIds: [],
+        timing: { kind: 'after_step_completion', stepKey: 'interest-email', offsetDays: 2 },
+      },
+      milestones: [
+        {
+          key: 'orientation',
+          projectKey: 'onboarding',
+          name: 'Orientation complete',
+          sort: 1,
+          timing: { kind: 'after_step_completion', stepKey: 'interest-email', offsetDays: 3 },
+        },
+      ],
+      tasks: [
+        {
+          key: 'interest-email',
+          title: 'Send interest email',
+          teamId,
+          priority: 'none',
+          labelIds: [],
+          timing: { kind: 'on_trigger' },
+        },
+        {
+          key: 'follow-up',
+          title: 'Send follow-up materials',
+          teamId,
+          projectKey: 'onboarding',
+          milestoneKey: 'orientation',
+          priority: 'none',
+          labelIds: [],
+          timing: { kind: 'after_step_completion', stepKey: 'interest-email', offsetDays: 4 },
+        },
+      ],
+      dependencies: [{ blockingStepKey: 'interest-email', blockedStepKey: 'follow-up' }],
+    };
+    const authored = await createPublishedProcessDefinition(db, {
+      organizationId,
+      actorId,
+      definition,
+    });
+    const series = await calendarSeries(authored.definitionId, authored.revisionId, '2026-11-01');
+    const initial = await materializeOccurrence(db, {
+      organizationId,
+      actorId,
+      ...series,
+      scheduledFor: '2026-11-01',
+    });
+    const rootTaskId = initial.taskIdsByKey['interest-email']!;
+    await db
+      .update(task)
+      .set({ state: 'done', completedAt: new Date('2026-11-05T20:00:00.000Z') })
+      .where(eq(task.id, rootTaskId));
+
+    const advanced = await advanceCompletedProcessTask(db, {
+      organizationId,
+      actorId,
+      completedTaskId: rootTaskId,
+      completedOn: '2026-11-05',
+    });
+    expect(advanced.instanceCompleted).toBe(false);
+    expect(advanced.createdProjectIdsByKey).toEqual({});
+    expect(advanced.createdMilestoneIdsByKey).toEqual({});
+    expect(advanced.createdTaskIdsByKey).toEqual({});
+
+    const [datedProject] = await db
+      .select()
+      .from(project)
+      .where(eq(project.id, initial.projectIdsByKey['onboarding']!));
+    const [datedMilestone] = await db
+      .select()
+      .from(milestone)
+      .where(eq(milestone.id, initial.milestoneIdsByKey['orientation']!));
+    const [datedFollowUp] = await db
+      .select()
+      .from(task)
+      .where(eq(task.id, initial.taskIdsByKey['follow-up']!));
+    expect(datedProject?.startDate?.toISOString()).toBe('2026-11-07T00:00:00.000Z');
+    expect(datedMilestone?.targetDate?.toISOString()).toBe('2026-11-08T00:00:00.000Z');
+    expect(datedFollowUp?.dueDate?.toISOString()).toBe('2026-11-09T00:00:00.000Z');
+  });
+
+  it('ignores ordinary tasks and generated tasks that have not actually completed', async () => {
+    const [ordinaryTask] = await db
+      .insert(task)
+      .values({ organizationId, teamId, title: 'Ordinary task', state: 'backlog' })
+      .returning();
+    expect(
+      await advanceCompletedProcessTask(db, {
+        organizationId,
+        actorId,
+        completedTaskId: ordinaryTask!.id,
+        completedOn: '2026-11-01',
+      }),
+    ).toEqual({
+      createdProjectIdsByKey: {},
+      createdMilestoneIdsByKey: {},
+      createdTaskIdsByKey: {},
+      instanceCompleted: false,
+      nextOccurrenceId: null,
+    });
+
+    const authored = await createPublishedProcessDefinition(db, {
+      organizationId,
+      actorId,
+      definition: {
+        name: 'Unfinished check-in',
+        creationMode: 'all_at_once',
+        milestones: [],
+        tasks: [
+          {
+            key: 'check-in',
+            title: 'Conduct check-in',
+            teamId,
+            priority: 'none',
+            labelIds: [],
+            timing: { kind: 'on_trigger' },
+          },
+        ],
+        dependencies: [],
+      },
+    });
+    const series = await calendarSeries(authored.definitionId, authored.revisionId, '2026-11-02');
+    const generated = await materializeOccurrence(db, {
+      organizationId,
+      actorId,
+      ...series,
+      scheduledFor: '2026-11-02',
+    });
+    expect(
+      await advanceCompletedProcessTask(db, {
+        organizationId,
+        actorId,
+        completedTaskId: generated.taskIdsByKey['check-in']!,
+        completedOn: '2026-11-02',
+      }),
+    ).toMatchObject({ instanceCompleted: false, nextOccurrenceId: null });
   });
 
   it('keeps old instances on their revision when a future revision is published', async () => {

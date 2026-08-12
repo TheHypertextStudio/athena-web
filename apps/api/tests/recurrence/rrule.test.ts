@@ -92,6 +92,19 @@ describe('exportRRule', () => {
         end: { kind: 'never' },
       }),
     ).toThrow(/last.day/i);
+
+    expect(() =>
+      exportRRule({
+        kind: 'yearly',
+        interval: 1,
+        startDate: '2024-02-29',
+        timezone,
+        month: 2,
+        day: 29,
+        overflow: 'last_day',
+        end: { kind: 'never' },
+      }),
+    ).toThrow(/last.day/i);
   });
 
   it('rejects completion-anchored schedules rather than changing their semantics', () => {
@@ -199,5 +212,114 @@ describe('importRRule', () => {
     expect(() =>
       importRRule({ dtstart: '2026-08-12', timezone, rrule: 'FREQ=DAILY;WKST=MO' }),
     ).toThrow(/unsupported/i);
+  });
+
+  it.each([
+    {
+      name: 'a blank timezone',
+      envelope: { dtstart: '2026-08-12', timezone: ' ', rrule: 'FREQ=DAILY' },
+      message: /timezone.*blank/i,
+    },
+    {
+      name: 'an unknown timezone',
+      envelope: { dtstart: '2026-08-12', timezone: 'Mars/Olympus', rrule: 'FREQ=DAILY' },
+      message: /unknown.*timezone/i,
+    },
+    {
+      name: 'a blank rule',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: '  ' },
+      message: /must not be blank/i,
+    },
+    {
+      name: 'a field without a value',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=' },
+      message: /malformed/i,
+    },
+    {
+      name: 'a field without a key',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: '=DAILY' },
+      message: /malformed/i,
+    },
+    {
+      name: 'a duplicate field',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=DAILY;FREQ=WEEKLY' },
+      message: /more than once/i,
+    },
+    {
+      name: 'a non-numeric interval',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=DAILY;INTERVAL=two' },
+      message: /positive integer/i,
+    },
+    {
+      name: 'an interval above the supported bound',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=DAILY;INTERVAL=1000001' },
+      message: /between 1 and 1000000/i,
+    },
+    {
+      name: 'an UNTIL value with the wrong shape',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=DAILY;UNTIL=2026-12-31' },
+      message: /YYYYMMDD/i,
+    },
+    {
+      name: 'an impossible UNTIL date',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=DAILY;UNTIL=20260230' },
+      message: /date/i,
+    },
+    {
+      name: 'an invalid weekly weekday',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=WEEKLY;BYDAY=MO,XX' },
+      message: /weekday codes/i,
+    },
+    {
+      name: 'a duplicate weekly weekday',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=WEEKLY;BYDAY=MO,MO' },
+      message: /must not repeat/i,
+    },
+    {
+      name: 'a monthly rule with neither supported selector',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=MONTHLY' },
+      message: /exactly one/i,
+    },
+    {
+      name: 'a monthly rule with both supported selectors',
+      envelope: {
+        dtstart: '2026-08-12',
+        timezone,
+        rrule: 'FREQ=MONTHLY;BYDAY=2MO;BYMONTHDAY=12',
+      },
+      message: /exactly one/i,
+    },
+    {
+      name: 'an out-of-range monthly day',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=MONTHLY;BYMONTHDAY=32' },
+      message: /between 1 and 31/i,
+    },
+    {
+      name: 'a non-ordinal monthly weekday',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=MONTHLY;BYDAY=MO' },
+      message: /ordinal weekday/i,
+    },
+    {
+      name: 'a yearly rule without a month',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=YEARLY;BYMONTHDAY=12' },
+      message: /BYMONTH.*positive integer/i,
+    },
+    {
+      name: 'a yearly rule without a day',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=YEARLY;BYMONTH=8' },
+      message: /BYMONTHDAY.*positive integer/i,
+    },
+    {
+      name: 'an unsupported frequency',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'FREQ=HOURLY' },
+      message: /unsupported.*HOURLY/i,
+    },
+    {
+      name: 'a missing frequency',
+      envelope: { dtstart: '2026-08-12', timezone, rrule: 'INTERVAL=2' },
+      message: /unsupported.*missing/i,
+    },
+  ])('rejects $name instead of guessing its semantics', ({ envelope, message }) => {
+    expect(() => importRRule(envelope)).toThrow(message);
   });
 });

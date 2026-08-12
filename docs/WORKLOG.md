@@ -4729,12 +4729,15 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   calendar entry points plus the recurrence-series management surface in `apps/web`; scheduler
   setup, focused tests, design evidence, and the implementation/design specifications.
 - **Validation**: `pnpm typecheck` and `pnpm lint` passed 20/20 tasks. Tooling tests passed 139
-  assertions and the monorepo test gate passed 20/20 packages, including API 324 files / 3,734
-  tests, web 275 files / 2,245 tests, and database 23 files / 144 tests. `pnpm build` passed all four
-  build packages; the complete migration chain applied to fresh PGlite; secret scanning reported
-  zero findings across 3,095 tracked files; CI gate policy and `git diff --check` passed. The
-  recurrence contract suite also restores the `@docket/types` coverage gate to 100% statements,
-  branches, functions, and lines across 626 tests. The
+  assertions and the monorepo test gate passed 20/20 packages, including API 325 files / 3,779
+  tests, web 275 files / 2,245 tests, and database 23 files / 144 tests. The forced monorepo coverage
+  run passed 18/18 tasks; API coverage reached 93.96% statements, 89% branches, 95.45% functions,
+  and 95.81% lines, while database coverage reached 97.62% statements, 100% branches, 96.15%
+  functions, and 97.56% lines. `pnpm build` passed all four build packages; the complete migration
+  chain applied to fresh PGlite; secret scanning reported zero findings across 3,095 tracked files;
+  CI gate policy and `git diff --check` passed. The recurrence contract suite also restores the
+  `@docket/types` coverage gate to 100% statements, branches, functions, and lines across 626 tests.
+  The
   authenticated production-bundle browser probe created a real M/W/F series, materialized 13
   ordinary tasks, verified backlinks and the management route, captured desktop/mobile in both
   themes, measured zero overflow at 320px, and found no recurrence target below 40px.

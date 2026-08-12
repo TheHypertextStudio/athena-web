@@ -214,6 +214,17 @@ export class RealStripeGateway implements BillingGateway {
     /* v8 ignore stop */
   }
 
+  /** Retrieve the provider id already persisted by Docket's verified webhook. */
+  private async retrieveSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+    /* v8 ignore start */
+    try {
+      return await this.stripe.subscriptions.retrieve(subscriptionId, { expand: ['items'] });
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to retrieve subscription.', { cause });
+    }
+    /* v8 ignore stop */
+  }
+
   /** {@inheritDoc BillingGateway.getSubscription} */
   async getSubscription(referenceId: string): Promise<Subscription | null> {
     const sub = await this.findSubscription(referenceId);
@@ -235,12 +246,23 @@ export class RealStripeGateway implements BillingGateway {
   }
 
   /** {@inheritDoc BillingGateway.createBillingPortalSession} */
-  async createBillingPortalSession(referenceId: string): Promise<BillingPortalSessionResult> {
+  async createBillingPortalSession(
+    referenceId: string,
+    providerSubscriptionId?: string,
+  ): Promise<BillingPortalSessionResult> {
+    const subscription = providerSubscriptionId
+      ? await this.retrieveSubscription(providerSubscriptionId)
+      : await this.findSubscription(referenceId);
+    if (!subscription) {
+      throw new Error('RealStripeGateway: no subscription customer exists for billing management.');
+    }
+    const customerId =
+      typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
     /* v8 ignore start */
     let session: Stripe.BillingPortal.Session;
     try {
       session = await this.stripe.billingPortal.sessions.create({
-        customer: referenceId,
+        customer: customerId,
         ...(this.config.portalConfigId ? { configuration: this.config.portalConfigId } : {}),
       });
     } catch (cause) {

@@ -128,7 +128,10 @@ export class InMemoryBillingGateway implements BillingGateway {
   }
 
   /** {@inheritDoc BillingGateway.createBillingPortalSession} */
-  async createBillingPortalSession(referenceId: string): Promise<BillingPortalSessionResult> {
+  async createBillingPortalSession(
+    referenceId: string,
+    _providerSubscriptionId?: string,
+  ): Promise<BillingPortalSessionResult> {
     return { url: `${this.baseUrl}/portal/${referenceId}` };
   }
 

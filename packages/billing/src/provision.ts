@@ -152,6 +152,8 @@ export interface ReconcileDocketStripeInput {
   readonly mode: StripeMode;
   readonly apiOrigin: string;
   readonly webOrigin: string;
+  /** Delivery mechanism for billing events. Live mode always uses a registered HTTPS endpoint. */
+  readonly webhookTransport?: 'endpoint' | 'stripe-cli';
   /** Existing one-time webhook secret, when the runtime already has it. */
   readonly existingWebhookSecret?: string;
 }
@@ -186,10 +188,26 @@ function only<T>(values: readonly T[], label: string): T | undefined {
 
 function normalizedOrigin(raw: string, field: string): string {
   const url = new URL(raw);
-  if (url.protocol !== 'https:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+  const local =
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
+    url.hostname.endsWith('.localhost');
+  if (url.protocol !== 'https:' && !local) {
     throw new Error(`${field} must use HTTPS outside localhost.`);
   }
   return url.origin;
+}
+
+/** Validate the sandbox-only CLI transport before any Stripe API request is made. */
+function stripeCliSigningSecret(input: ReconcileDocketStripeInput): string | undefined {
+  if (input.webhookTransport !== 'stripe-cli') return undefined;
+  if (input.mode !== 'test') {
+    throw new Error('Stripe CLI webhook forwarding is sandbox-only.');
+  }
+  if (!input.existingWebhookSecret?.startsWith('whsec_')) {
+    throw new Error('Stripe CLI webhook forwarding requires its whsec_ signing secret.');
+  }
+  return input.existingWebhookSecret;
 }
 
 function matchingPrice(price: StripePriceState, productId: string): boolean {
@@ -212,6 +230,8 @@ export async function reconcileDocketStripe(
   client: StripeProvisioningClient,
   input: ReconcileDocketStripeInput,
 ): Promise<DocketStripeProvisioningResult> {
+  const cliSigningSecret = stripeCliSigningSecret(input);
+
   const state = await client.readState();
   const expectedLive = input.mode === 'live';
   if (state.livemode !== expectedLive) {
@@ -294,6 +314,20 @@ export async function reconcileDocketStripe(
     ? await client.updatePortalConfiguration(existingPortal.id, portalInput)
     : await client.createPortalConfiguration(portalInput);
   actions.push(existingPortal ? 'updated billing portal' : 'created billing portal');
+
+  if (cliSigningSecret) {
+    actions.push('configured Stripe CLI webhook forwarding');
+    return {
+      values: {
+        BILLING_ENABLED: 'true',
+        DOCKET_PRICE_LOOKUP_DOCKET_PRO: DOCKET_PRO_MONTHLY_LOOKUP_KEY,
+        STRIPE_PRICE_DOCKET_PRO: price.id,
+        STRIPE_BILLING_PORTAL_CONFIG_ID: portal.id,
+        STRIPE_WEBHOOK_SECRET: cliSigningSecret,
+      },
+      actions,
+    };
+  }
 
   const webhookInput: StripeWebhookInput = {
     url: `${apiOrigin}/internal/billing/webhook`,

@@ -454,20 +454,49 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
   });
 
   it('opens a billing portal session with the configured config id', async () => {
-    const { http, reqs } = scriptedHttp([{ id: 'bps_1', url: 'https://portal' }]);
+    const { http, reqs } = scriptedHttp([
+      {
+        id: 'sub_portal',
+        object: 'subscription',
+        status: 'trialing',
+        customer: 'cus_1',
+        items: list([]),
+      },
+      { id: 'bps_1', url: 'https://portal' },
+    ]);
     const gw = new RealStripeGateway({ secretKey: 'sk', portalConfigId: 'bpc_1' }, http);
-    const result = await gw.createBillingPortalSession('cus_1');
+    const result = await gw.createBillingPortalSession('org_1', 'sub_portal');
     expect(result).toEqual({ url: 'https://portal' });
-    const req = reqs[0]!;
+    expect(reqs[0]!.url).toContain('/v1/subscriptions/sub_portal');
+    const req = reqs[1]!;
     expect(req.url).toContain('/v1/billing_portal/sessions');
     expect(decodeURIComponent(req.body)).toContain('customer=cus_1');
     expect(decodeURIComponent(req.body)).toContain('configuration=bpc_1');
   });
 
+  it('refuses to open the portal before Stripe has a subscription customer', async () => {
+    const { http, reqs } = scriptedHttp([searchResult([])]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    await expect(gw.createBillingPortalSession('org_without_subscription')).rejects.toThrow(
+      'no subscription customer',
+    );
+    expect(reqs).toHaveLength(1);
+  });
+
   it('honors a custom apiBase override (stripe-mock)', async () => {
-    const { http, reqs } = scriptedHttp([{ id: 'bps_2', url: 'https://portal' }]);
+    const { http, reqs } = scriptedHttp([
+      {
+        id: 'sub_portal',
+        object: 'subscription',
+        status: 'active',
+        customer: 'cus_2',
+        items: list([]),
+      },
+      { id: 'bps_2', url: 'https://portal' },
+    ]);
     const gw = new RealStripeGateway({ secretKey: 'sk', apiBase: 'http://localhost:12111' }, http);
-    await gw.createBillingPortalSession('cus_2');
-    expect(reqs[0]!.url).toContain('http://localhost:12111/v1/billing_portal/sessions');
+    await gw.createBillingPortalSession('org_2', 'sub_portal');
+    expect(reqs[0]!.url).toContain('http://localhost:12111/v1/subscriptions/sub_portal');
+    expect(reqs[1]!.url).toContain('http://localhost:12111/v1/billing_portal/sessions');
   });
 });

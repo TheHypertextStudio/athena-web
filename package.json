@@ -32,6 +32,8 @@
     "icons": "pnpm --filter @docket/brand icons",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "integrations": "tsx scripts/integrations-setup.ts",
+    "billing:webhooks": "dotenv -e .env.local -- tsx scripts/stripe-webhooks.ts",
+    "billing:verify-sandbox": "dotenv -e .env.local -- tsx apps/web/e2e/tools/verify-stripe-sandbox.ts",
     "env:check": "tsx scripts/env-check.ts",
     "domain:check": "tsx scripts/domain-check.ts",
     "workspaces:provision": "tsx scripts/provision-workspaces.ts",

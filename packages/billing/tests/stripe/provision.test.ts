@@ -111,6 +111,37 @@ describe('reconcileDocketStripe', () => {
     });
   });
 
+  it('uses the Stripe CLI signing secret without registering a localhost webhook', async () => {
+    const fake = fakeClient(emptyState());
+    const result = await reconcileDocketStripe(fake.client, {
+      mode: 'test',
+      apiOrigin: 'http://api.docket.localhost:4100',
+      webOrigin: 'http://docket.localhost:4200',
+      webhookTransport: 'stripe-cli',
+      existingWebhookSecret: 'whsec_cli',
+    });
+
+    expect(result.values.STRIPE_WEBHOOK_SECRET).toBe('whsec_cli');
+    expect(fake.state.webhookEndpoints).toEqual([]);
+    expect(fake.calls).not.toContain('createWebhookEndpoint');
+    expect(result.actions).toContain('configured Stripe CLI webhook forwarding');
+  });
+
+  it('rejects Stripe CLI forwarding in live mode before reading or mutating Stripe', async () => {
+    const fake = fakeClient(emptyState(true));
+
+    await expect(
+      reconcileDocketStripe(fake.client, {
+        mode: 'live',
+        apiOrigin: 'https://docket-api.hypertext.studio',
+        webOrigin: 'https://docket.hypertext.studio',
+        webhookTransport: 'stripe-cli',
+        existingWebhookSecret: 'whsec_cli',
+      }),
+    ).rejects.toThrow('Stripe CLI webhook forwarding is sandbox-only');
+    expect(fake.calls).toEqual([]);
+  });
+
   it('is idempotent when the managed resources already match', async () => {
     const fake = fakeClient(emptyState());
     const first = await reconcileDocketStripe(fake.client, input);

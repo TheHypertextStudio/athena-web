@@ -28,7 +28,7 @@ import {
   PRODUCT_ENTITLEMENT_STATUSES,
   PRODUCT_KEYS,
 } from '@docket/types';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -262,7 +262,20 @@ Side effect: creates a checkout session with the provider; product access change
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const result = await getContainer().billing.createBillingPortalSession(orgId);
+      const [product] = await db
+        .select({ stripeSubscriptionId: organizationProductEntitlement.stripeSubscriptionId })
+        .from(organizationProductEntitlement)
+        .where(
+          and(
+            eq(organizationProductEntitlement.organizationId, orgId),
+            eq(organizationProductEntitlement.productKey, 'docket_pro'),
+          ),
+        )
+        .limit(1);
+      const result = await getContainer().billing.createBillingPortalSession(
+        orgId,
+        product?.stripeSubscriptionId ?? undefined,
+      );
       return ok(c, RedirectOut, { url: result.url });
     },
   )

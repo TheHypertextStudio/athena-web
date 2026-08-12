@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
 
+import { DOCKET_STRIPE_WEBHOOK_EVENTS } from '../packages/billing/src/provision';
 import { fetchNotionWebhookToken } from './notion-webhook-token';
 
 // ── environments ────────────────────────────────────────────────────────────────
@@ -119,12 +120,23 @@ export function parseStripeCliProfile(raw: string): StripeCliProfile {
   };
 }
 
-/** Import a test credential from the selected Stripe CLI profile. */
+/** Select one mode-correct credential without ever rendering it. */
+export function stripeCliCredential(
+  profile: StripeCliProfile,
+  env: Environment,
+  field: 'secret' | 'publishable',
+): string | undefined {
+  if (env === 'production') return undefined;
+  const value = field === 'secret' ? profile.testSecretKey : profile.testPublishableKey;
+  const valid = field === 'secret' ? /^(?:sk|rk)_test_[A-Za-z0-9]+$/u : /^pk_test_[A-Za-z0-9]+$/u;
+  return value && valid.test(value) ? value : undefined;
+}
+
+/** Import a mode-correct credential from the selected Stripe CLI profile. */
 async function fetchStripeCliCredential(
   env: Environment,
   field: 'secret' | 'publishable',
 ): Promise<string | undefined> {
-  if (env === 'production') return undefined;
   try {
     const profile = parseStripeCliProfile(
       execFileSync('stripe', ['config', '--list'], {
@@ -132,9 +144,21 @@ async function fetchStripeCliCredential(
         stdio: ['ignore', 'pipe', 'ignore'],
       }),
     );
-    const value = field === 'secret' ? profile.testSecretKey : profile.testPublishableKey;
-    const valid = field === 'secret' ? /^(?:sk|rk)_test_/u : /^pk_test_/u;
-    return value && valid.test(value) ? value : undefined;
+    return stripeCliCredential(profile, env, field);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Read the stable test-mode webhook signing secret issued by the selected Stripe CLI profile. */
+export function fetchStripeCliWebhookSecret(): string | undefined {
+  try {
+    const value = execFileSync(
+      'stripe',
+      ['listen', '--print-secret', '--events', DOCKET_STRIPE_WEBHOOK_EVENTS.join(',')],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    ).trim();
+    return value.startsWith('whsec_') ? value : undefined;
   } catch {
     return undefined;
   }
@@ -847,8 +871,8 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
             ]
           : [
               '',
-              'Sandbox webhooks use the public HTTPS tunnel configured by `pnpm bootstrap`.',
-              'The provisioner stops instead of registering a .localhost webhook when no tunnel exists.',
+              'Sandbox webhooks use Stripe CLI signed forwarding; no public tunnel is required.',
+              'Run `pnpm billing:webhooks` alongside the local API while exercising checkout.',
             ]),
       ];
     },

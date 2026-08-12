@@ -53,6 +53,7 @@ import {
   providerVars,
   DEFAULT_LOCAL_API_URL,
   copyToClipboard,
+  fetchStripeCliWebhookSecret,
   type Environment,
   type ProviderGroup,
   type ProviderId,
@@ -778,6 +779,14 @@ export function normalizeCloudSecret(value: string): string {
   return normalized;
 }
 
+/** Remove credential-shaped values from provider errors before they reach a terminal or CI log. */
+export function redactIntegrationError(value: unknown): string {
+  const message = value instanceof Error ? value.message : String(value);
+  return message
+    .replace(/(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9_*]+/gu, '[Stripe key redacted]')
+    .replace(/whsec_[A-Za-z0-9]+/gu, '[Stripe webhook secret redacted]');
+}
+
 /** Build the least-privilege Secret Manager binding for the default Cloud Run runtime identity. */
 export function runtimeSecretAccessorBindingArgs(
   projectNumber: string,
@@ -1056,6 +1065,12 @@ async function runGuidedSteps(
   setupUrl?: string,
   project?: string,
 ): Promise<GuidedResult> {
+  const autoFetcher = (
+    varName: string,
+  ): NonNullable<ProviderGroup['autoFetch']>[string] | undefined => {
+    if (group.id === 'stripe' && env === 'production') return undefined;
+    return group.autoFetch?.[varName];
+  };
   let index = 0;
   while (index < steps.length) {
     const current = steps[index];
@@ -1085,7 +1100,7 @@ async function runGuidedSteps(
     if (current.var && shouldCollect && !generated) {
       const spec = findVar(current.var);
       if (!spec) throw new Error(`${group.title} references unknown variable ${current.var}.`);
-      const fetcher = group.autoFetch?.[current.var];
+      const fetcher = autoFetcher(current.var);
       const fetched = fetcher ? await tryAutoFetch(fetcher, env, project, current.var) : undefined;
       const value =
         fetched ??
@@ -1153,7 +1168,7 @@ async function runGuidedSteps(
         collected[current.var] = generated;
         ok(`${current.var} generated and copied without being displayed`);
       } else {
-        const fetcher = group.autoFetch?.[current.var];
+        const fetcher = autoFetcher(current.var);
         const fetched = fetcher
           ? await tryAutoFetch(fetcher, env, project, current.var)
           : undefined;
@@ -1225,30 +1240,24 @@ async function runProviderProvisioner(
   if (!publishableKey.startsWith(publishablePrefix)) {
     throw new Error(`${mode} Stripe provisioning requires a ${publishablePrefix} publishable key.`);
   }
-  const publicLocalOrigin = urls.webBases.find((value) => {
-    try {
-      const url = new URL(value);
-      return url.protocol === 'https:' && !url.hostname.endsWith('.localhost');
-    } catch {
-      return false;
-    }
-  });
-  if (env === 'local' && !publicLocalOrigin) {
+  const apiOrigin = urls.apiBase;
+  const webOrigin = urls.webBases[0] ?? urls.apiBase;
+  const stripeCliWebhookSecret = env === 'local' ? fetchStripeCliWebhookSecret() : undefined;
+  if (env === 'local' && !stripeCliWebhookSecret) {
     throw new Error(
-      'Stripe sandbox provisioning requires the public HTTPS tunnel from `pnpm bootstrap` so test webhooks can reach the local API.',
+      'Stripe sandbox provisioning requires a signed Stripe CLI session. Run `stripe login`, then retry.',
     );
   }
-  const apiOrigin = env === 'local' ? (publicLocalOrigin ?? urls.apiBase) : urls.apiBase;
-  const webOrigin =
-    env === 'local' ? (publicLocalOrigin ?? urls.apiBase) : (urls.webBases[0] ?? urls.apiBase);
   const result = await provisionDocketStripe({
     mode,
     secretKey,
     apiOrigin,
     webOrigin,
-    ...(current('STRIPE_WEBHOOK_SECRET')
-      ? { existingWebhookSecret: current('STRIPE_WEBHOOK_SECRET') }
-      : {}),
+    ...(env === 'local'
+      ? { webhookTransport: 'stripe-cli' as const, existingWebhookSecret: stripeCliWebhookSecret }
+      : current('STRIPE_WEBHOOK_SECRET')
+        ? { existingWebhookSecret: current('STRIPE_WEBHOOK_SECRET') }
+        : {}),
   });
   for (const action of result.actions) ok(`Stripe: ${action}`);
   return { ...result.values };
@@ -1732,7 +1741,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     note(integrationHelp(), 'Docket integrations');
   } else {
     runIntegrationSetup(cli).catch((err: unknown) => {
-      log.error(`Integration setup failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`Integration setup failed: ${redactIntegrationError(err)}`);
       process.exit(1);
     });
   }

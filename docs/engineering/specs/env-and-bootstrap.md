@@ -151,15 +151,15 @@ tunnel that `pnpm bootstrap` (Phase 1) sets up.
 
 Billing subject = Organization (`referenceId = Organization.id`). Stripe SDK pinned `stripe@^22`; API version `2026-03-25.dahlia`. Webhook path = `${API_URL}/internal/billing/webhook`. Keys and webhook secrets are **per-mode** (test for sandbox, live for production) — same variable names, different values.
 
-| Name                              | Apps       | Scope  | D/P | What it is                                                                                                     | Where to obtain                                                          |
-| --------------------------------- | ---------- | ------ | --- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `STRIPE_SECRET_KEY`               | api (auth) | server | D=P | Mode-matched secret or restricted key (`sk_test_`/`rk_test_` in sandbox; `sk_live_`/`rk_live_` in production). | Stripe Dashboard → Developers → API keys.                                |
-| `STRIPE_WEBHOOK_SECRET`           | api (auth) | server | D=P | One-time signing secret for the managed `/internal/billing/webhook` endpoint.                                  | Captured by `pnpm integrations` when it creates or rotates the endpoint. |
-| `STRIPE_PUBLISHABLE_KEY`          | api        | server | D=P | Browser-safe key returned at runtime by `GET /v1/config` (`pk_test_` or `pk_live_`).                           | Stripe Dashboard → API keys.                                             |
-| `DOCKET_PRICE_LOOKUP_DOCKET_PRO`  | api (auth) | server | D=P | Stable lookup key `docket_pro_monthly`, resolved within the active Stripe mode.                                | Written by the managed provisioner.                                      |
-| `STRIPE_PRICE_DOCKET_PRO`         | api (auth) | server | D≠P | Concrete mode-specific price id for the USD $8 monthly Docket Pro product.                                     | Written by the managed provisioner.                                      |
-| `STRIPE_BILLING_PORTAL_CONFIG_ID` | api (auth) | server | D≠P | Mode-specific Docket Pro customer portal configuration.                                                        | Written by the managed provisioner.                                      |
-| `BILLING_ENABLED`                 | api        | server | D=P | Enables real Docket Pro checkout only after all managed resources and runtime bindings exist.                  | Set to `true` by successful provisioning.                                |
+| Name                              | Apps       | Scope  | D/P | What it is                                                                                                     | Where to obtain                                            |
+| --------------------------------- | ---------- | ------ | --- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `STRIPE_SECRET_KEY`               | api (auth) | server | D=P | Mode-matched secret or restricted key (`sk_test_`/`rk_test_` in sandbox; `sk_live_`/`rk_live_` in production). | Stripe Dashboard → Developers → API keys.                  |
+| `STRIPE_WEBHOOK_SECRET`           | api (auth) | server | D=P | Signing secret for `/internal/billing/webhook`: Stripe CLI in sandbox, registered endpoint in production.      | Captured by the managed `pnpm integrations` provider pass. |
+| `STRIPE_PUBLISHABLE_KEY`          | api        | server | D=P | Browser-safe key returned at runtime by `GET /v1/config` (`pk_test_` or `pk_live_`).                           | Stripe Dashboard → API keys.                               |
+| `DOCKET_PRICE_LOOKUP_DOCKET_PRO`  | api (auth) | server | D=P | Stable lookup key `docket_pro_monthly`, resolved within the active Stripe mode.                                | Written by the managed provisioner.                        |
+| `STRIPE_PRICE_DOCKET_PRO`         | api (auth) | server | D≠P | Concrete mode-specific price id for the USD $8 monthly Docket Pro product.                                     | Written by the managed provisioner.                        |
+| `STRIPE_BILLING_PORTAL_CONFIG_ID` | api (auth) | server | D≠P | Mode-specific Docket Pro customer portal configuration.                                                        | Written by the managed provisioner.                        |
+| `BILLING_ENABLED`                 | api        | server | D=P | Enables real Docket Pro checkout only after all managed resources and runtime bindings exist.                  | Set to `true` by successful provisioning.                  |
 
 > Docket is free by default and does not touch Stripe. Docket Pro is a separate $8/month organization product.
 
@@ -468,17 +468,23 @@ Each pasted value is validated against its own `@docket/env` registry schema bef
 
 ### 3.5 Step 6 — Stripe (managed desired state)
 
-Run `pnpm integrations -- --env local --provider stripe` first. The local pass requires the public
-HTTPS tunnel from `pnpm bootstrap`, uses test-mode keys, and creates or repairs the Docket Pro
-product, USD $8 monthly organization price, customer portal, and reachable billing webhook. The
-same pass captures every generated id and the one-time webhook signing secret through the normal
-environment writer. When the Stripe CLI is installed and signed in, the wizard imports the test
-secret and publishable keys from its currently selected profile without displaying them. It never
-imports live credentials; the production pass requires an explicit live credential.
+Run `pnpm integrations -- --env local --provider stripe` first. The local pass uses the selected
+Stripe CLI test profile and creates or repairs the Docket Pro product, USD $8 monthly organization
+price, and customer portal. It captures the CLI listener's signing secret without displaying it and
+writes every generated runtime value through the normal environment writer. No public tunnel or
+remote sandbox webhook is required. Run `pnpm billing:webhooks` beside the local API while testing;
+the managed listener forwards only Docket's declared billing events to
+`/internal/billing/webhook` and redacts its signing secret from CLI output. The repository verifier
+`pnpm billing:verify-sandbox` completes hosted Checkout, waits for signed webhook activation, opens
+the customer portal, cancels the test subscription, proves personal data remains, and confirms a
+second checkout receives no new trial. Live credentials are never imported implicitly.
 
 After the sandbox state and purchase flow pass, run
-`pnpm integrations -- --env production --provider stripe` with live-mode keys. It applies the same
-declaration independently in live mode, writes secrets to GCP Secret Manager, writes
+`pnpm integrations -- --env production --provider stripe` and enter a durable live secret or
+restricted key through the wizard's hidden prompt. Stripe CLI stores its own short-lived live key in
+the OS keychain and exposes only a masked placeholder through `stripe config --list`; the bootstrap
+therefore never imports that display value into the application runtime. The provisioner applies the
+same declaration independently in live mode, writes secrets to GCP Secret Manager, writes
 `BILLING_ENABLED=true` to the GitHub production environment, refreshes `API_SECRET_BINDINGS`, and
 never stores a credential in a command argument or repository file. Re-running either pass updates
 owned mutable fields, reuses a matching price, replaces an immutable drifted price, and rotates a
@@ -519,7 +525,8 @@ For each app (`api`, `web`, `marketing`, `admin`) as a separate Vercel project:
 
 - Re-run validation: for each app, load its target env and execute the app's `createEnv` (via `pnpm env:check`); any failure prints the variable + its "where to obtain" hint and the bootstrap exits non-zero.
 - Smoke checks: open a Postgres connection over `DATABASE_URL` and `SELECT 1`; `stripe prices retrieve` (or list by lookup key) to confirm the price resolves; `curl ${API_URL}/api/auth/ok` style liveness if the API is running; fetch `${MCP_ISSUER_URL}/.well-known/oauth-authorization-server` and `${MCP_RESOURCE_URL}` PRM once the API is up.
-- Summary prints: created database resources, Stripe product/price/portal/webhook ids, the exact
+- Summary prints: created database resources, Stripe product/price/portal ids and the production
+  webhook id when applicable, the exact
   OAuth redirect URIs to confirm in each console, which environment values were written, and the
   next commands (`pnpm dev`, `pnpm --filter @docket/db db:studio`).
 
@@ -538,6 +545,6 @@ For each app (`api`, `web`, `marketing`, `admin`) as a separate Vercel project:
 1. **Same names everywhere.** No `DEV_`/`PROD_` prefixed variants. Test/live Stripe keys, dev/prod Neon strings, and per-env secrets all use the identical variable name; only the value differs.
 2. **Same validation everywhere.** The exact `createEnv` composition runs in dev, CI (with `SKIP_ENV_VALIDATION` only for secret-less image builds), and prod boot. A missing/invalid var fails identically in all three.
 3. **Same code path.** No conditional `if (NODE_ENV === 'development')` branching of which service is wired — only values switch (e.g. `sk_test_` vs `sk_live_`, localhost vs domain). Webhooks, OAuth callbacks, MCP discovery, and Checkout all resolve from env in both.
-4. **One command to a working dev env** (`pnpm bootstrap` → `pnpm dev`) and **one repository path
-   to production**, both fed by the env contract. Stripe is a standard provider pass, not a
-   second long-running command.
+4. **One bootstrap path to a working dev env** (`pnpm bootstrap` → `pnpm dev`) and **one repository
+   path to production**, both fed by the env contract. Real Stripe sandbox events use the explicit
+   `pnpm billing:webhooks` companion process so billing traffic is never enabled invisibly.

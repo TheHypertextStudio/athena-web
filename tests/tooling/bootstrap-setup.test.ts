@@ -9,6 +9,7 @@ import {
   parseStripeCliProfile,
   PROVIDER_GROUPS,
   providerVars,
+  stripeCliCredential,
 } from '../../scripts/integration-providers';
 import {
   buildApiSecretBindings,
@@ -16,6 +17,7 @@ import {
   normalizeCloudSecret,
   parseIntegrationArgs,
   policyProviderVars,
+  redactIntegrationError,
   requiredProviderVars,
   runtimeSecretAccessorBindingArgs,
   setupProviderVars,
@@ -167,6 +169,15 @@ describe('mandatory production provider catalog', () => {
     expect(guide).toContain('test mode before live mode');
     expect(guide).not.toContain('/api/auth/stripe/webhook');
     expect(guide).not.toContain('created separately');
+
+    const sandboxGuide = stripe
+      .instructions('local', {
+        apiBase: 'https://api.docket.localhost',
+        webBases: ['https://docket.localhost'],
+      })
+      .join('\n');
+    expect(sandboxGuide).toContain('pnpm billing:webhooks');
+    expect(sandboxGuide).not.toContain('public HTTPS tunnel');
   });
 
   it('imports sandbox Stripe CLI credentials without importing live credentials', async () => {
@@ -202,10 +213,33 @@ test_mode_pub_key = 'pk_test_other'
     });
   });
 
+  it('never treats the Stripe CLI live-key placeholder as a runtime credential', () => {
+    const profile = {
+      testSecretKey: 'sk_test_docket',
+      testPublishableKey: 'pk_test_docket',
+      liveSecretKey: 'rk_live_************1234',
+      livePublishableKey: 'pk_live_docket',
+    };
+
+    expect(stripeCliCredential(profile, 'local', 'secret')).toBe('sk_test_docket');
+    expect(stripeCliCredential(profile, 'production', 'secret')).toBeUndefined();
+    expect(stripeCliCredential(profile, 'production', 'publishable')).toBeUndefined();
+  });
+
   it('recognizes placeholder values without exposing or printing them', () => {
     expect(classifyCredentialValue('')).toBe('missing');
     expect(classifyCredentialValue('your-client-id...')).toBe('placeholder');
     expect(classifyCredentialValue('real-value')).toBe('ready');
+  });
+
+  it('redacts every Stripe credential shape from provider errors', () => {
+    expect(
+      redactIntegrationError(
+        new Error('Invalid API Key provided: rk_live_********1234; webhook whsec_signing'),
+      ),
+    ).toBe(
+      'Invalid API Key provided: [Stripe key redacted]; webhook [Stripe webhook secret redacted]',
+    );
   });
 
   it('keeps GitHub identity setup separate from optional Permissions & events setup', () => {

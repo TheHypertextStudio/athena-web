@@ -127,7 +127,10 @@ export interface BillingGateway {
    * @param referenceId - The Docket scope key (usually the organization id).
    * @returns the hosted billing-portal URL.
    */
-  createBillingPortalSession(referenceId: string): Promise<BillingPortalSessionResult>;
+  createBillingPortalSession(
+    referenceId: string,
+    providerSubscriptionId?: string,
+  ): Promise<BillingPortalSessionResult>;
 }
 
 export { InMemoryBillingGateway } from './in-memory';

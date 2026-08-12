@@ -4733,6 +4733,8 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   tests, web 275 files / 2,245 tests, and database 23 files / 144 tests. `pnpm build` passed all four
   build packages; the complete migration chain applied to fresh PGlite; secret scanning reported
   zero findings across 3,095 tracked files; CI gate policy and `git diff --check` passed. The
+  recurrence contract suite also restores the `@docket/types` coverage gate to 100% statements,
+  branches, functions, and lines across 626 tests. The
   authenticated production-bundle browser probe created a real M/W/F series, materialized 13
   ordinary tasks, verified backlinks and the management route, captured desktop/mobile in both
   themes, measured zero overflow at 320px, and found no recurrence target below 40px.

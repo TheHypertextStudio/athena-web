@@ -9,6 +9,7 @@ import {
   MonthlySchedule,
   ProcessDefinitionCreate,
   ProcessDefinitionDetailOut,
+  ProcessDefinitionUpdate,
   ProcessInstanceItem,
   RecurrenceSeriesCreate,
   RecurrenceSeriesDetailOut,
@@ -221,6 +222,19 @@ describe('RecurringTaskCreate', () => {
       true,
     );
   });
+
+  it('does not accept rolling materialization for completion-anchored work', () => {
+    const result = RecurringTaskCreate.safeParse({
+      task: { title: 'Replace filter', teamId: TEAM_ID },
+      schedule: { kind: 'after_completion', interval: 3, unit: 'month' },
+      materialization: { horizonDays: 28, minimumOccurrences: 2 },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.path.join('.') === 'materialization')).toBe(
+      true,
+    );
+  });
 });
 
 describe('ProcessTrigger', () => {
@@ -370,6 +384,55 @@ describe('ProcessDefinitionCreate', () => {
     expect(result.error?.issues.some((issue) => issue.path.join('.') === 'dependencies')).toBe(
       true,
     );
+  });
+
+  it('includes milestone keys when validating compatible generated references', () => {
+    expect(
+      ProcessDefinitionCreate.safeParse({
+        ...workshopProcess,
+        milestones: [
+          {
+            key: 'event-day',
+            projectKey: 'workshop',
+            name: 'Event day',
+          },
+        ],
+        tasks: workshopProcess.tasks.map((task) => {
+          if (task.key === 'host') return { ...task, milestoneKey: 'event-day' };
+          if (task.key === 'follow-up') return { ...task, parentTaskKey: 'host' };
+          return task;
+        }),
+      }).success,
+    ).toBe(true);
+  });
+
+  it('supports task-only processes without a generated project', () => {
+    expect(
+      ProcessDefinitionCreate.safeParse({
+        name: 'Daily run',
+        tasks: [{ key: 'run', title: 'Run six miles', teamId: TEAM_ID }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a task that references an unknown generated project', () => {
+    const result = ProcessDefinitionCreate.safeParse({
+      ...workshopProcess,
+      tasks: [{ ...workshopProcess.tasks[0], projectKey: 'missing-project' }],
+      dependencies: [],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((issue) => issue.path.join('.') === 'dependencies')).toBe(
+      true,
+    );
+  });
+});
+
+describe('ProcessDefinitionUpdate', () => {
+  it('requires at least one mutable metadata field', () => {
+    expect(ProcessDefinitionUpdate.safeParse({ name: 'Workshop series' }).success).toBe(true);
+    expect(ProcessDefinitionUpdate.safeParse({}).success).toBe(false);
   });
 });
 

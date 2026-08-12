@@ -108,11 +108,12 @@ separate visual redesign.
 | 8. Detail craft                   | 3     | Desktop and mobile captures show intentional wrapping and no horizontal overflow in the audited copy.                               |
 
 Hard gates: A11y **not re-certified by this copy audit** · Responsive ✅ · Theme parity ✅ · No
-placeholder ❌ · Screenshot-verified ✅.
+placeholder ✅ · Screenshot-verified ✅.
 
-The no-placeholder failure is the existing dashed product-image frames on the home page. Replacing
-those frames is visual-content work outside this plan, but the broader craft rubric correctly keeps
-the whole site below its visual ship bar until that work is done.
+The dashed product-image frames present during the copy-only review were replaced with nine
+captures of Docket using disclosed example data. The follow-up
+[`2026-08-11-marketing-release.md`](2026-08-11-marketing-release.md) audit verifies the resulting
+desktop and mobile layouts and records the complete marketing craft gate.
 
 ## Release gates
 

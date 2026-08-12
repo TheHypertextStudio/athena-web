@@ -60,6 +60,9 @@
   expected the obsolete OAuth-during-install copy and its Notion E2E fixtures created a pending
   record before navigating. The follow-up updates the contract assertion and completes the mock
   Notion connection before its UI navigation assertion.
+
+---
+
 ### [MARKETING-SHIP-002] Replace product placeholders and prove the production release
 
 - **Status**: BLOCKED
@@ -93,9 +96,9 @@
 - **Validation**: The local capture flow completed against a disposable passkey account and real
   Docket API writes. Home, Pricing, and About were photographed at 1440×900 and 390×844 in light
   and OS-dark modes; each passed the 320px overflow check and the craft review scored SHIP. The web
-  suite passes 258 files and 2,160 tests, including the 14-case public-copy gate. The forced
-  uncached repository suite passes 20/20 tasks, including 317 API files and 3,688 API tests;
-  typecheck passes 20/20, lint passes 20/20, and build passes 4/4.
+  suite passes, including the 14-case public-copy gate. After rebasing onto current `origin/main`,
+  the forced uncached repository suite passes 20/20 tasks; typecheck passes 20/20, lint passes
+  20/20, and build passes 4/4. A fresh PGlite database also applies migrations through 0081.
 - **Blockers**: Production promotion remains gated on live Stripe and legal evidence. The deploy
   workflow now reads the production `BILLING_ENABLED` variable and refuses billing-enabled releases
   unless the Stripe secret key, publishable key, webhook secret, and Docket Pro price are all mounted
@@ -110,6 +113,9 @@
   a lazy-loaded LCP candidate. Both now have direct regression coverage. A cached repository test
   pass can conceal policy drift after rebasing; the release pass now forces package tests so the
   committed design-debt ledger and production source are compared directly.
+  Current main added root error and missing-page surfaces after the debt snapshot; removing their
+  redundant type overrides and the stale unmatched-route exemption restored the ratchet without
+  changing recovery behavior or copy.
 
 ---
 
@@ -140,8 +146,8 @@
   access, cancellation, billing management, and return routing are verified. Privacy and terms also
   require operator and legal review.
 - **Validation**: Product-capability, billing-lifecycle, CTA-state, onboarding, and copy-gate tests
-  pass. `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass. The API suite passes 317
-  files and 3,688 tests; the public-copy gate passes 14/14 and the uncached design-token policy
+  pass. `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass. The public-copy gate
+  passes 14/14 and the uncached design-token policy
   passes 8/8. The 13 audited surfaces have 52 desktop/mobile, light/dark captures and every binary
   copy property is Aligned. Live production billing-path proof and legal approval remain external
   release gates, so the revised pricing copy is implemented but must remain unpublished. The
@@ -152,6 +158,7 @@
   without cache caught raw typography in the new billing surfaces and allowed the debt ledger to
   shrink instead of accepting new debt. A checkout redirect is not entitlement evidence; the
   signed webhook remains authoritative.
+
 ---
 
 ### [LABELS-001] Give labels a product — definition, groups, merge, and filtering

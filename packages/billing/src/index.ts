@@ -134,4 +134,31 @@ export { InMemoryBillingGateway } from './in-memory';
 export type { InMemoryBillingGatewayOptions } from './in-memory';
 export { RealStripeGateway } from './stripe';
 export type { RealStripeGatewayConfig } from './stripe';
+export {
+  DOCKET_PRO_MONTHLY_LOOKUP_KEY,
+  DOCKET_PRO_PRODUCT_KEY,
+  DOCKET_STRIPE_WEBHOOK_EVENTS,
+  provisionDocketStripe,
+  reconcileDocketStripe,
+} from './provision';
+export type {
+  DocketStripeProvisioningResult,
+  DocketStripeRuntimeValues,
+  ProvisionDocketStripeInput,
+  ReconcileDocketStripeInput,
+  StripeMode,
+  StripePortalConfigurationInput,
+  StripePortalConfigurationState,
+  StripePriceInput,
+  StripePriceState,
+  StripePriceUpdate,
+  StripeProductInput,
+  StripeProductState,
+  StripeProvisioningClient,
+  StripeProvisioningMetadata,
+  StripeProvisioningState,
+  StripeWebhookInput,
+  StripeWebhookState,
+  StripeWebhookUpdate,
+} from './provision';
 export { mapStripeEvent, parseApiBase, toStatus, toSubscription } from './stripe-mappers';

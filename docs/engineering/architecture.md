@@ -41,7 +41,7 @@ The layer boundaries fall where they do because each owns exactly one concern an
 │   • REST + RPC      /v1/orgs/:orgId/…   +   cross-org /v1/hub/{today,…}      │
 │   • MCP server      /mcp   (OAuth 2.1 Resource Server · Streamable HTTP)     │
 │   • OAuth / OIDC    /api/auth/*   (Better Auth = Authorization Server)       │
-│   • Stripe webhook  /api/auth/stripe/webhook   (+ lifecycle reconcile)       │
+│   • Stripe webhook  /internal/billing/webhook  (+ lifecycle reconcile)       │
 │   middleware:  CORS → session → orgContext → capabilityGuard                 │
 │   org_id ALWAYS from the verified token / context — never the client body    │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -558,7 +558,14 @@ The Neon layer is split deliberately into two connection strings because the two
 
 Provisioning is the job of `scripts/bootstrap.ts` (`pnpm bootstrap`), an idempotent, interactive flow that turns the env contract into real cloud resources. It is built to _list before it creates_ and reuse on match (by Neon project name, Stripe `lookup_key`, or webhook URL), so re-running is safe; secrets like `BETTER_AUTH_SECRET` are generated once per target and never silently regenerated, because rotating that secret invalidates every live session. The flow walks: preflight (CLIs installed and authed), target selection (dev writes `apps/*/.env`, prod writes Vercel env), domain confirmation (from which it derives all the `*_URL`/`BETTER_AUTH_*`/`MCP_*` values), secret generation, Neon branch + connection-string capture + migrate, OAuth app setup (the provider consoles have no creation API, so bootstrap prints the _exact_ dev and prod redirect URIs — `…/api/auth/callback/google`, `…/api/auth/callback/github`, and native Linear `…/api/auth/callback/linear` — and collects ids/secrets via masked prompts), Stripe setup, then the Vercel `env add` per app/target, and finally a verification pass that re-runs `@docket/env` plus connection smoke checks. Prod secret values are piped to `vercel env add … --sensitive` over stdin rather than argv, so they never land in shell history or logs.
 
-Stripe is where the data-lifecycle cron lives, and it reflects the engineering plan's split of responsibilities. The `@better-auth/stripe` plugin owns the billing subject (per-Organization, `referenceId = organization.id`), the subscription mirror table, and the core webhooks at `${API_URL}/api/auth/stripe/webhook`; webhook secrets are per-endpoint and per-mode (dev uses the `whsec_…` from `stripe listen --forward-to …/api/auth/stripe/webhook`, prod uses the registered endpoint's secret). What Stripe does _not_ do is delete data, so Docket builds the lifecycle itself on three `organization` columns — `lifecycle_state`, `export_ready_at`, `delete_after_at`. On a trial-end or payment-terminal transition the org moves to `export_window` with `delete_after_at = now + 14d` and an export artifact is generated; a Vercel Cron then hits `/lifecycle/sweep` to perform the actual deletion. That cron endpoint is guarded by `CRON_SECRET` sent as `Authorization: Bearer` (the same secret bootstrap generates and writes to Vercel), the sweep is idempotent, and reactivation cancels a pending deletion. Critically, the handler always reconciles against Stripe because webhooks are neither guaranteed nor ordered — the sweep treats Stripe as the source of truth rather than trusting that the right events arrived.
+Stripe bills an Organization for the Docket Pro product (`referenceId = organization.id`). The API
+owns checkout, its subscription mirror, and the webhook at `${API_URL}/internal/billing/webhook`.
+`pnpm integrations` applies one idempotent declaration in test mode and then live mode: Docket Pro,
+its USD $8 monthly price, the customer portal, and the exact webhook events the API consumes.
+Webhook secrets remain per-endpoint and per-mode. Stripe does not delete Docket data: cancellation
+on a personal organization removes Pro capabilities while preserving the free workspace; a shared
+organization enters the documented export and deletion lifecycle. The lifecycle sweep is
+idempotent and reconciles provider state because webhooks are neither guaranteed nor ordered.
 
 Secrets ownership falls out cleanly from the project split and is the property the diagram traces. `docket-api` is the sole holder of every server-only secret — `DATABASE_URL`/`DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET`, the OAuth client secrets, `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`, the agent credentials, and `CRON_SECRET` — none of which is ever bundled to a browser. Stripe's browser-safe publishable key is also runtime-owned by the API and returned through the public `/v1/config` contract, avoiding a parallel Vercel build-time value. The Next apps carry only their required `NEXT_PUBLIC_*` origin/passkey values. The `@docket/env` slices encode this boundary, and bootstrap's `API_SECRET_BINDINGS` manifest mounts only configured provider secrets into Cloud Run.
 
@@ -582,7 +589,7 @@ Docket is a 12-factor, env-var-only deploy: four Vercel projects (three Next.js 
                                         ▼
     apps/api outbound — server-only secrets, per-mode values
 ┌─ EXTERNAL SERVICES ──────────────────────────────────────────────────────────┐
-│ Stripe   billing per Organization · webhook /api/auth/stripe/webhook         │
+│ Stripe   Docket Pro per Organization · webhook /internal/billing/webhook     │
 │ OAuth    Google · GitHub · Linear   (login + linking + connector tokens)     │
 │ Agents   Athena · Claude · Codex    (open Session + activity stream)         │
 │ Sentry   NEXT_PUBLIC_SENTRY_DSN across all 4 projects                        │

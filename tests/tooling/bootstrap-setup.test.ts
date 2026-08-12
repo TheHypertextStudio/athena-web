@@ -139,6 +139,35 @@ describe('mandatory production provider catalog', () => {
     expect(setupProviderVars(github, 'production', true)).toContain('GITHUB_APP_PRIVATE_KEY');
   });
 
+  it('provisions Stripe resources instead of prompting for generated runtime bindings', () => {
+    const stripe = PROVIDER_GROUPS.find((group) => group.id === 'stripe');
+    if (!stripe?.instructions) throw new Error('Stripe provider flow is incomplete');
+
+    expect(stripe.provisioner).toBe('docket-stripe');
+    expect(setupProviderVars(stripe, 'production', false)).toEqual([
+      'STRIPE_SECRET_KEY',
+      'STRIPE_PUBLISHABLE_KEY',
+    ]);
+    expect(stripe.managedVars).toEqual([
+      'STRIPE_WEBHOOK_SECRET',
+      'DOCKET_PRICE_LOOKUP_DOCKET_PRO',
+      'STRIPE_PRICE_DOCKET_PRO',
+      'STRIPE_BILLING_PORTAL_CONFIG_ID',
+      'BILLING_ENABLED',
+    ]);
+    const guide = stripe
+      .instructions('production', {
+        apiBase: 'https://docket-api.hypertext.studio',
+        webBases: ['https://docket.hypertext.studio'],
+      })
+      .join('\n');
+    expect(guide).toContain('/internal/billing/webhook');
+    expect(guide).toContain('Docket Pro');
+    expect(guide).toContain('test mode before live mode');
+    expect(guide).not.toContain('/api/auth/stripe/webhook');
+    expect(guide).not.toContain('created separately');
+  });
+
   it('recognizes placeholder values without exposing or printing them', () => {
     expect(classifyCredentialValue('')).toBe('missing');
     expect(classifyCredentialValue('your-client-id...')).toBe('placeholder');

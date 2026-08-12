@@ -90,7 +90,7 @@
   - [x] Remove the public claim that Docket approves particular MCP clients; the screenshot now
         describes the product capability without presenting a vendor permission model.
   - [x] Replace the MCP vendor allowlists with OAuth-bound, client-neutral interoperability.
-  - [ ] Add idempotent Stripe sandbox and production provisioning to the standard bootstrap path.
+  - [x] Add idempotent Stripe sandbox and production provisioning to the standard bootstrap path.
   - [ ] Prove Stripe checkout, webhook activation, access, management, cancellation, and return routing.
   - [ ] Deploy the validated release and verify the production customer journey.
 - **Files Changed**: Deterministic marketing capture tooling; nine JPEG application captures;
@@ -125,6 +125,11 @@
   credential-free CORS; present Origins are validated structurally, and CIMD retains its HTTPS,
   DNS, public-address, size, timeout, redirect, PKCE, scope, consent, audience, and revocation
   checks without a client-vendor allowlist.
+  Stripe is now a named managed provisioner inside `pnpm integrations` and `pnpm bootstrap`, backed
+  by a tested desired-state reconciler in `@docket/billing`. It owns Docket Pro, the USD $8 monthly
+  price, customer portal, and `/internal/billing/webhook`; captures generated ids and the one-time
+  signing secret; writes them through existing local/GCP/GitHub writers; and refuses a local
+  sandbox endpoint unless the standard public HTTPS tunnel is available.
 
 ---
 

@@ -149,19 +149,19 @@ tunnel that `pnpm bootstrap` (Phase 1) sets up.
 
 ### 1.4 Stripe (billing + data lifecycle)
 
-Billing subject = Organization (`referenceId = Organization.id`). Stripe SDK pinned `stripe@^22`; API version `2026-03-25.dahlia`. Webhook path = `${API_URL}/api/auth/stripe/webhook`. Keys/secret are **per-mode** (test for dev, live for prod) — same variable names, different values (parity).
+Billing subject = Organization (`referenceId = Organization.id`). Stripe SDK pinned `stripe@^22`; API version `2026-03-25.dahlia`. Webhook path = `${API_URL}/internal/billing/webhook`. Keys and webhook secrets are **per-mode** (test for sandbox, live for production) — same variable names, different values.
 
-| Name                              | Apps       | Scope  | D/P            | What it is                                                                                                                                                                                                           | Where to obtain                                                                                                                                                                                            |
-| --------------------------------- | ---------- | ------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STRIPE_SECRET_KEY`               | api (auth) | server | D=P            | Secret API key. Dev = `sk_test_…`, prod = `sk_live_…`.                                                                                                                                                               | Stripe Dashboard → Developers → API keys (toggle Test/Live), or `stripe config --list` for the test key after `stripe login`.                                                                              |
-| `STRIPE_WEBHOOK_SECRET`           | api (auth) | server | D=P            | Signing secret for the webhook endpoint hitting `/api/auth/stripe/webhook`. **Dev** = the `whsec_…` printed by `stripe listen`; **prod** = the endpoint's secret from the Dashboard/CLI. **Per-endpoint, per-mode.** | Dev: `stripe listen --print-secret`. Prod: created when bootstrap registers the live webhook endpoint (`stripe webhook_endpoints create` returns it; or Dashboard → Webhooks → endpoint → Signing secret). |
-| `STRIPE_PUBLISHABLE_KEY`          | api        | server | D=P            | Browser-safe publishable key returned at runtime by `GET /v1/config`. Dev = `pk_test_…`, prod = `pk_live_…`; avoids a Vercel build-time configuration dependency.                                                    | Stripe Dashboard → API keys (publishable).                                                                                                                                                                 |
-| `DOCKET_PRICE_LOOKUP_TEAM`        | api (auth) | server | D=P            | **Primary** plan→price resolution: the `lookup_key` for the Team plan price. Mode-agnostic name; resolved at runtime to the active price in the current mode.                                                        | Set by bootstrap when it creates prices with `--lookup-key team_monthly`.                                                                                                                                  |
-| `DOCKET_PRICE_LOOKUP_TEAM_ANNUAL` | api (auth) | server | D=P            | `lookup_key` for the annual Team price (if annual offered).                                                                                                                                                          | `--lookup-key team_annual`.                                                                                                                                                                                |
-| `STRIPE_PRICE_TEAM`               | api (auth) | server | D=P (fallback) | **Fallback/override** explicit price ID per env (`price_…`). Used only if `authorize`-by-lookup is disabled. Never hardcode in code.                                                                                 | Output of `stripe prices create` (see §3.4).                                                                                                                                                               |
-| `STRIPE_BILLING_PORTAL_CONFIG_ID` | api (auth) | server | D=P (optional) | Customer Portal configuration ID, if a non-default portal config is used.                                                                                                                                            | `stripe billing_portal configurations create` or Dashboard → Customer portal.                                                                                                                              |
+| Name                              | Apps       | Scope  | D/P | What it is                                                                                                     | Where to obtain                                                          |
+| --------------------------------- | ---------- | ------ | --- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `STRIPE_SECRET_KEY`               | api (auth) | server | D=P | Mode-matched secret or restricted key (`sk_test_`/`rk_test_` in sandbox; `sk_live_`/`rk_live_` in production). | Stripe Dashboard → Developers → API keys.                                |
+| `STRIPE_WEBHOOK_SECRET`           | api (auth) | server | D=P | One-time signing secret for the managed `/internal/billing/webhook` endpoint.                                  | Captured by `pnpm integrations` when it creates or rotates the endpoint. |
+| `STRIPE_PUBLISHABLE_KEY`          | api        | server | D=P | Browser-safe key returned at runtime by `GET /v1/config` (`pk_test_` or `pk_live_`).                           | Stripe Dashboard → API keys.                                             |
+| `DOCKET_PRICE_LOOKUP_DOCKET_PRO`  | api (auth) | server | D=P | Stable lookup key `docket_pro_monthly`, resolved within the active Stripe mode.                                | Written by the managed provisioner.                                      |
+| `STRIPE_PRICE_DOCKET_PRO`         | api (auth) | server | D≠P | Concrete mode-specific price id for the USD $8 monthly Docket Pro product.                                     | Written by the managed provisioner.                                      |
+| `STRIPE_BILLING_PORTAL_CONFIG_ID` | api (auth) | server | D≠P | Mode-specific Docket Pro customer portal configuration.                                                        | Written by the managed provisioner.                                      |
+| `BILLING_ENABLED`                 | api        | server | D=P | Enables real Docket Pro checkout only after all managed resources and runtime bindings exist.                  | Set to `true` by successful provisioning.                                |
 
-> Personal/solo tier is **no-card** (product decision), so no price is required to _create_ a personal org; the Team price set above gates shared/team orgs and invites.
+> Docket is free by default and does not touch Stripe. Docket Pro is a separate $8/month organization product.
 
 ### 1.5 MCP server / OIDC provider
 
@@ -466,21 +466,24 @@ schema-validated and sensitive values are masked.
 
 Each pasted value is validated against its own `@docket/env` registry schema before being accepted (invalid values re-prompt rather than abort).
 
-### 3.5 Step 6 — Stripe (automated via Stripe CLI)
+### 3.5 Step 6 — Stripe (managed desired state)
 
-Verified commands; run against **test mode** for dev and **live mode** for prod (the CLI uses the active key; bootstrap can pass `--api-key` per mode).
+Run `pnpm integrations -- --env local --provider stripe` first. The local pass requires the public
+HTTPS tunnel from `pnpm bootstrap`, uses test-mode keys, and creates or repairs the Docket Pro
+product, USD $8 monthly organization price, customer portal, and reachable billing webhook. The
+same pass captures every generated id and the one-time webhook signing secret through the normal
+environment writer.
 
-1. Authenticate: `stripe login` (or pass `--api-key`).
-2. Create the product and monthly price with stable lookup keys (idempotent: list first, reuse if present):
-   - `stripe products create --name "Docket Pro" --output json` → capture product id.
-   - `stripe prices create --product <prod_id> --currency usd --unit-amount 800 --recurring.interval month --lookup-key docket_pro_monthly --output json` → sets `DOCKET_PRICE_LOOKUP_DOCKET_PRO = docket_pro_monthly`, captures `price_…` → `STRIPE_PRICE_DOCKET_PRO` (fallback).
-   - `DOCKET_PRICE_LOOKUP_TEAM` and `STRIPE_PRICE_TEAM` are accepted as one-release compatibility aliases. Do not create new Stripe configuration with them.
-3. Webhook endpoints:
-   - **Dev:** do **not** create a Dashboard endpoint; instead instruct the operator to run `stripe listen --forward-to localhost:8787/api/auth/stripe/webhook` in a side terminal, and capture `STRIPE_WEBHOOK_SECRET` via `stripe listen --print-secret`.
-   - **Prod:** create the real endpoint → `stripe webhook_endpoints create --url https://docket-api.hypertext.studio/api/auth/stripe/webhook --enabled-events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_failed,invoice.paid,invoice.payment_action_required,customer.subscription.trial_will_end --output json` → capture the returned signing secret into prod `STRIPE_WEBHOOK_SECRET`.
-4. Prompt for the runtime publishable key (`STRIPE_PUBLISHABLE_KEY`, mode-matched) and secret key
-   (`STRIPE_SECRET_KEY`). The API returns only the publishable key through `GET /v1/config`.
-5. Offer to seed test data for the e2e flow with `stripe trigger checkout.session.completed` (dev only) so the billing path can be smoke-tested immediately.
+After the sandbox state and purchase flow pass, run
+`pnpm integrations -- --env production --provider stripe` with live-mode keys. It applies the same
+declaration independently in live mode, writes secrets to GCP Secret Manager, writes
+`BILLING_ENABLED=true` to the GitHub production environment, refreshes `API_SECRET_BINDINGS`, and
+never stores a credential in a command argument or repository file. Re-running either pass updates
+owned mutable fields, reuses a matching price, replaces an immutable drifted price, and rotates a
+managed webhook only when its signing secret is unavailable.
+
+`DOCKET_PRICE_LOOKUP_TEAM` and `STRIPE_PRICE_TEAM` remain read-only compatibility aliases for one
+release. The provisioner never creates objects or bindings under those names.
 
 ### 3.6 Step 7 — Athena agent
 
@@ -514,7 +517,9 @@ For each app (`api`, `web`, `marketing`, `admin`) as a separate Vercel project:
 
 - Re-run validation: for each app, load its target env and execute the app's `createEnv` (via `pnpm env:check`); any failure prints the variable + its "where to obtain" hint and the bootstrap exits non-zero.
 - Smoke checks: open a Postgres connection over `DATABASE_URL` and `SELECT 1`; `stripe prices retrieve` (or list by lookup key) to confirm the price resolves; `curl ${API_URL}/api/auth/ok` style liveness if the API is running; fetch `${MCP_ISSUER_URL}/.well-known/oauth-authorization-server` and `${MCP_RESOURCE_URL}` PRM once the API is up.
-- Summary prints: created Neon project/branch ids, Stripe product/price ids + lookup keys, the exact OAuth redirect URIs to (re)confirm in each console, which Vercel env keys were set per target, and the next commands (`pnpm dev`, `stripe listen …`, `pnpm --filter @docket/db db:studio`).
+- Summary prints: created database resources, Stripe product/price/portal/webhook ids, the exact
+  OAuth redirect URIs to confirm in each console, which environment values were written, and the
+  next commands (`pnpm dev`, `pnpm --filter @docket/db db:studio`).
 
 ### 3.10 Idempotency & safety rules
 
@@ -531,4 +536,6 @@ For each app (`api`, `web`, `marketing`, `admin`) as a separate Vercel project:
 1. **Same names everywhere.** No `DEV_`/`PROD_` prefixed variants. Test/live Stripe keys, dev/prod Neon strings, and per-env secrets all use the identical variable name; only the value differs.
 2. **Same validation everywhere.** The exact `createEnv` composition runs in dev, CI (with `SKIP_ENV_VALIDATION` only for secret-less image builds), and prod boot. A missing/invalid var fails identically in all three.
 3. **Same code path.** No conditional `if (NODE_ENV === 'development')` branching of which service is wired — only values switch (e.g. `sk_test_` vs `sk_live_`, localhost vs domain). Webhooks, OAuth callbacks, MCP discovery, and Checkout all resolve from env in both.
-4. **One command to a working dev env** (`pnpm bootstrap` → `pnpm dev` + `stripe listen`) and **one path to prod** (`pnpm bootstrap` prod target → `vercel deploy`), both fed purely by the env contract.
+4. **One command to a working dev env** (`pnpm bootstrap` → `pnpm dev`) and **one repository path
+   to production**, both fed by the env contract. Stripe is a standard provider pass, not a
+   second long-running command.

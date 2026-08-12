@@ -4,7 +4,8 @@
  * @remarks
  * The per-provider setup copy + metadata ({@link PROVIDER_GROUPS}) and the few helpers it needs,
  * split out of `integrations-setup.ts` so the orchestration there stays readable. This module is
- * pure data + formatting; `integrations-setup.ts` drives the prompts, cloud writes, and ordering.
+ * declarative data + formatting; `integrations-setup.ts` drives prompts, provisioners, cloud
+ * writes, and ordering.
  */
 import { execSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -102,6 +103,10 @@ export interface ProviderGroup {
   readonly vars: readonly string[];
   /** Values required for the provider's primary identity capability. */
   readonly requiredVars?: readonly string[];
+  /** Values produced by a standard managed provisioner rather than typed by the operator. */
+  readonly managedVars?: readonly string[];
+  /** Named reusable provisioner invoked by the integration orchestrator. */
+  readonly provisioner?: 'docket-stripe';
   /** Docket-owned policy values shown separately from provider-console credentials. */
   readonly policyVars?: readonly string[];
   /** Optional connector/webhook values offered after the primary capability is configured. */
@@ -695,44 +700,62 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     title: 'Stripe Integration Set-up',
     label: 'Stripe Billing',
     consoleUrl: 'https://dashboard.stripe.com/apikeys',
-    vars: ['STRIPE_SECRET_KEY', 'STRIPE_PUBLISHABLE_KEY', 'STRIPE_WEBHOOK_SECRET'],
+    vars: [
+      'STRIPE_SECRET_KEY',
+      'STRIPE_PUBLISHABLE_KEY',
+      'STRIPE_WEBHOOK_SECRET',
+      'DOCKET_PRICE_LOOKUP_DOCKET_PRO',
+      'STRIPE_PRICE_DOCKET_PRO',
+      'STRIPE_BILLING_PORTAL_CONFIG_ID',
+      'BILLING_ENABLED',
+    ],
+    requiredVars: [
+      'STRIPE_SECRET_KEY',
+      'STRIPE_PUBLISHABLE_KEY',
+      'STRIPE_WEBHOOK_SECRET',
+      'DOCKET_PRICE_LOOKUP_DOCKET_PRO',
+      'STRIPE_PRICE_DOCKET_PRO',
+      'STRIPE_BILLING_PORTAL_CONFIG_ID',
+      'BILLING_ENABLED',
+    ],
+    managedVars: [
+      'STRIPE_WEBHOOK_SECRET',
+      'DOCKET_PRICE_LOOKUP_DOCKET_PRO',
+      'STRIPE_PRICE_DOCKET_PRO',
+      'STRIPE_BILLING_PORTAL_CONFIG_ID',
+      'BILLING_ENABLED',
+    ],
+    cloudVariables: ['BILLING_ENABLED'],
+    provisioner: 'docket-stripe',
     instructions: (env, urls) => {
       const mode = env === 'production' ? 'live' : 'test';
-      const lines = [
+      return [
         `Use ${mode}-mode keys for the "${env}" environment. Never mix test and live across envs.`,
         '',
         '1) Open https://dashboard.stripe.com and sign in.',
         `2) Top-right toggle: switch to ${mode} mode (the "Test mode" switch must show "${mode}").`,
         '3) API keys: Developers → API keys (https://dashboard.stripe.com/apikeys).',
-        `     • Copy "Secret key"      → starts with ${env === 'production' ? 'sk_live_' : 'sk_test_'}`,
+        `     • Copy "Secret or restricted key" → ${env === 'production' ? 'sk_live_ or rk_live_' : 'sk_test_ or rk_test_'}`,
         `     • Copy "Publishable key" → starts with ${env === 'production' ? 'pk_live_' : 'pk_test_'}`,
-        '4) Webhook signing secret (whsec_…):',
+        '4) Enter those two values. The standard provisioner will create or repair:',
+        '     • Docket Pro',
+        '     • USD $8 monthly organization price (lookup key docket_pro_monthly)',
+        '     • Docket Pro customer portal configuration',
+        `     • ${urls.apiBase}/internal/billing/webhook`,
+        '5) The provisioner captures the one-time webhook signing secret and writes every runtime',
+        '   binding through this wizard. Do not create Stripe objects separately.',
+        ...(env === 'production'
+          ? [
+              '',
+              'Production is the second pass. Run this provider for local first so the identical',
+              'desired state is created and verified in Stripe test mode before live mode.',
+            ]
+          : [
+              '',
+              'Sandbox webhooks use the public HTTPS tunnel configured by `pnpm bootstrap`.',
+              'The provisioner stops instead of registering a .localhost webhook when no tunnel exists.',
+            ]),
       ];
-      if (env === 'local') {
-        lines.push(
-          '     • Install the Stripe CLI (https://stripe.com/docs/stripe-cli), then in a SEPARATE',
-          '       terminal run:',
-          '           stripe login',
-          `           stripe listen --forward-to ${urls.apiBase}/api/auth/stripe/webhook`,
-          '     • It prints "Ready! ... whsec_…" — copy that whsec_ value.',
-          '     • Keep that terminal running while developing so webhooks reach your local API.',
-        );
-      } else {
-        lines.push(
-          '     • Developers → Webhooks → "Add endpoint".',
-          `     • Endpoint URL (paste exactly): ${urls.apiBase}/api/auth/stripe/webhook`,
-          '     • "Select events" → add: checkout.session.completed, customer.subscription.created,',
-          '       customer.subscription.updated, customer.subscription.deleted, invoice.paid,',
-          '       invoice.payment_failed → "Add endpoint".',
-          '     • Open the new endpoint → "Signing secret" → "Reveal" → copy the whsec_… value.',
-        );
-      }
-      lines.push(
-        '',
-        'Note: plan prices (DOCKET_PRICE_LOOKUP_*) are created separately via the Stripe CLI/',
-        'dashboard and are not collected here. Leave all three blank to keep billing on the mock.',
-      );
-      return lines;
     },
   },
   {

@@ -141,23 +141,33 @@ Webhooks beyond the plugin's four are handled through the plugin's `onEvent` hoo
 
 The trial uses `plan.freeTrial.days: 14`. As the Hard Constraints (§0) call out explicitly, this is **named** "legacy trial" but is the **supported, non-deprecated** path — and the only one compatible with both Stripe Checkout and the Better Auth plugin. The newer Trial Offer API (preview) is Checkout-incompatible, so adopting it would mean abandoning Checkout entirely; we keep the supported trial path on purpose. The default flow is **embedded Checkout** (rendered in the product app via `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`), not a redirect to a hosted page.
 
-### The tier-dependent card gate
+### Docket and Docket Pro
 
-Whether a card is required is a **product decision keyed to tier**, not a global setting. A Personal/solo org requires **no card** — a single user gets a frictionless start with no payment method at all. A card is required only when the user crosses into shared territory: **creating a shared/team org, or inviting members into one.** This is why bootstrap creates no price for the personal tier (env-and-bootstrap.md §1.4 note) — the Team price set is what gates shared orgs and invites, and the personal path never touches Stripe Checkout. The no-card-vs-card-required _default_ at the trial boundary remains an open decision (below).
+Docket is free by default and creates a personal workspace without a payment method. Docket Pro is
+a separate $8/month organization product. Buying it grants shared work, integrations, MCP, current
+Athena functionality, and voice through the organization-product entitlement record; it does not
+change the Docket product contract. Checkout belongs only to the explicit Add Docket Pro action.
 
 ### Test/live parity, per-mode webhook secrets, and `lookup_key`
 
-Billing obeys the same dev-mirrors-prod contract as everything else (§0, env-and-bootstrap.md §4): **test mode mirrors live mode** with identical variable names and only the values differing. `STRIPE_SECRET_KEY` is `sk_test_…` in dev and `sk_live_…` in prod; `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is `pk_test_…` vs `pk_live_…`. There is no `DEV_`/`PROD_` branching and no `if (NODE_ENV === 'development')` switch of which webhook or callback is wired — only the value behind each name changes.
+Billing obeys the same dev-mirrors-prod contract as everything else (§0, env-and-bootstrap.md §4): **test mode mirrors live mode** with identical variable names and only the values differing. `STRIPE_SECRET_KEY` is mode-matched (`sk_` or restricted `rk_`), and `STRIPE_PUBLISHABLE_KEY` is `pk_test_…` vs `pk_live_…`. There is no `DEV_`/`PROD_` branching of which webhook or product is wired.
 
-Webhook signing secrets are **per-mode and per-endpoint**. The endpoint path is fixed at `${API_URL}/api/auth/stripe/webhook`. In **dev**, `STRIPE_WEBHOOK_SECRET` is the `whsec_…` printed by `stripe listen --forward-to localhost:8787/api/auth/stripe/webhook` (captured via `stripe listen --print-secret`); in **prod** it is the signing secret of the real endpoint that bootstrap registers with `stripe webhook_endpoints create`. A test secret can never verify a live signature and vice versa, so the per-mode separation is a correctness requirement, not a convenience.
+Webhook signing secrets are **per-mode and per-endpoint**. The endpoint path is fixed at
+`${API_URL}/internal/billing/webhook`. The standard integration provisioner creates the test and
+live endpoints, captures each one-time `whsec_…`, and writes it through the environment-specific
+secret writer. A test secret can never verify a live signature and vice versa.
 
-Plan→price resolution **never hardcodes price IDs**. The primary mechanism is a stable, mode-agnostic **`lookup_key`**: `DOCKET_PRICE_LOOKUP_TEAM` (set to `team_monthly` when bootstrap creates the price with `--lookup-key team_monthly`) and the optional `DOCKET_PRICE_LOOKUP_TEAM_ANNUAL` (`team_annual`). Because the lookup key is the same string in both modes, the same code resolves it to whichever active price exists in the current mode. The explicit per-env price ID `STRIPE_PRICE_TEAM` (`price_…`) exists only as a fallback/override for when lookup-based resolution is disabled — and even it is sourced from env, never inlined. An optional `STRIPE_BILLING_PORTAL_CONFIG_ID` selects a non-default Customer Portal configuration when one is used.
+Product→price resolution uses the stable, mode-agnostic lookup key `docket_pro_monthly`. The
+provisioner writes `DOCKET_PRICE_LOOKUP_DOCKET_PRO` and the concrete mode-specific
+`STRIPE_PRICE_DOCKET_PRO`, and checkout resolves the lookup key inside the active Stripe mode.
+`DOCKET_PRICE_LOOKUP_TEAM` and `STRIPE_PRICE_TEAM` are accepted only as one-release runtime
+compatibility aliases; no new Stripe object or bootstrap output uses them.
 
 ### Open decisions
 
-Several billing questions remain open and are deferred to the billing phase (consolidated in §7 and RECONCILIATION's "Billing phase"):
+The public purchase contract is fixed: Docket is free, Docket Pro has a 14-day trial, and the paid
+product renews monthly at $8 per organization until canceled.
 
-- **No-card vs. card-required** as the trial _default_.
 - **`missing_payment_method`** behavior on trial end: cancel the subscription vs. pause it.
 - **`past_due` terminal state:** treat as `unpaid` (recommended) vs. `canceled`.
 - **Cron infrastructure** for the sweep (Vercel Cron is the working assumption).

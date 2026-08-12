@@ -193,7 +193,8 @@ Apple Developer console the Services ID's return URL must be `https://<host>/api
   `/v1/ingest/github`; real events are exercised on the shared instance. (For an isolated personal
   firehose, the same `pnpm bootstrap` tunnel step exposes your own stack — point a personal GitHub
   App's webhook at it.)
-- **Stripe** — no tunnel; use the Stripe CLI (`stripe listen`), and locally the billing gateway is
-  mocked anyway. Note the handler path is `POST /v1/billing/webhook`
-  (`apps/api/src/routes/webhooks.ts`), not the `@better-auth/stripe` `/api/auth/stripe/webhook`
-  some older docs reference.
+- **Stripe** — the application stays mocked by default. To exercise the real sandbox, first run
+  the standard `pnpm bootstrap` HTTPS tunnel, then
+  `pnpm integrations -- --env local --provider stripe`. It provisions the test product, price,
+  portal, and `POST /internal/billing/webhook` endpoint together and records their runtime values
+  in `.env.local`; there is no separate Dashboard or `stripe listen` step.

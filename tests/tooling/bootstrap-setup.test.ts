@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { parseBootstrapFlags } from '../../scripts/bootstrap';
 import {
   linearOAuthAppManifestUrl,
+  parseStripeCliProfile,
   PROVIDER_GROUPS,
   providerVars,
 } from '../../scripts/integration-providers';
@@ -166,6 +167,39 @@ describe('mandatory production provider catalog', () => {
     expect(guide).toContain('test mode before live mode');
     expect(guide).not.toContain('/api/auth/stripe/webhook');
     expect(guide).not.toContain('created separately');
+  });
+
+  it('imports sandbox Stripe CLI credentials without importing live credentials', async () => {
+    const stripe = PROVIDER_GROUPS.find((group) => group.id === 'stripe');
+    if (!stripe?.autoFetch) throw new Error('Stripe credential import is incomplete');
+
+    expect(stripe.autoFetch.STRIPE_SECRET_KEY).toBeTypeOf('function');
+    expect(stripe.autoFetch.STRIPE_PUBLISHABLE_KEY).toBeTypeOf('function');
+    expect(await stripe.autoFetch.STRIPE_SECRET_KEY?.('production')).toBeUndefined();
+    expect(await stripe.autoFetch.STRIPE_PUBLISHABLE_KEY?.('production')).toBeUndefined();
+  });
+
+  it('parses only the selected Stripe CLI profile and strips quoted values', () => {
+    const profile = parseStripeCliProfile(`
+color = 'auto'
+project-name = 'default'
+
+[default]
+account_id = 'acct_docket'
+test_mode_api_key = 'sk_test_docket'
+test_mode_pub_key = 'pk_test_docket'
+
+['another account']
+account_id = 'acct_other'
+test_mode_api_key = 'sk_test_other'
+test_mode_pub_key = 'pk_test_other'
+`);
+
+    expect(profile).toEqual({
+      accountId: 'acct_docket',
+      testSecretKey: 'sk_test_docket',
+      testPublishableKey: 'pk_test_docket',
+    });
   });
 
   it('recognizes placeholder values without exposing or printing them', () => {

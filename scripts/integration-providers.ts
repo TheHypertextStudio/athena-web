@@ -7,7 +7,7 @@
  * declarative data + formatting; `integrations-setup.ts` drives prompts, provisioners, cloud
  * writes, and ordering.
  */
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -47,6 +47,97 @@ export function copyToClipboard(text: string): boolean {
     }
   }
   return false;
+}
+
+/** Credentials available from the Stripe CLI's currently selected profile. */
+export interface StripeCliProfile {
+  readonly accountId?: string;
+  readonly testSecretKey?: string;
+  readonly testPublishableKey?: string;
+  readonly liveSecretKey?: string;
+  readonly livePublishableKey?: string;
+}
+
+/** Remove the optional quotes used by `stripe config --list`. */
+function stripeCliValue(raw: string): string {
+  const value = raw.trim();
+  if (
+    value.length >= 2 &&
+    ((value.startsWith("'") && value.endsWith("'")) ||
+      (value.startsWith('"') && value.endsWith('"')))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+/**
+ * Parse the active Stripe CLI profile without logging credentials.
+ *
+ * @remarks
+ * Stripe prints all configured profiles. The root `project-name` field identifies the selected
+ * one, so importing credentials must never fall through into a different account's section.
+ */
+export function parseStripeCliProfile(raw: string): StripeCliProfile {
+  const sections = new Map<string, Map<string, string>>();
+  let selectedProfile = 'default';
+  let section: string | undefined;
+
+  for (const sourceLine of raw.split(/\r?\n/u)) {
+    const line = sourceLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const sectionMatch = /^\[(.+)\]$/u.exec(line);
+    if (sectionMatch?.[1]) {
+      section = stripeCliValue(sectionMatch[1]);
+      if (!sections.has(section)) sections.set(section, new Map());
+      continue;
+    }
+    const assignment = /^([^=]+?)\s*=\s*(.*)$/u.exec(line);
+    if (!assignment?.[1]) continue;
+    const key = assignment[1].trim();
+    const value = stripeCliValue(assignment[2] ?? '');
+    if (!section) {
+      if (key === 'project-name' && value) selectedProfile = value;
+      continue;
+    }
+    sections.get(section)?.set(key, value);
+  }
+
+  const values = sections.get(selectedProfile);
+  if (!values) return {};
+  const accountId = values.get('account_id');
+  const testSecretKey = values.get('test_mode_api_key');
+  const testPublishableKey = values.get('test_mode_pub_key');
+  const liveSecretKey = values.get('live_mode_api_key');
+  const livePublishableKey = values.get('live_mode_pub_key');
+  return {
+    ...(accountId ? { accountId } : {}),
+    ...(testSecretKey ? { testSecretKey } : {}),
+    ...(testPublishableKey ? { testPublishableKey } : {}),
+    ...(liveSecretKey ? { liveSecretKey } : {}),
+    ...(livePublishableKey ? { livePublishableKey } : {}),
+  };
+}
+
+/** Import a test credential from the selected Stripe CLI profile. */
+async function fetchStripeCliCredential(
+  env: Environment,
+  field: 'secret' | 'publishable',
+): Promise<string | undefined> {
+  if (env === 'production') return undefined;
+  try {
+    const profile = parseStripeCliProfile(
+      execFileSync('stripe', ['config', '--list'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }),
+    );
+    const value = field === 'secret' ? profile.testSecretKey : profile.testPublishableKey;
+    const valid = field === 'secret' ? /^(?:sk|rk)_test_/u : /^pk_test_/u;
+    return value && valid.test(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // ── provider groups (curated order + DX copy; metadata comes from the registry) ──
@@ -727,6 +818,10 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     ],
     cloudVariables: ['BILLING_ENABLED'],
     provisioner: 'docket-stripe',
+    autoFetch: {
+      STRIPE_SECRET_KEY: (env) => fetchStripeCliCredential(env, 'secret'),
+      STRIPE_PUBLISHABLE_KEY: (env) => fetchStripeCliCredential(env, 'publishable'),
+    },
     instructions: (env, urls) => {
       const mode = env === 'production' ? 'live' : 'test';
       return [

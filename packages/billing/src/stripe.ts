@@ -4,9 +4,10 @@
  * @remarks
  * The env-driven {@link BillingGateway} that talks to Stripe through the official
  * `stripe` SDK. Selected only when `STRIPE_SECRET_KEY` is present and real-shaped by
- * the API container and never in `APP_MODE ∈ {local,test}`. All values come from
- * validated env; the network edge runs through the SDK's `fetch` HTTP client, which is
- * fed the injectable {@link HttpClient} so the only non-deterministic part — live
+ * the API container. Production uses it for live mode; local/test keeps the in-memory
+ * adapter unless managed sandbox setup has set `BILLING_ENABLED=true`. All values come
+ * from validated env; the network edge runs through the SDK's `fetch` HTTP client, which
+ * is fed the injectable {@link HttpClient} so the only non-deterministic part — live
  * Stripe I/O — is swappable at the composition root.
  *
  * Pure logic (config parsing, price-key resolution, Stripe→port mapping, and webhook

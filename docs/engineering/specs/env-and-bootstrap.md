@@ -472,7 +472,9 @@ Run `pnpm integrations -- --env local --provider stripe` first. The local pass r
 HTTPS tunnel from `pnpm bootstrap`, uses test-mode keys, and creates or repairs the Docket Pro
 product, USD $8 monthly organization price, customer portal, and reachable billing webhook. The
 same pass captures every generated id and the one-time webhook signing secret through the normal
-environment writer.
+environment writer. When the Stripe CLI is installed and signed in, the wizard imports the test
+secret and publishable keys from its currently selected profile without displaying them. It never
+imports live credentials; the production pass requires an explicit live credential.
 
 After the sandbox state and purchase flow pass, run
 `pnpm integrations -- --env production --provider stripe` with live-mode keys. It applies the same

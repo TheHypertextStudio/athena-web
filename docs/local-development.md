@@ -197,4 +197,6 @@ Apple Developer console the Services ID's return URL must be `https://<host>/api
   the standard `pnpm bootstrap` HTTPS tunnel, then
   `pnpm integrations -- --env local --provider stripe`. It provisions the test product, price,
   portal, and `POST /internal/billing/webhook` endpoint together and records their runtime values
-  in `.env.local`; there is no separate Dashboard or `stripe listen` step.
+  in `.env.local`. If the Stripe CLI is signed in, the wizard imports the selected profile's test
+  keys without displaying them; live keys are never imported. There is no separate Dashboard or
+  `stripe listen` step.

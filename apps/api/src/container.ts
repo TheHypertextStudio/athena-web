@@ -64,6 +64,8 @@ import { resolveVoiceProvider, type VoiceRealtimeProvider } from './routes/voice
 /** Runtime configuration values used to choose local mocks or production services. */
 export interface AppRuntimeEnv {
   readonly APP_MODE?: 'local' | 'test' | 'production';
+  /** Enables the real Stripe adapter; locally this means the provisioned test-mode sandbox. */
+  readonly BILLING_ENABLED?: boolean;
   readonly STRIPE_SECRET_KEY?: string;
   readonly STRIPE_WEBHOOK_SECRET?: string;
   readonly STRIPE_PRICE_DOCKET_PRO?: string;
@@ -174,6 +176,7 @@ export function anthropicConfigFromEnv(runtimeEnv: AppRuntimeEnv): AnthropicClie
 export function toAppRuntimeEnv(): AppRuntimeEnv {
   return {
     APP_MODE: env.APP_MODE,
+    BILLING_ENABLED: env.BILLING_ENABLED,
     ...(env.STRIPE_SECRET_KEY ? { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY } : {}),
     ...(env.STRIPE_WEBHOOK_SECRET ? { STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET } : {}),
     ...(env.STRIPE_PRICE_DOCKET_PRO
@@ -415,11 +418,11 @@ function buildPushSender(runtimeEnv: AppRuntimeEnv): PushSender {
  */
 export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
   const mock = localMode(runtimeEnv);
+  const useRealBilling = !mock || runtimeEnv.BILLING_ENABLED === true;
   const priceKey = resolveDocketProPriceKey(runtimeEnv);
   const billing = lazyValue(() =>
-    mock
-      ? new InMemoryBillingGateway()
-      : new RealStripeGateway({
+    useRealBilling
+      ? new RealStripeGateway({
           secretKey: required('STRIPE_SECRET_KEY', runtimeEnv.STRIPE_SECRET_KEY),
           ...(priceKey ? { priceKey } : {}),
           ...(runtimeEnv.STRIPE_WEBHOOK_SECRET
@@ -428,7 +431,8 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
           ...(runtimeEnv.STRIPE_BILLING_PORTAL_CONFIG_ID
             ? { portalConfigId: runtimeEnv.STRIPE_BILLING_PORTAL_CONFIG_ID }
             : {}),
-        }),
+        })
+      : new InMemoryBillingGateway(),
   );
   const agentRuntime = lazyValue(() =>
     mock ? new MockAgentRuntime() : new RealProviderRuntime(anthropicConfigFromEnv(runtimeEnv)),

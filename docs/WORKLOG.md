@@ -96,7 +96,9 @@
 - **Files Changed**: Deterministic marketing capture tooling; nine JPEG application captures;
   marketing screenshot frames and sections; support-contact derivation; MCP OAuth test helper;
   screenshot component and support-contact tests; the marketing craft scorecard and its twelve
-  viewport/theme captures; production Stripe secret-policy and workflow regression tests.
+  viewport/theme captures; production Stripe secret-policy and workflow regression tests; managed
+  Stripe desired-state and sandbox credential import tooling; client-neutral MCP authorization and
+  architecture documentation.
 - **Validation**: The local capture flow completed against a disposable passkey account and real
   Docket API writes. Home, Pricing, and About were photographed at 1440×900 and 390×844 in light
   and OS-dark modes; each passed the 320px overflow check and the craft review scored SHIP. The web
@@ -106,11 +108,12 @@
 - **Blockers**: Production promotion remains gated on live Stripe and legal evidence. The deploy
   workflow now reads the production `BILLING_ENABLED` variable and refuses billing-enabled releases
   unless the Stripe secret key, publishable key, webhook secret, and Docket Pro price are all mounted
-  from Secret Manager. The production variable and bindings are not configured, the available Stripe
-  CLI profiles do not identify a Docket account, and the local Google Cloud session requires
-  interactive reauthentication. Operator and legal approval for Privacy and Terms is also not
-  recorded. Publishing the $8 Docket Pro offer before those conditions are resolved would violate
-  the release contract.
+  from Secret Manager. The production variable and bindings are not configured. The selected Stripe
+  CLI profile identifies the Hypertext Studio account and supplies test credentials for the sandbox,
+  but the repository's public local tunnel still requires Cloudflare account authorization and a
+  durable production live credential has not been supplied. Operator and legal approval for Privacy
+  and Terms is also not recorded. Publishing the $8 Docket Pro offer before those conditions are
+  resolved would violate the release contract.
 - **Learnings**: Product screenshots must use the public MCP endpoint even when their data is
   captured locally. The visual audit also caught two non-copy release defects: the support address
   was derived from the web CNAME instead of the registrable domain, and the hero image was left as
@@ -129,7 +132,11 @@
   by a tested desired-state reconciler in `@docket/billing`. It owns Docket Pro, the USD $8 monthly
   price, customer portal, and `/internal/billing/webhook`; captures generated ids and the one-time
   signing secret; writes them through existing local/GCP/GitHub writers; and refuses a local
-  sandbox endpoint unless the standard public HTTPS tunnel is available.
+  sandbox endpoint unless the standard public HTTPS tunnel is available. The local pass imports
+  test keys from the Stripe CLI's selected profile without displaying them, while production still
+  requires an explicit live credential. Once managed setup writes `BILLING_ENABLED=true`, local
+  API composition switches only billing to the real Stripe adapter, so the sandbox checkout and
+  signed webhook path can be exercised without making every other local provider real.
 
 ---
 

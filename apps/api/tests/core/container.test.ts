@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import { RealStripeGateway } from '@docket/billing';
 import {
   CapturePushSender,
   CaptureSmsSender,
@@ -195,6 +196,19 @@ describe('buildAppContainer', () => {
     expect(container.inboundMail).toBeDefined();
     expect(container.mcpConnector).toBeDefined();
     expect(container.blob).toBeDefined();
+  });
+
+  it('uses the real Stripe sandbox locally after managed billing setup is enabled', () => {
+    const container = buildAppContainer({
+      APP_MODE: 'local',
+      BILLING_ENABLED: true,
+      STRIPE_SECRET_KEY: 'sk_test_x',
+      STRIPE_PRICE_DOCKET_PRO: 'price_test_x',
+      STRIPE_WEBHOOK_SECRET: 'whsec_test_x',
+      STRIPE_BILLING_PORTAL_CONFIG_ID: 'bpc_test_x',
+    });
+
+    expect(container.billing).toBeInstanceOf(RealStripeGateway);
   });
 
   it('builds every real service in production mode with a fully configured environment', () => {

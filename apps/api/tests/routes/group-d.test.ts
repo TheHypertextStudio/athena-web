@@ -367,6 +367,39 @@ describe('orgs router', () => {
     expect((await app.request(`/${orgId}`)).status).toBe(404);
   });
 
+  it('POST / disambiguates an auto-derived slug that collides with a reserved system name', async () => {
+    // A workspace named "API" or "Settings" must not silently end up on the one path segment the
+    // product itself owns — the org's slug is now also its default public brief address.
+    const { userId } = await seedUserWithHub();
+    const created = await orgsApp(fakeSession(userId)).request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'API' }),
+    });
+    expect(created.status).toBe(200);
+    const slug = (await body<{ organization: { slug: string } }>(created)).organization.slug;
+    expect(slug).not.toBe('api');
+    expect(slug.startsWith('api-')).toBe(true);
+  });
+
+  it('PATCH /:orgId rejects an explicit reserved slug (422), never silently accepted', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+    const created = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Reserved-slug workspace' }),
+    });
+    const orgId = (await body<{ organization: { id: string } }>(created)).organization.id;
+
+    const res = await app.request(`/${orgId}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ slug: 'settings' }),
+    });
+    expect(res.status).toBe(422);
+  });
+
   it('POST / uses the email as displayName when the user has no name', async () => {
     const { userId } = await seedUserWithHub();
     const app = orgsApp(fakeSession(userId, '', 'noname@e.com'));

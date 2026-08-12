@@ -163,6 +163,16 @@ export const organization = pgTable(
     uniqueIndex('organization_slug_uq').on(t.slug),
     index('organization_lifecycle_idx').on(t.lifecycleState),
     check('organization_initiative_max_depth_check', sql`${t.initiativeMaxDepth} between 1 and 5`),
+    // Mirrors `PublicSlug` (`@docket/types`): the slug is now always a workspace's default brief
+    // address too, unless a custom domain is set, so it takes the same public-path-segment shape
+    // — lowercase alphanumerics, single-hyphen separated, capped at 64 characters. Reserved-word
+    // screening lives in application code (`RESERVED_PUBLIC_SLUGS`), not here — a CHECK constraint
+    // can't cheaply express "not one of 40 literal strings" as cleanly as a Zod `.refine` can, and
+    // the list changes over time in a way a migration shouldn't have to chase.
+    check(
+      'organization_slug_format_check',
+      sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and length(${t.slug}) <= 64`,
+    ),
   ],
 );
 

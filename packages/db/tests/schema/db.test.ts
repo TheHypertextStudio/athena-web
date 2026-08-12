@@ -136,7 +136,6 @@ import {
   verification,
   voiceSession,
   workspaceDomain,
-  workspacePublicSlug,
 } from '../../src/schema';
 import {
   defaultWorkflowStates,
@@ -383,7 +382,6 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
     changeSetEntry,
     publication,
     workspaceDomain,
-    workspacePublicSlug,
     phoneNumber,
     phoneVerification,
     voiceSession,

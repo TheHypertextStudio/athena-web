@@ -58,26 +58,73 @@ function hasSessionCookie(request: NextRequest): boolean {
 }
 
 /**
+ * The visitor's real host: `x-forwarded-host` behind the dev reverse proxy, `host` in production,
+ * or `request.nextUrl.host` as the last resort.
+ *
+ * @remarks
+ * Shared by every host-sensitive decision this module makes. `x-forwarded-host` must win because
+ * behind the dev reverse proxy `request.nextUrl`/`Host` carries the loopback host Next was
+ * actually reached on, not the one the browser is on.
+ *
+ * @param request - The incoming request.
+ * @returns The host, with any port still attached.
+ */
+function requestHost(request: NextRequest): string {
+  return (
+    request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? request.nextUrl.host
+  );
+}
+
+/**
  * The absolute `/sign-in` URL to bounce an obviously-signed-out request to.
  *
  * @remarks
- * Built from the browser-facing host (`x-forwarded-host` when the dev reverse proxy supplied one)
- * rather than `request.nextUrl`, which behind that proxy carries the loopback host Next was
- * actually reached on. Redirecting to the loopback host would send the browser somewhere it cannot
- * reach, and the host-scoped session cookie would not ride the trip back.
+ * Built from the browser-facing host so a redirect never sends the browser to a loopback host it
+ * cannot reach, and so the host-scoped session cookie rides the trip back. See {@link requestHost}.
  *
  * @param request - The incoming request.
  * @param returnPath - Where to send the user after they authenticate (`pathname` + `search`).
  * @returns The absolute sign-in URL carrying a `callbackURL`.
  */
 function signInUrl(request: NextRequest, returnPath: string): URL {
-  const host =
-    request.headers.get('x-forwarded-host') ?? request.headers.get('host') ?? request.nextUrl.host;
+  const host = requestHost(request);
   const proto =
     request.headers.get('x-forwarded-proto') ?? request.nextUrl.protocol.replace(':', '');
   const url = new URL(`${proto}://${host}/sign-in`);
   url.searchParams.set('callbackURL', returnPath);
   return url;
+}
+
+/**
+ * The product's own canonical hostname, read directly from `process.env` rather than through
+ * `@docket/env/web`.
+ *
+ * @remarks
+ * This module must stay importable with zero environment configured — every existing test proves
+ * that today — so it reads the raw, Next-inlined `NEXT_PUBLIC_APP_URL` rather than going through
+ * `createEnv`'s fail-fast validation, which would throw at import time in any environment (or
+ * test) that hasn't configured the full validated contract this module doesn't otherwise need.
+ *
+ * @returns The bare hostname, or `undefined` when unset or unparsable.
+ */
+function ownHostname(): string | undefined {
+  const appUrl = process.env['NEXT_PUBLIC_APP_URL'];
+  if (appUrl === undefined) return undefined;
+  try {
+    return new URL(appUrl).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Docket's own shared brief host, read directly from `process.env` for the same reason as
+ * {@link ownHostname}.
+ *
+ * @returns The bare hostname, or `undefined` when unset.
+ */
+function briefHostname(): string | undefined {
+  return process.env['NEXT_PUBLIC_BRIEF_HOST'];
 }
 
 /**
@@ -122,10 +169,38 @@ function signInUrl(request: NextRequest, returnPath: string): URL {
  * distinguish a valid session from a stale one, so an optimistic redirect here paired with the
  * layout's authoritative one would bounce a stale cookie between the two forever.
  *
+ * **Public brief addresses.** A request arriving on any host other than the product's own is, by
+ * construction, either Docket's shared brief host or a workspace's verified custom domain — DNS
+ * only routes those hosts to this deployment at all when a brief needs serving. The two are
+ * rewritten to two different internal shapes:
+ * - **shared brief host** (`host === briefHostname()`): many workspaces coexist there, so the
+ *   short address still needs a workspace segment — `<briefHost>/<workspace>/<slug>` rewrites to
+ *   `/briefs/<workspace>/<slug>` (`app/(public)/briefs/[workspace]/[slug]/page.tsx`).
+ * - **anything else** (a verified custom domain): the host itself already identifies exactly one
+ *   workspace, so `<domain>/<slug>` rewrites to `/briefs/domain/<slug>`
+ *   (`app/(public)/briefs/domain/[slug]/page.tsx`) — no workspace segment to carry.
+ *
+ * Either way the rewrite returns immediately, before any of the app's own routing or auth logic
+ * runs — none of it applies to a public, unauthenticated read. The product's own routes are only
+ * ever requested on its own canonical host, so this can never intercept them; see
+ * {@link ownHostname}.
+ *
  * @param request - The incoming request.
- * @returns The sign-in redirect, or a `next()` carrying any rewritten request headers.
+ * @returns The sign-in redirect, the public-brief rewrite, or a `next()` carrying any rewritten
+ *   request headers.
  */
 export function proxy(request: NextRequest): NextResponse {
+  const own = ownHostname();
+  const host = requestHost(request).split(':')[0];
+  if (own !== undefined && host !== undefined && host !== own) {
+    const briefUrl = request.nextUrl.clone();
+    briefUrl.pathname =
+      host === briefHostname()
+        ? `/briefs${briefUrl.pathname}`
+        : `/briefs/domain${briefUrl.pathname}`;
+    return NextResponse.rewrite(briefUrl);
+  }
+
   const { pathname, search } = request.nextUrl;
   const protectedPath = isProtectedPath(pathname);
 
@@ -150,11 +225,19 @@ export function proxy(request: NextRequest): NextResponse {
  * The paths this middleware runs on.
  *
  * @remarks
- * `/api/auth/*` and `/v1/*` are the reverse-proxied API paths that need the host restored. The rest
- * are authenticated route-group top-level segments — each as both the bare path and its subtree —
- * which need the session gate. Written out as literals because Next statically analyses this export
- * at build time and cannot evaluate a derived array; the two lists are held in sync by
- * `apps/web/tests/auth/entry-gate.test.ts`.
+ * `/api/auth/*` and `/v1/*` are the reverse-proxied API paths that need the host restored. The
+ * named `/today`, `/focus`, … entries are authenticated route-group top-level segments — each as
+ * both the bare path and its subtree — which need the session gate. Written out as literals
+ * because Next statically analyses this export at build time and cannot evaluate a derived array;
+ * the two lists are held in sync by `apps/web/tests/auth/entry-gate.test.ts`.
+ *
+ * The final regex entry is deliberately a catch-all-with-exclusions rather than another named
+ * literal: it exists solely so the public-brief host check above can run on an arbitrary
+ * workspace slug, which — unlike the fixed `(app)` segments — has no fixed list to write out. It
+ * excludes Next internals, the two already-matched API prefixes, the already-canonical `/briefs`
+ * prefix, and anything with a file extension (favicons, the manifest, images) since no published
+ * slug ever contains a dot. It changes nothing for a request on the product's own host: `proxy`
+ * only acts on it when the host differs.
  */
 export const config = {
   matcher: [
@@ -186,6 +269,7 @@ export const config = {
     '/workspaces/:path*',
     '/orgs',
     '/orgs/:path*',
+    '/((?!_next|v1|api|briefs|.*\\..*).*)',
   ],
 };
 

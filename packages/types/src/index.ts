@@ -11,6 +11,7 @@ export * from './pagination';
 export * from './vocabulary';
 export * from './hub-preferences';
 export * from './organization';
+export * from './slug';
 export * from './entity-display';
 export * from './initiative';
 export * from './program';

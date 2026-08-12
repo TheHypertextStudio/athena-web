@@ -23,6 +23,17 @@ const config = docketVitest({
   environment: 'jsdom',
   react: true,
   setupFiles: ['./vitest.setup.ts'],
+  // `@docket/env/web`'s `createEnv` validates these three at import time and throws if any is
+  // missing — safe to run tests with no `.env` loaded, any component that imports the validated
+  // client env (rather than reading `process.env` raw) still imports cleanly. Values are
+  // deliberately fake but well-formed; a test that cares about a real value stubs it explicitly
+  // (`vi.stubEnv`), same as the optional vars (`NEXT_PUBLIC_BRIEF_HOST` etc.) that stay unset here
+  // by default so a test exercises the "not configured" branch unless it opts in.
+  env: {
+    NEXT_PUBLIC_API_URL: 'https://api.docket.test',
+    NEXT_PUBLIC_APP_URL: 'https://docket.test',
+    NEXT_PUBLIC_PASSKEY_RP_ID: 'docket.test',
+  },
   coverageInclude: [
     'src/components/settings/sections.ts',
     // The open-documents route matcher is pure logic with a behavioral guard (it rejects

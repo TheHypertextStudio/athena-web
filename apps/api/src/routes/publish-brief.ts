@@ -14,9 +14,10 @@
  *
  * Reachability is resolved here too, because it is part of the same read:
  * - the visitor's `Host` decides *which* workspaces may be served (a verified custom domain
- *   serves exactly one workspace; the product's own brief host serves any workspace that has
- *   claimed a public name), and
- * - the workspace's public name plus the brief's slug identify the record.
+ *   serves exactly one workspace; the product's own brief host serves any workspace), and
+ * - on the shared brief host, the workspace's own identity slug plus the brief's slug identify
+ *   the record; on a verified custom domain, the host alone already identifies the workspace, so
+ *   only the brief's slug is needed.
  *
  * Nothing in here renders a sentence. It returns raw enum members, ISO timestamps, and names;
  * the web app owns every word a reader sees.
@@ -35,7 +36,6 @@ import {
   task,
   team,
   workspaceDomain,
-  workspacePublicSlug,
 } from '@docket/db';
 import { apiHosts, isOwnHost } from '@docket/env/api';
 import { normalizeCustomDomain } from '@docket/env/custom-domain';
@@ -85,8 +85,12 @@ function calendarDay(value: Date | null): string | null {
 export interface BriefLocator {
   /** The `Host` the visitor's browser asked on, when the caller could determine it. */
   readonly host: string | undefined;
-  /** The workspace's claimed public name. */
-  readonly workspaceSlug: string;
+  /**
+   * The workspace's own identity slug, present for a request on the shared brief host. `undefined`
+   * for a request on a workspace's own verified custom domain, where the host alone already
+   * identifies exactly one workspace and a path segment for it would be redundant.
+   */
+  readonly workspaceSlug: string | undefined;
   /** The brief's path segment within that workspace. */
   readonly slug: string;
 }
@@ -95,10 +99,9 @@ export interface BriefLocator {
  * Whether a host is one of Docket's own, as opposed to a workspace's custom domain.
  *
  * @remarks
- * Docket's own hosts serve every workspace that has claimed a public name; a custom domain
- * serves exactly one workspace. Getting this backwards in either direction is a tenancy bug, so
- * the decision is made once, here, from the resolved host contract rather than from string
- * heuristics.
+ * Docket's own hosts serve every workspace; a custom domain serves exactly one workspace. Getting
+ * this backwards in either direction is a tenancy bug, so the decision is made once, here, from
+ * the resolved host contract rather than from string heuristics.
  *
  * The `.localhost` allowance is gated on the app mode, not merely conventional: outside
  * production the brief host, the app host, and the API host are all portless `*.localhost`
@@ -156,34 +159,65 @@ interface ResolvedPublication {
 }
 
 /**
+ * Resolve which workspace a locator addresses, before its brief slug is looked up.
+ *
+ * @remarks
+ * Two distinct shapes, matching {@link BriefLocator.workspaceSlug}'s two states:
+ * - **Shared host** (`workspaceSlug` present): the workspace is found by its own identity slug.
+ *   A verified-custom-domain `hostScope` still gates it (MISS-04's "a brief belonging to a
+ *   different workspace is not reachable on this host") — reachable only via a stale link or a
+ *   direct API call today, since the proxy rewrite never produces this shape for a custom domain.
+ * - **Custom domain** (`workspaceSlug` absent): the host itself is the only identifier. No
+ *   `hostScope` means no verified domain matched at all, which is a refusal, not an "any
+ *   workspace" fallback — the shared host never reaches this branch.
+ *
+ * @throws {NotFoundError} When no workspace matches.
+ */
+async function resolveWorkspace(
+  locator: Pick<BriefLocator, 'host' | 'workspaceSlug'>,
+): Promise<{ id: string; slug: string }> {
+  const hostScope = await resolveHostScope(locator.host);
+
+  if (locator.workspaceSlug !== undefined) {
+    const rows = await db
+      .select({ id: organization.id, slug: organization.slug })
+      .from(organization)
+      .where(eq(organization.slug, locator.workspaceSlug))
+      .limit(1);
+    const row = rows[0];
+    if (!row) throw new NotFoundError('Brief not found');
+    if (hostScope !== undefined && hostScope !== row.id) throw new NotFoundError('Brief not found');
+    return row;
+  }
+
+  if (hostScope === undefined) throw new NotFoundError('Brief not found');
+  const rows = await db
+    .select({ id: organization.id, slug: organization.slug })
+    .from(organization)
+    .where(eq(organization.id, hostScope))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new NotFoundError('Brief not found');
+  return row;
+}
+
+/**
  * Resolve a locator to exactly one currently-published record, or refuse.
  *
- * @param locator - The host, workspace name, and brief slug from the request.
+ * @param locator - The host, workspace slug (shared host) or nothing (custom domain), and brief
+ *   slug from the request.
  * @returns The publication's identity.
  * @throws {NotFoundError} When nothing published matches, including every refusal case.
  */
 async function resolvePublication(locator: BriefLocator): Promise<ResolvedPublication> {
-  const hostScope = await resolveHostScope(locator.host);
-
-  const claims = await db
-    .select({ organizationId: workspacePublicSlug.organizationId, slug: workspacePublicSlug.slug })
-    .from(workspacePublicSlug)
-    .where(eq(workspacePublicSlug.slug, locator.workspaceSlug))
-    .limit(1);
-  const claim = claims[0];
-  if (!claim) throw new NotFoundError('Brief not found');
-  // A verified domain serves its own workspace and nothing else (MISS-04's "a brief belonging to
-  // a different workspace is not reachable on this host").
-  if (hostScope !== undefined && hostScope !== claim.organizationId) {
-    throw new NotFoundError('Brief not found');
-  }
+  const workspace = await resolveWorkspace(locator);
 
   const rows = await db
     .select()
     .from(publication)
     .where(
       and(
-        eq(publication.organizationId, claim.organizationId),
+        eq(publication.organizationId, workspace.id),
         eq(publication.slug, locator.slug),
         isNotNull(publication.publishedAt),
       ),
@@ -197,7 +231,7 @@ async function resolvePublication(locator: BriefLocator): Promise<ResolvedPublic
     subjectKind: row.subjectKind,
     subjectId: row.subjectId,
     slug: row.slug,
-    workspaceSlug: claim.slug,
+    workspaceSlug: workspace.slug,
     publishedAt: row.publishedAt,
   };
 }
@@ -502,7 +536,10 @@ async function projectBrief(
  *
  * @example
  * ```ts
- * const brief = await loadPublicBrief({ host: 'briefs.docket.place', workspaceSlug: 'acme', slug: 'q3' });
+ * // Shared brief host — a workspace slug identifies the workspace.
+ * await loadPublicBrief({ host: 'briefs.docket.place', workspaceSlug: 'acme', slug: 'q3' });
+ * // A verified custom domain — the host alone identifies the workspace.
+ * await loadPublicBrief({ host: 'updates.acme.com', workspaceSlug: undefined, slug: 'q3' });
  * ```
  */
 export async function loadPublicBrief(
@@ -538,9 +575,21 @@ export async function loadPublicBrief(
   };
 }
 
-/** The path a brief answers on, relative to whichever host serves it. */
+/** The path a brief answers on via the shared brief host, where many workspaces coexist. */
 export function briefPath(workspaceSlug: string, slug: string): string {
-  return `/briefs/${workspaceSlug}/${slug}`;
+  return `/${workspaceSlug}/${slug}`;
+}
+
+/**
+ * The path a brief answers on via a workspace's own verified custom domain.
+ *
+ * @remarks
+ * No workspace segment: the domain itself already belongs to exactly one workspace (a domain can
+ * be claimed by only one, per the unique host index), so `/<workspaceSlug>/<slug>` there would be
+ * redundant — `updates.acme.com/q3-roadmap`, not `updates.acme.com/acme-corp/q3-roadmap`.
+ */
+export function customDomainBriefPath(slug: string): string {
+  return `/${slug}`;
 }
 
 /**
@@ -550,7 +599,7 @@ export function briefPath(workspaceSlug: string, slug: string): string {
  * `null` rather than a guessed origin: a deployment with no brief host configured genuinely has
  * no shared public address, and inventing one would put a dead link in a printed document.
  *
- * @param workspaceSlug - The workspace's claimed public name.
+ * @param workspaceSlug - The publishing workspace's own identity slug.
  * @param slug - The brief's path segment.
  * @returns The absolute URL, or `null` when no brief host is configured.
  */
@@ -564,20 +613,21 @@ export function briefUrlOnBriefHost(workspaceSlug: string, slug: string): string
  * Every absolute URL a workspace's brief is currently reachable at.
  *
  * @remarks
- * Shown in the app after publishing, so the person sees exactly what they can share. A
- * workspace with no claimed name and no verified domain gets an empty list — the honest answer,
- * and the prompt the publish surface uses to send them to settings.
+ * Shown in the app after publishing, so the person sees exactly what they can share. Empty only
+ * when this deployment has no brief host configured AND the workspace has no verified custom
+ * domain — every workspace has its own identity slug from the moment it exists, so there is no
+ * "not addressed yet" state to report anymore.
  *
  * @param organizationId - The publishing workspace.
  * @param slug - The brief's path segment.
  * @returns Absolute URLs, brief host first.
  */
 export async function briefUrls(organizationId: string, slug: string): Promise<string[]> {
-  const [claims, domains] = await Promise.all([
+  const [orgs, domains] = await Promise.all([
     db
-      .select({ slug: workspacePublicSlug.slug })
-      .from(workspacePublicSlug)
-      .where(eq(workspacePublicSlug.organizationId, organizationId))
+      .select({ slug: organization.slug })
+      .from(organization)
+      .where(eq(organization.id, organizationId))
       .limit(1),
     db
       .select({ host: workspaceDomain.host })
@@ -591,14 +641,15 @@ export async function briefUrls(organizationId: string, slug: string): Promise<s
       .orderBy(asc(workspaceDomain.host)),
   ]);
 
-  const workspaceSlug = claims[0]?.slug;
+  const workspaceSlug = orgs[0]?.slug;
+  /* v8 ignore next -- @preserve defensive: organizationId is always a real org's id */
   if (workspaceSlug === undefined) return [];
 
   const urls: string[] = [];
   const canonical = briefUrlOnBriefHost(workspaceSlug, slug);
   if (canonical !== null) urls.push(canonical);
   for (const domain of domains) {
-    urls.push(`https://${domain.host}${briefPath(workspaceSlug, slug)}`);
+    urls.push(`https://${domain.host}${customDomainBriefPath(slug)}`);
   }
   return urls;
 }

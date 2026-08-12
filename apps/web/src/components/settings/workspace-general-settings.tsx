@@ -1,11 +1,7 @@
 'use client';
 
-import {
-  type OrgOut,
-  type OrgUpdate,
-  type VocabularyPreset,
-  WORKSPACE_SLUG_PATTERN,
-} from '@docket/types';
+import { PublicSlug, type OrgOut, type OrgUpdate, type VocabularyPreset } from '@docket/types';
+import { env } from '@docket/env/web';
 import { Input, Select, Skeleton } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
@@ -120,7 +116,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
     baseline: current?.slug,
     ready: canEdit && current !== null,
     save: (slug) => {
-      if (WORKSPACE_SLUG_PATTERN.test(slug)) save.mutate({ slug });
+      if (PublicSlug.safeParse(slug).success) save.mutate({ slug });
     },
   });
   useDebouncedAutosave({
@@ -134,7 +130,8 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
   });
 
   const nameInvalid = draft !== null && draft.name.trim() === '';
-  const slugInvalid = draft !== null && !WORKSPACE_SLUG_PATTERN.test(draft.slug.trim());
+  const slugInvalid = draft !== null && !PublicSlug.safeParse(draft.slug.trim()).success;
+  const briefHost = env.NEXT_PUBLIC_BRIEF_HOST;
 
   return (
     <div className="flex flex-col gap-6">
@@ -195,8 +192,9 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
               <Input
                 value={draft.slug}
                 disabled={readOnly}
-                maxLength={80}
+                maxLength={64}
                 aria-describedby="workspace-slug-help"
+                {...(briefHost === undefined ? {} : { prefix: `${briefHost}/` })}
                 onChange={(event) => {
                   update('slug', event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'));
                 }}
@@ -205,12 +203,13 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 id="workspace-slug-help"
                 className="text-on-surface-variant text-xs font-normal"
               >
-                Used as the stable identifier for links and integrations:{' '}
-                {draft.slug || 'workspace'}
+                {briefHost === undefined
+                  ? "Your workspace's one identifier — lowercase letters, numbers, and hyphens."
+                  : 'Also where your published pages answer by default, unless you set up a custom domain in Settings → Publishing.'}
               </span>
               {slugInvalid ? (
                 <span className="text-error text-xs font-normal">
-                  Use lowercase letters and numbers, separated by hyphens.
+                  Use lowercase letters and numbers, separated by hyphens, and not a reserved name.
                 </span>
               ) : null}
             </label>

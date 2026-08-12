@@ -19,7 +19,7 @@
  * rot because a brief was toggled off for a week. The public serving guard is
  * `published_at IS NOT NULL`, never row existence, so a withdrawn brief 404s immediately.
  */
-import { db, publication, workspacePublicSlug } from '@docket/db';
+import { db, organization, publication } from '@docket/db';
 import {
   PublicationCreate,
   PublicationOut,
@@ -54,12 +54,13 @@ type PublicationRow = typeof publication.$inferSelect;
  * Serialize a publication row, resolving the live set of URLs it is reachable at.
  *
  * @param row - The stored row.
- * @param workspaceSlug - The workspace's claimed public name, or `null` when unclaimed.
+ * @param workspaceSlug - The publishing workspace's own identity slug (never null — every
+ *   workspace has one).
  * @returns The wire representation.
  */
 async function toOut(
   row: PublicationRow,
-  workspaceSlug: string | null,
+  workspaceSlug: string,
 ): Promise<z.input<typeof PublicationOut>> {
   return {
     id: row.id,
@@ -70,19 +71,30 @@ async function toOut(
     published: row.publishedAt !== null,
     publishedAt: row.publishedAt?.toISOString() ?? null,
     unpublishedAt: row.unpublishedAt?.toISOString() ?? null,
-    path: briefPath(workspaceSlug ?? ':workspace', row.slug),
+    path: briefPath(workspaceSlug, row.slug),
     urls: row.publishedAt === null ? [] : await briefUrls(row.organizationId, row.slug),
   };
 }
 
-/** Read the workspace's claimed public name once per request, for path construction. */
-async function claimedWorkspaceSlug(organizationId: string): Promise<string | null> {
+/**
+ * Read the publishing workspace's own identity slug — its default brief address — once per
+ * request, for path construction.
+ *
+ * @remarks
+ * `NotFoundError` on a missing row would be a defensive-only branch: every publication's
+ * `organizationId` is a real FK to a real org, so this can only fail if that invariant is broken
+ * elsewhere, in which case surfacing a clean error here is strictly better than a silent `''`.
+ */
+async function workspaceSlug(organizationId: string): Promise<string> {
   const rows = await db
-    .select({ slug: workspacePublicSlug.slug })
-    .from(workspacePublicSlug)
-    .where(eq(workspacePublicSlug.organizationId, organizationId))
+    .select({ slug: organization.slug })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
     .limit(1);
-  return rows[0]?.slug ?? null;
+  const row = rows[0];
+  /* v8 ignore next -- @preserve defensive: organizationId is always a real org's id */
+  if (!row) throw new NotFoundError('Workspace not found');
+  return row.slug;
 }
 
 /** Load one publication scoped to the org, or 404. */
@@ -136,19 +148,19 @@ const publications = new Hono<AppEnv>()
       tag: 'Publishing',
       summary: 'List published briefs',
       response: pageOf(PublicationOut),
-      description: `List every publication in the workspace — each row is one initiative, program, or project that has been published as a public brief, newest first, including those currently withdrawn (\`published: false\`). Withdrawn rows are retained so re-publishing restores the same URL, which is why they appear here rather than vanishing. Each row's \`urls\` array is resolved live: it lists the shared brief host (when the workspace has claimed a public name) plus every verified custom domain, and is empty for a withdrawn brief or a workspace that has claimed neither. Reads require only org membership.`,
+      description: `List every publication in the workspace — each row is one initiative, program, or project that has been published as a public brief, newest first, including those currently withdrawn (\`published: false\`). Withdrawn rows are retained so re-publishing restores the same URL, which is why they appear here rather than vanishing. Each row's \`urls\` array is resolved live: it lists the shared brief host (when one is configured for this deployment) plus every verified custom domain, and is empty for a withdrawn brief. Reads require only org membership.`,
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const [rows, workspaceSlug] = await Promise.all([
+      const [rows, slug] = await Promise.all([
         db
           .select()
           .from(publication)
           .where(eq(publication.organizationId, orgId))
           .orderBy(desc(publication.createdAt)),
-        claimedWorkspaceSlug(orgId),
+        workspaceSlug(orgId),
       ]);
-      const items = await Promise.all(rows.map((row) => toOut(row, workspaceSlug)));
+      const items = await Promise.all(rows.map((row) => toOut(row, slug)));
       return ok(c, pageOf(PublicationOut), { items });
     },
   )
@@ -178,7 +190,7 @@ const publications = new Hono<AppEnv>()
       const row = rows[0];
       if (!row) return ok(c, PublicationStateOut, { publication: null });
       return ok(c, PublicationStateOut, {
-        publication: await toOut(row, await claimedWorkspaceSlug(orgId)),
+        publication: await toOut(row, await workspaceSlug(orgId)),
       });
     },
   )
@@ -195,7 +207,7 @@ const publications = new Hono<AppEnv>()
 
 \`slug\` is the last segment of the public URL. Omit it and one is derived from the record's own title; supply it to choose. It must be 1–64 lowercase alphanumeric characters separated by single hyphens, must not be a reserved system name, and must be unused by another brief in this workspace — a clash returns **409 \`public_name_taken\`** and writes nothing.
 
-Publishing a record that was previously withdrawn restores it at its **original** URL rather than minting a new one, so shared links survive a withdrawal. Requires \`contribute\`: a brief is a view of work the caller can already author, and withdrawal is one click. Note that a brief is only *reachable* once the workspace has claimed a public name or verified a custom domain — until then \`urls\` is empty and the app says so.`,
+Publishing a record that was previously withdrawn restores it at its **original** URL rather than minting a new one, so shared links survive a withdrawal. Requires \`contribute\`: a brief is a view of work the caller can already author, and withdrawal is one click. \`urls\` reflects live reachability: the shared brief host (once one is configured for this deployment) plus every verified custom domain — empty only in a deployment with neither.`,
     }),
     zJson(PublicationCreate),
     async (c) => {
@@ -257,7 +269,7 @@ Publishing a record that was previously withdrawn restores it at its **original*
       if (!row) throw new Error('publication write returned no row');
 
       c.status(201);
-      return ok(c, PublicationOut, await toOut(row, await claimedWorkspaceSlug(orgId)));
+      return ok(c, PublicationOut, await toOut(row, await workspaceSlug(orgId)));
     },
   )
   .patch(
@@ -298,7 +310,7 @@ Publishing a record that was previously withdrawn restores it at its **original*
       const row = rows[0];
       /* v8 ignore next -- @preserve defensive: update always returns one row */
       if (!row) throw new Error('publication update returned no row');
-      return ok(c, PublicationOut, await toOut(row, await claimedWorkspaceSlug(orgId)));
+      return ok(c, PublicationOut, await toOut(row, await workspaceSlug(orgId)));
     },
   )
   .delete(
@@ -326,7 +338,7 @@ The row is deliberately **retained** with its address reserved, rather than dele
       const row = rows[0];
       /* v8 ignore next -- @preserve defensive: update always returns one row */
       if (!row) throw new Error('publication withdraw returned no row');
-      return ok(c, PublicationOut, await toOut(row, await claimedWorkspaceSlug(orgId)));
+      return ok(c, PublicationOut, await toOut(row, await workspaceSlug(orgId)));
     },
   );
 

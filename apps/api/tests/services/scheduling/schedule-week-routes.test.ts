@@ -101,7 +101,7 @@ async function seedPlanner(label: string): Promise<{
   if (!hubRow) throw new Error('seeded user has no hub');
 
   const mkOrg = async (name: string): Promise<string> => {
-    const slug = `${name}-${Math.random().toString(36).slice(2, 8)}`;
+    const slug = `org-${Math.random().toString(36).slice(2, 8)}`;
     const [org] = await db
       .insert(schema.organization)
       .values({ name, slug, lifecycleState: 'active' })

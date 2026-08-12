@@ -27,8 +27,11 @@ import { ok } from '../lib/ok';
 import { zParam, zQuery } from '../lib/validate';
 import { loadPublicBrief } from './publish-brief';
 
-/** The workspace name and brief slug that identify one brief. */
+/** The workspace's own identity slug and the brief slug that identify one brief. */
 const briefParam = z.object({ workspaceSlug: z.string(), slug: z.string() });
+
+/** The brief slug alone, for a request whose `Host` already identifies the workspace. */
+const domainBriefParam = z.object({ slug: z.string() });
 
 /**
  * The host the visitor's browser actually asked on.
@@ -45,25 +48,34 @@ const briefParam = z.object({ workspaceSlug: z.string(), slug: z.string() });
  */
 const briefQuery = z.object({ host: z.string().max(253).optional() });
 
-/** The public brief router: one read, no session, no mutation. */
-const publicBriefs = new Hono<AppEnv>().get(
-  '/briefs/:workspaceSlug/:slug',
-  zParam(briefParam),
-  zQuery(briefQuery),
-  async (c) => {
+/**
+ * Deliberately uncacheable, including by shared caches. Every response here embeds two decisions
+ * that can be revoked at any moment: that this record is published at all, and that this host may
+ * serve this workspace. A cache stores the decision along with the bytes, so any positive TTL is
+ * a window in which a withdrawn brief — or a brief on a domain that has just been released —
+ * keeps being served to the public. That window was measured at 60 seconds before this header
+ * existed, with all three entity types still answering 200 in a clean browser after being
+ * unpublished.
+ */
+function noStore(c: { header: (name: string, value: string) => void }): void {
+  c.header('Cache-Control', 'no-store');
+}
+
+/** The public brief router: two reads (shared host, custom domain), no session, no mutation. */
+const publicBriefs = new Hono<AppEnv>()
+  .get('/briefs/:workspaceSlug/:slug', zParam(briefParam), zQuery(briefQuery), async (c) => {
     const { workspaceSlug, slug } = c.req.valid('param');
     const { host } = c.req.valid('query');
     const brief = await loadPublicBrief({ host, workspaceSlug, slug });
-    // Deliberately uncacheable, including by shared caches. Every response here embeds two
-    // decisions that can be revoked at any moment: that this record is published at all, and
-    // that this host may serve this workspace. A cache stores the decision along with the bytes,
-    // so any positive TTL is a window in which a withdrawn brief — or a brief on a domain that
-    // has just been released — keeps being served to the public. That window was measured at 60
-    // seconds before this header existed, with all three entity types still answering 200 in a
-    // clean browser after being unpublished.
-    c.header('Cache-Control', 'no-store');
+    noStore(c);
     return ok(c, PublicBriefOut, brief);
-  },
-);
+  })
+  .get('/briefs/domain/:slug', zParam(domainBriefParam), zQuery(briefQuery), async (c) => {
+    const { slug } = c.req.valid('param');
+    const { host } = c.req.valid('query');
+    const brief = await loadPublicBrief({ host, workspaceSlug: undefined, slug });
+    noStore(c);
+    return ok(c, PublicBriefOut, brief);
+  });
 
 export default publicBriefs;

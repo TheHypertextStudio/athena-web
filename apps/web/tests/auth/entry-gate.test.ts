@@ -372,21 +372,30 @@ describe('protected-path matcher', () => {
 });
 
 describe('proxy (middleware) session gate', () => {
+  beforeEach(() => {
+    // Every test in this describe block represents a request that has already reached the
+    // product's own deployment; stubbing this is what makes `host === own` true by default so
+    // the public-brief rewrite (tested on its own below) never fires here by accident.
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example');
+  });
+
+  /** A real `URL` standing in for `NextRequest['nextUrl']`, with the `.clone()` Next adds. */
+  function nextUrl(pathname: string, search: string, host: string): URL {
+    const url = new URL(`https://${host}${pathname}${search}`);
+    return Object.assign(url, { clone: () => nextUrl(url.pathname, url.search, url.host) });
+  }
+
   /** A `NextRequest` stand-in exposing only what {@link proxy} reads. */
   function request(options: {
     pathname: string;
     search?: string;
     cookies?: string[];
     headers?: Record<string, string>;
+    host?: string;
   }): Parameters<typeof proxy>[0] {
     const headerEntries = new Headers(options.headers ?? {});
     return {
-      nextUrl: {
-        pathname: options.pathname,
-        search: options.search ?? '',
-        host: 'app.example',
-        protocol: 'https:',
-      },
+      nextUrl: nextUrl(options.pathname, options.search ?? '', options.host ?? 'app.example'),
       headers: headerEntries,
       cookies: { getAll: () => (options.cookies ?? []).map((name) => ({ name, value: 'x' })) },
     } as unknown as Parameters<typeof proxy>[0];
@@ -445,25 +454,115 @@ describe('proxy (middleware) session gate', () => {
   });
 
   it('still restores the browser-facing host for the proxied API paths', () => {
+    // The browser really is on the product's own host (`app.example`, matching the stub above) —
+    // `x-forwarded-host` differs from `host` only because of the dev reverse-proxy hop, not
+    // because this is a different deployment. That is what must fall through to the host-restore
+    // branch rather than the public-brief rewrite.
     const response = proxy(
       request({
         pathname: '/api/auth/get-session',
-        headers: { 'x-forwarded-host': 'docket.example', host: '127.0.0.1:3000' },
+        headers: { 'x-forwarded-host': 'app.example', host: '127.0.0.1:3000' },
       }),
     );
 
-    expect(response.headers.get('x-middleware-request-host')).toBe('docket.example');
+    expect(response.headers.get('x-middleware-request-host')).toBe('app.example');
   });
 
   it('leaves an API request with a matching host untouched', () => {
     const response = proxy(
       request({
         pathname: '/v1/orgs',
-        headers: { 'x-forwarded-host': 'docket.example', host: 'docket.example' },
+        headers: { 'x-forwarded-host': 'app.example', host: 'app.example' },
       }),
     );
 
     expect(response.headers.get('x-middleware-request-host')).toBeNull();
     expect(response.headers.get('location')).toBeNull();
+  });
+});
+
+describe('proxy: public brief host rewrite', () => {
+  /** A `NextRequest` stand-in with a real `nextUrl` (needed for `NextResponse.rewrite`). */
+  function request(options: {
+    pathname: string;
+    search?: string;
+    host: string;
+    headers?: Record<string, string>;
+  }): Parameters<typeof proxy>[0] {
+    const url = new URL(`https://${options.host}${options.pathname}${options.search ?? ''}`);
+    const nextUrl = Object.assign(url, {
+      clone: () => Object.assign(new URL(url.href), { clone: () => nextUrl }),
+    });
+    return {
+      nextUrl,
+      headers: new Headers(options.headers ?? {}),
+      cookies: { getAll: () => [] },
+    } as unknown as Parameters<typeof proxy>[0];
+  }
+
+  it('rewrites a request on the shared brief host to the workspace-segment internal route', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example');
+    vi.stubEnv('NEXT_PUBLIC_BRIEF_HOST', 'briefs.example');
+
+    const response = proxy(
+      request({ host: 'briefs.example', pathname: '/las-vegans/interview-guide' }),
+    );
+
+    expect(response.headers.get('x-middleware-rewrite')).toBe(
+      'https://briefs.example/briefs/las-vegans/interview-guide',
+    );
+  });
+
+  it('preserves the query string across the shared-host rewrite', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example');
+    vi.stubEnv('NEXT_PUBLIC_BRIEF_HOST', 'briefs.example');
+
+    const response = proxy(
+      request({ host: 'briefs.example', pathname: '/acme/q3', search: '?host=briefs.example' }),
+    );
+
+    expect(response.headers.get('x-middleware-rewrite')).toBe(
+      'https://briefs.example/briefs/acme/q3?host=briefs.example',
+    );
+  });
+
+  it('rewrites a request on any other host (a custom domain) to the host-only internal route', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example');
+    vi.stubEnv('NEXT_PUBLIC_BRIEF_HOST', 'briefs.example');
+
+    const response = proxy(request({ host: 'updates.acme.com', pathname: '/q3-roadmap' }));
+
+    expect(response.headers.get('x-middleware-rewrite')).toBe(
+      'https://updates.acme.com/briefs/domain/q3-roadmap',
+    );
+  });
+
+  it('treats every non-canonical host as a custom domain when no shared brief host is configured', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example');
+    vi.stubEnv('NEXT_PUBLIC_BRIEF_HOST', '');
+
+    const response = proxy(request({ host: 'updates.acme.com', pathname: '/q3-roadmap' }));
+
+    expect(response.headers.get('x-middleware-rewrite')).toBe(
+      'https://updates.acme.com/briefs/domain/q3-roadmap',
+    );
+  });
+
+  it('leaves a request on the product’s own host untouched by the brief rewrite', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example');
+
+    const response = proxy(request({ host: 'app.example', pathname: '/pricing' }));
+
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
+  });
+
+  it('never rewrites when the product’s own host is unconfigured — nothing safe to compare against', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
+
+    const response = proxy(
+      request({ host: 'briefs.example', pathname: '/las-vegans/interview-guide' }),
+    );
+
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
   });
 });

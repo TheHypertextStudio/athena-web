@@ -156,15 +156,24 @@ describe('requireSubjectTitle', () => {
 });
 
 describe('briefUrls', () => {
-  it('returns an empty list for a workspace that has claimed no public name', async () => {
+  it('returns just the canonical brief-host URL for a workspace with no custom domain', async () => {
+    // Every workspace has its own identity slug from the moment it exists (seedBaseOrg already
+    // gives it a random one) — there is no "claimed no public name" state left to test.
     const { orgId } = await seedBaseOrg(db, schema);
-    expect(await briefUrls(orgId, 'whatever')).toEqual([]);
+    const [org] = await db
+      .select({ slug: schema.organization.slug })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, orgId))
+      .limit(1);
+    expect(await briefUrls(orgId, 'whatever')).toEqual([
+      `https://${apiHosts.brief}/${org?.slug}/whatever`,
+    ]);
   });
 
-  it('lists the brief host first, then every verified custom domain, for a claimed workspace', async () => {
+  it('lists the brief host first, then every verified custom domain, for a workspace', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const slug = `slugged-${Math.random().toString(36).slice(2, 8)}`;
-    await db.insert(schema.workspacePublicSlug).values({ organizationId: orgId, slug });
+    await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
     await db.insert(schema.workspaceDomain).values({
       organizationId: orgId,
       host: 'urls-verified.example',
@@ -180,9 +189,11 @@ describe('briefUrls', () => {
     });
 
     const urls = await briefUrls(orgId, 'brief-slug');
-    expect(urls[0]).toBe(`https://${apiHosts.brief}/briefs/${slug}/brief-slug`);
-    expect(urls).toContain(`https://urls-verified.example/briefs/${slug}/brief-slug`);
-    expect(urls).not.toContain(`https://urls-unverified.example/briefs/${slug}/brief-slug`);
+    // The shared brief host needs the workspace segment (many workspaces coexist there); a
+    // verified custom domain does not (it already belongs to exactly this one workspace).
+    expect(urls[0]).toBe(`https://${apiHosts.brief}/${slug}/brief-slug`);
+    expect(urls).toContain('https://urls-verified.example/brief-slug');
+    expect(urls).not.toContain('https://urls-unverified.example/brief-slug');
     expect(urls).toHaveLength(2);
   });
 });
@@ -197,7 +208,7 @@ describe('when no brief host is configured for this deployment', () => {
 
       const { orgId } = await seedBaseOrg(db, schema);
       const slug = `no-brief-host-${Math.random().toString(36).slice(2, 8)}`;
-      await db.insert(schema.workspacePublicSlug).values({ organizationId: orgId, slug });
+      await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
       await db.insert(schema.workspaceDomain).values({
         organizationId: orgId,
         host: 'no-brief-host-verified.example',
@@ -205,10 +216,9 @@ describe('when no brief host is configured for this deployment', () => {
         verifiedAt: new Date(),
       });
       const urls = await briefUrls(orgId, 'a-published-slug');
-      // No canonical brief-host URL is pushed, but the verified custom domain still is.
-      expect(urls).toEqual([
-        `https://no-brief-host-verified.example/briefs/${slug}/a-published-slug`,
-      ]);
+      // No canonical brief-host URL is pushed, but the verified custom domain still is — with no
+      // workspace segment, since the domain alone already identifies this one workspace.
+      expect(urls).toEqual(['https://no-brief-host-verified.example/a-published-slug']);
     } finally {
       hosts['brief'] = saved;
     }
@@ -270,7 +280,7 @@ describe('the underlying record disappearing after publication', () => {
   it('404s an initiative brief once the initiative row is gone', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    await db.insert(schema.workspacePublicSlug).values({ organizationId: orgId, slug });
+    await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
     const initiativeId = one(
       await db
         .insert(schema.initiative)
@@ -295,7 +305,7 @@ describe('the underlying record disappearing after publication', () => {
   it('404s a program brief once the program row is gone', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    await db.insert(schema.workspacePublicSlug).values({ organizationId: orgId, slug });
+    await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
     const programId = one(
       await db
         .insert(schema.program)
@@ -320,7 +330,7 @@ describe('the underlying record disappearing after publication', () => {
   it('404s a project brief once the project row is gone', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    await db.insert(schema.workspacePublicSlug).values({ organizationId: orgId, slug });
+    await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
     const projectId = one(
       await db
         .insert(schema.project)
@@ -358,7 +368,7 @@ describe('owner resolution and the task-state fallback in a project brief', () =
   it('resolves a real owner name, drops a deleted owner to null, and falls back to completedAt/canceledAt when a task’s state key is unknown to its team', async () => {
     const { orgId, teamId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    await db.insert(schema.workspacePublicSlug).values({ organizationId: orgId, slug });
+    await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
 
     const owner = one(
       await db
@@ -444,23 +454,33 @@ describe('owner resolution and the task-state fallback in a project brief', () =
   });
 });
 
-describe('publishing in a workspace with no claimed public name or domain', () => {
-  it('produces an empty urls list from briefUrls, reflecting no reachable address', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
-    const projectId = one(
-      await db
-        .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Unclaimed workspace project' })
-        .returning({ id: schema.project.id }),
-    ).id;
-    await db.insert(schema.publication).values({
-      organizationId: orgId,
-      subjectKind: 'project',
-      subjectId: projectId,
-      slug: 'unclaimed-slug',
-      publishedAt: new Date(),
-    });
-    expect(await briefUrls(orgId, 'unclaimed-slug')).toEqual([]);
+describe('a deployment with no brief host and no verified domain', () => {
+  it('is the one remaining way briefUrls is genuinely empty — every workspace now has its own slug', async () => {
+    // Every workspace's own identity slug makes it addressable from the moment it exists; the
+    // only way `urls` is still empty for a published record is a deployment-level gap: no shared
+    // brief host configured here, AND the workspace has verified no custom domain.
+    const hosts = apiHosts as unknown as Record<string, unknown>;
+    const saved = hosts['brief'];
+    delete hosts['brief'];
+    try {
+      const { orgId } = await seedBaseOrg(db, schema);
+      const projectId = one(
+        await db
+          .insert(schema.project)
+          .values({ organizationId: orgId, name: 'No brief host, no domain' })
+          .returning({ id: schema.project.id }),
+      ).id;
+      await db.insert(schema.publication).values({
+        organizationId: orgId,
+        subjectKind: 'project',
+        subjectId: projectId,
+        slug: 'unreachable-slug',
+        publishedAt: new Date(),
+      });
+      expect(await briefUrls(orgId, 'unreachable-slug')).toEqual([]);
+    } finally {
+      hosts['brief'] = saved;
+    }
   });
 });
 
@@ -468,7 +488,7 @@ describe('a program brief’s directly-held tasks and the owner fallback', () =>
   it('reads a program’s own owner name and its direct task section', async () => {
     const { orgId, teamId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    await db.insert(schema.workspacePublicSlug).values({ organizationId: orgId, slug });
+    await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
     const owner = one(
       await db
         .insert(schema.actor)

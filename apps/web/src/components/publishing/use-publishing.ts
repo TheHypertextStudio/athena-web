@@ -6,9 +6,13 @@
  * @remarks
  * One module so the publish button on a detail header and the publishing settings page share
  * exactly one cache. They must: publishing a brief changes what the settings list shows, and
- * claiming a public name changes the URL the detail header prints. Both effects fall out of the
+ * adding a custom domain changes the URLs the detail header prints. Both effects fall out of the
  * shared `['org', orgId, 'publishing', …]` key prefix rather than from either surface knowing
  * the other exists.
+ *
+ * The workspace's default brief address is its own identity slug (`organization.slug`) — edited
+ * via `useOrgQuery`/`PATCH /v1/orgs/:orgId` in Settings → General, not here. This module only
+ * covers what's genuinely publishing-specific: publications themselves and custom domains.
  *
  * Every call goes through the typed RPC client and the shared query layer — no hand-rolled
  * `useEffect` + `fetch`, per the data-layer standard.
@@ -18,7 +22,6 @@ import type {
   PublicationSubjectKind,
   WorkspaceDomainOut,
   WorkspaceDomainVerifyOut,
-  WorkspacePublicSlugOut,
 } from '@docket/types';
 
 import { api } from '@/lib/api';
@@ -122,47 +125,6 @@ export function usePublicationsQuery(orgId: string, enabled: boolean) {
       { enabled },
     ),
   );
-}
-
-/** The workspace's claimed public name. */
-export function usePublicNameQuery(orgId: string, enabled: boolean) {
-  return useApiQuery(
-    apiQueryOptions(
-      queryKeys.workspacePublicName(orgId),
-      () => api.v1.orgs[':orgId'].publishing['public-name'].$get({ param: { orgId } }),
-      'Could not load the workspace address.',
-      { enabled },
-    ),
-  );
-}
-
-/** A currently-free public name derived from the workspace's own display name. */
-export function useSuggestedNameQuery(orgId: string, enabled: boolean) {
-  return useApiQuery(
-    apiQueryOptions(
-      queryKeys.workspaceSuggestedName(orgId),
-      () => api.v1.orgs[':orgId'].publishing['suggested-name'].$get({ param: { orgId } }),
-      'Could not suggest a workspace address.',
-      { enabled },
-    ),
-  );
-}
-
-/** Claim or change the workspace's public name. */
-export function useClaimPublicNameMutation(orgId: string) {
-  return useApiMutation<WorkspacePublicSlugOut, string>({
-    mutationFn: (slug) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].publishing['public-name'].$put({
-            param: { orgId },
-            json: { slug },
-          }),
-        'Could not save the workspace address.',
-      ),
-    // Coarse on purpose: every published URL in the workspace moves with the name.
-    invalidateKeys: [['org', orgId, 'publishing']],
-  });
 }
 
 /** Every custom domain claimed by the workspace. */

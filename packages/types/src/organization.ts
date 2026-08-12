@@ -5,16 +5,8 @@ import { z } from 'zod';
 
 import { ActorId, OrganizationId, TeamId } from './primitives';
 import { SettingsImageValue } from './settings-image';
+import { PublicSlug } from './slug';
 import { VocabularyPreset, VocabularySkin } from './vocabulary';
-
-/**
- * Workspace addresses are lowercase, hyphen-separated identifiers.
- *
- * @remarks
- * The single source of truth for the slug shape — imported by both {@link OrgUpdate}'s server-side
- * validation and any client-side field validation, so the two can never drift apart.
- */
-export const WORKSPACE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
  * Body for creating an Organization (the single un-nested create).
@@ -47,13 +39,9 @@ export const OrgCreate = z
       .describe(
         'A short free-text statement of what the organization is for. Backs the second field of the create-org form (name + purpose) and is shown in org settings. Optional; has no effect on slug or authorization.',
       ),
-    slug: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        'URL-safe unique identifier for the org, used in paths and the web app URL. Must be unique across all orgs (the `organization_slug_uq` index). When omitted it is auto-derived — from the name for team orgs, or `personal-<userId>` for personal spaces — and silently disambiguated with a random suffix on collision. When supplied explicitly, a collision is rejected with 409 instead of being disambiguated.',
-      ),
+    slug: PublicSlug.optional().describe(
+      "The org's one identifier: its internal key and, unless a custom domain is set, the path segment its published briefs answer on by default. Must be unique across all orgs (the `organization_slug_uq` index) and not one of the reserved system names. When omitted it is auto-derived — from the name for team orgs, or `personal-<userId>` for personal spaces — and disambiguated with a numeric suffix on collision. When supplied explicitly, a collision is rejected with 409 instead of being disambiguated.",
+    ),
     vocabulary: z
       .enum(['startup', 'nonprofit', 'agency'])
       .default('startup')
@@ -104,14 +92,9 @@ export const OrgUpdate = z
       .nullable()
       .optional()
       .describe('A concise workspace purpose; null clears the current purpose.'),
-    slug: z
-      .string()
-      .trim()
-      .min(1)
-      .max(80)
-      .regex(WORKSPACE_SLUG_PATTERN)
-      .optional()
-      .describe('The editable, globally unique URL-safe workspace identifier.'),
+    slug: PublicSlug.optional().describe(
+      "The workspace's one identifier: its internal key and, unless a custom domain is set, the path segment its published briefs answer on by default. Globally unique; not one of the reserved system names.",
+    ),
     avatar: SettingsImageValue.nullable()
       .optional()
       .describe('The workspace logo image; null removes the current logo.'),
@@ -132,7 +115,7 @@ export const OrgOut = z
     slug: z
       .string()
       .describe(
-        'URL-safe unique identifier used in API paths and the web app URL; unique across all orgs.',
+        "The workspace's one identifier: unique across all orgs, and — unless a custom domain is set — the path segment its published briefs answer on by default.",
       ),
     purpose: z
       .string()
@@ -168,7 +151,9 @@ export const OrgSummary = z
   .object({
     id: OrganizationId.describe('Stable ULID identifier of the organization.'),
     name: z.string().describe("The organization's display name, shown in the org switcher."),
-    slug: z.string().describe('URL-safe unique identifier used in paths and the web app URL.'),
+    slug: z
+      .string()
+      .describe("The workspace's one identifier — see {@link OrgOut.slug} for its full role."),
     avatar: z
       .string()
       .nullable()

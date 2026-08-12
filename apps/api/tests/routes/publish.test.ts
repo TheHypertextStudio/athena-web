@@ -1,12 +1,13 @@
 /**
- * Publishing: briefs, custom domains, and the public-name claim.
+ * Publishing: briefs and custom domains.
  *
  * @remarks
  * Covers CORE-26 (all three entity types publish and unpublish), CORE-27 (a brief reads live
  * records, never a snapshot), CORE-29 (admin-only domain administration), CORE-30 (one host, one
  * workspace — in the handler AND in the database), CORE-31 (DNS ownership before serving),
- * CORE-32 (the slug fallback), and MISS-04 (a verified domain serves its own workspace and only
- * its own workspace).
+ * CORE-32 (a workspace's own identity slug is its default brief address, from creation, with no
+ * separate claim step), and MISS-04 (a verified domain serves its own workspace and only its own
+ * workspace).
  */
 import type * as DbModule from '@docket/db';
 import { and, eq } from 'drizzle-orm';
@@ -53,12 +54,24 @@ async function publicApp() {
   return app;
 }
 
-/** Seed an org that has claimed a public name, so its briefs are addressable. */
+/**
+ * Seed an org whose own identity slug is `name`, so its briefs are addressable at a name the
+ * test chose rather than `seedBaseOrg`'s random one.
+ *
+ * @remarks
+ * There is no separate "claim a public name" step anymore — every org's own `organization.slug`
+ * (`seedBaseOrg` already gives it a real, random one) is its default brief address from the
+ * moment it exists. This helper just overwrites that slug with a caller-chosen value so tests can
+ * assert against a readable name instead of `seedBaseOrg`'s `org-xxxxxxxx`.
+ */
 async function seedPublishingOrg(
   name: string,
 ): Promise<{ orgId: string; teamId: string; humanActorId: string }> {
   const seeded = await seedBaseOrg(db, schema);
-  await db.insert(schema.workspacePublicSlug).values({ organizationId: seeded.orgId, slug: name });
+  await db
+    .update(schema.organization)
+    .set({ slug: name })
+    .where(eq(schema.organization.id, seeded.orgId));
   return seeded;
 }
 
@@ -217,26 +230,6 @@ describe('CORE-26 · publishing each of the three entity types', () => {
     expect(res.status).toBe(422);
     const problem = (await res.json()) as { fieldErrors?: Record<string, unknown> };
     expect(Object.keys(problem.fieldErrors ?? {})).toContain('slug');
-  });
-
-  it('publishes in a workspace with no claimed public name: path uses the placeholder and urls is empty', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const projectId = one(
-      await db
-        .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Unclaimed workspace project' })
-        .returning({ id: schema.project.id }),
-    ).id;
-    const app = await publishApp(orgId, ['contribute'], humanActorId);
-    const res = await app.request('/', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ subjectKind: 'project', subjectId: projectId, slug: 'no-claim' }),
-    });
-    expect(res.status).toBe(201);
-    const body = (await res.json()) as { path: string; urls: string[] };
-    expect(body.path).toBe('/briefs/:workspace/no-claim');
-    expect(body.urls).toEqual([]);
   });
 });
 
@@ -571,15 +564,6 @@ describe('CORE-29 · only workspace admins configure domains', () => {
     expect(created.status).toBe(403);
     expect((await member.request('/domains/anything/verify', { method: 'POST' })).status).toBe(403);
     expect((await member.request('/domains/anything', { method: 'DELETE' })).status).toBe(403);
-    expect(
-      (
-        await member.request('/public-name', {
-          method: 'PUT',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ slug: 'members-cannot' }),
-        })
-      ).status,
-    ).toBe(403);
 
     const rows = await db
       .select()
@@ -805,64 +789,38 @@ describe('CORE-31 · DNS ownership before serving', () => {
 });
 
 describe('CORE-32 · the workspace slug fallback', () => {
-  it('claims a name, serves briefs on it, and refuses a taken or reserved one', async () => {
-    const a = await seedBaseOrg(db, schema);
-    const b = await seedBaseOrg(db, schema);
-    const adminA = await addressApp(a.orgId, ['manage'], {}, a.humanActorId);
-    const adminB = await addressApp(b.orgId, ['manage'], {}, b.humanActorId);
-    const name = `claimed-${Math.random().toString(36).slice(2, 8)}`;
-
-    expect(
-      ((await (await adminA.request('/public-name')).json()) as { slug: null }).slug,
-    ).toBeNull();
-
-    const claimed = await adminA.request('/public-name', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ slug: name }),
-    });
-    expect(claimed.status).toBe(200);
-    expect(((await claimed.json()) as { slug: string }).slug).toBe(name);
+  it("serves briefs on the org's own identity slug immediately — no separate claim step", async () => {
+    // seedBaseOrg alone, deliberately: no seedPublishingOrg, no address-router call of any kind.
+    // The org's own slug (auto-derived at creation) is its brief address from the moment it
+    // exists — there is no "unclaimed" state left to put it in.
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [org] = await db
+      .select({ slug: schema.organization.slug })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, orgId))
+      .limit(1);
+    const slug = org?.slug;
+    expect(slug).toBeTruthy();
 
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: a.orgId, name: 'Slug-served' })
+        .values({ organizationId: orgId, name: 'Slug-served' })
         .returning({ id: schema.project.id }),
     ).id;
-    await (
-      await publishApp(a.orgId, ['contribute'], a.humanActorId)
-    ).request('/', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ subjectKind: 'project', subjectId: projectId, slug: 'on-a-slug' }),
-    });
-    const anon = await publicApp();
-    expect((await anon.request(`/briefs/${name}/on-a-slug`)).status).toBe(200);
-
-    // A second workspace naming the conflict, with no row written.
-    const conflict = await adminB.request('/public-name', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ slug: name }),
-    });
-    expect(conflict.status).toBe(409);
-    expect(((await conflict.json()) as { code: string }).code).toBe('public_name_taken');
-    const bRows = await db
-      .select()
-      .from(schema.workspacePublicSlug)
-      .where(eq(schema.workspacePublicSlug.organizationId, b.orgId));
-    expect(bRows).toHaveLength(0);
-
-    // Reserved/system names are refused outright.
-    for (const reserved of ['api', 'settings', 'sign-in', 'privacy', '_next']) {
-      const res = await adminB.request('/public-name', {
-        method: 'PUT',
+    const published = (await (
+      await (
+        await publishApp(orgId, ['contribute'], humanActorId)
+      ).request('/', {
+        method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ slug: reserved }),
-      });
-      expect(res.status).toBe(422);
-    }
+        body: JSON.stringify({ subjectKind: 'project', subjectId: projectId, slug: 'on-a-slug' }),
+      })
+    ).json()) as { path: string; urls: string[] };
+    expect(published.path).toBe(`/${slug}/on-a-slug`);
+
+    const anon = await publicApp();
+    expect((await anon.request(`/briefs/${slug}/on-a-slug`)).status).toBe(200);
   });
 
   it('rejects a brief slug that collides with another brief in the same workspace', async () => {

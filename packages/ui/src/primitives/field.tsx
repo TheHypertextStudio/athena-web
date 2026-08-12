@@ -95,6 +95,14 @@ export interface FieldSurfaceOptions {
    * beside it.
    */
   readonly multiline?: boolean;
+  /**
+   * Which interaction triggers the focus ring. Default `'self'` rings the element this string is
+   * applied to, correct for every ordinary field. Use `'within'` when this string is applied to a
+   * wrapper whose focusable descendant is a different element — {@link Input}'s `prefix` is the
+   * only caller today: the box is a `<span>`, so the ring has to key off the nested `<input>`
+   * gaining focus instead.
+   */
+  readonly ringOn?: 'self' | 'within';
 }
 
 /**
@@ -115,12 +123,15 @@ export function fieldSurface({
   controlSize,
   invalid = false,
   multiline = false,
+  ringOn = 'self',
 }: FieldSurfaceOptions): string {
   const metrics = CONTROL[controlSize];
 
   return cn(
     'placeholder:text-on-surface-variant w-full min-w-0 border transition-colors',
-    'disabled:cursor-not-allowed disabled:opacity-50',
+    ringOn === 'self'
+      ? 'disabled:cursor-not-allowed disabled:opacity-50'
+      : 'has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50',
     CONTROL_RADIUS,
     typeClass(metrics.fieldToken),
     multiline ? cn(metrics.minHeight, 'py-2') : metrics.height,
@@ -130,7 +141,7 @@ export function fieldSurface({
       'bg-surface-container-high hover:bg-surface-container-highest border-transparent',
     variant === 'plain' && 'hover:bg-surface-container-high border-transparent bg-transparent',
     invalid && 'border-error',
-    focusRing,
+    ringOn === 'self' ? focusRing : 'focus-within:ring-ring focus-within:ring-2',
   );
 }
 
@@ -147,6 +158,13 @@ export interface InputProps extends Omit<React.ComponentProps<'input'>, 'size'> 
    * worth more than matching the CSS vocabulary on two elements.
    */
   readonly controlSize?: ControlSize;
+  /**
+   * Fixed text shown inline immediately before the editable value — e.g. the host a slug is
+   * relative to. Renders in the same box, at the same type scale, as plain text distinguished
+   * from the editable part only by a muted tone — never a separate chip or a second box. Omit for
+   * a plain input.
+   */
+  readonly prefix?: string;
 }
 
 /**
@@ -160,21 +178,55 @@ export function Input({
   variant,
   controlSize,
   type,
+  prefix,
   'aria-invalid': ariaInvalid,
   ...props
 }: InputProps): React.JSX.Element {
   const size = useControlSize(controlSize);
+
+  if (prefix === undefined) {
+    return (
+      <input
+        type={type}
+        aria-invalid={ariaInvalid}
+        className={cn(
+          fieldSurface({ variant, controlSize: size, invalid: ariaInvalid === true }),
+          'file:text-on-surface file:border-0 file:bg-transparent',
+          className,
+        )}
+        {...props}
+      />
+    );
+  }
+
+  const metrics = CONTROL[size];
   return (
-    <input
-      type={type}
-      aria-invalid={ariaInvalid}
+    <span
       className={cn(
-        fieldSurface({ variant, controlSize: size, invalid: ariaInvalid === true }),
-        'file:text-on-surface file:border-0 file:bg-transparent',
+        fieldSurface({
+          variant,
+          controlSize: size,
+          invalid: ariaInvalid === true,
+          ringOn: 'within',
+        }),
+        'inline-flex items-center',
         className,
       )}
-      {...props}
-    />
+    >
+      <span aria-hidden className="text-on-surface-variant shrink-0 truncate select-none">
+        {prefix}
+      </span>
+      <input
+        type={type}
+        aria-invalid={ariaInvalid}
+        className={cn(
+          typeClass(metrics.fieldToken),
+          'text-on-surface min-w-0 flex-1 border-0 bg-transparent p-0 outline-none',
+          'placeholder:text-on-surface-variant file:text-on-surface file:border-0 file:bg-transparent',
+        )}
+        {...props}
+      />
+    </span>
   );
 }
 

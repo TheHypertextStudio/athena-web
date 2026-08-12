@@ -1,19 +1,16 @@
 /**
- * `@docket/api` — publishing addresses router (mounted at `/v1/orgs/:orgId/publishing`).
+ * `@docket/api` — custom domains router (mounted at `/v1/orgs/:orgId/publishing`).
  *
  * @remarks
- * Where a workspace's briefs answer, as opposed to which briefs exist (`./publish.ts`). Two
- * addressing mechanisms, both administered here:
+ * A workspace's briefs answer on its own identity slug (`organization.slug`,
+ * `PATCH /v1/orgs/:orgId`) by default — every workspace has one from the moment it exists, so
+ * there is nothing to claim. This router covers the one *optional* addressing upgrade: a custom
+ * domain a workspace owns (CORE-29 … CORE-31, MISS-04). A workspace claims a host, Docket mints a
+ * per-row token, and the host serves nothing until a DNS `TXT` record proves ownership.
+ * Uniqueness is global and enforced by a unique index, so one host belongs to exactly one
+ * workspace forever (CORE-30).
  *
- * 1. **Custom domains** (CORE-29 … CORE-31, MISS-04). A workspace claims a host, Docket mints a
- *    per-row token, and the host serves nothing until a DNS `TXT` record proves ownership.
- *    Uniqueness is global and enforced by a unique index, so one host belongs to exactly one
- *    workspace forever (CORE-30).
- * 2. **A public name** (CORE-32). The fallback for a workspace that owns no domain: claim a
- *    name and briefs answer at `<brief host>/briefs/<name>/<slug>`.
- *
- * **Everything here is `manage`-only.** CORE-29 asks for admin-gated domain configuration, and
- * the public name gets the same gate for the same reason: both decide the identity the whole
+ * **Everything here is `manage`-only** — domain configuration decides which host the whole
  * workspace presents to the internet, which is not a per-member decision. A non-admin member
  * receives 403 from every route in this file, and a non-member receives 404 from
  * `orgContextMiddleware` before reaching it.
@@ -24,7 +21,7 @@
  */
 import { resolveTxt } from 'node:dns/promises';
 
-import { db, organization, workspaceDomain, workspacePublicSlug } from '@docket/db';
+import { db, workspaceDomain } from '@docket/db';
 import { apiHosts } from '@docket/env/api';
 import {
   normalizeCustomDomain,
@@ -40,12 +37,9 @@ import {
   WorkspaceDomainCreate,
   WorkspaceDomainOut,
   WorkspaceDomainVerifyOut,
-  WorkspacePublicSlugClaim,
-  WorkspacePublicSlugOut,
   pageOf,
-  suggestPublicSlug,
 } from '@docket/types';
-import { and, asc, eq, ne } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -115,12 +109,6 @@ function routingRecordFor(host: string): z.input<typeof WorkspaceDomainOut>['rou
   } catch {
     return null;
   }
-}
-
-/** The absolute URL prefix a workspace's briefs answer on, or `null` with no brief host. */
-function workspaceBaseUrl(slug: string): string | null {
-  const brief = apiHosts.brief;
-  return brief === undefined ? null : `https://${brief}/briefs/${slug}`;
 }
 
 /** Load one domain scoped to the org, or 404. */
@@ -296,126 +284,6 @@ The response reports \`failure\` as a stable code and \`observedCount\` as **how
         const prior = await loadDomain(orgId, id);
         await db.delete(workspaceDomain).where(eq(workspaceDomain.id, prior.id));
         return ok(c, WorkspaceDomainOut, toDomainOut(prior));
-      },
-    )
-    .get(
-      '/public-name',
-      apiDoc({
-        tag: 'Publishing',
-        summary: 'Read the workspace’s public name',
-        response: WorkspacePublicSlugOut,
-        description: `Return the name this workspace's briefs answer on at the shared brief host, or \`null\` when nothing has been claimed. Readable by any member — a member needs to know whether the brief they just published is reachable, and the answer is the same one an anonymous visitor could derive from any published URL. Claiming or changing the name requires \`manage\`.`,
-      }),
-      async (c) => {
-        const { orgId } = c.get('actorCtx');
-        const rows = await db
-          .select({ slug: workspacePublicSlug.slug })
-          .from(workspacePublicSlug)
-          .where(eq(workspacePublicSlug.organizationId, orgId))
-          .limit(1);
-        const slug = rows[0]?.slug ?? null;
-        return ok(c, WorkspacePublicSlugOut, {
-          organizationId: orgId,
-          slug,
-          baseUrl: slug === null ? null : workspaceBaseUrl(slug),
-        });
-      },
-    )
-    .put(
-      '/public-name',
-      capabilityGuard('manage'),
-      apiDoc({
-        tag: 'Publishing',
-        summary: 'Claim the workspace’s public name',
-        capability: 'manage',
-        response: WorkspacePublicSlugOut,
-        description: `Claim (or change) the name this workspace's briefs answer on at the shared brief host — the addressing path for a workspace that owns no custom domain (CORE-32).
-
-The name must be 1–64 lowercase alphanumeric characters separated by single hyphens. **Reserved system names are refused** (\`api\`, \`admin\`, \`settings\`, \`sign-in\`, \`privacy\`, and the rest of \`RESERVED_PUBLIC_SLUGS\`) with **422**, because a workspace answering on one would shadow a page the product owns. A name already claimed by another workspace returns **409 \`public_name_taken\`** and writes nothing; a globally unique index backs it.
-
-Changing the name updates the existing claim rather than adding a second, so a workspace can never hoard names — and be aware that every already-shared brief URL moves with it. Requires \`manage\`. This is deliberately **not** \`organization.slug\`: that column is an auto-derived internal tenant key nobody chose, and publishing it would hand every workspace a public identity it never opted into.`,
-      }),
-      zJson(WorkspacePublicSlugClaim),
-      async (c) => {
-        const { orgId, actorId } = c.get('actorCtx');
-        const { slug } = c.req.valid('json');
-
-        const taken = await db
-          .select({ id: workspacePublicSlug.id })
-          .from(workspacePublicSlug)
-          .where(
-            and(eq(workspacePublicSlug.slug, slug), ne(workspacePublicSlug.organizationId, orgId)),
-          )
-          .limit(1);
-        if (taken[0]) {
-          throw new ConflictError('That workspace name is already taken.', 'public_name_taken');
-        }
-
-        const existing = await db
-          .select({ id: workspacePublicSlug.id })
-          .from(workspacePublicSlug)
-          .where(eq(workspacePublicSlug.organizationId, orgId))
-          .limit(1);
-        const prior = existing[0];
-        if (prior) {
-          await db
-            .update(workspacePublicSlug)
-            .set({ slug })
-            .where(eq(workspacePublicSlug.id, prior.id));
-        } else {
-          await db
-            .insert(workspacePublicSlug)
-            .values({ organizationId: orgId, slug, createdBy: actorId });
-        }
-
-        return ok(c, WorkspacePublicSlugOut, {
-          organizationId: orgId,
-          slug,
-          baseUrl: workspaceBaseUrl(slug),
-        });
-      },
-    )
-    .get(
-      '/suggested-name',
-      capabilityGuard('manage'),
-      apiDoc({
-        tag: 'Publishing',
-        summary: 'Suggest an available public name',
-        capability: 'manage',
-        response: WorkspacePublicSlugOut,
-        description: `Return a public name derived from the workspace's own display name that is currently free, so the claim form can be pre-filled instead of demanding invention. Purely a suggestion: it is re-validated and re-checked for collisions on \`PUT /public-name\`, since another workspace may claim it in between. \`slug\` is \`null\` when the workspace name yields nothing usable. Requires \`manage\` (same audience as the claim it feeds).`,
-      }),
-      async (c) => {
-        const { orgId } = c.get('actorCtx');
-        const orgs = await db
-          .select({ name: organization.name })
-          .from(organization)
-          .where(eq(organization.id, orgId))
-          .limit(1);
-        const base = suggestPublicSlug(orgs[0]?.name ?? '');
-        let candidate: string | null = null;
-        for (let attempt = 0; attempt < 12 && base.length > 0; attempt += 1) {
-          const trial = attempt === 0 ? base : `${base}-${String(attempt + 1)}`;
-          const clash = await db
-            .select({ id: workspacePublicSlug.id })
-            .from(workspacePublicSlug)
-            .where(
-              and(
-                eq(workspacePublicSlug.slug, trial),
-                ne(workspacePublicSlug.organizationId, orgId),
-              ),
-            )
-            .limit(1);
-          if (!clash[0]) {
-            candidate = trial;
-            break;
-          }
-        }
-        return ok(c, WorkspacePublicSlugOut, {
-          organizationId: orgId,
-          slug: candidate,
-          baseUrl: candidate === null ? null : workspaceBaseUrl(candidate),
-        });
       },
     );
 }

@@ -20,6 +20,7 @@
  * withdraw action live, because a header has no room to explain any of that and a person about
  * to publish work to the open internet deserves to see exactly what will be reachable.
  */
+import { env } from '@docket/env/web';
 import type { PublicationSubjectKind } from '@docket/types';
 import { suggestPublicSlug } from '@docket/types';
 import {
@@ -40,7 +41,9 @@ import {
 import { Globe } from '@docket/ui/icons';
 import { useState, type JSX } from 'react';
 
+import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 import {
   usePublicationState,
@@ -81,6 +84,15 @@ export function PublishAction({
 }: PublishActionProps): JSX.Element | null {
   const [open, setOpen] = useState(false);
   const { publication } = usePublicationState(orgId, subjectKind, subjectId);
+  // Gated on `open` — nobody needs the workspace's address until they open this dialog.
+  const orgQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.organization(orgId),
+      () => api.v1.orgs[':orgId'].$get({ param: { orgId } }),
+      'Could not load the workspace.',
+      { enabled: open },
+    ),
+  );
   const publish = usePublishMutation(orgId);
   const withdraw = useWithdrawMutation(orgId);
   const move = useMoveBriefMutation(orgId);
@@ -98,6 +110,15 @@ export function PublishAction({
   const proposed = publication?.slug ?? suggestPublicSlug(title);
   const pending = publish.isPending || withdraw.isPending || move.isPending;
   const error = publish.error ?? withdraw.error ?? move.error;
+  // The full prefix a record's own slug sits under: the shared brief host plus the workspace's
+  // own identity slug. `undefined` only when this deployment has no shared brief host configured
+  // at all — never a fabricated domain.
+  const briefHost = env.NEXT_PUBLIC_BRIEF_HOST;
+  const workspaceSlug = orgQ.data?.slug;
+  const prefix =
+    briefHost !== undefined && workspaceSlug !== undefined
+      ? `${briefHost}/${workspaceSlug}/`
+      : undefined;
 
   return (
     <>
@@ -134,7 +155,7 @@ export function PublishAction({
             <DialogDescription>
               {published
                 ? 'Anyone with the link can read this page. It always shows the current record — there is no separate copy.'
-                : `Anyone with the link will be able to read a brief of this ${lower}. It stays in step with the record: there is no separate copy to keep up to date.`}
+                : `Anyone with the link will be able to read this ${lower} as a public page — Docket calls it a brief. It stays in step with the record automatically, so there's no separate copy to keep up to date.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -149,6 +170,7 @@ export function PublishAction({
                 value={slug}
                 spellCheck={false}
                 autoComplete="off"
+                {...(prefix === undefined ? {} : { prefix })}
                 onChange={(event) => {
                   setSlug(event.target.value);
                 }}
@@ -176,12 +198,13 @@ export function PublishAction({
                 </div>
               ) : (
                 <Text as="p" token="body-small" tone="muted">
-                  {/* Honest rather than reassuring: a published brief with no workspace address and
-                      no verified domain genuinely is not reachable yet, and saying "published"
+                  {/* Honest rather than reassuring: every workspace has its own address now, so the
+                      only way this page is published but unreachable is a deployment with no
+                      shared brief host configured and no verified custom domain. Saying "published"
                       without saying that would be the exact "shows success when nothing happened"
                       failure this product refuses. */}
-                  This page is published but not reachable yet — give the workspace a public
-                  address, or verify a custom domain, in Settings → Publishing.
+                  This page is published but not reachable yet — verify a custom domain in Settings
+                  → Publishing.
                 </Text>
               )
             ) : null}

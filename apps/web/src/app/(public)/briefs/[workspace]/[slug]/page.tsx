@@ -1,23 +1,31 @@
 import type { PublicBriefOut } from '@docket/types';
-import { env } from '@docket/env/web';
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import type { JSX } from 'react';
 
 import { BriefDocument } from '@/components/publishing/brief-document';
 
+import { briefMetadata, readBriefAt } from '../../shared';
+
 /**
- * The published brief page (CORE-26, CORE-27, CORE-33, MISS-04).
+ * The published brief page on the shared brief host (CORE-26, CORE-27, CORE-33, MISS-04).
  *
  * @remarks
- * One canonical path shape, `/briefs/<workspace>/<slug>`, served identically on Docket's own
- * brief host and on a workspace's verified custom domain. Keeping one shape rather than adding
- * a bare `/<slug>` on custom domains is deliberate: a root-level catch-all in the App Router
- * would sit alongside the marketing routes and swallow any path they do not claim, which is a
- * routing hazard that grows every time a marketing page is added. The host still decides *which*
- * workspace may be served — the API refuses a brief that does not belong to the domain's owner —
- * so the isolation property MISS-04 asks for is enforced regardless of the path shape.
+ * Internally, one canonical path shape: `/briefs/<workspace>/<slug>`. A bare `/<workspace>/<slug>`
+ * at the App Router's root was rejected here for the same reason it still is: it would sit
+ * alongside the marketing routes and swallow any path they do not claim, a routing hazard that
+ * grows every time a marketing page is added.
+ *
+ * A visitor never sees the `/briefs/` segment, though — `apps/web/src/proxy.ts` rewrites the
+ * short public address to this route's internal path before Next resolves it, but only for
+ * requests arriving on a host other than the product's own. The app's real routes are only ever
+ * requested on its own canonical host, so that rewrite can never reach them, and this route keeps
+ * its one internal shape either way.
+ *
+ * `<workspace>` is the publishing workspace's own identity slug — every workspace has one from
+ * the moment it exists, so there is no "unclaimed" state to handle here. A verified custom domain
+ * uses the sibling `domain/[slug]/page.tsx` route instead, since the host alone already identifies
+ * the workspace and a workspace segment there would be redundant.
  *
  * The read is a plain server-side `fetch` rather than the app's typed RPC client, because the
  * brief endpoint deliberately lives outside the authenticated `/v1` app (see the API's
@@ -43,62 +51,21 @@ export const dynamic = 'force-dynamic';
 
 /** The route's own params. */
 interface BriefParams {
-  /** The publishing workspace's claimed public name. */
+  /** The publishing workspace's own identity slug. */
   readonly workspace: string;
   /** The brief's path segment. */
   readonly slug: string;
 }
 
-/**
- * The host the visitor's browser actually asked on.
- *
- * @remarks
- * Forwarded to the API explicitly because the API sits behind this app's rewrite proxy and
- * cannot observe it. `x-forwarded-host` wins over `host`: behind a proxy the latter is the
- * proxy's own name, and using it would make every custom-domain request look like a request to
- * Docket's own host — the permissive direction, which is exactly the direction that must not be
- * guessed.
- */
-async function visitorHost(): Promise<string | undefined> {
-  const store = await headers();
-  const raw = store.get('x-forwarded-host') ?? store.get('host');
-  if (raw === null || raw.length === 0) return undefined;
-  return raw.split(',')[0]?.trim();
-}
-
-/**
- * Read one published brief, or `null` when it is not published, not found, or not permitted
- * on this host.
- *
- * @remarks
- * Every one of those cases is a 404 from the API and `null` here, for the same reason it is one
- * status there: a visitor must not be able to tell an unpublished brief from a nonexistent one.
- */
+/** Read this route's brief from the shared-brief-host API path. */
 async function readBrief(params: BriefParams): Promise<PublicBriefOut | null> {
-  const apiOrigin = env.NEXT_PUBLIC_API_URL;
-  const host = await visitorHost();
-  const url = new URL(
+  return readBriefAt(
     `/v1/public/briefs/${encodeURIComponent(params.workspace)}/${encodeURIComponent(params.slug)}`,
-    apiOrigin,
   );
-  if (host !== undefined) url.searchParams.set('host', host);
-
-  const response = await fetch(url, {
-    headers: { accept: 'application/json' },
-    // Same reason as `dynamic` above: a cached read is a cached authorization decision.
-    cache: 'no-store',
-  });
-  if (!response.ok) return null;
-  return (await response.json()) as PublicBriefOut;
 }
 
 /**
  * Page metadata read from the same live record the body renders.
- *
- * @remarks
- * `robots` is left at the default (indexable) because the whole point of publishing is to be
- * readable on the web; nothing here is gated. The description falls back to the workspace name
- * rather than being omitted, so a link preview never renders as a bare URL.
  *
  * @param props - The route params.
  * @returns The document metadata.
@@ -108,21 +75,7 @@ export async function generateMetadata({
 }: {
   params: Promise<BriefParams>;
 }): Promise<Metadata> {
-  const brief = await readBrief(await params);
-  if (!brief) return { title: 'Brief not found' };
-  return {
-    title: `${brief.title} — ${brief.workspaceName}`,
-    description: brief.summary ?? `A brief published by ${brief.workspaceName}.`,
-    ...(brief.canonicalUrl ? { alternates: { canonical: brief.canonicalUrl } } : {}),
-    openGraph: {
-      type: 'article',
-      title: brief.title,
-      ...(brief.summary ? { description: brief.summary } : {}),
-      siteName: brief.workspaceName,
-      publishedTime: brief.publishedAt,
-      modifiedTime: brief.updatedAt,
-    },
-  };
+  return briefMetadata(await readBrief(await params));
 }
 
 /**

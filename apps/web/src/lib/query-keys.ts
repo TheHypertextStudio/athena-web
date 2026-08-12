@@ -18,15 +18,12 @@ export const queryKeys = {
   taskActivity: (orgId: string, taskId: string) =>
     ['org', orgId, 'tasks', taskId, 'activity'] as const,
   // Publishing keys nest under one `publishing` segment so a publish/withdraw can invalidate the
-  // whole area (a brief's reachable URLs depend on the workspace's domains AND its public name)
-  // with a single coarse prefix, while a detail read still has its own targeted key.
+  // whole area (a brief's reachable URLs depend on the workspace's domains) with a single coarse
+  // prefix, while a detail read still has its own targeted key.
   publications: (orgId: string) => ['org', orgId, 'publishing', 'publications'] as const,
   publication: (orgId: string, subjectKind: string, subjectId: string) =>
     ['org', orgId, 'publishing', 'publications', subjectKind, subjectId] as const,
   workspaceDomains: (orgId: string) => ['org', orgId, 'publishing', 'domains'] as const,
-  workspacePublicName: (orgId: string) => ['org', orgId, 'publishing', 'public-name'] as const,
-  workspaceSuggestedName: (orgId: string) =>
-    ['org', orgId, 'publishing', 'suggested-name'] as const,
   programs: (orgId: string) => ['org', orgId, 'programs'] as const,
   program: (orgId: string, programId: string) => ['org', orgId, 'programs', programId] as const,
   initiatives: (orgId: string) => ['org', orgId, 'initiatives'] as const,

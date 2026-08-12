@@ -2,7 +2,7 @@
  * `@docket/db` — publishing schema island (CORE-26 … CORE-34, MISS-04).
  *
  * @remarks
- * Three tables, and the shape of each is driven by one rule: **a brief is a permission
+ * Two tables, and the shape of each is driven by one rule: **a brief is a permission
  * decision, not a copy of the work.** Nothing here stores a title, a description, a status,
  * or a task list. A {@link publication} row says only "this initiative/program/project is
  * readable by the public, at this path" — every byte a visitor sees is read live from
@@ -11,14 +11,16 @@
  * rather than by a sync job that can silently drift.
  *
  * Reachability is the other half. A published brief is served on:
- * - the product's own brief host, under the workspace's claimed {@link workspacePublicSlug}
- *   (CORE-32 — the fallback for a workspace that owns no domain), or
+ * - the product's own brief host, under the workspace's own identity slug
+ *   (`organization.slug`, `@docket/db/schema/identity`) — every workspace has one from the
+ *   moment it exists (CORE-32), or
  * - a {@link workspaceDomain} the workspace has proved it owns via DNS (CORE-29 … CORE-31,
  *   MISS-04).
  *
- * Both name-spaces are globally unique, enforced in the database rather than in a handler:
- * a host or a workspace slug is a public identity, and two tenants answering to one name is
- * a tenancy break, not a UX annoyance.
+ * `workspace_domain.host` is globally unique, enforced in the database rather than in a
+ * handler: a host is a public identity, and two tenants answering to one name is a tenancy
+ * break, not a UX annoyance. `organization.slug`'s own uniqueness lives with the `organization`
+ * table itself, alongside its shape constraint — see there, not here.
  *
  * @see `@docket/env/custom-domain` for host normalization, token minting, and DNS verification.
  */
@@ -113,31 +115,5 @@ export const workspaceDomain = pgTable(
   (t) => [
     uniqueIndex('workspace_domain_host_uq').on(t.host),
     index('workspace_domain_org_idx').on(t.organizationId),
-  ],
-);
-
-/**
- * The workspace's claimed name on the shared brief host (CORE-32).
- *
- * @remarks
- * Separate from `organization.slug` on purpose. That column is an internal tenant key,
- * auto-derived from the workspace name at creation and never chosen; publishing it would hand
- * every workspace a public identity nobody picked, and would leak the workspace's name to
- * anyone who could enumerate it. This is an explicit, opt-in claim with its own reserved-word
- * screening.
- *
- * One row per workspace (`organization_id` unique) and one workspace per slug (`slug` unique):
- * changing the claim is an update of the same row, so a workspace can never hoard names.
- */
-export const workspacePublicSlug = pgTable(
-  'workspace_public_slug',
-  {
-    ...auditColumns(),
-    /** The public path segment identifying this workspace on the shared brief host. */
-    slug: text('slug').notNull(),
-  },
-  (t) => [
-    uniqueIndex('workspace_public_slug_uq').on(t.slug),
-    uniqueIndex('workspace_public_slug_org_uq').on(t.organizationId),
   ],
 );

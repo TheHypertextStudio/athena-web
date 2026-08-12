@@ -1,13 +1,17 @@
 /**
- * `@docket/types` — publishing DTOs: briefs, workspace domains, and the public slug claim.
+ * `@docket/types` — publishing DTOs: briefs and workspace custom domains.
  *
  * @remarks
  * Covers CORE-26 … CORE-34 and MISS-04. Two audiences share this module deliberately:
  *
- * - the **authenticated** surface (`Publication*`, `WorkspaceDomain*`, `WorkspacePublicSlug*`),
- *   which the app uses to publish, unpublish, claim a name, and manage domains; and
+ * - the **authenticated** surface (`Publication*`, `WorkspaceDomain*`), which the app uses to
+ *   publish, unpublish, and manage domains; and
  * - the **public** surface ({@link PublicBriefOut}), the one document an anonymous visitor
  *   receives.
+ *
+ * A brief's default address is the publishing workspace's own identity slug
+ * (`organization.slug`, `@docket/types/organization`) — every workspace has one from the moment
+ * it exists, so there is no separate "claim a public name" concept here anymore.
  *
  * {@link PublicBriefOut} is the narrow waist that makes CORE-27 checkable. It carries no
  * publication-time snapshot: every field on it is projected from the live `initiative` /
@@ -24,7 +28,10 @@ import { z } from 'zod';
 import { Health } from './capability';
 import { Id, OrganizationId } from './primitives';
 import type { ActorId } from './primitives';
+import { PublicSlug } from './slug';
 import { VocabularySkin } from './vocabulary';
+
+export { PublicSlug, RESERVED_PUBLIC_SLUGS, suggestSlug as suggestPublicSlug } from './slug';
 
 /** The three work records that can be published as a brief. */
 export const PublicationSubjectKind = z
@@ -34,119 +41,6 @@ export const PublicationSubjectKind = z
   );
 /** Publication subject kind value. */
 export type PublicationSubjectKind = z.infer<typeof PublicationSubjectKind>;
-
-/**
- * Path segments no workspace may claim, for either a workspace slug or a brief slug.
- *
- * @remarks
- * Two distinct hazards, one list. Some entries (`api`, `admin`, `app`, `www`, `mail`) would let
- * a workspace impersonate a product host if the shared brief host were ever flattened; the rest
- * (`sign-in`, `settings`, `_next`, `privacy`) are real Docket paths, and a workspace answering
- * on one of them would shadow a page the product owns. Screening both name-spaces against one
- * list is what CORE-32's "reserved/system slugs are refused" asks for, and keeping it in
- * `@docket/types` means the API rejects and the UI warns from the same source.
- */
-export const RESERVED_PUBLIC_SLUGS: readonly string[] = [
-  '_next',
-  'about',
-  'admin',
-  'api',
-  'app',
-  'assets',
-  'auth',
-  'blog',
-  'brief',
-  'briefs',
-  'cdn',
-  'dashboard',
-  'docket',
-  'docs',
-  'health',
-  'help',
-  'hub',
-  'internal',
-  'legal',
-  'login',
-  'mail',
-  'me',
-  'new',
-  'onboarding',
-  'orgs',
-  'pricing',
-  'privacy',
-  'problems',
-  'public',
-  'settings',
-  'sign-in',
-  'sign-out',
-  'sign-up',
-  'signin',
-  'signup',
-  'static',
-  'status',
-  'support',
-  'terms',
-  'today',
-  'v1',
-  'www',
-];
-
-/** The shape both a workspace slug and a brief slug must take. */
-const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-/** Longest slug accepted, short enough to stay legible in a shared link. */
-const SLUG_MAX_LENGTH = 64;
-
-/**
- * A URL-safe public path segment: lowercase alphanumerics separated by single hyphens.
- *
- * @remarks
- * Deliberately stricter than "what a URL allows". A public slug is something a person reads off
- * a slide and types into a phone, so mixed case, underscores, dots, and percent-encoding are all
- * refused rather than normalized — silently changing what someone typed produces a link they
- * cannot reproduce.
- */
-export const PublicSlug = z
-  .string()
-  .min(1)
-  .max(SLUG_MAX_LENGTH)
-  .regex(SLUG_PATTERN)
-  .refine((value) => !RESERVED_PUBLIC_SLUGS.includes(value), {
-    error: 'reserved',
-  })
-  .describe(
-    'A public path segment: 1–64 characters, lowercase letters/digits separated by single hyphens, and not one of the reserved system names.',
-  );
-/** Public slug value. */
-export type PublicSlug = z.infer<typeof PublicSlug>;
-
-/**
- * Best-effort conversion of a record's title into a candidate slug.
- *
- * @remarks
- * A *suggestion*, never an authority: the result is offered to the person publishing so the
- * common case needs no typing, and it is re-validated by {@link PublicSlug} on the way in like
- * any other input. Returns an empty string when the title has no slug-able characters at all
- * (e.g. a title that is entirely emoji), which callers treat as "ask the person to choose".
- *
- * @param title - The record's title.
- * @returns A candidate slug, possibly empty.
- *
- * @example
- * ```ts
- * suggestPublicSlug('Q3 — Payments Reliability!'); // 'q3-payments-reliability'
- * ```
- */
-export function suggestPublicSlug(title: string): string {
-  const slug = title
-    .normalize('NFKD')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, SLUG_MAX_LENGTH)
-    .replace(/-+$/g, '');
-  return RESERVED_PUBLIC_SLUGS.includes(slug) ? '' : slug;
-}
 
 /** A record's publication state, as the app sees it. */
 export const PublicationOut = z
@@ -169,12 +63,12 @@ export const PublicationOut = z
     path: z
       .string()
       .describe(
-        'The path the brief answers on, relative to whichever host serves it (e.g. `/briefs/acme/q3-roadmap`).',
+        'The path the brief answers on, relative to whichever host serves it (e.g. `/acme/q3-roadmap` on the shared brief host, or `/q3-roadmap` on a verified custom domain).',
       ),
     urls: z
       .array(z.string())
       .describe(
-        'Every absolute URL this brief is currently reachable at: the shared brief host when the workspace has claimed a slug, plus one per verified custom domain. Empty when the workspace has claimed neither.',
+        'Every absolute URL this brief is currently reachable at: the shared brief host (when configured for this deployment) plus one per verified custom domain. Empty for a withdrawn brief, or in a deployment with no brief host and no verified domain.',
       ),
   })
   .meta({ id: 'PublicationOut', description: "One record's publication state." });
@@ -307,32 +201,6 @@ export const WorkspaceDomainVerifyOut = z
   .meta({ id: 'WorkspaceDomainVerifyOut', description: 'The result of a DNS ownership check.' });
 /** Domain verification result value. */
 export type WorkspaceDomainVerifyOut = z.infer<typeof WorkspaceDomainVerifyOut>;
-
-/** The workspace's claimed public name on the shared brief host. */
-export const WorkspacePublicSlugOut = z
-  .object({
-    organizationId: OrganizationId.describe('The claiming workspace.'),
-    slug: PublicSlug.nullable().describe('The claimed name; `null` when nothing is claimed.'),
-    baseUrl: z
-      .string()
-      .nullable()
-      .describe(
-        'The absolute URL prefix briefs answer on for this workspace, or `null` when no name is claimed.',
-      ),
-  })
-  .meta({ id: 'WorkspacePublicSlugOut', description: "A workspace's public name claim." });
-/** Workspace public slug value. */
-export type WorkspacePublicSlugOut = z.infer<typeof WorkspacePublicSlugOut>;
-
-/** Body for claiming or changing the workspace's public name. */
-export const WorkspacePublicSlugClaim = z
-  .object({ slug: PublicSlug.describe('The name to claim.') })
-  .meta({
-    id: 'WorkspacePublicSlugClaim',
-    description: "Claim or change a workspace's public name.",
-  });
-/** Validated slug-claim body. */
-export type WorkspacePublicSlugClaim = z.infer<typeof WorkspacePublicSlugClaim>;
 
 /** One labelled fact in a brief's masthead — a date, an owner, a health verdict. */
 export const BriefFact = z

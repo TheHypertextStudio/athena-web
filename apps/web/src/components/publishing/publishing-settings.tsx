@@ -4,39 +4,42 @@
  * `publishing` — the workspace's publishing settings surface (CORE-29 … CORE-32).
  *
  * @remarks
- * Three things in one place, in the order a person actually needs them:
+ * Two things in one place, in the order a person actually needs them:
  *
- * 1. **The workspace address.** The name published pages answer on at Docket's shared brief
- *    host. Every workspace needs one, and without it a published brief is not reachable at all —
- *    so it comes first and says so plainly.
- * 2. **Custom domains.** The optional upgrade for a workspace that owns a domain, with the exact
- *    DNS records to publish and an honest verification state.
- * 3. **Published pages.** What is currently readable on the web, so nobody has to remember.
+ * 1. **Custom domains.** A workspace that owns a domain can serve published pages from it, with
+ *    the exact DNS records to publish and an honest verification state.
+ * 2. **Published pages.** What is currently readable on the web, so nobody has to remember.
  *
- * Everything here is administrator-only. The API refuses each write with 403 for anyone else and
- * the section is hidden from their nav; this component additionally refuses to render the domain
- * and address controls, so the gate holds even if someone types the URL.
+ * The workspace's default address (the shared-host path segment its briefs answer on absent a
+ * custom domain) is its own identity — edited in Settings → General, not here, since it is core
+ * workspace identity and publishing is only one of its consumers. This page shows the resolved
+ * result, read-only, with a link there.
+ *
+ * Domain management is administrator-only. The API refuses each domain write with 403 for anyone
+ * else and the section is hidden from their nav; this component additionally refuses to render
+ * the domain controls, so the gate holds even if someone types the URL.
  *
  * **Verification never lies.** A domain shows "verified" only when a DNS check just succeeded,
  * and a failure reports which of the three stable failure codes came back — never resolver text,
  * and never a cheerful "connected" over a check that did not pass.
  */
+import { env } from '@docket/env/web';
 import type { WorkspaceDomainOut } from '@docket/types';
 import { Globe } from '@docket/ui/icons';
 import { Button, ControlGroup, Field, Input, Skeleton, Text } from '@docket/ui/primitives';
-import { useEffect, useState, type JSX } from 'react';
+import Link from 'next/link';
+import { useState, type JSX } from 'react';
 
+import { api } from '@/lib/api';
 import { SectionHeader } from '@/components/settings/section-header';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { userErrorMessage } from '@/lib/problem';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 import {
   useAddDomainMutation,
-  useClaimPublicNameMutation,
   usePublicationsQuery,
-  usePublicNameQuery,
   useRemoveDomainMutation,
-  useSuggestedNameQuery,
   useVerifyDomainMutation,
   useWorkspaceDomainsQuery,
 } from './use-publishing';
@@ -62,20 +65,19 @@ export interface PublishingSettingsProps {
  */
 export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Element {
   const { canManage, loading: permissionLoading } = useCanManageOrg(orgId);
-  const nameQ = usePublicNameQuery(orgId, canManage);
-  const suggestedQ = useSuggestedNameQuery(orgId, canManage);
+  const orgQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.organization(orgId),
+      () => api.v1.orgs[':orgId'].$get({ param: { orgId } }),
+      'Could not load the workspace.',
+      { enabled: canManage },
+    ),
+  );
   const domainsQ = useWorkspaceDomainsQuery(orgId, canManage);
   const publicationsQ = usePublicationsQuery(orgId, canManage);
-  const claimName = useClaimPublicNameMutation(orgId);
   const addDomain = useAddDomainMutation(orgId);
 
-  const [name, setName] = useState('');
   const [host, setHost] = useState('');
-  useEffect(() => {
-    const claimed = nameQ.data?.slug ?? null;
-    if (claimed !== null) setName(claimed);
-    else if (suggestedQ.data?.slug) setName(suggestedQ.data.slug);
-  }, [nameQ.data, suggestedQ.data]);
 
   if (permissionLoading) {
     return <Skeleton className="h-72 max-w-2xl rounded-lg" />;
@@ -95,10 +97,11 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
     );
   }
 
-  const claimed = nameQ.data?.slug ?? null;
   const domains = domainsQ.data?.items ?? [];
   const publications = publicationsQ.data?.items ?? [];
   const livePublications = publications.filter((publication) => publication.published);
+  const briefHost = env.NEXT_PUBLIC_BRIEF_HOST;
+  const workspaceSlug = orgQ.data?.slug;
 
   return (
     <div className="flex max-w-2xl flex-col gap-10">
@@ -113,37 +116,25 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
             Workspace address
           </Text>
           <Text as="p" token="body-medium" tone="muted">
-            {claimed === null
-              ? 'Published pages aren’t reachable until this workspace has an address.'
-              : 'Changing this moves every published page in this workspace.'}
+            {briefHost === undefined
+              ? 'No shared brief host is configured for this deployment.'
+              : 'Every workspace has one — set it in General settings.'}
           </Text>
         </div>
 
-        <Field
-          label="Address"
-          description={nameQ.data?.baseUrl ?? 'Lowercase letters, numbers, and hyphens.'}
-          {...(claimName.error
-            ? { error: userErrorMessage(claimName.error, 'Could not save that address.') }
-            : {})}
-        >
+        <Field label="Address" description="Edited in Settings → General.">
           <Input
             controlSize="lg"
-            value={name}
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(event) => {
-              setName(event.target.value);
-            }}
+            readOnly
+            value={workspaceSlug ?? ''}
+            {...(briefHost === undefined || workspaceSlug === undefined
+              ? {}
+              : { prefix: `${briefHost}/` })}
           />
         </Field>
         <ControlGroup controlSize="lg">
-          <Button
-            disabled={claimName.isPending || name.length === 0 || name === claimed}
-            onClick={() => {
-              claimName.mutate(name);
-            }}
-          >
-            {claimed === null ? 'Claim address' : 'Save address'}
+          <Button variant="secondary" asChild>
+            <Link href={`/orgs/${orgId}/settings/general`}>Change in General settings</Link>
           </Button>
         </ControlGroup>
       </section>
@@ -161,7 +152,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
 
         <Field
           label="Add a domain"
-          description="For example, briefs.yourcompany.com"
+          description="For example, updates.yourcompany.com"
           {...(addDomain.error
             ? { error: userErrorMessage(addDomain.error, 'Could not add that domain.') }
             : {})}
@@ -225,20 +216,38 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
           </Text>
         ) : (
           <ul className="flex flex-col">
-            {livePublications.map((publication) => (
-              <li
-                key={publication.id}
-                className="border-outline-variant flex items-center gap-3 border-b py-2 last:border-b-0"
-              >
-                <Globe aria-hidden className="text-on-surface-variant size-4 shrink-0" />
-                <Text as="span" token="body-medium" truncate className="min-w-0 flex-1">
-                  {publication.urls[0] ?? publication.path}
-                </Text>
-                <Text as="span" token="label-small" tone="muted">
-                  {publication.subjectKind}
-                </Text>
-              </li>
-            ))}
+            {livePublications.map((publication) => {
+              const url = publication.urls[0];
+              return (
+                <li
+                  key={publication.id}
+                  className="border-outline-variant flex items-center gap-3 border-b py-2 last:border-b-0"
+                >
+                  <Globe aria-hidden className="text-on-surface-variant size-4 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    {url === undefined ? (
+                      <Text as="span" token="body-medium" tone="muted" truncate>
+                        Not reachable yet
+                      </Text>
+                    ) : (
+                      <Text as="span" token="body-medium" truncate>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline underline-offset-2"
+                        >
+                          {url}
+                        </a>
+                      </Text>
+                    )}
+                  </span>
+                  <Text as="span" token="label-small" tone="muted">
+                    {publication.subjectKind}
+                  </Text>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

@@ -181,6 +181,32 @@ describe('Input', () => {
     render(<Input aria-label="bare" />);
     expect(screen.getByLabelText('bare')).toBeInTheDocument();
   });
+
+  it('renders a fixed prefix inline before the editable input, never as a separate box', () => {
+    render(<Input prefix="docket-org.hypertext.studio/" aria-label="Address" />);
+    const input = screen.getByLabelText('Address');
+    expect(input.tagName).toBe('INPUT');
+    // The prefix is plain text content, not an input value or attribute.
+    expect(input).not.toHaveAttribute('prefix');
+    expect(screen.getByText('docket-org.hypertext.studio/')).toBeInTheDocument();
+    // One shared box: the prefix and the input share the same immediate wrapper.
+    expect(screen.getByText('docket-org.hypertext.studio/').parentElement).toBe(
+      input.parentElement,
+    );
+  });
+
+  it('keeps the input fully editable when a prefix is set', () => {
+    let value = '';
+    const { rerender } = render(
+      <Input prefix="docket-org.hypertext.studio/" aria-label="Address" value={value} readOnly />,
+    );
+    fireEvent.change(screen.getByLabelText('Address'), { target: { value: 'my-workspace' } });
+    value = 'my-workspace';
+    rerender(
+      <Input prefix="docket-org.hypertext.studio/" aria-label="Address" value={value} readOnly />,
+    );
+    expect(screen.getByLabelText('Address')).toHaveValue('my-workspace');
+  });
 });
 
 describe('Separator', () => {

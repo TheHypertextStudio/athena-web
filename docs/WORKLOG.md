@@ -4729,10 +4729,10 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   calendar entry points plus the recurrence-series management surface in `apps/web`; scheduler
   setup, focused tests, design evidence, and the implementation/design specifications.
 - **Validation**: `pnpm typecheck` and `pnpm lint` passed 20/20 tasks. Tooling tests passed 139
-  assertions and the monorepo test gate passed 20/20 packages, including API 324 files / 3,715
-  tests, web 251 files / 1,961 tests, and database 23 files / 144 tests. `pnpm build` passed all four
+  assertions and the monorepo test gate passed 20/20 packages, including API 324 files / 3,734
+  tests, web 275 files / 2,245 tests, and database 23 files / 144 tests. `pnpm build` passed all four
   build packages; the complete migration chain applied to fresh PGlite; secret scanning reported
-  zero findings across 2,980 tracked files; CI gate policy and `git diff --check` passed. The
+  zero findings across 3,095 tracked files; CI gate policy and `git diff --check` passed. The
   authenticated production-bundle browser probe created a real M/W/F series, materialized 13
   ordinary tasks, verified backlinks and the management route, captured desktop/mobile in both
   themes, measured zero overflow at 320px, and found no recurrence target below 40px.

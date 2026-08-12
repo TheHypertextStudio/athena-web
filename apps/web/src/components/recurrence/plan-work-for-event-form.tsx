@@ -84,7 +84,7 @@ export function PlanWorkForEventForm({ item, onDone }: PlanWorkForEventFormProps
   if (created) {
     return (
       <div className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-md border p-3">
-        <p className="text-body-medium text-on-surface font-medium">
+        <p className="text-body-medium text-on-surface">
           {created.scope === 'event_series'
             ? 'Tasks will be added for each event.'
             : 'Work was added for this event.'}

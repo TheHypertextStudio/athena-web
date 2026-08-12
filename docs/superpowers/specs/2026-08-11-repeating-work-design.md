@@ -1,6 +1,6 @@
 # Repeating Work and Process Execution
 
-**Status:** Approved for implementation  
+**Status:** Approved for implementation
 **Date:** 2026-08-11
 
 ## Objective

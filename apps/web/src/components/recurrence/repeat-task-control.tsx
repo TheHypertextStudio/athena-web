@@ -207,7 +207,7 @@ export function RepeatTaskControl({
       </PopoverTrigger>
       <PopoverContent className="w-[22rem] p-0" align="start">
         <div className="border-outline-variant border-b px-4 py-3">
-          <h2 className="text-title-small text-on-surface font-medium">Repeat task</h2>
+          <h2 className="text-title-small text-on-surface">Repeat task</h2>
           <p className="text-body-small text-on-surface-variant mt-0.5">
             Docket creates ordinary tasks ahead of time so they appear in planning.
           </p>

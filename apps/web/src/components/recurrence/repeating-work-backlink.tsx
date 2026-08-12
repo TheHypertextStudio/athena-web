@@ -36,7 +36,7 @@ function Backlink({
       <div className="flex min-w-0 items-center gap-3">
         <RefreshCw className="size-5 shrink-0" />
         <div className="min-w-0">
-          <p className="text-body-medium truncate font-medium">Part of {context.seriesName}</p>
+          <p className="text-body-medium truncate">Part of {context.seriesName}</p>
           <p className="text-body-small opacity-80">
             This work was created for the {date} occurrence.
           </p>

@@ -139,7 +139,7 @@ export function RepeatProjectDialog({
               </span>
             </div>
             <div className="bg-surface-container-low max-h-48 overflow-y-auto rounded-xl p-3">
-              <div className="text-body-medium text-on-surface flex items-center gap-2 font-medium">
+              <div className="text-body-medium text-on-surface flex items-center gap-2">
                 <FolderKanban className="text-on-surface-variant size-4" />
                 {project.name}
               </div>
@@ -172,9 +172,7 @@ export function RepeatProjectDialog({
                 }}
               />
               <span>
-                <span className="text-body-medium text-on-surface block font-medium">
-                  Show the full plan
-                </span>
+                <span className="text-body-medium text-on-surface block">Show the full plan</span>
                 <span className="text-body-small text-on-surface-variant block">
                   Create every task at the start. Best for fixed event and season checklists.
                 </span>
@@ -191,7 +189,7 @@ export function RepeatProjectDialog({
                 }}
               />
               <span>
-                <span className="text-body-medium text-on-surface block font-medium">
+                <span className="text-body-medium text-on-surface block">
                   Show tasks when ready
                 </span>
                 <span className="text-body-small text-on-surface-variant block">

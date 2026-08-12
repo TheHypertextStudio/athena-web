@@ -74,7 +74,7 @@ matrix does not cover.
 | Item | Host handler | Test |
 | --- | --- | --- |
 | `_meta.ui.resourceUri` | `apps/api/src/mcp/apps/index.ts :: widgetMeta` | `apps/api/tests/mcp/mcp-apps.test.ts :: carries the linkage under the stable spec key as well as the extension id` |
-| `_meta.ui.visibility` | `apps/api/src/mcp/apps/index.ts :: widgetMeta` | `apps/api/tests/mcp/mcp-apps.test.ts :: leaves visibility unset, which the spec reads as model and app` |
+| `_meta.ui.visibility` | `apps/api/src/mcp/apps/index.ts :: widgetMeta` | `apps/api/tests/mcp/mcp-apps.test.ts :: keeps semantic tools model-visible while confining legacy get to app callers` |
 | `_meta.ui.csp` | `packages/integrations/src/mcp-apps-host.ts :: buildViewCsp` | `mcp-apps-host.test.ts :: adds exactly the origins the resource declared and nothing else` |
 | `_meta.ui.permissions` | `packages/integrations/src/mcp-apps-host.ts :: buildViewPermissionsAllow` | `mcp-apps-host.test.ts :: grants only the permissions the resource asked for` |
 | `_meta.ui.domain` | `packages/integrations/src/mcp-apps-sandbox.ts :: sandboxProxyDocument`<br>_Honoured as the host-controlled proxy origin. Per the spec this field is host-dependent; Docket serves every view from its own API-origin proxy rather than minting a per-resource subdomain._ | `mcp-apps-sandbox.test.ts :: accepts messages only from the host origin it was built for` |

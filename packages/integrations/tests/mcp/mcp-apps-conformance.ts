@@ -335,7 +335,7 @@ export const CONFORMANCE_CLAIMS: Readonly<Record<string, ConformanceClaim>> = {
   },
   'meta:_meta.ui.visibility': {
     implementation: 'apps/api/src/mcp/apps/index.ts :: widgetMeta',
-    test: 'apps/api/tests/mcp/mcp-apps.test.ts :: leaves visibility unset, which the spec reads as model and app',
+    test: 'apps/api/tests/mcp/mcp-apps.test.ts :: keeps semantic tools model-visible while confining legacy get to app callers',
   },
   'meta:_meta.ui.csp': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: buildViewCsp',

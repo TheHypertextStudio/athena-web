@@ -26,7 +26,9 @@
   the three-project batch asserts every route and its status/health/work line. Production CI run
   `31552026638` deployed commit `d239e353` successfully; the web, admin, and API health routes
   return 200. The Athena host's fullscreen boundary returns attempted background focus to its
-  visible Close control, covered by `mcp-app-view.test.tsx`.
+  visible Close control, covered by `mcp-app-view.test.tsx`. The generated MCP Apps conformance
+  matrix cites the strengthened semantic-visibility test by its current name, and its integration
+  gate passes again.
 - **Blockers**: A real authenticated third-party MCP host capture remains unavailable in this
   environment. Both available browsers are unauthenticated, and Docket's host endpoints are
   deliberately owner-scoped to a signed-in user with a personal MCP connection. The audit is

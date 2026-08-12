@@ -78,7 +78,7 @@ the user-facing SSE stream and the binary export download stay on `/v1` outside 
 
 ### 1.6 Auth & tenant context middleware (applied in order)
 
-1. **CORS** (registered first; exposes `Authorization`, `WWW-Authenticate`). Allowed origins env-driven.
+1. **CORS** (registered first; exposes `Authorization`, `WWW-Authenticate`). Cookie-bearing web and admin routes use the environment-owned application origins. `/mcp` is a separate Bearer-only resource with open, credential-free CORS and a structural check on any present `Origin`; it has no client-origin list.
 2. **`sessionMiddleware`** — resolves the Better Auth session from the incoming request (`auth.api.getSession({ headers })`); on protected routes a missing/invalid session → `401`. Sets `c.var.session` (`{ user, session }`). The `/api/auth/*` mount itself is owned by this same Hono service (eng §2) — it is **out of `/v1`** and not part of the RPC AppType.
 3. **`orgContextMiddleware`** (only on `/orgs/:orgId/*`) — loads the **Actor** row for `(session.user.id, orgId)` where `kind = 'human'`; 404 if no membership; sets `c.var.actorCtx = { orgId, actorId, role, capabilities }`. **Tenant key `organization_id` is ALWAYS derived from this verified context — never from the body.** This mirrors the MCP rule (eng §4: org/user from verified token `sub` only).
 4. **`capabilityGuard(capability, resourceLocator)`** — per-route guard that checks the resolved `Grant`/`Role` capabilities (`view | comment | contribute | assign | manage`) against the target resource, honoring **cascade-down containment** (Org→Team/Program→Project→Task) with lower-level overrides, and `visibility {public, private}` (guests are grant-only). Returns `403` on failure.

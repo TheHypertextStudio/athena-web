@@ -6,8 +6,9 @@ import type * as DbModule from '@docket/db';
 
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import type { resetNotifications as ResetNotifications } from '../../src/mcp/notify';
-import { getSession, resetAuthMocks } from '../support/auth-mock';
+import { resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
 import { getMigratedDb, grantDocketPro } from '../support/db';
+import { seedConsentedClient } from '../support/oauth-grant';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -28,6 +29,7 @@ interface Seed {
   actorId: string;
   roleId: string;
   taskId: string;
+  clientId: string;
 }
 
 /** Seed an org whose human actor holds `view` org-wide. */
@@ -52,6 +54,12 @@ async function seedOrg(): Promise<Seed> {
     .returning({ id: schema.user.id });
   const userId = user!.id;
   await db.insert(schema.hub).values({ userId });
+  const { clientId } = await seedConsentedClient(schema, userId, [
+    'work:read',
+    'work:write',
+    'agents:run',
+    'connectors:link',
+  ]);
 
   const [actor] = await db
     .insert(schema.actor)
@@ -84,7 +92,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ organizationId: orgId, title: 'Ship', teamId, state: 'todo', createdBy: actorId })
     .returning({ id: schema.task.id });
 
-  return { userId, orgId, teamId, actorId, roleId, taskId: task!.id };
+  return { userId, orgId, teamId, actorId, roleId, taskId: task!.id, clientId };
 }
 
 function app(): Hono {
@@ -95,15 +103,26 @@ function app(): Hono {
 
 /** Authenticate the next `mcpHandler` call as `seed`'s user. */
 function authAs(seed: Seed): void {
-  getSession.mockResolvedValue({ user: { id: seed.userId, name: 'Ada', email: 'a@e.com' } });
+  verifyAccessToken.mockResolvedValue({
+    sub: seed.userId,
+    azp: seed.clientId,
+    scope: 'work:read work:write agents:run connectors:link',
+  });
 }
+
+/** Bearer authorization presented by the synthetic client. */
+const AUTHORIZATION = { authorization: 'Bearer notification-test' } as const;
 
 /** Complete `initialize` and return the minted session id. */
 async function openSession(seed: Seed): Promise<string> {
   authAs(seed);
   const res = await app().request('/mcp', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      ...AUTHORIZATION,
+    },
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
@@ -148,6 +167,7 @@ async function rpc(
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
       'mcp-session-id': sessionId,
+      ...AUTHORIZATION,
     },
     body: JSON.stringify({ jsonrpc: '2.0', id: 2, method, params }),
   });
@@ -178,7 +198,7 @@ async function openStream(
   const controller = new AbortController();
   const res = await app().request('/mcp', {
     method: 'GET',
-    headers: { accept: 'text/event-stream', 'mcp-session-id': sessionId },
+    headers: { accept: 'text/event-stream', 'mcp-session-id': sessionId, ...AUTHORIZATION },
     signal: controller.signal,
   });
   expect(res.status).toBe(200);
@@ -309,7 +329,7 @@ describe('MCP notification channel', () => {
     authAs(seed);
     const deleted = await app().request('/mcp', {
       method: 'DELETE',
-      headers: { 'mcp-session-id': sessionId },
+      headers: { 'mcp-session-id': sessionId, ...AUTHORIZATION },
     });
     expect(deleted.status).toBe(204);
 
@@ -334,7 +354,7 @@ describe('MCP notification channel', () => {
       authAs(seed);
       const second = await app().request('/mcp', {
         method: 'GET',
-        headers: { accept: 'text/event-stream', 'mcp-session-id': sessionId },
+        headers: { accept: 'text/event-stream', 'mcp-session-id': sessionId, ...AUTHORIZATION },
       });
       expect(second.status).toBe(409);
     } finally {

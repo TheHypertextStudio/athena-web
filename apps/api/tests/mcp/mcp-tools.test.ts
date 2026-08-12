@@ -13,8 +13,9 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
-import { getSession, resetAuthMocks } from '../support/auth-mock';
+import { resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
 import { getMigratedDb, grantDocketPro } from '../support/db';
+import { seedConsentedClient } from '../support/oauth-grant';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -166,6 +167,22 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
 }
 
 const harnesses: { close(): Promise<void> }[] = [];
+
+/** Seed a standing OAuth grant and return headers for the HTTP-level MCP tests. */
+async function authorizeHttp(seed: Seed): Promise<{ authorization: string }> {
+  const { clientId } = await seedConsentedClient(schema, seed.userId, [
+    'work:read',
+    'work:write',
+    'agents:run',
+    'connectors:link',
+  ]);
+  verifyAccessToken.mockResolvedValue({
+    sub: seed.userId,
+    azp: clientId,
+    scope: 'work:read work:write agents:run connectors:link',
+  });
+  return { authorization: 'Bearer mcp-tools-test' };
+}
 
 /** Connect a fresh identity-bound MCP server + client over the in-memory transport. */
 async function connect(ctx: McpContext): Promise<Client> {
@@ -601,9 +618,7 @@ describe('resources', () => {
 describe('mcpHandler success path (authenticated)', () => {
   it('processes an initialize request through a fresh transport', async () => {
     const s = await seedOrg(['view']);
-    getSession.mockResolvedValueOnce({
-      user: { id: s.userId, name: 'Ada', email: 'a@e.com' },
-    });
+    const authorization = await authorizeHttp(s);
     const app = new Hono();
     app.on(['POST', 'GET'], '/mcp', mcpHandler);
     const res = await app.request('/mcp', {
@@ -611,6 +626,7 @@ describe('mcpHandler success path (authenticated)', () => {
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
+        ...authorization,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -628,9 +644,7 @@ describe('mcpHandler success path (authenticated)', () => {
 
   it('advertises the notification capabilities it now delivers', async () => {
     const s = await seedOrg(['view']);
-    getSession.mockResolvedValueOnce({
-      user: { id: s.userId, name: 'Ada', email: 'a@e.com' },
-    });
+    const authorization = await authorizeHttp(s);
     const app = new Hono();
     app.on(['POST', 'GET'], '/mcp', mcpHandler);
     const res = await app.request('/mcp', {
@@ -638,6 +652,7 @@ describe('mcpHandler success path (authenticated)', () => {
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
+        ...authorization,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -674,9 +689,7 @@ describe('mcpHandler success path (authenticated)', () => {
 
   it('hands back a session id on initialize so a client can open the stream', async () => {
     const s = await seedOrg(['view']);
-    getSession.mockResolvedValueOnce({
-      user: { id: s.userId, name: 'Ada', email: 'a@e.com' },
-    });
+    const authorization = await authorizeHttp(s);
     const app = new Hono();
     app.on(['POST', 'GET', 'DELETE'], '/mcp', mcpHandler);
     const res = await app.request('/mcp', {
@@ -684,6 +697,7 @@ describe('mcpHandler success path (authenticated)', () => {
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
+        ...authorization,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -700,8 +714,8 @@ describe('mcpHandler success path (authenticated)', () => {
     expect(res.headers.get('Mcp-Session-Id')).toEqual(expect.any(String));
   });
 
-  it('returns a 500 problem when a non-ApiError escapes auth resolution', async () => {
-    getSession.mockRejectedValueOnce(new Error('boom'));
+  it('returns an unauthorized problem when bearer verification fails', async () => {
+    verifyAccessToken.mockRejectedValueOnce(new Error('signature verification failed'));
     const app = new Hono();
     app.on(['POST', 'GET'], '/mcp', mcpHandler);
     const res = await app.request('/mcp', {
@@ -709,11 +723,12 @@ describe('mcpHandler success path (authenticated)', () => {
       headers: {
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
+        authorization: 'Bearer invalid',
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
     });
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(401);
     const prob = (await res.json()) as { code: string };
-    expect(prob.code).toBe('internal');
+    expect(prob.code).toBe('unauthorized');
   });
 });

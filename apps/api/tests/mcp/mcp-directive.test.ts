@@ -26,8 +26,9 @@ import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import type * as ScopeModule from '../../src/mcp/scope';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { sweepDirectivePosture as SweepDirectivePosture } from '../../src/routes/directive-sweep';
-import { getSession, resetAuthMocks } from '../support/auth-mock';
+import { resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedConsentedClient } from '../support/oauth-grant';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -60,6 +61,7 @@ interface Seed {
   userId: string;
   hubId: string;
   email: string;
+  clientId: string;
 }
 
 /** Seed a bare user + Hub. No scheduling preference, so the sweep never picks these up. */
@@ -74,7 +76,8 @@ async function seedHubUser(): Promise<Seed> {
     .insert(schema.hub)
     .values({ userId: u!.id })
     .returning({ id: schema.hub.id });
-  return { userId: u!.id, hubId: h!.id, email };
+  const { clientId } = await seedConsentedClient(schema, u!.id, ['work:read', 'work:write']);
+  return { userId: u!.id, hubId: h!.id, email, clientId };
 }
 
 /** Seed the native-blocks calendar layer a block needs to hang off. */
@@ -408,17 +411,28 @@ function app(): Hono {
   return instance;
 }
 
-/** Authenticate the next `mcpHandler` call as `seed`'s user (first-party cookie path). */
+/** Authenticate the next `mcpHandler` call through a standing OAuth Bearer grant. */
 function authAs(seed: Seed): void {
-  getSession.mockResolvedValue({ user: { id: seed.userId, name: 'Ada', email: seed.email } });
+  verifyAccessToken.mockResolvedValue({
+    sub: seed.userId,
+    azp: seed.clientId,
+    scope: 'work:read work:write',
+  });
 }
+
+/** Bearer authorization presented by the synthetic client. */
+const AUTHORIZATION = { authorization: 'Bearer directive-test' } as const;
 
 /** Complete `initialize` and return the minted session id. */
 async function openSession(seed: Seed): Promise<string> {
   authAs(seed);
   const res = await app().request('/mcp', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      ...AUTHORIZATION,
+    },
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
@@ -444,6 +458,7 @@ async function subscribe(seed: Seed, sessionId: string): Promise<void> {
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
       'mcp-session-id': sessionId,
+      ...AUTHORIZATION,
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -467,7 +482,7 @@ async function openStream(
   const controller = new AbortController();
   const res = await app().request('/mcp', {
     method: 'GET',
-    headers: { accept: 'text/event-stream', 'mcp-session-id': sessionId },
+    headers: { accept: 'text/event-stream', 'mcp-session-id': sessionId, ...AUTHORIZATION },
     signal: controller.signal,
   });
   expect(res.status).toBe(200);

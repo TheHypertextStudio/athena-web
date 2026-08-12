@@ -85,17 +85,16 @@ export function createRuntimeWatchdog(options: RuntimeWatchdogOptions = {}): Run
 
       let reported = false;
       let cleaned = false;
-      let handle: RuntimeWatchdogTimeout | undefined;
       const reportMissingAcknowledgement = (): void => {
         if (reported || cleaned || receiptOwner.isAcknowledged()) return;
         reported = true;
         options.onFailure?.({ code: 'missing-painted-acknowledgement', actionId });
       };
-      handle = schedule(reportMissingAcknowledgement);
+      const handle: RuntimeWatchdogTimeout = schedule(reportMissingAcknowledgement);
       const cleanup = (): void => {
         if (cleaned) return;
         cleaned = true;
-        if (handle !== undefined) clear(handle);
+        clear(handle);
       };
 
       return {

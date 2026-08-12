@@ -92,6 +92,8 @@
   - [x] Remove the public claim that Docket approves particular MCP clients; the screenshot now
         describes the product capability without presenting a vendor permission model.
   - [x] Replace the MCP vendor allowlists with OAuth-bound, client-neutral interoperability.
+  - [x] Supersede the frozen architecture decisions that told future builders to restore MCP
+        client, CIMD-host, or browser-Origin allowlists.
   - [x] Add idempotent Stripe sandbox and production provisioning to the standard bootstrap path.
   - [x] Prove Stripe test-mode checkout, webhook activation, access, management, cancellation,
         personal fallback, return routing, and one-trial enforcement.
@@ -164,7 +166,9 @@
   resource, and access is decided by the user's OAuth grant, token scopes, and Docket permissions.
   Named app entries in settings are convenience guides only; the generic remote-MCP URL path remains
   first-class and the public-copy gate rejects language that calls clients allowed, approved, or
-  supported.
+  supported. The resolved-decision ledger now matches that implementation: protocol safety checks
+  decide whether a registration or request is structurally valid, while consent, scopes, and Docket
+  grants decide what it may do. No deployment variable identifies trusted MCP vendors.
   The production Stripe pass also proved why live keys cannot be copied out of the CLI profile:
   Stripe keeps the real short-lived key in the OS keychain and returns a masked placeholder from
   `stripe config --list`. Bootstrap now rejects that placeholder, keeps production collection on a

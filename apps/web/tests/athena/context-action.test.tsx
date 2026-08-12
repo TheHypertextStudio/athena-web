@@ -9,35 +9,13 @@ vi.mock('../../src/components/athena/athena-panel-provider', () => ({
   useAthenaPanel: () => ({ openAthena }),
 }));
 
-import {
-  AthenaContextAction,
-  AthenaContextMenuItem,
-} from '../../src/components/athena/athena-context-action';
+import { AthenaContextMenuItem } from '../../src/components/athena/athena-context-action';
 
 beforeEach(() => {
   openAthena.mockReset();
 });
 
-describe('AthenaContextAction', () => {
-  it('opens personal Athena with the exact workspace and source object', () => {
-    render(
-      <AthenaContextAction
-        label="Have Athena review this project"
-        context={{
-          workspaceId: 'workspace_1',
-          source: { type: 'project', id: 'project_1', label: 'Athena launch' },
-        }}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Have Athena review this project' }));
-
-    expect(openAthena).toHaveBeenCalledWith({
-      workspaceId: 'workspace_1',
-      source: { type: 'project', id: 'project_1', label: 'Athena launch' },
-    });
-  });
-
+describe('AthenaContextMenuItem', () => {
   it('opens personal Athena with the same task context from an overflow menu item', async () => {
     const context = {
       workspaceId: 'workspace_1',

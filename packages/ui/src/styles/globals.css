@@ -884,7 +884,7 @@
   --detail-collapse-progress: 0;
   --detail-collapse-delay: 0s;
   --detail-expanded-glyph-row: 3.25rem;
-  --detail-compact-identity-inset: 2.25rem;
+  --detail-compact-identity-inset: 3rem;
   container-type: size;
   overflow-anchor: none;
 }
@@ -909,11 +909,18 @@
 /*
  * One identity tree serves both states. The glyph is independently positioned; expanded title
  * padding gives it a row of its own, then the title sheds that block padding and gains an inline
- * inset as the glyph scales into the compact row.
+ * inset as the full-size glyph moves into the compact row.
  */
+.detail-masthead {
+  display: grid;
+  row-gap: 0.75rem;
+  animation-name: detail-masthead-collapse;
+}
+
 .detail-identity {
   position: relative;
   min-width: 0;
+  min-block-size: 2.5rem;
 }
 
 .detail-glyph {
@@ -929,6 +936,10 @@
   overflow: hidden;
   overflow-wrap: anywhere;
   padding-block-start: var(--detail-expanded-glyph-row);
+}
+
+.detail-tabs {
+  margin-block-start: 0.25rem;
 }
 
 /*
@@ -947,7 +958,7 @@
 }
 
 .detail-backdrop-space,
-.detail-glyph,
+.detail-masthead,
 .detail-title,
 .detail-secondary {
   animation-delay: var(--detail-collapse-delay);
@@ -959,10 +970,6 @@
 
 .detail-backdrop-space {
   animation-name: detail-backdrop-collapse;
-}
-
-.detail-glyph {
-  animation-name: detail-glyph-collapse;
 }
 
 .detail-title {
@@ -987,15 +994,16 @@
   }
 }
 
-@keyframes detail-glyph-collapse {
+@keyframes detail-masthead-collapse {
   to {
-    scale: 0.6;
+    row-gap: 0;
   }
 }
 
 @keyframes detail-title-collapse {
   from {
     padding-block-start: var(--detail-expanded-glyph-row);
+    padding-block-end: 0;
     padding-inline-start: 0;
     font-size: var(--text-headline-medium);
     line-height: var(--text-headline-medium--line-height);
@@ -1004,7 +1012,8 @@
     white-space: normal;
   }
   to {
-    padding-block-start: 0;
+    padding-block-start: 0.5rem;
+    padding-block-end: 0.5rem;
     padding-inline-start: var(--detail-compact-identity-inset);
     font-size: var(--text-title-medium);
     line-height: var(--text-title-medium--line-height);

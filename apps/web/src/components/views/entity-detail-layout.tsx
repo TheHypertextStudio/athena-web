@@ -16,6 +16,9 @@ import { useOwnPageScroll } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX, ReactNode } from 'react';
 
+import { ObjectSurface } from '@/components/objects/object-surface';
+import type { ObjectRef } from '@/lib/actions/object';
+
 import { useDetailHeaderCollapse } from './entity-detail-collapse';
 
 /** Props for {@link EntityDetailLayout}. */
@@ -48,6 +51,8 @@ export interface EntityDetailLayoutProps {
   children: ReactNode;
   /** Extra container classes (e.g. a page print scope). */
   className?: string;
+  /** Canonical object identity for drag and the shared right-click action surface. */
+  object?: ObjectRef;
 }
 
 /**
@@ -75,6 +80,7 @@ export function EntityDetailLayout({
   tabs,
   children,
   className,
+  object,
 }: EntityDetailLayoutProps): JSX.Element {
   // Every detail page owns its scrolling, backdrop or not. Making it conditional would mean two
   // layouts again — one that scrolls itself and one the shell scrolls — which is the duplication
@@ -84,6 +90,45 @@ export function EntityDetailLayout({
   // and a timeline to collapse against, which every detail page benefits from equally.
   useOwnPageScroll();
   const scrollRef = useDetailHeaderCollapse({ hasCover: Boolean(cover) });
+
+  const header = (
+    <header className="page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-0 pt-1 pb-1">
+      {/* The backdrop is a layer of this header, not a section above it. `isolate` traps it in
+          the header's own stacking context, so it cannot paint over anything outside — the class
+          of bug that made an opaque icon look transparent. It has no height of its own: it is
+          whatever the header is, so collapsing the header collapses the artwork with it. */}
+      {cover ? <div className="absolute inset-0 -z-10 overflow-hidden">{cover}</div> : null}
+
+      {eyebrow || actions ? (
+        <div className="mb-3 flex items-center justify-between gap-3 pt-3">
+          <div className="min-w-0">{eyebrow}</div>
+          {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
+        </div>
+      ) : null}
+
+      {cover ? <div aria-hidden="true" className="detail-backdrop-space" /> : null}
+
+      <div className="detail-masthead">
+        <div className="detail-identity">
+          <div className="detail-glyph">{icon}</div>
+          <h1 className="detail-title text-on-surface text-headline-medium min-w-0 font-medium">
+            {title}
+          </h1>
+        </div>
+
+        <div className="detail-secondary">
+          <div className="flex min-w-0 flex-col gap-3">
+            {subtitle ? (
+              <div className="text-on-surface-variant text-body-large min-w-0">{subtitle}</div>
+            ) : null}
+            {metadata}
+          </div>
+        </div>
+      </div>
+
+      <div className="detail-tabs">{tabs}</div>
+    </header>
+  );
 
   return (
     <div
@@ -100,40 +145,13 @@ export function EntityDetailLayout({
       {/* Bleeds the full pane so the backdrop can reach both edges, and re-measures its own
           children through the nested grid, so nothing inside has to know it sits in a bleeding
           section. */}
-      <header className="page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-3 pt-1 pb-1">
-        {/* The backdrop is a layer of this header, not a section above it. `isolate` traps it in
-            the header's own stacking context, so it cannot paint over anything outside — the class
-            of bug that made an opaque icon look transparent. It has no height of its own: it is
-            whatever the header is, so collapsing the header collapses the artwork with it. */}
-        {cover ? <div className="absolute inset-0 -z-10 overflow-hidden">{cover}</div> : null}
-
-        {eyebrow || actions ? (
-          <div className="flex items-center justify-between gap-3 pt-3">
-            <div className="min-w-0">{eyebrow}</div>
-            {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
-          </div>
-        ) : null}
-
-        {cover ? <div aria-hidden="true" className="detail-backdrop-space" /> : null}
-
-        <div className="detail-identity">
-          <div className="detail-glyph">{icon}</div>
-          <h1 className="detail-title text-on-surface text-headline-medium min-w-0 font-medium">
-            {title}
-          </h1>
-        </div>
-
-        <div className="detail-secondary">
-          <div className="flex min-w-0 flex-col gap-3">
-            {subtitle ? (
-              <div className="text-on-surface-variant text-body-large min-w-0">{subtitle}</div>
-            ) : null}
-            {metadata}
-          </div>
-        </div>
-
-        {tabs}
-      </header>
+      {object ? (
+        <ObjectSurface object={object} surfaceId="entity-detail">
+          {header}
+        </ObjectSurface>
+      ) : (
+        header
+      )}
 
       {/* This nested grid preserves the page measure while guaranteeing enough stable block-size
           for the scroll-linked header to reach its compact endpoint on short panels. */}

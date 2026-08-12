@@ -35,11 +35,21 @@ describe('entity detail collapse contract', () => {
 
   it('morphs one identity from stacked to compact without duplicating the icon', () => {
     expect(layout).toContain('className="detail-identity"');
+    expect(layout).toContain('className="detail-masthead"');
+    expect(layout).toContain('className="detail-tabs"');
     expect(layout.match(/className="detail-glyph/g)).toHaveLength(1);
     expect(layout.indexOf('detail-glyph')).toBeLessThan(layout.indexOf('detail-title'));
     expect(css).toContain('padding-block-start: var(--detail-expanded-glyph-row)');
     expect(css).toContain('padding-inline-start: var(--detail-compact-identity-inset)');
     expect(css).toContain('font-size: var(--text-title-medium)');
+  });
+
+  it('keeps the full-size identity and removes collapsed secondary whitespace above tabs', () => {
+    expect(css).toContain('--detail-compact-identity-inset: 3rem');
+    expect(css).not.toContain('scale: 0.6');
+    expect(css).toContain('animation-name: detail-masthead-collapse');
+    expect(css).toMatch(/@keyframes detail-masthead-collapse[\s\S]*row-gap:\s*0/);
+    expect(css).toMatch(/\.detail-tabs\s*\{[\s\S]*margin-block-start:\s*0\.25rem/);
   });
 
   it('uses a discrete compact state for reduced motion', () => {

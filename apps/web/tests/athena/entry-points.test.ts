@@ -6,10 +6,6 @@ const root = resolve(import.meta.dirname, '../../../..');
 const read = (path: string): string => readFileSync(resolve(root, path), 'utf8');
 
 describe('ambient Athena entry points', () => {
-  // `/today` is deliberately absent from this list. Its Athena door is not a button in the
-  // masthead any more — it is the capture composer's destination mode, asserted on its own below.
-  // A page-level "Open Athena for today" *beside* a field that already sends to Athena made the
-  // engine look like a place you navigate to, which is the opposite of the model.
   it.each([
     'apps/web/src/app/(app)/tasks/all-tasks-client.tsx',
     'apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/page.tsx',
@@ -18,24 +14,16 @@ describe('ambient Athena entry points', () => {
     'apps/web/src/app/(app)/stream/page.tsx',
     'apps/web/src/app/(app)/calendar/calendar-client.tsx',
     'apps/web/src/app/(app)/inbox/inbox-client.tsx',
-  ])('routes %s through the shared contextual action', (path) => {
-    expect(read(path)).toContain('AthenaContextAction');
+  ])('keeps the overview or detail route %s free of a page-local Athena button', (path) => {
+    expect(read(path)).not.toContain('AthenaContextAction');
   });
 
-  it('carries every supported object kind from the corresponding detailed surface', () => {
-    expect(read('apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/page.tsx')).toContain(
-      "type: 'task'",
-    );
-    expect(read('apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/page.tsx')).toContain(
-      "type: 'project'",
-    );
-    expect(
-      read('apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/page.tsx'),
-    ).toContain("type: 'initiative'");
-    expect(read('apps/web/src/app/(app)/stream/page.tsx')).toContain("type: 'stream_event'");
-    expect(read('apps/web/src/app/(app)/calendar/calendar-client.tsx')).toContain(
-      "type: 'calendar_item'",
-    );
+  it('keeps Athena available as a contextual task-menu action instead of a page button', () => {
+    const controls = read('apps/web/src/components/task-detail/task-header-controls.tsx');
+    const detail = read('apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/page.tsx');
+    expect(controls).toContain('AthenaContextMenuItem');
+    expect(controls).toContain('Have Athena handle this');
+    expect(detail).toContain("source: { type: 'task'");
   });
 
   it('routes the Today prompt into the shared dock instead of creating a local mini session UI', () => {

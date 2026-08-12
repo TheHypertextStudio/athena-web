@@ -148,6 +148,12 @@ export default function TeamDetailClient(): JSX.Element {
 
   return (
     <EntityDetailLayout
+      object={{
+        kind: 'team',
+        id: teamId,
+        organizationId: orgId,
+        title: team.name,
+      }}
       // The layout owns the banner's height so it can collapse it on scroll; the cover just fills it.
       cover={<TeamCover display={display} teamName={team.name} className="size-full" />}
       eyebrow={<BackToTeams orgId={orgId} />}
@@ -178,16 +184,8 @@ export default function TeamDetailClient(): JSX.Element {
           items={[
             { value: 'overview', label: 'Overview' },
             { value: 'activity', label: 'Activity' },
-            {
-              value: 'library',
-              label: 'Library',
-              ...(referenceCount ? { count: referenceCount } : {}),
-            },
-            {
-              value: 'people',
-              label: 'People',
-              ...(members.length ? { count: members.length } : {}),
-            },
+            { value: 'library', label: 'Library' },
+            { value: 'people', label: 'People' },
           ]}
         />
       }

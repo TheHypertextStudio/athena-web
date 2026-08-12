@@ -11,7 +11,7 @@ import type {
 import { defaultEntityDisplay } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { ChevronLeft, Ellipsis, Trash2 } from '@docket/ui/icons';
+import { ChevronLeft, CornerDownLeft, Ellipsis, Trash2 } from '@docket/ui/icons';
 import {
   Button,
   ControlGroup,
@@ -28,7 +28,6 @@ import { useRouter } from 'next/navigation';
 import { useAppParams, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
-import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -37,6 +36,7 @@ import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
+import { InitiativeRelationshipPanels } from '@/components/initiatives/initiative-relationship-panels';
 import {
   INITIATIVE_CADENCE_LABEL,
   INITIATIVE_PRIORITY_LABEL,
@@ -45,8 +45,13 @@ import {
 } from '@/components/initiatives/properties-panel';
 
 import { memberActorOptions } from '@/components/pickers/options';
+import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { PublishAction } from '@/components/publishing/publish-action';
-import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
+import {
+  ENTITY_METADATA_CHIP_CLASS,
+  EntityDetailLayout,
+  EntityMetadataRow,
+} from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { queryKeys, apiQueryOptions, useApiMutation, useApiQuery, unwrap } from '@/lib/query';
@@ -55,7 +60,7 @@ import { useInitiativeMutations } from '@/lib/use-initiative-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { userErrorMessage } from '@/lib/problem';
 
-type TabId = 'overview' | 'updates' | 'resources';
+type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
 
 /** Printable, document-first Initiative detail composed from the shared entity-detail shell. */
 export default function InitiativeDetailPage(): JSX.Element {
@@ -63,10 +68,16 @@ export default function InitiativeDetailPage(): JSX.Element {
   const entityMentions = useEntityMentions(orgId, 'initiative', initiativeId);
   const router = useRouter();
   const queryClient = useQueryClient();
+  const pickerOverlay = usePickerOverlay();
   const searchParams = useAppSearchParams();
   const initialTab = searchParams.get('tab');
   const [tab, setTab] = useState<TabId>(
-    initialTab === 'updates' || initialTab === 'resources' ? initialTab : 'overview',
+    initialTab === 'subinitiatives' ||
+      initialTab === 'work' ||
+      initialTab === 'updates' ||
+      initialTab === 'resources'
+      ? initialTab
+      : 'overview',
   );
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const initiativeNoun = useVocabulary('initiative');
@@ -245,12 +256,21 @@ export default function InitiativeDetailPage(): JSX.Element {
     return { name: member?.displayName ?? 'Unknown', kind: 'human' as const };
   };
   const ownerName = members.find((member) => member.actorId === detail.ownerId)?.displayName ?? '—';
-  const resourceCount =
-    detail.resources.length + entityMentions.external.length + entityMentions.entities.length;
+  const initiativeObject = {
+    kind: 'initiative' as const,
+    id: initiativeId,
+    organizationId: orgId,
+    title: detail.name,
+    meta: {
+      parentInitiativeId: detail.parent?.id ?? null,
+      parentLinkId: detail.parentLinkId,
+    },
+  };
 
   return (
     <EntityDetailLayout
       className="initiative-print"
+      object={initiativeObject}
       eyebrow={
         <nav
           className="no-print text-on-surface-variant flex items-center gap-2 text-sm"
@@ -359,6 +379,22 @@ export default function InitiativeDetailPage(): JSX.Element {
                 );
               }}
             />
+            <Button
+              variant="ghost"
+              className={ENTITY_METADATA_CHIP_CLASS}
+              onClick={(event) => {
+                pickerOverlay.open({
+                  kind: 'initiative-hierarchy',
+                  mode: 'parent',
+                  organizationId: orgId,
+                  subject: initiativeObject,
+                  anchor: event.currentTarget,
+                });
+              }}
+            >
+              <CornerDownLeft aria-hidden className="size-5" />
+              {detail.parent ? detail.parent.name : 'Set parent'}
+            </Button>
           </EntityMetadataRow>
           {mutations.propsError ? (
             <p role="alert" className="text-error mt-2 text-sm">
@@ -380,14 +416,6 @@ export default function InitiativeDetailPage(): JSX.Element {
         // what makes the publish icon and the overflow icon provably the same size (CORE-28)
         // rather than the same size until someone edits one of them.
         <ControlGroup controlSize="xl">
-          <AthenaContextAction
-            label={`Open Athena for this ${initiativeNoun.toLowerCase()}`}
-            context={{
-              workspaceId: orgId,
-              source: { type: 'initiative', id: initiativeId, label: detail.name },
-            }}
-            variant="ghost"
-          />
           <PublishAction
             orgId={orgId}
             subjectKind="initiative"
@@ -429,17 +457,10 @@ export default function InitiativeDetailPage(): JSX.Element {
           label={`${initiativeNoun} sections`}
           items={[
             { value: 'overview', label: 'Overview' },
-            {
-              value: 'updates',
-              label: 'Updates',
-              ...(updates.length ? { count: updates.length } : {}),
-            },
-            {
-              value: 'resources',
-              label: 'Resources',
-              // Derived references included, so the badge matches what the tab lists.
-              ...(resourceCount ? { count: resourceCount } : {}),
-            },
+            { value: 'subinitiatives', label: 'Sub-initiatives' },
+            { value: 'work', label: 'Connected work' },
+            { value: 'updates', label: 'Updates' },
+            { value: 'resources', label: 'Resources' },
           ]}
         />
       }
@@ -575,8 +596,25 @@ export default function InitiativeDetailPage(): JSX.Element {
         </div>
       ) : null}
 
+      <InitiativeRelationshipPanels
+        tab={tab}
+        children={children}
+        connectedWork={detail.connectedWork}
+        initiativeNoun={initiativeNoun}
+        programNoun={programNoun}
+        projectNoun={projectNoun}
+        onAddSubinitiative={() => {
+          pickerOverlay.open({
+            kind: 'initiative-hierarchy',
+            mode: 'child',
+            organizationId: orgId,
+            subject: initiativeObject,
+          });
+        }}
+      />
+
       <div
-        className={`${tab === 'overview' ? 'flex' : 'hidden'} initiative-overview min-w-0 flex-col gap-10`}
+        className={`${tab === 'overview' ? 'flex' : 'hidden'} initiative-overview min-w-0 flex-col gap-6`}
         role="tabpanel"
         id="tabpanel-overview"
         aria-labelledby="tab-overview"
@@ -602,52 +640,6 @@ export default function InitiativeDetailPage(): JSX.Element {
           }}
           placeholder="Add the Initiative brief…"
         />
-        <section>
-          <h2 className="text-on-surface text-title-small mb-3">Sub-initiatives</h2>
-          {children.length ? (
-            <div className="bg-surface-container-low flex flex-col rounded-xl p-1">
-              {children.map((child) => (
-                <Link
-                  key={child.id}
-                  href={`/orgs/${child.organizationId}/initiatives/${child.id}`}
-                  className="hover:bg-surface-container-high flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors"
-                >
-                  <span className="min-w-0 truncate">{child.name}</span>
-                  <span className="text-on-surface-variant shrink-0">
-                    {INITIATIVE_STATUS_LABEL[child.status]}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="bg-surface-container-low text-on-surface-variant rounded-xl px-4 py-6 text-center text-sm">
-              Nothing's nested under this one yet.
-            </p>
-          )}
-        </section>
-        <section>
-          <h2 className="text-on-surface text-title-small mb-3">Connected work</h2>
-          {detail.connectedWork.length ? (
-            <div className="bg-surface-container-low flex flex-col rounded-xl p-1">
-              {detail.connectedWork.map((item) => (
-                <div
-                  key={`${item.kind}-${item.id}`}
-                  className="hover:bg-surface-container-high flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors"
-                >
-                  <span className="min-w-0 truncate">{item.name}</span>
-                  <span className="text-on-surface-variant ml-3 shrink-0">
-                    {item.kind === 'program' ? programNoun : projectNoun}
-                    {!item.direct ? ' · inherited' : ''}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="bg-surface-container-low text-on-surface-variant rounded-xl px-4 py-6 text-center text-sm">
-              No projects or programs linked to this yet.
-            </p>
-          )}
-        </section>
       </div>
 
       <style jsx global>{`

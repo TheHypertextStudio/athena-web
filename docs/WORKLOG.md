@@ -4631,6 +4631,34 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [OBJECT-SURFACES-001] Make a thing behave like itself everywhere
+
+- **Completed**: 2026-08-11
+- **Summary**: Added `ObjectSurface` and `ObjectListRow` as the standard object interaction
+  primitives. Initiatives now expose Open, Change parent, Add sub-initiative, and Move to top level
+  from the universal action system, while handle-free whole-row drag and the searchable hierarchy
+  picker share one mutation planner. Initiative detail now gives Sub-initiatives and Connected work
+  first-class count-free tabs built from the same object rows. Core detail pages stamp their object
+  identity into the shared layout, retain 40px identity targets when compact, and use entity-owned
+  Open actions. Redundant visible Athena buttons were removed from overview and detail surfaces;
+  the persistent Athena entry point and contextual menu action remain.
+- **Files Changed**: Shared web object/action/detail primitives, Initiative overview and detail
+  routes, Project/Program/Cycle/Team detail routes, Initiative aggregate API/types, shared UI styles,
+  focused tests, and the design/implementation specifications.
+- **Validation**: The full web suite passes 2,236 tests across 274 files; the Initiative aggregate
+  API file passes 40 tests; web, API, and types typechecks and lint pass; the production web and
+  service-worker build passes; and Playwright discovers the new Initiative objectness journey. The
+  live browser run could not reach application auth because the worktree web proxy failed TLS to
+  its local API hostname with `EPROTO` and a TLS internal error, so it is recorded as an environment
+  gate rather than visual-runtime proof.
+- **Learnings**: Object identity is a behavioral contract, not a row treatment. Drag, menus, detail
+  headers, and relationship lists stay coherent when they consume the same object reference and
+  action registry. Counts that do not answer a decision and local assistant buttons that duplicate
+  persistent access both weaken that contract.
+- **Retrospective**: Moving hierarchy semantics into a single planner made the drag gesture and the
+  explicit picker mutually testable instead of parallel implementations. The local TLS proxy should
+  be repaired separately so authenticated browser geometry checks are available to every worktree.
+
 ### [NAVIGATION-RECOVERY-001] Keep failed app navigation inside Docket
 
 - **Completed**: 2026-08-11

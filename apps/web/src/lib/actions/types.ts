@@ -35,6 +35,7 @@ export type ActionDomain =
   | 'initiative'
   | 'program'
   | 'cycle'
+  | 'team'
   | 'calendar'
   | 'workspace'
   | 'athena'

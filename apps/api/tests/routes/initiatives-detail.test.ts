@@ -490,13 +490,15 @@ describe('initiatives context hierarchy', () => {
     const aggregate = await writer.request(`/${root}/aggregate`);
     expect(aggregate.status).toBe(200);
     const body = await json<{
-      children: { id: string }[];
+      children: { id: string; parentInitiativeId: string; parentLinkId: string }[];
       connectedWork: { id: string; direct: boolean; inheritedThroughInitiativeId: string }[];
       labels: { id: string }[];
       resources: { title: string }[];
       rolledUpHealth: string | null;
     }>(aggregate);
-    expect(body.children).toMatchObject([{ id: child }]);
+    expect(body.children).toMatchObject([
+      { id: child, parentInitiativeId: root, parentLinkId: expect.any(String) },
+    ]);
     expect(body.connectedWork).toMatchObject([
       { id: projectId, direct: false, inheritedThroughInitiativeId: child },
     ]);

@@ -467,12 +467,19 @@ const initiativeAggregates = new Hono<AppEnv>()
       const children = childLinks.flatMap((link) => {
         const child = rowsById.get(link.childInitiativeId);
         return child
-          ? [toReference(child, orgId, orgNameById.get(child.organizationId) ?? '')]
+          ? [
+              {
+                ...toReference(child, orgId, orgNameById.get(child.organizationId) ?? ''),
+                parentInitiativeId: id,
+                parentLinkId: link.id,
+              },
+            ]
           : [];
       });
       return ok(c, InitiativeAggregateDetail, {
         ...baseDetail,
         contextOrganizationId: orgId,
+        parentLinkId: parentLink?.id ?? null,
         parent,
         children,
         connectedWork,

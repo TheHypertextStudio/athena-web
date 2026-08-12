@@ -11,7 +11,6 @@ import type {
 } from '@docket/types';
 import { InitiativeId } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
-import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, ChevronRight, Plus, Target } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
@@ -28,16 +27,20 @@ import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import {
   type InitiativeDragObject,
-  planReparent,
-  readInitiativeDragObject,
   selfOrDescendantPredicate,
 } from '@/components/initiatives/hierarchy-dnd';
+import {
+  initiativeDragObjectFromRef,
+  resolveInitiativeHierarchyMutation,
+} from '@/components/initiatives/initiative-hierarchy-mutations';
 import {
   buildInitiativeCatalog,
   HEALTH_LABEL,
   STATUS_LABEL,
 } from '@/components/initiatives/initiative-catalog';
 import { filterRows, sortRows } from '@/components/views/apply-view';
+import { ObjectSurface } from '@/components/objects/object-surface';
+import { readObjectPayload } from '@/components/dnd/drag-payload';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { useViewState } from '@/components/views/use-view-state';
@@ -52,7 +55,6 @@ import {
   useApiQuery,
   usePrefetchApi,
 } from '@/lib/query';
-import { entityDragSource } from '@/lib/entity-drag';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { userErrorMessage } from '@/lib/problem';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -528,7 +530,11 @@ export default function InitiativesListClient(): JSX.Element {
 
   const handleReparent = useCallback(
     (dragged: InitiativeDragObject, targetId: string | null): void => {
-      const plan = planReparent({ dragged, targetId, isSelfOrDescendant });
+      const plan = resolveInitiativeHierarchyMutation({
+        dragged,
+        targetId,
+        isSelfOrDescendant,
+      });
       if (plan.kind === 'create') {
         createLink.mutate({
           parentInitiativeId: plan.parentInitiativeId,
@@ -538,10 +544,10 @@ export default function InitiativesListClient(): JSX.Element {
         moveLink.mutate({
           linkId: plan.linkId,
           parentInitiativeId: plan.parentInitiativeId,
-          childInitiativeId: dragged.id,
+          childInitiativeId: plan.childInitiativeId,
         });
       } else if (plan.kind === 'detach') {
-        detachLink.mutate({ linkId: plan.linkId, childInitiativeId: dragged.id });
+        detachLink.mutate({ linkId: plan.linkId, childInitiativeId: plan.childInitiativeId });
       }
     },
     [createLink, moveLink, detachLink, isSelfOrDescendant],
@@ -666,7 +672,9 @@ export default function InitiativesListClient(): JSX.Element {
                   }}
                   onDrop={(event) => {
                     event.preventDefault();
-                    const dragged = readInitiativeDragObject(event.dataTransfer);
+                    const object = readObjectPayload(event.dataTransfer);
+                    const dragged =
+                      object?.kind === 'initiative' ? initiativeDragObjectFromRef(object) : null;
                     setDraggingId(null);
                     setDropTargetId(null);
                     if (dragged) handleReparent(dragged, null);
@@ -690,178 +698,173 @@ export default function InitiativesListClient(): JSX.Element {
                     draggingId !== null &&
                     draggingId !== item.id &&
                     !isSelfOrDescendant(draggingId, item.id);
-                  // The row is the drag source for the whole object: pressing anywhere inside it —
-                  // the icon, the name, any metadata cell — starts the same drag.
-                  const dragProps = dragSourceProps(
-                    entityDragSource(
-                      {
-                        kind: 'initiative',
-                        id: item.id,
-                        organizationId: item.organizationId,
-                        title: item.name,
-                        parentInitiativeId: item.parentInitiativeId,
-                        parentLinkId: item.parentLinkId,
-                      },
-                      {
-                        enabled: canReparent,
-                        onDragStart: () => {
-                          dragOccurredRef.current = true;
-                          setDraggingId(item.id);
-                        },
-                        onDragEnd: () => {
-                          setDraggingId(null);
-                          setDropTargetId(null);
-                          // Clear on the next tick so the post-drop synthesized click (dispatched
-                          // before this macrotask) is still suppressed, while later genuine clicks
-                          // navigate normally.
-                          window.setTimeout(() => {
-                            dragOccurredRef.current = false;
-                          }, 0);
-                        },
-                      },
-                    ),
-                  );
+                  const object = {
+                    kind: 'initiative' as const,
+                    id: item.id,
+                    organizationId: item.organizationId,
+                    title: item.name,
+                    meta: {
+                      parentInitiativeId: item.parentInitiativeId,
+                      parentLinkId: item.parentLinkId,
+                    },
+                  };
                   return (
-                    <div
+                    <ObjectSurface
                       key={item.id}
-                      role="row"
-                      aria-level={item.depth}
-                      aria-rowindex={rowIndex + 1}
-                      {...dragProps}
-                      className={`${dragProps?.className ?? ''} grid h-[72px] cursor-pointer grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] rounded-lg transition-colors ${draggingId === item.id ? 'opacity-50' : 'hover:bg-surface-container-high'} ${dropTargetId === item.id ? 'ring-primary bg-surface-container-high ring-2 ring-inset' : ''}`}
-                      onMouseEnter={() => {
-                        prefetch(initiativeDetailDef(item.organizationId, item.id));
+                      object={object}
+                      dragDisabled={!canReparent}
+                      surfaceId="initiatives-hierarchy"
+                      onDragStart={() => {
+                        dragOccurredRef.current = true;
+                        setDraggingId(item.id);
                       }}
-                      onClick={(event) => {
-                        // The name Link owns real-link semantics (new-tab, focus). This row-level
-                        // click is a mouse convenience: skip it when the click landed on an
-                        // interactive control (icon picker button, the name anchor, any button) or
-                        // when a drag just finished.
-                        if (dragOccurredRef.current) return;
-                        if ((event.target as HTMLElement).closest('a, button')) return;
-                        router.push(`/orgs/${item.organizationId}/initiatives/${item.id}`);
-                      }}
-                      onDragOver={(event) => {
-                        if (!isValidDropTarget) return;
-                        event.preventDefault();
-                        event.dataTransfer.dropEffect = 'move';
-                        if (dropTargetId !== item.id) setDropTargetId(item.id);
-                      }}
-                      onDragLeave={() => {
-                        setDropTargetId((current) => (current === item.id ? null : current));
-                      }}
-                      onDrop={(event) => {
-                        if (!isValidDropTarget) return;
-                        event.preventDefault();
-                        const dragged = readInitiativeDragObject(event.dataTransfer);
+                      onDragEnd={() => {
                         setDraggingId(null);
                         setDropTargetId(null);
-                        if (dragged) handleReparent(dragged, item.id);
+                        window.setTimeout(() => {
+                          dragOccurredRef.current = false;
+                        }, 0);
                       }}
                     >
-                      <div role="gridcell" className="relative h-full min-w-0">
-                        <HierarchyRails
-                          depth={item.depth}
-                          continuationDepths={continuationDepths}
-                          hasChildren={hasVisibleChildren}
-                          hasSummary={hasSummary}
-                          isLastSibling={isLastSibling}
-                        />
-                        <div
-                          className={`relative flex h-full min-w-0 ${hasSummary ? 'items-start pt-2' : 'items-center'}`}
-                          style={{ paddingLeft: `${itemLeft}px` }}
-                        >
-                          <InitiativeIconPicker
-                            display={item.display}
-                            initiativeName={item.name}
-                            editable={item.organizationId === orgId}
-                            pending={displayMutation.isPending}
-                            onChange={(iconKey, colorKey, customColor) => {
-                              displayMutation.mutate({
-                                initiativeId: item.id,
-                                iconKey,
-                                colorKey,
-                                customColor,
-                              });
-                            }}
+                      <div
+                        role="row"
+                        aria-level={item.depth}
+                        aria-rowindex={rowIndex + 1}
+                        className={`grid h-[72px] grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] rounded-lg transition-colors ${draggingId === item.id ? 'opacity-50' : 'hover:bg-surface-container-high'} ${dropTargetId === item.id ? 'ring-primary bg-surface-container-high ring-2 ring-inset' : ''}`}
+                        onMouseEnter={() => {
+                          prefetch(initiativeDetailDef(item.organizationId, item.id));
+                        }}
+                        onClick={(event) => {
+                          if (dragOccurredRef.current) return;
+                          if ((event.target as HTMLElement).closest('a, button')) return;
+                          router.push(`/orgs/${item.organizationId}/initiatives/${item.id}`);
+                        }}
+                        onDragOver={(event) => {
+                          if (!isValidDropTarget) return;
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = 'move';
+                          if (dropTargetId !== item.id) setDropTargetId(item.id);
+                        }}
+                        onDragLeave={() => {
+                          setDropTargetId((current) => (current === item.id ? null : current));
+                        }}
+                        onDrop={(event) => {
+                          if (!isValidDropTarget) return;
+                          event.preventDefault();
+                          const dropped = readObjectPayload(event.dataTransfer);
+                          const dragged =
+                            dropped?.kind === 'initiative'
+                              ? initiativeDragObjectFromRef(dropped)
+                              : null;
+                          setDraggingId(null);
+                          setDropTargetId(null);
+                          if (dragged) handleReparent(dragged, item.id);
+                        }}
+                      >
+                        <div role="gridcell" className="relative h-full min-w-0">
+                          <HierarchyRails
+                            depth={item.depth}
+                            continuationDepths={continuationDepths}
+                            hasChildren={hasVisibleChildren}
+                            hasSummary={hasSummary}
+                            isLastSibling={isLastSibling}
                           />
-                          <div className="ml-3 min-w-0 pt-0.5">
-                            <div className="flex min-w-0 items-center">
-                              {canReparent && canContribute ? (
-                                <EditableTitle
-                                  value={item.name}
-                                  onSave={(name) => {
-                                    renameInitiative.mutate({ id: item.id, name });
-                                  }}
-                                  canEdit
-                                  activate="doubleClick"
-                                  onActivate={() => {
-                                    router.push(
-                                      `/orgs/${item.organizationId}/initiatives/${item.id}`,
-                                    );
-                                  }}
-                                  ariaLabel="Initiative name"
-                                  className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold"
-                                />
-                              ) : (
-                                <Link
-                                  href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
-                                  title={item.name}
-                                  // The row owns dragging; keep the anchor from starting a link-drag.
-                                  draggable={false}
-                                  className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold hover:underline"
-                                >
-                                  {item.name}
-                                </Link>
-                              )}
-                              {item.organizationId !== orgId ? (
-                                <Badge className="ml-2 shrink-0" variant="outline">
-                                  {item.organizationName}
-                                </Badge>
+                          <div
+                            className={`relative flex h-full min-w-0 ${hasSummary ? 'items-start pt-2' : 'items-center'}`}
+                            style={{ paddingLeft: `${itemLeft}px` }}
+                          >
+                            <InitiativeIconPicker
+                              display={item.display}
+                              initiativeName={item.name}
+                              editable={item.organizationId === orgId}
+                              pending={displayMutation.isPending}
+                              onChange={(iconKey, colorKey, customColor) => {
+                                displayMutation.mutate({
+                                  initiativeId: item.id,
+                                  iconKey,
+                                  colorKey,
+                                  customColor,
+                                });
+                              }}
+                            />
+                            <div className="ml-3 min-w-0 pt-0.5">
+                              <div className="flex min-w-0 items-center">
+                                {canReparent && canContribute ? (
+                                  <EditableTitle
+                                    value={item.name}
+                                    onSave={(name) => {
+                                      renameInitiative.mutate({ id: item.id, name });
+                                    }}
+                                    canEdit
+                                    activate="doubleClick"
+                                    onActivate={() => {
+                                      router.push(
+                                        `/orgs/${item.organizationId}/initiatives/${item.id}`,
+                                      );
+                                    }}
+                                    ariaLabel="Initiative name"
+                                    className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold"
+                                  />
+                                ) : (
+                                  <Link
+                                    href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
+                                    title={item.name}
+                                    // The row owns dragging; keep the anchor from starting a link-drag.
+                                    draggable={false}
+                                    className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold hover:underline"
+                                  >
+                                    {item.name}
+                                  </Link>
+                                )}
+                                {item.organizationId !== orgId ? (
+                                  <Badge className="ml-2 shrink-0" variant="outline">
+                                    {item.organizationName}
+                                  </Badge>
+                                ) : null}
+                              </div>
+                              {item.summary ? (
+                                <p className="text-on-surface-variant mt-0.5 line-clamp-2 max-w-[44ch] text-xs leading-4">
+                                  {item.summary}
+                                </p>
                               ) : null}
                             </div>
-                            {item.summary ? (
-                              <p className="text-on-surface-variant mt-0.5 line-clamp-2 max-w-[44ch] text-xs leading-4">
-                                {item.summary}
-                              </p>
-                            ) : null}
                           </div>
                         </div>
-                      </div>
-                      <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
-                        {STATUS_LABEL[item.status]}
-                      </div>
-                      <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
-                        {item.health ? (
-                          <span
-                            className={`${HEALTH_TEXT_CLASS[item.health]} flex items-center gap-1.5 font-medium`}
-                          >
+                        <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
+                          {STATUS_LABEL[item.status]}
+                        </div>
+                        <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
+                          {item.health ? (
                             <span
-                              aria-hidden
-                              className={`${HEALTH_FILL_CLASS[item.health]} size-1.5 rounded-full`}
-                            />
-                            {HEALTH_LABEL[item.health]}
-                          </span>
-                        ) : (
-                          <span className="text-on-surface-variant">—</span>
-                        )}
+                              className={`${HEALTH_TEXT_CLASS[item.health]} flex items-center gap-1.5 font-medium`}
+                            >
+                              <span
+                                aria-hidden
+                                className={`${HEALTH_FILL_CLASS[item.health]} size-1.5 rounded-full`}
+                              />
+                              {HEALTH_LABEL[item.health]}
+                            </span>
+                          ) : (
+                            <span className="text-on-surface-variant">—</span>
+                          )}
+                        </div>
+                        <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
+                          {item.ownerName ?? <span className="text-on-surface-variant">—</span>}
+                        </div>
+                        <div
+                          role="gridcell"
+                          className="flex items-center px-3 whitespace-nowrap tabular-nums"
+                        >
+                          {targetDate ?? <span className="text-on-surface-variant">—</span>}
+                        </div>
+                        <div
+                          role="gridcell"
+                          className="flex items-center px-3 whitespace-nowrap tabular-nums"
+                        >
+                          {lastUpdate ?? <span className="text-on-surface-variant">Never</span>}
+                        </div>
                       </div>
-                      <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
-                        {item.ownerName ?? <span className="text-on-surface-variant">—</span>}
-                      </div>
-                      <div
-                        role="gridcell"
-                        className="flex items-center px-3 whitespace-nowrap tabular-nums"
-                      >
-                        {targetDate ?? <span className="text-on-surface-variant">—</span>}
-                      </div>
-                      <div
-                        role="gridcell"
-                        className="flex items-center px-3 whitespace-nowrap tabular-nums"
-                      >
-                        {lastUpdate ?? <span className="text-on-surface-variant">Never</span>}
-                      </div>
-                    </div>
+                    </ObjectSurface>
                   );
                 },
               )}

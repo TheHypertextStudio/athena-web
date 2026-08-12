@@ -9,7 +9,6 @@ import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
-import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
@@ -294,20 +293,11 @@ export default function TaskDetailPage(): JSX.Element {
             ) : null
           }
           actions={
-            <>
-              {/* Track this task. Deliberately unconditional on workflow state and on `canEdit`:
-                  time tracking is the viewer's own personal record of what they did, so it is not
-                  a content mutation and a task being blocked, done or someone else's does not stop
-                  a person having spent real time on it. */}
-              <TaskTimerButton taskId={taskId} title={task.title} controlSize="md" />
-              <AthenaContextAction
-                label="Have Athena handle this"
-                context={{
-                  workspaceId: orgId,
-                  source: { type: 'task', id: taskId, label: task.title },
-                }}
-              />
-            </>
+            // Track this task. Deliberately unconditional on workflow state and on `canEdit`:
+            // time tracking is the viewer's own personal record of what they did, so it is not a
+            // content mutation and a task being blocked, done or someone else's does not stop a
+            // person having spent real time on it.
+            <TaskTimerButton taskId={taskId} title={task.title} controlSize="md" />
           }
           overflow={
             <TaskHeaderOverflowMenu

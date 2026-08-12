@@ -131,10 +131,10 @@ describe('Projects experience contract', () => {
     expect(detail).toContain('<ResourcesTab');
   });
 
-  it('counts derived references in the Resources tab badge', () => {
+  it('keeps the Resources tab count-free while the panel still receives derived references', () => {
     const detail = source(detailPath);
-    // A badge reading 0 above visible derived rows reads as a bug, so the count must include them.
-    expect(detail).toContain('entityMentions.external.length');
-    expect(detail).toContain('entityMentions.entities.length');
+    expect(detail).not.toMatch(/value: 'resources'[^}]*badge:/);
+    expect(detail).toContain('mentionedExternal={entityMentions.external}');
+    expect(detail).toContain('mentionedEntities={entityMentions.entities}');
   });
 });

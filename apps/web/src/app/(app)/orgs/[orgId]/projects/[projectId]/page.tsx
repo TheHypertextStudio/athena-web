@@ -29,7 +29,6 @@ import { useAppParams, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
-import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { FreeformText } from '@/components/editor/freeform-text';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
@@ -234,31 +233,16 @@ export default function ProjectDetailPage(): JSX.Element {
     [participantIds, resolveActor],
   );
   const latestUpdate = updates[0];
-  const tabItems = useMemo<readonly TabsItem[]>(
-    () => [
-      { value: 'overview', label: 'Overview' },
-      { value: 'tasks', label: 'Tasks', count: milestoneTasks.length },
-      { value: 'updates', label: 'Updates', count: updates.length },
-      {
-        value: 'resources',
-        label: 'Resources',
-        // Counts what the tab actually lists, derived references included — a badge reading 0
-        // above four visible rows reads as a bug.
-        count: resources.length + entityMentions.external.length + entityMentions.entities.length,
-      },
-    ],
-    [
-      milestoneTasks.length,
-      resources.length,
-      updates.length,
-      entityMentions.external.length,
-      entityMentions.entities.length,
-    ],
-  );
+  const tabItems: readonly TabsItem[] = [
+    { value: 'overview', label: 'Overview' },
+    { value: 'tasks', label: 'Tasks' },
+    { value: 'updates', label: 'Updates' },
+    { value: 'resources', label: 'Resources' },
+  ];
 
   if (detailQ.isPending) {
     // placeholder: the project's own record — its breadcrumb trail, name, summary, and the
-    // milestone-grouped tasks, updates and resources beneath it (including the per-tab counts).
+    // milestone-grouped tasks, updates and resources beneath it.
     // The route carries only a project id, so none of this has a value to render before the read.
     return (
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
@@ -283,6 +267,12 @@ export default function ProjectDetailPage(): JSX.Element {
 
   return (
     <EntityDetailLayout
+      object={{
+        kind: 'project',
+        id: projectId,
+        organizationId: orgId,
+        title: project.name,
+      }}
       icon={
         <InitiativeIconPicker
           display={
@@ -383,14 +373,6 @@ export default function ProjectDetailPage(): JSX.Element {
         // what makes the publish icon and the overflow icon provably the same size (CORE-28)
         // rather than the same size until someone edits one of them.
         <ControlGroup controlSize="xl">
-          <AthenaContextAction
-            label="Open Athena for this project"
-            context={{
-              workspaceId: orgId,
-              source: { type: 'project', id: projectId, label: project.name },
-            }}
-            variant="ghost"
-          />
           <PublishAction
             orgId={orgId}
             subjectKind="project"

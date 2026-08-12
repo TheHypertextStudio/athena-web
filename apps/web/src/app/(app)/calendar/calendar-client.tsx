@@ -29,7 +29,6 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
-import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
 import CreateBlockForm from '@/components/calendar/create-block-form';
 import { resolveScheduleTimezone, useScheduleDisplayDate } from '@/components/scheduling';
@@ -243,47 +242,16 @@ export default function CalendarClient(): JSX.Element {
           />
         }
         createControl={
-          <>
-            {/*
-              The contextual Athena door collapses to its glyph like every other trailing control
-              rather than disappearing. It used to be hidden below `@4xl`, which meant that on a
-              1440px desktop with the rail docked — a perfectly ordinary layout — it was the one
-              control in the row that vanished while Calendars, Display and New sat beside it as
-              icons. Now only its *wording* is conditional.
-
-              `AthenaContextAction` hard-codes `min-h-10` and inherits `Button`'s 24px glyph, which
-              would make it the one control in the row at a different height, so the row's shared
-              geometry is imposed from this wrapper: the descendant selectors outrank the button's
-              own utilities, which is what actually lands it. The two steps mirror
-              `CALENDAR_CONTROL_CLASS` — a 44px touch target while the control is icon-only, 32px
-              once the row is wide enough to carry labels.
-            */}
-            <span className="hidden shrink-0 @lg:flex [&_button_svg]:size-4 [&>button]:min-h-11 [&>button]:min-w-11 @2xl:[&>button]:min-h-8 @2xl:[&>button]:min-w-8">
-              <AthenaContextAction
-                label={
-                  openItemId ? 'Open Athena for this calendar item' : 'Open Athena for Calendar'
-                }
-                text="Athena"
-                labelFrom="@4xl"
-                context={
-                  openItemId
-                    ? { source: { type: 'calendar_item', id: openItemId, label: heading } }
-                    : null
-                }
-                variant="ghost"
-              />
-            </span>
-            <CreateBlockForm
-              displayTimezone={displayTimezone}
-              layers={dateAxis.layers}
-              preferences={preferences}
-              selection={selection}
-              selectionAnchorRef={selection ? selectionAnchorRef : undefined}
-              onSelectionConsumed={() => {
-                setSelection(null);
-              }}
-            />
-          </>
+          <CreateBlockForm
+            displayTimezone={displayTimezone}
+            layers={dateAxis.layers}
+            preferences={preferences}
+            selection={selection}
+            selectionAnchorRef={selection ? selectionAnchorRef : undefined}
+            onSelectionConsumed={() => {
+              setSelection(null);
+            }}
+          />
         }
       />
 

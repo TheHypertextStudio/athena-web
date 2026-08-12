@@ -26,12 +26,12 @@ The shared header has three conceptual layers:
 2. An expanded layer containing the optional cover treatment, subtitle, and metadata.
 3. A flow-owned collapse runway that scrolls away without changing size.
 
-At the top of the page, the glyph occupies its own row above the title, and the title uses the
-expanded headline token and may wrap. As the runway is consumed, the title continuously
-interpolates to the compact title token, the glyph scales down and moves beside the title,
-secondary context fades and clears, and the tabs rise into their pinned position. Once the runway
-is consumed, the header remains fully compact with glyph and title inline. The compact title is a
-single truncated line.
+At the top of the page, the identity target occupies its own row above the title, and the title uses
+the expanded headline token and may wrap. As the runway is consumed, the title continuously
+interpolates to the compact title token, the identity target moves beside the title without
+shrinking below its standard 40px size, secondary context fades and clears, and the tabs rise into
+their pinned position. Once the runway is consumed, the header remains fully compact with identity
+and title inline. The compact title is a single truncated line.
 
 Covered headers retain a larger expanded composition and collapse distance. Coverless headers
 start denser and use a shorter runway sized for their secondary context. Both variants resolve to
@@ -70,7 +70,8 @@ Behavior-focused coverage will prove that:
 - Covered and coverless headers both reach the same fully compact state.
 - A short coverless document cannot strand the header midway.
 - The title size decreases continuously and reaches the compact design token.
-- The glyph begins on its own expanded row and finishes inline with the compact title.
+- The identity target begins on its own expanded row and finishes inline with the compact title at
+  the same standard 40px size.
 - Secondary context is fully visible at the top and fully absent after collapse.
 - Tabs and document content do not jump or leave empty space.
 - Long titles wrap while expanded and truncate when compact.

@@ -29,7 +29,6 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { formatDay } from '@/components/date-picker';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { OrgChip } from '@/components/org-chip';
@@ -130,10 +129,7 @@ export default function AllTasksClient(): JSX.Element {
     <Stack gap={4} className="mx-auto h-full w-full max-w-4xl p-4 @2xl:p-6">
       <Row as="header" justify="between">
         <h1 className="text-on-surface text-title-large">Tasks</h1>
-        <Row gap={2}>
-          <AthenaContextAction label="Open Athena for tasks" variant="ghost" />
-          {sorted.length > 0 ? <SortToggle sort={sort} onSort={setSort} /> : null}
-        </Row>
+        {sorted.length > 0 ? <SortToggle sort={sort} onSort={setSort} /> : null}
       </Row>
 
       {/* placeholder: the caller's task rows — how many they have and each one's title, state,

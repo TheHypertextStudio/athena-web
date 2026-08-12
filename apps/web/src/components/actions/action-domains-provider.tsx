@@ -22,6 +22,8 @@
  */
 import type { JSX, ReactNode } from 'react';
 
+import { useRegisterEntityNavigationActions } from '@/components/actions/entity-navigation-actions';
+import { useRegisterInitiativeActions } from '@/components/initiatives/initiative-actions';
 import { useRegisterTaskActions } from '@/components/tasks/task-actions';
 
 /** Props for {@link ActionDomainsProvider}. */
@@ -39,6 +41,8 @@ export interface ActionDomainsProviderProps {
 export default function ActionDomainsProvider({
   children,
 }: ActionDomainsProviderProps): JSX.Element {
+  useRegisterEntityNavigationActions();
+  useRegisterInitiativeActions();
   useRegisterTaskActions();
   return <>{children}</>;
 }

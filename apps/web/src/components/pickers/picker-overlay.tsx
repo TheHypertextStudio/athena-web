@@ -28,6 +28,7 @@ import {
 
 import type { ObjectRef } from '@/lib/actions';
 
+import { InitiativeHierarchyPickerOverlay } from '../initiatives/initiative-hierarchy-picker-overlay';
 import { LabelPickerOverlay } from './label-picker-overlay';
 
 /** A request to edit the label set of one or more objects. */
@@ -47,10 +48,22 @@ export interface LabelPickerRequest {
   readonly anchor?: HTMLElement | null;
 }
 
+/** A request to choose a parent for an Initiative or move another Initiative beneath it. */
+export interface InitiativeHierarchyPickerRequest {
+  readonly kind: 'initiative-hierarchy';
+  readonly mode: 'parent' | 'child';
+  readonly organizationId: string;
+  readonly subject: ObjectRef & { readonly kind: 'initiative' };
+  readonly anchor?: HTMLElement | null;
+}
+
+/** Every picker the single app overlay can move to an invoking object. */
+export type PickerOverlayRequest = LabelPickerRequest | InitiativeHierarchyPickerRequest;
+
 /** What `usePickerOverlay()` exposes. */
 export interface PickerOverlayApi {
-  /** Open the labels popover for a request. Replaces any request already open. */
-  readonly open: (request: LabelPickerRequest) => void;
+  /** Open the requested object picker. Replaces any request already open. */
+  readonly open: (request: PickerOverlayRequest) => void;
 }
 
 const PickerOverlayContext = createContext<PickerOverlayApi | null>(null);
@@ -84,7 +97,7 @@ export interface PickerOverlayProviderProps {
  * the same "exactly one" reason `InteractionProvider` is mounted exactly once.
  */
 export function PickerOverlayProvider({ children }: PickerOverlayProviderProps): JSX.Element {
-  const [request, setRequest] = useState<LabelPickerRequest | null>(null);
+  const [request, setRequest] = useState<PickerOverlayRequest | null>(null);
   // Forces a clean remount of LabelPickerOverlay per open() call, so its internal "resolved
   // current, seeded once" state and its anchor ref (captured at mount) never leak across requests.
   const sequenceRef = useRef(0);
@@ -103,13 +116,23 @@ export function PickerOverlayProvider({ children }: PickerOverlayProviderProps):
     <PickerOverlayContext.Provider value={api}>
       {children}
       {request ? (
-        <LabelPickerOverlay
-          key={sequenceRef.current}
-          request={request}
-          onClose={() => {
-            setRequest(null);
-          }}
-        />
+        request.kind === 'labels' ? (
+          <LabelPickerOverlay
+            key={sequenceRef.current}
+            request={request}
+            onClose={() => {
+              setRequest(null);
+            }}
+          />
+        ) : (
+          <InitiativeHierarchyPickerOverlay
+            key={sequenceRef.current}
+            request={request}
+            onClose={() => {
+              setRequest(null);
+            }}
+          />
+        )
       ) : null}
     </PickerOverlayContext.Provider>
   );

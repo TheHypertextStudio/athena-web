@@ -51,9 +51,6 @@ export default function ProgramDetailPage(): JSX.Element {
   const projectNounCased = useVocabulary('project');
 
   const detailKey = queryKeys.program(orgId, programId);
-  // Same key `ProgramWorkView` builds internally for its own task-list read, so the tab badge's
-  // count and the tab's own content share one cached fetch instead of two round trips.
-  const workTasksKey = useMemo(() => [...detailKey, 'tasks'] as const, [detailKey]);
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const [tab, setTab] = useState<TabId>('overview');
@@ -70,15 +67,6 @@ export default function ProgramDetailPage(): JSX.Element {
   const members = detail?.members ?? [];
   const agents = detail?.agents ?? [];
   const roles = detail?.roles ?? [];
-
-  const workTasksQ = useApiQuery(
-    apiQueryOptions(
-      workTasksKey,
-      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: { programId } }),
-      "Could not load this program's work.",
-    ),
-  );
-  const workCount = workTasksQ.data?.items.length ?? 0;
 
   const updatesQ = useApiQuery(
     apiQueryOptions(
@@ -134,31 +122,16 @@ export default function ProgramDetailPage(): JSX.Element {
     [members],
   );
 
-  const tabs: readonly TabsItem[] = useMemo(
-    () => [
-      { value: 'overview', label: 'Overview' },
-      {
-        value: 'projects',
-        label: 'Projects',
-        ...(program?.rollup.projects ? { count: program.rollup.projects } : {}),
-      },
-      {
-        value: 'work',
-        label: 'Work',
-        ...(workCount ? { count: workCount } : {}),
-      },
-      {
-        value: 'updates',
-        label: 'Updates',
-        ...(updates.length ? { count: updates.length } : {}),
-      },
-    ],
-    [program?.rollup.projects, workCount, updates.length],
-  );
+  const tabs: readonly TabsItem[] = [
+    { value: 'overview', label: 'Overview' },
+    { value: 'projects', label: 'Projects' },
+    { value: 'work', label: 'Work' },
+    { value: 'updates', label: 'Updates' },
+  ];
 
   if (detailQ.isPending) {
-    // placeholder: the program's own record — name, summary, the metric strip, which detail tabs
-    // have content (and their counts), and the projects under it. The route carries only a program
+    // placeholder: the program's own record — name, summary, the metric strip, detail tabs,
+    // and the projects under it. The route carries only a program
     // id; even the tab row's counts come from the same read.
     return (
       <PageContainer>
@@ -195,6 +168,12 @@ export default function ProgramDetailPage(): JSX.Element {
 
   return (
     <EntityDetailLayout
+      object={{
+        kind: 'program',
+        id: programId,
+        organizationId: orgId,
+        title: program.name,
+      }}
       icon={
         <span className="flex size-10 shrink-0 items-center justify-center">
           <EntityIconGlyph iconKey="layers" colorKey="primary" customColor={null} />

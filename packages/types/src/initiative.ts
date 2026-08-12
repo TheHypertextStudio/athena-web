@@ -318,6 +318,14 @@ export const InitiativeReference = z.object({
 /** Compact Initiative reference value. */
 export type InitiativeReference = z.infer<typeof InitiativeReference>;
 
+/** A child reference that retains the hierarchy edge required to move it from any surface. */
+export const InitiativeHierarchyReference = InitiativeReference.extend({
+  parentInitiativeId: InitiativeId,
+  parentLinkId: Id,
+});
+/** Initiative child reference with complete hierarchy interaction context. */
+export type InitiativeHierarchyReference = z.infer<typeof InitiativeHierarchyReference>;
+
 /** One visible row in the context hierarchy overview. */
 export const InitiativeOverviewItem = InitiativeOut.extend({
   display: EntityDisplayOut,
@@ -380,8 +388,9 @@ export type InitiativeConnectedWork = z.infer<typeof InitiativeConnectedWork>;
 /** Aggregate document-detail read in one workspace hierarchy context. */
 export const InitiativeAggregateDetail = InitiativeDetail.extend({
   contextOrganizationId: OrganizationId,
+  parentLinkId: Id.nullable(),
   parent: InitiativeReference.nullable(),
-  children: z.array(InitiativeReference),
+  children: z.array(InitiativeHierarchyReference),
   connectedWork: z.array(InitiativeConnectedWork),
   labels: z.array(LabelOut),
   resources: z.array(AttachmentOut),

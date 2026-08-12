@@ -80,11 +80,11 @@ describe('marketing product screenshots', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows an approved MCP client in Docket settings', () => {
+  it('shows a connected MCP app without implying a client approval program', () => {
     render(<AgentsStrip />);
 
     expect(
-      screen.getByRole('img', { name: 'Claude Desktop approved in Docket' }),
+      screen.getByRole('img', { name: 'A connected MCP app in Docket settings' }),
     ).toBeInTheDocument();
   });
 });

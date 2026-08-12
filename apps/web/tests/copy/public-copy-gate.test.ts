@@ -20,6 +20,7 @@ const PUBLIC_COPY_FILES = [
   'app/(app)/billing/return/page.tsx',
   'components/settings/billing-settings.tsx',
   'components/marketing/hero.tsx',
+  'components/marketing/agents-strip.tsx',
   'components/marketing/closing-section.tsx',
   'components/marketing/marketing-cta.tsx',
   'components/marketing/pricing-products.tsx',
@@ -61,6 +62,7 @@ describe('public copy gate', () => {
     'nonprofit pricing',
     'pricing tier',
     'plan tier',
+    'Approved AI clients',
   ])('does not contain the generated-copy phrase %s', (phrase) => {
     expect(publicCopy.toLowerCase()).not.toContain(phrase.toLowerCase());
   });

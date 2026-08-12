@@ -65,7 +65,7 @@
 
 ### [MARKETING-SHIP-002] Replace product placeholders and prove the production release
 
-- **Status**: BLOCKED
+- **Status**: IN_PROGRESS
 - **Started**: 2026-08-11
 - **Priority**: P0
 - **Description**: Replace every dashed marketing placeholder with a real Docket screenshot built
@@ -87,6 +87,10 @@
         unless the complete Stripe runtime and Docket Pro price bindings exist.
   - [x] Run the release policies without Turbo cache and clear the resulting design-token and
         application-owned error-copy violations.
+  - [x] Remove the public claim that Docket approves particular MCP clients; the screenshot now
+        describes the product capability without presenting a vendor permission model.
+  - [ ] Replace the MCP vendor allowlists with OAuth-bound, client-neutral interoperability.
+  - [ ] Add idempotent Stripe sandbox and production provisioning to the standard bootstrap path.
   - [ ] Prove Stripe checkout, webhook activation, access, management, cancellation, and return routing.
   - [ ] Deploy the validated release and verify the production customer journey.
 - **Files Changed**: Deterministic marketing capture tooling; nine JPEG application captures;

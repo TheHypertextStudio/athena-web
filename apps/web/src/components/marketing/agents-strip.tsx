@@ -5,12 +5,11 @@ import { Text } from '@docket/ui/primitives';
 import { ProductScreenshot } from './product-screenshot';
 
 /**
- * Let your agents work with you — the shortest section on the page.
+ * Show the Docket Pro MCP surface without implying a vendor approval program.
  *
  * @remarks
- * Deliberately smaller than the sections above it. Agents matter, but an equal-sized block here
- * would put connecting an MCP client on the same footing as tracking a task, which is not the
- * order someone evaluates the product in.
+ * Deliberately smaller than the sections above it. MCP access is one Docket Pro capability, not
+ * the product's primary positioning and not a list of clients Docket has chosen to permit.
  *
  * The plate is a wide strip rather than a screen, since what there is to show is a client window
  * next to Docket rather than a Docket surface.
@@ -26,7 +25,7 @@ export function AgentsStrip(): JSX.Element {
             tone="inherit"
             className="font-display text-ink text-balance"
           >
-            Approved AI clients
+            MCP connections
           </Text>
           <Text
             as="p"
@@ -34,12 +33,12 @@ export function AgentsStrip(): JSX.Element {
             tone="inherit"
             className="text-ink-muted mt-3 text-balance"
           >
-            Approved AI clients can work from existing Docket records.
+            Docket Pro includes an MCP endpoint for work stored in Docket.
           </Text>
         </div>
         <ProductScreenshot
           src="/marketing/connected-apps.jpg"
-          alt="Claude Desktop approved in Docket"
+          alt="A connected MCP app in Docket settings"
           aspect="aspect-[2/1]"
           tone="paper"
           position="center"

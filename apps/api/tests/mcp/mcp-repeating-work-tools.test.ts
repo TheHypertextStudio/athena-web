@@ -58,10 +58,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
   );
   const email = `${slug}@example.test`;
   const user = first(
-    await db
-      .insert(schema.user)
-      .values({ name: 'Ada', email })
-      .returning({ id: schema.user.id }),
+    await db.insert(schema.user).values({ name: 'Ada', email }).returning({ id: schema.user.id }),
   );
   first(
     await db

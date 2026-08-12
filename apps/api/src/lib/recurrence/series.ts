@@ -794,10 +794,7 @@ async function appendFutureSeriesRevision(
     if (compareCalendarDates(input.effectiveFrom, asOf) < 0) {
       throw new ConflictError('Future schedule changes cannot begin in the past');
     }
-    if (
-      latest[0] &&
-      compareCalendarDates(input.effectiveFrom, latest[0].effectiveFrom) <= 0
-    ) {
+    if (latest[0] && compareCalendarDates(input.effectiveFrom, latest[0].effectiveFrom) <= 0) {
       throw new ConflictError('Future schedule changes must follow the latest schedule version');
     }
     const process = await latestProcessRevision(tx, input.organizationId, series.definitionId);

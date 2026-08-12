@@ -146,9 +146,10 @@ describe('RecurrenceSeriesPage', () => {
     expect(screen.getByRole('button', { name: 'Move' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Mark complete' })).toBeTruthy();
     expect(screen.getByText(/Changes apply from the selected date forward/)).toBeTruthy();
-    const earliest = new Date().toISOString().slice(0, 10) > '2026-08-12'
-      ? new Date().toISOString().slice(0, 10)
-      : '2026-08-13';
+    const earliest =
+      new Date().toISOString().slice(0, 10) > '2026-08-12'
+        ? new Date().toISOString().slice(0, 10)
+        : '2026-08-13';
     expect(
       await screen.findByRole('button', {
         name: `Apply from — ${new Intl.DateTimeFormat('en', {

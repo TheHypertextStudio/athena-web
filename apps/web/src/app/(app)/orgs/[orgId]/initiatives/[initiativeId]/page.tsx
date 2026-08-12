@@ -19,7 +19,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Skeleton,
   Tabs,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
@@ -47,12 +46,14 @@ import {
 import { memberActorOptions } from '@/components/pickers/options';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { PublishAction } from '@/components/publishing/publish-action';
+import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
 import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityDetailLayout,
   EntityMetadataRow,
 } from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
+import { initiativeRecordDef } from '@/lib/entity-records';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { queryKeys, apiQueryOptions, useApiMutation, useApiQuery, unwrap } from '@/lib/query';
 import { useCreateLabel } from '@/components/labels/queries';
@@ -85,6 +86,9 @@ export default function InitiativeDetailPage(): JSX.Element {
   const programNoun = useVocabulary('program');
   const projectNoun = useVocabulary('project');
   const detailQ = useApiQuery(initiativeDetailDef(orgId, initiativeId));
+  // The initiative's own row, read apart from the composite above it, so the masthead can paint
+  // from whatever arrived first — the composer that just created it, a warmed list, or one read.
+  const recordQ = useApiQuery(initiativeRecordDef(orgId, initiativeId));
   const data = detailQ.data;
   const detail = data?.detail;
   const updatesKey = [...queryKeys.initiative(orgId, initiativeId), 'updates'] as const;
@@ -231,24 +235,30 @@ export default function InitiativeDetailPage(): JSX.Element {
     },
   });
 
-  if (detailQ.isPending)
-    // placeholder: the initiative's own record — its breadcrumb trail, its name, and the projects,
-    // health and timeline beneath it. The route carries only an id, so nothing here has a
-    // compile-time value to render instead.
-    return (
-      <div className="mx-auto max-w-7xl space-y-5 p-6">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="h-12 w-2/3" />
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
-  if (detailQ.isError || !detail)
+  // Failure and absence are decided first: a read that finished without an initiative is a
+  // missing initiative, not a slow one, and must not sit under a placeholder forever.
+  if (detailQ.isError || (!detailQ.isPending && !detail))
     return (
       <p role="alert" className="text-error mx-auto max-w-7xl p-6">
         {detailQ.isError
           ? userErrorMessage(detailQ.error, 'Could not load this initiative.')
           : 'Initiative not found.'}
       </p>
+    );
+  if (!detail)
+    // placeholder: the initiative's own record — its breadcrumb trail, its name, and the projects,
+    // health and timeline beneath it. The route carries only an id, so nothing here has a
+    // compile-time value to render instead.
+    return (
+      <EntityDetailSkeleton
+        label="Loading initiative"
+        // The row often lands well before the aggregate that fills the body — seeded by the
+        // composer that created it, or warmed by the list the reader came from. Showing the real
+        // name the moment it exists is the difference between a page that is loading and a page
+        // that gives no sign of what it is.
+        title={recordQ.data?.name}
+        subtitle={recordQ.data?.summary ?? undefined}
+      />
     );
 
   const resolveActor = (actorId: string | null | undefined) => {

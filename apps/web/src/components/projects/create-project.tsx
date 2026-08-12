@@ -55,6 +55,7 @@ import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { seedProjectRecord } from '@/lib/entity-records';
 import { queryKeys } from '@/lib/query';
 
 import { ProjectComposerPickers } from './project-form-pickers';
@@ -505,6 +506,9 @@ function GlobalProjectComposerBody({
             invalidationKeys,
             invalidate: (queryKey) => {
               void queryClient.invalidateQueries({ queryKey });
+            },
+            seed: () => {
+              seedProjectRecord(queryClient, projectOrgId, project);
             },
             openDestination: () => {
               router.push(`/orgs/${projectOrgId}/projects/${project.id}`);

@@ -10,6 +10,15 @@
 export const queryKeys = {
   projects: (orgId: string) => ['org', orgId, 'projects'] as const,
   project: (orgId: string, projectId: string) => ['org', orgId, 'projects', projectId] as const,
+  // The entity's own row, separate from the composite detail read above it.
+  //
+  // A detail page needs two different things: its masthead (icon, name, summary, properties) is
+  // one row, while its tab panels need the dozen-request composite. Keeping them apart is what
+  // lets the identity paint immediately — seeded straight from a create response, restored from a
+  // list, or fetched as a single cheap read — instead of waiting on the whole composite. Nested
+  // under the detail key so any coarse invalidation still reaches it.
+  projectRecord: (orgId: string, projectId: string) =>
+    ['org', orgId, 'projects', projectId, 'record'] as const,
   tasks: (orgId: string) => ['org', orgId, 'tasks'] as const,
   task: (orgId: string, taskId: string) => ['org', orgId, 'tasks', taskId] as const,
   // Nested under the task's own detail key on purpose: every task mutation already invalidates
@@ -32,9 +41,15 @@ export const queryKeys = {
   workspaceDomains: (orgId: string) => ['org', orgId, 'publishing', 'domains'] as const,
   programs: (orgId: string) => ['org', orgId, 'programs'] as const,
   program: (orgId: string, programId: string) => ['org', orgId, 'programs', programId] as const,
+  /** The program's own row — see {@link queryKeys.projectRecord} for why this is separate. */
+  programRecord: (orgId: string, programId: string) =>
+    ['org', orgId, 'programs', programId, 'record'] as const,
   initiatives: (orgId: string) => ['org', orgId, 'initiatives'] as const,
   initiative: (orgId: string, initiativeId: string) =>
     ['org', orgId, 'initiatives', initiativeId] as const,
+  /** The initiative's own row — see {@link queryKeys.projectRecord} for why this is separate. */
+  initiativeRecord: (orgId: string, initiativeId: string) =>
+    ['org', orgId, 'initiatives', initiativeId, 'record'] as const,
   cycles: (orgId: string) => ['org', orgId, 'cycles'] as const,
   cycle: (orgId: string, cycleId: string) => ['org', orgId, 'cycles', cycleId] as const,
   teams: (orgId: string) => ['org', orgId, 'teams'] as const,

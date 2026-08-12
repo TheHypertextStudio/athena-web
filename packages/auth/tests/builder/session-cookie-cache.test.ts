@@ -28,7 +28,6 @@ process.env['ATHENA_ASYNC_RUNNER_ENABLED'] = 'false';
 const captureMailer: Mailer = {
   send: async (_message: OutboundMessage) => undefined,
 };
-void captureMailer;
 
 beforeAll(async () => {
   const { db } = await import('@docket/db');

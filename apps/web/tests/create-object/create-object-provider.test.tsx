@@ -97,6 +97,87 @@ const BRAVO_WORKSPACE: OrgSummary = {
 
 const WORKSPACES: readonly OrgSummary[] = [ALPHA_WORKSPACE, BRAVO_WORKSPACE];
 
+describe('completeCreateObject — seeding the created object', () => {
+  it('seeds the cache before opening the destination', () => {
+    const order: string[] = [];
+
+    completeCreateObject({
+      created: { id: 'project_1' },
+      initialWorkspaceId: ALPHA_ID,
+      targetWorkspaceId: ALPHA_ID,
+      sameWorkspaceCompletion: 'open',
+      invalidationKeys: [],
+      invalidate: vi.fn(),
+      seed: () => order.push('seed'),
+      openDestination: () => order.push('open'),
+    });
+
+    // Order is the whole point: the destination page reads the cache as it mounts, so a seed
+    // that lands after navigation is a seed the page has already rendered a skeleton instead of.
+    expect(order).toEqual(['seed', 'open']);
+  });
+
+  it('seeds even when the launcher chose to stay put', () => {
+    const seed = vi.fn();
+    const openDestination = vi.fn();
+
+    completeCreateObject({
+      created: { id: 'project_1' },
+      initialWorkspaceId: ALPHA_ID,
+      targetWorkspaceId: ALPHA_ID,
+      sameWorkspaceCompletion: 'stay',
+      invalidationKeys: [],
+      invalidate: vi.fn(),
+      seed,
+      openDestination,
+    });
+
+    // The object is just as real when the composer stays open; the next thing that opens it
+    // should still find it cached.
+    expect(seed).toHaveBeenCalledOnce();
+    expect(openDestination).not.toHaveBeenCalled();
+  });
+
+  it('still navigates when seeding throws', () => {
+    const openDestination = vi.fn();
+
+    expect(() => {
+      completeCreateObject({
+        created: { id: 'project_1' },
+        initialWorkspaceId: ALPHA_ID,
+        targetWorkspaceId: ALPHA_ID,
+        sameWorkspaceCompletion: 'open',
+        invalidationKeys: [],
+        invalidate: vi.fn(),
+        seed: () => {
+          throw new Error('cache write failed');
+        },
+        openDestination,
+      });
+    }).not.toThrow();
+
+    // Seeding is an optimization over a page that can always fetch for itself. Letting it break
+    // navigation would trade a slower screen for no screen at all.
+    expect(openDestination).toHaveBeenCalledOnce();
+  });
+
+  it('completes normally when no seed is supplied', () => {
+    const openDestination = vi.fn();
+
+    completeCreateObject({
+      created: { id: 'project_1' },
+      initialWorkspaceId: ALPHA_ID,
+      targetWorkspaceId: ALPHA_ID,
+      sameWorkspaceCompletion: 'open',
+      invalidationKeys: [],
+      invalidate: vi.fn(),
+      openDestination,
+    });
+
+    expect(openDestination).toHaveBeenCalledOnce();
+  });
+});
+
 describe('completeCreateObject', () => {
   it('invalidates destination keys and runs a same-workspace stay callback without routing', () => {
     const invalidate = vi.fn();

@@ -3,7 +3,7 @@
 import { type Priority } from '@docket/types';
 import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Skeleton } from '@docket/ui/primitives';
+import { Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
 import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
@@ -192,15 +192,25 @@ export default function TaskDetailPage(): JSX.Element {
     // current values are the whole point of rendering them, its description, and its subtasks,
     // comments and relations. The route carries only a task id.
     return (
+      // The same container, header block and two-column split the loaded page uses, so nothing
+      // moves when the read resolves. A single column here was the visible bug: the content
+      // column jumped left the moment the 18rem property rail appeared beside it.
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-        <Skeleton className="h-9 w-2/3" />
-        <div className="flex gap-2">
-          <Skeleton className="h-8 w-32" />
-          <Skeleton className="h-8 w-32" />
-          <Skeleton className="h-8 w-24" />
+        <header className="flex flex-col gap-4">
+          <SkeletonText scale="title" className="w-2/3 max-w-lg" />
+          <div className="flex flex-wrap gap-2">
+            <SkeletonChip className="w-32" />
+            <SkeletonChip className="w-32" />
+            <SkeletonChip className="w-24" />
+          </div>
+        </header>
+        <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="flex flex-col gap-6">
+            <Skeleton className="h-32 w-full rounded-lg" />
+            <Skeleton className="h-48 w-full rounded-lg" />
+          </div>
+          <Skeleton className="h-64 w-full rounded-lg" />
         </div>
-        <Skeleton className="h-32 w-full rounded-lg" />
-        <Skeleton className="h-48 w-full rounded-lg" />
       </div>
     );
   }

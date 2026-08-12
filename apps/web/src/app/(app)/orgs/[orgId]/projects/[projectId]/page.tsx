@@ -19,7 +19,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Skeleton,
   Tabs,
   type TabsItem,
 } from '@docket/ui/primitives';
@@ -45,6 +44,7 @@ import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { projectStatusOf } from '@/components/project-detail/project-config';
+import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { useActiveOrg } from '@/components/active-org';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
@@ -80,6 +80,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const {
     detailKey,
     detailQ,
+    identityPending,
     updatesQ,
     resourcesQ,
     detail,
@@ -240,18 +241,15 @@ export default function ProjectDetailPage(): JSX.Element {
     { value: 'resources', label: 'Resources' },
   ];
 
-  if (detailQ.isPending) {
+  if (identityPending) {
     // placeholder: the project's own record — its breadcrumb trail, name, summary, and the
     // milestone-grouped tasks, updates and resources beneath it.
     // The route carries only a project id, so none of this has a value to render before the read.
-    return (
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
-        <Skeleton className="h-5 w-72" />
-        <Skeleton className="h-14 w-3/4" />
-        <Skeleton className="h-6 w-2/3" />
-        <Skeleton className="h-96 w-full rounded-xl" />
-      </main>
-    );
+    //
+    // Reached only on a genuinely cold open. Arriving from a list, or straight from the composer
+    // that just created the project, the record is already cached and the page renders its real
+    // masthead immediately with only the body still loading.
+    return <EntityDetailSkeleton label={`Loading ${projectNoun.toLowerCase()}`} />;
   }
   if (detailQ.isError || !project) {
     return (

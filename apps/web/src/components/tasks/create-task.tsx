@@ -69,6 +69,7 @@ import { TeamPicker } from '@/components/teams/team-picker';
 import { useSession } from '@/lib/auth-client';
 import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { seedTaskRecord } from '@/lib/entity-records';
 import { queryKeys } from '@/lib/query';
 import {
   RepeatTaskControl,
@@ -736,6 +737,9 @@ function GlobalTaskComposerDialog({
               invalidationKeys,
               invalidate,
               navigationEnabled: !continueCreating,
+              seed: () => {
+                seedTaskRecord(queryClient, taskOrgId, task, references);
+              },
               openDestination: () => {
                 router.push(`/orgs/${taskOrgId}/tasks/${task.id}`);
               },

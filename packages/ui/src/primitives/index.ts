@@ -169,7 +169,8 @@ export {
 export { SettingsDialogContent } from './settings-dialog';
 export { Separator } from './separator';
 export { Surface, type SurfaceElement, type SurfaceProps, type SurfaceTone } from './surface';
-export { Skeleton } from './skeleton';
+export { Skeleton, SkeletonChip, SkeletonGlyph, SkeletonText } from './skeleton';
+export type { SkeletonTextProps, SkeletonTextScale } from './skeleton';
 export {
   Tab,
   TabList,

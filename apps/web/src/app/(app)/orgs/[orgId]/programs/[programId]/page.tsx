@@ -11,7 +11,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Skeleton,
   Tabs,
   type TabsItem,
 } from '@docket/ui/primitives';
@@ -25,6 +24,7 @@ import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { PageContainer } from '@/components/views/page-layout';
+import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { ProgramProjectsPanel } from '@/components/programs/program-projects-panel';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
@@ -33,6 +33,7 @@ import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/upda
 import { memberActorOptions } from '@/components/pickers/options';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { api } from '@/lib/api';
+import { programRecordDef } from '@/lib/entity-records';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { fetchProgramDetail } from '@/lib/fetch-program-detail';
@@ -62,8 +63,11 @@ export default function ProgramDetailPage(): JSX.Element {
       `Could not load this ${programLabel.toLowerCase()}.`,
     ),
   );
+  // The program's own row, read apart from the composite above it, so the masthead can paint from
+  // whatever arrived first — the composer that just created it, a warmed list, or one cheap read.
+  const recordQ = useApiQuery(programRecordDef(orgId, programId));
   const detail = detailQ.data ?? null;
-  const program = detail?.program ?? null;
+  const program = detail?.program ?? recordQ.data ?? null;
   const members = detail?.members ?? [];
   const agents = detail?.agents ?? [];
   const roles = detail?.roles ?? [];
@@ -129,19 +133,14 @@ export default function ProgramDetailPage(): JSX.Element {
     { value: 'updates', label: 'Updates' },
   ];
 
-  if (detailQ.isPending) {
+  if (program === null && (detailQ.isPending || recordQ.isPending)) {
     // placeholder: the program's own record — name, summary, the metric strip, detail tabs,
     // and the projects under it. The route carries only a program
     // id; even the tab row's counts come from the same read.
-    return (
-      <PageContainer>
-        <Skeleton className="h-9 w-72" />
-        <Skeleton className="h-4 w-full max-w-xl" />
-        <Skeleton className="h-40 w-full rounded-xl" />
-        <Skeleton className="h-10 w-48" />
-        <Skeleton className="h-32 w-full rounded-xl" />
-      </PageContainer>
-    );
+    //
+    // Reached only on a genuinely cold open; arriving from a list or from the composer that just
+    // created it, the record is cached and the real masthead renders straight away.
+    return <EntityDetailSkeleton tabCount={3} label={`Loading ${programLabel.toLowerCase()}`} />;
   }
 
   if (detailQ.isError) {

@@ -53,6 +53,7 @@ import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { seedInitiativeRecord } from '@/lib/entity-records';
 import { queryKeys } from '@/lib/query';
 
 import { InitiativeComposerPickers } from './initiative-form-pickers';
@@ -417,6 +418,9 @@ function GlobalInitiativeComposerBody({
             invalidationKeys: [queryKeys.initiatives(initiativeOrgId)],
             invalidate: (queryKey) => {
               void queryClient.invalidateQueries({ queryKey });
+            },
+            seed: () => {
+              seedInitiativeRecord(queryClient, initiativeOrgId, initiative);
             },
             openDestination: () => {
               router.push(`/orgs/${initiativeOrgId}/initiatives/${initiative.id}`);

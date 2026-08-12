@@ -16,6 +16,16 @@ export interface CompleteCreateObjectOptions<Created> {
   readonly invalidationKeys: readonly (readonly unknown[])[];
   /** Invalidate one destination key. */
   readonly invalidate: (queryKey: readonly unknown[]) => void;
+  /**
+   * Write the created object into the cache the destination reads from.
+   *
+   * @remarks
+   * The create response already carries the whole record, and without this it is thrown away
+   * apart from the id in the URL — so the destination page mounts against an empty cache and
+   * shows a skeleton for something the client was just handed. Entity-specific because only the
+   * composer knows which typed key holds its record.
+   */
+  readonly seed?: () => void;
   /** Open the destination object's canonical surface. */
   readonly openDestination: () => void;
   /** Whether this completion may navigate; false while a create-more flow continues. */
@@ -33,6 +43,16 @@ export interface CompleteCreateObjectOptions<Created> {
  * @param options - Created object, workspace comparison, invalidations, and completion effects.
  */
 export function completeCreateObject<Created>(options: CompleteCreateObjectOptions<Created>): void {
+  // Before anything else, and specifically before navigation: the destination page reads the
+  // cache as it mounts, so a seed that lands afterwards is one the page has already rendered a
+  // skeleton instead of. Best-effort like the launcher callback below — a cache write that fails
+  // should cost a slower screen, never the screen itself.
+  try {
+    options.seed?.();
+  } catch {
+    // The destination can always fetch for itself; this only decides whether it has to.
+  }
+
   for (const queryKey of options.invalidationKeys) options.invalidate(queryKey);
 
   const targetIsOriginalWorkspace = options.targetWorkspaceId === options.initialWorkspaceId;

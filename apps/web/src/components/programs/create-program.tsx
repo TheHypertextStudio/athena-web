@@ -49,6 +49,7 @@ import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { seedProgramRecord } from '@/lib/entity-records';
 import { queryKeys } from '@/lib/query';
 
 import { ProgramComposerPickers } from './program-form-pickers';
@@ -393,6 +394,9 @@ function GlobalProgramComposerBody({
             invalidationKeys: [queryKeys.programs(programOrgId)],
             invalidate: (queryKey) => {
               void queryClient.invalidateQueries({ queryKey });
+            },
+            seed: () => {
+              seedProgramRecord(queryClient, programOrgId, program);
             },
             openDestination: () => {
               router.push(`/orgs/${programOrgId}/programs/${program.id}`);

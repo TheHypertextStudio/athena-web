@@ -10,6 +10,7 @@ import {
   programOptions as toProgramOptions,
 } from '@/components/pickers/options';
 import { api } from '@/lib/api';
+import { projectRecordDef } from '@/lib/entity-records';
 import { projectDetailDef } from '@/lib/fetch-project-detail';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -21,6 +22,12 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const detailQ = useApiQuery(projectDetailDef(orgId, projectId));
+  // The project's own row, read apart from the thirteen-request composite above it. This is what
+  // the masthead needs, and it arrives by whichever route is fastest: already in cache from the
+  // composer that just created it, warmed by the list the reader came from, or as one cheap read.
+  // Without it the page has nothing to show — not even its own name — until the slowest of the
+  // composite's requests returns.
+  const recordQ = useApiQuery(projectRecordDef(orgId, projectId));
   const updatesQ = useApiQuery(
     apiQueryOptions(
       updatesKey,
@@ -49,7 +56,19 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
   const mutations = useProjectMutations(orgId, projectId);
 
   const detail = detailQ.data ?? null;
-  const project = detail?.project ?? null;
+  // The row wins while the composite is still in flight; once both are settled they are the same
+  // project, and the composite's copy is the one every other slice was derived alongside.
+  const project = detail?.project ?? recordQ.data ?? null;
+  /**
+   * Whether the page still has no identity to render.
+   *
+   * @remarks
+   * The gate the masthead gets, instead of the composite's own pending flag. A page that knows
+   * its name, icon and properties should draw them and skeleton only the body it is still
+   * waiting on — showing a whole-page placeholder over data already in hand is the thing that
+   * made every navigation look slow.
+   */
+  const identityPending = project === null && (detailQ.isPending || recordQ.isPending);
   const members = detail?.members ?? [];
   const roles = detail?.roles ?? [];
   const programs = detail?.programs ?? [];
@@ -84,6 +103,8 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
   return {
     detailKey,
     detailQ,
+    recordQ,
+    identityPending,
     updatesQ,
     resourcesQ,
     detail,

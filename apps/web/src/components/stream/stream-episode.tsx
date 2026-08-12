@@ -73,7 +73,7 @@ function MinorSummary({
   const sameActor = events.every((event) => streamActorLabel(event) === actor);
   const subject = sameActor ? actor : 'People';
   return (
-    <p className="text-on-surface-variant min-h-10 py-2 text-sm">
+    <p className="text-on-surface-variant text-body-small min-h-10 py-2">
       {subject} made{' '}
       {events.length === 1 ? 'a small update' : `${String(events.length)} small updates`}
     </p>
@@ -110,16 +110,16 @@ export function StreamEpisodeView({
             <a
               href={href}
               className={cn(
-                'text-on-surface hover:text-primary block w-fit max-w-full rounded-sm text-sm leading-snug font-semibold outline-none',
+                'text-on-surface hover:text-primary text-title-small block w-fit max-w-full rounded-sm outline-none',
                 focusRing,
               )}
             >
               <span className="block truncate">{title}</span>
             </a>
           ) : (
-            <h3 className="text-on-surface truncate text-sm leading-snug font-semibold">{title}</h3>
+            <h3 className="text-on-surface text-title-small truncate">{title}</h3>
           )}
-          <div className="text-on-surface-variant mt-1 flex flex-wrap items-center gap-2 text-xs capitalize">
+          <div className="text-on-surface-variant text-label-small mt-1 flex flex-wrap items-center gap-2 capitalize">
             <span>{subjectType(first)}</span>
             {systems.map((system) => (
               <ProviderBadge key={system} system={system} />
@@ -150,7 +150,7 @@ export function StreamEpisodeView({
                 setExpanded((value) => !value);
               }}
               className={cn(
-                'text-on-surface-variant hover:text-on-surface min-h-10 rounded-md px-2 text-xs font-medium outline-none',
+                'text-on-surface-variant hover:text-on-surface text-label-medium min-h-10 rounded-md px-2 outline-none',
                 focusRing,
               )}
             >

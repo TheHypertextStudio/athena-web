@@ -120,7 +120,7 @@ export function StreamView(props: StreamViewProps): JSX.Element {
         <h1 ref={headingRef} tabIndex={-1} className="text-title-large rounded-sm outline-none">
           Stream
         </h1>
-        <p className="text-on-surface-variant text-xs">
+        <p className="text-on-surface-variant text-body-small">
           {props.scope === 'me'
             ? 'Everything that happened across your workspaces.'
             : `Everything that happened in ${props.contextName ?? 'this workspace'}.`}
@@ -150,7 +150,7 @@ export function StreamView(props: StreamViewProps): JSX.Element {
       {props.error ? (
         <div
           role="alert"
-          className="border-outline-variant text-on-surface-variant flex items-center justify-between rounded-lg border p-4 text-sm"
+          className="border-outline-variant text-on-surface-variant text-body-small flex items-center justify-between rounded-lg border p-4"
         >
           <span>{props.error}</span>
           <button type="button" className="text-primary min-h-10 px-2" onClick={props.onRetry}>
@@ -188,7 +188,7 @@ export function StreamView(props: StreamViewProps): JSX.Element {
             >
               <h2
                 id={`stream-${group.label.replaceAll(' ', '-')}`}
-                className="text-on-surface-variant mb-1 text-xs font-semibold tracking-wide"
+                className="text-on-surface-variant text-label-small mb-1"
               >
                 {group.label}
               </h2>
@@ -211,7 +211,9 @@ export function StreamView(props: StreamViewProps): JSX.Element {
           ))}
           <div ref={sentinelRef} aria-hidden="true" />
           {props.isFetchingNextPage ? (
-            <p className="text-on-surface-variant py-2 text-center text-xs">Loading more…</p>
+            <p className="text-on-surface-variant text-body-small py-2 text-center">
+              Loading more…
+            </p>
           ) : null}
         </div>
       )}

@@ -48,7 +48,7 @@ export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | n
       <aside className="bg-surface border-outline-variant absolute top-0 right-0 flex h-full w-[420px] max-w-[92vw] flex-col border-l shadow-xl">
         <header className="border-outline-variant flex min-h-14 items-center gap-2 border-b px-4 py-3">
           <ProviderBadge system={row.system} />
-          <span className="text-on-surface-variant text-xs">{KIND_LABEL[row.kind]}</span>
+          <span className="text-on-surface-variant text-label-small">{KIND_LABEL[row.kind]}</span>
           <button
             type="button"
             onClick={onClose}
@@ -63,21 +63,22 @@ export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | n
         </header>
 
         <div className="flex-1 overflow-auto p-5">
-          <h2 className="text-on-surface text-title-medium leading-snug">
-            {streamDescription(row)}
-          </h2>
-          <time dateTime={row.occurredAt} className="text-on-surface-variant mt-1 block text-xs">
+          <h2 className="text-on-surface text-title-medium">{streamDescription(row)}</h2>
+          <time
+            dateTime={row.occurredAt}
+            className="text-on-surface-variant text-label-small mt-1 block"
+          >
             {new Date(row.occurredAt).toLocaleString()}
           </time>
 
           {row.entityTitle ? (
             <div className="border-outline-variant mt-5 border-t pt-4">
-              <p className="text-on-surface-variant text-label-small font-medium">Subject</p>
+              <p className="text-on-surface-variant text-label-small">Subject</p>
               {href ? (
                 <a
                   href={href}
                   className={cn(
-                    'text-primary mt-1 inline-flex min-h-10 items-center gap-1 rounded-sm text-sm font-medium outline-none',
+                    'text-primary text-body-medium mt-1 inline-flex min-h-10 items-center gap-1 rounded-sm outline-none',
                     focusRing,
                   )}
                 >
@@ -85,16 +86,14 @@ export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | n
                   <OpenInNew className="size-4" aria-hidden="true" />
                 </a>
               ) : (
-                <p className="text-on-surface mt-1 text-sm font-medium">{row.entityTitle}</p>
+                <p className="text-on-surface text-body-medium mt-1">{row.entityTitle}</p>
               )}
             </div>
           ) : null}
 
           {detail ? (
             <div className="bg-surface-container-low mt-4 rounded-lg p-3">
-              <p className="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">
-                {detail}
-              </p>
+              <p className="text-on-surface text-body-small whitespace-pre-wrap">{detail}</p>
             </div>
           ) : null}
 

@@ -24,7 +24,7 @@ export default function GlobalError({
     <html lang="en">
       <body className="bg-surface-container text-on-surface">
         <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center gap-4 px-6 py-12">
-          <p className="text-on-surface-variant text-label-large font-medium">Page unavailable</p>
+          <p className="text-on-surface-variant text-label-large">Page unavailable</p>
           <h1 className="text-headline-small">Couldn’t load Docket</h1>
           <p className="text-on-surface-variant text-body-large">
             Try again, or return to your work and continue from there.
@@ -33,11 +33,11 @@ export default function GlobalError({
             <button
               type="button"
               onClick={reset}
-              className="bg-primary text-on-primary rounded-md px-4 py-2 font-medium"
+              className="bg-primary text-on-primary text-label-large rounded-md px-4 py-2"
             >
               Try again
             </button>
-            <Link href="/today" className="text-primary self-center font-medium">
+            <Link href="/today" className="text-primary text-label-large self-center">
               Go to Today
             </Link>
           </div>

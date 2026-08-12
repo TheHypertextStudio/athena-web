@@ -63,13 +63,11 @@ export function AppContentFallback({
       className="flex h-full w-full items-center justify-center p-6"
     >
       <div className="border-outline-variant bg-surface-container-low/60 flex w-full max-w-md flex-col items-center gap-3 rounded-xl border p-8 text-center">
-        <p className="text-on-surface-variant text-label-large font-medium">{copy.eyebrow}</p>
+        <p className="text-on-surface-variant text-label-large">{copy.eyebrow}</p>
         <h1 id="app-content-fallback-title" className="text-on-surface text-title-large">
           {copy.title}
         </h1>
-        <p className="text-on-surface-variant text-body-medium max-w-xs leading-relaxed">
-          {copy.body}
-        </p>
+        <p className="text-on-surface-variant text-body-medium max-w-xs">{copy.body}</p>
         <div className="mt-1 flex flex-wrap justify-center gap-2">
           {onRetry ? (
             <Button type="button" size="sm" onClick={onRetry}>

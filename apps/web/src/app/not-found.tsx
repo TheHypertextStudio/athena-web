@@ -52,12 +52,12 @@ export default async function RootNotFound(): Promise<JSX.Element> {
 function PublicMissingPage(): JSX.Element {
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center gap-3 px-6 py-12">
-      <p className="text-on-surface-variant text-label-large font-medium">404</p>
+      <p className="text-on-surface-variant text-label-large">404</p>
       <h1 className="text-on-surface text-headline-small">This page isn’t available</h1>
       <p className="text-on-surface-variant text-body-large">
         The address may be mistyped, or the page may no longer exist.
       </p>
-      <Link href="/" className="text-primary text-body-medium mt-2 w-fit font-medium">
+      <Link href="/" className="text-primary text-body-medium mt-2 w-fit">
         Go to Docket home
       </Link>
     </main>

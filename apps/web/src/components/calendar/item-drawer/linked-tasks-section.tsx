@@ -26,7 +26,7 @@ import { queuedOfflineWrite } from '@/components/pwa/offline-write';
 import { PlanWorkForEventForm } from '@/components/recurrence/plan-work-for-event-form';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
-import { UserFacingError } from '@/lib/problem';
+import { UserFacingError, userErrorMessage } from '@/lib/problem';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
 
@@ -165,7 +165,10 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
       ) : null}
       {queuedLink ? (
         <p role="status" className="text-on-surface-variant text-body-small">
-          {queuedLink.message}
+          {userErrorMessage(
+            queuedLink,
+            "Saved on this device. Docket will sync it as soon as you're back online.",
+          )}
         </p>
       ) : linkCreatedTask.isError ? (
         <p role="alert" className="text-error text-body-small">

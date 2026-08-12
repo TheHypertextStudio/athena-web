@@ -29,7 +29,13 @@ import * as React from 'react';
 
 import { Check, Plus, Search, X } from '../../icons';
 import { cn } from '../../lib/utils';
-import { MENU_METRICS, menuFocusRing, menuItemClass, menuSupporting } from '../../primitives';
+import {
+  MENU_METRICS,
+  Skeleton,
+  menuFocusRing,
+  menuItemClass,
+  menuSupporting,
+} from '../../primitives';
 
 import { type PickerOption, optionMatches } from './types';
 
@@ -60,8 +66,47 @@ export interface PickerListProps<TValue extends string = string> {
   searchable?: boolean;
   /** Placeholder for the search input. */
   searchPlaceholder?: string;
-  /** Text shown when no option matches the query. */
+  /** Text shown when no option matches a *typed* query. */
   emptyText?: string;
+  /**
+   * Text shown when the list is empty and nothing has been typed yet.
+   *
+   * @remarks
+   * Defaults to `emptyText`, so a locally-filtered picker is unaffected. It exists for
+   * server-filtered lists, where "you have nothing here" and "nothing matched what you typed" are
+   * different problems with different fixes — the first usually needs an action from the reader,
+   * the second just needs a shorter query. Collapsing them into one string sends people looking
+   * for a fault that isn't there.
+   */
+  idleText?: string;
+  /** The search text, when the caller owns it. Supplying this makes the field controlled. */
+  query?: string;
+  /** Report typing. Pair with {@link PickerListProps.query} for a controlled search field. */
+  onQueryChange?: (query: string) => void;
+  /**
+   * Who narrows `options` against the query. Defaults to `'local'`.
+   *
+   * @remarks
+   * `'none'` is for a list the caller has already filtered — typically at a provider, which
+   * interprets the query more cleverly than `includes` does, so a second local pass would drop
+   * rows the server deliberately returned.
+   *
+   * Deliberately its own prop rather than inferred from `onQueryChange` being present. Who owns
+   * the *text* and who does the *filtering* are independent decisions, and this list is the engine
+   * under every picker in the app: a caller reaching for `onQueryChange` to lift the query into
+   * URL state, or to clear it when a popover closes, must not silently lose filtering — a failure
+   * with no type error and no runtime signal.
+   */
+  filter?: 'local' | 'none';
+  /**
+   * True while the caller is fetching options.
+   *
+   * @remarks
+   * Renders placeholder rows instead of the empty state, and marks the list `aria-busy`. Without
+   * it a remote picker says "No matches" during every request — an answer it does not have yet,
+   * and the one thing a search box must never claim prematurely.
+   */
+  loading?: boolean;
   /**
    * An optional "clear / none" affordance rendered at the top of the list (single-select):
    * its label and the callback to invoke when chosen (e.g. "No lead", "No project").
@@ -113,18 +158,28 @@ export function PickerList<TValue extends string = string>({
   searchable = true,
   searchPlaceholder = 'Search…',
   emptyText = 'No matches',
+  idleText,
+  query: queryProp,
+  onQueryChange,
+  filter = 'local',
+  loading = false,
   clear = null,
   create = null,
   ariaLabel,
 }: PickerListProps<TValue>): React.JSX.Element {
-  const [query, setQuery] = React.useState('');
+  const [ownQuery, setOwnQuery] = React.useState('');
   const [activeIndex, setActiveIndex] = React.useState(0);
   const listId = React.useId();
 
+  // Controlled when a `query` is supplied, uncontrolled otherwise — React's own convention.
+  const query = queryProp ?? ownQuery;
+  const setQuery = onQueryChange ?? setOwnQuery;
+
   const filtered = React.useMemo(() => {
+    if (filter === 'none') return options;
     const normalized = query.trim().toLowerCase();
     return options.filter((option) => optionMatches(option, normalized));
-  }, [options, query]);
+  }, [options, query, filter]);
 
   // MD3's leading-icon column: reserved on every row once *any* row in the (unfiltered) list
   // carries an icon, so a bare label still lines up under an icon-bearing sibling instead of
@@ -236,13 +291,26 @@ export function PickerList<TValue extends string = string>({
         // When the search input is hidden the list itself must catch the arrow keys.
         tabIndex={searchable ? -1 : 0}
         onKeyDown={searchable ? undefined : onKeyDown}
+        aria-busy={loading || undefined}
         className="max-h-64 overflow-y-auto"
       >
         {rows.length === 0 ? (
-          <li className="flex flex-col items-center gap-1.5 px-4 py-6 text-center">
-            <Search aria-hidden="true" className="text-on-surface-variant size-5 opacity-40" />
-            <span className="text-on-surface-variant text-label-large">{emptyText}</span>
-          </li>
+          loading ? (
+            // Placeholder rows, not "No matches": the request has not answered yet, and a search
+            // box that reports absence before it knows is the most reliable way to make someone
+            // stop typing a term that would have worked.
+            <li aria-hidden="true" className="flex flex-col gap-1 px-2 py-1.5">
+              <Skeleton className="h-8 rounded-md" />
+              <Skeleton className="h-8 rounded-md" />
+            </li>
+          ) : (
+            <li className="flex flex-col items-center gap-1.5 px-4 py-6 text-center">
+              <Search aria-hidden="true" className="text-on-surface-variant size-5 opacity-40" />
+              <span className="text-on-surface-variant text-label-large">
+                {trimmedQuery ? emptyText : (idleText ?? emptyText)}
+              </span>
+            </li>
+          )
         ) : (
           rows.map((row, index) => {
             const active = index === activeIndex;

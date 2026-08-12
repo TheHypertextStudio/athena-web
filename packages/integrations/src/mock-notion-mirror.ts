@@ -20,6 +20,8 @@ import type {
   MirrorDatabaseSpec,
   MirrorExternalPerson,
   MirrorParentPage,
+  MirrorParentPageList,
+  MirrorParentPageQuery,
   MirrorRowOp,
   MirrorRowResult,
   NotionMirrorPort,
@@ -46,11 +48,51 @@ export interface MockNotionMirrorConfig {
   readonly people?: readonly MirrorExternalPerson[];
 }
 
-/** The default fixture workspace: two shareable pages and three humans, no bots. */
+/**
+ * The default fixture workspace: four shareable pages and three humans, no bots.
+ *
+ * @remarks
+ * Two of the pages are called "Projects" on purpose. A real workspace is full of same-named pages,
+ * and a picker that shows nothing but a title makes them indistinguishable — so the fixture that
+ * every local run and every test sees contains the collision the UI has to survive.
+ *
+ * Ordered most-recently-edited first, matching the ordering the real client asks Notion for.
+ */
 const DEFAULT_PAGES: readonly MirrorParentPage[] = [
-  { id: 'mock_page_workspace', title: 'Team wiki' },
-  { id: 'mock_page_projects', title: 'Projects' },
+  {
+    id: 'mock_page_workspace',
+    title: 'Team wiki',
+    url: 'https://www.notion.so/mock-page-workspace',
+    icon: '📚',
+    lastEditedTime: '2025-12-30T09:00:00.000Z',
+    parentKind: 'workspace',
+  },
+  {
+    id: 'mock_page_projects',
+    title: 'Projects',
+    url: 'https://www.notion.so/mock-page-projects',
+    lastEditedTime: '2025-12-28T09:00:00.000Z',
+    parentKind: 'workspace',
+  },
+  {
+    id: 'mock_page_projects_archive',
+    title: 'Projects',
+    url: 'https://www.notion.so/mock-page-projects-archive',
+    lastEditedTime: '2025-11-02T09:00:00.000Z',
+    parentKind: 'page',
+  },
+  {
+    id: 'mock_page_handbook',
+    title: 'Engineering handbook',
+    url: 'https://www.notion.so/mock-page-handbook',
+    icon: '🛠️',
+    lastEditedTime: '2025-10-14T09:00:00.000Z',
+    parentKind: 'page',
+  },
 ];
+
+/** How many fixture pages the mock returns per call when the caller does not say. */
+const MOCK_PAGE_SIZE = 25;
 
 /**
  * Deliberately mixed: one person Docket will match by email, one it will not, and one guest with
@@ -122,9 +164,37 @@ export class MockNotionMirror implements NotionMirrorPort {
     return Promise.resolve(this.bot);
   }
 
-  /** {@inheritDoc NotionMirrorPort.listParentPages} */
-  listParentPages(): Promise<MirrorParentPage[]> {
-    return Promise.resolve([...this.parents]);
+  /**
+   * {@inheritDoc NotionMirrorPort.listParentPages}
+   *
+   * @remarks
+   * Behavioural like the rest of this mock: the title query and the cursor are actually applied,
+   * because a mock that ignores them would let a picker ship having only ever been exercised
+   * against its whole fixture at once — which is the exact bug being fixed.
+   */
+  listParentPages(options: MirrorParentPageQuery = {}): Promise<MirrorParentPageList> {
+    const query = options.query?.trim().toLowerCase() ?? '';
+    const matched =
+      query.length === 0
+        ? this.parents
+        : this.parents.filter((page) => page.title.toLowerCase().includes(query));
+    // The cursor is the index of the first unreturned row, stringified — opaque to the caller,
+    // exactly as Notion's is. `parseInt` yields NaN, never Infinity, so `|| 0` covers both a
+    // missing cursor and a malformed one.
+    const from = Math.max(0, Number.parseInt(options.cursor ?? '', 10) || 0);
+    const limit = options.limit ?? MOCK_PAGE_SIZE;
+    const items = matched.slice(from, from + limit);
+    const end = from + items.length;
+    return Promise.resolve({
+      items,
+      nextCursor: end < matched.length ? String(end) : null,
+    });
+  }
+
+  /** {@inheritDoc NotionMirrorPort.describePage} */
+  describePage(pageId: string): Promise<MirrorParentPage> {
+    const found = this.parents.find((page) => page.id === pageId);
+    return Promise.resolve(found ?? { id: pageId, title: 'Untitled' });
   }
 
   /** {@inheritDoc NotionMirrorPort.listWorkspaceUsers} */

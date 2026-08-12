@@ -91,9 +91,9 @@ test.describe('notion mirror visuals', () => {
       // 2. Connected, designed, nothing created in Notion yet — the state right after connecting.
       await connectNotion(page, orgId);
       await page.goto(notionHref, { waitUntil: 'domcontentloaded' });
-      await expect(page.getByRole('heading', { name: 'Tables Docket builds for you' })).toBeVisible(
-        { timeout: TIMEOUTS.pageReady },
-      );
+      await expect(page.getByText('Set up Docket in Notion')).toBeVisible({
+        timeout: TIMEOUTS.pageReady,
+      });
       await shot(page, `notion-hub-${viewport.name}-light.png`);
       await setColorScheme(page, 'dark');
       await shot(page, `notion-hub-${viewport.name}-dark.png`);
@@ -153,7 +153,7 @@ test.describe('notion mirror visuals', () => {
       await page.goto(orgHref(orgId, 'settings/connections/notion'), {
         waitUntil: 'domcontentloaded',
       });
-      await expect(page.getByText('Create these in Notion')).toBeVisible({
+      await expect(page.getByText('Set up Docket in Notion')).toBeVisible({
         timeout: TIMEOUTS.pageReady,
       });
       await shot(page, `notion-setup-${viewport.name}-light.png`);
@@ -164,12 +164,18 @@ test.describe('notion mirror visuals', () => {
       // Provision by CLICKING, not by POSTing. Driving it out of band leaves the already-loaded
       // page serving the unprovisioned response from the service worker's cache; the real button
       // goes through `useApiMutation` and invalidates, which is also what a user does.
+      // Choosing the page is part of the shot, and part of the flow: nothing is preselected, so
+      // the button is inert until a real choice has been made.
+      await page.getByRole('button', { name: /Notion page/ }).click();
+      await shot(page, `notion-page-picker-${viewport.name}-light.png`);
+      await page.getByRole('option', { name: /Team wiki/ }).click();
       await page.getByRole('button', { name: 'Create in Notion' }).click();
       // The setup card disappearing is the honest signal that provisioning landed — the hub no
       // longer reports row counts, because a reader does not care that Projects has four rows.
-      await expect(page.getByText('Create these in Notion')).toBeHidden({
+      await expect(page.getByText('Set up Docket in Notion')).toBeHidden({
         timeout: TIMEOUTS.sweep,
       });
+      await expect(page.getByText('Where this lives')).toBeVisible({ timeout: TIMEOUTS.ui });
       await expect(page.getByText(/Last updated/)).toBeVisible({ timeout: TIMEOUTS.ui });
       await shot(page, `notion-hub-provisioned-${viewport.name}-light.png`);
       await setColorScheme(page, 'dark');

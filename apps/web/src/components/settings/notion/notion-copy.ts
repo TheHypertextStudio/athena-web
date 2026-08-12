@@ -11,9 +11,113 @@
  */
 import type { NotionMirrorEntity, NotionPersonRepresentation } from '@docket/types';
 
-/** Shown on the hub when the databases have been designed but not yet created in Notion. */
+/** Shown inside the preview disclosure when the databases have been designed but not created. */
 export const EMPTY_DATABASE_HINT =
-  'These are designed but not created yet. Review the columns, then create them in your Notion workspace.';
+  'None of these exist in Notion yet. Customize any of them before you create them, or leave them as they are.';
+
+/** The setup card's heading — the one action a fresh Notion connection is waiting on. */
+export const SETUP_TITLE = 'Set up Docket in Notion';
+
+/**
+ * The setup card's explanation.
+ *
+ * @remarks
+ * Three sentences doing three jobs: say what will happen, say that it is reversible, and say that
+ * nothing happens until asked. The copy this replaces did only the first, which is why choosing a
+ * page read as a weighty, permanent decision about somebody else's workspace — when in truth
+ * Docket addresses its databases by id, so they can be dragged anywhere in Notion afterwards.
+ */
+export const SETUP_BODY =
+  'Pick a page in your Notion workspace. Docket builds its databases inside it and keeps them current. You can move them anywhere in Notion afterwards — Docket keeps up. Nothing is created until you press Create.';
+
+/** The label above the page picker. */
+export const SETUP_PAGE_LABEL = 'Build them under';
+
+/** The setup card's primary action, and its in-flight form. */
+export const SETUP_ACTION = 'Create in Notion';
+/** Shown on the button while the provision run is in flight. */
+export const SETUP_ACTION_BUSY = 'Creating…';
+
+/** Shown under the button while the provision run is in flight. */
+export const SETUP_RUNNING =
+  'Building your databases and filling them in. This can take a minute for a large workspace — you can leave this page.';
+
+/** Shown when a provision run reports a status other than success. */
+export const SETUP_FAILED =
+  'Docket could not finish creating your Notion databases. Check the connection and try again.';
+
+/**
+ * Shown when the connection can see no Notion pages at all.
+ *
+ * @remarks
+ * A public Notion integration only sees what was ticked during consent, so this is a common
+ * first-run state rather than a fault. The copy it replaces told the reader to open Notion's •••
+ * menu and then *reload this page* — a dead end dressed as instructions. Pairs with
+ * {@link NO_PAGES_ACTION}, which reopens the consent screen in place.
+ */
+export const NO_PAGES_HINT =
+  'Docket can’t see any pages in your Notion workspace. Notion only shares the pages you tick when you connect, so there may be nothing shared yet.';
+
+/** The action beside {@link NO_PAGES_HINT}: reopen Notion's consent screen. */
+export const NO_PAGES_ACTION = 'Choose pages to share';
+
+/** The page picker's empty-trigger prompt. */
+export const PAGE_PICKER_PLACEHOLDER = 'Choose a page';
+/** The page picker's search-field placeholder. */
+export const PAGE_PICKER_SEARCH = 'Search your Notion pages…';
+/** Shown in the picker before anything is typed and nothing came back. */
+export const PAGE_PICKER_IDLE = 'No pages shared with Docket yet.';
+/** Shown in the picker when a typed query matched nothing. */
+export const PAGE_PICKER_EMPTY = 'No pages match.';
+
+/**
+ * Where a Notion page sits, for the picker's second line.
+ *
+ * @param kind - The page's parent kind, or null when Notion did not say.
+ * @returns a short placement phrase, or undefined when there is nothing to add.
+ */
+export function pagePlacement(kind: 'workspace' | 'page' | 'database' | null): string | undefined {
+  if (kind === 'workspace') return 'Top level';
+  if (kind === 'page') return 'Inside another page';
+  if (kind === 'database') return 'Inside a database';
+  return undefined;
+}
+
+/** The disclosure heading listing what provisioning will create. */
+export function previewSummary(count: number): string {
+  return `What Docket will create · ${String(count)} ${count === 1 ? 'table' : 'tables'}`;
+}
+
+/** The heading over the created tables, once they exist. */
+export const PROVISIONED_TITLE = 'Tables Docket builds for you';
+
+/** The subtitle under {@link PROVISIONED_TITLE}. */
+export const PROVISIONED_HINT =
+  'Each of these is a Notion database Docket fills in and keeps current. Configure one to change its name or which columns it has.';
+
+/** The label on the row naming the page the databases were built under. */
+export const CONTAINER_LABEL = 'Where this lives';
+
+/** Used when a connection was provisioned before the container page's title was recorded. */
+export const CONTAINER_UNKNOWN = 'A page in your Notion workspace';
+
+/** The reassurance beside {@link CONTAINER_LABEL}. */
+export const CONTAINER_NOTE =
+  'Move it anywhere in Notion — Docket keeps up. Deleting it removes the databases.';
+
+/** The per-row link out to the real Notion database. */
+export const OPEN_IN_NOTION = 'Open in Notion';
+
+/**
+ * The per-row action, which reads differently before and after the table exists.
+ *
+ * @param provisioned - Whether the table has been created in Notion.
+ * @returns the link label.
+ */
+export function tableAction(provisioned: boolean): string {
+  // Two different offers: one shapes something about to be built, the other changes something live.
+  return provisioned ? 'Configure' : 'Customize';
+}
 
 /** The plain-language name for each projected entity. */
 const ENTITY_LABEL: Record<NotionMirrorEntity, string> = {

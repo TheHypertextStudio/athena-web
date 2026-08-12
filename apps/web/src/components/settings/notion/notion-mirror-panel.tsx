@@ -10,15 +10,39 @@
  * connection and a broken one looked identical, so the only way to learn something needed doing
  * was to read every row.
  *
+ * The page has two shapes, because before and after provisioning it answers different questions.
+ *
+ * **Before** the only question is "how do I start", so the setup card comes first and the nine
+ * tables collapse into a preview. They used to be nine expanded rows with nine "Configure"
+ * buttons for tables that did not exist — the primary action outnumbered nine to one by
+ * secondary ones, all of them offering to customize something not yet built.
+ *
+ * **After**, the questions are "where did they go" and "how do I get to one", so the container
+ * page is named and every row links out to the real database. Both facts were already stored and
+ * neither was rendered: `containerPageId` went into the connector config and was never shown
+ * again, and each row's `externalUrl` was read from Notion at provision time and dropped.
+ *
  * Pure presentation — all reads and writes live in `use-notion-mirror-controller.ts`.
  */
 import type { NotionMirrorDatabaseOut } from '@docket/types';
-import { ArrowRight, CheckCircle2, CircleAlert } from '@docket/ui/icons';
+import { ArrowRight, CheckCircle2, CircleAlert, OpenInNew } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
 
-import { EMPTY_DATABASE_HINT, entityLabel, tableMeaning } from './notion-copy';
+import {
+  CONTAINER_LABEL,
+  CONTAINER_NOTE,
+  CONTAINER_UNKNOWN,
+  EMPTY_DATABASE_HINT,
+  OPEN_IN_NOTION,
+  PROVISIONED_HINT,
+  PROVISIONED_TITLE,
+  tableAction,
+  entityLabel,
+  previewSummary,
+  tableMeaning,
+} from './notion-copy';
 import { NotionSetupCard } from './notion-setup-card';
 import { useNotionMirror, useNotionPeople } from './use-notion-mirror-controller';
 
@@ -29,12 +53,15 @@ export interface NotionMirrorPanelProps {
 }
 
 /**
- * One table in the hub list: what it does, and the button that configures it.
+ * One table in the hub list: what it does, and the way in.
  *
  * @remarks
  * Row counts are gone. "Projects · 4" answers a question nobody has, while the thing a reader
  * actually wants — will my Notion edits survive, and how do I change what appears — was invisible:
  * the only affordance used to be the table's name, styled as body text.
+ *
+ * The action reads "Customize" before the table exists and "Configure" after, because those are
+ * different offers: one shapes something about to be built, the other changes something live.
  */
 function DatabaseRow({
   database,
@@ -51,12 +78,25 @@ function DatabaseRow({
           {tableMeaning(database.direction, entityLabel(database.entityType))}
         </span>
       </span>
-      <NextLink
-        href={designHref}
-        className="border-outline-variant text-on-surface text-label-large hover:bg-surface-container shrink-0 self-start rounded-lg border px-3 py-1.5 @lg:self-auto"
-      >
-        Configure
-      </NextLink>
+      <span className="flex shrink-0 items-center gap-3 self-start @lg:self-auto">
+        {database.externalUrl !== null ? (
+          <a
+            href={database.externalUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-on-surface-variant text-label-large hover:text-on-surface inline-flex items-center gap-1"
+          >
+            {OPEN_IN_NOTION}
+            <OpenInNew aria-hidden="true" className="size-3.5" />
+          </a>
+        ) : null}
+        <NextLink
+          href={designHref}
+          className="border-outline-variant text-on-surface text-label-large hover:bg-surface-container rounded-lg border px-3 py-1.5"
+        >
+          {tableAction(database.provisionedAt !== null)}
+        </NextLink>
+      </span>
     </li>
   );
 }
@@ -107,6 +147,21 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
     `/orgs/${orgId}/settings/connections/notion/${entity}`;
   const needsPeople = people.unmatched.length > 0;
   const nothingProvisioned = model.provisionedCount === 0;
+  const integrationId = model.integration.id;
+  const containerPage = model.containerPage;
+  const containerName = containerPage?.title ?? CONTAINER_UNKNOWN;
+
+  const tableList = (
+    <ul className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
+      {model.databases.map((database) => (
+        <DatabaseRow
+          key={database.id}
+          database={database}
+          designHref={designHref(database.entityType)}
+        />
+      ))}
+    </ul>
+  );
 
   return (
     <div className="@container flex flex-col gap-5">
@@ -144,31 +199,52 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
         </div>
       ) : null}
 
-      <section className="flex flex-col gap-2" aria-label="Docket in Notion">
-        <h2 className="text-on-surface text-title-small">Tables Docket builds for you</h2>
-        <p className="text-on-surface-variant text-body-small max-w-prose">
-          {nothingProvisioned
-            ? EMPTY_DATABASE_HINT
-            : 'Each of these is a Notion database Docket fills in and keeps current. Configure one to change its name or which columns it has.'}
-        </p>
-        {nothingProvisioned ? (
-          <NotionSetupCard orgId={orgId} integrationId={model.integration.id} />
-        ) : null}
-        <ul className="border-outline-variant bg-surface-container-low mt-1 overflow-hidden rounded-xl border">
-          {model.databases.map((database) => (
-            <DatabaseRow
-              key={database.id}
-              database={database}
-              designHref={designHref(database.entityType)}
-            />
-          ))}
-        </ul>
-        {model.lastSyncedLabel !== null ? (
-          <p className="text-on-surface-variant text-body-small mt-1">
-            Last updated {model.lastSyncedLabel}.
-          </p>
-        ) : null}
-      </section>
+      {nothingProvisioned ? (
+        <>
+          <NotionSetupCard orgId={orgId} integrationId={integrationId} />
+          {/* A native disclosure rather than a controlled one: it holds no state worth owning,
+              and `<details>` is keyboard- and screen-reader-complete without any of it. */}
+          <details className="flex flex-col gap-2">
+            <summary className="text-on-surface text-title-small cursor-pointer list-none marker:content-none">
+              {previewSummary(model.databases.length)}
+            </summary>
+            <p className="text-on-surface-variant text-body-small mt-2 mb-2 max-w-prose">
+              {EMPTY_DATABASE_HINT}
+            </p>
+            {tableList}
+          </details>
+        </>
+      ) : (
+        <section className="flex flex-col gap-2" aria-label="Docket in Notion">
+          <h2 className="text-on-surface text-title-small">{PROVISIONED_TITLE}</h2>
+          <p className="text-on-surface-variant text-body-small max-w-prose">{PROVISIONED_HINT}</p>
+          {containerPage !== null ? (
+            <div className="border-outline-variant bg-surface-container-low mt-1 flex flex-col gap-1 rounded-xl border px-4 py-3">
+              <span className="text-on-surface-variant text-body-small">{CONTAINER_LABEL}</span>
+              {containerPage.url !== null ? (
+                <a
+                  href={containerPage.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary text-label-large inline-flex items-center gap-1 self-start hover:underline"
+                >
+                  {containerName}
+                  <OpenInNew aria-hidden="true" className="size-3.5" />
+                </a>
+              ) : (
+                <span className="text-on-surface text-label-large">{containerName}</span>
+              )}
+              <span className="text-on-surface-variant text-body-small">{CONTAINER_NOTE}</span>
+            </div>
+          ) : null}
+          <div className="mt-1">{tableList}</div>
+          {model.lastSyncedLabel !== null ? (
+            <p className="text-on-surface-variant text-body-small mt-1">
+              Last updated {model.lastSyncedLabel}.
+            </p>
+          ) : null}
+        </section>
+      )}
     </div>
   );
 }

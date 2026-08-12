@@ -35,15 +35,27 @@ test('a person can reach Notion from Connections and create the databases', asyn
 
   // The card must offer a way in. Without this link the page below is URL-only.
   await notionCard.getByRole('link', { name: 'Manage' }).click();
-  await expect(page.getByRole('heading', { name: 'Tables Docket builds for you' })).toBeVisible({
+  await expect(page.getByText('Set up Docket in Notion')).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
 
-  // The setup card is the affordance the hub's own copy promises.
-  await expect(page.getByText('Create these in Notion')).toBeVisible();
-  await page.getByRole('button', { name: 'Create in Notion' }).click();
+  // Nothing is preselected, so the button cannot fire until a page has genuinely been chosen.
+  const create = page.getByRole('button', { name: 'Create in Notion' });
+  await expect(create).toBeDisabled();
 
-  await expect(page.getByText('Create these in Notion')).toBeHidden({ timeout: TIMEOUTS.sweep });
+  await page.getByRole('button', { name: /Notion page/ }).click();
+  await page.getByRole('option', { name: /Team wiki/ }).click();
+  await expect(create).toBeEnabled();
+  await create.click();
+
+  await expect(page.getByText('Set up Docket in Notion')).toBeHidden({ timeout: TIMEOUTS.sweep });
+
+  // Afterwards the page answers the two questions it used to leave open: where the databases went,
+  // and how to reach one.
+  await expect(page.getByRole('heading', { name: 'Tables Docket builds for you' })).toBeVisible();
+  await expect(page.getByText('Where this lives')).toBeVisible();
+  await expect(page.getByRole('link', { name: /Team wiki/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Open in Notion/ })).toHaveCount(9);
 
   // Every table offers a way to configure it. This is the assertion that would have caught a hub
   // whose only affordance was a name styled as body text.

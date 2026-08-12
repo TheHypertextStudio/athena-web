@@ -4,20 +4,42 @@
  * `settings/notion` — the one action that turns a design into real Notion databases.
  *
  * @remarks
- * Shown only while nothing has been provisioned. It exists because the hub previously *told* the
- * reader to "create them in your Notion workspace" and gave them no way to do it — the central
- * action of the feature had no affordance at all.
+ * Shown only while nothing has been provisioned, and shown *first*: it used to render below a
+ * heading, a subtitle, and nine "Configure" rows for tables that did not exist, so the page's
+ * primary action was its least prominent element.
  *
- * Two states matter as much as the happy one. A workspace that shared no pages during consent gets
- * an explanation and a route forward, not an empty dropdown; and a provision run that fails still
- * returns HTTP 200 carrying a failed run, so the controller surfaces that as an error rather than
- * letting it read as success.
+ * Three states matter as much as the happy one:
+ *
+ * - **Nothing chosen.** There is no implicit default any more. The old card fell back to
+ *   `parentPages[0]`, so pressing Create without opening the dropdown built nine databases inside
+ *   whichever page Notion happened to return first — in somebody else's workspace.
+ * - **No pages shared.** A public Notion integration only sees what was ticked during consent, so
+ *   this is a common first run, not a failure. It now offers to reopen that consent screen rather
+ *   than instructing the reader to go use Notion's ••• menu and reload the page.
+ * - **A run that failed.** The provision route answers 200 carrying a failed run, so the
+ *   controller surfaces that as an error instead of letting it read as success.
  */
-import { Button, Select } from '@docket/ui/primitives';
+import type { NotionParentPageOut } from '@docket/types';
+import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useState } from 'react';
 
-import { useNotionSetup } from './use-notion-mirror-controller';
+import { authClient } from '@/lib/auth-client';
+
+import { socialProviderForConnector } from '../integrations-config';
+
+import {
+  NO_PAGES_ACTION,
+  NO_PAGES_HINT,
+  SETUP_ACTION,
+  SETUP_ACTION_BUSY,
+  SETUP_BODY,
+  SETUP_PAGE_LABEL,
+  SETUP_RUNNING,
+  SETUP_TITLE,
+} from './notion-copy';
+import { NotionParentPagePicker } from './notion-parent-page-picker';
+import { useNotionParentPages, useNotionSetup } from './use-notion-mirror-controller';
 
 /** Props for {@link NotionSetupCard}. */
 export interface NotionSetupCardProps {
@@ -28,66 +50,84 @@ export interface NotionSetupCardProps {
 /** Choose a Notion page, then create the designed databases inside it. */
 export function NotionSetupCard({ orgId, integrationId }: NotionSetupCardProps): JSX.Element {
   const setup = useNotionSetup(orgId, integrationId);
-  const [pageId, setPageId] = useState('');
+  const [page, setPage] = useState<NotionParentPageOut | null>(null);
+  const [query, setQuery] = useState('');
 
-  const chosen = pageId || (setup.parentPages[0]?.id ?? '');
-  const noPages = !setup.loading && setup.parentPages.length === 0;
+  // One search, owned here rather than inside the picker. The card has to answer a question the
+  // picker cannot — "can this connection see any pages at all?", which decides between offering
+  // the picker and offering re-consent — and that answer is the empty-term wave of the very same
+  // search. Two hooks agreeing by cache key would give the same answer today and diverge the
+  // moment either side changed its debounce or its default term.
+  const search = useNotionParentPages(orgId, integrationId, query, true);
+  const noPages =
+    query === '' && !search.pending && search.error === null && search.pages.length === 0;
 
   return (
     <div className="border-primary/40 bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4">
       <div>
-        <p className="text-on-surface text-label-large">Create these in Notion</p>
-        <p className="text-on-surface-variant text-body-small mt-1 max-w-prose">
-          Docket will build the databases below inside a page you choose, then keep them current.
-          Nothing is created until you do this.
-        </p>
+        <p className="text-on-surface text-label-large">{SETUP_TITLE}</p>
+        <p className="text-on-surface-variant text-body-small mt-1 max-w-prose">{SETUP_BODY}</p>
       </div>
 
       {noPages ? (
-        <p className="text-on-surface-variant text-body-small max-w-prose" role="note">
-          Docket can’t see any Notion pages yet. In Notion, open the page you want these to live
-          under, then share it with Docket from the ••• menu — and reload this page.
-        </p>
-      ) : (
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-on-surface-variant text-body-small">Build them under</span>
-            <Select
-              value={chosen}
-              disabled={setup.loading || setup.creating}
-              onChange={(e) => {
-                setPageId(e.target.value);
-              }}
-              className="w-64 max-w-full"
-            >
-              {setup.parentPages.map((page) => (
-                <option key={page.id} value={page.id}>
-                  {page.title}
-                </option>
-              ))}
-            </Select>
-          </label>
+        <div className="flex flex-col items-start gap-2">
+          <p className="text-on-surface-variant text-body-small max-w-prose" role="note">
+            {NO_PAGES_HINT}
+          </p>
           <Button
-            disabled={setup.creating || chosen.length === 0}
+            variant="outline"
             onClick={() => {
-              setup.create(chosen);
+              void authClient.linkSocial({
+                provider: socialProviderForConnector('notion'),
+                callbackURL: window.location.pathname,
+              });
             }}
           >
-            {setup.creating ? 'Creating…' : 'Create in Notion'}
+            {NO_PAGES_ACTION}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-end gap-3">
+          {/* A caption, not a `<label>`: the picker's affordance is a button, and a label that
+              points at a button neither focuses it nor announces anything a screen reader wants.
+              The accessible name comes from the picker's own `ariaLabel`. */}
+          <div className="flex flex-col gap-1">
+            <span className="text-on-surface-variant text-body-small">{SETUP_PAGE_LABEL}</span>
+            <NotionParentPagePicker
+              pages={search.pages}
+              value={page}
+              onChange={setPage}
+              query={query}
+              onQueryChange={setQuery}
+              loading={search.pending}
+              // Drop the term when the popover closes, so a shut picker stops holding an active
+              // observer for `q=proj` that every window focus would refetch.
+              onOpenChange={(open) => {
+                if (!open) setQuery('');
+              }}
+              disabled={setup.creating}
+            />
+          </div>
+          <Button
+            disabled={setup.creating || page === null}
+            onClick={() => {
+              if (page !== null) setup.create(page.id);
+            }}
+          >
+            {setup.creating ? SETUP_ACTION_BUSY : SETUP_ACTION}
           </Button>
         </div>
       )}
 
       {setup.creating ? (
         <p className="text-on-surface-variant text-body-small" role="status">
-          Building your databases and filling them in. This can take a minute for a large workspace
-          — you can leave this page.
+          {SETUP_RUNNING}
         </p>
       ) : null}
 
-      {setup.error !== null ? (
+      {(setup.error ?? search.error) ? (
         <p role="alert" className="text-error text-body-medium">
-          {setup.error}
+          {setup.error ?? search.error}
         </p>
       ) : null}
     </div>

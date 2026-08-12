@@ -162,6 +162,96 @@ describe('Notion mirror routes', () => {
     expect((await count.json()) as { docketOnly: number }).toMatchObject({ docketOnly: 0 });
   });
 
+  it('searches parent pages at the provider rather than returning the workspace', async () => {
+    // The route used to dump every page the integration could see, unsorted, on every settings
+    // open. The narrowing has to reach Notion — a picker that filters locally has already paid to
+    // download a workspace it will mostly throw away.
+    const { integration, app } = await seedRouter();
+
+    const all = await app.request(`/${integration.id}/parent-pages`);
+    expect(all.status).toBe(200);
+    const everything = (await all.json()) as { items: { title: string }[] };
+    expect(everything.items.length).toBeGreaterThan(1);
+
+    const narrowed = await app.request(`/${integration.id}/parent-pages?q=proj`);
+    expect(narrowed.status).toBe(200);
+    const matched = (await narrowed.json()) as { items: { title: string }[] };
+    expect(matched.items.length).toBeLessThan(everything.items.length);
+    expect(matched.items.every((page) => page.title.toLowerCase().includes('proj'))).toBe(true);
+  });
+
+  it('carries what tells two same-named pages apart, and pages with a cursor', async () => {
+    const { integration, app } = await seedRouter();
+
+    const first = await app.request(`/${integration.id}/parent-pages?limit=2`);
+    const page1 = (await first.json()) as {
+      items: { id: string; url: string | null; icon: string | null; parentKind: string | null }[];
+      nextCursor?: string;
+    };
+    expect(page1.items).toHaveLength(2);
+    expect(page1.nextCursor).toBeDefined();
+    // A row without these is a row nobody can choose between; `url` in particular was already on
+    // the port and dropped by the old inline `{ id, title }` response schema.
+    expect(page1.items[0]).toMatchObject({ url: expect.any(String), parentKind: 'workspace' });
+
+    const second = await app.request(
+      `/${integration.id}/parent-pages?limit=2&cursor=${String(page1.nextCursor)}`,
+    );
+    const page2 = (await second.json()) as { items: { id: string }[]; nextCursor?: string };
+    expect(page2.items.map((p) => p.id)).not.toEqual(page1.items.map((p) => p.id));
+    expect(page2.nextCursor).toBeUndefined();
+  });
+
+  it('records what the container page is called, from Notion rather than from the client', async () => {
+    // Settings names this page on a link people click, so the title has to come from the provider
+    // and not from whatever the browser happened to be showing when Create was pressed.
+    const { integration, app } = await seedRouter();
+    await app.request(`/${integration.id}/databases`);
+
+    const provisioned = await app.request(`/${integration.id}/provision`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ containerPageId: 'mock_page_workspace' }),
+    });
+    expect(provisioned.status).toBe(200);
+
+    const row = one(
+      await db.select().from(schema.integration).where(eq(schema.integration.id, integration.id)),
+    );
+    expect(row.config).toMatchObject({
+      notionMirror: {
+        containerPageId: 'mock_page_workspace',
+        containerPageTitle: 'Team wiki',
+        containerPageUrl: expect.any(String),
+      },
+    });
+  });
+
+  it('keeps the linked-table mode’s config when it records the container page', async () => {
+    // `config` is a wholesale replace. Writing only the mirror key would drop `listIds` and
+    // silently unlink every database the linked-table mode syncs.
+    const { integration, app } = await seedRouter();
+    await db
+      .update(schema.integration)
+      .set({ config: { listIds: ['existing-notion-db'] } })
+      .where(eq(schema.integration.id, integration.id));
+    await app.request(`/${integration.id}/databases`);
+
+    await app.request(`/${integration.id}/provision`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ containerPageId: 'mock_page_projects' }),
+    });
+
+    const row = one(
+      await db.select().from(schema.integration).where(eq(schema.integration.id, integration.id)),
+    );
+    expect(row.config).toMatchObject({
+      listIds: ['existing-notion-db'],
+      notionMirror: { containerPageId: 'mock_page_projects' },
+    });
+  });
+
   it('provisions through the leased sync spine and reports a held lease as conflict', async () => {
     const { integration, app } = await seedRouter();
     await app.request(`/${integration.id}/databases`);

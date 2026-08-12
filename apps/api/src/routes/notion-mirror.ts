@@ -13,14 +13,17 @@
  * @see `docs/engineering/specs/notion-sync.md`
  */
 import { actor, db, externalActor, integration } from '@docket/db';
+import type { MirrorParentPage } from '@docket/integrations';
 import {
   NotionMirrorDatabaseOut,
   SyncRunOut,
   NotionMirrorDesignOut,
   NotionMirrorDesignPatch,
   NotionMirrorEntity,
+  NotionParentPageOut,
   NotionPersonResolve,
   NotionWorkspacePerson,
+  CursorQuery,
   pageOf,
 } from '@docket/types';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -32,7 +35,7 @@ import { buildNotionMirror } from '../container';
 import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 import { resolveConnectorToken } from './integration-provider';
@@ -50,6 +53,49 @@ import {
 const mirrorParam = z.object({ id: z.string() });
 /** Path params for one entity's design. */
 const entityParam = z.object({ id: z.string(), entity: NotionMirrorEntity });
+
+/**
+ * How many pages one `/parent-pages` call returns when the caller does not say.
+ *
+ * @remarks
+ * A picker's worth, not a workspace's worth. The list is searched at the provider and scrolls to
+ * a cursor, so the ceiling is about how much a person reads before typing — not about coverage.
+ */
+const PARENT_PAGE_LIMIT = 25;
+
+/**
+ * Query params for the parent-page search.
+ *
+ * @remarks
+ * Extends the shared {@link CursorQuery} rather than restating `cursor`/`limit`, the same way
+ * `cycles.ts` and `projects.ts` do — so this route tracks the repo's cursor contract instead of
+ * carrying its own copy of it in the OpenAPI document.
+ */
+const parentPageQuery = CursorQuery.extend({
+  q: z
+    .string()
+    .optional()
+    .describe('Title substring passed straight to Notion. Omit for the most recent pages.'),
+});
+
+/**
+ * Map a provider page onto the wire shape.
+ *
+ * @remarks
+ * The port's optional fields become explicit `null`s: an absent key and a null mean the same
+ * thing to a reader but not to a client that has to branch, and the response schema is the
+ * contract that says which fields may be missing.
+ */
+function toParentPageOut(page: MirrorParentPage): NotionParentPageOut {
+  return {
+    id: page.id,
+    title: page.title,
+    url: page.url ?? null,
+    icon: page.icon ?? null,
+    lastEditedTime: page.lastEditedTime ?? null,
+    parentKind: page.parentKind ?? null,
+  };
+}
 
 /** Load the integration, asserting it exists in this org and is the Notion connector. */
 async function assertNotionIntegration(
@@ -72,20 +118,17 @@ async function assertNotionIntegration(
  * Resolve the Notion access token for a read-only provider call.
  *
  * @remarks
+ * Takes the row every caller has already loaded through {@link assertNotionIntegration} rather
+ * than re-selecting it. That was a wash when this only ran once per settings load; `/parent-pages`
+ * is now a search that runs on every debounced keystroke, so the redundant select is per-keystroke
+ * too.
+ *
  * Returns undefined in local/test mode, where the container hands back the in-memory mirror and
  * no token is meaningful.
  */
 async function mirrorToken(
-  c: { get: (k: 'actorCtx') => { orgId: string } },
-  id: string,
+  row: Pick<typeof integration.$inferSelect, 'createdBy' | 'externalAccountId'>,
 ): Promise<string | undefined> {
-  const rows = await db
-    .select({ createdBy: integration.createdBy, externalAccountId: integration.externalAccountId })
-    .from(integration)
-    .where(eq(integration.id, id))
-    .limit(1);
-  const row = rows[0];
-  if (!row) return undefined;
   const result = await resolveConnectorToken(row.createdBy, 'notion', row.externalAccountId);
   if (!result.ok || result.token === 'mock') return undefined;
   return result.token;
@@ -171,22 +214,31 @@ A rename never re-binds. Provisioned columns keep their Notion \`propertyId\`, w
     capabilityGuard('manage'),
     apiDoc({
       tag: 'Integrations',
-      summary: 'List Notion pages a database can be created under',
+      summary: 'Search Notion pages a database can be created under',
       capability: 'manage',
-      response: pageOf(z.object({ id: z.string(), title: z.string() })),
+      response: pageOf(NotionParentPageOut),
       description: `The Notion pages this integration may parent its designed databases under — the pages the person shared with Docket during consent.
 
-An empty list is a legitimate and common state, not an error: a public Notion integration only sees what it was explicitly granted. The setup flow must say so and offer a re-consent path rather than presenting it as a failure.`,
+Searched and paged **at the provider**: \`q\` is passed to Notion as a title query and results come back most-recently-edited first. Omit \`q\` for the most recent pages. This is a search endpoint rather than a dump because a real workspace has more pages than a person will ever scroll, and downloading all of them to filter in the browser is neither fast nor a usable list.
+
+An empty list is a legitimate and common state, not an error: a public Notion integration only sees what it was explicitly granted. With no \`q\`, an empty result means nothing was shared and the setup flow must offer a re-consent path; with a \`q\`, it just means nothing matched.`,
     }),
     zParam(mirrorParam),
+    zQuery(parentPageQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await assertNotionIntegration(orgId, id);
-      const token = await mirrorToken(c, id);
-      const pages = await buildNotionMirror(token).listParentPages();
-      return ok(c, pageOf(z.object({ id: z.string(), title: z.string() })), {
-        items: pages.map((page) => ({ id: page.id, title: page.title })),
+      const { q, cursor, limit } = c.req.valid('query');
+      const row = await assertNotionIntegration(orgId, id);
+      const token = await mirrorToken(row);
+      const page = await buildNotionMirror(token).listParentPages({
+        ...(q !== undefined ? { query: q } : {}),
+        ...(cursor !== undefined ? { cursor } : {}),
+        limit: limit ?? PARENT_PAGE_LIMIT,
+      });
+      return ok(c, pageOf(NotionParentPageOut), {
+        items: page.items.map(toParentPageOut),
+        ...(page.nextCursor !== null ? { nextCursor: page.nextCursor } : {}),
       });
     },
   )
@@ -211,14 +263,33 @@ Requires \`manage\`. Returns 409 when another run already holds the integration'
       const { id } = c.req.valid('param');
       const { containerPageId } = c.req.valid('json');
       const row = await assertNotionIntegration(orgId, id);
-      await ensureDesigns(orgId, id, actorId);
+
+      // Ask Notion what this page is actually called, rather than trusting a title the browser
+      // happened to be showing. Settings names the container page from this, so a stale or
+      // spoofed client title would become the permanent label on a link people click.
+      //
+      // Concurrent with the design seed: one is a local write, the other a Notion round trip, and
+      // only the config write below needs either.
+      const [, described] = await Promise.all([
+        ensureDesigns(orgId, id, actorId),
+        mirrorToken(row).then((token) => buildNotionMirror(token).describePage(containerPageId)),
+      ]);
 
       // Spread the existing config: `config` is a wholesale replace, so writing only the mirror
       // key would drop `listIds` and silently unlink every database the other mode syncs.
       const config = row.config;
       const updated = await db
         .update(integration)
-        .set({ config: { ...config, notionMirror: { containerPageId } } })
+        .set({
+          config: {
+            ...config,
+            notionMirror: {
+              containerPageId,
+              containerPageTitle: described.title,
+              ...(described.url !== undefined ? { containerPageUrl: described.url } : {}),
+            },
+          },
+        })
         .where(eq(integration.id, id))
         .returning();
       const fresh = updated[0];

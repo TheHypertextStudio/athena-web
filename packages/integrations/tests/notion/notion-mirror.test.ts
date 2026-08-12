@@ -1,11 +1,14 @@
+import type { PageObjectResponse } from '@notionhq/client';
 import { NotionPropertyKind } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
 import { ConnectorError } from '../../src/connector-error';
 import {
+  NotionMirrorClient,
   columnSchema,
   databaseSchema,
   readPropertyIds,
+  toParentPage,
   type MirrorColumnSpec,
 } from '../../src/notion-mirror';
 
@@ -111,5 +114,106 @@ describe('readPropertyIds', () => {
       Name: { id: '' },
     });
     expect(ids).toEqual({});
+  });
+});
+
+describe('toParentPage', () => {
+  const page = (over: Record<string, unknown>): PageObjectResponse =>
+    ({
+      object: 'page',
+      id: 'page_1',
+      url: 'https://www.notion.so/page-1',
+      last_edited_time: '2026-01-02T03:04:05.000Z',
+      parent: { type: 'workspace', workspace: true },
+      icon: null,
+      properties: { Name: { type: 'title', title: [{ plain_text: 'Roadmap' }] } },
+      ...over,
+    }) as unknown as PageObjectResponse;
+
+  it('carries the three things that tell two same-named pages apart', () => {
+    // Resolving each result's parent *title* would be one extra request per row per keystroke.
+    // These three come free on the search result and do the same job.
+    expect(toParentPage(page({ icon: { type: 'emoji', emoji: '🗺️' } }))).toEqual({
+      id: 'page_1',
+      title: 'Roadmap',
+      url: 'https://www.notion.so/page-1',
+      icon: '🗺️',
+      lastEditedTime: '2026-01-02T03:04:05.000Z',
+      parentKind: 'workspace',
+    });
+  });
+
+  it('drops a hosted icon rather than making the picker fetch it', () => {
+    // An authenticated image request per option, for decoration, with a URL that expires.
+    const mapped = toParentPage(
+      page({ icon: { type: 'external', external: { url: 'https://example.com/i.png' } } }),
+    );
+    expect(mapped.icon).toBeUndefined();
+  });
+
+  it('reports where the page sits for every parent Notion names', () => {
+    expect(toParentPage(page({ parent: { type: 'page_id', page_id: 'p' } })).parentKind).toBe(
+      'page',
+    );
+    expect(
+      toParentPage(page({ parent: { type: 'data_source_id', data_source_id: 'd' } })).parentKind,
+    ).toBe('database');
+    expect(toParentPage(page({ parent: { type: 'block_id', block_id: 'b' } })).parentKind).toBe(
+      undefined,
+    );
+  });
+
+  it('falls back to Untitled rather than rendering a nameless row', () => {
+    expect(toParentPage(page({ properties: {} })).title).toBe('Untitled');
+  });
+});
+
+describe('NotionMirrorClient.listParentPages', () => {
+  /** Capture the request the SDK makes, and answer with an empty search result. */
+  function captureSearch(): { body: () => Record<string, unknown>; fetchImpl: typeof fetch } {
+    let seen: Record<string, unknown> = {};
+    const fetchImpl = ((_url: string, init?: { body?: string }) => {
+      seen = JSON.parse(init?.body ?? '{}') as Record<string, unknown>;
+      return Promise.resolve(
+        new Response(JSON.stringify({ object: 'list', results: [], next_cursor: null }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    }) as unknown as typeof fetch;
+    return { body: () => seen, fetchImpl };
+  }
+
+  it('asks Notion to do the narrowing and the ordering', async () => {
+    // The whole point of the change: `search` takes both a title query and a `last_edited_time`
+    // sort, so a workspace is never downloaded to be filtered in a browser. The previous version
+    // sent neither — and its docstring claimed an ordering it never requested.
+    const { body, fetchImpl } = captureSearch();
+    await new NotionMirrorClient('token', fetchImpl).listParentPages({ query: ' roadmap ' });
+
+    expect(body()).toMatchObject({
+      query: 'roadmap',
+      filter: { property: 'object', value: 'page' },
+      sort: { timestamp: 'last_edited_time', direction: 'descending' },
+    });
+  });
+
+  it('omits the query entirely when nothing has been typed', async () => {
+    // An empty `query` is not the same request as no query; sending one narrows to nothing.
+    const { body, fetchImpl } = captureSearch();
+    await new NotionMirrorClient('token', fetchImpl).listParentPages({ query: '   ' });
+    expect(body()).not.toHaveProperty('query');
+  });
+
+  it('asks for one page, not the whole workspace, and forwards the cursor', async () => {
+    const { body, fetchImpl } = captureSearch();
+    await new NotionMirrorClient('token', fetchImpl).listParentPages({ limit: 25, cursor: 'c1' });
+    expect(body()).toMatchObject({ page_size: 25, start_cursor: 'c1' });
+  });
+
+  it('clamps a caller asking for more than Notion allows', async () => {
+    const { body, fetchImpl } = captureSearch();
+    await new NotionMirrorClient('token', fetchImpl).listParentPages({ limit: 5000 });
+    expect(body()).toMatchObject({ page_size: 100 });
   });
 });

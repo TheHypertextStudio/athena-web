@@ -13,18 +13,33 @@
  *
  * @see `docs/engineering/specs/notion-sync.md`
  */
+import { ConnectorConfig } from '@docket/types';
 import type {
   IntegrationOut,
   NotionMirrorDatabaseOut,
   NotionMirrorDesignOut,
   NotionMirrorEntity,
+  NotionParentPageOut,
   NotionWorkspacePerson,
 } from '@docket/types';
 import { useState } from 'react';
 
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
-import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import {
+  STALE,
+  apiQueryOptions,
+  queryKeys,
+  unwrap,
+  useApiListQuery,
+  useApiMutation,
+  useApiQuery,
+} from '@/lib/query';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
+
+import { relativeTime } from '../format-time';
+
+import { SETUP_FAILED } from './notion-copy';
 
 /** The Notion hub's view model. */
 export interface NotionMirrorModel {
@@ -43,6 +58,18 @@ export interface NotionMirrorModel {
   connectionsHref: string;
   /** When the mirror last ran, in words, or null when it never has. */
   lastSyncedLabel: string | null;
+  /**
+   * The Notion page the databases were built under, or null before provisioning.
+   *
+   * @remarks
+   * Recorded at provision time so the surface can say where its output went. It used to be
+   * written to `integration.config` and never shown again, which left the one question a reader
+   * has afterwards — *where did those nine databases go?* — answerable only by searching Notion.
+   *
+   * `title` is absent on connections provisioned before it was recorded; those fall back to a
+   * generic label rather than to nothing.
+   */
+  containerPage: { title: string | null; url: string | null } | null;
 }
 
 /** Read the Notion connection and the databases designed against it. */
@@ -83,7 +110,32 @@ export function useNotionMirror(orgId: string): NotionMirrorModel {
     lastSyncedLabel: relativeSyncLabel(
       databases.map((d) => d.lastPushedAt).filter((v): v is string => v !== null),
     ),
+    containerPage: readContainerPage(integration?.config),
   };
+}
+
+/**
+ * Read the container page out of the connector config.
+ *
+ * @remarks
+ * `IntegrationOut.config` crosses the wire as untyped jsonb, so it has to be validated rather than
+ * asserted — but against {@link ConnectorConfig}, the schema that *defines* this shape and that the
+ * API parses the same value with. Hand-narrowing it here would make the key path a fact stated in
+ * three places in two idioms.
+ *
+ * `safeParse` rather than `parse`: a connection provisioned before the title was recorded, or one
+ * whose config predates the mirror entirely, must render the surface without it rather than throw
+ * on a settings page.
+ *
+ * @param config - The integration's connector config, if any.
+ * @returns the container page's title and URL, or null when nothing has been provisioned.
+ */
+function readContainerPage(
+  config: Record<string, unknown> | undefined,
+): { title: string | null; url: string | null } | null {
+  const mirror = ConnectorConfig.safeParse(config ?? {}).data?.notionMirror;
+  if (mirror === undefined) return null;
+  return { title: mirror.containerPageTitle ?? null, url: mirror.containerPageUrl ?? null };
 }
 
 /**
@@ -97,21 +149,108 @@ function relativeSyncLabel(timestamps: readonly string[]): string | null {
   if (timestamps.length === 0) return null;
   const latest = Math.max(...timestamps.map((t) => Date.parse(t)).filter((n) => !Number.isNaN(n)));
   if (!Number.isFinite(latest)) return null;
-  const minutes = Math.round((Date.now() - latest) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${String(minutes)} minute${minutes === 1 ? '' : 's'} ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${String(hours)} hour${hours === 1 ? '' : 's'} ago`;
-  const days = Math.round(hours / 24);
-  return `${String(days)} day${days === 1 ? '' : 's'} ago`;
+  return relativeTime(new Date(latest).toISOString());
 }
 
-/** The setup surface's view model: choose a page, then create the databases. */
-export interface NotionSetupModel {
-  loading: boolean;
+/**
+ * How long ago a moment was, tolerating an absent or unparseable timestamp.
+ *
+ * @remarks
+ * A null guard over the settings surface's own {@link relativeTime}, which is what every other
+ * connector stamp on this screen already uses — including the "last synced" line on the Notion
+ * card the reader just came from. Its fallback to an absolute date past a week is what the page
+ * picker wants: "Mar 3" beside one same-named page and "2 days ago" beside the other tells them
+ * apart far better than "243 days ago" would.
+ *
+ * @param iso - An ISO-8601 timestamp, or null.
+ * @returns the phrase, or null when there is no usable timestamp.
+ */
+export function relativeTimeLabel(iso: string | null): string | null {
+  if (iso === null || Number.isNaN(Date.parse(iso))) return null;
+  return relativeTime(iso);
+}
+
+/** Below this, a Notion title query matches so much that it is noise rather than a result. */
+const PARENT_PAGE_DEBOUNCE_MS = 280;
+
+/** One page of the parent-page search, as the picker needs it. */
+export interface NotionParentPageSearch {
+  /** The current result wave. Never blanks between keystrokes — see `useApiListQuery`. */
+  pages: readonly NotionParentPageOut[];
+  /**
+   * True while the typed term has not yet reached the server, or the request is in flight.
+   *
+   * @remarks
+   * The mid-burst window counts. Without it the picker looks settled on the previous term's
+   * results while a newer request is already on its way.
+   */
+  pending: boolean;
   error: string | null;
-  /** Notion pages Docket may build under — empty is legitimate, not a failure. */
-  parentPages: readonly { id: string; title: string }[];
+}
+
+/**
+ * Search the Notion pages Docket may build under.
+ *
+ * @remarks
+ * Server-filtered, not client-filtered. Notion's `search` takes the title query and returns the
+ * most recently edited matches, so the browser never downloads a workspace to narrow it locally.
+ *
+ * Debounced at 280ms — the same figure the mention picker uses for its provider wave, because
+ * this is the same kind of cost: one real OAuth round trip to somebody else's server per
+ * keystroke. The *term* is debounced rather than the request, so the settled value goes into the
+ * query key and TanStack handles deduplication, cancellation and race-safety.
+ *
+ * @param orgId - The workspace.
+ * @param integrationId - The Notion connection.
+ * @param query - What has been typed, unsettled.
+ * @param enabled - False while the picker is closed, so a shut popover issues no requests.
+ * @returns the current result wave.
+ */
+export function useNotionParentPages(
+  orgId: string,
+  integrationId: string,
+  query: string,
+  enabled: boolean,
+): NotionParentPageSearch {
+  const trimmed = query.trim();
+  const term = useDebouncedValue(trimmed, PARENT_PAGE_DEBOUNCE_MS);
+  const active = enabled && integrationId.length > 0;
+
+  const pagesQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.notionParentPages(orgId, integrationId, term),
+      () =>
+        api.v1.orgs[':orgId'].integrations[':id'].notion['parent-pages'].$get({
+          param: { orgId, id: integrationId },
+          query: term.length > 0 ? { q: term } : {},
+        }),
+      'Could not load your Notion pages.',
+      {
+        enabled: active,
+        // A workspace's page list is not volatile, and `refetchOnWindowFocus` is on: a 5s stale
+        // window would mean a real OAuth round trip to Notion on every tab focus, for a one-shot
+        // setup surface.
+        staleTime: STALE.static,
+        // Every settled term mints its own key, and the default gc time is 24h with persistence —
+        // so without this, typing "engineering handbook" leaves half a dozen search results in
+        // the persisted cache for a day.
+        gcTime: 60_000,
+      },
+    ),
+  );
+
+  return {
+    pages: pagesQ.data?.items ?? [],
+    pending: active && (trimmed !== term || pagesQ.isPending),
+    error: pagesQ.error
+      ? userErrorMessage(pagesQ.error, 'Could not load your Notion pages.')
+      : null,
+  };
+}
+
+/** The setup surface's view model: create the databases under a chosen page. */
+export interface NotionSetupModel {
+  error: string | null;
   /** True while the provision run is in flight. */
   creating: boolean;
   /** Create the databases under the chosen page. */
@@ -119,28 +258,19 @@ export interface NotionSetupModel {
 }
 
 /**
- * Read the pages Docket may build under, and create the databases.
+ * Create the designed databases in Notion.
  *
  * @remarks
  * The provision route answers 200 carrying the sync run, so a *failed* run is a successful HTTP
  * response describing a failure. This surfaces that as an error rather than as success — the whole
  * point of the never-report-success-when-nothing-happened rule.
+ *
+ * Reading the candidate pages is deliberately **not** here: it is a search that reruns as
+ * somebody types, and folding it into the model that owns the create mutation would make every
+ * keystroke a state change for the button too.
  */
 export function useNotionSetup(orgId: string, integrationId: string): NotionSetupModel {
   const [error, setError] = useState<string | null>(null);
-  const enabled = integrationId.length > 0;
-
-  const pagesQ = useApiQuery({
-    ...apiQueryOptions(
-      [...queryKeys.notionMirrorDatabases(orgId, integrationId), 'parent-pages'],
-      () =>
-        api.v1.orgs[':orgId'].integrations[':id'].notion['parent-pages'].$get({
-          param: { orgId, id: integrationId },
-        }),
-      'Could not load your Notion pages.',
-    ),
-    enabled,
-  });
 
   const create = useApiMutation({
     mutationFn: (containerPageId: string) =>
@@ -162,11 +292,7 @@ export function useNotionSetup(orgId: string, integrationId: string): NotionSetu
     onSuccess: (run: { status: string }) => {
       // A failed run still arrives as a 200. Reporting it as success is exactly the dishonesty
       // this codebase refuses.
-      setError(
-        run.status === 'succeeded'
-          ? null
-          : 'Docket could not finish creating your Notion databases. Check the connection and try again.',
-      );
+      setError(run.status === 'succeeded' ? null : SETUP_FAILED);
     },
     onError: (e: Error) => {
       setError(userErrorMessage(e, 'Could not create your Notion databases.'));
@@ -174,11 +300,7 @@ export function useNotionSetup(orgId: string, integrationId: string): NotionSetu
   });
 
   return {
-    loading: enabled && pagesQ.isPending,
-    error:
-      error ??
-      (pagesQ.error ? userErrorMessage(pagesQ.error, 'Could not load your Notion pages.') : null),
-    parentPages: pagesQ.data?.items ?? [],
+    error,
     creating: create.isPending,
     create: (containerPageId) => {
       create.mutate(containerPageId);

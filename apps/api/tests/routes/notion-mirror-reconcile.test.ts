@@ -17,6 +17,7 @@ import {
   type MirrorDatabaseSpec,
   type MirrorExternalPerson,
   type MirrorParentPage,
+  type MirrorParentPageList,
   type MirrorRowOp,
   type MirrorRowResult,
   type NotionMirrorPort,
@@ -56,8 +57,12 @@ class RecordingMirror implements NotionMirrorPort {
     return Promise.resolve('notion-bot');
   }
 
-  listParentPages(): Promise<MirrorParentPage[]> {
-    return Promise.resolve([{ id: 'parent-1', title: 'Workspace' }]);
+  listParentPages(): Promise<MirrorParentPageList> {
+    return Promise.resolve({ items: [{ id: 'parent-1', title: 'Workspace' }], nextCursor: null });
+  }
+
+  describePage(pageId: string): Promise<MirrorParentPage> {
+    return Promise.resolve({ id: pageId, title: 'Workspace' });
   }
 
   listWorkspaceUsers(): Promise<MirrorExternalPerson[]> {

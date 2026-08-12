@@ -334,6 +334,44 @@ export const NotionWorkspacePerson = z
 /** Notion workspace-person value. */
 export type NotionWorkspacePerson = z.infer<typeof NotionWorkspacePerson>;
 
+/**
+ * One Notion page offered as a home for Docket's designed databases.
+ *
+ * @remarks
+ * Everything past `id` and `title` exists to tell two same-named pages apart. A workspace of any
+ * age has several pages called "Projects", and the picker cannot resolve each result's parent
+ * *title* — that is one extra Notion request per row, per keystroke. So it shows what a single
+ * search result already carries: the page's own emoji, whether it sits at the top level, and when
+ * it was last edited.
+ *
+ * All three are optional because `pages.retrieve` and `search` are allowed to omit them, and a
+ * missing icon must degrade to a plain row rather than to an error.
+ */
+export const NotionParentPageOut = z
+  .object({
+    id: z.string(),
+    title: z.string().describe("The page's title, or `Untitled` when it has none."),
+    url: z.string().nullable().describe('A deep link to the page in Notion.'),
+    icon: z
+      .string()
+      .nullable()
+      .describe('The page emoji. Image icons are deliberately not carried — see the client.'),
+    lastEditedTime: z
+      .string()
+      .nullable()
+      .describe('ISO-8601. Also the field the search results are ordered by.'),
+    parentKind: z
+      .enum(['workspace', 'page', 'database'])
+      .nullable()
+      .describe('Where the page sits, as far as one search result can say.'),
+  })
+  .meta({
+    id: 'NotionParentPageOut',
+    description: 'A Notion page Docket may build its designed databases under.',
+  });
+/** Notion parent-page value. */
+export type NotionParentPageOut = z.infer<typeof NotionParentPageOut>;
+
 /** The decision a person makes about one unmatched Notion member. */
 export const NotionPersonResolve = z
   .object({

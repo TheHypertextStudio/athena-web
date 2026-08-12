@@ -114,6 +114,47 @@ describe('MockNotionMirror — the flow the reconciler depends on', () => {
     );
   });
 
+  it('narrows the parent-page list by title, case-insensitively', async () => {
+    // The picker never filters locally — it trusts the provider to have interpreted the query. A
+    // mock that returned its whole fixture regardless would let that contract ship unexercised.
+    const mirror = new MockNotionMirror();
+    const all = await mirror.listParentPages();
+    const matched = await mirror.listParentPages({ query: 'proj' });
+
+    expect(all.items.length).toBeGreaterThan(matched.items.length);
+    expect(matched.items.every((page) => page.title.toLowerCase().includes('proj'))).toBe(true);
+  });
+
+  it('offers two same-named pages that only their placement and edit time tell apart', async () => {
+    // The reason a row carries more than a title: a real workspace has repeats, and the picker's
+    // whole job is making them distinguishable without a request per row.
+    const projects = (await new MockNotionMirror().listParentPages({ query: 'Projects' })).items;
+
+    expect(projects).toHaveLength(2);
+    expect(new Set(projects.map((page) => page.title)).size).toBe(1);
+    expect(new Set(projects.map((page) => page.parentKind)).size).toBe(2);
+    expect(new Set(projects.map((page) => page.lastEditedTime)).size).toBe(2);
+  });
+
+  it('pages through with a cursor and stops by reporting none', async () => {
+    const mirror = new MockNotionMirror();
+    const first = await mirror.listParentPages({ limit: 2 });
+    expect(first.items).toHaveLength(2);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await mirror.listParentPages({ limit: 2, cursor: first.nextCursor ?? '' });
+    expect(second.items.map((page) => page.id)).not.toEqual(first.items.map((page) => page.id));
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('describes a page by id, and names an unknown one rather than failing', async () => {
+    // Provisioning records the container page's title from this. A miss must degrade to a label,
+    // not throw — the databases were still created and the surface still has to render.
+    const mirror = new MockNotionMirror();
+    expect(await mirror.describePage('mock_page_workspace')).toMatchObject({ title: 'Team wiki' });
+    expect(await mirror.describePage('nope')).toEqual({ id: 'nope', title: 'Untitled' });
+  });
+
   it('trashes on delete rather than dropping the page', async () => {
     // Notion has no hard delete over the API, and a sync must never destroy data at either end.
     const mirror = new MockNotionMirror();

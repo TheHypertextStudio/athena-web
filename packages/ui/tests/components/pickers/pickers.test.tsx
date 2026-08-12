@@ -128,6 +128,110 @@ describe('PickerList', () => {
     expect(screen.getByText('No projects')).toBeInTheDocument();
   });
 
+  it('reports typing without giving up filtering', () => {
+    // Owning the query text and owning the filtering are independent. A caller lifting the term
+    // into URL state, or clearing it when a popover closes, must not silently lose local matching.
+    const onQueryChange = vi.fn();
+    render(
+      <PickerList
+        options={PROJECTS}
+        selected={null}
+        onSelect={vi.fn()}
+        query="onb"
+        onQueryChange={onQueryChange}
+        ariaLabel="Project"
+      />,
+    );
+    expect(screen.queryByRole('option', { name: /Migration/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Onboarding/ })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search Project'), { target: { value: 'mig' } });
+    expect(onQueryChange).toHaveBeenCalledWith('mig');
+  });
+
+  it('leaves an already-filtered list alone when told the caller filtered it', () => {
+    // A server interpreted the query its own way; re-running `includes` over the answer would
+    // drop rows it deliberately returned.
+    render(
+      <PickerList
+        options={PROJECTS}
+        selected={null}
+        onSelect={vi.fn()}
+        query="zzzz"
+        onQueryChange={vi.fn()}
+        filter="none"
+        ariaLabel="Project"
+      />,
+    );
+    expect(screen.getByRole('option', { name: /Migration/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Onboarding/ })).toBeInTheDocument();
+  });
+
+  it('shows placeholder rows while loading rather than claiming no matches', () => {
+    // The one thing a search box must never do is report absence before it has an answer.
+    render(
+      <PickerList
+        options={[]}
+        selected={null}
+        onSelect={vi.fn()}
+        query="mig"
+        onQueryChange={vi.fn()}
+        loading
+        emptyText="No projects"
+        ariaLabel="Project"
+      />,
+    );
+    expect(screen.queryByText('No projects')).not.toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Project' })).toHaveAttribute('aria-busy', 'true');
+  });
+
+  it('distinguishes "nothing here yet" from "nothing matched"', () => {
+    // Different problems with different fixes: the first usually needs an action from the reader,
+    // the second just needs a shorter query.
+    const view = render(
+      <PickerList
+        options={[]}
+        selected={null}
+        onSelect={vi.fn()}
+        query=""
+        onQueryChange={vi.fn()}
+        idleText="Nothing shared yet"
+        emptyText="No projects"
+        ariaLabel="Project"
+      />,
+    );
+    expect(screen.getByText('Nothing shared yet')).toBeInTheDocument();
+
+    view.rerender(
+      <PickerList
+        options={[]}
+        selected={null}
+        onSelect={vi.fn()}
+        query="zzz"
+        onQueryChange={vi.fn()}
+        idleText="Nothing shared yet"
+        emptyText="No projects"
+        ariaLabel="Project"
+      />,
+    );
+    expect(screen.getByText('No projects')).toBeInTheDocument();
+  });
+
+  it('falls back to the empty text when no idle text is given', () => {
+    // The uncontrolled path must be untouched: one string, exactly as before.
+    render(
+      <PickerList
+        options={[]}
+        selected={null}
+        onSelect={vi.fn()}
+        emptyText="No projects"
+        ariaLabel="Project"
+      />,
+    );
+    expect(screen.getByText('No projects')).toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Project' })).not.toHaveAttribute('aria-busy');
+  });
+
   it('reports the chosen value on click', () => {
     const onSelect = vi.fn();
     render(

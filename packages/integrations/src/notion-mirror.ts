@@ -144,11 +144,44 @@ export const NOTION_RELATION_LIMIT = 100;
 /** Notion's rich-text length ceiling; longer content is a 400 rather than a truncation. */
 export const NOTION_TEXT_LIMIT = 2000;
 
-/** A page in the workspace that can parent a designed database. */
+/** Where a page sits in the Notion workspace, as far as one search result can say. */
+export type MirrorPageParentKind = 'workspace' | 'page' | 'database';
+
+/**
+ * A page in the workspace that can parent a designed database.
+ *
+ * @remarks
+ * Carries more than an id and a title because the picker has to be usable in a real workspace,
+ * where several pages share a name. Resolving each result's *parent title* would be an N+1 fetch
+ * per keystroke, so the disambiguating detail is the three things one search result already
+ * knows: the page's own emoji, whether it sits at the top level, and when it was last touched.
+ */
 export interface MirrorParentPage {
   readonly id: string;
   readonly title: string;
   readonly url?: string;
+  /** The page's emoji icon, when it has one. File and external icons are not carried. */
+  readonly icon?: string;
+  /** ISO-8601 `last_edited_time`, the field the search is also sorted by. */
+  readonly lastEditedTime?: string;
+  readonly parentKind?: MirrorPageParentKind;
+}
+
+/** One page of {@link MirrorParentPage} results. */
+export interface MirrorParentPageList {
+  readonly items: MirrorParentPage[];
+  /** Notion's opaque cursor for the next page, or null at the end of the list. */
+  readonly nextCursor: string | null;
+}
+
+/** How to narrow {@link NotionMirrorPort.listParentPages}. */
+export interface MirrorParentPageQuery {
+  /** A title substring; omitted or empty returns the most recently edited pages. */
+  readonly query?: string;
+  /** An opaque cursor from a previous call's `nextCursor`. */
+  readonly cursor?: string;
+  /** How many results to ask Notion for. Capped at Notion's own ceiling. */
+  readonly limit?: number;
 }
 
 /** A human in the provider workspace, for identity matching. */
@@ -352,8 +385,10 @@ function asConnectorError(err: unknown, context: string): ConnectorError {
 export interface NotionMirrorPort {
   /** Docket's own bot user id — the echo guard's other half. */
   botId(): Promise<string>;
-  /** Pages the integration may parent a database under. */
-  listParentPages(): Promise<MirrorParentPage[]>;
+  /** Pages the integration may parent a database under, narrowed and paged. */
+  listParentPages(options?: MirrorParentPageQuery): Promise<MirrorParentPageList>;
+  /** Describe one page by id, so the server owns the container page's name and URL. */
+  describePage(pageId: string): Promise<MirrorParentPage>;
   /** The workspace's people, never its bots. */
   listWorkspaceUsers(): Promise<MirrorExternalPerson[]>;
   /** Create a database and its initial data source. */
@@ -418,21 +453,52 @@ export class NotionMirrorClient implements NotionMirrorPort {
    * empty result is a legitimate, common state that the setup flow must explain rather than treat
    * as an error.
    *
-   * @returns the shareable pages, most recently edited first.
+   * **One request, narrowed and ordered by the provider.** This used to walk the entire result set
+   * with `collectPaginatedAPI` at 100 pages a request, unsorted, on every settings open — and
+   * claimed an ordering in its own docstring that the call never asked for. Notion's `search`
+   * takes both a title `query` and a `last_edited_time` sort, so the narrowing belongs there
+   * rather than in a client that has already paid to download the whole workspace.
+   *
+   * @param options - Title query, cursor and page size; all optional.
+   * @returns one page of shareable pages, most recently edited first, plus the next cursor.
    */
-  async listParentPages(): Promise<MirrorParentPage[]> {
+  async listParentPages(options: MirrorParentPageQuery = {}): Promise<MirrorParentPageList> {
+    const query = options.query?.trim() ?? '';
     try {
-      const results = await collectPaginatedAPI(this.notion.search, {
+      const response = await this.notion.search({
+        ...(query.length > 0 ? { query } : {}),
         filter: { property: 'object', value: 'page' },
-        page_size: NOTION_PAGE_SIZE,
+        sort: { timestamp: 'last_edited_time', direction: 'descending' },
+        page_size: Math.min(options.limit ?? NOTION_PAGE_SIZE, NOTION_PAGE_SIZE),
+        ...(options.cursor !== undefined ? { start_cursor: options.cursor } : {}),
       });
-      return fullPages(results).map((page) => ({
-        id: page.id,
-        title: pageTitle(page),
-        ...(typeof page.url === 'string' ? { url: page.url } : {}),
-      }));
+      return {
+        items: fullPages(response.results).map(toParentPage),
+        nextCursor: response.next_cursor,
+      };
     } catch (err) {
       throw asConnectorError(err, 'page listing');
+    }
+  }
+
+  /**
+   * Describe one page by id.
+   *
+   * @remarks
+   * Exists so the *server* records what the container page is called and where it lives, rather
+   * than trusting a title the browser happened to be showing when someone pressed Create. The
+   * settings surface then names the page without a Notion round trip on every load.
+   *
+   * @param pageId - The Notion page id.
+   * @returns the page's title, URL, icon and placement.
+   */
+  async describePage(pageId: string): Promise<MirrorParentPage> {
+    try {
+      const page = await this.notion.pages.retrieve({ page_id: pageId });
+      const full = fullPages([page])[0];
+      return full ? toParentPage(full) : { id: pageId, title: 'Untitled' };
+    } catch (err) {
+      throw asConnectorError(err, 'page lookup');
     }
   }
 
@@ -659,6 +725,43 @@ function pageTitle(page: PageObjectResponse): string {
     if (text.length > 0) return text;
   }
   return 'Untitled';
+}
+
+/**
+ * Which Notion parent types map to which placement, answerable at a glance.
+ *
+ * @remarks
+ * Partial on purpose: `block_id` and any type a future API version adds fall through to
+ * `undefined`, which the picker renders as a row with no placement line rather than a wrong one.
+ */
+const PARENT_KIND: Partial<Record<PageObjectResponse['parent']['type'], MirrorPageParentKind>> = {
+  workspace: 'workspace',
+  page_id: 'page',
+  data_source_id: 'database',
+  database_id: 'database',
+};
+
+/**
+ * Map a full page response onto the picker's page shape.
+ *
+ * @remarks
+ * Only an `emoji` icon is carried. Notion's other two icon kinds are hosted images, and a picker
+ * row that fires off an authenticated image request per option — for decoration — is not worth
+ * the bytes or the broken-image state when the URL expires.
+ *
+ * @param page - The full page from `search` or `pages.retrieve`.
+ * @returns the page as the setup flow needs it.
+ */
+export function toParentPage(page: PageObjectResponse): MirrorParentPage {
+  const parentKind = PARENT_KIND[page.parent.type];
+  return {
+    id: page.id,
+    title: pageTitle(page),
+    ...(typeof page.url === 'string' ? { url: page.url } : {}),
+    ...(page.icon?.type === 'emoji' ? { icon: page.icon.emoji } : {}),
+    lastEditedTime: page.last_edited_time,
+    ...(parentKind !== undefined ? { parentKind } : {}),
+  };
 }
 
 /** Map a full page response onto the mirror's change shape. */

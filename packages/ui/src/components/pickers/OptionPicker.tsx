@@ -43,8 +43,29 @@ export interface OptionPickerProps<TValue extends string = string> {
   searchable?: boolean;
   /** Placeholder for the search input. */
   searchPlaceholder?: string;
-  /** Text shown when no option matches the query. */
+  /** Text shown when no option matches a *typed* query. */
   emptyText?: string;
+  /** Text shown when the list is empty and nothing has been typed. See {@link PickerListProps}. */
+  idleText?: string;
+  /** The search text, when the caller owns it. Supplying this makes the field controlled. */
+  query?: string;
+  /** Report typing. Pair with `query` for a controlled search field. */
+  onQueryChange?: (query: string) => void;
+  /**
+   * Who narrows `options` against the query. Defaults to `'local'`; pass `'none'` when the caller
+   * has already filtered (e.g. at a provider). See {@link PickerListProps.filter}.
+   */
+  filter?: 'local' | 'none';
+  /** True while the caller is fetching options; renders placeholder rows, not an empty state. */
+  loading?: boolean;
+  /**
+   * Observe the popover opening and closing.
+   *
+   * @remarks
+   * The open state stays owned here — this only reports it. A server-filtered picker needs it to
+   * stop querying for a list nobody is looking at.
+   */
+  onOpenChange?: (open: boolean) => void;
   /** When set, render a top "clear" row with this label that reports `null` through `onChange`. */
   clearLabel?: string;
   /** Accessible label prefix for the trigger + listbox (e.g. "Lead", "Project"). */
@@ -86,6 +107,12 @@ export function OptionPicker<TValue extends string = string>({
   searchable = true,
   searchPlaceholder = 'Search…',
   emptyText = 'No matches',
+  idleText,
+  query,
+  onQueryChange,
+  filter,
+  loading,
+  onOpenChange,
   clearLabel,
   ariaLabel,
   disabled,
@@ -94,6 +121,10 @@ export function OptionPicker<TValue extends string = string>({
   triggerClassName,
 }: OptionPickerProps<TValue>): React.JSX.Element {
   const [open, setOpen] = React.useState(false);
+  const setOpenState = (next: boolean): void => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
   const active = value !== null ? options.find((option) => option.value === value) : undefined;
 
   // A read-only or disabled picker never opens; render the trigger affordance only.
@@ -113,7 +144,7 @@ export function OptionPicker<TValue extends string = string>({
   if (readOnly) return trigger;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpenState}>
       <PopoverTrigger asChild disabled={disabled}>
         {trigger}
       </PopoverTrigger>
@@ -123,11 +154,16 @@ export function OptionPicker<TValue extends string = string>({
           selected={value}
           onSelect={(next) => {
             onChange(next);
-            setOpen(false);
+            setOpenState(false);
           }}
           searchable={searchable}
           searchPlaceholder={searchPlaceholder}
           emptyText={emptyText}
+          idleText={idleText}
+          query={query}
+          onQueryChange={onQueryChange}
+          filter={filter}
+          loading={loading}
           ariaLabel={ariaLabel}
           clear={
             clearLabel
@@ -135,7 +171,7 @@ export function OptionPicker<TValue extends string = string>({
                   label: clearLabel,
                   onClear: () => {
                     onChange(null);
-                    setOpen(false);
+                    setOpenState(false);
                   },
                 }
               : null

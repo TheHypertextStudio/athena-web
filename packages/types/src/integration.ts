@@ -143,6 +143,16 @@ export const ConnectorConfig = z
         containerPageId: z
           .string()
           .describe('The Notion page Docket creates its designed databases under.'),
+        containerPageTitle: z
+          .string()
+          .optional()
+          .describe(
+            "The container page's title as Notion reported it at provision time, so settings can name where the databases live without a Notion round trip on every load. Absent on connections provisioned before this was recorded.",
+          ),
+        containerPageUrl: z
+          .string()
+          .optional()
+          .describe('A deep link to the container page in Notion, from the same lookup.'),
       })
       .optional()
       .describe(

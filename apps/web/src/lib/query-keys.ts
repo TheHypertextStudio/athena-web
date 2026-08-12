@@ -61,6 +61,16 @@ export const queryKeys = {
   /** Notion workspace members and their Docket actor matches. */
   notionMirrorPeople: (orgId: string, integrationId: string) =>
     ['org', orgId, 'integrations', integrationId, 'notion', 'people'] as const,
+  /**
+   * One page of the Notion parent-page search.
+   *
+   * @remarks
+   * The settled search term is part of the key, not a parameter the fetcher closes over: that is
+   * what hands deduplication, cancellation and race-safety to TanStack instead of re-solving them
+   * by hand for every keystroke.
+   */
+  notionParentPages: (orgId: string, integrationId: string, query: string) =>
+    ['org', orgId, 'integrations', integrationId, 'notion', 'parent-pages', query] as const,
   mcpIntegrations: (orgId: string) => ['org', orgId, 'mcp-integrations'] as const,
   emailSuggestions: (orgId: string) => ['org', orgId, 'email-suggestions'] as const,
   emailSuggestionThread: (orgId: string, suggestionId: string) =>

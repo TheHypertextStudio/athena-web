@@ -80,23 +80,27 @@
   - [x] Replace all dashed frames with labeled product screenshots and responsive crops.
   - [x] Keep current billing and customer documentation product-based.
   - [x] Re-run copy, responsive, theme, no-placeholder, type, lint, test, and build gates.
+  - [x] Replace the hard-disabled billing deploy with a production-variable gate that fails closed
+        unless the complete Stripe runtime and Docket Pro price bindings exist.
   - [ ] Prove Stripe checkout, webhook activation, access, management, cancellation, and return routing.
   - [ ] Deploy the validated release and verify the production customer journey.
 - **Files Changed**: Deterministic marketing capture tooling; nine JPEG application captures;
   marketing screenshot frames and sections; support-contact derivation; MCP OAuth test helper;
   screenshot component and support-contact tests; the marketing craft scorecard and its twelve
-  viewport/theme captures.
+  viewport/theme captures; production Stripe secret-policy and workflow regression tests.
 - **Validation**: The local capture flow completed against a disposable passkey account and real
   Docket API writes. Home, Pricing, and About were photographed at 1440×900 and 390×844 in light
   and OS-dark modes; each passed the 320px overflow check and the craft review scored SHIP. The web
   suite passes 258 files and 2,160 tests, including the 14-case public-copy gate. Repository
   typecheck passes 20/20, lint passes 20/20, tests pass 20/20, and build passes 4/4.
 - **Blockers**: Production promotion remains gated on live Stripe and legal evidence. The deploy
-  workflow explicitly sets `BILLING_ENABLED=false`, the production `API_SECRET_BINDINGS` map has
-  no Stripe secret or price entries, the available Stripe CLI profiles do not identify a Docket
-  account, and the local Google Cloud session requires interactive reauthentication. Operator and
-  legal approval for Privacy and Terms is also not recorded. Publishing the $8 Docket Pro offer
-  before those conditions are resolved would violate the release contract.
+  workflow now reads the production `BILLING_ENABLED` variable and refuses billing-enabled releases
+  unless the Stripe secret key, publishable key, webhook secret, and Docket Pro price are all mounted
+  from Secret Manager. The production variable and bindings are not configured, the available Stripe
+  CLI profiles do not identify a Docket account, and the local Google Cloud session requires
+  interactive reauthentication. Operator and legal approval for Privacy and Terms is also not
+  recorded. Publishing the $8 Docket Pro offer before those conditions are resolved would violate
+  the release contract.
 - **Learnings**: Product screenshots must use the public MCP endpoint even when their data is
   captured locally. The visual audit also caught two non-copy release defects: the support address
   was derived from the web CNAME instead of the registrable domain, and the hero image was left as

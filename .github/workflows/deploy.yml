@@ -28,6 +28,7 @@ jobs:
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           API_SECRET_BINDINGS: ${{ vars.API_SECRET_BINDINGS }}
+          BILLING_ENABLED: ${{ vars.BILLING_ENABLED || 'false' }}
         run: npx -y tsx scripts/production-secrets.ts
 
       - uses: docker/setup-buildx-action@v4
@@ -88,7 +89,7 @@ jobs:
           GOOGLE_OAUTH_TEST_EMAILS: "${{ vars.GOOGLE_OAUTH_TEST_EMAILS }}"
           AGENT_MAX_TURNS: "${{ vars.AGENT_MAX_TURNS }}"
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
-          BILLING_ENABLED: "false"
+          BILLING_ENABLED: "${{ vars.BILLING_ENABLED || 'false' }}"
           MCP_ALLOWED_ORIGINS: "${{ vars.WEB_URL }},https://claude.ai,https://claude.com"
           MCP_TASKS_ENABLED: "false"
           MCP_CIMD_STRICT: "true"

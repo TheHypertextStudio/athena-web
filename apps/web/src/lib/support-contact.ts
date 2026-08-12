@@ -10,8 +10,8 @@
  *
  * There is no hard-coded fallback. The address follows the configured public root domain, or the
  * registrable passkey domain when the root is not repeated in the web deployment. That distinction
- * matters while the app lives on a subdomain: `support@docket.hypertext.studio` cannot receive
- * mail when that host is a CNAME, while `support@hypertext.studio` can. An explicit
+ * matters while the app lives on a delegated subdomain: an address at that application host may
+ * not receive mail when the host is a CNAME, while the registrable domain can. An explicit
  * `NEXT_PUBLIC_SUPPORT_EMAIL` still wins when the mailbox is not `support@`.
  *
  * `NEXT_PUBLIC_` because these are statically rendered marketing pages — the value is inlined at

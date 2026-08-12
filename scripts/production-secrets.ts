@@ -39,6 +39,27 @@ export const REQUIRED_PRODUCTION_SECRET_ENV_NAMES = [
   'LINEAR_WEBHOOK_SECRET',
 ] as const;
 
+/** Stripe bindings that must exist before production billing may be enabled. */
+export const REQUIRED_BILLING_SECRET_ENV_NAMES = [
+  'STRIPE_SECRET_KEY',
+  'STRIPE_PUBLISHABLE_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+] as const;
+
+/** Current and one-release compatibility names accepted for the Docket Pro monthly price. */
+export const DOCKET_PRO_PRICE_ENV_NAMES = [
+  'DOCKET_PRICE_LOOKUP_DOCKET_PRO',
+  'STRIPE_PRICE_DOCKET_PRO',
+  'DOCKET_PRICE_LOOKUP_TEAM',
+  'STRIPE_PRICE_TEAM',
+] as const;
+
+/** Deployment switches that affect the required Secret Manager binding set. */
+export interface ProductionSecretPolicy {
+  /** Whether the API will start with Docket Pro purchase and webhook handling enabled. */
+  readonly billingEnabled: boolean;
+}
+
 /** Parse the multiline `API_SECRET_BINDINGS` format without accepting shell syntax. */
 export function parseSecretBindings(raw: string): SecretBinding[] {
   const bindings: SecretBinding[] = [];
@@ -100,6 +121,35 @@ export function validateSecretBindings(
   return issues;
 }
 
+/** Validate the base production bindings plus the conditional Docket Pro billing contract. */
+export function validateProductionSecretBindings(
+  bindings: readonly SecretBinding[],
+  readValue: (binding: SecretBinding) => string,
+  policy: ProductionSecretPolicy,
+): SecretValidationIssue[] {
+  const requiredEnvNames = policy.billingEnabled
+    ? [...REQUIRED_PRODUCTION_SECRET_ENV_NAMES, ...REQUIRED_BILLING_SECRET_ENV_NAMES]
+    : REQUIRED_PRODUCTION_SECRET_ENV_NAMES;
+  const issues = validateSecretBindings(bindings, readValue, requiredEnvNames);
+
+  if (
+    policy.billingEnabled &&
+    !bindings.some((binding) =>
+      DOCKET_PRO_PRICE_ENV_NAMES.includes(
+        binding.envName as (typeof DOCKET_PRO_PRICE_ENV_NAMES)[number],
+      ),
+    )
+  ) {
+    issues.push({
+      envName: 'DOCKET_PRICE_LOOKUP_DOCKET_PRO',
+      secretName: '<binding>',
+      reason: 'invalid-binding',
+    });
+  }
+
+  return issues;
+}
+
 /** Read one Secret Manager version without exposing its payload to stdout/stderr. */
 export function readSecretManagerValue(binding: SecretBinding, project: string): string {
   return execFileSync(
@@ -127,8 +177,10 @@ function main(): void {
     secretName: 'docket-database-url-unpooled',
     version: 'latest',
   });
-  const issues = validateSecretBindings(bindings, (binding) =>
-    readSecretManagerValue(binding, project),
+  const issues = validateProductionSecretBindings(
+    bindings,
+    (binding) => readSecretManagerValue(binding, project),
+    { billingEnabled: process.env['BILLING_ENABLED'] === 'true' },
   );
   if (issues.length > 0) {
     console.error('Production secret validation failed:');

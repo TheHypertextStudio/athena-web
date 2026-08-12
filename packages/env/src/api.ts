@@ -156,6 +156,8 @@ function assertCrossFieldRules(e: typeof env): void {
 
   if (e.BILLING_ENABLED) {
     if (!e.STRIPE_SECRET_KEY) fail('BILLING_ENABLED=true requires STRIPE_SECRET_KEY.');
+    if (!e.STRIPE_PUBLISHABLE_KEY) fail('BILLING_ENABLED=true requires STRIPE_PUBLISHABLE_KEY.');
+    if (!e.STRIPE_WEBHOOK_SECRET) fail('BILLING_ENABLED=true requires STRIPE_WEBHOOK_SECRET.');
     if (
       !e.STRIPE_PRICE_DOCKET_PRO &&
       !e.DOCKET_PRICE_LOOKUP_DOCKET_PRO &&

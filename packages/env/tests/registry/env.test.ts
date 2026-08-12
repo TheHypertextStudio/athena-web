@@ -421,12 +421,18 @@ describe('api composition', () => {
     expect(mod.env).toBeDefined();
   });
 
-  describe('cross-field: BILLING_ENABLED requires stripe key + price', () => {
+  describe('cross-field: BILLING_ENABLED requires complete Stripe configuration', () => {
+    const requiredStripeRuntime = {
+      STRIPE_SECRET_KEY: 'sk_test_123',
+      STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+      STRIPE_WEBHOOK_SECRET: 'whsec_123',
+    } as const;
+
     it('passes with secret key + price id', async () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
-        STRIPE_SECRET_KEY: 'sk_test_123',
+        ...requiredStripeRuntime,
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
       })) {
         vi.stubEnv(key, value);
@@ -439,7 +445,7 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
-        STRIPE_SECRET_KEY: 'sk_test_123',
+        ...requiredStripeRuntime,
         DOCKET_PRICE_LOOKUP_DOCKET_PRO: 'docket_pro_monthly',
       })) {
         vi.stubEnv(key, value);
@@ -452,6 +458,8 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
+        STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
       })) {
         vi.stubEnv(key, value);
@@ -461,11 +469,41 @@ describe('api composition', () => {
       );
     });
 
-    it('throws when both price id and lookup key are missing', async () => {
+    it('throws when the publishable key is missing', async () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
         STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_ENABLED=true requires STRIPE_PUBLISHABLE_KEY',
+      );
+    });
+
+    it('throws when the webhook secret is missing', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'true',
+        STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_ENABLED=true requires STRIPE_WEBHOOK_SECRET',
+      );
+    });
+
+    it('throws when both price id and lookup key are missing', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'true',
+        ...requiredStripeRuntime,
       })) {
         vi.stubEnv(key, value);
       }
@@ -478,7 +516,7 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
-        STRIPE_SECRET_KEY: 'sk_test_123',
+        ...requiredStripeRuntime,
         STRIPE_PRICE_TEAM: 'price_legacy',
       })) {
         vi.stubEnv(key, value);

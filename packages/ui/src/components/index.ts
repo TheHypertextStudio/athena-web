@@ -185,4 +185,6 @@ export {
   type TabBarProps,
   type TabDocType,
   type TabRenderLink,
+  TYPE_LABEL,
+  tabLabel,
 } from './shell/TabBar';

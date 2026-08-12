@@ -18,7 +18,7 @@ import {
 } from '../../primitives';
 
 import type { OpenTab, TabRenderLink } from './tab-types';
-import { TYPE_ICON } from './tab-types';
+import { TYPE_ICON, tabLabel } from './tab-types';
 
 interface OverflowMenuProps {
   readonly tabs: readonly OpenTab[];
@@ -57,7 +57,7 @@ export function OverflowMenu({
     () =>
       normalizedQuery.length === 0
         ? tabs
-        : tabs.filter((tab) => tab.title.toLocaleLowerCase().includes(normalizedQuery)),
+        : tabs.filter((tab) => tabLabel(tab).toLocaleLowerCase().includes(normalizedQuery)),
     [normalizedQuery, tabs],
   );
 
@@ -194,7 +194,7 @@ export function OverflowMenu({
                 <div
                   key={tab.key}
                   role="listitem"
-                  aria-label={tab.title}
+                  aria-label={tabLabel(tab)}
                   aria-current={active ? 'true' : undefined}
                   data-document-result=""
                   className={menuItemClass('standard', { selected: active })}
@@ -207,7 +207,7 @@ export function OverflowMenu({
                     tab.href,
                     <>
                       <Icon aria-hidden="true" className="shrink-0 opacity-70" />
-                      <span className="min-w-0 flex-1 truncate">{tab.title}</span>
+                      <span className="min-w-0 flex-1 truncate">{tabLabel(tab)}</span>
                     </>,
                     cn(
                       'flex min-w-0 flex-1 items-center gap-3 rounded-corner-xs outline-none',
@@ -216,7 +216,7 @@ export function OverflowMenu({
                   )}
                   <button
                     type="button"
-                    aria-label={`Close ${tab.title}`}
+                    aria-label={`Close ${tabLabel(tab)}`}
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();

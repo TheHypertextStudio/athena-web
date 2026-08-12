@@ -52,8 +52,10 @@ import { TabItem } from './tab-item';
 import { OverflowMenu } from './tab-overflow-menu';
 import type { TabDocType, TabRenderLink } from './tab-types';
 import type { OpenTab } from './tab-types';
+import { TYPE_LABEL, tabLabel } from './tab-types';
 
 export type { OpenTab, TabDocType, TabRenderLink };
+export { TYPE_LABEL, tabLabel };
 
 /** Props for {@link TabBar}. */
 export interface TabBarProps {

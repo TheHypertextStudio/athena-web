@@ -46,6 +46,8 @@ import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { projectStatusOf } from '@/components/project-detail/project-config';
 import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
+import { useDocumentTitle } from '@/components/tabs/use-document-title';
+import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { useActiveOrg } from '@/components/active-org';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { PublishAction } from '@/components/publishing/publish-action';
@@ -105,6 +107,10 @@ export default function ProjectDetailPage(): JSX.Element {
     updatePosting,
     updateError,
   } = useProjectDetailPage(orgId, projectId);
+
+  // The tab bar and the browser tab both follow the name on screen, including through a rename.
+  useRegisterTabTitle('project', orgId, projectId, project?.name);
+  useDocumentTitle(project?.name);
 
   // Deleting a project hits `capabilityGuard('manage')` server-side, so the affordance is gated on
   // `manage` — a strictly stronger bar than the `contribute`-level `canEdit` used for field edits.

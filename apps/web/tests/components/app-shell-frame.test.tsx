@@ -74,7 +74,9 @@ vi.mock('../../src/components/authentication-interlock', () => ({
 }));
 
 vi.mock('../../src/components/tabs/resolve-title', () => ({
-  fallbackTitle: () => 'Project',
+  // Nothing cached in this harness, so a tab opens unnamed and the bar labels it by kind until
+  // `resolveTabTitle` answers.
+  titleFromCache: () => null,
   resolveTabTitle,
 }));
 

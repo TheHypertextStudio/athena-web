@@ -13,7 +13,7 @@ import {
 } from '../../primitives';
 
 import type { OpenTab, TabRenderLink } from './tab-types';
-import { TYPE_ICON } from './tab-types';
+import { TYPE_ICON, tabLabel } from './tab-types';
 
 interface TabItemProps {
   readonly tab: OpenTab;
@@ -25,6 +25,11 @@ interface TabItemProps {
 /** TabItem renders the shell navigation UI control for its parent workflow. */
 export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): React.JSX.Element {
   const Icon = TYPE_ICON[tab.type];
+  // Until the document's own name is read, the tab says what kind of thing it is. It never says
+  // what its id looks like: an internal identifier tells the reader nothing and, once persisted,
+  // used to stay that way.
+  const label = tabLabel(tab);
+  const unresolved = tab.title === null;
   return (
     <div
       role="tab"
@@ -40,7 +45,7 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
         tab.href,
         <>
           <Icon aria-hidden="true" className="size-4 shrink-0 opacity-70" />
-          <span className="min-w-0 flex-1 truncate">{tab.title}</span>
+          <span className={cn('min-w-0 flex-1 truncate', unresolved && 'opacity-60')}>{label}</span>
         </>,
         cn(
           'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md py-1.5 pr-1 pl-2.5',
@@ -51,7 +56,7 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
         <TooltipTrigger asChild>
           <button
             type="button"
-            aria-label={`Close ${tab.title}`}
+            aria-label={`Close ${label}`}
             onClick={() => {
               onClose(tab.key);
             }}

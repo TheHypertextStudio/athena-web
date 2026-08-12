@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation';
 import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
+import { useDocumentTitle } from '@/components/tabs/use-document-title';
+import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -78,6 +80,10 @@ export default function TaskDetailPage(): JSX.Element {
     isError,
     error,
   } = useTaskDetail(orgId, taskId);
+
+  // The tab bar and the browser tab both follow the name on screen, including through a rename.
+  useRegisterTabTitle('task', orgId, taskId, task?.title);
+  useDocumentTitle(task?.title);
 
   const {
     setState,

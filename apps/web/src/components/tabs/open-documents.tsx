@@ -24,6 +24,7 @@
 import { ULID_REGEX } from '@docket/types';
 import type { OpenTab } from '@docket/ui/components';
 import { readStoredJson, writeStoredJson } from '@docket/ui/lib/browser-storage';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useAppPathname } from '@/lib/app-location';
 import {
@@ -38,7 +39,7 @@ import {
   useState,
 } from 'react';
 
-import { fallbackTitle, resolveTabTitle } from './resolve-title';
+import { resolveTabTitle, titleFromCache } from './resolve-title';
 import { tabRefFromPath } from './route-tabs';
 import { hrefForTab, type TabRef, tabKey } from './types';
 
@@ -50,6 +51,8 @@ export interface OpenDocumentsValue {
   readonly activeKey: string | undefined;
   /** Close a tab by key (routes to a neighbor / base when the active tab closes). */
   readonly closeTab: (key: string) => void;
+  /** Report a document's current name, so an open tab follows a rename. */
+  readonly registerTitle: (ref: TabRef, title: string) => void;
 }
 
 /** Internal context; consumed only through {@link useOpenDocuments}. */
@@ -80,7 +83,9 @@ function isOpenTab(value: unknown): value is OpenTab {
     typeof tab.id === 'string' &&
     typeof tab.orgId === 'string' &&
     typeof tab.href === 'string' &&
-    typeof tab.title === 'string' &&
+    // `null` is a legitimate stored value: a tab whose document could not be read is persisted
+    // unnamed rather than named after its id, and re-resolves on the next visit.
+    (typeof tab.title === 'string' || tab.title === null) &&
     ULID_REGEX.test(tab.id) &&
     ULID_REGEX.test(tab.orgId)
   );
@@ -99,14 +104,20 @@ export interface OpenDocumentsProviderProps {
   readonly children: ReactNode;
 }
 
-/** Build a fresh {@link OpenTab} for a ref with a placeholder title (resolved later). */
-function newTab(ref: TabRef): OpenTab {
+/**
+ * Build a fresh {@link OpenTab} for a ref.
+ *
+ * @param ref - The document the tab points at.
+ * @param title - Its name if already known (usually from the query cache), else `null`.
+ * @returns The new tab.
+ */
+function newTab(ref: TabRef, title: string | null): OpenTab {
   return {
     key: tabKey(ref),
     type: ref.type,
     orgId: ref.orgId,
     id: ref.id,
-    title: fallbackTitle(ref),
+    title,
     href: hrefForTab(ref),
   };
 }
@@ -125,6 +136,7 @@ export function OpenDocumentsProvider({
 }: OpenDocumentsProviderProps): JSX.Element {
   const router = useRouter();
   const pathname = useAppPathname();
+  const queryClient = useQueryClient();
   const [tabs, setTabs] = useState<readonly OpenTab[]>([]);
 
   // Hydrate from session storage when the user resolves (and reset on sign-out / user change).
@@ -160,6 +172,8 @@ export function OpenDocumentsProvider({
   // for one account cannot patch another account's tab state. Within the same scope, a late title
   // only patches a tab whose key is still open and never resurrects a closed tab.
   const resolvedRef = useRef(new Set<string>());
+  /** Names reported by detail pages, kept so a report can arrive before its tab does. */
+  const registeredTitles = useRef(new Map<string, string>());
   const resolvedUserRef = useRef(userId);
   const resolutionEpochRef = useRef(0);
   useEffect(() => {
@@ -167,6 +181,7 @@ export function OpenDocumentsProvider({
     resolvedUserRef.current = userId;
     resolutionEpochRef.current += 1;
     resolvedRef.current.clear();
+    registeredTitles.current.clear();
   }, [userId]);
 
   useEffect(() => {
@@ -174,18 +189,59 @@ export function OpenDocumentsProvider({
     const ref = tabRefFromPath(pathname);
     if (!ref) return;
     const key = tabKey(ref);
-    setTabs((current) =>
-      current.some((t) => t.key === key) ? current : [...current, newTab(ref)],
-    );
+
+    // Usually there is nothing to fetch: arriving from a list, from search, or from the composer
+    // that just created the document means its record is already cached, so the tab is named in
+    // the same tick it appears instead of after a round trip spent showing something else.
+    // A detail page's own `useRegisterTabTitle` effect commits before this provider's does —
+    // child effects run first — so a page that already knows its name reports it before the tab
+    // it names exists. Reading that report here is what makes the two orders equivalent.
+    const cached = registeredTitles.current.get(key) ?? titleFromCache(queryClient, ref);
+    setTabs((current) => {
+      const existing = current.find((t) => t.key === key);
+      if (!existing) return [...current, newTab(ref, cached)];
+      // A rename can land while the tab is open; adopt a newer cached name over a stale one.
+      if (cached === null || existing.title === cached) return current;
+      return current.map((t) => (t.key === key ? { ...t, title: cached } : t));
+    });
+    if (cached !== null) {
+      resolvedRef.current.add(key);
+      return;
+    }
 
     if (resolvedRef.current.has(key)) return;
     resolvedRef.current.add(key);
     const resolutionEpoch = resolutionEpochRef.current;
     void resolveTabTitle(ref).then((title) => {
       if (resolutionEpochRef.current !== resolutionEpoch) return;
+      // A failed resolve leaves the title null, so the bar keeps labelling the tab by its kind
+      // and the next visit tries again — rather than freezing an unhelpful name into storage.
+      if (title === null) {
+        resolvedRef.current.delete(key);
+        return;
+      }
       setTabs((current) => current.map((t) => (t.key === key ? { ...t, title } : t)));
     });
-  }, [pathname, userId]);
+  }, [pathname, userId, queryClient]);
+
+  /**
+   * Adopt a document's real name once the page showing it knows one.
+   *
+   * @remarks
+   * The store resolves titles independently, which is enough to name a tab but not to keep it
+   * named: renaming a document from its own detail page left every open tab still showing the
+   * old title, because nothing told the store anything had changed. This is that channel.
+   */
+  const registerTitle = useCallback((ref: TabRef, title: string): void => {
+    const key = tabKey(ref);
+    resolvedRef.current.add(key);
+    registeredTitles.current.set(key, title);
+    setTabs((current) =>
+      current.some((t) => t.key === key && t.title !== title)
+        ? current.map((t) => (t.key === key ? { ...t, title } : t))
+        : current,
+    );
+  }, []);
 
   const closeTab = useCallback(
     (key: string): void => {
@@ -194,6 +250,7 @@ export function OpenDocumentsProvider({
       const closed = tabs[index];
       const next = tabs.filter((t) => t.key !== key);
       resolvedRef.current.delete(key);
+      registeredTitles.current.delete(key);
       setTabs(next);
 
       // Only the active tab's closing changes where we are; closing a background tab leaves the
@@ -210,8 +267,8 @@ export function OpenDocumentsProvider({
   );
 
   const value = useMemo<OpenDocumentsValue>(
-    () => ({ tabs, activeKey, closeTab }),
-    [tabs, activeKey, closeTab],
+    () => ({ tabs, activeKey, closeTab, registerTitle }),
+    [tabs, activeKey, closeTab, registerTitle],
   );
 
   return <OpenDocumentsContext.Provider value={value}>{children}</OpenDocumentsContext.Provider>;
@@ -229,4 +286,18 @@ export function useOpenDocuments(): OpenDocumentsValue {
     throw new Error('useOpenDocuments must be used within an <OpenDocumentsProvider>.');
   }
   return value;
+}
+
+/**
+ * Read the open-documents store if one is mounted.
+ *
+ * @returns The current {@link OpenDocumentsValue}, or `null` outside a provider.
+ *
+ * @remarks
+ * For things a detail page does *for* the tab bar rather than *with* it — reporting its own name,
+ * say. The store belongs to the app shell, so a page rendered outside it (a print view, an
+ * embed, a focused test) should quietly do without one rather than fail to render at all.
+ */
+export function useOptionalOpenDocuments(): OpenDocumentsValue | null {
+  return useContext(OpenDocumentsContext);
 }

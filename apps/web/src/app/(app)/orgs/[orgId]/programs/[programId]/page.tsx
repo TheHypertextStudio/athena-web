@@ -32,6 +32,8 @@ import { ProgramWorkView } from '@/components/programs/program-work-view';
 import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
 import { PublishAction } from '@/components/publishing/publish-action';
+import { useDocumentTitle } from '@/components/tabs/use-document-title';
+import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
 import { programRecordDef } from '@/lib/entity-records';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
@@ -68,6 +70,10 @@ export default function ProgramDetailPage(): JSX.Element {
   const recordQ = useApiQuery(programRecordDef(orgId, programId));
   const detail = detailQ.data ?? null;
   const program = detail?.program ?? recordQ.data ?? null;
+
+  // The tab bar and the browser tab both follow the name on screen, including through a rename.
+  useRegisterTabTitle('program', orgId, programId, program?.name);
+  useDocumentTitle(program?.name);
   const members = detail?.members ?? [];
   const agents = detail?.agents ?? [];
   const roles = detail?.roles ?? [];

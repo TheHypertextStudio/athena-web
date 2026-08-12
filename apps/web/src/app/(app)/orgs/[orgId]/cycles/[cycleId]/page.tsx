@@ -10,6 +10,8 @@ import { useRouter } from 'next/navigation';
 import { useAppParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
+import { useDocumentTitle } from '@/components/tabs/use-document-title';
+import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import type { ActorDirectory } from '@/components/agents/actor-directory';
 import { CloseCycleDialog } from '@/components/cycles/close-cycle-dialog';
 import { CycleMetadata } from '@/components/cycle-detail/cycle-metadata-row';
@@ -114,6 +116,10 @@ export default function CycleDetailPage(): JSX.Element {
   );
   const data = detailQ.data ?? null;
   const cycle = data?.cycle ?? null;
+
+  // The tab bar and the browser tab both follow the name on screen, including through a rename.
+  useRegisterTabTitle('cycle', orgId, cycleId, cycle?.displayName);
+  useDocumentTitle(cycle?.displayName);
   const burnup = data?.burnup ?? null;
   const tasks = useMemo(() => data?.tasks ?? [], [data]);
   // Normalized rather than read straight off the query data: a cache restored from IndexedDB has

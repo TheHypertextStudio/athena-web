@@ -52,6 +52,8 @@ import {
   EntityDetailLayout,
   EntityMetadataRow,
 } from '@/components/views/entity-detail-layout';
+import { useDocumentTitle } from '@/components/tabs/use-document-title';
+import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
 import { initiativeRecordDef } from '@/lib/entity-records';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
@@ -91,6 +93,11 @@ export default function InitiativeDetailPage(): JSX.Element {
   const recordQ = useApiQuery(initiativeRecordDef(orgId, initiativeId));
   const data = detailQ.data;
   const detail = data?.detail;
+
+  // The tab bar and the browser tab both follow the name on screen, including through a rename.
+  const initiativeName = detail?.name ?? recordQ.data?.name;
+  useRegisterTabTitle('initiative', orgId, initiativeId, initiativeName);
+  useDocumentTitle(initiativeName);
   const updatesKey = [...queryKeys.initiative(orgId, initiativeId), 'updates'] as const;
   const updatesQ = useApiQuery(
     apiQueryOptions(

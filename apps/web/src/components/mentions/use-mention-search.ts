@@ -23,9 +23,9 @@ import { useMemo } from 'react';
 import type { MentionExternalOut, MentionItem, MentionSearchOut } from '@docket/types';
 
 import { api } from '@/lib/api';
-import { apiQueryOptions, STALE, useApiListQuery } from '@/lib/query';
+import { STALE } from '@/lib/query';
 import { queryKeys } from '@/lib/query-keys';
-import { useDebouncedValue } from '@/lib/use-debounced-value';
+import { useRemoteSearch } from '@/lib/use-remote-search';
 
 import { buildMentionGroups, flattenMentionGroups, type MentionGroup } from './mention-merge';
 
@@ -70,35 +70,37 @@ export interface MentionSearchInput {
  */
 export function useMentionSearch(input: MentionSearchInput): MentionSearchState {
   const trimmed = input.query.trim();
-  const localTerm = useDebouncedValue(trimmed, LOCAL_DEBOUNCE_MS);
-  const externalTerm = useDebouncedValue(trimmed, EXTERNAL_DEBOUNCE_MS);
 
-  const localQ = useApiListQuery<MentionSearchOut>(
-    apiQueryOptions(
-      queryKeys.mentionLocal(input.orgId, localTerm),
-      () =>
-        api.v1.orgs[':orgId'].mentions.search.$get({
-          param: { orgId: input.orgId },
-          query: { q: localTerm, limit: '8' },
-        }),
-      'Could not search this workspace.',
-      { enabled: input.enabled, staleTime: STALE.volatile },
-    ),
-  );
+  // Two waves over one set of keystrokes, each with its own delay and its own idea of what is
+  // worth asking for. `useRemoteSearch` covers one wave, so this calls it twice and merges below.
+  const localQ = useRemoteSearch<MentionSearchOut>({
+    query: input.query,
+    debounceMs: LOCAL_DEBOUNCE_MS,
+    enabled: input.enabled,
+    key: (term) => queryKeys.mentionLocal(input.orgId, term),
+    fetch: (term) =>
+      api.v1.orgs[':orgId'].mentions.search.$get({
+        param: { orgId: input.orgId },
+        query: { q: term, limit: '8' },
+      }),
+    fallbackMessage: 'Could not search this workspace.',
+    options: { staleTime: STALE.volatile },
+  });
 
-  const externalEnabled = input.enabled && externalTerm.length >= MIN_EXTERNAL_CHARS;
-  const externalQ = useApiListQuery<MentionExternalOut>(
-    apiQueryOptions(
-      queryKeys.mentionExternal(input.orgId, externalTerm),
-      () =>
-        api.v1.orgs[':orgId'].mentions.external.$get({
-          param: { orgId: input.orgId },
-          query: { q: externalTerm, limit: '6' },
-        }),
-      'Could not search your connected apps.',
-      { enabled: externalEnabled, staleTime: STALE.standard },
-    ),
-  );
+  const externalQ = useRemoteSearch<MentionExternalOut>({
+    query: input.query,
+    debounceMs: EXTERNAL_DEBOUNCE_MS,
+    minChars: MIN_EXTERNAL_CHARS,
+    enabled: input.enabled,
+    key: (term) => queryKeys.mentionExternal(input.orgId, term),
+    fetch: (term) =>
+      api.v1.orgs[':orgId'].mentions.external.$get({
+        param: { orgId: input.orgId },
+        query: { q: term, limit: '6' },
+      }),
+    fallbackMessage: 'Could not search your connected apps.',
+    options: { staleTime: STALE.standard },
+  });
 
   const local = localQ.data?.items;
   const external = externalQ.data?.items;
@@ -116,9 +118,9 @@ export function useMentionSearch(input: MentionSearchInput): MentionSearchState 
   return {
     groups,
     items: flattenMentionGroups(groups),
-    localPending: trimmed !== localTerm || (input.enabled && localQ.isPending),
-    externalPending: externalEnabled && (trimmed !== externalTerm || externalQ.isPending),
-    localFailed: localQ.isError,
-    externalFailed: externalQ.isError,
+    localPending: localQ.pending,
+    externalPending: externalQ.pending,
+    localFailed: localQ.failed,
+    externalFailed: externalQ.failed,
   };
 }

@@ -22,6 +22,7 @@ import { TaskTimerButton } from '@/components/time-tracking';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { hrefForSearchResult, isExternalSearchHref } from '@/lib/search-route';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 import {
   type SearchPageFilters,
@@ -194,20 +195,20 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
     ],
   );
 
+  // Settle the typed term with the shared primitive, then commit. This page deliberately does not
+  // use `useRemoteSearch`: what happens on settle is not a fetch but a **URL write** — it replaces
+  // the filter querystring, resets the pagination cursor, and clears `?id=` only when the term
+  // actually changed. Its query key is the whole filter set plus the cursor, not the term. Only
+  // the settling step is shared machinery; the commit is this surface's own.
+  const settledDraft = useDebouncedValue(draft.trim(), DEBOUNCE_MS);
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const nextQuery = draft.trim();
-      // Keep an initial `?id=` deep link intact, but clear it once someone starts a new search.
-      const nextIds = nextQuery === query ? ids : [];
-      setQuery(nextQuery);
-      setIds(nextIds);
-      setCursor(null);
-      replaceFilters({ ...filters, query: nextQuery, ids: nextIds });
-    }, DEBOUNCE_MS);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [draft, filters, ids, query, replaceFilters]);
+    // Keep an initial `?id=` deep link intact, but clear it once someone starts a new search.
+    const nextIds = settledDraft === query ? ids : [];
+    setQuery(settledDraft);
+    setIds(nextIds);
+    setCursor(null);
+    replaceFilters({ ...filters, query: settledDraft, ids: nextIds });
+  }, [settledDraft, filters, ids, query, replaceFilters]);
 
   const queryArgs = useMemo(
     () => searchPageFiltersToHttpQuery(filters, { limit: PAGE_SIZE, cursor }),

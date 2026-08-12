@@ -45,6 +45,21 @@ export interface LabelsPickerProps<TValue extends string = string> {
   /** Text shown when no label matches the query. */
   emptyText?: string;
   /** Accessible label prefix for the trigger + listbox. */
+  /**
+   * Remote-search passthrough. Supply `query` + `onQueryChange` to own the search text, and
+   * `filter="none"` when the options are already narrowed by the server. See {@link PickerList}.
+   */
+  query?: string;
+  /** Report typing; pair with `query`. */
+  onQueryChange?: (query: string) => void;
+  /** Who narrows the options — `'local'` (default) or `'none'` when the caller already did. */
+  filter?: 'local' | 'none';
+  /** True while the caller is fetching options; renders placeholder rows, not an empty state. */
+  loading?: boolean;
+  /** Text shown when the list is empty and nothing has been typed. */
+  idleText?: string;
+  /** Observe the popover opening and closing (e.g. to stop searching for a shut list). */
+  onOpenChange?: (open: boolean) => void;
   ariaLabel?: string;
   /** Disable the trigger (e.g. while a mutation is in flight). */
   disabled?: boolean;
@@ -93,6 +108,12 @@ export function LabelsPicker<TValue extends string = string>({
   triggerIcon = <Tag className="text-on-surface-variant size-4" />,
   searchPlaceholder = 'Filter labels…',
   emptyText = 'No labels',
+  query,
+  onQueryChange,
+  filter,
+  loading,
+  idleText,
+  onOpenChange,
   ariaLabel = 'Labels',
   disabled,
   readOnly,
@@ -101,6 +122,10 @@ export function LabelsPicker<TValue extends string = string>({
   onCreate,
 }: LabelsPickerProps<TValue>): React.JSX.Element {
   const [open, setOpen] = React.useState(false);
+  const setOpenState = (next: boolean): void => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
   const summary = summarize(value, options);
 
   const trigger = (
@@ -119,7 +144,7 @@ export function LabelsPicker<TValue extends string = string>({
   if (readOnly) return trigger;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpenState}>
       <PopoverTrigger asChild disabled={disabled}>
         {trigger}
       </PopoverTrigger>
@@ -131,6 +156,11 @@ export function LabelsPicker<TValue extends string = string>({
           multiple
           searchPlaceholder={searchPlaceholder}
           emptyText={emptyText}
+          query={query}
+          onQueryChange={onQueryChange}
+          filter={filter}
+          loading={loading}
+          idleText={idleText}
           ariaLabel={ariaLabel}
           create={
             onCreate

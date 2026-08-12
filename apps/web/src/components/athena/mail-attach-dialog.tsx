@@ -37,6 +37,7 @@ import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, STALE, unwrap } from '@/lib/query-core';
 import { queryKeys, useApiMutation, useApiQuery } from '@/lib/query';
+import { useRemoteSearch } from '@/lib/use-remote-search';
 
 import { attachMessage, mailAttachmentsKey, mailListKey, mailMessageKey } from './mail-query-defs';
 
@@ -99,6 +100,12 @@ const KIND_LABEL: Readonly<Record<AttachmentSubjectType, string>> = {
   initiative: 'Initiative',
 };
 
+/** Matches the command palette, which searches the same endpoint. */
+const SEARCH_DEBOUNCE_MS = 180;
+
+/** Below two characters a workspace search matches so much that it is noise, not a result. */
+const MIN_SEARCH_CHARS = 2;
+
 /**
  * Attach one received message to a task, project, or initiative.
  *
@@ -130,18 +137,23 @@ export function MailAttachDialog({
   );
   const workspaces = orgsQ.data?.items ?? [];
 
-  const searchQ = useApiQuery(
-    apiQueryOptions(
-      ['orgs', organizationId, 'search', 'attach', term] as const,
-      () =>
-        api.v1.orgs[':orgId'].search.$get({
-          param: { orgId: organizationId },
-          query: { q: term },
-        }),
-      'Could not search this workspace.',
-      { staleTime: STALE.volatile, enabled: open && organizationId.length > 0 && term.length > 1 },
-    ),
-  );
+  // Debounced: this used to put the raw `term` straight into the query key, so every keystroke
+  // past the second issued its own workspace search — a DB query plus permission resolution each
+  // time. 180ms matches the command palette, which hits the same endpoint.
+  const searchQ = useRemoteSearch<SearchOut>({
+    query: term,
+    debounceMs: SEARCH_DEBOUNCE_MS,
+    minChars: MIN_SEARCH_CHARS,
+    enabled: open && organizationId.length > 0,
+    key: (settled) => ['orgs', organizationId, 'search', 'attach', settled] as const,
+    fetch: (settled) =>
+      api.v1.orgs[':orgId'].search.$get({
+        param: { orgId: organizationId },
+        query: { q: settled },
+      }),
+    fallbackMessage: 'Could not search this workspace.',
+    options: { staleTime: STALE.volatile },
+  });
   const candidates = useMemo(() => toCandidates(searchQ.data), [searchQ.data]);
 
   const attachM = useApiMutation({
@@ -167,9 +179,7 @@ export function MailAttachDialog({
   const attachError = attachM.error
     ? userErrorMessage(attachM.error, 'Could not attach this message.')
     : null;
-  const searchError = searchQ.error
-    ? userErrorMessage(searchQ.error, 'Could not search this workspace.')
-    : null;
+  const searchError = searchQ.error;
 
   return (
     <Dialog
@@ -226,14 +236,14 @@ export function MailAttachDialog({
                 {searchError}
               </Text>
             ) : null}
-            {term.length <= 1 ? (
+            {term.trim().length < MIN_SEARCH_CHARS ? (
               <ControlGroup controlSize="sm" className="text-on-surface-variant">
                 <SearchIcon aria-hidden="true" className="size-4" />
                 <Text token="body-small" tone="muted">
                   Search to find the task or project this belongs to.
                 </Text>
               </ControlGroup>
-            ) : searchQ.isPending ? (
+            ) : searchQ.pending ? (
               <Text token="body-small" tone="muted">
                 Searching…
               </Text>

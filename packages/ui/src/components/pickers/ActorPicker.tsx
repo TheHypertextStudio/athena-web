@@ -34,6 +34,21 @@ export interface ActorPickerProps<TValue extends string = string> {
   searchPlaceholder?: string;
   /** Text shown when no actor matches the query. */
   emptyText?: string;
+  /**
+   * Remote-search passthrough. Supply `query` + `onQueryChange` to own the search text, and
+   * `filter="none"` when the options are already narrowed by the server. See {@link OptionPicker}.
+   */
+  query?: string;
+  /** Report typing; pair with `query`. */
+  onQueryChange?: (query: string) => void;
+  /** Who narrows the options — `'local'` (default) or `'none'` when the caller already did. */
+  filter?: 'local' | 'none';
+  /** True while the caller is fetching options; renders placeholder rows, not an empty state. */
+  loading?: boolean;
+  /** Text shown when the list is empty and nothing has been typed. */
+  idleText?: string;
+  /** Observe the popover opening and closing (e.g. to stop searching for a shut list). */
+  onOpenChange?: (open: boolean) => void;
   /** Accessible label prefix (e.g. "Assignee", "Lead"). */
   ariaLabel?: string;
   /** Disable the trigger (e.g. while a mutation is in flight). */
@@ -61,6 +76,12 @@ export function ActorPicker<TValue extends string = string>({
   clearLabel = 'Unassigned',
   searchPlaceholder = 'Search people…',
   emptyText = 'No matches',
+  query,
+  onQueryChange,
+  filter,
+  loading,
+  idleText,
+  onOpenChange,
   ariaLabel = 'Assignee',
   disabled,
   readOnly,
@@ -77,6 +98,12 @@ export function ActorPicker<TValue extends string = string>({
       clearLabel={clearLabel}
       searchPlaceholder={searchPlaceholder}
       emptyText={emptyText}
+      query={query}
+      onQueryChange={onQueryChange}
+      filter={filter}
+      loading={loading}
+      idleText={idleText}
+      onOpenChange={onOpenChange}
       ariaLabel={ariaLabel}
       disabled={disabled}
       readOnly={readOnly}

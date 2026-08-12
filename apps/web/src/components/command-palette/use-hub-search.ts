@@ -1,6 +1,6 @@
 'use client';
 
-import type { SearchDocumentKind, SearchResult } from '@docket/types';
+import type { SearchDocumentKind, SearchOut, SearchResult } from '@docket/types';
 import {
   Activity,
   Building,
@@ -21,15 +21,15 @@ import {
   Users,
 } from '@docket/ui/icons';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { queryKeys } from '@/lib/query';
 import { hrefForSearchResult, isExternalSearchHref } from '@/lib/search-route';
+import { useRemoteSearch } from '@/lib/use-remote-search';
 
 import type { PaletteItem, PaletteScope } from './types';
-import { userErrorMessage } from '@/lib/problem';
 
 /** How long to wait after the last keystroke before issuing a search (ms). */
 const DEBOUNCE_MS = 180;
@@ -171,11 +171,12 @@ interface HubSearchInput {
  * Reads `api.v1.hub.search` — which fans out across every org the caller belongs to and
  * returns org-chipped semantic hits — and normalizes each hit into a
  * selectable {@link PaletteItem} whose `run` deep-links into the originating org. The query
- * string is debounced before it enters the {@link queryKeys.hubSearch} key, so the dynamic-data
- * layer ({@link useApiQuery}) handles the request lifecycle: it is keyed (so a repeated query is
- * served from cache), deduped, and inherently race-safe (a superseded query's result lands under
- * its own key and is never shown). The query is gated on a non-empty term (`enabled`), and in the
- * `org` scope the request goes through the org route instead of filtering Hub results client-side.
+ * string is debounced before it enters the {@link queryKeys.search} key, so the dynamic-data layer
+ * handles the request lifecycle: it is keyed (so a repeated query is served from cache), deduped,
+ * and inherently race-safe (a superseded query's result lands under its own key and is never
+ * shown). The request is deliberately **not** gated on a non-empty term — an empty box browses
+ * recents, which is the palette's most common opening move. In the `org` scope the request goes
+ * through the org route instead of filtering Hub results client-side.
  *
  * @param input - The query, scope, and the palette `close` callback.
  * @returns the reactive {@link HubSearchState}.
@@ -189,48 +190,35 @@ export function useHubSearch({ query, scope, close, open }: HubSearchInput): Hub
   const orgFilter = scope === 'org' ? activeOrgId : null;
   const rankingOrgId = activeOrgId ?? null;
 
-  // Debounce the term before it enters the query key, so a keystroke burst issues one request for
-  // the settled term rather than one per character.
-  const [debounced, setDebounced] = useState(trimmed);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebounced(trimmed);
-    }, DEBOUNCE_MS);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [trimmed]);
-
-  const debouncedHasQuery = debounced.length > 0;
-
-  const searchQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.search(scope, debounced, scope === 'hub' ? rankingOrgId : orgFilter),
-      () =>
-        orgFilter
-          ? api.v1.orgs[':orgId'].search.$get({
-              param: { orgId: orgFilter },
-              // Omitting `q` asks the same endpoint to browse: recently-touched rows instead of
-              // matches. An open palette with an empty box is a jumping-off point, and offering
-              // nothing there wastes the most common keystroke in the app.
-              query: {
-                ...(debouncedHasQuery ? { q: debounced } : {}),
-                limit: '20',
-                surface: 'palette',
-              },
-            })
-          : api.v1.hub.search.$get({
-              query: {
-                ...(debouncedHasQuery ? { q: debounced } : {}),
-                limit: '20',
-                surface: 'palette',
-                ...(rankingOrgId ? { activeOrgId: rankingOrgId } : {}),
-              },
-            }),
-      'Search failed.',
-      { enabled: open && (scope === 'hub' || Boolean(orgFilter)) },
-    ),
-  );
+  const searchQ = useRemoteSearch<SearchOut>({
+    query,
+    debounceMs: DEBOUNCE_MS,
+    // No `minChars`: an empty term is a real request here, not an absence of one.
+    enabled: open && (scope === 'hub' || Boolean(orgFilter)),
+    key: (term) => queryKeys.search(scope, term, scope === 'hub' ? rankingOrgId : orgFilter),
+    fetch: (term) =>
+      orgFilter
+        ? api.v1.orgs[':orgId'].search.$get({
+            param: { orgId: orgFilter },
+            // Omitting `q` asks the same endpoint to browse: recently-touched rows instead of
+            // matches. An open palette with an empty box is a jumping-off point, and offering
+            // nothing there wastes the most common keystroke in the app.
+            query: {
+              ...(term.length > 0 ? { q: term } : {}),
+              limit: '20',
+              surface: 'palette',
+            },
+          })
+        : api.v1.hub.search.$get({
+            query: {
+              ...(term.length > 0 ? { q: term } : {}),
+              limit: '20',
+              surface: 'palette',
+              ...(rankingOrgId ? { activeOrgId: rankingOrgId } : {}),
+            },
+          }),
+    fallbackMessage: 'Could not search your workspace.',
+  });
 
   const toResultItem = useCallback(
     (hit: SearchResult): PaletteItem =>
@@ -249,14 +237,7 @@ export function useHubSearch({ query, scope, close, open }: HubSearchInput): Hub
     [searchQ.data, toResultItem],
   );
 
-  // While the user is mid-burst (raw term not yet debounced) or the keyed request is in flight,
-  // the result pane shows its loading skeleton; the error mirrors the search request's failure.
-  // Neither is gated on there being a query any more: with an empty box the same request is still
+  // Neither signal is gated on there being a query: with an empty box the same request is still
   // in flight, fetching recents, and a silent failure there would read as "you have nothing".
-  const loading = trimmed !== debounced || searchQ.isPending;
-  const error = searchQ.isError
-    ? userErrorMessage(searchQ.error, 'Could not search your workspace.')
-    : null;
-
-  return { results, loading, error, hasQuery };
+  return { results, loading: searchQ.pending, error: searchQ.error, hasQuery };
 }

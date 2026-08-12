@@ -32,6 +32,25 @@ export interface EnumPickerProps<TValue extends string = string> {
   triggerIcon?: React.ReactNode;
   /** When set, render a top "clear" row (for nullable enums like health). */
   clearLabel?: string;
+  /** Placeholder for the search input, when `searchable`. */
+  searchPlaceholder?: string;
+  /** Text shown when no option matches a typed query. */
+  emptyText?: string;
+  /**
+   * Remote-search passthrough. Supply `query` + `onQueryChange` to own the search text, and
+   * `filter="none"` when the options are already narrowed by the server. See {@link OptionPicker}.
+   */
+  query?: string;
+  /** Report typing; pair with `query`. */
+  onQueryChange?: (query: string) => void;
+  /** Who narrows the options — `'local'` (default) or `'none'` when the caller already did. */
+  filter?: 'local' | 'none';
+  /** True while the caller is fetching options; renders placeholder rows, not an empty state. */
+  loading?: boolean;
+  /** Text shown when the list is empty and nothing has been typed. */
+  idleText?: string;
+  /** Observe the popover opening and closing (e.g. to stop searching for a shut list). */
+  onOpenChange?: (open: boolean) => void;
   /** Accessible label prefix (e.g. "Status", "Priority", "Health"). */
   ariaLabel?: string;
   /** Enable search (off by default — enum lists are short). */
@@ -70,6 +89,14 @@ export function EnumPicker<TValue extends string = string>({
   placeholder,
   triggerIcon,
   clearLabel,
+  searchPlaceholder,
+  emptyText,
+  query,
+  onQueryChange,
+  filter,
+  loading,
+  idleText,
+  onOpenChange,
   ariaLabel,
   searchable = false,
   disabled,
@@ -85,6 +112,14 @@ export function EnumPicker<TValue extends string = string>({
       placeholder={placeholder}
       triggerIcon={triggerIcon}
       clearLabel={clearLabel}
+      searchPlaceholder={searchPlaceholder}
+      emptyText={emptyText}
+      query={query}
+      onQueryChange={onQueryChange}
+      filter={filter}
+      loading={loading}
+      idleText={idleText}
+      onOpenChange={onOpenChange}
       ariaLabel={ariaLabel}
       searchable={searchable}
       disabled={disabled}

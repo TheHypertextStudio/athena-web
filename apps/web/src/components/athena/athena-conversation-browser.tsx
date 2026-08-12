@@ -21,7 +21,8 @@ import { type JSX, useMemo, useState } from 'react';
 import { DatePicker } from '@/components/date-picker';
 import { api } from '@/lib/api';
 import { apiQueryOptions, STALE } from '@/lib/query-core';
-import { useApiQuery } from '@/lib/query';
+import { useApiListQuery, useApiQuery } from '@/lib/query';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 
 /** Which lens the browser is showing. */
 type BrowseLens = 'topics' | 'search';
@@ -97,6 +98,12 @@ export interface AthenaConversationBrowserProps {
   readonly className?: string;
 }
 
+/** Longer than the palette's: this search scans the whole conversation history in process. */
+const SEARCH_DEBOUNCE_MS = 280;
+
+/** Below two characters the scan matches nearly everything, at full cost. */
+const MIN_SEARCH_CHARS = 2;
+
 /** The topics / search / date-range panel for the one Athena conversation. */
 export function AthenaConversationBrowser({
   onJump,
@@ -107,18 +114,29 @@ export function AthenaConversationBrowser({
   const [fromDay, setFromDay] = useState('');
   const [toDay, setToDay] = useState('');
 
+  // Only the typed term is debounced. The dates come from `DatePicker` clicks, not keystrokes —
+  // delaying those would feel broken — and this search is expensive enough to be worth waiting
+  // for: it scans every activity row across all of the caller's sessions and scores them in
+  // process. It previously ran on every character, with no minimum length at all.
+  const typed = term.trim();
+  const settledTerm = useDebouncedValue(typed, SEARCH_DEBOUNCE_MS);
+  const usableTerm = settledTerm.length >= MIN_SEARCH_CHARS ? settledTerm : '';
+
   const searchInput = useMemo(
     () => ({
-      ...(term.trim() ? { q: term.trim() } : {}),
+      ...(usableTerm ? { q: usableTerm } : {}),
       ...(dayBoundary(fromDay, 'start') ? { from: dayBoundary(fromDay, 'start') } : {}),
       ...(dayBoundary(toDay, 'end') ? { to: dayBoundary(toDay, 'end') } : {}),
     }),
-    [fromDay, term, toDay],
+    [fromDay, usableTerm, toDay],
   );
   const hasQuery = Object.keys(searchInput).length > 0;
+  // A term typed but not yet searched for still counts as "the reader is asking something", so
+  // the panel keeps its idle prompt off screen while the burst settles.
+  const typing = typed.length >= MIN_SEARCH_CHARS && typed !== usableTerm;
 
   const segments = useApiQuery(segmentsDef());
-  const results = useApiQuery({
+  const results = useApiListQuery({
     ...searchDef(searchInput),
     enabled: lens === 'search' && hasQuery,
   });
@@ -234,12 +252,12 @@ export function AthenaConversationBrowser({
               ))}
             </ul>
           )
-        ) : !hasQuery ? (
+        ) : !hasQuery && !typing ? (
           <Text as="p" token="body-small" tone="muted">
             <Calendar aria-hidden="true" className="mr-1 inline size-4 align-text-bottom" />
             Search by a word, a date range, or both.
           </Text>
-        ) : results.isPending ? (
+        ) : typing || results.isPending ? (
           <Text as="p" token="body-small" tone="muted">
             Looking…
           </Text>

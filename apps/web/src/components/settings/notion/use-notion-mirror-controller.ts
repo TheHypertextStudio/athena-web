@@ -31,11 +31,10 @@ import {
   apiQueryOptions,
   queryKeys,
   unwrap,
-  useApiListQuery,
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
-import { useDebouncedValue } from '@/lib/use-debounced-value';
+import { useRemoteSearch } from '@/lib/use-remote-search';
 
 import { relativeTime } from '../format-time';
 
@@ -170,20 +169,17 @@ export function relativeTimeLabel(iso: string | null): string | null {
   return relativeTime(iso);
 }
 
-/** Below this, a Notion title query matches so much that it is noise rather than a result. */
+/** One real OAuth round trip to somebody else's server per keystroke, so a provider-sized wait. */
 const PARENT_PAGE_DEBOUNCE_MS = 280;
+
+/** Application-owned copy for a page search that fails. */
+const PAGES_ERROR = 'Could not load your Notion pages.';
 
 /** One page of the parent-page search, as the picker needs it. */
 export interface NotionParentPageSearch {
   /** The current result wave. Never blanks between keystrokes — see `useApiListQuery`. */
   pages: readonly NotionParentPageOut[];
-  /**
-   * True while the typed term has not yet reached the server, or the request is in flight.
-   *
-   * @remarks
-   * The mid-burst window counts. Without it the picker looks settled on the previous term's
-   * results while a newer request is already on its way.
-   */
+  /** True while results for the current text are still expected. */
   pending: boolean;
   error: string | null;
 }
@@ -195,10 +191,9 @@ export interface NotionParentPageSearch {
  * Server-filtered, not client-filtered. Notion's `search` takes the title query and returns the
  * most recently edited matches, so the browser never downloads a workspace to narrow it locally.
  *
- * Debounced at 280ms — the same figure the mention picker uses for its provider wave, because
- * this is the same kind of cost: one real OAuth round trip to somebody else's server per
- * keystroke. The *term* is debounced rather than the request, so the settled value goes into the
- * query key and TanStack handles deduplication, cancellation and race-safety.
+ * A thin adapter over {@link useRemoteSearch}; only the parts that are actually Notion's live
+ * here — the endpoint, the copy, and the two cache tunings a provider-backed one-shot setup
+ * surface needs.
  *
  * @param orgId - The workspace.
  * @param integrationId - The Notion connection.
@@ -212,40 +207,30 @@ export function useNotionParentPages(
   query: string,
   enabled: boolean,
 ): NotionParentPageSearch {
-  const trimmed = query.trim();
-  const term = useDebouncedValue(trimmed, PARENT_PAGE_DEBOUNCE_MS);
-  const active = enabled && integrationId.length > 0;
+  const search = useRemoteSearch({
+    query,
+    debounceMs: PARENT_PAGE_DEBOUNCE_MS,
+    enabled: enabled && integrationId.length > 0,
+    key: (term) => queryKeys.notionParentPages(orgId, integrationId, term),
+    fetch: (term) =>
+      api.v1.orgs[':orgId'].integrations[':id'].notion['parent-pages'].$get({
+        param: { orgId, id: integrationId },
+        query: term.length > 0 ? { q: term } : {},
+      }),
+    fallbackMessage: PAGES_ERROR,
+    options: {
+      // A workspace's page list is not volatile, and `refetchOnWindowFocus` is on: a 5s stale
+      // window would mean a real OAuth round trip to Notion on every tab focus, for a one-shot
+      // setup surface.
+      staleTime: STALE.static,
+      // Every settled term mints its own key, and the default gc time is 24h with persistence —
+      // so without this, typing "engineering handbook" leaves half a dozen search results in
+      // the persisted cache for a day.
+      gcTime: 60_000,
+    },
+  });
 
-  const pagesQ = useApiListQuery(
-    apiQueryOptions(
-      queryKeys.notionParentPages(orgId, integrationId, term),
-      () =>
-        api.v1.orgs[':orgId'].integrations[':id'].notion['parent-pages'].$get({
-          param: { orgId, id: integrationId },
-          query: term.length > 0 ? { q: term } : {},
-        }),
-      'Could not load your Notion pages.',
-      {
-        enabled: active,
-        // A workspace's page list is not volatile, and `refetchOnWindowFocus` is on: a 5s stale
-        // window would mean a real OAuth round trip to Notion on every tab focus, for a one-shot
-        // setup surface.
-        staleTime: STALE.static,
-        // Every settled term mints its own key, and the default gc time is 24h with persistence —
-        // so without this, typing "engineering handbook" leaves half a dozen search results in
-        // the persisted cache for a day.
-        gcTime: 60_000,
-      },
-    ),
-  );
-
-  return {
-    pages: pagesQ.data?.items ?? [],
-    pending: active && (trimmed !== term || pagesQ.isPending),
-    error: pagesQ.error
-      ? userErrorMessage(pagesQ.error, 'Could not load your Notion pages.')
-      : null,
-  };
+  return { pages: search.data?.items ?? [], pending: search.pending, error: search.error };
 }
 
 /** The setup surface's view model: create the databases under a chosen page. */

@@ -695,10 +695,18 @@ body[data-state='error'] .skeleton { display: none; }
 }
 .entity-preview-copy,
 .batch-copy { min-width: 0; flex: 1 1 auto; }
-.entity-preview-title,
-.batch-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--font-weight-medium); }
+.entity-preview-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--font-weight-medium); }
+.batch-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-text-md-size);
+  line-height: var(--font-text-md-line-height);
+  font-weight: var(--font-weight-semibold);
+}
 .entity-preview-secondary,
 .batch-context { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-text-sm-size); line-height: var(--font-text-sm-line-height); }
+.batch-meta { margin-top: 5px; font-size: var(--font-text-sm-size); line-height: var(--font-text-sm-line-height); }
 .entity-preview-action { flex: 0 0 auto; }
 .batch-list { display: grid; gap: 8px; }
 .batch-item {

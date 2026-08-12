@@ -943,6 +943,12 @@ for (const palette of PALETTES) {
               await expect(body).toContainText('Pairs riders with reliable transit guidance.');
               await expect(body).toContainText('Corridor Fellowship');
               await expect(body).toContainText('Urbanist Book Club');
+              // A project row is a compact briefing rather than a stack of generic fields: its
+              // description says what the work is, and its status/health plus task count say
+              // where that work stands right now.
+              await expect(body).toContainText('Active · On track · 12 tasks');
+              await expect(body).toContainText('Active · At risk · 7 tasks');
+              await expect(body).toContainText('Planned · 3 tasks');
               if (testCase.name === 'entity-projects-batch') {
                 await expect(body).toContainText('Some requested items could not be shown.');
               } else {

@@ -315,9 +315,11 @@ function scriptFor(entityType?: EntityDocumentType): string {
     }
   }
 
-  function batchContext(item) {
-    const narrative = text(item.description || item.summary || (item.latestUpdate && item.latestUpdate.body));
-    if (narrative) return narrative;
+  function batchNarrative(item) {
+    return text(item.description || item.summary || (item.latestUpdate && item.latestUpdate.body));
+  }
+
+  function batchStatus(item) {
     const parts = [stateText(item), item.health && window.docket.label(item.health)];
     if (type === 'project' && typeof item.taskCount === 'number') parts.push(item.taskCount + ' tasks');
     if (type === 'program' && item.rollup) parts.push(item.rollup.projects + ' projects · ' + item.rollup.tasks + ' tasks');
@@ -340,8 +342,10 @@ function scriptFor(entityType?: EntityDocumentType): string {
       name.className = 'batch-title';
       name.textContent = nameOf(item);
       copy.appendChild(name);
-      const context = batchContext(item);
-      if (context) appendText(copy, 'batch-context muted', context);
+      const narrative = batchNarrative(item);
+      if (narrative) appendText(copy, 'batch-context muted', narrative);
+      const status = batchStatus(item);
+      if (status) appendText(copy, 'batch-meta muted', status);
       row.appendChild(copy);
       if (item.href) {
         const open = document.createElement('button');

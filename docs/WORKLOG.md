@@ -7,6 +7,32 @@
 
 ## Active Tasks
 
+### [MCP-APPS-ENTITY-001] Give Docket MCP reads semantic entity briefings
+
+- **Status**: REVIEW
+- **Started**: 2026-08-11
+- **Priority**: P1
+- **Description**: Docket exposed one generic `get` tool for every readable entity and rendered
+  its output as an undifferentiated card that could silently choose the first result. The MCP App
+  needed type-specific reads, server-owned routes, and an interface that presents a project as
+  work with an outcome rather than a metadata dump.
+- **Approach**: Keep canonical `docket://` reads and the legacy callable `get`, but lead model
+  discovery with twelve same-type read tools. Render all documents with one responsive runtime,
+  while each entity composes its own briefing. A single result carries the detail appropriate to
+  that entity; a batch is a set of compact rows. Project rows now retain title, outcome,
+  status/health, and task rollup together so the compact view remains decision-useful.
+- **Validation**: API MCP surface, capability, and widget tests pass. The widget evidence suite
+  captures all entity fixtures at 320px and 720px in light/dark and bare/themed host variants;
+  the three-project batch asserts every route and its status/health/work line. Production CI run
+  `31549913262` deployed commit `4b0b0ff1` successfully; the web, admin, and API health routes
+  return 200.
+- **Blockers**: A real authenticated third-party MCP host capture remains unavailable in this
+  environment. Both available browsers are unauthenticated, and Docket's host endpoints are
+  deliberately owner-scoped to a signed-in user with a personal MCP connection. The audit is
+  honestly marked `target_host: pending`; the public marketing page is not substituted as proof.
+- **Notes**: No schema migration was needed. The one remaining capture requires an authenticated
+  host session with a connected Docket server and readable project data.
+
 ### [GITHUB-INSTALL-002] Complete every provider connection in one ceremony
 
 - **Status**: IN_PROGRESS

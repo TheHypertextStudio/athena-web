@@ -176,9 +176,9 @@ async function onboardJustMe(page: Page): Promise<string> {
 /** Sign up a fresh user and onboard the "Just me" personal workspace; returns `{ user, orgId }`. */
 export async function signUpAndOnboard(
   page: Page,
-  label: string,
+  identity: string | TestUser,
 ): Promise<{ user: TestUser; orgId: string }> {
-  const user = newUser(label);
+  const user = typeof identity === 'string' ? newUser(identity) : identity;
   await signUp(page, user);
   const orgId = await onboardJustMe(page);
   return { user, orgId };

@@ -104,7 +104,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
         <div className="flex flex-col gap-1">
           <h2 className="text-on-surface text-body-medium font-medium">Connect an MCP client</h2>
           <p className="text-on-surface-variant text-body-medium leading-relaxed">
-            Give Claude Desktop, Cursor, or any MCP-compatible tool access to your Docket account.
+            Connect any MCP-compatible tool to your Docket account.
           </p>
         </div>
 
@@ -131,7 +131,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
           </p>
         </div>
 
-        {/* placeholder: the OAuth apps this person has authorized — how many, their names, icons,
+        {/* Loading state for the OAuth apps this person has authorized — their names, icons,
             granted permissions and consent dates. Everything above (the heading and the paragraph
             explaining what revoking does) is static copy and paints first. */}
         {loading ? (

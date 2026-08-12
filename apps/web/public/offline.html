@@ -55,7 +55,12 @@
         color: var(--on-surface);
         /* Matches the app's brand face when it happens to be installed locally, and degrades to the
            platform UI face otherwise. No webfont is reachable offline. */
-        font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-family:
+          'IBM Plex Sans',
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          sans-serif;
         -webkit-font-smoothing: antialiased;
       }
       .panel {
@@ -119,10 +124,7 @@
         </svg>
       </div>
       <h1>You're offline</h1>
-      <p>
-        Docket can't load this page without a connection. Nothing has been lost — reconnect and this
-        page will pick up where you left off.
-      </p>
+      <p>Docket can't load this page without a connection. Reconnect, then try again.</p>
       <button type="button" onclick="location.reload()">Try again</button>
     </main>
     <script>

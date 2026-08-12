@@ -614,7 +614,7 @@ export default function ProjectsListClient(): JSX.Element {
   return (
     <ListPageLayout
       title={projectsNoun}
-      subtitle="Plan, sequence, and operate bounded work."
+      subtitle="Projects have a start and an end."
       actions={
         <Button className="min-h-10 gap-1.5" onClick={openProjectComposer}>
           <Plus aria-hidden className="size-4" /> New {projectNoun.toLowerCase()}

@@ -80,6 +80,8 @@
   matrix, then inspect the configured production billing and deployment path before promotion.
 - **Subtasks**:
   - [x] Capture Today, task, program/project, initiative, organization, calendar, and MCP surfaces.
+  - [x] Replace generic seed filler and the disposable timestamp email with one coherent example
+        account, specific work descriptions, subtasks, an attachment, and matching MCP setup state.
   - [x] Replace all dashed frames with labeled product screenshots and responsive crops.
   - [x] Keep current billing and customer documentation product-based.
   - [x] Re-run copy, responsive, theme, no-placeholder, type, lint, test, and build gates.
@@ -102,14 +104,20 @@
 - **Validation**: The local capture flow completed against a disposable passkey account and real
   Docket API writes. Home, Pricing, and About were photographed at 1440×900 and 390×844 in light
   and OS-dark modes; each passed the 320px overflow check and the craft review scored SHIP. The web
-  suite passes, including the 14-case public-copy gate. After rebasing onto current `origin/main`,
+  suite passes, including the 15-case public-copy gate. After rebasing onto current `origin/main`,
   the forced uncached repository suite passes 20/20 tasks; typecheck passes 20/20, lint passes
   20/20, and build passes 4/4. A fresh PGlite database also applies migrations through 0081.
+  The refreshed capture ran against another freshly migrated isolated PGlite database using the
+  correct `docket.localhost` WebAuthn relying-party host. All nine assets were read back at their
+  native 1440×900 resolution. Home, Pricing, and About were recaptured at both audit widths and
+  both OS themes; each passes the 320px overflow probe. The public copy gate now covers the offline
+  document too and passes 15 cases.
 - **Blockers**: Production promotion remains gated on live Stripe and legal evidence. The deploy
   workflow now reads the production `BILLING_ENABLED` variable and refuses billing-enabled releases
   unless the Stripe secret key, publishable key, webhook secret, and Docket Pro price are all mounted
-  from Secret Manager. The production variable and bindings are not configured. The selected Stripe
-  CLI profile identifies the Hypertext Studio account and supplies test credentials for the sandbox,
+  from Secret Manager. `BILLING_ENABLED` is already true in production, but the Stripe secret mounts
+  and Docket Pro price binding are absent. The selected Stripe CLI profile identifies the Hypertext
+  Studio account and supplies test credentials for the sandbox,
   but the repository's public local tunnel still requires Cloudflare account authorization and a
   durable production live credential has not been supplied. Operator and legal approval for Privacy
   and Terms is also not recorded. Publishing the $8 Docket Pro offer before those conditions are
@@ -128,6 +136,11 @@
   credential-free CORS; present Origins are validated structurally, and CIMD retains its HTTPS,
   DNS, public-address, size, timeout, redirect, PKCE, scope, consent, audience, and revocation
   checks without a client-vendor allowlist.
+  The earlier marketing command's bare `localhost` host could never complete a real passkey
+  ceremony because Better Auth correctly sets its signed challenge cookie for `docket.localhost`.
+  The documented capture command now uses the cookie domain and relying-party id the app actually
+  owns. The refresh also found a real 320px header overflow and removed the redundant header
+  sign-in link only below 360px; the hero retains the same action.
   Stripe is now a named managed provisioner inside `pnpm integrations` and `pnpm bootstrap`, backed
   by a tested desired-state reconciler in `@docket/billing`. It owns Docket Pro, the USD $8 monthly
   price, customer portal, and `/internal/billing/webhook`; captures generated ids and the one-time

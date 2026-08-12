@@ -9,7 +9,11 @@
  * frame that displays them.
  *
  * Run against a local stack:
- * `APP_URL=http://localhost:4200 API_URL=http://localhost:4100 PASSKEY_RP_ID=localhost pnpm --filter @docket/web exec tsx e2e/tools/capture-marketing-screens.ts`
+ * `APP_URL=http://docket.localhost:4200 API_URL=http://api.docket.localhost:4100 PASSKEY_RP_ID=docket.localhost pnpm --filter @docket/web exec tsx e2e/tools/capture-marketing-screens.ts`
+ *
+ * The Docket hostname is load-bearing: Better Auth scopes its signed WebAuthn challenge cookie to
+ * `docket.localhost`, so running the browser at bare `localhost` makes verification correctly fail
+ * with `CHALLENGE_NOT_FOUND`.
  */
 import { chromium } from '@playwright/test';
 import type { Page } from '@playwright/test';
@@ -38,6 +42,21 @@ interface WorkSeed {
   readonly primaryProjectId: string;
   readonly primaryTaskId: string;
   readonly tasks: readonly string[];
+}
+
+interface WorkSeedCopy {
+  readonly program: string;
+  readonly programSummary: string;
+  readonly programDescription: string;
+  readonly initiative: string;
+  readonly initiativeSummary: string;
+  readonly initiativeDescription: string;
+  readonly project: string;
+  readonly projectSummary: string;
+  readonly secondProject: string;
+  readonly secondProjectSummary: string;
+  readonly tasks: readonly [string, string, string, string];
+  readonly taskDescriptions: readonly [string, string, string, string];
 }
 
 interface OrgCreateResult {
@@ -120,22 +139,13 @@ async function createOrganization(page: Page, name: string, purpose: string): Pr
 }
 
 /** Create one coherent program, initiative, project set, and task list in an organization. */
-async function seedWork(
-  page: Page,
-  org: OrgSeed,
-  names: {
-    readonly program: string;
-    readonly initiative: string;
-    readonly project: string;
-    readonly secondProject: string;
-    readonly tasks: readonly [string, string, string, string];
-  },
-): Promise<WorkSeed> {
+async function seedWork(page: Page, org: OrgSeed, names: WorkSeedCopy): Promise<WorkSeed> {
   const program = await apiJson<{ id: string }>(page, `/v1/orgs/${org.id}/programs`, {
     method: 'POST',
     body: {
       name: names.program,
-      summary: 'Ongoing planning, delivery, and follow-through.',
+      summary: names.programSummary,
+      description: names.programDescription,
       ownerId: org.ownerActorId,
       health: 'on_track',
     },
@@ -144,7 +154,8 @@ async function seedWork(
     method: 'POST',
     body: {
       name: names.initiative,
-      summary: 'Coordinate the work that has to land together.',
+      summary: names.initiativeSummary,
+      description: names.initiativeDescription,
       ownerId: org.ownerActorId,
       status: 'active',
       priority: 'high',
@@ -156,7 +167,8 @@ async function seedWork(
     method: 'POST',
     body: {
       name: names.project,
-      summary: 'Deliver the public-facing work and close the operational gaps.',
+      summary: names.projectSummary,
+      description: names.projectSummary,
       leadId: org.ownerActorId,
       teamId: org.teamId,
       programId: program.id,
@@ -171,7 +183,8 @@ async function seedWork(
     method: 'POST',
     body: {
       name: names.secondProject,
-      summary: 'Prepare the next phase without blocking current delivery.',
+      summary: names.secondProjectSummary,
+      description: names.secondProjectSummary,
       leadId: org.ownerActorId,
       teamId: org.teamId,
       programId: program.id,
@@ -217,7 +230,7 @@ async function seedWork(
     },
   ] as const;
   const tasks: string[] = [];
-  for (const body of taskBodies) {
+  for (const [index, body] of taskBodies.entries()) {
     const created = await apiJson<{ id: string }>(page, `/v1/orgs/${org.id}/tasks`, {
       method: 'POST',
       body: {
@@ -225,8 +238,7 @@ async function seedWork(
         teamId: org.teamId,
         projectId: primaryProject.id,
         assigneeId: org.ownerActorId,
-        description:
-          'Keep the decision, owner, estimate, schedule, and result together on this task.',
+        description: names.taskDescriptions[index],
       },
     });
     tasks.push(created.id);
@@ -240,6 +252,42 @@ async function seedWork(
     primaryTaskId,
     tasks,
   };
+}
+
+/** Populate the task-detail capture with real child work and a useful external reference. */
+async function seedTaskContext(page: Page, org: OrgSeed, work: WorkSeed): Promise<void> {
+  for (const body of [
+    {
+      title: 'Mark school holidays and conference dates',
+      description: 'Copy the confirmed dates into the shared calendar and note each travel day.',
+      state: 'done',
+      priority: 'medium',
+      assigneeId: org.ownerActorId,
+      estimateMinutes: 25,
+    },
+    {
+      title: 'Add hotel cancellation deadlines',
+      description: 'Record the last refundable day beside each reservation.',
+      state: 'todo',
+      priority: 'high',
+      assigneeId: org.ownerActorId,
+      estimateMinutes: 20,
+    },
+  ] as const) {
+    await apiJson(page, `/v1/orgs/${org.id}/tasks/${work.primaryTaskId}/subtasks`, {
+      method: 'POST',
+      body,
+    });
+  }
+
+  await apiJson(page, `/v1/orgs/${org.id}/tasks/${work.primaryTaskId}/attachments`, {
+    method: 'POST',
+    body: {
+      kind: 'url',
+      title: 'Amtrak route schedules',
+      url: 'https://www.amtrak.com/train-schedules-timetables',
+    },
+  });
 }
 
 /** Add selected tasks to Today and record actual historical time against two of them. */
@@ -331,7 +379,10 @@ async function main(): Promise<void> {
   const page = await context.newPage();
   await addVirtualAuthenticator(page);
 
-  const { orgId: personalId } = await signUpAndOnboard(page, 'Marketing');
+  const { orgId: personalId } = await signUpAndOnboard(page, {
+    name: 'Alex Rivera',
+    email: 'alex.rivera@example.com',
+  });
   // Better Auth's passkey ceremony uses the browser clock when validating its challenge. Freeze
   // the product data only after authentication, so the capture is deterministic without making
   // a valid server-issued challenge appear to come from the future or the past.
@@ -355,40 +406,90 @@ async function main(): Promise<void> {
 
   const personalWork = await seedWork(page, personal, {
     program: 'Home and personal admin',
+    programSummary: 'Keep household commitments, appointments, and travel plans current.',
+    programDescription:
+      'The ongoing work Alex reviews each Sunday: appointments, school dates, household errands, and travel logistics.',
     initiative: 'September reset',
-    project: 'Rebuild the weekly routine',
-    secondProject: 'Plan the fall travel calendar',
+    initiativeSummary: 'Set the family calendar and weekly routine before September begins.',
+    initiativeDescription:
+      'Confirm the fall travel dates, school schedule, recurring errands, and Sunday planning routine before Labor Day.',
+    project: 'Plan the fall travel calendar',
+    projectSummary:
+      'Confirm every trip, reservation deadline, and family handoff through the end of November.',
+    secondProject: 'Rebuild the weekly routine',
+    secondProjectSummary:
+      'Set a workable Sunday review and weekday rhythm before the school year starts.',
     tasks: [
       'Review the fall calendar',
       'Book the annual checkup',
       'Compare train times',
       'Send the family schedule',
     ],
+    taskDescriptions: [
+      'Check the confirmed trips, school dates, hotel deadlines, and family handoffs before booking the remaining train legs.',
+      'Call the clinic and find a morning appointment before the September travel week.',
+      'Compare the Coast Starlight and Cascades connections, including the overnight transfer.',
+      'Send the confirmed September dates and pickup plan to Jordan and Maya.',
+    ],
   });
   const civicWork = await seedWork(page, civic, {
     program: 'Community engagement',
+    programSummary: 'Recruit, brief, and support volunteers for rider-facing events.',
+    programDescription:
+      'Civic Studio runs recurring volunteer briefings, open houses, and field research with transit riders.',
     initiative: 'Fall service campaign',
+    initiativeSummary: 'Prepare riders and volunteers for the September service change.',
+    initiativeDescription:
+      'Publish a tested field guide, hold a public open house, and brief volunteers before the new schedules take effect.',
     project: 'Publish the rider field guide',
-    secondProject: 'Run the September open house',
+    projectSummary:
+      'Test the route notes with volunteers, finish the maps, and publish before service changes.',
+    secondProject: 'Host the September open house',
+    secondProjectSummary:
+      'Book the library room, recruit six volunteers, and prepare a bilingual welcome table.',
     tasks: [
       'Review the service map',
       'Confirm the volunteer briefing',
       'Prepare the survey cards',
       'Send partner notes',
     ],
+    taskDescriptions: [
+      'Check every stop label and transfer note against the August operator bulletin.',
+      'Confirm the library room, interpretation, and six volunteer assignments for Thursday.',
+      'Print 150 bilingual rider cards and bundle them by survey location.',
+      'Send the route findings and three open questions to the agency planning team.',
+    ],
   });
   const neighborhoodWork = await seedWork(page, neighborhood, {
     program: 'Resident grants',
+    programSummary: 'Run small-grant rounds from application through award reporting.',
+    programDescription:
+      'Neighborhood Fund supports resident-led block projects with clear applications, review panels, and public award records.',
     initiative: 'Autumn grant round',
+    initiativeSummary: 'Open applications and complete the first review panel by September 30.',
+    initiativeDescription:
+      'Publish the application, hold two office hours, recruit reviewers, and document award criteria for the autumn round.',
     project: 'Open the block improvement fund',
+    projectSummary:
+      'Publish a plain-language application and make the first decisions by the end of September.',
     secondProject: 'Document the summer grantees',
+    secondProjectSummary:
+      'Collect final photos and short reports from all twelve summer award recipients.',
     tasks: [
       'Check the application form',
       'Schedule the review panel',
       'Publish office hours',
       'Confirm the award criteria',
     ],
+    taskDescriptions: [
+      'Test the eligibility questions and make the budget section readable on a phone.',
+      'Find a two-hour evening slot that works for all five resident reviewers.',
+      'Post two drop-in sessions at the library and add them to the neighborhood calendar.',
+      'Send the final scoring guide to reviewers and publish it beside the application.',
+    ],
   });
+
+  await seedTaskContext(page, personal, personalWork);
 
   await seedPersonalPlanning(page, [
     { orgId: personal.id, taskId: personalWork.primaryTaskId, hour: 8 },
@@ -434,7 +535,9 @@ async function main(): Promise<void> {
     const config = (await response.json()) as Record<string, unknown>;
     await route.fulfill({ response, json: { ...config, mcpUrl: PUBLIC_MCP_URL } });
   });
-  await capture(page, '/settings/connected-apps', 'connected-apps.jpg');
+  await capture(page, '/settings/connected-apps', 'connected-apps.jpg', async (settingsPage) => {
+    await settingsPage.locator('#mcp-client-select').selectOption('claude-desktop');
+  });
   await page.unroute('**/v1/config');
 
   await browser.close();

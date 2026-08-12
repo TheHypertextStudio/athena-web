@@ -102,7 +102,9 @@ describe('marketing CTAs', () => {
     it('invites a visitor to sign in or start', () => {
       render(<HeaderActions />);
 
-      expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/sign-in');
+      const signIn = screen.getByRole('link', { name: 'Sign in' });
+      expect(signIn.getAttribute('href')).toBe('/sign-in');
+      expect(signIn.className).toContain('max-[359px]:hidden');
       expect(screen.getByRole('link', { name: 'Create free account' }).getAttribute('href')).toBe(
         '/open',
       );

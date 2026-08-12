@@ -38,6 +38,7 @@ function interfaceSource(relativePath: string): string {
 }
 
 const publicCopy = PUBLIC_COPY_FILES.map(interfaceSource).join('\n');
+const offlineCopy = readFileSync(resolve(process.cwd(), 'public/offline.html'), 'utf8');
 
 describe('public copy gate', () => {
   it('uses the approved position exactly once', () => {
@@ -64,7 +65,7 @@ describe('public copy gate', () => {
     'plan tier',
     'Approved AI clients',
   ])('does not contain the generated-copy phrase %s', (phrase) => {
-    expect(publicCopy.toLowerCase()).not.toContain(phrase.toLowerCase());
+    expect(`${publicCopy}\n${offlineCopy}`.toLowerCase()).not.toContain(phrase.toLowerCase());
   });
 
   it('does not restore the removed personal welcome step', () => {

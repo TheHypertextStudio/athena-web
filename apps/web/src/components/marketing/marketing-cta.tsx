@@ -69,7 +69,7 @@ export function HeaderActions(): JSX.Element {
 
   return (
     <div className="flex items-center gap-2">
-      <Button asChild variant="ghost" size="sm">
+      <Button asChild variant="ghost" size="sm" className="max-[359px]:hidden">
         <Link href={signInUrl}>Sign in</Link>
       </Button>
       <Button asChild size="sm">

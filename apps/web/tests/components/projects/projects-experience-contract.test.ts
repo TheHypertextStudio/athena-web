@@ -16,6 +16,12 @@ function source(path: string): string {
 }
 
 describe('Projects experience contract', () => {
+  it('describes projects with their defining boundary', () => {
+    const overview = source(overviewPath);
+    expect(overview).toContain('subtitle="Projects have a start and an end."');
+    expect(overview).not.toContain('Plan, sequence, and operate bounded work.');
+  });
+
   it('keeps list, dependencies, and timeline as equal lenses over shared view state', () => {
     const overview = source(overviewPath);
     // The list-page arrangement + canonical title token live once in the shared layout; the page

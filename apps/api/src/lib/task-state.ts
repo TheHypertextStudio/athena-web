@@ -18,6 +18,7 @@ import { emitEvent } from '../routes/event-emit';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from './task-audit';
+import { advanceCompletedProcessTask } from './recurrence/advance';
 
 /** The selected `task` row shape. */
 export type TaskRow = typeof task.$inferSelect;
@@ -96,5 +97,13 @@ export async function setTaskState(input: SetTaskStateInput): Promise<TaskRow | 
     changes: await resolveTaskChangeLabels(input.organizationId, diffTaskFields(row, next)),
   });
   await enqueueSearchUpsert(input.organizationId, 'task', next.id);
+  if (next.completedAt) {
+    await advanceCompletedProcessTask(db, {
+      organizationId: input.organizationId,
+      actorId: input.actorId ?? undefined,
+      completedTaskId: next.id,
+      completedOn: next.completedAt.toISOString().slice(0, 10),
+    });
+  }
   return next;
 }

@@ -51,6 +51,11 @@ import {
 import { and, eq, isNull, lt, or } from 'drizzle-orm';
 import type { z } from 'zod';
 
+import {
+  calendarOccurrenceDate,
+  materializeCalendarProcessBindings,
+} from '../lib/recurrence/calendar-binding';
+
 /** Credentials an adapter needs to call its provider. Resolved per-connection by the engine. */
 export interface CalendarProviderCredentials {
   readonly accessToken: string;
@@ -601,6 +606,7 @@ async function upsertProviderItem(
     externalCalendarId: input.externalCalendarId,
     externalEventId: snapshot.externalEventId,
     recurringEventId: snapshot.recurringEventId,
+    recurrenceInstanceKey: snapshot.externalEventId,
     status: snapshot.status,
     title,
     description: snapshot.description,
@@ -711,6 +717,15 @@ async function runLayerSync(
       if (outcome === 'created') tally.created += 1;
       else if (outcome === 'updated') tally.updated += 1;
       else if (outcome === 'archived') tally.archived += 1;
+      if (outcome === 'created' || outcome === 'updated') {
+        const processResult = await materializeCalendarProcessBindings(db, {
+          calendarLayerId: input.target.id,
+          externalSeriesId: itemSnapshot.recurringEventId ?? itemSnapshot.externalEventId,
+          externalOccurrenceKey: itemSnapshot.externalEventId,
+          scheduledFor: calendarOccurrenceDate(itemSnapshot),
+        });
+        tally.errors.push(...processResult.errors);
+      }
     }
 
     await db

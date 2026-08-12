@@ -34,6 +34,7 @@ export * from './email-suggestion';
 export * from './update';
 export * from './saved-view';
 export * from './template';
+export * from './recurrence';
 export * from './member';
 export * from './role';
 export * from './grant';

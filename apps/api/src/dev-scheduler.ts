@@ -25,6 +25,7 @@ import { sweepConnectorSync } from './routes/integration-sync';
 import { sweepNotionMirror } from './routes/notion-mirror-reconcile';
 import { processSearchIndexJobs } from './search/process-jobs';
 import { sweepElicitations } from './services/elicitation-service';
+import { sweepRecurrenceMaterialization } from './lib/recurrence/sweep';
 
 /** How often the dev scheduler runs the account sweeps (short, so exports feel responsive). */
 const TICK_MS = 3000;
@@ -37,6 +38,7 @@ export function startDevScheduler(): void {
       await sweepAccountExports(db, now.toISOString());
       await sweepAccountDeletions(db, now.toISOString());
       await sweepCalendarSync(now);
+      await sweepRecurrenceMaterialization(db, now);
       // Locally there is no Cloud Scheduler, so without this a question's deadline would never
       // arrive and "nothing pends forever" would be false in exactly the environment it is
       // demonstrated in.

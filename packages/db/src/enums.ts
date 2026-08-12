@@ -64,6 +64,87 @@ export const cycleStatus = pgEnum('cycle_status', ['upcoming', 'active', 'comple
 export const health = pgEnum('health', ['on_track', 'at_risk', 'off_track']);
 /** Task priority. */
 export const taskPriority = pgEnum('task_priority', ['none', 'urgent', 'high', 'medium', 'low']);
+
+/** Whether a process creates every fixed step immediately or releases steps when ready. */
+export const processCreationMode = pgEnum('process_creation_mode', ['all_at_once', 'when_ready']);
+/** Lifecycle of a reusable process definition. */
+export const processDefinitionStatus = pgEnum('process_definition_status', [
+  'draft',
+  'published',
+  'archived',
+]);
+/** Concrete entity kind described by a process step. */
+export const processStepKind = pgEnum('process_step_kind', ['project', 'milestone', 'task']);
+/** Readiness/date behavior carried by a process step. */
+export const processStepTimingKind = pgEnum('process_step_timing_kind', [
+  'on_trigger',
+  'relative_to_trigger',
+  'after_step_completion',
+]);
+/** Source that creates occurrences for a recurrence series. */
+export const processTriggerKind = pgEnum('process_trigger_kind', [
+  'manual',
+  'calendar',
+  'after_completion',
+  'event',
+]);
+/** Calendar schedule shape within a series revision. */
+export const recurrenceScheduleKind = pgEnum('recurrence_schedule_kind', [
+  'daily',
+  'weekly',
+  'monthly',
+  'yearly',
+]);
+/** Monthly calendar pattern shape. */
+export const recurrenceMonthlyPatternKind = pgEnum('recurrence_monthly_pattern_kind', [
+  'day_of_month',
+  'nth_weekday',
+]);
+/** Behavior when a selected day does not exist in a month/year. */
+export const recurrenceCalendarOverflow = pgEnum('recurrence_calendar_overflow', [
+  'skip',
+  'last_day',
+]);
+/** Termination rule for a calendar recurrence. */
+export const recurrenceEndKind = pgEnum('recurrence_end_kind', ['never', 'on_date', 'after_count']);
+/** Calendar unit used by a completion-anchored trigger. */
+export const recurrenceIntervalUnit = pgEnum('recurrence_interval_unit', ['day', 'week', 'month']);
+/** What happens when a dated occurrence passes unfinished. */
+export const missedOccurrencePolicy = pgEnum('missed_occurrence_policy', [
+  'skip',
+  'carry',
+  'resolve',
+]);
+/** Recurrence-series lifecycle. */
+export const recurrenceSeriesStatus = pgEnum('recurrence_series_status', [
+  'active',
+  'paused',
+  'ended',
+]);
+/** Durable outcome of one expected recurrence occurrence. */
+export const processOccurrenceStatus = pgEnum('process_occurrence_status', [
+  'expected',
+  'materialized',
+  'completed',
+  'skipped',
+  'canceled',
+  'needs_resolution',
+  'superseded',
+]);
+/** Execution lifecycle of one materialized process instance. */
+export const processInstanceStatus = pgEnum('process_instance_status', [
+  'pending',
+  'active',
+  'completed',
+  'canceled',
+  'failed',
+]);
+/** One exception applied to a generated calendar date. */
+export const recurrenceExceptionKind = pgEnum('recurrence_exception_kind', [
+  'exclude',
+  'include',
+  'reschedule',
+]);
 /**
  * The workspace-wide task-estimation scale — which set of point values `task.estimate` is
  * chosen from, mirroring Linear's per-workspace estimate setting.

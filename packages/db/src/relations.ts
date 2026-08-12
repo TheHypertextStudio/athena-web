@@ -18,6 +18,18 @@ import {
 } from './schema/calendar';
 import { role } from './schema/crosscutting';
 import { actor, organization, team, teamMember } from './schema/identity';
+import {
+  processDefinition,
+  processInstance,
+  processInstanceMilestone,
+  processInstanceProject,
+  processInstanceTask,
+  processOccurrence,
+  processRevision,
+  processStep,
+  recurrenceSeries,
+  recurrenceSeriesRevision,
+} from './schema/recurrence';
 import { project, task } from './schema/work';
 
 /** Organization → its actors, teams, projects, tasks. */
@@ -75,6 +87,90 @@ export const taskRelations = relations(task, ({ one }) => ({
   team: one(team, { fields: [task.teamId], references: [team.id] }),
   project: one(project, { fields: [task.projectId], references: [project.id] }),
   assignee: one(actor, { fields: [task.assigneeId], references: [actor.id] }),
+}));
+
+/** Process definition → immutable revisions and the recurrence series that execute it. */
+export const processDefinitionRelations = relations(processDefinition, ({ many }) => ({
+  revisions: many(processRevision),
+  series: many(recurrenceSeries),
+  instances: many(processInstance),
+}));
+
+/** Process revision → definition, authored steps, series revisions, and concrete instances. */
+export const processRevisionRelations = relations(processRevision, ({ one, many }) => ({
+  definition: one(processDefinition, {
+    fields: [processRevision.definitionId],
+    references: [processDefinition.id],
+  }),
+  steps: many(processStep),
+  seriesRevisions: many(recurrenceSeriesRevision),
+  instances: many(processInstance),
+}));
+
+/** Process step → its immutable revision. */
+export const processStepRelations = relations(processStep, ({ one }) => ({
+  revision: one(processRevision, {
+    fields: [processStep.revisionId],
+    references: [processRevision.id],
+  }),
+}));
+
+/** Recurrence series → process definition, trigger revisions, and durable occurrences. */
+export const recurrenceSeriesRelations = relations(recurrenceSeries, ({ one, many }) => ({
+  definition: one(processDefinition, {
+    fields: [recurrenceSeries.definitionId],
+    references: [processDefinition.id],
+  }),
+  revisions: many(recurrenceSeriesRevision),
+  occurrences: many(processOccurrence),
+}));
+
+/** Series revision → series, process revision, and the occurrences it generated. */
+export const recurrenceSeriesRevisionRelations = relations(
+  recurrenceSeriesRevision,
+  ({ one, many }) => ({
+    series: one(recurrenceSeries, {
+      fields: [recurrenceSeriesRevision.seriesId],
+      references: [recurrenceSeries.id],
+    }),
+    processRevision: one(processRevision, {
+      fields: [recurrenceSeriesRevision.processRevisionId],
+      references: [processRevision.id],
+    }),
+    occurrences: many(processOccurrence),
+  }),
+);
+
+/** Occurrence → its series/revision and optional concrete process instance. */
+export const processOccurrenceRelations = relations(processOccurrence, ({ one }) => ({
+  series: one(recurrenceSeries, {
+    fields: [processOccurrence.seriesId],
+    references: [recurrenceSeries.id],
+  }),
+  seriesRevision: one(recurrenceSeriesRevision, {
+    fields: [processOccurrence.seriesRevisionId],
+    references: [recurrenceSeriesRevision.id],
+  }),
+  instance: one(processInstance),
+}));
+
+/** Process instance → its source records and concrete work-item mappings. */
+export const processInstanceRelations = relations(processInstance, ({ one, many }) => ({
+  definition: one(processDefinition, {
+    fields: [processInstance.definitionId],
+    references: [processDefinition.id],
+  }),
+  revision: one(processRevision, {
+    fields: [processInstance.revisionId],
+    references: [processRevision.id],
+  }),
+  occurrence: one(processOccurrence, {
+    fields: [processInstance.occurrenceId],
+    references: [processOccurrence.id],
+  }),
+  projects: many(processInstanceProject),
+  milestones: many(processInstanceMilestone),
+  tasks: many(processInstanceTask),
 }));
 
 /** Calendar layer → its owner, items, and workspace shares. */

@@ -103,6 +103,10 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
     load: async () => (await import('@/app/(app)/orgs/[orgId]/projects/projects-client')).default,
   },
   {
+    pattern: '/orgs/[orgId]/recurrence-series/[seriesId]',
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page')).default,
+  },
+  {
     pattern: '/orgs/[orgId]/search',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/search/org-search-client')).default,
   },

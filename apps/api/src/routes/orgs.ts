@@ -67,6 +67,7 @@ import labels from './labels';
 import members from './members';
 import milestones from './milestones';
 import programs from './programs';
+import processDefinitions from './process-definitions';
 import projects from './projects';
 import publications from './publish';
 import publishingAddresses from './domains';
@@ -78,6 +79,7 @@ import templates from './templates';
 import { entityMentionRoutes } from './entity-mentions';
 import mentions from './mentions';
 import references from './references';
+import recurrenceSeries, { recurringTaskRoutes } from './recurrence-series';
 import search from './search';
 import tasks from './tasks';
 import teams from './teams';
@@ -465,6 +467,9 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/updates', updates)
   .route('/:orgId/saved-views', savedViews)
   .route('/:orgId/templates', templates)
+  .route('/:orgId/process-definitions', processDefinitions)
+  .route('/:orgId/recurrence-series', recurrenceSeries)
+  .route('/:orgId/recurring-tasks', recurringTaskRoutes)
   .route('/:orgId/search', search)
   .route('/:orgId/mentions', mentions)
   // The inbound direction: what points *at* a thing. One mount for every target kind.

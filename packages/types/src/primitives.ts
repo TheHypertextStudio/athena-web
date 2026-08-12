@@ -131,6 +131,34 @@ export const SavedViewId = id<'SavedViewId'>().describe(
 export const TemplateId = id<'TemplateId'>().describe(
   'ULID id of a Template — a reusable pre-filled draft for creating a Task, Project, Initiative, or Program.',
 );
+/** Branded `ProcessDefinition` id. */
+export const ProcessDefinitionId = id<'ProcessDefinitionId'>().describe(
+  'ULID id of a ProcessDefinition — a reusable, versioned description of work Docket can materialize.',
+);
+/** Branded `ProcessRevision` id. */
+export const ProcessRevisionId = id<'ProcessRevisionId'>().describe(
+  'ULID id of a ProcessRevision — one immutable version of a process definition.',
+);
+/** Branded `ProcessStep` id. */
+export const ProcessStepId = id<'ProcessStepId'>().describe(
+  'ULID id of a ProcessStep — one project, milestone, or task specification within a process revision.',
+);
+/** Branded `RecurrenceSeries` id. */
+export const RecurrenceSeriesId = id<'RecurrenceSeriesId'>().describe(
+  'ULID id of a RecurrenceSeries — a schedule that expects process occurrences.',
+);
+/** Branded `RecurrenceSeriesRevision` id. */
+export const RecurrenceSeriesRevisionId = id<'RecurrenceSeriesRevisionId'>().describe(
+  'ULID id of a RecurrenceSeriesRevision — one immutable trigger version within a recurrence series.',
+);
+/** Branded `Occurrence` id. */
+export const OccurrenceId = id<'OccurrenceId'>().describe(
+  'ULID id of an Occurrence — one durable expected run of a recurrence series.',
+);
+/** Branded `ProcessInstance` id. */
+export const ProcessInstanceId = id<'ProcessInstanceId'>().describe(
+  'ULID id of a ProcessInstance — concrete Docket work materialized from one process revision.',
+);
 /** Branded `Agent` id. */
 export const AgentId = id<'AgentId'>().describe(
   'ULID id of an Agent — a configured AI worker that can be invoked to act within an org.',

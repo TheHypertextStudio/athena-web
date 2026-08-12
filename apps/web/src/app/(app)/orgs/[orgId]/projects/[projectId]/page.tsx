@@ -11,7 +11,7 @@ import type {
 import { ProjectId, TeamId } from '@docket/types';
 import { ActorAvatar } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Ellipsis, Trash2 } from '@docket/ui/icons';
+import { Ellipsis, RefreshCw, Trash2 } from '@docket/ui/icons';
 import {
   Button,
   ControlGroup,
@@ -50,6 +50,8 @@ import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity
 import { useActiveOrg } from '@/components/active-org';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { PublishAction } from '@/components/publishing/publish-action';
+import { RepeatProjectDialog } from '@/components/recurrence/repeat-project-dialog';
+import { ProjectRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
 import { api } from '@/lib/api';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 import { useCreateLabel } from '@/components/labels/queries';
@@ -73,6 +75,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const taskNoun = useVocabulary('task').toLowerCase();
   const [tab, setTab] = useState<TabId>('overview');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [repeatProjectOpen, setRepeatProjectOpen] = useState(false);
   const entityMentions = useEntityMentions(orgId, 'project', projectId);
 
   const {
@@ -396,6 +399,16 @@ export default function ProjectDetailPage(): JSX.Element {
             noun={projectNoun}
             canPublish={canEdit}
           />
+          {canEdit ? (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setRepeatProjectOpen(true);
+              }}
+            >
+              <RefreshCw className="size-4" /> Repeat {projectNoun.toLowerCase()}
+            </Button>
+          ) : null}
           {canDelete ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -436,6 +449,7 @@ export default function ProjectDetailPage(): JSX.Element {
           aria-labelledby="tab-overview"
           className="flex flex-col gap-8"
         >
+          <ProjectRepeatingWorkBacklink orgId={orgId} entityId={projectId} />
           {participants.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5" aria-label="Project people">
               {participants.map((participant) => (
@@ -623,6 +637,18 @@ export default function ProjectDetailPage(): JSX.Element {
               setConfirmDeleteOpen(false);
             },
           });
+        }}
+      />
+      <RepeatProjectDialog
+        open={repeatProjectOpen}
+        onOpenChange={setRepeatProjectOpen}
+        orgId={orgId}
+        project={project}
+        milestones={milestones}
+        tasks={milestoneTasks}
+        projectNoun={projectNoun}
+        onCreated={(seriesId) => {
+          router.push(`/orgs/${orgId}/recurrence-series/${seriesId}`);
         }}
       />
     </EntityDetailLayout>

@@ -42,6 +42,7 @@ import {
   type TeamOut,
   type WorkflowState,
 } from '@docket/types';
+import { todayIso } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
@@ -69,6 +70,10 @@ import { useSession } from '@/lib/auth-client';
 import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { queryKeys } from '@/lib/query';
+import {
+  RepeatTaskControl,
+  type TaskRepeatDraft,
+} from '@/components/recurrence/repeat-task-control';
 
 import { TaskComposerPickers } from './task-form-pickers';
 
@@ -92,6 +97,8 @@ export interface TaskDraft {
   labelIds: readonly string[];
   /** Coarse effort estimate in the workspace's scale, or null for none. */
   estimate: number | null;
+  /** Whether and how Docket should create future copies of this task. */
+  repeat: TaskRepeatDraft;
 }
 
 /** Workspace references carried with a successful task create for precise cache invalidation. */
@@ -206,6 +213,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     dueDate: null,
     labelIds: [],
     estimate: null,
+    repeat: { kind: 'none' },
   });
 
   const [workflowStates, setWorkflowStates] = useState<readonly WorkflowState[]>([]);
@@ -347,26 +355,38 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       let createdTask: TaskOut | null = null;
       try {
         const trimmedBody = draft.description.trim();
-        const res = await api.v1.orgs[':orgId'].tasks.$post({
-          param: { orgId },
-          json: {
-            title: trimmed,
-            teamId: TeamId.parse(teamId),
-            priority: draft.priority,
-            ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-            ...(draft.state ? { state: draft.state } : {}),
-            ...(draft.assigneeId ? { assigneeId: ActorId.parse(draft.assigneeId) } : {}),
-            ...(draft.projectId ? { projectId: ProjectId.parse(draft.projectId) } : {}),
-            ...(draft.milestoneId ? { milestoneId: MilestoneId.parse(draft.milestoneId) } : {}),
-            ...(draft.cycleId ? { cycleId: CycleId.parse(draft.cycleId) } : {}),
-            ...(draft.startDate ? { startDate: draft.startDate } : {}),
-            ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
-            ...(draft.labelIds.length > 0
-              ? { labels: draft.labelIds.map((id) => LabelId.parse(id)) }
-              : {}),
-            ...(draft.estimate !== null ? { estimate: draft.estimate } : {}),
-          },
-        });
+        const taskBody = {
+          title: trimmed,
+          teamId: TeamId.parse(teamId),
+          priority: draft.priority,
+          ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
+          ...(draft.state ? { state: draft.state } : {}),
+          ...(draft.assigneeId ? { assigneeId: ActorId.parse(draft.assigneeId) } : {}),
+          ...(draft.projectId ? { projectId: ProjectId.parse(draft.projectId) } : {}),
+          ...(draft.milestoneId ? { milestoneId: MilestoneId.parse(draft.milestoneId) } : {}),
+          ...(draft.cycleId ? { cycleId: CycleId.parse(draft.cycleId) } : {}),
+          ...(draft.startDate ? { startDate: draft.startDate } : {}),
+          ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
+          ...(draft.labelIds.length > 0
+            ? { labels: draft.labelIds.map((id) => LabelId.parse(id)) }
+            : {}),
+          ...(draft.estimate !== null ? { estimate: draft.estimate } : {}),
+        };
+        const res =
+          draft.repeat.kind === 'none'
+            ? await api.v1.orgs[':orgId'].tasks.$post({ param: { orgId }, json: taskBody })
+            : await api.v1.orgs[':orgId']['recurring-tasks'].$post({
+                param: { orgId },
+                json:
+                  draft.repeat.kind === 'calendar'
+                    ? {
+                        task: taskBody,
+                        schedule: draft.repeat.schedule,
+                        missedPolicy: draft.repeat.missedPolicy,
+                        materialization: draft.repeat.materialization,
+                      }
+                    : { task: taskBody, schedule: draft.repeat.schedule },
+              });
         if (!res.ok) {
           setError(
             userErrorMessage(
@@ -377,14 +397,14 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           return;
         }
         const created = await res.json();
-        createdTask = created;
+        createdTask = 'firstTask' in created ? created.firstTask : created;
         const references: TaskCreationReferences = {
           projectId: draft.projectId,
           milestoneId: draft.milestoneId,
           cycleId: draft.cycleId,
         };
         if (globalCreation !== undefined) {
-          await globalCreation.onCreated(created, references, continueCreating);
+          await globalCreation.onCreated(createdTask, references, continueCreating);
         }
         if (continueCreating) {
           focusTitleAfterContinuation.current = true;
@@ -394,7 +414,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           return;
         }
         onOpenChange(false);
-        if (globalCreation === undefined) onCreated(created);
+        if (globalCreation === undefined) onCreated(createdTask);
       } catch (caught) {
         if (createdTask !== null && globalCreation !== undefined) {
           setCompletionFailed(true);
@@ -542,7 +562,13 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       creating={creating}
       canSubmit={completedTask !== null || canSubmit}
       onSubmit={() => void submit(createMore)}
-      submitLabel={completedTask === null ? 'Create task' : 'Open created task'}
+      submitLabel={
+        completedTask !== null
+          ? 'Open created task'
+          : draft.repeat.kind === 'none'
+            ? 'Create task'
+            : 'Create repeating task'
+      }
     >
       <TaskComposerPickers
         statusOptions={statusOptions}
@@ -591,6 +617,15 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         onEstimateChange={(next) => {
           setField('estimate', next);
         }}
+      />
+      <RepeatTaskControl
+        value={draft.repeat}
+        onChange={(next) => {
+          setField('repeat', next);
+        }}
+        today={todayIso()}
+        timezone={Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'}
+        disabled={creating}
       />
     </ComposerShell>
   );

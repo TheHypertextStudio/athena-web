@@ -35,6 +35,7 @@ import { sweepAthenaAssignmentTriggers } from '../agent/assignments';
 import { reapIdleSessions } from '../mcp/session-registry';
 import { sweepElicitations } from '../services/elicitation-service';
 import { sweepExpiredSessions } from './session-sweep';
+import { sweepRecurrenceMaterialization } from '../lib/recurrence/sweep';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -158,6 +159,13 @@ const cron = new Hono()
   .post('/sync-calendars', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepCalendarSync(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Rolling recurrence materialization: keep future work visible far enough ahead for planning,
+  // and resolve dates that passed according to each series' explicit missed-work policy.
+  .post('/recurrence-materialization', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepRecurrenceMaterialization(db, new Date());
     return c.json({ swept: true, ...result });
   })
   // Linear Agent session-run sweep: finds queued (or lease-abandoned) `agent_session_run` rows,

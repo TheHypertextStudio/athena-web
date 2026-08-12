@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Hoisted so the mock factory (lifted above imports) can reference them.
 const {
   taskPost,
+  recurringTaskPost,
   membersGet,
   agentsGet,
   projectsGet,
@@ -46,6 +47,7 @@ const {
   };
   return {
     taskPost: vi.fn(),
+    recurringTaskPost: vi.fn(),
     membersGet: vi.fn(),
     agentsGet: vi.fn(),
     projectsGet: vi.fn(),
@@ -68,6 +70,7 @@ vi.mock('../../src/lib/api', () => ({
       orgs: {
         ':orgId': {
           tasks: { $post: taskPost },
+          'recurring-tasks': { $post: recurringTaskPost },
           members: { $get: membersGet },
           agents: { $get: agentsGet },
           projects: { $get: projectsGet },
@@ -198,6 +201,7 @@ const AGENTS: unknown[] = [];
 
 beforeEach(() => {
   taskPost.mockReset();
+  recurringTaskPost.mockReset();
   membersGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MEMBERS }));
   agentsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: AGENTS }));
   projectsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: PROJECTS }));
@@ -1062,6 +1066,40 @@ describe('CreateTaskDialog — robust composer', () => {
       expect(taskPost).toHaveBeenCalledTimes(1);
     });
     expect(firstJson(taskPost.mock.calls)).toMatchObject({ title: 'Tagged', labels: [BUG_ID] });
+  });
+
+  it('creates a repeating task through the one-call recurrence endpoint', async () => {
+    recurringTaskPost.mockResolvedValue(
+      jsonResponse(true, {
+        firstTask: { id: 'task_repeat', title: 'Run six miles' },
+        series: { id: 'series_1' },
+        occurrences: [],
+      }),
+    );
+    const { onCreated } = renderComposer();
+    await waitFor(() => {
+      expect(teamGet).toHaveBeenCalled();
+    });
+
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Run six miles' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Repeat — Does not repeat' }));
+    fireEvent.change(screen.getByLabelText('Repeat cadence'), { target: { value: 'daily' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create repeating task' }));
+
+    await waitFor(() => {
+      expect(recurringTaskPost).toHaveBeenCalledTimes(1);
+    });
+    expect(firstJson(recurringTaskPost.mock.calls)).toMatchObject({
+      task: { title: 'Run six miles', teamId: TEAM_ID, state: 'backlog' },
+      schedule: { kind: 'daily', interval: 1 },
+      missedPolicy: 'skip',
+      materialization: { horizonDays: 28, minimumOccurrences: 2 },
+    });
+    expect(taskPost).not.toHaveBeenCalled();
+    expect(onCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'task_repeat', title: 'Run six miles' }),
+    );
   });
 
   it('disables Create until the title is non-empty and never sends an empty title', async () => {

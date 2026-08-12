@@ -17,6 +17,12 @@ export const queryKeys = {
   // property re-reads the entry it just wrote without any call site knowing the log exists.
   taskActivity: (orgId: string, taskId: string) =>
     ['org', orgId, 'tasks', taskId, 'activity'] as const,
+  processDefinitions: (orgId: string) => ['org', orgId, 'process-definitions'] as const,
+  processDefinition: (orgId: string, definitionId: string) =>
+    ['org', orgId, 'process-definitions', definitionId] as const,
+  recurrenceSeries: (orgId: string) => ['org', orgId, 'recurrence-series'] as const,
+  recurrenceSeriesDetail: (orgId: string, seriesId: string) =>
+    ['org', orgId, 'recurrence-series', seriesId] as const,
   // Publishing keys nest under one `publishing` segment so a publish/withdraw can invalidate the
   // whole area (a brief's reachable URLs depend on the workspace's domains) with a single coarse
   // prefix, while a detail read still has its own targeted key.

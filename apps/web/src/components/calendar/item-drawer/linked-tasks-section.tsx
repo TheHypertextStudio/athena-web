@@ -5,7 +5,7 @@ import type {
   CalendarItemOut,
   CalendarItemTaskRole,
 } from '@docket/types';
-import { Link as LinkIcon, Plus } from '@docket/ui/icons';
+import { Link as LinkIcon, Plus, Workflow } from '@docket/ui/icons';
 import {
   Button,
   Dialog,
@@ -23,6 +23,7 @@ import { type JSX, useState } from 'react';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { queuedOfflineWrite } from '@/components/pwa/offline-write';
+import { PlanWorkForEventForm } from '@/components/recurrence/plan-work-for-event-form';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
 import { UserFacingError } from '@/lib/problem';
@@ -53,6 +54,7 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
   const { openCreate } = useCreateObject();
   const linkCreatedTask = useLinkTaskToItem(item.id);
   const queuedLink = queuedOfflineWrite(linkCreatedTask.error);
+  const [showPlan, setShowPlan] = useState(false);
   const grouped = TASK_ROLE_ORDER.map((role) => ({
     role,
     links: item.linkedTasks.filter((link) => link.role === role),
@@ -103,6 +105,7 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
                   }
                 },
               });
+              setShowPlan(false);
             }}
           >
             <Plus /> New
@@ -112,12 +115,26 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
             variant="outline"
             onClick={() => {
               setShowLink((value) => !value);
+              setShowPlan(false);
             }}
           >
             <LinkIcon /> Link
           </Button>
         </div>
       </div>
+
+      <Button
+        size="sm"
+        variant="outline"
+        className="w-fit"
+        onClick={() => {
+          setShowPlan((value) => !value);
+          setShowLink(false);
+        }}
+      >
+        <Workflow />
+        {item.recurringEventId ? 'Add tasks for each event' : 'Plan work around this event'}
+      </Button>
 
       {grouped.length === 0 ? (
         <p className="text-on-surface-variant text-body-small">No linked tasks yet.</p>
@@ -160,6 +177,14 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
           itemId={item.id}
           onDone={() => {
             setShowLink(false);
+          }}
+        />
+      ) : null}
+      {showPlan ? (
+        <PlanWorkForEventForm
+          item={item}
+          onDone={() => {
+            setShowPlan(false);
           }}
         />
       ) : null}

@@ -26,3 +26,4 @@ export * from './publishing';
 export * from './phone';
 export * from './scheduling';
 export * from './athena-mail';
+export * from './recurrence';

@@ -43,6 +43,7 @@ import { useTaskMutations } from '@/lib/use-task-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { stateTypeOf } from '@/lib/work-state';
+import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
 
 interface TaskFeedActor {
   name: string;
@@ -341,6 +342,8 @@ export default function TaskDetailPage(): JSX.Element {
           </p>
         ) : null}
       </header>
+
+      <TaskRepeatingWorkBacklink orgId={orgId} entityId={taskId} />
 
       <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="flex min-w-0 flex-col gap-6">

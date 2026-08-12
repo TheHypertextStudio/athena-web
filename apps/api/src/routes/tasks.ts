@@ -34,6 +34,7 @@ import { setTaskState } from '../lib/task-state';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
+import { advanceCompletedProcessTask } from '../lib/recurrence/advance';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
@@ -508,6 +509,14 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
         await db.transaction((tx) => replaceLabels(tx, 'task', row.id, orgId, patchLabels));
       }
       await enqueueTaskSearchIndex(orgId, row.id);
+      if (statePatch?.completedAt) {
+        await advanceCompletedProcessTask(db, {
+          organizationId: orgId,
+          actorId: ctx.actorId,
+          completedTaskId: row.id,
+          completedOn: statePatch.completedAt.toISOString().slice(0, 10),
+        });
+      }
       return ok(c, TaskOut, toOut(row, await labelsForSubject('task', orgId, row.id)));
     },
   )

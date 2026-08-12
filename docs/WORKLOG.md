@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-11
+> **Last Updated**: 2026-08-12
 
 ---
 
@@ -4708,6 +4708,45 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   boundary must cover indirect creation hooks and contextual drawers, while success handling must
   distinguish object commitment from follow-up relationship writes so a committed object is never
   presented as a retryable blank draft.
+
+---
+
+### [REPEAT-001] Repeating Work and Process Foundation
+
+- **Completed**: 2026-08-12
+- **Duration**: 2 days
+- **Priority**: P1
+- **Summary**: Docket now owns a normalized, versioned process and recurrence engine that works
+  without Athena. One-step repeating tasks, multi-step project processes, rolling calendar work,
+  completion-anchored work, calendar bindings, missed-occurrence decisions, future-only schedule
+  revisions, and event-driven automation all converge on ordinary Docket tasks and projects with
+  durable backlinks. Athena exposes authoring commands over the same contracts instead of carrying
+  a second interpretation layer.
+- **Files Changed**: Named discriminated contracts in `packages/types`; process definitions,
+  revisions, steps, series, occurrences, instances, bindings, relations, and migration `0081` in
+  `packages/db`; expansion, RRULE interoperability, materialization, lifecycle, calendar,
+  scheduler, task-completion, automation, API, and MCP behavior in `apps/api`; task, project, and
+  calendar entry points plus the recurrence-series management surface in `apps/web`; scheduler
+  setup, focused tests, design evidence, and the implementation/design specifications.
+- **Validation**: `pnpm typecheck` and `pnpm lint` passed 20/20 tasks. Tooling tests passed 139
+  assertions and the monorepo test gate passed 20/20 packages, including API 324 files / 3,715
+  tests, web 251 files / 1,961 tests, and database 23 files / 144 tests. `pnpm build` passed all four
+  build packages; the complete migration chain applied to fresh PGlite; secret scanning reported
+  zero findings across 2,980 tracked files; CI gate policy and `git diff --check` passed. The
+  authenticated production-bundle browser probe created a real M/W/F series, materialized 13
+  ordinary tasks, verified backlinks and the management route, captured desktop/mobile in both
+  themes, measured zero overflow at 320px, and found no recurrence target below 40px.
+- **Learnings**: Immutable revisions need chronological validation at the service boundary, not
+  only a date-picker minimum; otherwise a direct API client can rewrite the effective timeline.
+  Future edits should immediately refill their rolling window so saved work does not disappear
+  until the next scheduler tick. New App Router pages must regenerate
+  `offline-routes.generated.ts`, recurrence dates must use the shared picker, and responsive
+  breakpoints must reflect the content width left after Docket's rails rather than the viewport.
+- **Retrospective**: The named unions and normalized execution tables kept task recurrence,
+  reusable projects, calendar events, and Athena commands on one model. The first comparison-style
+  mockup obscured real product context; full-scale authenticated surfaces exposed the useful issues
+  in layout, touch targets, routing, and date behavior. Future feature work should move to a native
+  runtime slice earlier and reserve concept diagrams for one explicit concern at a time.
 
 ---
 

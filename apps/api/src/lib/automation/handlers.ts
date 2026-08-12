@@ -24,6 +24,8 @@ import type { ActionContext } from './engine';
 import type { AutomationEvent } from './event';
 import { createRegistry, type Registry } from './registry';
 import { RouteTaskParams, routeInboundItemToTask } from './route-task';
+import { materializeOccurrence } from '../recurrence/materialize';
+import { loadRecurrenceSeries, seriesRevisionAt } from '../recurrence/series';
 
 export type { AutomationEvent } from './event';
 
@@ -125,6 +127,8 @@ const AssignParams = z.object({ assigneeId: z.string().min(1) });
 const SetPriorityParams = z.object({ priority: Priority });
 /** `task.applyLabel` params. */
 const ApplyLabelParams = z.object({ labelId: z.string().min(1) });
+/** `process.start` params. */
+const StartProcessParams = z.object({ seriesId: z.string().min(1) });
 /** `notification.send` params. */
 const NotificationSendParams = z.object({
   to: z.enum(['actor', 'taskAssignee']),
@@ -178,6 +182,52 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
   const registry = createRegistry();
 
   for (const m of MAIL_ACTIONS) registry.register(mailHandler(m.type, m.build, deps));
+
+  // process.start — run an existing manual/event process series from a matching automation event.
+  // The event projection supplies a stable identity so a drain retry cannot start the process
+  // twice, while two distinct events on the same day still create distinct instances.
+  registry.register({
+    type: 'process.start',
+    run: async (ctx, params): Promise<void> => {
+      const event = eventOf(ctx);
+      const parsed = StartProcessParams.safeParse(params);
+      if (!parsed.success) return;
+      try {
+        const series = await loadRecurrenceSeries(db, event.organizationId, parsed.data.seriesId);
+        if (
+          series.status !== 'active' ||
+          (series.trigger.kind !== 'manual' && series.trigger.kind !== 'event')
+        ) {
+          return;
+        }
+        const scheduledFor = event.occurredAt.toISOString().slice(0, 10);
+        const revision = await seriesRevisionAt(
+          db,
+          event.organizationId,
+          parsed.data.seriesId,
+          scheduledFor,
+        );
+        const subject =
+          event.externalId ?? `${event.subjectType ?? 'event'}:${event.subjectId ?? ''}`;
+        const occurrenceKey = [event.source, event.kind, subject, event.occurredAt.toISOString()]
+          .join(':')
+          .slice(0, 300);
+        await materializeOccurrence(db, {
+          organizationId: event.organizationId,
+          actorId: event.actorId,
+          seriesId: parsed.data.seriesId,
+          seriesRevisionId: revision.id,
+          scheduledFor,
+          externalOccurrenceKey: occurrenceKey,
+        });
+      } catch (error) {
+        console.warn('[automation] process.start skipped', {
+          seriesId: parsed.data.seriesId,
+          error,
+        });
+      }
+    },
+  });
 
   // task.setStatus — move the firing task to a workflow state (shared transition lib).
   registry.register({

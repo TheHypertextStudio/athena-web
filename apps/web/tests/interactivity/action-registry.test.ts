@@ -111,7 +111,9 @@ describe('action registry: registration', () => {
     const begin = vi.fn(() => 'ephemeral-root-invocation');
     const abandon = vi.fn();
     const failure = new Error('private failure');
-    const registry = createActionRegistry({ receiptRuntime: { begin, observeAsync: vi.fn(), abandon } });
+    const registry = createActionRegistry({
+      receiptRuntime: { begin, observeAsync: vi.fn(), abandon },
+    });
     const invalidThrowingReceipt = [
       {
         id: 'task.open' as const,

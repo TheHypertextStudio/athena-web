@@ -473,5 +473,7 @@ export function defineActionDomain<const Actions extends readonly ActionDefiniti
   domain: ActionDomain,
   actions: Actions & ValidatedActionDefinitions<Actions>,
 ): readonly ActionDefinition[] {
-  return Object.freeze(actions.map((action) => ({ ...action, domain }))) as readonly ActionDefinition[];
+  return Object.freeze(
+    actions.map((action) => ({ ...action, domain })),
+  ) as readonly ActionDefinition[];
 }

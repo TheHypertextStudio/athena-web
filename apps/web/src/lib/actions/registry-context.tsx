@@ -28,11 +28,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 
-import {
-  type ActionReceiptRuntime,
-  type ActionRegistry,
-  createActionRegistry,
-} from './registry';
+import { type ActionReceiptRuntime, type ActionRegistry, createActionRegistry } from './registry';
 import type {
   ActionContextResolver,
   ActionDefinition,

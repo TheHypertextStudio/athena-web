@@ -19,6 +19,8 @@ const PUBLIC_COPY_FILES = [
   'app/onboarding/page.tsx',
   'app/(app)/billing/return/page.tsx',
   'components/settings/billing-settings.tsx',
+  'components/settings/connected-apps-tab.tsx',
+  'components/settings/mcp-clients.ts',
   'components/marketing/hero.tsx',
   'components/marketing/agents-strip.tsx',
   'components/marketing/closing-section.tsx',
@@ -64,6 +66,9 @@ describe('public copy gate', () => {
     'pricing tier',
     'plan tier',
     'Approved AI clients',
+    'approved MCP clients',
+    'allowed MCP clients',
+    'supported MCP clients',
   ])('does not contain the generated-copy phrase %s', (phrase) => {
     expect(`${publicCopy}\n${offlineCopy}`.toLowerCase()).not.toContain(phrase.toLowerCase());
   });

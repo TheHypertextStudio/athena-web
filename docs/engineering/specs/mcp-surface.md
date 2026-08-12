@@ -39,8 +39,8 @@
 - **One endpoint, `/mcp`**, supporting `POST` (JSON-RPC requests/notifications, may upgrade to SSE) and `GET` (server→client SSE stream). The deprecated HTTP+SSE (two-endpoint) transport is **forbidden**.
 - **Session mode:** ~~stateful~~ **RESOLVED: shipped stateless.** The implementation uses `sessionIdGenerator: undefined` — one fresh server + transport per request, no `Mcp-Session-Id`, no Redis event store (`apps/api/src/mcp/server.ts`). Cross-request `resources/subscribe` notifications therefore cannot exist; long agent runs use the Tasks capability (behind `MCP_TASKS_ENABLED` + `MCP_SESSION_STORE_URL`) and clients poll resources. The original stateful+Redis design remains a possible future upgrade if resumable SSE becomes a requirement.
 - **Protocol version header:** the RS MUST honor `MCP-Protocol-Version: 2025-11-25` on every non-initialize request; reject unknown versions with HTTP 400 (SDK handles this).
-- **Origin validation (MUST, DNS-rebinding):** reject requests whose `Origin` is not in an allowlist (`https://app.docket.*`, `https://*.docket.*`, and configured client origins) before any auth work. Bind the listener to the platform host only.
-- **CORS:** registered **before** the Better Auth handler (engineering plan §2); expose `Authorization`, `WWW-Authenticate`, `Mcp-Session-Id`, `MCP-Protocol-Version`.
+- **Origin validation (MUST, DNS-rebinding):** a missing `Origin` is accepted for native clients. A supplied origin must be one exact, syntactically valid HTTPS origin; non-production additionally accepts HTTP loopback. This is a transport check, not client identification: there is no vendor-domain allowlist.
+- **CORS:** registered **before** the Better Auth handler (engineering plan §2). `/mcp` and public OAuth routes use open, credential-free CORS; session-cookie routes retain the first-party origin policy. Expose `Authorization` and `WWW-Authenticate`.
 
 ---
 

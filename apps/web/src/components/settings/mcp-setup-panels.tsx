@@ -4,14 +4,14 @@ import { Button, Select } from '@docket/ui/primitives';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import type {
-  CliClient,
-  ConfigClient,
-  DeepLinkClient,
+  CliSetupGuide,
+  ConfigSetupGuide,
+  DeepLinkSetupGuide,
   OS,
-  StepsClient,
-  UrlClient,
+  StepsSetupGuide,
+  UrlSetupGuide,
 } from './mcp-clients';
-import { MCP_CLIENTS, detectOS } from './mcp-clients';
+import { MCP_SETUP_GUIDES, detectOS } from './mcp-clients';
 
 /** One grid cell shared by both copy-button labels, so the wider one fixes the button's width. */
 const STACKED_LABEL = 'col-start-1 row-start-1';
@@ -60,7 +60,7 @@ function CodeBlock({ code, label = 'Copy' }: { code: string; label?: string }): 
   );
 }
 
-function CliSetup({ client, url }: { client: CliClient; url: string }): JSX.Element {
+function CliSetup({ client, url }: { client: CliSetupGuide; url: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-on-surface-variant text-body-medium">Run this command in your terminal:</p>
@@ -75,7 +75,7 @@ function DeepLinkSetup({
   url,
   os,
 }: {
-  client: DeepLinkClient;
+  client: DeepLinkSetupGuide;
   url: string;
   os: OS;
 }): JSX.Element {
@@ -129,7 +129,7 @@ function ConfigSetup({
   url,
   os,
 }: {
-  client: ConfigClient;
+  client: ConfigSetupGuide;
   url: string;
   os: OS;
 }): JSX.Element {
@@ -154,7 +154,7 @@ function ConfigSetup({
   );
 }
 
-function StepsSetup({ client, url }: { client: StepsClient; url: string }): JSX.Element {
+function StepsSetup({ client, url }: { client: StepsSetupGuide; url: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
       <ol className="text-on-surface-variant text-body-medium flex flex-col gap-2">
@@ -173,7 +173,7 @@ function StepsSetup({ client, url }: { client: StepsClient; url: string }): JSX.
   );
 }
 
-function UrlSetup({ client, url }: { client: UrlClient; url: string }): JSX.Element {
+function UrlSetup({ client, url }: { client: UrlSetupGuide; url: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-on-surface-variant text-body-medium">MCP server URL:</p>
@@ -183,19 +183,19 @@ function UrlSetup({ client, url }: { client: UrlClient; url: string }): JSX.Elem
   );
 }
 
-/** ClientSetup renders the settings UI control for its parent workflow. */
+/** ClientSetup renders optional app-specific guides plus a generic MCP URL path. */
 export function ClientSetup({ mcpUrl }: { mcpUrl: string }): JSX.Element {
   const [selectedId, setSelectedId] = useState<string>('claude-code');
   const os = useMemo(() => detectOS(), []);
 
-  const client = MCP_CLIENTS.find((c) => c.id === selectedId) ?? MCP_CLIENTS[0];
+  const client = MCP_SETUP_GUIDES.find((guide) => guide.id === selectedId) ?? MCP_SETUP_GUIDES[0];
   if (!client) return <></>;
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <label htmlFor="mcp-client-select" className="text-on-surface text-body-medium font-medium">
-          Which app are you setting up?
+          Setup guide
         </label>
         <Select
           id="mcp-client-select"
@@ -205,9 +205,9 @@ export function ClientSetup({ mcpUrl }: { mcpUrl: string }): JSX.Element {
           }}
           className="w-full"
         >
-          {MCP_CLIENTS.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
+          {MCP_SETUP_GUIDES.map((guide) => (
+            <option key={guide.id} value={guide.id}>
+              {guide.name}
             </option>
           ))}
         </Select>

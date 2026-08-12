@@ -1,8 +1,8 @@
-/** Supported desktop operating systems for MCP client setup instructions. */
+/** Desktop operating systems covered by an app-specific MCP setup guide. */
 export type OS = 'mac' | 'windows' | 'linux';
 
-/** CliClient describes the settings data contract shared by the hook or component. */
-export interface CliClient {
+/** A setup guide that connects Docket by running a command. */
+export interface CliSetupGuide {
   id: string;
   name: string;
   kind: 'cli';
@@ -10,8 +10,8 @@ export interface CliClient {
   note?: string;
 }
 
-/** DeepLinkClient describes the settings data contract shared by the hook or component. */
-export interface DeepLinkClient {
+/** A setup guide that connects Docket through an app deep link. */
+export interface DeepLinkSetupGuide {
   id: string;
   name: string;
   kind: 'deeplink';
@@ -21,8 +21,8 @@ export interface DeepLinkClient {
   note?: string;
 }
 
-/** ConfigClient describes the settings data contract shared by the hook or component. */
-export interface ConfigClient {
+/** A setup guide that connects Docket through a configuration file. */
+export interface ConfigSetupGuide {
   id: string;
   name: string;
   kind: 'config';
@@ -31,8 +31,8 @@ export interface ConfigClient {
   note?: string;
 }
 
-/** StepsClient describes the settings data contract shared by the hook or component. */
-export interface StepsClient {
+/** A setup guide that connects Docket through app-specific steps. */
+export interface StepsSetupGuide {
   id: string;
   name: string;
   kind: 'steps';
@@ -40,19 +40,24 @@ export interface StepsClient {
   note?: string;
 }
 
-/** UrlClient describes the settings data contract shared by the hook or component. */
-export interface UrlClient {
+/** The generic setup guide for every app that accepts a remote MCP URL. */
+export interface UrlSetupGuide {
   id: string;
   name: string;
   kind: 'url';
   note?: string;
 }
 
-/** Union of every MCP client setup model rendered by the settings UI. */
-export type McpClient = CliClient | DeepLinkClient | ConfigClient | StepsClient | UrlClient;
+/** One convenience guide for entering Docket's MCP URL in another app. */
+export type McpSetupGuide =
+  | CliSetupGuide
+  | DeepLinkSetupGuide
+  | ConfigSetupGuide
+  | StepsSetupGuide
+  | UrlSetupGuide;
 
-/** Catalog of MCP clients and setup options shown in settings. */
-export const MCP_CLIENTS: McpClient[] = [
+/** Convenience guides, not an interoperability or authorization allowlist. */
+export const MCP_SETUP_GUIDES: McpSetupGuide[] = [
   {
     id: 'claude-code',
     name: 'Claude Code',
@@ -116,9 +121,9 @@ export const MCP_CLIENTS: McpClient[] = [
   },
   {
     id: 'other',
-    name: 'Other',
+    name: 'Other app',
     kind: 'url',
-    note: 'Point your MCP-compatible client at this URL. It will handle OAuth automatically.',
+    note: 'Use this URL in any app that supports remote MCP servers. The app will open Docket for authorization.',
   },
 ];
 

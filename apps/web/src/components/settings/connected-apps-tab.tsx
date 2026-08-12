@@ -4,7 +4,7 @@
  * `settings` — the Connected Apps tab.
  *
  * @remarks
- * Shows an MCP client setup guide (dropdown → client-specific deep link or config snippet),
+ * Shows app-specific MCP setup shortcuts plus a generic server URL,
  * then lists every OAuth client the user has explicitly consented to — drawn from
  * `GET /v1/me/connected-apps` — with a per-client revoke button.
  *
@@ -54,7 +54,7 @@ export interface ConnectedAppsTabProps {
 }
 
 /**
- * The Connected Apps settings tab — MCP client setup guide + authorized client roster.
+ * The Connected Apps settings tab — MCP setup guides plus the user's OAuth grants.
  */
 export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.Element {
   const { data: config } = usePublicConfig();
@@ -102,9 +102,11 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
       {/* ── Setup guide ── */}
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-body-medium font-medium">Connect an MCP client</h2>
+          <h2 className="text-on-surface text-body-medium font-medium">
+            Connect Docket to another app
+          </h2>
           <p className="text-on-surface-variant text-body-medium leading-relaxed">
-            Connect any MCP-compatible tool to your Docket account.
+            Use Docket&rsquo;s MCP URL in any app that supports remote MCP servers.
           </p>
         </div>
 
@@ -114,7 +116,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
       <div className="border-outline-variant border-t" role="separator" />
 
       {/* ── Authorized clients roster ── */}
-      <section className="flex flex-col gap-4" aria-label="Authorized MCP clients">
+      <section className="flex flex-col gap-4" aria-label="Apps you authorized">
         <div className="flex flex-col gap-1">
           <h2 className="text-on-surface text-body-medium font-medium">
             Apps with access to your Docket
@@ -155,7 +157,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
           <EmptyState
             icon={Link}
             title="No apps connected"
-            body="When you authorize an MCP client, it appears here."
+            body="An app appears here after you authorize it."
             className="border-none p-8"
           />
         ) : (

@@ -93,7 +93,9 @@
         describes the product capability without presenting a vendor permission model.
   - [x] Replace the MCP vendor allowlists with OAuth-bound, client-neutral interoperability.
   - [x] Add idempotent Stripe sandbox and production provisioning to the standard bootstrap path.
-  - [ ] Prove Stripe checkout, webhook activation, access, management, cancellation, and return routing.
+  - [x] Prove Stripe test-mode checkout, webhook activation, access, management, cancellation,
+        personal fallback, return routing, and one-trial enforcement.
+  - [ ] Repeat the proven Docket Pro lifecycle against Stripe live mode.
   - [ ] Deploy the validated release and verify the production customer journey.
 - **Files Changed**: Deterministic marketing capture tooling; nine JPEG application captures;
   marketing screenshot frames and sections; support-contact derivation; MCP OAuth test helper;
@@ -115,13 +117,12 @@
 - **Blockers**: Production promotion remains gated on live Stripe and legal evidence. The deploy
   workflow now reads the production `BILLING_ENABLED` variable and refuses billing-enabled releases
   unless the Stripe secret key, publishable key, webhook secret, and Docket Pro price are all mounted
-  from Secret Manager. `BILLING_ENABLED` is already true in production, but the Stripe secret mounts
-  and Docket Pro price binding are absent. The selected Stripe CLI profile identifies the Hypertext
-  Studio account and supplies test credentials for the sandbox,
-  but the repository's public local tunnel still requires Cloudflare account authorization and a
-  durable production live credential has not been supplied. Operator and legal approval for Privacy
-  and Terms is also not recorded. Publishing the $8 Docket Pro offer before those conditions are
-  resolved would violate the release contract.
+  from Secret Manager. Production currently keeps `BILLING_ENABLED=false`; the Stripe secret mounts,
+  live Docket Pro resources, and price binding are absent. The selected Stripe CLI profile identifies
+  the Hypertext Studio account and now supplies the proven test sandbox, but a durable production live
+  credential has not been supplied. Operator and legal approval for Privacy and Terms is also not
+  recorded. Publishing the $8 Docket Pro offer before those conditions are resolved would violate the
+  release contract.
 - **Learnings**: Product screenshots must use the public MCP endpoint even when their data is
   captured locally. The visual audit also caught two non-copy release defects: the support address
   was derived from the web CNAME instead of the registrable domain, and the hero image was left as
@@ -150,6 +151,26 @@
   requires an explicit live credential. Once managed setup writes `BILLING_ENABLED=true`, local
   API composition switches only billing to the real Stripe adapter, so the sandbox checkout and
   signed webhook path can be exercised without making every other local provider real.
+  The local webhook transport now uses `pnpm billing:webhooks`, a Stripe CLI listener restricted to
+  Docket's declared event set. The standard provider pass captures its stable signing secret, and the
+  listener redacts that secret from its own ready banner. `pnpm billing:verify-sandbox` proved a real
+  14-day hosted Checkout, signed activation, trial status, portal access, immediate test cancellation,
+  preserved personal work, and a second checkout without another trial. That run found and fixed a
+  real portal defect: the gateway passed the organization id as Stripe's customer id and then relied
+  on eventually consistent Search. The billing route now supplies the webhook-persisted subscription
+  id, and the gateway retrieves its customer directly before opening the portal.
+  MCP interoperability is also client-neutral end to end: any public CIMD metadata host or dynamic
+  registration may reach consent, any exact HTTPS browser origin may reach the credential-free MCP
+  resource, and access is decided by the user's OAuth grant, token scopes, and Docket permissions.
+  Named app entries in settings are convenience guides only; the generic remote-MCP URL path remains
+  first-class and the public-copy gate rejects language that calls clients allowed, approved, or
+  supported.
+  The production Stripe pass also proved why live keys cannot be copied out of the CLI profile:
+  Stripe keeps the real short-lived key in the OS keychain and returns a masked placeholder from
+  `stripe config --list`. Bootstrap now rejects that placeholder, keeps production collection on a
+  hidden prompt for a durable live runtime key, and redacts Stripe credential shapes from provider
+  errors. Both attempted live passes stopped during their initial account read, before creating or
+  changing a Stripe object.
 
 ---
 

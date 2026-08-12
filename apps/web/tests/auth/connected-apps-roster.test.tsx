@@ -100,7 +100,7 @@ describe('the Connected apps roster', () => {
     // and `apps/api/tests/mcp/mcp-grant-lifecycle.test.ts` proves the claim against a token that
     // is still cryptographically valid at the moment it is refused. If that check is ever removed,
     // this test fails and the promise cannot quietly outlive the mechanism behind it.
-    const roster = screen.getByLabelText('Authorized MCP clients');
+    const roster = screen.getByLabelText('Apps you authorized');
     expect(roster).toHaveTextContent('takes effect immediately');
     expect(roster).not.toHaveTextContent('15 minutes');
     expect(roster).not.toHaveTextContent('for up to');

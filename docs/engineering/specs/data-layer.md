@@ -78,6 +78,10 @@ All three are **definition-only** — pass a `apiQueryOptions(...)` result, neve
 
 The single contract for create/update/delete. Provide a `mutationFn` (wrap one RPC call through `unwrap`) plus optionally `onMutate` (optimistic patch → rollback context), `onError` (rollback), and `invalidateKeys`. Invalidation runs in `onSettled` after any caller `onSettled`, so success reconciles the optimistic cache and failure repairs it. Generics infer from `mutationFn`.
 
+**Invalidation is started, not awaited.** `invalidateQueries` resolves only once every matching _active_ query has refetched, and TanStack does not leave a mutation's `pending` state until `onSettled` returns — so awaiting it kept `isPending` true, and every control bound to it disabled, for a second round trip after the write had already succeeded. The refetch still runs and still reconciles the cache; the caller is simply released when their change lands. Pass `awaitInvalidation: true` for the rare write that must not be followed by another action until the refreshed data is on the client (a flow that reads back what it just wrote, a confirmation gated on server-derived state).
+
+When testing this, hold the invalidation's own refetch and read `isPending` once. A `waitFor` poll can pass against either behavior, because it retries until _some_ refetch settles — which is how the first version of this test passed against the code it was meant to reject.
+
 ### 2.4 `optimisticPatch(queryClient, key, recipe)` — instant writes
 
 Snapshots the cache at `key`, applies `recipe(prev) => next`, and returns `{ rollback }`. The optimistic-by-default recipe (rule 3):
@@ -188,6 +192,10 @@ The target for entry/list pages (today, my-work, inbox, the org list pages, heav
 - `getServerQueryClient()` — a request-scoped `QueryClient` (React `cache()`-deduped per render).
 - `getServerApi()` — a Hono RPC client for RSC prefetch that mirrors the browser's same-origin model (targets the request's own origin so the Next rewrite proxies to the API) and **forwards the caller's session cookie** via `next/headers`, so server reads are authenticated.
 - `dehydrate` (re-exported) for the `<HydrationBoundary state={…}>`.
+
+**Adopted — entity detail routes (record-only prefetch).** Project, Program, Initiative and Task detail split into a server entry plus their existing client component. Each prefetches only the entity's **own row** — `queryKeys.<kind>Record(orgId, id)`, or `queryKeys.task` for tasks, which already held the single-row read — not the page's composite. The composite is four to thirteen requests, each a hop from the RSC back through the app's own origin to the API, so prefetching it server-side would move that cost in front of the first byte rather than removing it. The row is one cheap read and is all the masthead needs; the tab panels keep loading on the client.
+
+The record keys nest under each entity's composite detail key (`['org', orgId, 'projects', id, 'record']`), which is what lets a create seed one safely: every create already invalidates its collection, so a seeded entry is marked stale in the same breath it is written and the mount's refetch trues it up. A seed therefore only has to be _true_, not complete — see `lib/entity-records.ts`.
 
 **Adopted — every entry page.** Each splits into a server wrapper (prefetch + hydrate) and the existing client component (a default-exported `*-client.tsx`): projects, programs, teams, portfolio, inbox, initiatives, cycles, and my-work. Two patterns proved out beyond the simple "prefetch the page's keys" case:
 

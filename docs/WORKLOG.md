@@ -7,6 +7,81 @@
 
 ## Active Tasks
 
+### [PERF-001] Creating something stops feeling like waiting for something
+
+- **Status**: REVIEW
+- **Started**: 2026-08-12
+- **Priority**: P1
+- **Description**: Creating a program, initiative, project or task showed a long loading state;
+  open document tabs were titled with slices of internal ids; and detail-page placeholders were
+  drawn separately from the pages they preceded, so content jumped into position on resolve.
+- **Approach**: Attack the write path on both ends rather than hiding the latency on one.
+
+  **Server.** Session resolution was a database read on _every_ request, so it multiplied by a
+  screen's request fan-out — about a dozen parallel reads on one detail page meant about a dozen
+  session lookups before any handler ran. Now served from a signed cookie with a one-minute
+  window, with the refreshed cookie forwarded so the cache stays warm; the surfaces where that
+  staleness would be the bug (device list and revoke, account deletion, recovery codes)
+  re-resolve authoritatively. Post-commit effects — the activity event and its recipient/
+  automation/index fan-out, the entity-write bus — moved off the response path onto a tracked,
+  logged, shutdown-drained deferral seam, for creates only; prose edits that a client reads back
+  stay awaited. Independent tenant guards run concurrently while still reporting the
+  earliest-declared failure.
+
+  **Client.** The create response carried the whole record and the client kept only the id.
+  Each entity's row now caches under its own key (nested under the composite, so an existing
+  invalidation trues up a partial seed), is seeded by the composer, and is prefetched by a new
+  server entry on each detail route — so identity is in the first paint instead of behind a
+  four-to-thirteen request composite. `useApiMutation` stopped awaiting its invalidation, which
+  had held `isPending` true through a second round trip after the write succeeded. The
+  navigation seam finally has a consumer: a delayed, indeterminate progress bar, because between
+  a click and its route payload the screen was unchanged and indistinguishable from a click that
+  did nothing.
+
+  **Tabs.** `title` is nullable; an unnamed tab reads as its kind, never its id. Titles come from
+  the query cache first (usually no request at all), then from by-id endpoints rather than
+  whole-org list scans, and a detail page reports renames upward. Unresolved titles are no longer
+  persisted as resolved. Browser tabs get per-document titles.
+
+  **Placeholders.** `EntityDetailSkeleton` composes the real `EntityDetailLayout`, so page
+  measure, sticky header, identity grid and scroll ownership are used rather than reproduced.
+  Task detail's placeholder is two-column like its page; the program list's matches its card
+  grid; the initiative roster's got its container.
+
+- **Subtasks**:
+  - [x] Session cookie cache + authoritative re-read on revocation-sensitive routes
+  - [x] `deferAfterResponse` seam; creates stop awaiting events and search indexing
+  - [x] `guardsInOrder`; concurrent tenant guards with deterministic failure precedence
+  - [x] Record keys, `entity-records.ts`, seeding through `completeCreateObject`
+  - [x] `useApiMutation` releases on write, `awaitInvalidation` opt-in
+  - [x] `NavigationProgress` + composers on the responsive router
+  - [x] Tab titles: nullable, cache-seeded, by-id, rename-following, per-document browser titles
+  - [x] `EntityDetailSkeleton` + task/program/initiative placeholder parity
+  - [x] SSR record prefetch on project/program/initiative/task detail; layout hairpin parallelized
+  - [x] Quick-add accepts the next title while the previous saves, and returns a failed one
+- **Blockers**: None.
+- **Notes**: Not measured end-to-end in a browser. A dev server from another worktree owns the
+  local domains, so an authenticated click-to-paint number was not taken; the reasoning is from
+  request counts and code paths, and the numbers in the plan are estimates rather than
+  measurements. Verified by the full suite (web 2286, api 3799, ui 571, auth 89), root lint and
+  typecheck, `pnpm build`, and per-package coverage gates.
+
+  Deliberately not done: `usePendingInsert` and the rest of the intent-preserving mutation
+  primitives; the modal composers still lock their draft while its own create is in flight, which
+  is correct for a one-draft composer (a field edited after submit would show a change the
+  created object does not have) and only wants an `aria-busy` until that lifecycle exists. Cycle
+  and session detail keep the client-only path — neither is created by the global composers.
+  `use-task-detail`'s two-level waterfall wants an aggregate endpoint, which is an API change
+  beyond this branch.
+
+- **Learnings**: A `waitFor` poll can pass against either side of a timing contract, because it
+  retries until _some_ matching state appears. The first version of the mutation-settle test
+  passed against the code it was written to reject; holding exactly the invalidation's own
+  refetch and reading the state once is what actually distinguishes the two. Also: two of the
+  findings this work started from did not survive contact — the shell's placeholders already
+  shared one identity gate, and reduced motion was already handled globally — which is the
+  argument for reading the code before fixing the report.
+
 ### [MCP-APPS-ENTITY-001] Give Docket MCP reads semantic entity briefings
 
 - **Status**: REVIEW

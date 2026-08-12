@@ -8,6 +8,31 @@
 
 **Tech Stack:** Next.js, React, TypeScript, TanStack Query, Vitest, Testing Library, TypeScript compiler API, Playwright.
 
+## Status note — 2026-08-12
+
+A separate branch (`PERF-001` in `docs/WORKLOG.md`) fixed the reported symptoms without running
+this program. It overlaps three of the findings below and leaves the rest open.
+
+**Satisfied in part:**
+
+- Task 2 / Task 7 — the inline task composer no longer disables its field or awaits before
+  clearing; each submission captures its own title, and a refusal returns it.
+- Task 7's navigation category — the responsive navigation seam has a consumer at last
+  (`NavigationProgress`), and the create composers route through it. The remaining ~50 raw
+  `useRouter` call sites are untouched.
+- Task 5 in name only — the composers gained `aria-busy`, but their draft is still locked while
+  its own create is in flight. That is deliberate: with one draft in flight, a field edited after
+  submitting would show a change the created object does not have. Relaxing it needs the
+  pending-insert lifecycle, not a relaxed `disabled`.
+
+**Still open:** everything else, including Task 1's generated inventory and debt ledger, Tasks 3–4
+and 6, Task 8's browser matrix, and the required responsiveness CI job. The mutation primitives
+plan is likewise still at Task 1 of 7 — only the pure intent journal exists; `useInstantMutation`,
+`usePendingInsert` and `useConfirmedMutation` have not been built.
+
+Separately, one premise below did not survive contact: the shell's account and agenda placeholders
+already resolve on a single shared identity signal rather than on independent clocks.
+
 ## Global Constraints
 
 - Migrate by coherent product domain and keep every commit green.

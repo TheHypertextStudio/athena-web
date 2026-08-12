@@ -33,6 +33,9 @@ function reportFailure(label: string, error: unknown): void {
       source: 'api',
       event: 'deferred_work_failed',
       label,
+      /* v8 ignore next 2 -- @preserve defensive: lint forbids first-party code from rejecting
+         with a non-Error, so only a third-party client can reach the `String(error)` path.
+         Keeping it is what stops such a value being logged as "[object Object]". */
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     }),

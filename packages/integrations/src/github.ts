@@ -41,6 +41,15 @@ interface GitHubErrorBody {
 /** The two shapes `GET /issues` can answer with: the issue array, or an error body. */
 type GitHubIssuesResponse = GitHubIssue[] | GitHubErrorBody | undefined;
 
+/**
+ * GitHub's documented maximum page size for the search endpoints.
+ *
+ * @remarks
+ * Lower than the general REST maximum. Exceeding it is a 422 rather than a clamp, so it has to be
+ * respected on the way out rather than discovered from the response.
+ */
+const GITHUB_SEARCH_MAX_PER_PAGE = 100;
+
 /** One `GET /search/issues` hit, narrowed to the pull-request fields the activity pull reads. */
 interface GitHubSearchItem {
   readonly id: number;
@@ -175,11 +184,20 @@ export class GitHubProviderClient implements ConnectorProviderClient, ActivitySo
     }
     const window = `${input.since.slice(0, 10)}..${input.until.slice(0, 10)}`;
     const query = encodeURIComponent(`author:${login} type:pr updated:${window}`);
+    // Clamped to GitHub's documented ceiling for search endpoints. The port's `maxDrafts` is a
+    // decision about cost, and the callers legitimately pass more than a page's worth — sending it
+    // through unclamped makes GitHub answer 422, which the leased spine records as a provider
+    // failure, flips the integration to `error`, and tells its owner GitHub needs attention. Every
+    // tick, for a request that was only ever asking for too many rows at once.
+    const perPage = Math.min(input.maxDrafts, GITHUB_SEARCH_MAX_PER_PAGE);
     const json = await this.http.getJson<GitHubSearchResponse>(
-      `/search/issues?q=${query}&sort=updated&per_page=${String(input.maxDrafts)}`,
+      `/search/issues?q=${query}&sort=updated&per_page=${String(perPage)}`,
     );
     const items = json.items ?? [];
-    const truncated = (json.total_count ?? items.length) > items.length;
+    // Measured against what came back rather than against `total_count`: the `updated:` search
+    // matches pull requests merely *touched* in the window, most of which yield no draft at all, so
+    // a large `total_count` says nothing about whether drafts were clipped.
+    const truncated = items.length >= perPage;
 
     const since = new Date(input.since).getTime();
     const until = new Date(input.until).getTime();

@@ -224,6 +224,34 @@ describe('GitHub activity pull', () => {
     );
   });
 
+  it('never asks GitHub for more rows per page than it allows', async () => {
+    // The defect this pins: the sweep passes `maxDrafts: 200`, and GitHub's search endpoints cap
+    // `per_page` at 100 with a 422 rather than a clamp. Sent through unclamped, every pull failed,
+    // the leased spine recorded a provider failure, and the integration was flipped to `error` with
+    // its owner notified — every tick. The old suite never passed a maxDrafts above 50, so it could
+    // not see this.
+    const http = new RecordingHttp();
+    http.respond = route([searchItem()]);
+    await client(http).pullActivity({ ...WINDOW, maxDrafts: 200 });
+
+    const search = http.paths.find((p) => p.startsWith('/search/issues')) ?? '';
+    const perPage = Number(/per_page=(\d+)/.exec(search)?.[1] ?? '0');
+    expect(perPage).toBeLessThanOrEqual(100);
+    expect(perPage).toBeGreaterThan(0);
+  });
+
+  it('reports truncation from what came back, not from total_count', async () => {
+    // `updated:` matches pull requests merely touched in the window, most of which yield no draft,
+    // so a large `total_count` says nothing about whether drafts were clipped.
+    const http = new RecordingHttp();
+    http.respond = (path) =>
+      path === '/user' ? { login: 'willie' } : { total_count: 500, items: [searchItem()] };
+
+    const { truncated } = await client(http).pullActivity({ ...WINDOW, maxDrafts: 50 });
+
+    expect(truncated).toBe(false);
+  });
+
   it('reports truncation when the provider says more matched than it returned', async () => {
     const http = new RecordingHttp();
     http.respond = (path) =>

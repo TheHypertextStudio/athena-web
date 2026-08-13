@@ -72,6 +72,14 @@ export const JOBS: readonly CronJob[] = [
       'Docket: ambient-intelligence drain (normalize inbound webhook events into canonical events).',
   },
   {
+    name: 'docket-pull-activity',
+    path: '/internal/cron/pull-activity',
+    schedule: '*/15 * * * *',
+    description:
+      'Docket: activity poll (asks every connected tool with no webhook — sent mail, pull-request ' +
+      'authorship, attended meetings — what the person did, into the canonical event log).',
+  },
+  {
     name: 'docket-daily-digests',
     path: '/internal/cron/daily-digests',
     schedule: '*/15 * * * *',

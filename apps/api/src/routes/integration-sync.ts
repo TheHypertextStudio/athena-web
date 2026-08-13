@@ -288,6 +288,13 @@ export async function runLeasedSync(
       status: 'running',
       trigger: opts.trigger,
       purpose: opts.purpose,
+      // Stamped from the application clock rather than left to the column's `defaultNow()`. The
+      // two are not interchangeable: a `timestamp` column's database-side default comes back in the
+      // database session's own clock domain, so a run stamped that way cannot be compared against a
+      // JavaScript `Date` — a cadence gate built on such a comparison is off by the timezone offset
+      // and silently never holds. Every other `now` in this codebase is passed in for exactly this
+      // reason; this column was the one that was not.
+      startedAt: now,
     })
     .returning();
   /* v8 ignore next -- @preserve defensive: insert always returns a row */

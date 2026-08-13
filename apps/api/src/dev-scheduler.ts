@@ -21,6 +21,7 @@ import { getContainer } from './container';
 import { sweepLegacyMentions } from './content/legacy-mention-sweep';
 import { sweepResourceUnfurls } from './content/unfurl-sweep';
 import { sweepCalendarSync } from './routes/calendar-sync-sweep';
+import { sweepActivitySources } from './lib/activity/sweep';
 import { sweepConnectorSync } from './routes/integration-sync';
 import { sweepNotionMirror } from './routes/notion-mirror-reconcile';
 import { processSearchIndexJobs } from './search/process-jobs';
@@ -49,6 +50,9 @@ export function startDevScheduler(): void {
       // sweep gates each integration on its own `syncCadenceMinutes` and returns the rest
       // untouched, so this runs what is genuinely due and nothing else.
       await sweepConnectorSync(now);
+      // Harmless on a three-second tick: the 30-minute per-purpose cadence gate means all but one
+      // run in each window returns immediately without touching a provider.
+      await sweepActivitySources(now);
       await sweepNotionMirror(now);
       await processSearchIndexJobs({ limit: 50 });
       await sweepResourceUnfurls(getContainer().unfurler, now);

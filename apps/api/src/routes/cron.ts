@@ -25,6 +25,7 @@ import { sweepConnectorSync } from './integration-sync';
 import { sweepDayCadence } from './day-cadence-sweep';
 import { sweepDirectivePosture } from './directive-sweep';
 import { sweepInboundEvents } from './event-sync';
+import { sweepActivitySources } from '../lib/activity/sweep';
 import { sweepDailyDigests } from './daily-digest';
 import { sweepLinearAgentSessions } from './linear-agent-sweep';
 import { getContainer } from '../container';
@@ -132,6 +133,16 @@ const cron = new Hono()
   .post('/daily-digests', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepDailyDigests(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Activity poll: ask every connected tool that has no webhook what the person did — sent mail and
+  // pull-request authorship over the provider APIs, attended meetings projected from Docket's own
+  // calendar tables. Without this, activity only ever arrives from GitHub and Linear webhooks, so a
+  // day spent in mail and meetings reads as an empty one. Each pull rides the leased sync spine, so
+  // it is idempotent, records its own outcome, and surfaces a broken connection to its owner.
+  .post('/pull-activity', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepActivitySources(new Date());
     return c.json({ swept: true, ...result });
   })
   // Account-deletion sweep: hard-delete every account whose 14-day grace window has elapsed,

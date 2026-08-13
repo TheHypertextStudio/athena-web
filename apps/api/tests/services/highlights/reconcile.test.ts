@@ -1,0 +1,252 @@
+import { and, asc, eq } from 'drizzle-orm';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+import type * as DbModule from '@docket/db';
+
+import { getDb, one, seedBaseOrg } from '../../support/routes-harness';
+import { reconcileDay } from '../../../src/services/highlights/reconcile';
+
+let schema!: typeof DbModule;
+let db!: typeof DbModule.db;
+
+beforeAll(async () => {
+  schema = await getDb();
+  db = schema.db;
+});
+
+const DAY = '2026-08-12';
+/** Mid-afternoon UTC, so the day's window is open and its events sit inside it. */
+const NOW = new Date('2026-08-12T18:00:00.000Z');
+
+let people = 0;
+
+/** A person with a Hub pinned to UTC, so the local day and the calendar date coincide. */
+async function seedPerson(): Promise<{ orgId: string; userId: string }> {
+  const { orgId } = await seedBaseOrg(db, schema);
+  people += 1;
+  const userId = one(
+    await db
+      .insert(schema.user)
+      .values({ name: `Ada ${String(people)}`, email: `ada-${String(people)}@example.test` })
+      .returning({ id: schema.user.id }),
+  ).id;
+  await db.insert(schema.hub).values({ userId, preferences: { timezone: 'UTC' } });
+  return { orgId, userId };
+}
+
+let seq = 0;
+
+/** One canonical event on a given subject at a given time. */
+async function seedEvent(
+  orgId: string,
+  userId: string,
+  over: { subject?: string; title?: string; at?: string; kind?: 'completed' | 'comment' } = {},
+): Promise<string> {
+  seq += 1;
+  const subject = over.subject ?? 'ENG-1';
+  return one(
+    await db
+      .insert(schema.event)
+      .values({
+        organizationId: orgId,
+        userId,
+        sourceSystem: 'github',
+        kind: over.kind ?? 'completed',
+        occurredAt: new Date(over.at ?? '2026-08-12T09:00:00.000Z'),
+        title: over.title ?? `Event ${String(seq)}`,
+        entity: {
+          kind: 'work_item',
+          source: 'github',
+          externalId: subject,
+          title: `Subject ${subject}`,
+          url: null,
+          docketEntityId: null,
+        },
+        entityKind: 'work_item',
+        entityAssociation: 'pending',
+        dedupeKey: `test-${String(seq)}`,
+      })
+      .returning({ id: schema.event.id }),
+  ).id;
+}
+
+async function highlightsFor(activityDayId: string) {
+  return db
+    .select()
+    .from(schema.activityHighlight)
+    .where(eq(schema.activityHighlight.activityDayId, activityDayId))
+    .orderBy(asc(schema.activityHighlight.sort));
+}
+
+async function dayFor(userId: string) {
+  const [row] = await db
+    .select()
+    .from(schema.activityDay)
+    .where(and(eq(schema.activityDay.userId, userId), eq(schema.activityDay.localDate, DAY)))
+    .limit(1);
+  return row;
+}
+
+describe('reconcileDay', () => {
+  it('turns a day of events into narrated episodes', async () => {
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId, { title: 'Merged the import fix' });
+
+    const result = await reconcileDay(userId, DAY, NOW);
+
+    expect(result.empty).toBe(false);
+    expect(result.episodeCount).toBe(1);
+    expect(result.narrated).toBe(1);
+
+    const rows = await highlightsFor(result.activityDayId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.narrationState).toBe('ready');
+    expect(rows[0]?.narration).not.toBeNull();
+    expect(rows[0]?.kept).toBe(true);
+    expect((await dayFor(userId))?.status).toBe('ready');
+  });
+
+  it('collapses a day of work on one subject into a single story', async () => {
+    // The product premise: six commits on one pull request is one line, not six.
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId, { at: '2026-08-12T09:00:00.000Z' });
+    await seedEvent(orgId, userId, { at: '2026-08-12T09:20:00.000Z', kind: 'comment' });
+    await seedEvent(orgId, userId, { at: '2026-08-12T16:00:00.000Z', kind: 'comment' });
+
+    const result = await reconcileDay(userId, DAY, NOW);
+
+    expect(result.episodeCount).toBe(1);
+    const rows = await highlightsFor(result.activityDayId);
+    expect(rows).toHaveLength(1);
+    // Even the one seven hours later: same subject, same day, one story.
+    expect(rows[0]?.eventIds).toHaveLength(3);
+  });
+
+  it('keeps separate subjects as separate stories, ordered by when they began', async () => {
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId, { subject: 'ENG-late', at: '2026-08-12T15:00:00.000Z' });
+    await seedEvent(orgId, userId, { subject: 'ENG-early', at: '2026-08-12T08:00:00.000Z' });
+
+    const result = await reconcileDay(userId, DAY, NOW);
+
+    const rows = await highlightsFor(result.activityDayId);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.subjectTitle)).toEqual(['Subject ENG-early', 'Subject ENG-late']);
+    expect(rows.map((r) => r.sort)).toEqual([0, 1]);
+  });
+
+  it('records a quiet day as empty, and spends nothing on it', async () => {
+    const { userId } = await seedPerson();
+    const { getContainer } = await import('../../../src/container');
+    const spy = vi.spyOn(getContainer().summarizer, 'narrateDay');
+
+    const result = await reconcileDay(userId, DAY, NOW);
+
+    expect(result.empty).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+    expect((await dayFor(userId))?.status).toBe('empty');
+    spy.mockRestore();
+  });
+
+  it('narrates each episode once, however often the day is reconciled', async () => {
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId);
+    await reconcileDay(userId, DAY, NOW);
+
+    const { getContainer } = await import('../../../src/container');
+    const spy = vi.spyOn(getContainer().summarizer, 'narrateDay');
+    const second = await reconcileDay(userId, DAY, NOW);
+
+    // Already narrated, so there is nothing to claim and no reason to call the model again.
+    expect(spy).not.toHaveBeenCalled();
+    expect(second.narrated).toBe(0);
+    expect(await highlightsFor(second.activityDayId)).toHaveLength(1);
+    spy.mockRestore();
+  });
+
+  it('never discards a rewrite or a drop when the day is reconciled again', async () => {
+    // The guarantee behind "the record is fixed, the story is editable": a later-arriving event
+    // extends an episode, and must not quietly overwrite what the person wrote about it.
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId, { at: '2026-08-12T09:00:00.000Z' });
+    const first = await reconcileDay(userId, DAY, NOW);
+    const before = one(await highlightsFor(first.activityDayId));
+
+    await db
+      .update(schema.activityHighlight)
+      .set({ editedNarration: 'I wrote this myself.', kept: false, curatedAt: NOW })
+      .where(eq(schema.activityHighlight.id, before.id));
+
+    // A backfilled event on the same subject — exactly the case the episode key exists to survive.
+    await seedEvent(orgId, userId, { at: '2026-08-12T08:00:00.000Z', kind: 'comment' });
+    const second = await reconcileDay(userId, DAY, NOW);
+
+    const after = one(await highlightsFor(second.activityDayId));
+    expect(after.id).toBe(before.id);
+    expect(after.episodeKey).toBe(before.episodeKey);
+    expect(after.editedNarration).toBe('I wrote this myself.');
+    expect(after.kept).toBe(false);
+    // The derived facts did move: the episode now covers both events.
+    expect(after.eventIds).toHaveLength(2);
+  });
+
+  it('keeps the record when narration fails, and says so rather than pretending', async () => {
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId);
+
+    const { getContainer } = await import('../../../src/container');
+    const spy = vi
+      .spyOn(getContainer().summarizer, 'narrateDay')
+      .mockRejectedValueOnce(new Error('model unavailable'));
+
+    const result = await reconcileDay(userId, DAY, NOW);
+
+    expect(result.narrationFailed).toBe(1);
+    const rows = await highlightsFor(result.activityDayId);
+    // The episode exists and is complete; only its sentence is missing.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.narrationState).toBe('failed');
+    expect(rows[0]?.narration).toBeNull();
+    expect(rows[0]?.eventIds).toHaveLength(1);
+    const day = await dayFor(userId);
+    expect(day?.status).toBe('ready');
+    expect(day?.narratedAt).toBeNull();
+    spy.mockRestore();
+  });
+
+  it('retries a failed narration on the next pass', async () => {
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId);
+
+    const { getContainer } = await import('../../../src/container');
+    const spy = vi
+      .spyOn(getContainer().summarizer, 'narrateDay')
+      .mockRejectedValueOnce(new Error('model unavailable'));
+    const failed = await reconcileDay(userId, DAY, NOW);
+    spy.mockRestore();
+
+    // `failed` must be reachable again, or a transient outage would strand the day forever.
+    await db
+      .update(schema.activityHighlight)
+      .set({ narrationState: 'pending' })
+      .where(eq(schema.activityHighlight.activityDayId, failed.activityDayId));
+
+    const retried = await reconcileDay(userId, DAY, NOW);
+    expect(retried.narrated).toBe(1);
+    expect((await highlightsFor(retried.activityDayId))[0]?.narration).not.toBeNull();
+  });
+
+  it('leaves events from other days and other people out of the day', async () => {
+    const { orgId, userId } = await seedPerson();
+    const other = await seedPerson();
+    await seedEvent(orgId, userId, { at: '2026-08-11T09:00:00.000Z', subject: 'ENG-yesterday' });
+    await seedEvent(other.orgId, other.userId, { subject: 'ENG-theirs' });
+    await seedEvent(orgId, userId, { subject: 'ENG-mine' });
+
+    const result = await reconcileDay(userId, DAY, NOW);
+
+    const rows = await highlightsFor(result.activityDayId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.subjectTitle).toBe('Subject ENG-mine');
+  });
+});

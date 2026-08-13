@@ -18,6 +18,8 @@ import {
 } from '@docket/types';
 import {
   accountExport,
+  activityDay,
+  activityHighlight,
   actor,
   dailyDigest,
   dailyPlanItem,
@@ -136,22 +138,34 @@ export async function collectAccountExport(
       orgs.map(async (org) => ({ organization: org, work: await collectWorkLayer(org.id, db) })),
     ),
     (async () => {
-      const [planItems, notifications, events, recipients, digests, follows] = await Promise.all([
-        hubId
-          ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
-          : Promise.resolve([]),
-        includesPersonal
-          ? db.select().from(notification).where(eq(notification.userId, userId))
-          : [],
-        includesPersonal ? db.select().from(event).where(eq(event.userId, userId)) : [],
-        includesPersonal
-          ? db.select().from(eventRecipient).where(eq(eventRecipient.userId, userId))
-          : [],
-        includesPersonal ? db.select().from(dailyDigest).where(eq(dailyDigest.userId, userId)) : [],
-        includesPersonal
-          ? db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId))
-          : [],
-      ]);
+      const [planItems, notifications, events, recipients, digests, days, follows] =
+        await Promise.all([
+          hubId
+            ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
+            : Promise.resolve([]),
+          includesPersonal
+            ? db.select().from(notification).where(eq(notification.userId, userId))
+            : [],
+          includesPersonal ? db.select().from(event).where(eq(event.userId, userId)) : [],
+          includesPersonal
+            ? db.select().from(eventRecipient).where(eq(eventRecipient.userId, userId))
+            : [],
+          includesPersonal
+            ? db.select().from(dailyDigest).where(eq(dailyDigest.userId, userId))
+            : [],
+          // The narrated day and its highlights, because `edited_narration` is the person's own
+          // writing about their own work — the clearest case there is of content an export owes them.
+          includesPersonal
+            ? db
+                .select()
+                .from(activityDay)
+                .leftJoin(activityHighlight, eq(activityHighlight.activityDayId, activityDay.id))
+                .where(eq(activityDay.userId, userId))
+            : [],
+          includesPersonal
+            ? db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId))
+            : [],
+        ]);
       return {
         hub: hubRow ?? null,
         dailyPlan: planItems,
@@ -159,6 +173,7 @@ export async function collectAccountExport(
         events,
         eventRecipients: recipients,
         dailyDigests: digests,
+        activityDays: days,
         streamSubscriptions: follows,
       };
     })(),

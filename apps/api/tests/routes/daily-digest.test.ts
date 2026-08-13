@@ -289,21 +289,22 @@ describe('sweepDailyDigests (the hero feature)', () => {
     }
   });
 
-  it('records a generic error message when generation throws something other than an Error', async () => {
+  it('does not deliver a day it could not narrate, and says why', async () => {
+    // Narration failing no longer fails the *record* — that separation is deliberate. But an email is
+    // a one-shot artifact: sending "no tracked activity" for a day that had plenty would be false, so
+    // the delivery is the thing that fails while the day itself stands.
     const { orgId } = await seedBaseOrg(db, schema);
     const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
-    await seedEvent(orgId, userId, 'Non-Error throw');
+    await seedEvent(orgId, userId, 'Real work that went unnarrated');
 
     const { getContainer } = await import('../../src/container');
-    const summarizer = getContainer().summarizer;
-    // Deliberately a non-Error rejection, to exercise the `err instanceof Error` false arm of the
-    // digest's own catch block.
     const spy = vi
-      .spyOn(summarizer, 'narrateDay')
+      .spyOn(getContainer().summarizer, 'narrateDay')
       .mockRejectedValueOnce('a plain string rejection');
 
     try {
       const result = await sweepDailyDigests(NOW);
+      expect(result.sent).toBe(0);
       expect(result.failed).toBe(1);
 
       const [digest] = await db
@@ -311,10 +312,50 @@ describe('sweepDailyDigests (the hero feature)', () => {
         .from(schema.dailyDigest)
         .where(eq(schema.dailyDigest.userId, userId));
       expect(digest!.status).toBe('failed');
-      expect(digest!.lastError).toBe('digest generation error');
+      expect(digest!.sentAt).toBeNull();
+      expect(digest!.lastError).toContain('narrated');
+
+      // The day's record survives the narration failure — that is the whole point of the split.
+      const [day] = await db
+        .select()
+        .from(schema.activityDay)
+        .where(eq(schema.activityDay.userId, userId));
+      expect(day!.eventCount).toBeGreaterThan(0);
+      const highlights = await db
+        .select()
+        .from(schema.activityHighlight)
+        .where(eq(schema.activityHighlight.activityDayId, day!.id));
+      expect(highlights).toHaveLength(1);
+      expect(highlights[0]!.narrationState).toBe('failed');
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it('stays silent for a day the person curated away', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
+    await seedEvent(orgId, userId, 'Something they chose not to report');
+
+    // Narrate first, then drop everything — dropping every line is a decision, not a failure, and
+    // the right response to it is silence rather than an empty email.
+    const { reconcileDay } = await import('../../src/services/highlights/reconcile');
+    const reconciled = await reconcileDay(userId, '2026-06-28', NOW);
+    await db
+      .update(schema.activityHighlight)
+      .set({ kept: false, curatedAt: NOW })
+      .where(eq(schema.activityHighlight.activityDayId, reconciled.activityDayId));
+
+    const result = await sweepDailyDigests(NOW);
+
+    expect(result.sent).toBe(0);
+    expect(result.skippedEmpty).toBe(1);
+    const [digest] = await db
+      .select()
+      .from(schema.dailyDigest)
+      .where(eq(schema.dailyDigest.userId, userId));
+    expect(digest!.status).toBe('skipped_empty');
+    expect(digest!.sentAt).toBeNull();
   });
 });
 

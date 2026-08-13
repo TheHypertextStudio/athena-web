@@ -14,43 +14,17 @@
  * double-sends. A no-activity day records `skipped_empty` and sends nothing (cost control).
  * `now` is always passed in. Cross-org + user-scoped: one digest per person per day.
  */
-import { dailyDigest, db, event, hub, user } from '@docket/db';
-import type { ActorRef, DigestStats, EntityRef } from '@docket/db';
-import type { NarrationEpisode } from '@docket/agent-runtime';
-import type { CanonicalEntityKind, EventDetail, EventKind, SourceSystemKind } from '@docket/types';
-import { groupSubjectDayEpisodes } from '@docket/types';
-import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
+import { activityDay, activityHighlight, dailyDigest, db, hub, user } from '@docket/db';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
-import { getContainer } from '../container';
+import { localDateOf, zonedParts } from '../lib/activity/local-day';
+import { reconcileDay } from '../services/highlights/reconcile';
 import { dispatchSystemUserNotification } from '../services/notifications/system';
 
 /** The default local send time when a Hub enabled digests without choosing one. */
 const DEFAULT_SEND_AT = '18:00';
 /** The same default as minutes-since-midnight (the fallback for an unparseable send time). */
 const DEFAULT_SEND_MINUTES = 18 * 60;
-
-/**
- * The event columns the digest reads.
- *
- * @remarks
- * Wider than it once was because grouping needs identity: an episode is defined by its *subject*, so
- * the entity and actor references and the resolved Docket id all have to be present before the day
- * can be divided into stories.
- */
-interface DigestRow {
-  readonly id: string;
-  readonly organizationId: string;
-  readonly sourceSystem: SourceSystemKind;
-  readonly kind: EventKind;
-  readonly occurredAt: Date;
-  readonly title: string;
-  readonly summary: string | null;
-  readonly actor: ActorRef | null;
-  readonly entity: EntityRef | null;
-  readonly entityKind: CanonicalEntityKind | null;
-  readonly docketEntityId: string | null;
-  readonly detail: EventDetail | null;
-}
 
 /** The result of one daily-digest sweep. */
 export interface DigestSweepResult {
@@ -64,66 +38,6 @@ export interface DigestSweepResult {
   readonly skipped: number;
   /** Generations that errored (recorded on the row). */
   readonly failed: number;
-}
-
-/** The wall-clock parts of an instant in a timezone. */
-interface ZonedParts {
-  readonly y: number;
-  readonly mo: number;
-  readonly d: number;
-  readonly h: number;
-  readonly mi: number;
-}
-
-/**
- * Cached `Intl.DateTimeFormat` per timezone.
- *
- * @remarks
- * Formatter construction loads locale/tz data and is relatively expensive; the digest sweep
- * calls {@link zonedParts} several times per user (and once per not-yet-due user), with users
- * heavily sharing timezones — so one formatter per tz is reused across the whole sweep.
- */
-const PARTS_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
-function partsFormatter(tz: string): Intl.DateTimeFormat {
-  let fmt = PARTS_FORMATTERS.get(tz);
-  if (!fmt) {
-    fmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    });
-    PARTS_FORMATTERS.set(tz, fmt);
-  }
-  return fmt;
-}
-
-/** The wall-clock parts of an instant in a timezone (`hourCycle: h23`). */
-function zonedParts(instant: Date, tz: string): ZonedParts {
-  const parts = partsFormatter(tz).formatToParts(instant);
-  const pick = (t: string): number => Number(parts.find((p) => p.type === t)?.value ?? '0');
-  return {
-    y: pick('year'),
-    mo: pick('month'),
-    d: pick('day'),
-    h: pick('hour'),
-    mi: pick('minute'),
-  };
-}
-
-/** The tz's UTC offset (ms) at `instant`: the wall-clock-as-UTC minus the instant. */
-function tzOffsetMs(instant: Date, tz: string): number {
-  const p = zonedParts(instant, tz);
-  return Date.UTC(p.y, p.mo - 1, p.d, p.h, p.mi) - instant.getTime();
-}
-
-/** The UTC instant of the local midnight that begins the day described by `parts` in `tz`. */
-function localDayStartUtc(parts: ZonedParts, tz: string): Date {
-  const midnightGuess = Date.UTC(parts.y, parts.mo - 1, parts.d, 0, 0);
-  return new Date(midnightGuess - tzOffsetMs(new Date(midnightGuess), tz));
 }
 
 /** Parse `"HH:MM"` to minutes-since-midnight, defaulting to {@link DEFAULT_SEND_MINUTES}. */
@@ -171,66 +85,6 @@ export function markdownToHtml(md: string): string {
 }
 
 /**
- * Group a day's events into the episodes narration works on.
- *
- * @remarks
- * Uses the shared grouping from `@docket/types`, the same function the client renders with, so the
- * server cannot narrate a different set of stories than the app shows. Keyed by
- * `(subject, local date)`, which is stable under the late and out-of-order arrivals a poll produces.
- */
-function toNarrationEpisodes(rows: readonly DigestRow[], localDate: string): NarrationEpisode[] {
-  const episodes = groupSubjectDayEpisodes(
-    rows.map((row) => ({
-      id: row.id,
-      organizationId: row.organizationId,
-      system: row.sourceSystem,
-      kind: row.kind,
-      occurredAt: row.occurredAt.toISOString(),
-      entityKind: row.entityKind,
-      entityExternalId: row.entity?.externalId ?? null,
-      entityDocketId: row.docketEntityId,
-      actorDocketId: row.actor?.docketActorId ?? null,
-      actorSource: row.actor?.source ?? null,
-      actorExternalId: row.actor?.externalId ?? null,
-      actorName: row.actor?.displayName ?? null,
-      detail: row.detail,
-      // Carried through so the narration prompt can read them without a second lookup.
-      title: row.title,
-      summary: row.summary,
-      entityTitle: row.entity?.title ?? null,
-    })),
-    localDate,
-  );
-
-  return episodes.map((episode) => {
-    const anchor = episode.allEvents[0];
-    return {
-      key: episode.key,
-      /* v8 ignore next -- an episode always has at least one event */
-      provider: anchor?.system ?? 'docket',
-      ...(anchor?.entityTitle ? { subject: anchor.entityTitle } : {}),
-      /* v8 ignore next 2 -- as above */
-      startedAt: anchor?.occurredAt ?? localDate,
-      endedAt:
-        episode.allEvents[episode.allEvents.length - 1]?.occurredAt ??
-        anchor?.occurredAt ??
-        localDate,
-      // Only the substantive events are narrated; minor ones stay in the record and out of the
-      // prompt, so a burst of reactions cannot dominate the sentence about real work.
-      events: (episode.visibleEvents.length > 0 ? episode.visibleEvents : episode.allEvents).map(
-        (event) => ({
-          kind: event.kind,
-          occurredAt: event.occurredAt,
-          title: event.title,
-          ...(event.summary ? { summary: event.summary } : {}),
-          ...(event.actorName ? { actor: event.actorName } : {}),
-        }),
-      ),
-    };
-  });
-}
-
-/**
  * Assemble the delivered Markdown from narrated highlights.
  *
  * @remarks
@@ -255,24 +109,13 @@ export function assembleHighlightsMarkdown(input: {
   return `# Your day\n\n${greeting}\n\n${body}`;
 }
 
-/** Build the per-source / per-kind stat counts for a day's events. */
-function buildStats(rows: readonly DigestRow[]): DigestStats {
-  const bySource: Record<string, number> = {};
-  const byKind: Record<string, number> = {};
-  for (const row of rows) {
-    bySource[row.sourceSystem] = (bySource[row.sourceSystem] ?? 0) + 1;
-    byKind[row.kind] = (byKind[row.kind] ?? 0) + 1;
-  }
-  return { total: rows.length, bySource, byKind };
-}
-
 /** Generate, send, and persist one user's digest for their local day. Returns the outcome. */
 async function generateForUser(
   candidate: { userId: string; email: string; name: string | null; tz: string; sendAt: string },
   now: Date,
 ): Promise<'sent' | 'empty' | 'skipped' | 'failed'> {
   const parts = zonedParts(now, candidate.tz);
-  const localDate = `${String(parts.y)}-${String(parts.mo).padStart(2, '0')}-${String(parts.d).padStart(2, '0')}`;
+  const localDate = localDateOf(parts);
   const localMinutes = parts.h * 60 + parts.mi;
   if (localMinutes < sendMinutes(candidate.sendAt)) return 'skipped'; // not yet send time today
 
@@ -293,39 +136,40 @@ async function generateForUser(
   if (!claimed) return 'skipped';
 
   try {
-    const dayStart = localDayStartUtc(parts, candidate.tz);
-    const rows = await db
-      .select({
-        id: event.id,
-        organizationId: event.organizationId,
-        sourceSystem: event.sourceSystem,
-        kind: event.kind,
-        occurredAt: event.occurredAt,
-        title: event.title,
-        summary: event.summary,
-        actor: event.actor,
-        entity: event.entity,
-        entityKind: event.entityKind,
-        docketEntityId: event.docketEntityId,
-        detail: event.detail,
-      })
-      .from(event)
-      .where(
-        and(
-          eq(event.userId, candidate.userId),
-          gte(event.occurredAt, dayStart),
-          lte(event.occurredAt, now),
-        ),
-      )
-      .orderBy(asc(event.occurredAt));
+    // Make the day current, then deliver it. The digest does not narrate: `reconcileDay` owns that,
+    // so opening the review early and receiving the email later cannot produce two different days,
+    // and a day already narrated by an early open costs no second model call here.
+    await reconcileDay(candidate.userId, localDate, now);
 
-    if (rows.length === 0) {
+    const [day] = await db
+      .select({
+        id: activityDay.id,
+        status: activityDay.status,
+        eventCount: activityDay.eventCount,
+        stats: activityDay.stats,
+      })
+      .from(activityDay)
+      .where(and(eq(activityDay.userId, candidate.userId), eq(activityDay.localDate, localDate)))
+      .limit(1);
+
+    if (!day || day.status === 'empty') {
       await db
         .update(dailyDigest)
         .set({ status: 'skipped_empty', eventCount: 0, generatedAt: now })
         .where(eq(dailyDigest.id, claimed.id));
       return 'empty';
     }
+
+    // Only what the person kept. Assembling here rather than storing it at narration time is what
+    // makes the delivered artifact reflect their curation, and freezes it once it has gone out.
+    const kept = await db
+      .select({
+        narration: activityHighlight.narration,
+        editedNarration: activityHighlight.editedNarration,
+      })
+      .from(activityHighlight)
+      .where(and(eq(activityHighlight.activityDayId, day.id), eq(activityHighlight.kept, true)))
+      .orderBy(asc(activityHighlight.sort));
 
     const dateLabel = new Intl.DateTimeFormat('en-US', {
       timeZone: candidate.tz,
@@ -335,12 +179,44 @@ async function generateForUser(
       day: 'numeric',
     }).format(now);
 
-    const { summarizer } = getContainer();
-    const { highlights } = await summarizer.narrateDay({
-      dateLabel,
-      ...(candidate.name ? { recipientName: candidate.name } : {}),
-      episodes: toNarrationEpisodes(rows, localDate),
+    // Curated to nothing: the person dropped every line, so there is nothing they want said. That
+    // is a decision, not a failure, and the right response is silence.
+    if (kept.length === 0) {
+      await db
+        .update(dailyDigest)
+        .set({
+          status: 'skipped_empty',
+          activityDayId: day.id,
+          eventCount: day.eventCount,
+          generatedAt: now,
+        })
+        .where(eq(dailyDigest.id, claimed.id));
+      return 'empty';
+    }
+
+    const highlights = kept.flatMap((row) => {
+      const sentence = row.editedNarration ?? row.narration;
+      // A line with no sentence is left out rather than delivered blank; it is still in the record,
+      // and the review surface shows it and offers a rewrite.
+      return sentence === null ? [] : [{ sentence }];
     });
+
+    // The day happened but has no prose — narration failed for all of it. An email is a one-shot
+    // artifact, so neither option here is acceptable: saying nothing happened would be false, and
+    // sending an empty list says nothing at all. Record the delivery as failed and leave the record
+    // standing; the in-app review still shows the whole day.
+    if (highlights.length === 0) {
+      await db
+        .update(dailyDigest)
+        .set({
+          status: 'failed',
+          activityDayId: day.id,
+          eventCount: day.eventCount,
+          lastError: 'the day has no narrated highlights to deliver',
+        })
+        .where(eq(dailyDigest.id, claimed.id));
+      return 'failed';
+    }
     const markdown = assembleHighlightsMarkdown({
       dateLabel,
       recipientName: candidate.name,
@@ -370,10 +246,11 @@ async function generateForUser(
       .update(dailyDigest)
       .set({
         status: 'sent',
+        activityDayId: day.id,
         summaryMarkdown: markdown,
         summaryHtml: html,
-        stats: buildStats(rows),
-        eventCount: rows.length,
+        stats: day.stats,
+        eventCount: day.eventCount,
         generatedAt: now,
         sentAt: now,
       })

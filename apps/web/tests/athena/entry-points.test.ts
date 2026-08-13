@@ -20,7 +20,9 @@ describe('ambient Athena entry points', () => {
 
   it('keeps Athena available as a contextual task-menu action instead of a page button', () => {
     const controls = read('apps/web/src/components/task-detail/task-header-controls.tsx');
-    const detail = read('apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx');
+    const detail = read(
+      'apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx',
+    );
     expect(controls).toContain('AthenaContextMenuItem');
     expect(controls).toContain('Have Athena handle this');
     expect(detail).toContain("source: { type: 'task'");

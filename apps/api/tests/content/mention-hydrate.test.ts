@@ -5,8 +5,11 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import { canonicalizeResourceUrl } from '@docket/types';
+
 import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
 
+import { createDrizzleMentionStorage } from '../../src/content/drizzle-mention-storage';
 import { excerptMarkdownOf, hydrateMentions } from '../../src/content/mention-hydrate';
 
 describe('hydrateMentions excerptMarkdown', () => {
@@ -159,6 +162,51 @@ describe('hydrateMentions excerptMarkdown', () => {
     expect(card.excerptMarkdown).not.toBeNull();
     expect(card.excerptMarkdown?.length).toBeLessThan(longBody.length);
     expect(card.excerptMarkdown?.length).toBeLessThanOrEqual(321);
+  });
+});
+
+describe('hydrateMentions external resources', () => {
+  it('resolves an external ref to the stored resource behind its canonical key', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'MentionHydrateExternalUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    const url = 'https://example.com/handbook';
+    const canonical = canonicalizeResourceUrl(url);
+    if (canonical === undefined) throw new Error('expected a canonicalizable url');
+    await createDrizzleMentionStorage().resources.findOrCreate({
+      organizationId: orgId,
+      createdBy: null,
+      ...canonical,
+    });
+
+    const [card] = await hydrateMentions({
+      caller: { kind: 'user', userId },
+      orgId,
+      refs: [{ kind: 'external', url }],
+    });
+
+    expect(card?.kind).toBe('external');
+    if (card?.kind !== 'external') throw new Error('expected an external card');
+    expect(card.url).toBe(url);
+  });
+
+  it('omits an external ref whose resource was never stored, rather than throwing', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'MentionHydrateExternalMissingUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    const cards = await hydrateMentions({
+      caller: { kind: 'user', userId },
+      orgId,
+      refs: [{ kind: 'external', url: 'https://example.com/never-unfurled' }],
+    });
+
+    expect(cards).toHaveLength(0);
   });
 });
 

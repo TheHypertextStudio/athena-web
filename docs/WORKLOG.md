@@ -251,18 +251,42 @@
 
 - **Subtasks**:
   - [x] Share episode grouping between the stream and the digest (`@docket/types`)
-  - [ ] Extract the shared canonical-event writer
-  - [ ] Activity-source enums and the persisted narrated day
-  - [ ] The `ActivitySource` port with Gmail and GitHub adapters
-  - [ ] Poll every connected tool into the canonical event log
-  - [ ] Per-episode first-person narration
-  - [ ] Narrate and persist the day's highlights
-  - [ ] Read and curate endpoints
-  - [ ] The shared highlights component family
-  - [ ] Mount on the review, today, and task detail
-  - [ ] The MCP retrospective read
-  - [ ] Link an unresolved activity event to a task
-- **Blockers**: None.
+  - [x] Extract the shared canonical-event writer
+  - [x] Activity-source enums and the persisted narrated day
+  - [x] The `ActivitySource` port with Gmail and GitHub adapters
+  - [x] Poll every connected tool into the canonical event log
+  - [x] Per-episode first-person narration
+  - [x] Reconcile and persist the day's highlights
+  - [x] Read and curate endpoints
+  - [x] The shared highlights component family
+  - [x] Mount on the end-of-day review and on Today
+  - [x] The MCP retrospective read (`retrospect`)
+  - [ ] Mount on task detail — needs an entity-scoped read that does not exist yet, and must _merge_
+        with `TaskActivitySection` rather than replace it, since that section reads `audit_event`
+        (Docket's own field-by-field trail) and this reads `event` (the cross-tool log). Neither is a
+        superset of the other.
+  - [ ] Link an unresolved activity event to a task — deliberately ordered last so the feature ships
+        without it. Gate on `entityAssociation !== 'matched'`, not `= 'pending'`: `MIRROR_LOOKUP`
+        maps both `calendar_event` and `thread` to null, so every meeting and mail thread lands
+        `unmatched`, and gating on `pending` would make exactly the new sources unlinkable.
+- **Blockers**: None. The feature is shippable as it stands; the two open subtasks are additive.
+- **Learnings**: three defects surfaced that were not in the original plan, all of the same species —
+  a comparison or an identity that looked right and silently was not.
+  1. **`sync_run.started_at` came from the database's clock** (`defaultNow()`) while every comparison
+     against it used a JavaScript `Date`. The two differ by the session's timezone offset, so a
+     cadence gate built on that comparison never held: the poll would have re-hit every provider on
+     every tick with nothing appearing broken. Fixed by stamping it from the `now` already passed in,
+     which is what every other timestamp in this codebase does.
+  2. **A day-bounded pull window has a hole just after midnight.** The window is minutes wide, and
+     because provider searches are eventually consistent, something done at 23:50 may only become
+     findable at 00:05 — by which time the window has moved past it, and that activity would never be
+     pulled by anything. Fixed with a minimum 26-hour lookback; over-fetching is free because
+     `dedupeKey` absorbs it and the read side filters by day.
+  3. **An episode key derived from membership moves when membership changes.** Deriving it from the
+     run's anchor event fixes ascending-versus-descending reads but not backfill, and backfill is the
+     normal case here. Keying on `(subject, localDate)` makes it immovable, and a test pins that a
+     13:00 event arriving late extends a 14:00–15:00 episode rather than replacing it.
+
 - **Notes**: Worked-versus-planned time (Sunsama's `WORKED / PLANNED` and its timeline strip) is
   deliberately deferred; `time-tracking.md` §8.2–8.3 already specifies the semantics and the
   calendar adapter records `durationMinutes` so the follow-up has its input. GitHub ships as pull

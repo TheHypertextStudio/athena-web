@@ -9,6 +9,7 @@
  */
 import type { ConnectorProvider, ImportedItem, ResourceRef } from './connector';
 import type { MailThreadSummary } from './mail';
+import type { EventDraft } from './observer';
 import type {
   ExternalCycle,
   ExternalLabel,
@@ -623,3 +624,104 @@ export const RESOURCE_FIXTURES = [
     modifiedAt: '2026-04-11T13:22:00.000Z',
   },
 ] as const;
+
+/**
+ * Deterministic activity drafts for one provider, placed relative to a reference instant.
+ *
+ * @remarks
+ * A function rather than a constant, and relative rather than absolute, because these fixtures have
+ * two jobs. In tests they must be reproducible, which an injected `now` gives. In local development
+ * they must land inside *today's* window, or the whole point — running the poll → narrate → review
+ * pipeline with no external accounts — would silently find nothing every day after the fixtures were
+ * written.
+ *
+ * The offsets are chosen to exercise the grouping rather than just to exist: two drafts share one
+ * subject minutes apart (so they collapse into a single episode), and one sits hours away (so a
+ * second episode exists to order against the first).
+ *
+ * @param provider - The provider being polled.
+ * @param now - The reference instant the offsets are measured back from.
+ * @returns the drafts, chronological.
+ */
+export function activityDraftsFor(provider: ConnectorProvider, now: string): readonly EventDraft[] {
+  const at = (minutesAgo: number): string =>
+    new Date(new Date(now).getTime() - minutesAgo * 60_000).toISOString();
+
+  if (provider === 'github') {
+    const prTitle = 'Make OSM street import produce a real network';
+    return [
+      {
+        kind: 'created',
+        occurredAt: at(300),
+        title: prTitle,
+        permalink: 'https://github.com/docket/mock/pull/2',
+        entity: {
+          kind: 'work_item',
+          externalId: 'PR_mock_2',
+          title: prTitle,
+          url: 'https://github.com/docket/mock/pull/2',
+        },
+        detail: { schema: 'github.pull_request', number: 2, merged: false, draft: false },
+        externalId: 'PR_mock_2',
+        dedupeKey: 'github:pr:PR_mock_2:created',
+      },
+      {
+        kind: 'completed',
+        occurredAt: at(290),
+        title: prTitle,
+        permalink: 'https://github.com/docket/mock/pull/2',
+        entity: {
+          kind: 'work_item',
+          externalId: 'PR_mock_2',
+          title: prTitle,
+          url: 'https://github.com/docket/mock/pull/2',
+        },
+        detail: { schema: 'github.pull_request', number: 2, merged: true, draft: false },
+        externalId: 'PR_mock_2',
+        dedupeKey: 'github:pr:PR_mock_2:completed',
+      },
+    ];
+  }
+
+  if (provider === 'gmail') {
+    const subject = 'Re: Presentation for Las Vegans for Better Transit';
+    return [
+      {
+        kind: 'message',
+        occurredAt: at(120),
+        title: subject,
+        summary: 'Outlined introductions, the RTC team presentation, and project updates.',
+        permalink: 'https://mail.google.com/mail/#all/gmail-thread-transit',
+        entity: { kind: 'thread', externalId: 'gmail-thread-transit', title: subject },
+        detail: {
+          schema: 'gmail.message',
+          threadId: 'gmail-thread-transit',
+          subject,
+          recipientCount: 3,
+          isReply: true,
+        },
+        externalId: 'gmail-msg-transit-1',
+        dedupeKey: 'gmail:sent:gmail-msg-transit-1',
+      },
+      {
+        kind: 'message',
+        occurredAt: at(110),
+        title: subject,
+        summary: 'Asked for the slides and clarified the meeting link.',
+        permalink: 'https://mail.google.com/mail/#all/gmail-thread-transit',
+        entity: { kind: 'thread', externalId: 'gmail-thread-transit', title: subject },
+        detail: {
+          schema: 'gmail.message',
+          threadId: 'gmail-thread-transit',
+          subject,
+          recipientCount: 3,
+          isReply: true,
+        },
+        externalId: 'gmail-msg-transit-2',
+        dedupeKey: 'gmail:sent:gmail-msg-transit-2',
+      },
+    ];
+  }
+
+  return [];
+}

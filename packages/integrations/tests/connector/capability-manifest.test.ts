@@ -1,10 +1,15 @@
+import { ACTIVITY_PROVIDER_IDS, PROVIDER_CATALOG } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
 import type { ConnectorProvider } from '../../src/connector';
 import { WRITE_BACK_CAPABLE_PROVIDERS } from '../../src/connector';
 import { MAIL_CAPABLE_PROVIDERS } from '../../src/mail';
 import { PROVIDER_CLIENT_FACTORIES } from '../../src/real-connector';
-import { isMailActionsProviderClient, isWritableProviderClient } from '../../src/provider-client';
+import {
+  isActivitySourceProviderClient,
+  isMailActionsProviderClient,
+  isWritableProviderClient,
+} from '../../src/provider-client';
 import type { ProviderHttp } from '../../src/provider-http';
 
 /**
@@ -30,4 +35,31 @@ describe('capability manifests ⇔ structural provider-client shape', () => {
       expect(isWritableProviderClient(client)).toBe(WRITE_BACK_CAPABLE_PROVIDERS.has(provider));
     },
   );
+
+  it.each(providers)(
+    "%s: activity capability agrees with the catalog's activity flag",
+    (provider) => {
+      // Unlike the two above, the declaration lives in `PROVIDER_CATALOG` rather than in a manifest
+      // local to this package — provider capabilities belong in one place, and the catalog is
+      // already where `connector` and `webhook` are declared.
+      const client = PROVIDER_CLIENT_FACTORIES[provider](inertHttp);
+      expect(isActivitySourceProviderClient(client)).toBe(PROVIDER_CATALOG[provider].activity);
+    },
+  );
+
+  it('keeps the catalog flag and the activity id list from drifting apart', () => {
+    const flagged = Object.values(PROVIDER_CATALOG)
+      .filter((entry) => entry.activity)
+      .map((entry) => entry.id)
+      .sort();
+    expect(flagged).toEqual([...ACTIVITY_PROVIDER_IDS].sort());
+  });
+
+  it('polls only providers that can carry a source badge', () => {
+    // A canonical event with no source system cannot be attributed to anything, so a provider that
+    // has none (Google Tasks) must never be polled for activity however capable its client is.
+    for (const id of ACTIVITY_PROVIDER_IDS) {
+      expect(PROVIDER_CATALOG[id].sourceSystem).not.toBeNull();
+    }
+  });
 });

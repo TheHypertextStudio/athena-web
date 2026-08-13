@@ -28,6 +28,24 @@ export const WEBHOOK_PROVIDER_IDS = ['github', 'linear', 'notion'] as const;
 /** Webhook-provider id value. */
 export type WebhookProviderId = (typeof WEBHOOK_PROVIDER_IDS)[number];
 
+/**
+ * Provider ids Docket can *poll* for a person's own activity.
+ *
+ * @remarks
+ * The complement of {@link WEBHOOK_PROVIDER_IDS}, not a subset of it: a provider needs polling
+ * precisely when it will not push. Gmail exposes no webhook at all, and GitHub's only covers repos
+ * where the App is installed — which is not the same set as the repos somebody opens pull requests
+ * against, so the two coexist and converge on the same deduped log.
+ *
+ * Google Calendar is deliberately absent. Its data is already synced into Docket's own
+ * `calendar_item` tables with their own credentials and sync tokens, so its activity is projected
+ * locally rather than re-fetched; a second credential path and a second "have we seen this" store
+ * would be exactly the drift the connector-reliability invariant forbids.
+ */
+export const ACTIVITY_PROVIDER_IDS = ['github', 'gmail'] as const;
+/** Activity-provider id value. */
+export type ActivityProviderId = (typeof ACTIVITY_PROVIDER_IDS)[number];
+
 /** Provider ids shown in the Connections directory. */
 export const DIRECTORY_PROVIDER_IDS = [...CONNECTOR_PROVIDER_IDS] as const;
 /** Directory-provider id value. */
@@ -43,6 +61,8 @@ export interface ProviderCatalogEntry {
   readonly connector: boolean;
   /** Whether this provider has inbound webhook observation. */
   readonly webhook: boolean;
+  /** Whether Docket can poll this provider for the connected person's own activity. */
+  readonly activity: boolean;
   /** Whether this provider is shown in the Connections directory. */
   readonly directory: boolean;
   /** The connect-directory relationship pattern. */
@@ -66,6 +86,7 @@ export const PROVIDER_CATALOG = {
     name: 'GitHub',
     connector: true,
     webhook: true,
+    activity: true,
     directory: true,
     pattern: 'connector',
     roles: ['code', 'work'],
@@ -79,6 +100,7 @@ export const PROVIDER_CATALOG = {
     name: 'Linear',
     connector: true,
     webhook: true,
+    activity: false,
     directory: true,
     pattern: 'connector',
     roles: ['work'],
@@ -92,6 +114,7 @@ export const PROVIDER_CATALOG = {
     name: 'Gmail',
     connector: true,
     webhook: false,
+    activity: true,
     directory: true,
     pattern: 'connector',
     roles: ['signal'],
@@ -105,6 +128,7 @@ export const PROVIDER_CATALOG = {
     name: 'Google Calendar',
     connector: true,
     webhook: false,
+    activity: false,
     directory: true,
     pattern: 'connector',
     roles: ['time'],
@@ -118,6 +142,7 @@ export const PROVIDER_CATALOG = {
     name: 'Google Drive',
     connector: true,
     webhook: false,
+    activity: false,
     directory: true,
     pattern: 'connector',
     // `context`, not `work`: Drive contributes documents to reference, never work items to sync,
@@ -133,6 +158,7 @@ export const PROVIDER_CATALOG = {
     name: 'Google Tasks',
     connector: true,
     webhook: false,
+    activity: false,
     directory: true,
     pattern: 'connector',
     roles: ['work'],
@@ -146,6 +172,7 @@ export const PROVIDER_CATALOG = {
     name: 'Notion',
     connector: true,
     webhook: true,
+    activity: false,
     directory: true,
     // `connector`, not `migration`: the sync is ONGOING and two-way, so it needs the
     // `syncMode`/`writeBack` semantics only the connector pattern carries. That Docket holds the

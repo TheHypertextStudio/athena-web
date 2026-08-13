@@ -12,6 +12,7 @@
  */
 import type { ConnectorProviderId } from '@docket/types';
 
+import type { ActivitySource } from './activity-source';
 import type { MailActions } from './mail';
 import type { ResourceSearch } from './resource-search';
 import type { WorkGraphConnector } from './work-graph';
@@ -391,6 +392,20 @@ export interface Connector {
    * {@link MailActions}; every other provider omits it or returns `undefined`.
    */
   asMailActor?(): MailActions | undefined;
+
+  /**
+   * Return this connector's activity-pull capability, or `undefined` when Docket does not poll this
+   * provider for the connected person's own activity.
+   *
+   * @remarks
+   * The seam the activity sweep uses, discovered exactly like {@link Connector.asWritable}. Present
+   * for providers flagged `activity` in `PROVIDER_CATALOG` (Gmail and GitHub); every other provider
+   * omits it or returns `undefined`. Independent of {@link Connector.asMailActor} even though Gmail
+   * has both: reading a mailbox to *suggest tasks* and reading it to *record what you sent* are
+   * different questions with different cursors, and conflating them would make each purpose consume
+   * the other's view of the mailbox.
+   */
+  asActivitySource?(): ActivitySource | undefined;
 
   /**
    * Return this connector's work-graph capability, or `undefined` when the provider has no

@@ -5,6 +5,7 @@
  * This package owns third-party provider surfaces such as connectors, mail actions,
  * work graph reads, and activity observers. Runtime composition lives in the app layer.
  */
+export * from './activity-source';
 export * from './connector';
 export * from './connector-error';
 export * from './event-detail';

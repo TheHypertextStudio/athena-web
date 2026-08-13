@@ -38,7 +38,13 @@ import type {
   MailThreadSummary,
 } from './mail';
 import { isConnectorError } from './connector-error';
-import type { MailActionsProviderClient, ResolvedAccount } from './provider-client';
+import type { ActivityPullInput, ActivityPullResult } from './activity-source';
+import type { EventDraft } from './observer';
+import type {
+  ActivitySourceProviderClient,
+  MailActionsProviderClient,
+  ResolvedAccount,
+} from './provider-client';
 import type { ProviderHttp } from './provider-http';
 import { paginateGoogle } from './google';
 
@@ -64,6 +70,8 @@ interface GmailMessagePayload {
 /** One Gmail message resource within a thread (metadata format). */
 interface GmailMessageResource {
   id: string;
+  /** Present on `messages.get`; absent when the message arrives nested inside a thread. */
+  threadId?: string;
   snippet?: string;
   internalDate?: string;
   payload?: GmailMessagePayload;
@@ -105,9 +113,17 @@ function gmailThreadUrl(threadId: string): string {
  * @remarks
  * Mail capability is structural: this class implements {@link MailActionsProviderClient},
  * and the connector's `asMailActor()` discovers it via the interface guard — no provider
- * literals anywhere.
+ * literals anywhere. Activity capability works the same way through
+ * {@link ActivitySourceProviderClient} and `asActivitySource()`.
+ *
+ * The two capabilities read the same mailbox for different purposes and are deliberately kept
+ * apart: mail listing walks the history feed to decide what might *become* a task, while the
+ * activity pull searches for what the person *sent*. Sharing the history cursor between them would
+ * make each consume the other's view of the mailbox.
  */
-export class GmailProviderClient implements MailActionsProviderClient {
+export class GmailProviderClient
+  implements MailActionsProviderClient, ActivitySourceProviderClient
+{
   /**
    * @param http - The provider HTTP wrapper bound to the Gmail API base.
    */
@@ -310,6 +326,85 @@ export class GmailProviderClient implements MailActionsProviderClient {
       subject: messages[0]?.subject ?? `Thread ${input.threadId}`,
       messages,
       externalUrl: gmailThreadUrl(input.threadId),
+    };
+  }
+
+  /**
+   * {@inheritDoc ActivitySourceProviderClient.pullActivity}
+   *
+   * @remarks
+   * Answers "what did I send" with a bounded search (`from:me` between the window's edges) rather
+   * than through the history feed, for two independent reasons.
+   *
+   * First, correctness: `history.list` is driven by a *consumed* `historyId` that the email-to-task
+   * sweep already owns and advances. Two purposes sharing that cursor do not race — they alternate,
+   * and each silently eats the delta the other needed, so task suggestions would start disappearing.
+   * A search takes no cursor and consumes nothing.
+   *
+   * Second, expressiveness: {@link MailThreadSummary} carries only the *latest* message's sender, so
+   * "threads I replied to" is not derivable from the mail-listing contract at any cost. `from:me`
+   * asks the question directly.
+   *
+   * Re-running the same window is free because `dedupeKey` is the message id, which is also what
+   * makes the eventual consistency of Gmail search harmless: a message that surfaces late simply
+   * joins the episode it belongs to.
+   */
+  async pullActivity(input: ActivityPullInput): Promise<ActivityPullResult> {
+    // Gmail's `after`/`before` operators take whole seconds and are inclusive/exclusive
+    // respectively, which matches the port's window semantics.
+    const after = Math.floor(new Date(input.since).getTime() / 1000);
+    const before = Math.ceil(new Date(input.until).getTime() / 1000);
+    const query = encodeURIComponent(`from:me after:${String(after)} before:${String(before)}`);
+    const listed = await this.http.getJson<{ messages?: { id: string }[] }>(
+      `/users/me/messages?q=${query}&maxResults=${String(input.maxDrafts)}`,
+    );
+    const ids = (listed.messages ?? []).map((m) => m.id);
+    // A full page is the only signal Gmail gives that more exists; reporting it is what keeps a
+    // clipped day from looking like a complete one.
+    const truncated = ids.length >= input.maxDrafts;
+
+    const drafts: EventDraft[] = [];
+    for (const id of ids) {
+      const message = await this.http.getJson<GmailMessageResource>(
+        `/users/me/messages/${id}?format=metadata${THREAD_METADATA_HEADERS}`,
+      );
+      const draft = this.toSentMessageDraft(message);
+      if (draft) drafts.push(draft);
+    }
+    drafts.sort((left, right) => (left.occurredAt < right.occurredAt ? -1 : 1));
+    return { drafts, truncated };
+  }
+
+  /**
+   * Project one sent Gmail message into a canonical draft, or `null` when it cannot be placed.
+   *
+   * @remarks
+   * The subject is the *thread*, not the message, so every reply sent on one conversation in a day
+   * collapses into a single episode rather than becoming a row each.
+   */
+  private toSentMessageDraft(m: GmailMessageResource): EventDraft | null {
+    const mail = this.toMailMessage(m);
+    const threadId = m.threadId;
+    // Without a thread there is no subject to group on and no link to follow; a message that cannot
+    // be placed is skipped rather than recorded as a subject-less orphan.
+    if (!threadId || mail.sentAt === '') return null;
+    const subject = mail.subject === '' ? '(no subject)' : mail.subject;
+    return {
+      kind: 'message',
+      occurredAt: new Date(mail.sentAt).toISOString(),
+      title: subject,
+      summary: mail.snippet === '' ? undefined : mail.snippet,
+      permalink: gmailThreadUrl(threadId),
+      entity: { kind: 'thread', externalId: threadId, title: subject },
+      detail: {
+        schema: 'gmail.message',
+        threadId,
+        subject,
+        recipientCount: mail.to.length,
+        isReply: mail.inReplyTo !== undefined,
+      },
+      externalId: m.id,
+      dedupeKey: `gmail:sent:${m.id}`,
     };
   }
 

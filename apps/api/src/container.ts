@@ -265,7 +265,10 @@ export function buildConnector(
   token: string | undefined,
   runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv(),
 ): Connector {
-  if (localMode(runtimeEnv)) return new MockConnector({ provider });
+  // `now` is supplied in local mode so the mock's activity fixtures land in *today's* window.
+  // Without it the mock anchors to its fixed sample instant, and the whole offline pipeline —
+  // poll, narrate, review — would correctly find nothing every day after the fixtures were written.
+  if (localMode(runtimeEnv)) return new MockConnector({ provider, now: new Date().toISOString() });
   return new RealConnector({
     provider,
     accessToken: required(`${provider.toUpperCase()}_ACCESS_TOKEN`, token),

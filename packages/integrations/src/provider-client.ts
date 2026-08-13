@@ -1,3 +1,4 @@
+import type { ActivityPullInput, ActivityPullResult } from './activity-source';
 import type {
   ExternalWriteResult,
   ImportWorkInput,
@@ -163,6 +164,33 @@ export function isMailActionsProviderClient(
   client: ConnectorProviderClient,
 ): client is MailActionsProviderClient {
   return typeof (client as Partial<MailActionsProviderClient>).applyMailAction === 'function';
+}
+
+/**
+ * The activity-capable provider client (`GmailProviderClient`, `GitHubProviderClient`).
+ *
+ * @remarks
+ * Extends the read-only client with a single windowed pull of the connected person's *own*
+ * activity. Kept as a separate interface so providers Docket does not poll implement nothing extra;
+ * `RealConnector` narrows via {@link isActivitySourceProviderClient} — purely structural — and
+ * exposes it through {@link import('./connector').Connector.asActivitySource}. Membership must agree
+ * with the `activity` flag in `PROVIDER_CATALOG` (a boundary test enforces it).
+ */
+export interface ActivitySourceProviderClient extends ConnectorProviderClient {
+  /**
+   * Pull the person's own activity for a window.
+   *
+   * @param input - The window and the draft ceiling.
+   * @throws {ConnectorError} On auth, throttle, or provider failure.
+   */
+  pullActivity(input: ActivityPullInput): Promise<ActivityPullResult>;
+}
+
+/** Narrow a {@link ConnectorProviderClient} to an {@link ActivitySourceProviderClient}. */
+export function isActivitySourceProviderClient(
+  client: ConnectorProviderClient,
+): client is ActivitySourceProviderClient {
+  return typeof (client as Partial<ActivitySourceProviderClient>).pullActivity === 'function';
 }
 
 /**

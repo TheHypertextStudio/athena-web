@@ -23,6 +23,8 @@
  * response-mapping path here is pure and unit-tested through the injected client; only
  * the real network call (in {@link defaultHttpClient}) is the untestable IO edge.
  */
+import { providerSourceSystem } from '@docket/types';
+
 import type {
   ConnectInput,
   ConnectionResult,
@@ -38,6 +40,7 @@ import type {
   ResourceRef,
   WritableConnector,
 } from './connector';
+import type { ActivitySource } from './activity-source';
 import type { MailActions } from './mail';
 import type { WorkGraphConnector } from './work-graph';
 import { defaultHttpClient, type HttpClient } from './http';
@@ -52,6 +55,7 @@ import { GmailProviderClient } from './gmail';
 import { NOTION_API_BASE, NotionProviderClient } from './notion';
 import { ProviderHttp } from './provider-http';
 import {
+  isActivitySourceProviderClient,
   isMailActionsProviderClient,
   isWritableProviderClient,
   isWorkGraphProviderClient,
@@ -251,6 +255,26 @@ export class RealConnector implements Connector {
       listThreads: (input) => client.listThreads(input),
       applyMailAction: (input) => client.applyMailAction(input),
       fetchThread: (input) => client.fetchThread(input),
+    };
+  }
+
+  /**
+   * {@inheritDoc Connector.asActivitySource}
+   *
+   * @remarks
+   * Structural discovery, mirroring {@link RealConnector.asWritable}. The extra `sourceSystem` guard
+   * is not defensive noise: a canonical event is unreadable without a source badge, so a provider
+   * with none (`gtasks`) cannot produce activity at all, and returning `undefined` says that plainly
+   * rather than writing rows nobody can attribute.
+   */
+  asActivitySource(): ActivitySource | undefined {
+    const client = this.client;
+    if (!isActivitySourceProviderClient(client)) return undefined;
+    const sourceSystem = providerSourceSystem(this.provider);
+    if (!sourceSystem) return undefined;
+    return {
+      sourceSystem,
+      pullActivity: (input) => client.pullActivity(input),
     };
   }
 

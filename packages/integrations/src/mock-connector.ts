@@ -8,6 +8,9 @@
  * counter and timestamps anchor to an injectable `now` (defaulting to
  * {@link FIXED_NOW}). Exercises the import / read-only-mirror / link logic offline.
  */
+import { PROVIDER_CATALOG, providerSourceSystem } from '@docket/types';
+
+import type { ActivitySource } from './activity-source';
 import {
   CONNECTOR_ITEMS,
   FIXED_NOW,
@@ -17,6 +20,7 @@ import {
   MAIL_THREAD_SUMMARIES,
   NOTION_DATA_SOURCES,
   RESOURCE_FIXTURES,
+  activityDraftsFor,
 } from './fixtures';
 import type {
   ConnectInput,
@@ -201,6 +205,42 @@ export class MockConnector implements Connector {
       externalId: op.kind === 'create' ? this.nextId('gtask') : op.externalId,
       externalUpdatedAt: stamp,
       externalEtag: `etag_${this.counter.toString().padStart(6, '0')}`,
+    };
+  }
+
+  /**
+   * {@inheritDoc Connector.asActivitySource}
+   *
+   * @remarks
+   * Gated by the declarative `activity` flag in `PROVIDER_CATALOG` (mirroring the real connectors'
+   * structural capability). This is what lets the entire pipeline — poll, write, episode grouping,
+   * narration, review — run with no external accounts at all: the fixtures are windowed exactly as a
+   * real adapter windows a search, so a caller that mishandles the window fails here rather than
+   * only against a live provider.
+   */
+  asActivitySource(): ActivitySource | undefined {
+    const sourceSystem = providerSourceSystem(this.provider);
+    if (!PROVIDER_CATALOG[this.provider].activity || !sourceSystem) return undefined;
+    const provider = this.provider;
+    return {
+      sourceSystem,
+      pullActivity: (input) => {
+        const since = new Date(input.since).getTime();
+        const until = new Date(input.until).getTime();
+        // Anchored to the mock's own `now`, not to the requested window, so that a window containing
+        // no activity genuinely returns nothing. Anchoring to the window would make every day look
+        // busy and leave the quiet-day and broken-connector states impossible to exercise offline —
+        // which are exactly the states most worth getting right.
+        const all = activityDraftsFor(provider, this.now);
+        const within = all.filter((draft) => {
+          const at = new Date(draft.occurredAt).getTime();
+          return at >= since && at < until;
+        });
+        return Promise.resolve({
+          drafts: within.slice(0, input.maxDrafts),
+          truncated: within.length > input.maxDrafts,
+        });
+      },
     };
   }
 

@@ -18,7 +18,6 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "db:auth:generate": "echo 'auth schema is hand-authored in src/schema/auth.ts; the P6 auth lane regenerates it with the full Better Auth plugin set'",
     "clean": "rm -rf .turbo *.tsbuildinfo",
     "test:coverage": "vitest run --coverage"
   },

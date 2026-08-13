@@ -1,6 +1,6 @@
 # Docket — Data Model / Drizzle Schema Spec (`@docket/db`)
 
-> Implementation-grade Drizzle (Postgres) schema for every entity in the engineering plan §5. This is the **single SQL owner** for the monorepo: app tables AND Better Auth CLI-generated tables live here together. Source of truth: `docs/engineering/docket-engineering-plan.md` §5 and `docs/core/mvp-plan.md` §3–4.
+> Implementation-grade Drizzle (Postgres) schema for every entity in the engineering plan §5. This is the **single SQL owner** for the monorepo: app tables AND the hand-maintained tables backing Better Auth live here together. Source of truth: `docs/engineering/docket-engineering-plan.md` §5 and `docs/core/mvp-plan.md` §3–4.
 
 ## 0. Conventions (apply to ALL app tables unless noted)
 
@@ -219,11 +219,11 @@ than a choice. Full model in `statuses.md`.
 
 ---
 
-## 2. Better Auth tables (CLI-generated, owned by `@docket/db`)
+## 2. Better Auth tables (hand-maintained, owned by `@docket/db`)
 
-**Process (engineering plan §2):** run the Better Auth CLI to _generate_ the Drizzle schema **into `packages/db/src/schema/auth.ts`**, then `drizzle-kit generate`/`migrate` from `@docket/db`. `@docket/db` is the single migration owner; `@docket/auth` imports these tables, never owns them.
+**Process (engineering plan §2):** run the Better Auth CLI into a scratch file when its version or plugin set changes, reconcile supported model changes into `packages/db/src/schema/auth.ts`, then run `drizzle-kit generate`/`migrate` from `@docket/db`. `@docket/db` is the single migration owner; `@docket/auth` imports these tables, never owns them. The owned schema preserves Docket-specific ULID defaults, constraints, and columns that a direct overwrite would remove.
 
-**Tables emitted (with the configured plugin set; all `text("id").primaryKey()`, `date`→`timestamp`, FK→`user.id` cascade):**
+**Supported tables mirrored from the configured plugin set (all `text("id").primaryKey()`, `date`→`timestamp`, FK→`user.id` cascade):**
 
 | Table                       | Origin                             | Notes                                                                                                                                                                                                                                                                                                                                                     |
 | --------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -241,7 +241,7 @@ than a choice. Full model in `statuses.md`.
 
 > The MCP plugin (`mcp()`) is built on the OIDC provider and reuses `oauthApplication`/`oauthAccessToken`/`oauthConsent` — no new tables beyond those.
 
-**Coexistence rule:** Better Auth tables keep their generated singular names (`user`, `session`, `account`, …). Docket app tables avoid those exact names except where it owns the concept; the one true collision is the word "session" — Docket's agent session table is named **`agent_session`** (see §5.6), and Better Auth's is `session`.
+**Coexistence rule:** Better Auth tables keep their singular model names (`user`, `session`, `account`, …). Docket app tables avoid those exact names except where it owns the concept; the one true collision is the word "session" — Docket's agent session table is named **`agent_session`** (see §5.6), and Better Auth's is `session`.
 
 ---
 
@@ -1230,7 +1230,7 @@ packages/db/
 │  ├─ enums.ts         all pgEnum()
 │  ├─ types.ts         Zod-derived $type<> interfaces (preferences, vocabulary, connection, ...)
 │  ├─ schema/
-│  │  ├─ auth.ts       Better Auth CLI-GENERATED (user/session/account/verification/passkey/
+│  │  ├─ auth.ts       HAND-MAINTAINED FROM BETTER AUTH MODELS (user/session/account/verification/passkey/
 │  │  │               oauthApplication/oauthAccessToken/oauthConsent/subscription/sso/scim/jwks)
 │  │  ├─ identity.ts   hub, organization, actor, team, teamMember
 │  │  ├─ work.ts       initiative, program, project, cycle, task, milestone
@@ -1245,7 +1245,7 @@ packages/db/
 └─ package.json        compiled (tsc → dist) per engineering §1
 ```
 
-- `@docket/db` is the **single migration owner**: `drizzle-kit generate` + `drizzle-kit migrate` run only here. Better Auth's CLI writes `schema/auth.ts`; Docket never hand-edits generated tables, only re-runs the CLI on plugin/version changes.
+- `@docket/db` is the **single migration owner**: `drizzle-kit generate` + `drizzle-kit migrate` run only here. Better Auth's CLI writes only a scratch comparison; Docket reconciles supported changes into the owned `schema/auth.ts` on plugin/version changes.
 - Neon serverless driver in prod, node-postgres in local dev — same schema, env-var-only connection string (`DATABASE_URL`). Dev mirrors prod (engineering §0.3).
 
 ---

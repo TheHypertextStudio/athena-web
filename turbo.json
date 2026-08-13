@@ -98,9 +98,6 @@
     "db:studio": {
       "cache": false,
       "persistent": true
-    },
-    "db:auth:generate": {
-      "cache": false
     }
   }
 }

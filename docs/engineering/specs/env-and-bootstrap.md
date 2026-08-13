@@ -425,7 +425,7 @@ Verified commands:
    - Pooled (runtime `DATABASE_URL`): `neonctl connection-string <branch> --pooled --output json`.
    - Unpooled (`DATABASE_URL_UNPOOLED`, for migrations): `neonctl connection-string <branch> --output json`.
    - Dev target → `dev` branch; prod target → `production` branch.
-4. Migrate: with the **unpooled** string exported as `DATABASE_URL_UNPOOLED`, run `pnpm --filter @docket/db db:generate` (if schema changed) then `pnpm --filter @docket/db db:migrate` (`drizzle-kit migrate`). Better Auth tables were generated into `@docket/db` already (engineering §2 schema ownership), so this single migrate creates the full schema.
+4. Migrate: with the **unpooled** string exported as `DATABASE_URL_UNPOOLED`, run `pnpm --filter @docket/db db:generate` (if schema changed) then `pnpm --filter @docket/db db:migrate` (`drizzle-kit migrate`). The Better Auth tables are owned in `@docket/db` already (engineering §2 schema ownership), so this single migrate creates the full schema.
 5. Seed default roles per future org happens at runtime; bootstrap does **not** seed tenant data.
 
 ### 3.4 Step 5 — OAuth applications & third-party integrations (semi-automated)

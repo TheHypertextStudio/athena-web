@@ -19,7 +19,7 @@ Coverage is complete and the dependency spine is sound and acyclic. Every one of
 - **All SQL** lives in `@docket/db` and the **canonical `grant`/`role`/enums are owned by the data-model db tickets**; permissions tickets _consume_ them (fold `PAB-DB-*` into the db lane or sequence them strictly before the data-API db tickets in **one** db worktree).
 - **`@docket/types` shared primitives** (`Id`, `Capability`, error/problem types) are owned **solely by `FND-P4-01`**; `DA-shared-01`, `PAB-TYPES-01`, `MCP-05` import them, never redefine.
 - **`apps/api/src/app.ts` (the chained-router composition root) is edited only by `DA-app-compose-01`.** Every other router self-registers in its own file — break the `.route()` chain and the `AppType` RPC contract silently collapses.
-- **Migrations are a global serialization point.** Within the db worktree all schema tickets are sequential and end with **one** `drizzle generate` → a single coherent migration. No two lanes generate migrations concurrently. Better Auth's CLI schema regen (`db:auth:generate`) re-cuts the db seam, so the **full**-plugin generation (sso/scim/oidc/mcp/stripe tables) must precede any P6 lane that migrates.
+- **Migrations are a global serialization point.** Within the db worktree all schema tickets are sequential and end with **one** `drizzle generate` → a single coherent migration. No two lanes generate migrations concurrently. Better Auth model changes are captured into a scratch CLI schema and reconciled into the hand-maintained `packages/db/src/schema/auth.ts` before any dependent lane migrates; no command overwrites that owned schema.
 
 ## Missing tickets to add to the manifest
 

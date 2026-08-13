@@ -16,7 +16,7 @@ Confirmed against current docs (ctx7, 2026-06-05). These are load-bearing for th
 - **Hono mount** for Better Auth: `app.on(["POST","GET"], "/api/auth/*", (c) => auth.handler(c.req.raw))`. CORS middleware must be registered **before** the auth route. (Matches engineering plan §2 "CORS registered first".)
 - **Session in Hono context**: `await auth.api.getSession({ headers: c.req.raw.headers })` in an `app.use("*", …)` middleware, with typed `Variables: { user, session }` via `auth.$Infer.Session`.
 - **Hono RPC**: type inference **only** survives if routes are **method-chained** and you export `type AppType = typeof routes`. In a monorepo, **both** the api and consumer `tsconfig.json` need `"strict": true`. Client is `hc<AppType>(baseURL)`. This is why engineering plan §1 mandates **compiling** `apps/api` to `dist` + splitting the router across files — RPC inference otherwise cripples `tsserver`.
-- **Better Auth schema generation**: `npx @better-auth/cli generate` emits the Drizzle schema; it must be generated **into `@docket/db`** (single SQL owner per §2), then applied with `drizzle-kit migrate`.
+- **Better Auth schema reconciliation**: the installed CLI emits a scratch Drizzle schema; supported model changes are reconciled into the hand-maintained `packages/db/src/schema/auth.ts` (single SQL owner per §2), then applied with `drizzle-kit migrate`.
 - **Next.js 16** (latest stable line confirmed: 16.2.x) + React 19 + React Compiler. App Router, Server Components by default.
 - **Org/Actor are custom domain tables, NOT the Better Auth `organization` plugin.** Engineering plan §5 defines a custom `Actor` that "folds in membership (`user_id` + `role`) — no separate Membership table." We honor that. (See Open Issues for the explicit trade-off.)
 
@@ -64,12 +64,12 @@ P4 apps/api (RPC + auth mount) ─► P4.5 permissions core ─► P5 @docket/ui
 #### Phase 2 — `@docket/db` _(sequential; the single SQL owner)_
 
 - **Do:** Drizzle (latest) + Postgres driver (`postgres`) targeting **Neon serverless** (hosting assumption). Define the **slice subset** of the engineering plan §5 schema first (see Part 2 table list), then stub the rest. `drizzle.config.ts` lives here; migrations in `packages/db/drizzle`. Export `db` client + `schema` namespace + inferred row types.
-- **Better Auth tables are generated into THIS package** (Phase 3 writes them here), keeping `@docket/db` the single source of truth per §2.
+- **Better Auth tables are owned by THIS package** (Phase 3 reconciles upstream model changes here), keeping `@docket/db` the single source of truth per §2.
 - **Exit gate:** `pnpm --filter @docket/db db:generate && db:migrate` against a local/Neon Postgres creates all slice tables; `db:studio` shows them.
 
 #### Phase 3 — `@docket/auth` _(sequential; depends on db)_
 
-- **Do:** One `betterAuth()` config (engineering plan §2). For the slice, the **minimum viable plugin set**: `passkey({ registration: { requireSession: false, resolveUser } })` + `nextCookies()` **last**. (Google/GitHub/Linear social, `sso`, `scim`, `oidcProvider`, `mcp`, `stripe` are added in their own Phase-6 lanes — they are not needed to prove the slice.) `drizzleAdapter(db, { provider: "pg" })`. Run `npx @better-auth/cli generate` → output Better Auth schema **into `@docket/db`** → `drizzle-kit migrate`.
+- **Do:** One `betterAuth()` config (engineering plan §2). For the slice, the **minimum viable plugin set**: `passkey({ registration: { requireSession: false, resolveUser } })` + `nextCookies()` **last**. (Google/GitHub/Linear social, `sso`, `scim`, `oidcProvider`, `mcp`, `stripe` were added in later lanes.) `drizzleAdapter(db, { provider: "pg" })`. Capture the CLI's schema in a scratch file, reconcile supported model changes into `packages/db/src/schema/auth.ts`, then run `drizzle-kit migrate`.
 - **`resolveUser`** for passkey-first: on first passkey registration with no session, create the `user` row **and** its 1:1 `hub` row (engineering plan §5 "User … 1:1 with a Hub"). This is the seam where global identity is born.
 - **Exit gate:** `auth.handler` responds to `/api/auth/passkey/*`; a unit test registers + verifies a passkey using a virtual authenticator and gets a session cookie.
 
@@ -132,7 +132,7 @@ Independent lanes, each = new tables + new chained routes + new components, no s
 | Package                     | Role in the slice                                                                                                                           |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@docket/env`               | Validated `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_API_URL`.                                                   |
-| `@docket/db`                | Tables (below) + `db` client + Better Auth generated tables.                                                                                |
+| `@docket/db`                | Tables (below) + `db` client + Better Auth-backed tables.                                                                                   |
 | `@docket/auth`              | `betterAuth()` with `passkey({ registration:{ requireSession:false, resolveUser } })` + `nextCookies()`.                                    |
 | `@docket/types`             | Zod schemas: `createOrganizationInput`, `createProjectInput`, `createTaskInput`, and the response DTOs.                                     |
 | `apps/api`                  | Hono service: CORS → session middleware → `/api/auth/*` mount → chained `/organizations`, `/projects`, `/tasks` routers; exports `AppType`. |
@@ -145,7 +145,7 @@ Independent lanes, each = new tables + new chained routes + new components, no s
 
 Generated/owned in `@docket/db`:
 
-- **Better Auth generated:** `user`, `session`, `account`, `verification`, `passkey`. (User = global account, §5.)
+- **Better Auth-backed:** `user`, `session`, `account`, `verification`, `passkey`. (User = global account, §5.)
 - **`hub`** — 1:1 with `user` (`id`, `user_id`, `name?`, `preferences`). Created in `resolveUser` on first passkey registration.
 - **`organization`** — `id`, `name`, `slug`, `avatar?`, `is_personal`, `vocabulary` (skin, default Startup), `agent_guidance?`, plus common cols (`created_by`, `created_at`, `updated_at`). For the slice `is_personal=false` for the user-created org.
 - **`actor`** — `id`, `organization_id`, `kind {human,agent,team}`, `display_name`, `avatar?`, `status`, and for `kind=human` the folded membership cols `user_id` + `role` (FK → `role`). Creating the org inserts: the caller's **human** Actor (role=Owner) and one **team** Actor for the default Team.
@@ -214,7 +214,7 @@ A `scripts/bootstrap.ts` (run via `pnpm bootstrap`) guides real-service setup so
 
 1. Provision/confirm **Neon** Postgres → write `DATABASE_URL` into `apps/api/.env` (and `@docket/db`).
 2. Generate `BETTER_AUTH_SECRET` (`openssl rand -base64 32`), set `BETTER_AUTH_URL`, `NEXT_PUBLIC_API_URL`.
-3. Run `db:generate` (Better Auth schema → `@docket/db`) + `db:migrate`.
+3. Run `db:generate` for the owned `@docket/db` schema + `db:migrate`.
 4. Validate all required vars through `@docket/env`; fail loudly on any missing (proves the 12-factor contract).
 5. Print next steps (`pnpm dev` to bring up `apps/api` + `apps/web`). Stripe/OAuth/MCP creds are prompted only when their Phase-6 lanes are enabled — the slice needs none of them.
 

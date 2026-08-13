@@ -148,3 +148,19 @@ export const HighlightPatch = z
   .meta({ id: 'HighlightPatch', description: "A change to one highlight's story." });
 /** Highlight-patch value. */
 export type HighlightPatch = z.infer<typeof HighlightPatch>;
+
+/**
+ * Which task an activity event is about.
+ *
+ * @remarks
+ * Used when Docket could not resolve the subject itself — a meeting and a mail thread have no Docket
+ * mirror to match against, so they always arrive unresolved.
+ */
+export const StreamEventLinkBody = z
+  .object({ taskId: z.string().describe('The task this activity is about.') })
+  .meta({
+    id: 'StreamEventLinkBody',
+    description: 'Which task an unresolved activity event is about.',
+  });
+/** Stream-event-link-body value. */
+export type StreamEventLinkBody = z.infer<typeof StreamEventLinkBody>;

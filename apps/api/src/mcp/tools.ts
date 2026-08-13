@@ -24,6 +24,7 @@ import { registerDirectiveTools } from './directive-tools';
 import { registerLinkTool } from './link-tool';
 import { registerOrganizeTool } from './organize-tool';
 import { registerPlanTools } from './plan-tools';
+import { registerRetrospectTools } from './retrospect-tools';
 import { registerRepeatingWorkTools } from './repeating-work-tools';
 import { registerSessionTools } from './session-tools';
 import { registerTimeTools } from './time-tools';
@@ -62,6 +63,7 @@ export function registerTools(
   registerLinkTool(server, ctx, sessionId);
   registerArchiveTool(server, ctx, sessionId);
   registerPlanTools(server, ctx);
+  registerRetrospectTools(server, ctx);
   registerRepeatingWorkTools(server, ctx);
   registerDirectiveTools(server, ctx);
   registerWorkspacesTool(server, ctx);

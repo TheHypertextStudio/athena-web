@@ -212,6 +212,7 @@ lookup, a filtered query, and a bulk write, and offered none of the three) and w
 | `find`           |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
 | `get`            |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
 | `brief`          |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
+| `retrospect`     |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
 | `capture`        |    F     |      F      |     F      |     F     | `work:write`      | `change-report` |
 | `organize`       |    F     |      F      |   **T**    |     F     | `work:write`      | `change-report` |
 | `update`         |    F     |    **T**    |     T      |     F     | `work:write`      | `change-report` |

@@ -110,6 +110,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   find: 'work:read',
   get: 'work:read',
   brief: 'work:read',
+  retrospect: 'work:read',
   workspaces: 'work:read',
 } as const;
 

@@ -57,6 +57,7 @@ export * from './elicitation';
 export * from './elicitation-api';
 export * from './event';
 export * from './activity-episode';
+export * from './highlights';
 export * from './stream';
 export * from './daily-plan';
 export * from './activity';

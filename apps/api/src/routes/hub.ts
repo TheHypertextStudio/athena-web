@@ -8,6 +8,9 @@
  */
 import { auditEvent, db, event, hub as hubTable, notification } from '@docket/db';
 import {
+  HighlightOut,
+  HighlightPatch,
+  HighlightsDayOut,
   HubActivityOut,
   HubInboxOut,
   HubPortfolioOut,
@@ -23,7 +26,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { AuthError, NotFoundError } from '../error';
+import { AuthError, ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import {
@@ -37,12 +40,18 @@ import { zJson, zQuery } from '../lib/validate';
 import { SearchHttpQuery } from '../search/http';
 import { searchWorkspace } from '../search/query';
 
+import { localDateOf, zonedParts } from '../lib/activity/local-day';
+import { curateHighlight } from '../services/highlights/curate';
+import { buildHighlightsDayPayload } from '../services/highlights/read';
+
 import { callerActorIds, callerOrgIds, toAuditEventOut, toNotificationOut } from './hub-helpers';
 import { toStreamEventOut } from './stream-helpers';
 import { buildHubTodayPayload } from './hub-today';
 import { buildHubPortfolioPayload } from './hub-portfolio';
 
 const todayQuery = z.object({ date: z.iso.date() });
+/** The day to read; omitted means the caller's current local day. */
+const highlightsQuery = z.object({ date: z.iso.date().optional() });
 const portfolioQuery = z.object({
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
@@ -297,6 +306,63 @@ Built as a per-membership fan-out merged in application code: **tenant bands sta
           activeOrgId: params.activeOrgId ?? null,
           params,
         }),
+      );
+    },
+  )
+  .get(
+    '/highlights',
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Get a narrated day',
+      response: HighlightsDayOut,
+      description: `Return one local day of the caller's own activity, grouped into episodes and narrated a sentence at a time. An episode is everything that happened to one subject on one day, so a run of commits on one pull request or a thread answered several times is a single entry rather than one per event.
+
+Each entry carries the sentence, whether a person has rewritten it, whether it is currently kept, and the underlying events. \`sources\` reports how each connected source fared for this day, as a state rather than a message: a day where a source could not be read is distinguishable from a day where nothing happened.
+
+Read-only. Building the day is a separate operation, so a response can legitimately be \`pending\` (never built), \`empty\` (built, no activity) or carry entries whose narration is still \`generating\`. Session-only, no capability; 401 when unauthenticated. \`date\` defaults to the caller's current local day and may not be in the future.`,
+    }),
+    zQuery(highlightsQuery),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { date } = c.req.valid('query');
+      const now = new Date();
+      const payload = await buildHighlightsDayPayload(session.user.id, date, now);
+      // A future day cannot have happened. Comparing the resolved local date rather than the raw
+      // parameter is what makes this correct for a caller whose timezone is ahead of the server's.
+      if (date !== undefined && date > localDateOf(zonedParts(now, payload.timezone))) {
+        throw new ConflictError('That day has not happened yet.', 'validation_error');
+      }
+      return ok(c, HighlightsDayOut, payload);
+    },
+  )
+  .patch(
+    '/highlights/:highlightId',
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Change what a highlight says',
+      response: HighlightOut,
+      description: `Drop a highlight from the day, restore it, or replace its sentence with the caller's own. One route covers all three because they are one act from the caller's side: deciding what their day says.
+
+The activity log itself is append-only and is never touched here — only the narration and the keep decision move. Dropping keeps the entry as a record rather than deleting it, so the choice stays reversible. Sending \`narration: null\` reverts to the generated sentence; an empty string is rejected, since removing a line is what dropping is for.
+
+Session-only, no capability. A highlight belonging to another caller answers 404 rather than 403, so the route reveals nothing about days that are not the caller's.`,
+    }),
+    zJson(HighlightPatch),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const patch = c.req.valid('json');
+      if (patch.narration?.trim() === '') {
+        throw new ConflictError(
+          'A highlight needs something to say. Drop it instead.',
+          'validation_error',
+        );
+      }
+      return ok(
+        c,
+        HighlightOut,
+        await curateHighlight(session.user.id, c.req.param('highlightId'), patch, new Date()),
       );
     },
   );

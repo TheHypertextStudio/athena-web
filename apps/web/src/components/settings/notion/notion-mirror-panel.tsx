@@ -26,25 +26,37 @@
  */
 import type { NotionMirrorDatabaseOut } from '@docket/types';
 import { ArrowRight, CheckCircle2, CircleAlert, OpenInNew } from '@docket/ui/icons';
-import { Skeleton } from '@docket/ui/primitives';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
 
+import { CardAlert, CardNote } from '../card-note';
+import { CONNECTION_ERROR_MESSAGE, integrationStatusLabel } from '../integration-status';
+
 import {
+  CONNECTION_ERROR_DETAIL,
   CONTAINER_LABEL,
   CONTAINER_NOTE,
   CONTAINER_UNKNOWN,
   EMPTY_DATABASE_HINT,
+  MIRROR_FAILED_DETAIL,
+  MIRROR_FAILED_TITLE,
   OPEN_IN_NOTION,
   PROVISIONED_HINT,
   PROVISIONED_TITLE,
+  SYNC_ACTION,
+  SYNC_ACTION_BUSY,
   tableAction,
   entityLabel,
   previewSummary,
   tableMeaning,
 } from './notion-copy';
 import { NotionSetupCard } from './notion-setup-card';
-import { useNotionMirror, useNotionPeople } from './use-notion-mirror-controller';
+import {
+  useNotionMirror,
+  useNotionMirrorSync,
+  useNotionPeople,
+} from './use-notion-mirror-controller';
 
 /** Props for {@link NotionMirrorPanel}. */
 export interface NotionMirrorPanelProps {
@@ -105,6 +117,7 @@ function DatabaseRow({
 export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Element {
   const model = useNotionMirror(orgId);
   const people = useNotionPeople(orgId, model.integration?.id ?? '');
+  const sync = useNotionMirrorSync(orgId, model.integration?.id ?? '');
 
   if (model.loading) {
     return (
@@ -150,6 +163,27 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
   const integrationId = model.integration.id;
   const containerPage = model.containerPage;
   const containerName = containerPage?.title ?? CONTAINER_UNKNOWN;
+  const health = model.health;
+  const connectionBroken = health.connection === 'error';
+  // A mirror that failed while the credential still works. Suppressed when the connection itself
+  // is broken, because then the alert above already says the true, more actionable thing.
+  const mirrorBroken = !connectionBroken && health.lastRun === 'failed';
+
+  // Gated on the container page, not on `provisionedCount`: a provision that recorded the page and
+  // then failed before creating anything has zero databases, and gating on those would leave the
+  // one connection most in need of a re-run with no way to ask for one.
+  const canSync = containerPage !== null;
+  const syncButton = canSync ? (
+    <Button
+      variant="outline"
+      disabled={sync.syncing}
+      onClick={() => {
+        sync.sync();
+      }}
+    >
+      {sync.syncing ? SYNC_ACTION_BUSY : SYNC_ACTION}
+    </Button>
+  ) : null;
 
   const tableList = (
     <ul className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
@@ -165,10 +199,23 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
 
   return (
     <div className="@container flex flex-col gap-5">
+      {/* The chip reads the connection's real status. It used to be hardcoded green, so a
+          connection the server had already demoted to `error` still rendered as "Connected" —
+          the surface telling somebody their sync was fine while it was broken. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="bg-tertiary-container text-on-tertiary-container text-body-small inline-flex items-center gap-1.5 rounded-full px-2.5 py-1">
-          <CheckCircle2 aria-hidden="true" className="size-3.5" />
-          Connected
+        <span
+          className={
+            connectionBroken
+              ? 'bg-error-container text-on-error-container text-body-small inline-flex items-center gap-1.5 rounded-full px-2.5 py-1'
+              : 'bg-tertiary-container text-on-tertiary-container text-body-small inline-flex items-center gap-1.5 rounded-full px-2.5 py-1'
+          }
+        >
+          {connectionBroken ? (
+            <CircleAlert aria-hidden="true" className="size-3.5" />
+          ) : (
+            <CheckCircle2 aria-hidden="true" className="size-3.5" />
+          )}
+          {integrationStatusLabel(model.integration)}
         </span>
         <span className="text-on-surface-variant text-body-small">
           {model.integration.connection.externalWorkspaceName ??
@@ -176,6 +223,22 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
             'Notion workspace'}
         </span>
       </div>
+
+      {connectionBroken ? (
+        <CardAlert message={CONNECTION_ERROR_MESSAGE} detail={CONNECTION_ERROR_DETAIL} />
+      ) : null}
+
+      {mirrorBroken ? (
+        <CardNote tone="error">
+          {MIRROR_FAILED_TITLE} {MIRROR_FAILED_DETAIL}
+        </CardNote>
+      ) : null}
+
+      {sync.error !== null ? (
+        <p role="alert" className="text-error text-body-small">
+          {sync.error}
+        </p>
+      ) : null}
 
       {/* The attention block renders only when there is something to act on, so a healthy
           connection is a quiet page rather than a wall of green reassurance. */}
@@ -202,6 +265,10 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
       {nothingProvisioned ? (
         <>
           <NotionSetupCard orgId={orgId} integrationId={integrationId} />
+          {/* A page was already chosen but nothing exists in Notion — a provision that recorded
+              its config and then failed. Retrying the run is the repair, and without this the
+              connection is stranded on a setup card that only offers to pick a page again. */}
+          {canSync ? <div className="flex justify-start">{syncButton}</div> : null}
           {/* A native disclosure rather than a controlled one: it holds no state worth owning,
               and `<details>` is keyboard- and screen-reader-complete without any of it. */}
           <details className="flex flex-col gap-2">
@@ -238,11 +305,17 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
             </div>
           ) : null}
           <div className="mt-1">{tableList}</div>
-          {model.lastSyncedLabel !== null ? (
-            <p className="text-on-surface-variant text-body-small mt-1">
-              Last updated {model.lastSyncedLabel}.
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+            {/* The freshness stamp is what was last actually PUSHED, so it stays true even when
+                the newest run failed — but it is only reassuring on its own, which is why the
+                failure note above has to be read first. */}
+            <p className="text-on-surface-variant text-body-small">
+              {model.lastSyncedLabel !== null
+                ? `Last updated ${model.lastSyncedLabel}.`
+                : 'Nothing has been pushed to Notion yet.'}
             </p>
-          ) : null}
+            {syncButton}
+          </div>
         </section>
       )}
     </div>

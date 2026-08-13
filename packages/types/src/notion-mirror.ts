@@ -326,6 +326,12 @@ export const NotionWorkspacePerson = z
       .nullable()
       .describe('Null is an explicit unmatched state, never a fallback.'),
     matchedBy: z.enum(['email', 'manual']).nullable(),
+    ignoredAt: z
+      .string()
+      .nullable()
+      .describe(
+        'ISO-8601 timestamp of a deliberate `skip`. Non-null means somebody said not to sync this person, which is a different state from nobody having decided yet (`actorId: null, ignoredAt: null`) — and, like a `manual` match, it is immune to email re-matching until undone with `unignore`.',
+      ),
   })
   .meta({
     id: 'NotionWorkspacePerson',
@@ -372,13 +378,20 @@ export const NotionParentPageOut = z
 /** Notion parent-page value. */
 export type NotionParentPageOut = z.infer<typeof NotionParentPageOut>;
 
-/** The decision a person makes about one unmatched Notion member. */
+/**
+ * The decision a person makes about one Notion member.
+ *
+ * @remarks
+ * Every action is durable and reversible. `skip` in particular must write something — recording
+ * it as "still unmatched" would make the decision byte-identical to never having made it, so the
+ * person reappears on the next read and the surface can never be finished.
+ */
 export const NotionPersonResolve = z
   .object({
     action: z
-      .enum(['create_actor', 'match_existing', 'skip'])
+      .enum(['create_actor', 'match_existing', 'skip', 'unignore'])
       .describe(
-        '`create_actor` adds them to Docket as a person with no account; `match_existing` links them to an actor you name; `skip` leaves them unmatched on purpose.',
+        '`create_actor` adds them to Docket as a person with no account; `match_existing` links them to an actor you name; `skip` records a deliberate exclusion (stamping `ignoredAt`, immune to email re-matching); `unignore` undoes any prior decision and returns them to undecided.',
       ),
     actorId: z
       .string()
@@ -387,17 +400,7 @@ export const NotionPersonResolve = z
   })
   .meta({
     id: 'NotionPersonResolve',
-    description: 'Resolve one unmatched Notion workspace member.',
+    description: 'Resolve one Notion workspace member.',
   });
 /** Notion person-resolve value. */
 export type NotionPersonResolve = z.infer<typeof NotionPersonResolve>;
-
-/** What to do with an unmatched Notion person. */
-export const NotionPersonResolution = z
-  .enum(['create_actor', 'match_existing', 'invite', 'skip'])
-  .meta({
-    id: 'NotionPersonResolution',
-    description: 'The chosen disposition for one unmatched Notion workspace member.',
-  });
-/** Notion person-resolution value. */
-export type NotionPersonResolution = z.infer<typeof NotionPersonResolution>;

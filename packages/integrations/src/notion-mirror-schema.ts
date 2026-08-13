@@ -43,6 +43,22 @@ export interface MirrorField {
    * representation that can hold every human — including the ones with no Notion account.
    */
   readonly personValued?: boolean;
+  /**
+   * The person-valued field this column is the native-Notion companion of.
+   *
+   * @remarks
+   * Present only on **derived** columns, which the designer never offers directly: they are
+   * generated from their parent's representation and regenerated on every save.
+   *
+   * They exist because Notion's `people` property structurally cannot hold anyone outside the
+   * workspace. Provisioning it *instead of* the parent — which is what choosing "Notion person"
+   * used to do — deletes the only column that can hold a person with no Notion account, i.e. the
+   * exact population the representation choice exists to protect. So it is provisioned *beside*
+   * the parent, never in place of it.
+   *
+   * @see `docs/engineering/specs/notion-sync.md` §8.3
+   */
+  readonly personCompanionOf?: string;
   /** Notion requires exactly one title property, so that column can never be removed. */
   readonly required?: boolean;
   /** The entity a `relation` column points at. */
@@ -96,7 +112,7 @@ const DOCKET_URL_FIELD: MirrorField = {
 };
 
 /** Per-entity field catalogs. */
-export const MIRROR_ENTITY_SPECS: Record<NotionMirrorEntity, MirrorEntitySpec> = {
+const AUTHORED_ENTITY_SPECS: Record<NotionMirrorEntity, MirrorEntitySpec> = {
   task: {
     entity: 'task',
     direction: 'two_way',
@@ -284,6 +300,57 @@ export const MIRROR_ENTITY_SPECS: Record<NotionMirrorEntity, MirrorEntitySpec> =
   },
 };
 
+/** The field key of the native-Notion companion column for a person-valued field. */
+export function personCompanionKey(parentField: string): string {
+  return `${parentField}NotionPerson`;
+}
+
+/**
+ * Derive the native-Notion companion for each of an entity's person-valued fields.
+ *
+ * @remarks
+ * Generated rather than hand-written so a companion cannot go missing from a person-valued field
+ * somebody adds later, and so its shape cannot drift from its parent's. Emitted immediately after
+ * its parent, so every consumer that walks `fields` in order — the designer's palette, the
+ * provisioner's column specs — sees the pair adjacent without having to know they are related.
+ *
+ * @param spec - The authored catalog entry.
+ * @returns the same entry with its companion columns woven in.
+ */
+function withPersonCompanions(spec: MirrorEntitySpec): MirrorEntitySpec {
+  return {
+    ...spec,
+    fields: spec.fields.flatMap((field) =>
+      field.personValued === true
+        ? [
+            field,
+            {
+              field: personCompanionKey(field.field),
+              label: `${field.label} (Notion)`,
+              kind: 'people' as const,
+              personCompanionOf: field.field,
+            },
+          ]
+        : [field],
+    ),
+  };
+}
+
+/**
+ * Everything the designer and the sync engine need to know about every projected entity.
+ *
+ * @remarks
+ * The authored catalog plus the derived companion columns. Companions are deliberately absent from
+ * every `defaultColumns` list: a companion exists only because somebody chose the representation
+ * that needs it.
+ */
+export const MIRROR_ENTITY_SPECS: Record<NotionMirrorEntity, MirrorEntitySpec> = Object.fromEntries(
+  Object.entries(AUTHORED_ENTITY_SPECS).map(([entity, spec]) => [
+    entity,
+    withPersonCompanions(spec),
+  ]),
+) as Record<NotionMirrorEntity, MirrorEntitySpec>;
+
 /** Every entity kind, in the order the designer lists them. */
 export const MIRROR_ENTITY_ORDER: readonly NotionMirrorEntity[] = [
   'task',
@@ -295,6 +362,30 @@ export const MIRROR_ENTITY_ORDER: readonly NotionMirrorEntity[] = [
   'milestone',
   'label',
   'person',
+];
+
+/**
+ * The order entities are **projected** in.
+ *
+ * @remarks
+ * `person` first, and that is load-bearing rather than cosmetic: a relation to the People database
+ * can only carry a page id that already exists, so every other entity's person columns depend on
+ * the People rows having been written — this pass or a previous one.
+ *
+ * Distinct from {@link MIRROR_ENTITY_ORDER}, which is the order the *designer* lists entities in
+ * and deliberately puts `person` last: the roster is the least interesting table to configure and
+ * the most important one to write.
+ */
+export const MIRROR_PROJECTION_ORDER: readonly NotionMirrorEntity[] = [
+  'person',
+  'task',
+  'project',
+  'initiative',
+  'program',
+  'team',
+  'cycle',
+  'milestone',
+  'label',
 ];
 
 /**
@@ -440,18 +531,28 @@ export function fieldsByPropertyId(map: NotionPropertyMap): Map<string, string> 
  * `kind` is only the default. Resolving it in one place keeps provisioning, schema updates and
  * value mapping from each deriving it slightly differently.
  *
+ * `notion_person` maps to `rich_text`, **not** `people`, and that is the correction that makes the
+ * representation safe. Notion's people property can only reference members of the Notion
+ * workspace, so provisioning it in place of the text column would delete the only column able to
+ * hold a person with no Notion account — the population the choice exists to protect. The native
+ * property is added *beside* it as a derived companion column, which carries `kind: 'people'` in
+ * the catalog and therefore reaches the `default` branch below.
+ *
+ * A `people` property is consequently never the product of a *representation*; it is always a
+ * column of its own.
+ *
  * @param binding - The designed column.
  * @returns the Notion property type to create.
+ * @see `docs/engineering/specs/notion-sync.md` §8.3
  */
 export function provisionedKind(binding: NotionColumnBinding): NotionPropertyKind {
   switch (binding.representation) {
     case 'notion_person':
-      return 'people';
+    case 'text':
+      return 'rich_text';
     case 'docket_people_table':
     case 'existing_table':
       return 'relation';
-    case 'text':
-      return 'rich_text';
     default:
       return binding.kind;
   }

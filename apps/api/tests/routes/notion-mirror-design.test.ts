@@ -179,28 +179,54 @@ describe('Notion mirror designs', () => {
       assignee: {
         field: 'assignee',
         title: 'Owner',
+        // `rich_text`, NOT `people`: the native Notion property is ADDED beside this column, never
+        // substituted for it. Substituting would delete the only column able to hold a person with
+        // no Notion account — the population the representation exists to protect.
         kind: 'rich_text',
         order: 1,
         propertyId: 'prop_assignee',
         representation: 'notion_person',
       },
+      // Derived from the parent's representation, never sent by the client, and named after the
+      // parent's own title so a rename carries.
+      assigneeNotionPerson: {
+        field: 'assigneeNotionPerson',
+        title: 'Owner (Notion)',
+        kind: 'people',
+        order: 2,
+      },
       project: {
         field: 'project',
         title: 'Project',
         kind: 'relation',
-        order: 2,
+        order: 3,
         relationDataSourceId: 'ds_projects',
       },
     });
 
+    // Docket owns no page ids in a database it did not create, so it could never fill this in.
+    // Refused rather than accepted and silently left blank, which is what used to happen.
+    await expect(
+      applyDesignPatch(updated, {
+        columns: [
+          { field: 'title', title: 'Work' },
+          { field: 'assignee', title: 'Owner', representation: 'existing_table' },
+          { field: 'project', title: 'Project' },
+        ],
+      }),
+    ).rejects.toThrow();
+
     const explicitlyChanged = await applyDesignPatch(updated, {
       columns: [
         { field: 'title', title: 'Work' },
-        { field: 'assignee', title: 'Owner', representation: 'existing_table' },
+        { field: 'assignee', title: 'Owner', representation: 'docket_people_table' },
         { field: 'project', title: 'Project' },
       ],
     });
-    expect(explicitlyChanged.propertyMap['assignee']?.representation).toBe('existing_table');
+    expect(explicitlyChanged.propertyMap['assignee']?.representation).toBe('docket_people_table');
+    // Switching away from `notion_person` takes its companion with it: the column exists only
+    // because that representation was chosen.
+    expect(explicitlyChanged.propertyMap['assigneeNotionPerson']).toBeUndefined();
     expect(explicitlyChanged.propertyMap['project']?.relationDataSourceId).toBe('ds_projects');
 
     const withoutPreviousChoices = await applyDesignPatch(

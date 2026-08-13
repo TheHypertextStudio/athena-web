@@ -21,6 +21,7 @@ import type {
   NotionMirrorEntity,
   NotionParentPageOut,
   NotionWorkspacePerson,
+  SyncRunOut,
 } from '@docket/types';
 import { useState } from 'react';
 
@@ -38,7 +39,31 @@ import { useRemoteSearch } from '@/lib/use-remote-search';
 
 import { relativeTime } from '../format-time';
 
-import { SETUP_FAILED } from './notion-copy';
+import { SETUP_FAILED, SYNC_FAILED } from './notion-copy';
+
+/**
+ * How the mirror is actually doing, as opposed to how the connection is doing.
+ *
+ * @remarks
+ * Two separate facts, and conflating them is what let a broken mirror render as "Connected".
+ *
+ * `connection` is the shared connector health — the credential works, or it does not. But the
+ * integration's roll-up (`status`, `lastSyncedAt`) is written by whichever *purpose* ran last, and
+ * a Notion connection runs two: the task pull and this mirror. A successful task pull advances
+ * those fields without the mirror having run at all, so reading them alone would report the mirror
+ * healthy on the strength of an unrelated sync.
+ *
+ * `lastRun` therefore comes from the durable run history, filtered to this purpose. It is the only
+ * place a mirror-specific outcome survives.
+ */
+export interface NotionMirrorHealth {
+  /** The connection's own health, shared across every purpose that uses it. */
+  connection: IntegrationOut['status'];
+  /** How the most recent *mirror* pass ended, or null when one has never run. */
+  lastRun: 'succeeded' | 'failed' | 'running' | null;
+  /** When that pass ended, in words, or null. */
+  lastRunLabel: string | null;
+}
 
 /** The Notion hub's view model. */
 export interface NotionMirrorModel {
@@ -55,8 +80,10 @@ export interface NotionMirrorModel {
   totalRows: number;
   /** Where to go to connect Notion when it is not connected yet. */
   connectionsHref: string;
-  /** When the mirror last ran, in words, or null when it never has. */
+  /** How stale what you see in Notion is, in words, or null when nothing has been pushed. */
   lastSyncedLabel: string | null;
+  /** Whether the mirror is working — read this before believing {@link lastSyncedLabel}. */
+  health: NotionMirrorHealth;
   /**
    * The Notion page the databases were built under, or null before provisioning.
    *
@@ -95,6 +122,21 @@ export function useNotionMirror(orgId: string): NotionMirrorModel {
     enabled: integration !== null,
   });
 
+  // The mirror's own run history. Deliberately NOT folded into `error` below: a settings page
+  // that blanks itself because it could not read a sync log is worse than one that renders with
+  // its health unknown, and the databases it is showing are still true.
+  const runsQ = useApiQuery({
+    ...apiQueryOptions(
+      queryKeys.integrationRuns(orgId, integration?.id ?? 'none'),
+      () =>
+        api.v1.orgs[':orgId'].integrations[':id'].runs.$get({
+          param: { orgId, id: integration?.id ?? '' },
+        }),
+      'Could not load sync history.',
+    ),
+    enabled: integration !== null,
+  });
+
   const databases: readonly NotionMirrorDatabaseOut[] = databasesQ.data?.items ?? [];
   const loadError = integrationsQ.error ?? databasesQ.error;
 
@@ -109,7 +151,33 @@ export function useNotionMirror(orgId: string): NotionMirrorModel {
     lastSyncedLabel: relativeSyncLabel(
       databases.map((d) => d.lastPushedAt).filter((v): v is string => v !== null),
     ),
+    health: mirrorHealth(integration, runsQ.data?.items ?? []),
     containerPage: readContainerPage(integration?.config),
+  };
+}
+
+/**
+ * Reduce the connection and its run history to what the hub has to say about health.
+ *
+ * @remarks
+ * The runs arrive newest-first, so the first `notion_mirror` entry is the latest mirror pass.
+ * Filtering by purpose is the whole point: the same list carries `task_sync` runs against the same
+ * connection, and letting one of those stand in for the mirror is exactly the substitution that
+ * made a broken mirror look healthy.
+ *
+ * @param integration - The Notion connection, or null when there is none.
+ * @param runs - Recent sync runs for it, newest-first.
+ * @returns the hub's health view.
+ */
+function mirrorHealth(
+  integration: IntegrationOut | null,
+  runs: readonly SyncRunOut[],
+): NotionMirrorHealth {
+  const latest = runs.find((run) => run.purpose === 'notion_mirror');
+  return {
+    connection: integration?.status ?? 'pending',
+    lastRun: latest?.status ?? null,
+    lastRunLabel: relativeTimeLabel(latest?.finishedAt ?? latest?.startedAt ?? null),
   };
 }
 
@@ -298,6 +366,70 @@ export function useNotionSetup(orgId: string, integrationId: string): NotionSetu
   };
 }
 
+/** The hub's "run it now" model. */
+export interface NotionMirrorSyncModel {
+  /** The error to render, or null. Always application-owned copy. */
+  error: string | null;
+  /** True while a mirror pass is in flight. */
+  syncing: boolean;
+  /** Run the mirror against the container page already chosen. */
+  sync: () => void;
+}
+
+/**
+ * Run the Notion mirror on demand.
+ *
+ * @remarks
+ * Separate from {@link useNotionSetup} because the two are different acts: setup *chooses* where
+ * the databases live and rewrites the connection's config, while this only runs. Folding them
+ * together is what left a provisioned connection with no way to re-run its mirror at all — the
+ * one thing a stalled sync needs.
+ *
+ * Same honesty rule as setup: the route answers 200 carrying the run, so a failed pass is a
+ * successful HTTP response describing a failure and has to be read off `status`.
+ *
+ * @param orgId - The workspace.
+ * @param integrationId - The Notion connection.
+ * @returns the action and its state.
+ */
+export function useNotionMirrorSync(orgId: string, integrationId: string): NotionMirrorSyncModel {
+  const [error, setError] = useState<string | null>(null);
+
+  const run = useApiMutation({
+    mutationFn: () =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].integrations[':id'].notion.sync.$post({
+            param: { orgId, id: integrationId },
+          }),
+        SYNC_FAILED,
+      ),
+    // The people roster is refreshed BY the pass (it is where the Notion workspace members are
+    // learned), and the run history is what the hub reads its own health from — so both are as
+    // stale as the databases once this returns.
+    invalidateKeys: [
+      queryKeys.notionMirrorDatabases(orgId, integrationId),
+      queryKeys.notionMirrorPeople(orgId, integrationId),
+      queryKeys.integrationRuns(orgId, integrationId),
+      queryKeys.integrations(orgId),
+    ],
+    onSuccess: (finished: { status: string }) => {
+      setError(finished.status === 'succeeded' ? null : SYNC_FAILED);
+    },
+    onError: (e: Error) => {
+      setError(userErrorMessage(e, SYNC_FAILED));
+    },
+  });
+
+  return {
+    error,
+    syncing: run.isPending,
+    sync: () => {
+      run.mutate(undefined);
+    },
+  };
+}
+
 /** One column as the designer edits it, before it is saved. */
 export interface DesignerColumn {
   field: string;
@@ -403,8 +535,18 @@ export interface NotionPeopleModel {
   error: string | null;
   /** Notion members matched to a Docket actor. */
   matched: readonly NotionWorkspacePerson[];
-  /** Notion members with no Docket actor — the only group that needs a decision. */
+  /** Notion members nobody has decided about — the only group that needs an answer. */
   unmatched: readonly NotionWorkspacePerson[];
+  /**
+   * Notion members somebody deliberately excluded.
+   *
+   * @remarks
+   * Separated from {@link unmatched} because they are the same row shape describing opposite
+   * situations: one is a question, the other is its answer. Lumping them together is what made
+   * "Don't sync them" look like it did nothing — the person was re-counted as needing a decision
+   * the instant the list refreshed, so the count never fell and the work could never be finished.
+   */
+  ignored: readonly NotionWorkspacePerson[];
   /** The org's people, for the "match to someone" picker. */
   roster: readonly { id: string; displayName: string }[];
   /** The externalId currently being resolved, or null. */
@@ -423,11 +565,12 @@ export interface NotionPeopleModel {
   docketOnly: number;
 }
 
-/** One decision about an unmatched person. */
+/** One decision about a Notion person. */
 export type PersonDecision =
   | { readonly action: 'create_actor' }
   | { readonly action: 'match_existing'; readonly actorId: string }
-  | { readonly action: 'skip' };
+  | { readonly action: 'skip' }
+  | { readonly action: 'unignore' };
 
 /** Read the Notion↔Docket identity matching for this connection. */
 export function useNotionPeople(orgId: string, integrationId: string): NotionPeopleModel {
@@ -502,8 +645,12 @@ export function useNotionPeople(orgId: string, integrationId: string): NotionPeo
       setResolving(externalId);
       resolveOne.mutate({ externalId, decision });
     },
+    // Three populations, not two. `actorId === null` alone conflates "we don't know yet" with
+    // "we were told not to", which is why a skipped person used to reappear in the list of
+    // decisions still to make immediately after being decided.
     matched: people.filter((p) => p.actorId !== null),
-    unmatched: people.filter((p) => p.actorId === null),
+    unmatched: people.filter((p) => p.actorId === null && p.ignoredAt === null),
+    ignored: people.filter((p) => p.actorId === null && p.ignoredAt !== null),
     docketOnly: unmatchedQ.data?.docketOnly ?? 0,
   };
 }

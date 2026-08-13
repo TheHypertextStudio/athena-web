@@ -6,8 +6,8 @@ import NextLink from 'next/link';
 import type { JSX } from 'react';
 
 import { CardAlert, CardNote } from './card-note';
-import { relativeTime } from './format-time';
 import { IntegrationActionButton } from './integration-action-button';
+import { CONNECTION_ERROR_MESSAGE, integrationStatusLabel } from './integration-status';
 import { IntegrationRowActions } from './integration-row-actions';
 import { providerIcon } from './integrations-config';
 
@@ -63,18 +63,6 @@ interface IntegrationProviderCardProps {
   onDisconnect: () => void;
   /** Toggle the inline config panel open/closed. */
   onToggleConfig: () => void;
-}
-
-/**
- * The status-aware subtitle for a provider that has an integration. Never implies a connection
- * that wasn't validated: only a `connected` integration reads "Connected".
- */
-function statusSubtitle(existing: IntegrationOut): string {
-  if (existing.status === 'error') return 'Connection needs attention';
-  if (existing.status === 'disconnected') return 'Disconnected';
-  if (existing.lastSyncedAt)
-    return `Connected · Last synced ${relativeTime(existing.lastSyncedAt)}`;
-  return 'Connected';
 }
 
 /** Human-readable account/workspace identity for one concrete provider connection. */
@@ -145,7 +133,9 @@ export function IntegrationProviderCard({
             <span className="text-on-surface-variant truncate text-xs">{identityLabel}</span>
           ) : null}
           <span className="text-on-surface-variant text-xs">
-            {visibleIntegration ? statusSubtitle(visibleIntegration) : (mechanics ?? connectHint)}
+            {visibleIntegration
+              ? integrationStatusLabel(visibleIntegration)
+              : (mechanics ?? connectHint)}
           </span>
         </div>
         {visibleIntegration && manageHref ? (
@@ -186,7 +176,7 @@ export function IntegrationProviderCard({
       {/* Persistent connection error from the server (survives reload), never ephemeral state. */}
       {visibleIntegration?.status === 'error' ? (
         <CardAlert
-          message="This connection needs attention. Reconnect it to restore syncing."
+          message={CONNECTION_ERROR_MESSAGE}
           detail={
             <>
               Use <span className="font-medium">Reconnect</span> to re-authorize and resume syncing.

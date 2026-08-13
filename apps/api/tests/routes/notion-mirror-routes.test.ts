@@ -152,14 +152,143 @@ describe('Notion mirror routes', () => {
       matchedBy: 'manual',
     });
 
+    // A skip has to WRITE something. Recording it as plain `actorId: null` would be
+    // byte-identical to never having decided, so the person resurfaces on the next read and the
+    // surface asking the question can never be finished.
     const skipped = await resolve('notion-skip', { action: 'skip' });
     expect(skipped.status).toBe(200);
-    expect(await skipped.json()).toMatchObject({ actorId: null, matchedBy: null });
+    expect(await skipped.json()).toMatchObject({
+      actorId: null,
+      matchedBy: null,
+      ignoredAt: expect.any(String),
+    });
     expect((await resolve('missing-person', { action: 'skip' })).status).toBe(404);
+
+    // …and it has to survive the round trip, not just the response body.
+    const afterSkip = await app.request(`/${integration.id}/people`);
+    const listed = (await afterSkip.json()) as {
+      items: { externalId: string; ignoredAt: string | null }[];
+    };
+    expect(listed.items.find((p) => p.externalId === 'notion-skip')?.ignoredAt).toEqual(
+      expect.any(String),
+    );
 
     const count = await app.request(`/${integration.id}/unmatched-people`);
     expect(count.status).toBe(200);
     expect((await count.json()) as { docketOnly: number }).toMatchObject({ docketOnly: 0 });
+  });
+
+  it('reverses a skip, and clears one when the person is matched instead', async () => {
+    const { orgId, humanActorId, integration, app } = await seedRouter();
+    await db.insert(schema.externalActor).values([
+      {
+        organizationId: orgId,
+        integrationId: integration.id,
+        externalId: 'notion-undo',
+        displayName: 'Undo Me',
+        ignoredAt: new Date(),
+      },
+      {
+        organizationId: orgId,
+        integrationId: integration.id,
+        externalId: 'notion-rethink',
+        displayName: 'Rethink Me',
+        ignoredAt: new Date(),
+      },
+    ]);
+    const resolve = (externalId: string, body: object) =>
+      app.request(`/${integration.id}/people/${externalId}/resolve`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    const unignored = await resolve('notion-undo', { action: 'unignore' });
+    expect(unignored.status).toBe(200);
+    expect(await unignored.json()).toMatchObject({
+      actorId: null,
+      matchedBy: null,
+      ignoredAt: null,
+    });
+
+    // Deciding anything about somebody supersedes an earlier exclusion — a stale `ignoredAt`
+    // left on a matched row would keep it immune to re-matching forever.
+    const rethought = await resolve('notion-rethink', {
+      action: 'match_existing',
+      actorId: humanActorId,
+    });
+    expect(rethought.status).toBe(200);
+    expect(await rethought.json()).toMatchObject({
+      actorId: humanActorId,
+      matchedBy: 'manual',
+      ignoredAt: null,
+    });
+  });
+
+  it('runs the mirror on demand once a container page is chosen', async () => {
+    const { integration, app } = await seedRouter();
+    await app.request(`/${integration.id}/databases`);
+
+    const ran = await app.request(`/${integration.id}/sync`, { method: 'POST' });
+    expect(ran.status).toBe(409);
+
+    await app.request(`/${integration.id}/provision`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ containerPageId: 'parent-1' }),
+    });
+
+    const synced = await app.request(`/${integration.id}/sync`, { method: 'POST' });
+    expect(synced.status).toBe(200);
+    expect(await synced.json()).toMatchObject({
+      purpose: 'notion_mirror',
+      trigger: 'manual',
+      status: 'succeeded',
+    });
+  });
+
+  it('refuses to sync an unprovisioned mirror without demoting the connection', async () => {
+    // Pressing Sync before setup is finished is a 409, not a run: the pass throws without a
+    // container page, and the spine would record that throw as a connector failure — flipping a
+    // healthy connection to `error` and notifying its owner about a mistake they did not make.
+    const { integration, app } = await seedRouter();
+
+    const res = await app.request(`/${integration.id}/sync`, { method: 'POST' });
+    expect(res.status).toBe(409);
+
+    const after = one(
+      await db.select().from(schema.integration).where(eq(schema.integration.id, integration.id)),
+    );
+    expect(after.status).toBe('connected');
+    expect(after.lastSyncStatus).toBeNull();
+    expect(
+      await db
+        .select()
+        .from(schema.syncRun)
+        .where(eq(schema.syncRun.integrationId, integration.id)),
+    ).toHaveLength(0);
+  });
+
+  it('404s the sync route for a cross-tenant or non-Notion integration', async () => {
+    const { orgId, app } = await seedRouter();
+    const foreign = await seedBaseOrg(db, schema);
+    const foreignIntegration = one(
+      await db
+        .insert(schema.integration)
+        .values({ organizationId: foreign.orgId, provider: 'notion', pattern: 'connector' })
+        .returning(),
+    );
+    const notNotion = one(
+      await db
+        .insert(schema.integration)
+        .values({ organizationId: orgId, provider: 'github', pattern: 'connector' })
+        .returning(),
+    );
+
+    expect((await app.request(`/${foreignIntegration.id}/sync`, { method: 'POST' })).status).toBe(
+      404,
+    );
+    expect((await app.request(`/${notNotion.id}/sync`, { method: 'POST' })).status).toBe(404);
   });
 
   it('searches parent pages at the provider rather than returning the workspace', async () => {

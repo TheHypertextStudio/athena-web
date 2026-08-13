@@ -43,7 +43,8 @@ import {
   socialProviderId,
   toOut,
 } from './integration-provider';
-import { runSync, toSyncRunOut } from './integration-sync';
+import { runSync, toSyncRunOut, type SyncRunRow } from './integration-sync';
+import { runNotionMirrorSync } from './notion-mirror-reconcile';
 import { importItems, resolveImportTeam } from './integration-import';
 import { toExternalActorOut } from './integration-identity';
 import { assertRefInOrg } from './task-helpers';
@@ -69,6 +70,50 @@ async function setIntegration(
    * update could empty `updated`, not reproducible against a single serialized connection. */
   if (!row) throw new NotFoundError('Integration not found');
   return row;
+}
+
+/**
+ * Run the Notion mirror pass too, when this integration has one configured.
+ *
+ * @remarks
+ * "Sync" on a Notion connection has to mean both directions. The task-mirror spine pulls a
+ * provider's work IN; the Notion mirror pushes Docket's work OUT into the designed databases.
+ * Running only the first and reporting success is the never-report-success-when-nothing-happened
+ * violation this exists to close — the mirror was untouched and the button said it synced.
+ *
+ * Skipped silently when no container page has been chosen: that is an unfinished setup, not a
+ * failure, and running anyway would demote a healthy connection and notify its owner.
+ *
+ * @param row - The integration just synced.
+ * @param actorId - The acting Docket actor, as the spine requires.
+ * @returns the mirror's run, or null when there was nothing to run or the lease was held.
+ */
+async function runConfiguredNotionMirror(
+  row: IntegrationRow,
+  actorId: string,
+): Promise<SyncRunRow | null> {
+  if (row.provider !== 'notion') return null;
+  const config = ConnectorConfig.safeParse(row.config).data ?? {};
+  if (config.notionMirror?.containerPageId === undefined) return null;
+  return runNotionMirrorSync(row, { actorId, trigger: 'manual' });
+}
+
+/**
+ * Pick which of two runs the response reports.
+ *
+ * @remarks
+ * Failure wins. One response cannot carry two runs, and of the two possible lies — "it succeeded"
+ * when half of it did not, versus "it failed" when half of it did — only the first one lets a
+ * broken sync look healthy. Both runs are durable and separately readable at `GET /:id/runs`.
+ *
+ * @param primary - The task-mirror run, which always happened.
+ * @param mirror - The Notion mirror run, when one ran.
+ * @returns the run to serialize into the response.
+ */
+function reportedRun(primary: SyncRunRow, mirror: SyncRunRow | null): SyncRunRow {
+  if (primary.status === 'failed') return primary;
+  if (mirror === null) return primary;
+  return mirror;
 }
 
 /** Load an org-scoped integration or 404 (existence-hiding across tenants). */
@@ -768,7 +813,11 @@ Requires \`contribute\` (it creates tasks, the same bar as authoring work direct
 
 Concurrency is guarded: only one sync may be in flight per integration, so if a run is already active this returns 409 (\`A sync is already in progress for this integration.\`) rather than starting a duplicate. A provider that can't sync yields 409 (\`Integration provider does not support sync\`); a missing/cross-tenant id 404s. The run is recorded with \`trigger='manual'\` (the background scheduler uses \`scheduled\`).
 
-Requires \`manage\` — triggering org-wide mirroring is an administrative action (contrast the \`contribute\`-level \`POST /:id/import\`, which is a user pulling their own work in). Related: \`GET /:id/runs\`, \`POST /:id/verify\`.`,
+For a Notion connection that has a **mirror** configured (a container page chosen via \`POST /:id/notion/provision\`), this also runs the mirror pass — the opposite direction, pushing Docket's work OUT into the designed databases. Both are needed for "Sync" to mean what it says on that connection: running only the task pull would report success having never touched the mirror. They run sequentially because they contend for the same lease, and the mirror pass also refreshes the Notion people roster.
+
+Two runs, one response. The body is the **failed** run if either failed, otherwise the mirror run when one ran, otherwise the task run — so a partial failure can never be reported as success. Both runs are durable and separately inspectable at \`GET /:id/runs\`, keyed by \`purpose\` (\`task_sync\` / \`notion_mirror\`).
+
+Requires \`manage\` — triggering org-wide mirroring is an administrative action (contrast the \`contribute\`-level \`POST /:id/import\`, which is a user pulling their own work in). Related: \`GET /:id/runs\`, \`POST /:id/verify\`, \`POST /:id/notion/sync\` (the mirror alone).`,
     }),
     zParam(idParam),
     async (c) => {
@@ -782,7 +831,9 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
 
       const run = await runSync(row, { actorId, trigger: 'manual' });
       if (!run) throw new ConflictError('A sync is already in progress for this integration.');
-      return ok(c, SyncRunOut, toSyncRunOut(run));
+
+      const mirrorRun = await runConfiguredNotionMirror(row, actorId);
+      return ok(c, SyncRunOut, toSyncRunOut(reportedRun(run, mirrorRun)));
     },
   )
   // GitHub installation returns a URL with a signed `state` binding this integration + org.
@@ -817,7 +868,7 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
       summary: 'List external actor identity mappings',
       capability: 'manage',
       response: pageOf(ExternalActorOut),
-      description: `List every \`external_actor\` identity mapping for this integration — one row per provider-side user (e.g. a Linear member) the sync engine has ever seen, as a page of {@link ExternalActorOut}. Includes matched AND unmatched rows: an unmatched row (\`actorId: null\`) is an explicit, queryable state, never hidden or fabricated. \`matchedBy\` distinguishes an automatic \`email\` match (re-evaluated on every sync) from a \`manual\` link (set via \`PATCH /:id/external-actors/:externalActorId\`, immune to re-matching). A missing/cross-tenant integration id 404s (\`Integration not found\`).
+      description: `List every \`external_actor\` identity mapping for this integration — one row per provider-side user (e.g. a Linear member) the sync engine has ever seen, as a page of {@link ExternalActorOut}. Includes matched AND unmatched rows: an unmatched row (\`actorId: null\`) is an explicit, queryable state, never hidden or fabricated. \`matchedBy\` distinguishes an automatic \`email\` match (re-evaluated on every sync) from a \`manual\` link (set via \`PATCH /:id/external-actors/:externalActorId\`, immune to re-matching). \`ignoredAt\` splits the unmatched rows again: non-null is a deliberate exclusion, also immune to re-matching, and null means nobody has decided yet. A missing/cross-tenant integration id 404s (\`Integration not found\`).
 
 Requires \`manage\` — reviewing/curating identity mappings is an administrative task, the same bar as the other integration-configuration routes. Related: \`PATCH /:id/external-actors/:externalActorId\` (manually link/unlink one row).`,
     }),
@@ -841,7 +892,7 @@ Requires \`manage\` — reviewing/curating identity mappings is an administrativ
       summary: 'Manually link or unlink an external actor mapping',
       capability: 'manage',
       response: ExternalActorOut,
-      description: `Manually override one \`external_actor\` identity mapping, returning the updated {@link ExternalActorOut}. Setting \`actorId\` to a Docket Actor id (which MUST belong to the caller's org — 404 \`Actor not found\` otherwise) links the mapping and marks it \`matchedBy: 'manual'\`: from that point on, \`POST /:id/sync\`'s email matching NEVER touches this row again, even if the provider user's email later disagrees or disappears — a human's explicit link always wins. Setting \`actorId\` to \`null\` unlinks it AND clears \`matchedBy\` back to \`null\` (an explicit manual unlink, not a re-match) — so the row returns to normal automatic matching and the next sync's email pass may re-match it.
+      description: `Manually override one \`external_actor\` identity mapping, returning the updated {@link ExternalActorOut}. Setting \`actorId\` to a Docket Actor id (which MUST belong to the caller's org — 404 \`Actor not found\` otherwise) links the mapping and marks it \`matchedBy: 'manual'\`: from that point on, \`POST /:id/sync\`'s email matching NEVER touches this row again, even if the provider user's email later disagrees or disappears — a human's explicit link always wins. Setting \`actorId\` to \`null\` unlinks it AND clears \`matchedBy\` back to \`null\` (an explicit manual unlink, not a re-match) — so the row returns to normal automatic matching and the next sync's email pass may re-match it. Either direction also clears \`ignoredAt\`, since deciding anything about a mapping supersedes an earlier decision to exclude it — and leaving the exclusion behind would keep the row immune to the re-matching an unlink promises to restore.
 
 The integration must exist in the caller's org (404 \`Integration not found\`); the mapping row must belong to that integration (404 \`External actor not found\` otherwise — existence-hiding, same as a cross-tenant integration id). Requires \`manage\`. Related: \`GET /:id/external-actors\` (review current mappings), \`POST /:id/sync\` (where automatic email matching runs).`,
     }),
@@ -856,7 +907,10 @@ The integration must exist in the caller's org (404 \`Integration not found\`); 
 
       const updated = await db
         .update(externalActor)
-        .set({ actorId: body.actorId, matchedBy: body.actorId ? 'manual' : null })
+        // `ignoredAt` clears either way: linking or unlinking is a fresh decision that supersedes
+        // an earlier exclusion, and a stale one left behind would keep the row immune to the
+        // automatic re-matching an unlink explicitly promises to restore.
+        .set({ actorId: body.actorId, matchedBy: body.actorId ? 'manual' : null, ignoredAt: null })
         .where(
           and(
             eq(externalActor.id, externalActorId),

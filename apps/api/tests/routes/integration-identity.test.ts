@@ -74,6 +74,7 @@ interface ExternalActorRes {
   avatarUrl: string | null;
   actorId: string | null;
   matchedBy: string | null;
+  ignoredAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -157,6 +158,38 @@ describe('syncExternalActors', () => {
     expect(after.actorId).toBe(manualTargetActorId);
     // The provider-sourced fields still refresh even on a manually-pinned row.
     expect(after.email).toBe('reassigned@example.com');
+  });
+
+  it('a deliberately ignored row is never re-matched, even when its email agrees', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId);
+
+    await syncExternalActors(orgId, id, [
+      extUser({ externalId: 'ext-ignored', displayName: 'Skipped', email: 'skipped@example.com' }),
+    ]);
+    const row = await loadRow(id);
+    // Simulate the `skip` decision (the resolve route is covered in notion-mirror-routes).
+    const ignoredAt = new Date('2026-08-12T00:00:00.000Z');
+    await db
+      .update(schema.externalActor)
+      .set({ ignoredAt })
+      .where(eq(schema.externalActor.id, row.id));
+
+    // A member with exactly this email now exists, so the email pass WOULD match it. Without
+    // the exclusion being honored, the decision to skip them is silently overturned here — the
+    // defect this test exists for.
+    const { actorId: matchingActorId } = await seedMemberWithEmail(orgId, 'skipped@example.com');
+    const map = await syncExternalActors(orgId, id, [
+      extUser({ externalId: 'ext-ignored', displayName: 'Skipped', email: 'skipped@example.com' }),
+    ]);
+    expect(map.get('ext-ignored')).toBeNull();
+    expect(map.get('ext-ignored')).not.toBe(matchingActorId);
+
+    const after = await loadRow(id);
+    expect(after.actorId).toBeNull();
+    expect(after.matchedBy).toBeNull();
+    // The exclusion itself survives the pass — otherwise it would only hold for one sync.
+    expect(after.ignoredAt).toEqual(ignoredAt);
   });
 
   it('an email-matched row unmatches once the member email no longer agrees', async () => {
@@ -376,6 +409,36 @@ describe('external-actor endpoints', () => {
       extUser({ externalId: 'ext-patch-2', displayName: 'Linked', email: 'linked@example.com' }),
     ]);
     expect(resynced.get('ext-patch-2')).toBe(memberActorId);
+  });
+
+  it('PATCH clears a prior exclusion, restoring the automatic matching it promises', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId);
+    const { actorId: memberActorId } = await seedMemberWithEmail(orgId, 'unskip@example.com');
+    await syncExternalActors(orgId, id, [
+      extUser({ externalId: 'ext-patch-3', displayName: 'Skipped', email: 'unskip@example.com' }),
+    ]);
+    const row = await loadRow(id);
+    await db
+      .update(schema.externalActor)
+      .set({ actorId: null, matchedBy: null, ignoredAt: new Date() })
+      .where(eq(schema.externalActor.id, row.id));
+
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request(`/${id}/external-actors/${row.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ actorId: null }),
+    });
+    expect(res.status).toBe(200);
+    const out = await body<ExternalActorRes>(res);
+    expect(out.ignoredAt).toBeNull();
+
+    // With the exclusion gone the row is ordinary again, so the email pass reaches it.
+    const resynced = await syncExternalActors(orgId, id, [
+      extUser({ externalId: 'ext-patch-3', displayName: 'Skipped', email: 'unskip@example.com' }),
+    ]);
+    expect(resynced.get('ext-patch-3')).toBe(memberActorId);
   });
 
   it('404 PATCH for an external-actor row that does not belong to the integration', async () => {

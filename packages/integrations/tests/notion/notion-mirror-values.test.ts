@@ -7,8 +7,11 @@ import {
   projectRow,
   propertyValue,
   readMirrorProperties,
+  resolveMirrorValues,
+  type MirrorSourceValue,
   type MirrorTruncation,
   type MirrorValue,
+  type PersonProjection,
 } from '../../src/notion-mirror-values';
 
 const bind = (over: Partial<NotionColumnBinding> = {}): NotionColumnBinding => ({
@@ -76,12 +79,19 @@ describe('propertyValue', () => {
   });
 
   it('resolves a person representation to the type it was provisioned as', () => {
+    // `notion_person` stays rich text: the native people property is a SEPARATE companion column,
+    // never a substitution. Substituting it would drop everyone without a Notion account from the
+    // database, which is the opposite of what the choice is for.
     expect(
       render(bind({ kind: 'rich_text', representation: 'notion_person' }), {
-        kind: 'people',
-        externalIds: ['u1'],
+        kind: 'text',
+        value: 'Dana Whitfield',
       }),
-    ).toEqual({ people: [{ object: 'user', id: 'u1' }] });
+    ).toEqual({ rich_text: [{ text: { content: 'Dana Whitfield' } }] });
+    // The companion column itself carries `kind: 'people'` and no representation.
+    expect(render(bind({ kind: 'people' }), { kind: 'people', externalIds: ['u1'] })).toEqual({
+      people: [{ object: 'user', id: 'u1' }],
+    });
     expect(
       render(bind({ kind: 'rich_text', representation: 'docket_people_table' }), {
         kind: 'relation',
@@ -318,5 +328,105 @@ describe('projectRow', () => {
       },
     );
     expect(row.truncations.map((t) => t.limit).sort()).toEqual(['relation', 'text']);
+  });
+});
+
+describe('resolveMirrorValues', () => {
+  const NOBODY: PersonProjection = {
+    notionUserByActor: new Map(),
+    personPageByActor: new Map(),
+  };
+  const KNOWN: PersonProjection = {
+    notionUserByActor: new Map([['act_1', 'notion-user-1']]),
+    personPageByActor: new Map([['act_1', 'people-page-1']]),
+  };
+  const assignee = (over: Partial<NotionColumnBinding> = {}): NotionColumnBinding =>
+    bind({ field: 'assignee', title: 'Assignee', kind: 'rich_text', propertyId: 'pid_a', ...over });
+  const ref = (actorId: string | null, displayName: string | null): MirrorSourceValue => ({
+    kind: 'actor',
+    actorId,
+    displayName,
+  });
+
+  it('renders a person as a name when the column is plain text', () => {
+    const binding = assignee({ representation: 'text' });
+    const out = resolveMirrorValues([binding], { assignee: ref('act_1', 'Sam S') }, KNOWN);
+    expect(out.values['assignee']).toEqual({ kind: 'text', value: 'Sam S' });
+    expect(out.unresolved).toEqual([]);
+  });
+
+  it('renders a matched person as the native Notion user', () => {
+    const binding = assignee({ kind: 'people', representation: undefined });
+    const out = resolveMirrorValues([binding], { assignee: ref('act_1', 'Sam S') }, KNOWN);
+    expect(out.values['assignee']).toEqual({ kind: 'people', externalIds: ['notion-user-1'] });
+  });
+
+  it('writes an unmatched person as an honest empty, and says it will never resolve', () => {
+    // The column's documented meaning is "the matched subset", and the name sits in the column
+    // beside it — so empty is the truth here, and retrying would not change it.
+    const binding = assignee({ kind: 'people', representation: undefined });
+    const out = resolveMirrorValues([binding], { assignee: ref('act_2', 'No Notion') }, KNOWN);
+    expect(out.values['assignee']).toEqual({ kind: 'people', externalIds: [] });
+    expect(out.unresolved).toEqual([
+      { field: 'assignee', actorId: 'act_2', reason: 'no_notion_account', retryable: false },
+    ]);
+  });
+
+  it('renders a person as a relation to their row in the People database', () => {
+    const binding = assignee({ kind: 'relation', representation: 'docket_people_table' });
+    const out = resolveMirrorValues([binding], { assignee: ref('act_1', 'Sam S') }, KNOWN);
+    expect(out.values['assignee']).toEqual({
+      kind: 'relation',
+      externalPageIds: ['people-page-1'],
+    });
+  });
+
+  it('OMITS a relation whose People row is not written yet, rather than clearing it', () => {
+    // The distinction the whole resolver turns on. An empty relation CLEARS the Notion property,
+    // which for "I don't know yet" would confidently erase a cell somebody may have filled in.
+    const binding = assignee({ kind: 'relation', representation: 'docket_people_table' });
+    const out = resolveMirrorValues([binding], { assignee: ref('act_1', 'Sam S') }, NOBODY);
+    expect(out.values['assignee']).toBeUndefined();
+    expect(out.unresolved).toEqual([
+      { field: 'assignee', actorId: 'act_1', reason: 'person_page_missing', retryable: true },
+    ]);
+  });
+
+  it('clears the property when there genuinely is no assignee', () => {
+    // The other side of that distinction: nobody assigned is a KNOWN empty, and must clear.
+    for (const [kind, representation, expected] of [
+      ['rich_text', 'text', { kind: 'text', value: null }],
+      ['people', undefined, { kind: 'people', externalIds: [] }],
+      ['relation', 'docket_people_table', { kind: 'relation', externalPageIds: [] }],
+    ] as const) {
+      const binding = assignee({ kind, representation });
+      const out = resolveMirrorValues([binding], { assignee: ref(null, null) }, NOBODY);
+      expect(out.values['assignee']).toEqual(expected);
+      expect(out.unresolved).toEqual([]);
+    }
+  });
+
+  it('passes non-person values through untouched', () => {
+    const out = resolveMirrorValues(
+      [bind()],
+      { title: { kind: 'text', value: 'Ship it' } },
+      NOBODY,
+    );
+    expect(out.values['title']).toEqual({ kind: 'text', value: 'Ship it' });
+  });
+
+  it('an omitted reference leaves the content hash free to change when it resolves', () => {
+    // This is what proves omission CONVERGES rather than stalls: the unresolved pass writes a row
+    // without the property and hashes it that way, so the pass that resolves it sees a different
+    // hash and issues exactly one update.
+    const binding = assignee({ kind: 'relation', representation: 'docket_people_table' });
+    const source = { assignee: ref('act_1', 'Sam S') };
+
+    const pending = projectRow([binding], resolveMirrorValues([binding], source, NOBODY).values);
+    const filled = projectRow([binding], resolveMirrorValues([binding], source, KNOWN).values);
+
+    expect(pending.properties).not.toHaveProperty('pid_a');
+    expect(filled.properties).toHaveProperty('pid_a');
+    expect(pending.contentHash).not.toBe(filled.contentHash);
   });
 });

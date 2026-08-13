@@ -46,6 +46,57 @@ export const SETUP_RUNNING =
 export const SETUP_FAILED =
   'Docket could not finish creating your Notion databases. Check the connection and try again.';
 
+/** The hub's manual-run action, and its in-flight form. */
+export const SYNC_ACTION = 'Sync now';
+/** Shown on the button while a mirror pass is in flight. */
+export const SYNC_ACTION_BUSY = 'Syncing…';
+
+/**
+ * Shown when a manual mirror run reports a status other than success.
+ *
+ * @remarks
+ * Deliberately says what to do rather than what went wrong. The reason lives in the run record
+ * and is provider-authored text; repeating it here would put Notion's words in Docket's mouth,
+ * and it is rarely actionable anyway.
+ */
+export const SYNC_FAILED =
+  'Docket could not finish updating your Notion databases. Check the connection and try again.';
+
+/**
+ * Shown when the LAST mirror run failed but the connection itself is fine.
+ *
+ * @remarks
+ * The state that used to be invisible: the credential works, so the connection reads healthy
+ * everywhere, while the thing this page is about has not run successfully. Without this the page
+ * showed a green chip and a reassuring "Last updated" stamp from before the breakage.
+ */
+export const MIRROR_FAILED_TITLE = 'The last update to Notion didn’t finish.';
+/** What to do about {@link MIRROR_FAILED_TITLE}. */
+export const MIRROR_FAILED_DETAIL =
+  'What’s in Notion is older than what’s in Docket. Try running it again.';
+
+/** The follow-up line on the hub's broken-connection alert, naming this surface's recovery path. */
+export const CONNECTION_ERROR_DETAIL =
+  'Reconnect Notion from Connections to resume syncing. Your designed databases are kept.';
+
+/** The collapsed group of people who were deliberately excluded. */
+export function ignoredTitle(count: number): string {
+  return count === 1 ? '1 person you’re not syncing' : `${String(count)} people you’re not syncing`;
+}
+
+/**
+ * What being skipped actually means, and that it can be undone.
+ *
+ * @remarks
+ * Says the consequence rather than restating the setting. Somebody who skipped a person months ago
+ * needs to know what that is still doing — not that they once clicked a button.
+ */
+export const IGNORED_DETAIL =
+  'Anything assigned to them in Notion won’t reach Docket. You can change your mind at any time.';
+
+/** The action that returns a skipped person to the list of decisions still to make. */
+export const UNIGNORE_ACTION = 'Sort out';
+
 /**
  * Shown when the connection can see no Notion pages at all.
  *
@@ -167,18 +218,16 @@ export const REPRESENTATION_CHOICES: readonly RepresentationChoice[] = [
     value: 'notion_person',
     label: 'Notion person',
     detail:
-      'Native @-mentions and notifications — but only for people who have a Notion account in this workspace.',
+      'Adds a second column for native @-mentions and notifications, beside the name. Only people with a Notion account in this workspace appear in it.',
   },
   {
     value: 'docket_people_table',
     label: 'Link to a People table',
     detail: 'Docket creates one. Everyone gets a row, account or not.',
   },
-  {
-    value: 'existing_table',
-    label: 'Link to a table you already have',
-    detail: 'Point the column at a database this workspace already keeps.',
-  },
+  // `existing_table` is deliberately absent. Docket owns no page ids in a database it did not
+  // create, so it could never fill such a column in — it was selectable and did nothing. The
+  // server refuses it too; this only keeps the dead choice off the screen.
 ];
 
 /** The label under a preview table when its rows are illustrative rather than real. */

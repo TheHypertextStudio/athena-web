@@ -22,20 +22,23 @@ import { db, integration, notionMirrorDatabase, notionMirrorRow } from '@docket/
 import type { NotionColumnBinding, NotionMirrorEntity } from '@docket/types';
 import {
   MIRROR_ENTITY_SPECS,
+  MIRROR_PROJECTION_ORDER,
   type MirrorColumnSpec,
   type MirrorValue,
   type NotionMirrorPort,
+  type PersonProjection,
   orderedColumns,
   projectRow,
   provisionedKind,
   readMirrorProperties,
+  resolveMirrorValues,
 } from '@docket/integrations';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import { ConnectorConfig } from '@docket/types';
 
 import { buildNotionMirror } from '../container';
-import { syncExternalActors } from './integration-identity';
+import { externalActorReverseMap, syncExternalActors } from './integration-identity';
 import { recordSyncConflict } from './sync-notion';
 import { runLeasedSync, type RunSyncOptions, type SyncRunRow } from './integration-sync';
 import type { IntegrationRow } from './integration-provider';
@@ -70,8 +73,25 @@ const WRITE_INTERVAL_MS = 350;
 export interface MirrorPassResult {
   readonly written: number;
   readonly conflicts: number;
-  /** True when the pass covered everything it was asked to; false when the budget ran out. */
+  /**
+   * True when the pass covered everything it was asked to.
+   *
+   * @remarks
+   * False when the write budget ran out, and false when a person reference could not be resolved
+   * *yet* — both mean the sweep should come back rather than record a complete sync.
+   */
   readonly complete: boolean;
+  /** Person references a later pass can still fill in (the People row is not written yet). */
+  readonly unresolvedPending: number;
+  /**
+   * Person references nothing will ever fill in, because there is no Notion account to point at.
+   *
+   * @remarks
+   * Reported but deliberately NOT allowed to mark the pass incomplete. An org with one
+   * account-less person would otherwise never record a full sync again — and the column is doing
+   * exactly what it says, holding the matched subset, with the name beside it in the text column.
+   */
+  readonly unresolvedPermanent: number;
 }
 
 /** Everything a pass needs to reach Notion and the database. */
@@ -84,9 +104,63 @@ export interface MirrorContext {
   readonly now: Date;
 }
 
+/** A pass that had nothing to do. */
+const EMPTY_PASS: MirrorPassResult = {
+  written: 0,
+  conflicts: 0,
+  complete: true,
+  unresolvedPending: 0,
+  unresolvedPermanent: 0,
+};
+
 /** Sleep between writes so a burst does not trip Notion's limiter. */
 function pace(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, WRITE_INTERVAL_MS));
+}
+
+/**
+ * The content hash of a record as it would be projected right now.
+ *
+ * @remarks
+ * Resolution has to happen before hashing, or the hash describes values the projection would never
+ * write — and the next pass would read that as "changed" and push a row that did not need pushing.
+ *
+ * @param bindings - The design's columns.
+ * @param record - The Docket record.
+ * @param people - The person id maps for this pass.
+ * @returns the stable content hash.
+ */
+function projectedHash(
+  bindings: readonly NotionColumnBinding[],
+  record: MirrorEntityRecord,
+  people: PersonProjection,
+): string {
+  return projectRow(bindings, resolveMirrorValues(bindings, record.values, people).values)
+    .contentHash;
+}
+
+/**
+ * Load the id maps every person representation needs, once for the whole pass.
+ *
+ * @remarks
+ * Per-pass rather than per-row or per-entity: both maps are small, both are read by every entity
+ * that has a person column, and re-reading them per row would turn a projection into a query
+ * storm. Loaded *after* provisioning and after the People database is projected, so the page ids
+ * are as complete as this pass can make them.
+ *
+ * @param ctx - The sync context.
+ * @returns the Notion-user and People-page maps, keyed by Docket actor id.
+ */
+async function loadPersonProjection(ctx: MirrorContext): Promise<PersonProjection> {
+  const [notionUserByActor, personRows] = await Promise.all([
+    externalActorReverseMap(ctx.integrationId),
+    loadMirrorRows(ctx.integrationId, 'person'),
+  ]);
+  const personPageByActor = new Map<string, string>();
+  for (const [actorId, row] of personRows) {
+    personPageByActor.set(actorId, row.externalPageId);
+  }
+  return { notionUserByActor, personPageByActor };
 }
 
 /**
@@ -119,9 +193,14 @@ function toColumnSpec(
   if (explicit !== undefined) {
     return { field: binding.field, title: binding.title, kind, relationDataSourceId: explicit };
   }
-  const target = MIRROR_ENTITY_SPECS[entity].fields.find(
-    (f) => f.field === binding.field,
-  )?.relationEntity;
+  // A person column rendered as a relation points at Docket's own People database. Without this
+  // the lookup below found no `relationEntity` (person-valued fields have none — they are not
+  // catalog relations), so the column was dropped from the spec and never created in Notion at
+  // all: the representation was selectable and did nothing.
+  const target =
+    binding.representation === 'docket_people_table'
+      ? 'person'
+      : MIRROR_ENTITY_SPECS[entity].fields.find((f) => f.field === binding.field)?.relationEntity;
   const dataSourceId = target === undefined ? undefined : dataSourceByEntity.get(target);
   if (dataSourceId === undefined) return undefined;
   return { field: binding.field, title: binding.title, kind, relationDataSourceId: dataSourceId };
@@ -204,7 +283,13 @@ export async function provisionMirror(ctx: MirrorContext, parentPageId: string):
     await pace();
   }
 
-  // Wave two: relations, now that every target data source exists.
+  // Wave two: relations, now that every target data source exists — plus any column that is still
+  // missing a property id.
+  //
+  // That second condition is what makes a column ADDED to an already-provisioned database actually
+  // get created. Gating on "has a relation" alone meant a design with no relation column was never
+  // patched again after creation, so a column added later existed in Docket's map and nowhere in
+  // Notion, and every value written to it was silently dropped.
   for (const design of designs) {
     const refreshed = await db
       .select()
@@ -214,7 +299,10 @@ export async function provisionMirror(ctx: MirrorContext, parentPageId: string):
     const row = refreshed[0];
     if (!row?.externalDataSourceId) continue;
     const columns = orderedColumns(row.propertyMap);
-    if (!columns.some((binding) => provisionedKind(binding) === 'relation')) continue;
+    const needsPatch =
+      columns.some((binding) => provisionedKind(binding) === 'relation') ||
+      columns.some((binding) => binding.propertyId === undefined);
+    if (!needsPatch) continue;
     const ids = await ctx.mirror.updateDatabaseSchema(row.externalDataSourceId, {
       title: row.title,
       parentPageId,
@@ -251,18 +339,25 @@ function withPropertyIds(
  * entity whose `updated_at` moved for an unrelated reason free. That is the difference between a
  * sweep that keeps up with a large workspace and one that never finishes.
  *
+ * A row whose person column cannot be resolved yet is still written, minus that one property,
+ * rather than held back. An empty-looking Tasks database is a worse lie than a complete one with a
+ * single column still filling in, and the content hash means the eventual fill costs exactly one
+ * extra write per affected row.
+ *
  * @param ctx - The sync context.
  * @param design - The database to project into.
  * @param budget - Remaining Notion writes this pass may spend.
+ * @param people - The person id maps, loaded once for the whole pass.
  * @returns what the pass wrote.
  */
 export async function projectEntity(
   ctx: MirrorContext,
   design: MirrorDatabaseRow,
   budget: number,
+  people: PersonProjection,
 ): Promise<MirrorPassResult> {
   const dataSourceId = design.externalDataSourceId;
-  if (dataSourceId === null) return { written: 0, conflicts: 0, complete: true };
+  if (dataSourceId === null) return EMPTY_PASS;
 
   const bindings = orderedColumns(design.propertyMap);
   const records = await loadEntityRows(ctx.orgId, ctx.integrationId, design.entityType);
@@ -270,13 +365,20 @@ export async function projectEntity(
 
   let written = 0;
   let complete = true;
+  let unresolvedPending = 0;
+  let unresolvedPermanent = 0;
   for (const record of records) {
     if (written >= budget) {
       complete = false;
       break;
     }
     const existing = mirrors.get(record.entityId);
-    const projected = projectRow(bindings, record.values);
+    const resolved = resolveMirrorValues(bindings, record.values, people);
+    for (const ref of resolved.unresolved) {
+      if (ref.retryable) unresolvedPending += 1;
+      else unresolvedPermanent += 1;
+    }
+    const projected = projectRow(bindings, resolved.values);
 
     if (existing === undefined) {
       const result = await ctx.mirror.writeRow({
@@ -336,7 +438,16 @@ export async function projectEntity(
     .set({ lastPushedAt: ctx.now, rowCount })
     .where(eq(notionMirrorDatabase.id, design.id));
 
-  return { written, conflicts: 0, complete };
+  return {
+    written,
+    conflicts: 0,
+    // A pending reference means a People row this pass depends on has not been written yet, so
+    // the projection is genuinely unfinished and the sweep must return. Permanent ones must not
+    // count, or one account-less person would keep the workspace from ever recording a full sync.
+    complete: complete && unresolvedPending === 0,
+    unresolvedPending,
+    unresolvedPermanent,
+  };
 }
 
 /**
@@ -357,9 +468,10 @@ export async function pullBackEntity(
   ctx: MirrorContext,
   design: MirrorDatabaseRow,
   budget: number,
+  people: PersonProjection,
 ): Promise<MirrorPassResult> {
   const dataSourceId = design.externalDataSourceId;
-  if (dataSourceId === null) return { written: 0, conflicts: 0, complete: true };
+  if (dataSourceId === null) return EMPTY_PASS;
 
   const direction = MIRROR_ENTITY_SPECS[design.entityType].direction;
   const since = design.lastPulledAt?.toISOString();
@@ -404,8 +516,7 @@ export async function pullBackEntity(
           design.entityType,
           entityId,
         );
-        const contentHash =
-          record === undefined ? '' : projectRow(bindings, record.values).contentHash;
+        const contentHash = record === undefined ? '' : projectedHash(bindings, record, people);
         await db.insert(notionMirrorRow).values({
           organizationId: ctx.orgId,
           integrationId: ctx.integrationId,
@@ -446,8 +557,7 @@ export async function pullBackEntity(
           design.entityType,
           local.entityId,
         );
-        const contentHash =
-          record === undefined ? null : projectRow(bindings, record.values).contentHash;
+        const contentHash = record === undefined ? null : projectedHash(bindings, record, people);
         // No Notion call here — this is a local DB write, not a Notion write, so it is not paced
         // against the rate limit. It IS counted against the pass's write budget: the budget's real
         // job is capping how long one sweep runs, and a pull that reads Notion's full property set
@@ -499,7 +609,10 @@ export async function pullBackEntity(
         local?.entityId,
       );
       if (record === undefined) continue;
-      const projected = projectRow(bindings, record.values);
+      const projected = projectRow(
+        bindings,
+        resolveMirrorValues(bindings, record.values, people).values,
+      );
       const result = await ctx.mirror.writeRow(
         action.kind === 'create'
           ? { kind: 'create', dataSourceId, properties: projected.properties }
@@ -548,7 +661,9 @@ export async function pullBackEntity(
       .where(eq(notionMirrorDatabase.id, design.id));
   }
 
-  return { written, conflicts, complete };
+  // The pull path resolves person values only to recompute content hashes, never to write a
+  // person property, so an unresolved reference here changes nothing about what was read back.
+  return { written, conflicts, complete, unresolvedPending: 0, unresolvedPermanent: 0 };
 }
 
 /** A mirror row plus the id needed to update it. */
@@ -677,7 +792,7 @@ export async function runNotionMirrorSync(
 
     await provisionMirror(ctx, parentPageId);
 
-    const designs = await db
+    const found = await db
       .select()
       .from(notionMirrorDatabase)
       .where(
@@ -689,16 +804,30 @@ export async function runNotionMirrorSync(
         ),
       );
 
+    // Sorted, because the select's order is whatever Postgres returns. `person` must project
+    // before anything that relates to it — a relation can only carry a page id that already
+    // exists — and a deterministic order also decides budget spend predictably rather than by
+    // accident of row layout.
+    const designs = [...found].sort(
+      (a, b) =>
+        MIRROR_PROJECTION_ORDER.indexOf(a.entityType) -
+        MIRROR_PROJECTION_ORDER.indexOf(b.entityType),
+    );
+
     let budget = WRITE_BUDGET;
     let processed = 0;
     let complete = true;
+
+    // Loaded before the pull loop and refreshed after it: the pull can adopt rows created in
+    // Notion, which mints People pages the projection below can then point at.
+    let people = await loadPersonProjection(ctx);
 
     for (const design of designs) {
       if (budget <= 0) {
         complete = false;
         break;
       }
-      const pulled = await pullBackEntity(ctx, design, budget);
+      const pulled = await pullBackEntity(ctx, design, budget, people);
       budget -= pulled.written;
       processed += pulled.written;
       if (!pulled.complete) complete = false;
@@ -709,10 +838,16 @@ export async function runNotionMirrorSync(
         complete = false;
         break;
       }
-      const pushed = await projectEntity(ctx, design, budget);
+      const pushed = await projectEntity(ctx, design, budget, people);
       budget -= pushed.written;
       processed += pushed.written;
       if (!pushed.complete) complete = false;
+      // Re-read after People is written, so every entity projected after it sees the page ids it
+      // just created. Only then, and only once: this is the one entity whose output the rest of
+      // the pass reads back.
+      if (design.entityType === 'person' && pushed.written > 0) {
+        people = await loadPersonProjection(ctx);
+      }
     }
 
     const total = designs.reduce((sum, design) => sum + design.rowCount, 0);
@@ -728,6 +863,17 @@ export interface NotionMirrorSweepResult {
   readonly ran: number;
   /** Runs that ended in failure. */
   readonly failed: number;
+  /**
+   * Connections that can never run as configured, and so are silently going nowhere.
+   *
+   * @remarks
+   * A mirror with no container page, or with no owning actor whose credentials it can borrow, is
+   * skipped every tick forever. Counting it is the difference between a sweep that reports
+   * `{eligible: 0, ran: 0, failed: 0}` — indistinguishable from "nothing was due" — and one that
+   * says a workspace is stuck. Not-yet-due is deliberately NOT counted here; that is a healthy
+   * cadence, not a stall.
+   */
+  readonly stalled: number;
 }
 
 /**
@@ -739,11 +885,13 @@ export interface NotionMirrorSweepResult {
  * the spine would be an import cycle. It also keeps the two purposes independently schedulable —
  * a workspace can mirror into Notion on a different cadence than it pulls linked databases.
  *
- * An integration with no container page is skipped silently: it has designed databases but has not
- * chosen where they go, which is a legitimate half-finished setup rather than a failure.
+ * An integration with no container page — or none with an owning actor to borrow credentials
+ * from — is not run, because there is nothing it could do. It is *counted* as `stalled` rather
+ * than skipped in silence: a half-finished setup is a legitimate state, but one that never
+ * finishes is indistinguishable from a working sync unless the sweep says so.
  *
  * @param now - The sweep's clock.
- * @returns how many integrations were eligible, ran, and failed.
+ * @returns how many integrations were eligible, ran, failed, and are stuck.
  */
 export async function sweepNotionMirror(now: Date): Promise<NotionMirrorSweepResult> {
   const rows = await db
@@ -760,12 +908,19 @@ export async function sweepNotionMirror(now: Date): Promise<NotionMirrorSweepRes
   let eligible = 0;
   let ran = 0;
   let failed = 0;
+  let stalled = 0;
 
   for (const row of rows) {
     const config = ConnectorConfig.safeParse(row.config).data ?? {};
-    if (config.notionMirror?.containerPageId === undefined) continue;
+    if (config.notionMirror?.containerPageId === undefined) {
+      stalled += 1;
+      continue;
+    }
     const actorId = row.createdBy;
-    if (actorId === null) continue;
+    if (actorId === null) {
+      stalled += 1;
+      continue;
+    }
 
     const cadenceMs = (row.syncCadenceMinutes ?? 0) * 60_000;
     if (cadenceMs <= 0) continue;
@@ -780,5 +935,5 @@ export async function sweepNotionMirror(now: Date): Promise<NotionMirrorSweepRes
     else ran += 1;
   }
 
-  return { eligible, ran, failed };
+  return { eligible, ran, failed, stalled };
 }

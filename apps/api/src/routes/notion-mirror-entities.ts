@@ -25,9 +25,11 @@ import {
   task,
   taskPriority,
   team,
+  user,
 } from '@docket/db';
 import type { NotionMirrorEntity } from '@docket/types';
-import type { MirrorValue } from '@docket/integrations';
+import { personCompanionKey } from '@docket/integrations';
+import type { MirrorSourceValue, MirrorValue } from '@docket/integrations';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { setTaskState } from '../lib/task-state';
@@ -37,12 +39,20 @@ import { resolveImportTeam } from './integration-import';
 import { resolveStateKeys } from './integration-reconcile';
 import type { IntegrationRow } from './integration-provider';
 
-/** One Docket record, ready to project. */
+/** One Docket record, ready to resolve and then project. */
 export interface MirrorEntityRecord {
   /** The Docket entity's id. */
   readonly entityId: string;
-  /** Its values, keyed by the catalog's field keys. */
-  readonly values: Readonly<Record<string, MirrorValue>>;
+  /**
+   * Its values, keyed by the catalog's field keys.
+   *
+   * @remarks
+   * `MirrorSourceValue`, not `MirrorValue`: a person-valued field is emitted as an actor reference
+   * and rendered by `resolveMirrorValues` once the id maps are loaded. That widening is deliberate
+   * — it makes a projection path that skips the resolver a compile error rather than a silent
+   * fallback to the display name.
+   */
+  readonly values: Readonly<Record<string, MirrorSourceValue>>;
 }
 
 /** Wrap a nullable string as a text value. */
@@ -102,10 +112,15 @@ async function actorNames(orgId: string): Promise<Map<string, string>> {
  * Load every projectable record for one entity, with its values.
  *
  * @remarks
- * Person-valued fields resolve to the actor's display name, which is the `text` representation.
- * The other three representations (native Notion person, or a relation to a People table) need the
- * external-actor mapping and the People database's own page ids, so they are resolved by the
- * reconciler once those exist rather than guessed here.
+ * Person-valued fields are emitted as **references** — an actor id plus a display name — rather
+ * than as a rendered value. How one is written depends on the column's representation, which needs
+ * the external-actor mapping and the People database's own page ids; neither belongs in a loader,
+ * and both are per-pass rather than per-row. `resolveMirrorValues` turns them into Notion values.
+ *
+ * Each reference is emitted twice: once under the field's own key, and once under its companion
+ * key. They render differently because their bindings differ — the parent as text or a relation,
+ * the companion as a native Notion person — which is what lets a workspace get @-mentions for the
+ * people who have Notion accounts without losing the ones who do not.
  *
  * @param orgId - The tenant.
  * @param integrationId - The Notion integration, for the task exclusion rule.
@@ -118,7 +133,15 @@ export async function loadEntityRows(
   entity: NotionMirrorEntity,
 ): Promise<MirrorEntityRecord[]> {
   const names = await actorNames(orgId);
-  const nameOf = (id: string | null): MirrorValue => text(id === null ? null : names.get(id));
+  /** One person-valued field, as both its own column and its native-Notion companion. */
+  const personFields = (field: string, id: string | null): Record<string, MirrorSourceValue> => {
+    const ref: MirrorSourceValue = {
+      kind: 'actor',
+      actorId: id,
+      displayName: id === null ? null : (names.get(id) ?? null),
+    };
+    return { [field]: ref, [personCompanionKey(field)]: ref };
+  };
 
   switch (entity) {
     case 'task': {
@@ -138,7 +161,7 @@ export async function loadEntityRows(
         values: {
           title: text(row.title),
           state: option(row.state),
-          assignee: nameOf(row.assigneeId),
+          ...personFields('assignee', row.assigneeId),
           dueDate: date(row.dueDate),
           startDate: date(row.startDate),
           priority: option(row.priority),
@@ -159,7 +182,7 @@ export async function loadEntityRows(
           name: text(row.name),
           status: option(row.status),
           health: option(row.health),
-          lead: nameOf(row.leadId),
+          ...personFields('lead', row.leadId),
           targetDate: date(row.targetDate),
           startDate: date(row.startDate),
           summary: text(row.summary),
@@ -179,7 +202,7 @@ export async function loadEntityRows(
           status: option(row.status),
           health: option(row.health),
           priority: option(row.priority),
-          owner: nameOf(row.ownerId),
+          ...personFields('owner', row.ownerId),
           targetDate: date(row.targetDate),
           updateCadence: option(row.updateCadence),
           summary: text(row.summary),
@@ -198,7 +221,7 @@ export async function loadEntityRows(
           name: text(row.name),
           status: option(row.status),
           health: option(row.health),
-          owner: nameOf(row.ownerId),
+          ...personFields('owner', row.ownerId),
           summary: text(row.summary),
           docketUrl: docketUrl(orgId, `programs/${row.id}`),
         },
@@ -277,9 +300,21 @@ export async function loadEntityRows(
     case 'person': {
       // Humans only. Agent and team actors are assignable in Docket but are not people, and a
       // People database listing them would misrepresent the roster.
+      //
+      // `email` comes from the Better Auth user an actor is backed by, and is therefore absent for
+      // an account-less person. That is the truth, and the right thing to show: falling back to
+      // `external_actor.email` would be echoing Notion's own copy of the address back into Notion
+      // as though Docket knew it.
       const rows = await db
-        .select()
+        .select({
+          id: actor.id,
+          displayName: actor.displayName,
+          title: actor.title,
+          userId: actor.userId,
+          email: user.email,
+        })
         .from(actor)
+        .leftJoin(user, eq(actor.userId, user.id))
         .where(
           and(eq(actor.organizationId, orgId), eq(actor.kind, 'human'), isNull(actor.archivedAt)),
         );
@@ -287,7 +322,13 @@ export async function loadEntityRows(
         entityId: row.id,
         values: {
           displayName: text(row.displayName),
+          email: text(row.email),
           jobTitle: text(row.title),
+          // The roster's own native-Notion column: an actor reference resolved to the matched
+          // Notion user, or left empty. Declared in the catalog and in `defaultColumns` since the
+          // beginning, but never given a value — so the column was created in every workspace and
+          // stayed permanently blank.
+          notionUser: { kind: 'actor', actorId: row.id, displayName: row.displayName },
           // `user_id` is what distinguishes a person with an account from one without — the
           // account-less actors this whole feature exists to keep first-class.
           hasDocketAccount: boolean(row.userId !== null),

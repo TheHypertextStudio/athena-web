@@ -10,17 +10,22 @@
  * - **Matched** — quiet. Nothing to do; collapsed to a count so it does not crowd out the rest.
  * - **Unmatched Notion people** — the only group needing a decision, and the only one whose
  *   absence has a consequence worth stating: their assignments cannot reach Docket.
+ * - **People you chose not to sync** — decided, so they leave the list above rather than sitting
+ *   in it looking undecided. Collapsed and reversible: an exclusion nobody can find again is a
+ *   decision you cannot take back.
  * - **Docket people with no Notion account** — *not* a problem, and saying so is the point. They
  *   still get a row in the projected People database and can be assigned work there; Notion simply
  *   cannot @-mention them, because its native people property only references Notion members.
  *   Left unexplained this reads as the sync having dropped somebody.
  */
+import type { NotionWorkspacePerson } from '@docket/types';
 import { cn } from '@docket/ui';
-import { CheckCircle2, CircleAlert, User } from '@docket/ui/icons';
+import { CheckCircle2, CircleAlert, User, UserOff } from '@docket/ui/icons';
 import { Button, Select, Skeleton } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { useState } from 'react';
 
+import { IGNORED_DETAIL, UNIGNORE_ACTION, ignoredTitle } from './notion-copy';
 import { useNotionPeople, type PersonDecision } from './use-notion-mirror-controller';
 
 /** Props for {@link NotionPeoplePanel}. */
@@ -61,8 +66,13 @@ export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelPro
     );
   }
 
+  // `ignored` counts too: a workspace whose every Notion member was skipped has still been seen,
+  // and telling that reader "no Notion people yet" would deny the decisions they just made.
   const nothingSeen =
-    people.matched.length === 0 && people.unmatched.length === 0 && people.docketOnly === 0;
+    people.matched.length === 0 &&
+    people.unmatched.length === 0 &&
+    people.ignored.length === 0 &&
+    people.docketOnly === 0;
 
   if (nothingSeen) {
     return (
@@ -124,6 +134,27 @@ export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelPro
                 .join(', ') + (people.matched.length > 3 ? ', and more' : '')
         }
       />
+
+      {people.ignored.length > 0 ? (
+        <Summary
+          icon={<UserOff aria-hidden="true" className="text-on-surface-variant size-4" />}
+          title={ignoredTitle(people.ignored.length)}
+          detail={IGNORED_DETAIL}
+        >
+          <ul>
+            {people.ignored.map((person) => (
+              <IgnoredRow
+                key={person.externalId}
+                person={person}
+                busy={people.resolving === person.externalId}
+                onRestore={() => {
+                  people.resolve(person.externalId, { action: 'unignore' });
+                }}
+              />
+            ))}
+          </ul>
+        </Summary>
+      ) : null}
 
       <Summary
         icon={<User aria-hidden="true" className="text-on-surface-variant size-4" />}
@@ -198,10 +229,26 @@ function UnmatchedRow(props: {
   );
 }
 
-/** A quiet, collapsed group: a count and one line of context. */
-function Summary(props: { icon: JSX.Element; title: string; detail: string }): JSX.Element {
-  return (
-    <section className={cn('border-outline-variant rounded-xl border px-4 py-3')}>
+/**
+ * A quiet, collapsed group: a count and one line of context.
+ *
+ * @remarks
+ * With `children` the whole thing becomes a native `<details>` — a disclosure rather than a static
+ * block. Native for the same reason the hub's preview is: it holds no state worth owning, and
+ * `<details>` is keyboard- and screen-reader-complete without any.
+ *
+ * The heading stays identical either way, so a group that happens to have something inside it does
+ * not become visually louder than one that does not. These groups are the resolved part of the
+ * page; the unresolved part above them is what should draw the eye.
+ */
+function Summary(props: {
+  icon: JSX.Element;
+  title: string;
+  detail: string;
+  children?: ReactNode;
+}): JSX.Element {
+  const heading = (
+    <>
       <p className="text-on-surface text-label-large flex items-center gap-2">
         {props.icon}
         {props.title}
@@ -209,6 +256,55 @@ function Summary(props: { icon: JSX.Element; title: string; detail: string }): J
       <p className="text-on-surface-variant text-body-small mt-1 max-w-prose pl-6">
         {props.detail}
       </p>
-    </section>
+    </>
+  );
+
+  if (props.children === undefined) {
+    return (
+      <section className={cn('border-outline-variant rounded-xl border px-4 py-3')}>
+        {heading}
+      </section>
+    );
+  }
+
+  return (
+    <details className="border-outline-variant overflow-hidden rounded-xl border">
+      <summary className="cursor-pointer list-none px-4 py-3 marker:content-none">
+        {heading}
+      </summary>
+      {props.children}
+    </details>
+  );
+}
+
+/**
+ * One person who was deliberately excluded, with the way back.
+ *
+ * @remarks
+ * The undo lives on the row rather than behind a bulk action for the same reason the decision
+ * does: exclusions are made one person at a time and reversed the same way. Without it, "Don't
+ * sync them" would be a one-way door — and a decision that cannot be revisited is one people are
+ * right to hesitate over.
+ */
+function IgnoredRow(props: {
+  person: NotionWorkspacePerson;
+  busy: boolean;
+  onRestore: () => void;
+}): JSX.Element {
+  return (
+    <li className="border-outline-variant bg-surface-container-low flex items-center gap-3 border-t px-4 py-3">
+      <span className="bg-surface-container text-on-surface-variant text-body-small flex size-8 shrink-0 items-center justify-center rounded-full">
+        {initials(props.person.name)}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-on-surface text-body-medium truncate">{props.person.name}</span>
+        <span className="text-on-surface-variant text-body-small truncate">
+          {props.person.email ?? 'No email in Notion'}
+        </span>
+      </span>
+      <Button variant="outline" disabled={props.busy} onClick={props.onRestore}>
+        {UNIGNORE_ACTION}
+      </Button>
+    </li>
   );
 }

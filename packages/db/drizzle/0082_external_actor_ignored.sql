@@ -1,0 +1,1 @@
+ALTER TABLE "external_actor" ADD COLUMN "ignored_at" timestamp;

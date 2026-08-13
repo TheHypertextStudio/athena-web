@@ -203,6 +203,44 @@ describe('integrations sync', () => {
     expect(second.id).not.toBe(first.id);
   });
 
+  it('drives the Notion mirror too, so Sync on that connection is not a half-truth', async () => {
+    // Notion runs two syncs in opposite directions: the task pull, and the mirror that pushes
+    // Docket's work out into the designed databases. "Sync" used to run only the first and report
+    // success, having never touched the mirror the user was actually looking at.
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'notion');
+    await db
+      .update(schema.integration)
+      .set({ config: { notionMirror: { containerPageId: 'parent-1' } } })
+      .where(eq(schema.integration.id, id));
+
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+    const res = await w.request(`/${id}/sync`, { method: 'POST', headers: J });
+    expect(res.status).toBe(200);
+
+    const runs = await db
+      .select({ purpose: schema.syncRun.purpose })
+      .from(schema.syncRun)
+      .where(eq(schema.syncRun.integrationId, id));
+    expect(runs.map((r) => r.purpose).sort()).toEqual(['notion_mirror', 'task_sync']);
+  });
+
+  it('leaves a Notion connection with no mirror configured to the task sync alone', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'notion');
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const res = await w.request(`/${id}/sync`, { method: 'POST', headers: J });
+    expect(res.status).toBe(200);
+    expect((await body<SyncRunRes>(res)).status).toBe('succeeded');
+
+    const runs = await db
+      .select({ purpose: schema.syncRun.purpose })
+      .from(schema.syncRun)
+      .where(eq(schema.syncRun.integrationId, id));
+    expect(runs.map((r) => r.purpose)).toEqual(['task_sync']);
+  });
+
   it('honors a valid config.teamId, and falls back when it is invalid', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
 

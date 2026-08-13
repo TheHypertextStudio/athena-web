@@ -13,17 +13,22 @@
  * dropped on the floor.
  */
 import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeQueryWrapper, okResponse } from '../../support/query';
 
 // Hoisted so the mock factory (lifted above imports) can reference them.
-const { integrationsGet, databasesGet, peopleGet, unmatchedGet } = vi.hoisted(() => ({
-  integrationsGet: vi.fn(),
-  databasesGet: vi.fn(),
-  peopleGet: vi.fn(),
-  unmatchedGet: vi.fn(),
-}));
+const { integrationsGet, databasesGet, peopleGet, unmatchedGet, runsGet, syncPost } = vi.hoisted(
+  () => ({
+    integrationsGet: vi.fn(),
+    databasesGet: vi.fn(),
+    peopleGet: vi.fn(),
+    unmatchedGet: vi.fn(),
+    runsGet: vi.fn(),
+    syncPost: vi.fn(),
+  }),
+);
 
 vi.mock('../../../src/lib/api', () => ({
   api: {
@@ -33,12 +38,14 @@ vi.mock('../../../src/lib/api', () => ({
           integrations: {
             $get: integrationsGet,
             ':id': {
+              runs: { $get: runsGet },
               notion: {
                 databases: { $get: databasesGet },
                 people: { $get: peopleGet },
                 'unmatched-people': { $get: unmatchedGet },
                 'parent-pages': { $get: vi.fn() },
                 provision: { $post: vi.fn() },
+                sync: { $post: syncPost },
               },
             },
           },
@@ -50,6 +57,8 @@ vi.mock('../../../src/lib/api', () => ({
 }));
 
 import { NotionMirrorPanel } from '../../../src/components/settings/notion/notion-mirror-panel';
+// Imported rather than spelled out, so the wording stays a product decision the copy module owns.
+import { SYNC_ACTION } from '../../../src/components/settings/notion/notion-copy';
 
 const ORG_ID = 'org_1';
 
@@ -97,10 +106,29 @@ function renderPanel(): void {
   render(<NotionMirrorPanel orgId={ORG_ID} />, { wrapper });
 }
 
+/** One sync run as `GET /:id/runs` returns it, newest-first. */
+function syncRun(over: Record<string, unknown> = {}) {
+  return {
+    id: 'run_1',
+    integrationId: 'int_1',
+    status: 'succeeded',
+    trigger: 'manual',
+    purpose: 'notion_mirror',
+    processed: 1,
+    total: 1,
+    error: null,
+    startedAt: '2026-01-01T00:00:00Z',
+    finishedAt: '2026-01-01T00:01:00Z',
+    ...over,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   peopleGet.mockResolvedValue(okResponse({ items: [] }));
   unmatchedGet.mockResolvedValue(okResponse({ docketOnly: 0 }));
+  runsGet.mockResolvedValue(okResponse({ items: [] }));
+  syncPost.mockResolvedValue(okResponse(syncRun()));
 });
 
 afterEach(cleanup);
@@ -183,5 +211,85 @@ describe('NotionMirrorPanel — once the databases exist', () => {
 
     await screen.findByRole('link', { name: 'Configure' });
     expect(screen.queryByText('Where this lives')).not.toBeInTheDocument();
+  });
+});
+
+describe('NotionMirrorPanel — saying whether the sync actually works', () => {
+  const provisioned = {
+    provisionedAt: '2026-01-02T00:00:00Z',
+    externalUrl: 'https://www.notion.so/tasks-db',
+  };
+  const withPage = {
+    notionMirror: { containerPageId: 'page_wiki', containerPageTitle: 'Team wiki' },
+  };
+
+  beforeEach(() => {
+    databasesGet.mockResolvedValue(okResponse({ items: [database(provisioned)] }));
+    integrationsGet.mockResolvedValue(okResponse({ items: [integration(withPage)] }));
+  });
+
+  it('raises an alert instead of a success chip when the connection is broken', async () => {
+    // The chip used to be hardcoded green, so a connection the server had already demoted to
+    // `error` still rendered as connected — the page reporting health it did not have.
+    integrationsGet.mockResolvedValue(
+      okResponse({ items: [{ ...integration(withPage), status: 'error' }] }),
+    );
+    renderPanel();
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('stays quiet when the connection and the mirror are both healthy', async () => {
+    // The counterpart to the two cases above: without this, an implementation that always
+    // rendered an alert would satisfy them and still be wrong.
+    runsGet.mockResolvedValue(okResponse({ items: [syncRun({ status: 'succeeded' })] }));
+    renderPanel();
+
+    await screen.findByRole('link', { name: 'Configure' });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('reports a failed mirror run even though the connection itself is fine', async () => {
+    // The state that was previously invisible: the credential works, so every connection-level
+    // signal reads healthy, while the pass this page is about has not succeeded.
+    runsGet.mockResolvedValue(okResponse({ items: [syncRun({ status: 'failed' })] }));
+    renderPanel();
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('ignores another purpose running against the same connection', async () => {
+    // A successful task_sync advances the integration's roll-up without the mirror having run.
+    // Treating it as the mirror's own outcome is exactly the substitution that hid the breakage.
+    runsGet.mockResolvedValue(
+      okResponse({ items: [syncRun({ purpose: 'task_sync', status: 'succeeded' })] }),
+    );
+    renderPanel();
+
+    await screen.findByRole('link', { name: 'Configure' });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('offers a way to run the mirror, and reports a failed run as a failure', async () => {
+    // A failed pass arrives as a 200 carrying `status: 'failed'`. Reading the response code as
+    // success is the dishonesty this branch exists to prevent.
+    syncPost.mockResolvedValue(okResponse(syncRun({ status: 'failed' })));
+    renderPanel();
+
+    const button = await screen.findByRole('button', { name: SYNC_ACTION });
+    await userEvent.click(button);
+
+    expect(syncPost).toHaveBeenCalledWith({ param: { orgId: ORG_ID, id: 'int_1' } });
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('withholds the run action until a container page has been chosen', async () => {
+    // Nothing to run against, and the route would 409 — so offering the button would be an
+    // affordance that cannot work.
+    integrationsGet.mockResolvedValue(okResponse({ items: [integration()] }));
+    renderPanel();
+
+    await screen.findByRole('link', { name: 'Configure' });
+    expect(screen.queryByRole('button', { name: SYNC_ACTION })).not.toBeInTheDocument();
   });
 });

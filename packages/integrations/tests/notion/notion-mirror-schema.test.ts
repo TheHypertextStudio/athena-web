@@ -4,12 +4,14 @@ import { describe, expect, it } from 'vitest';
 import {
   MIRROR_ENTITY_ORDER,
   MIRROR_ENTITY_SPECS,
+  MIRROR_PROJECTION_ORDER,
   defaultColumnTitle,
   defaultDatabaseTitle,
   defaultPropertyMap,
   fieldsByPropertyId,
   mirrorField,
   orderedColumns,
+  personCompanionKey,
   provisionedKind,
   writableFields,
 } from '../../src/notion-mirror-schema';
@@ -157,9 +159,48 @@ describe('provisionedKind', () => {
   it('resolves each person representation to the Notion type it actually creates', () => {
     const base = { field: 'assignee', title: 'Assignee', kind: 'rich_text', order: 0 } as const;
     expect(provisionedKind({ ...base, representation: 'text' })).toBe('rich_text');
-    expect(provisionedKind({ ...base, representation: 'notion_person' })).toBe('people');
+    // `notion_person` stays rich text. The native people property is provisioned as a separate
+    // companion column BESIDE this one — substituting it here would delete the only column able
+    // to hold a person with no Notion account, which is the population the choice protects.
+    expect(provisionedKind({ ...base, representation: 'notion_person' })).toBe('rich_text');
     expect(provisionedKind({ ...base, representation: 'docket_people_table' })).toBe('relation');
     expect(provisionedKind({ ...base, representation: 'existing_table' })).toBe('relation');
+  });
+
+  it('never derives a people property from a representation — only from a column kind', () => {
+    const representations = ['text', 'notion_person', 'docket_people_table', 'existing_table'];
+    for (const representation of representations) {
+      expect(
+        provisionedKind({
+          field: 'assignee',
+          title: 'Assignee',
+          kind: 'rich_text',
+          order: 0,
+          representation: representation as 'text',
+        }),
+      ).not.toBe('people');
+    }
+    expect(
+      provisionedKind({ field: 'notionUser', title: 'Notion account', kind: 'people', order: 0 }),
+    ).toBe('people');
+  });
+
+  it('derives a native-Notion companion for every person-valued field', () => {
+    // Generated rather than hand-written, so a person-valued field added later cannot ship without
+    // one — and a companion is never a default column, since it exists only when chosen.
+    for (const spec of Object.values(MIRROR_ENTITY_SPECS)) {
+      for (const field of spec.fields.filter((f) => f.personValued === true)) {
+        const companion = spec.fields.find((f) => f.field === personCompanionKey(field.field));
+        expect(companion).toMatchObject({ kind: 'people', personCompanionOf: field.field });
+        expect(spec.defaultColumns).not.toContain(companion?.field);
+      }
+    }
+  });
+
+  it('projects People before anything that can relate to it', () => {
+    // Load-bearing: a relation can only carry a page id that already exists.
+    expect(MIRROR_PROJECTION_ORDER[0]).toBe('person');
+    expect([...MIRROR_PROJECTION_ORDER].sort()).toEqual([...MIRROR_ENTITY_ORDER].sort());
   });
 
   it('falls through to the declared kind when there is no representation', () => {

@@ -29,6 +29,151 @@ export type MirrorValue =
   | { readonly kind: 'relation'; readonly externalPageIds: readonly string[] }
   | { readonly kind: 'url'; readonly value: string | null };
 
+/**
+ * A reference to a Docket person, before a representation decides how it is written.
+ *
+ * @remarks
+ * A person-valued field is the one kind whose Notion payload is not a function of the Docket value
+ * alone: the same assignee is a name, a native Notion person, or a relation to a People row
+ * depending on what the column was designed as. Resolving that needs two id maps the loader has no
+ * business knowing about, so the loader emits this and {@link resolveMirrorValues} renders it.
+ *
+ * `displayName` rides along because the `text` representation — the default, and the only one that
+ * can hold a person with no Notion account — needs nothing else.
+ */
+export interface MirrorActorValue {
+  readonly kind: 'actor';
+  readonly actorId: string | null;
+  readonly displayName: string | null;
+}
+
+/**
+ * What a loader produces: a Notion-ready value, or a person reference still to be resolved.
+ *
+ * @remarks
+ * Deliberately a **wider** type than {@link MirrorValue} rather than a new member of it. Widening
+ * only the source side means `projectRow` still takes `MirrorValue`, so any projection path that
+ * forgets to resolve is a compile error rather than a silent fall back to the display name — which
+ * is exactly the failure this exists to fix. It also keeps `actor` unconstructible on the *pull*
+ * side, where it can never legitimately occur.
+ */
+export type MirrorSourceValue = MirrorValue | MirrorActorValue;
+
+/** The two id maps a person representation needs, loaded once per pass. */
+export interface PersonProjection {
+  /**
+   * `actorId → Notion workspace user id`, for matched people only.
+   *
+   * @remarks
+   * Absence means unmatched — never a guess. Notion's native people property can only reference
+   * members of the Notion workspace, so a person with no Notion account is structurally
+   * unrepresentable there, and inventing a nearby id would assign somebody else's work.
+   */
+  readonly notionUserByActor: ReadonlyMap<string, string>;
+  /** `actorId → its page id` in Docket's projected People database. */
+  readonly personPageByActor: ReadonlyMap<string, string>;
+}
+
+/** Why one person reference could not be written. */
+export type MirrorUnresolvedReason =
+  /** No Notion account to point at. Permanent and by design — the column holds the matched subset. */
+  | 'no_notion_account'
+  /** The People row is not projected yet. Transient; a later pass fills it. */
+  | 'person_page_missing';
+
+/** One person reference a pass could not write, and whether retrying can fix it. */
+export interface MirrorUnresolvedRef {
+  readonly field: string;
+  readonly actorId: string;
+  readonly reason: MirrorUnresolvedReason;
+  /** True when a later pass can resolve it; false when nothing will change by retrying. */
+  readonly retryable: boolean;
+}
+
+/** Values ready for {@link projectRow}, plus what could not be resolved. */
+export interface ResolvedMirrorValues {
+  readonly values: Readonly<Record<string, MirrorValue>>;
+  readonly unresolved: readonly MirrorUnresolvedRef[];
+}
+
+/**
+ * Render every person reference in a row according to its column's representation.
+ *
+ * @remarks
+ * The distinction the rules below turn on is **known-empty versus unknown**, and it is the whole
+ * reason this is not a one-liner:
+ *
+ * - A genuinely absent person (`actorId: null`) resolves to an empty value, which *clears* the
+ *   Notion property. That is correct — the assignee really was removed.
+ * - A person whose page id is not known *yet* omits the field entirely. `projectRow` skips an
+ *   absent value, so it lands in neither the payload nor the content hash, and the next pass
+ *   fills it in with exactly one write. Writing an empty value here would look identical to the
+ *   first case and would confidently erase a cell somebody may have filled in by hand.
+ *
+ * @param bindings - The designed columns, which decide each field's Notion kind.
+ * @param source - The loader's values, some of which are person references.
+ * @param people - The id maps, loaded once per pass.
+ * @returns Notion-ready values plus every reference that could not be written.
+ */
+export function resolveMirrorValues(
+  bindings: readonly NotionColumnBinding[],
+  source: Readonly<Record<string, MirrorSourceValue>>,
+  people: PersonProjection,
+): ResolvedMirrorValues {
+  const values: Record<string, MirrorValue> = {};
+  const unresolved: MirrorUnresolvedRef[] = [];
+  const bindingByField = new Map(bindings.map((binding) => [binding.field, binding]));
+
+  for (const [field, value] of Object.entries(source)) {
+    if (value.kind !== 'actor') {
+      values[field] = value;
+      continue;
+    }
+
+    const binding = bindingByField.get(field);
+    // No column for this field: nothing to render it into, and `projectRow` would drop it anyway.
+    if (binding === undefined) continue;
+    const kind = provisionedKind(binding);
+    const actorId = value.actorId;
+
+    if (kind === 'people') {
+      if (actorId === null) {
+        values[field] = { kind: 'people', externalIds: [] };
+        continue;
+      }
+      const notionUserId = people.notionUserByActor.get(actorId);
+      if (notionUserId === undefined) {
+        // Honest empty, not an omission: this column's documented meaning is "the matched subset",
+        // and the text column beside it carries the name. Retrying will not change the answer.
+        values[field] = { kind: 'people', externalIds: [] };
+        unresolved.push({ field, actorId, reason: 'no_notion_account', retryable: false });
+        continue;
+      }
+      values[field] = { kind: 'people', externalIds: [notionUserId] };
+      continue;
+    }
+
+    if (kind === 'relation') {
+      if (actorId === null) {
+        values[field] = { kind: 'relation', externalPageIds: [] };
+        continue;
+      }
+      const pageId = people.personPageByActor.get(actorId);
+      if (pageId === undefined) {
+        // Omitted, NOT cleared — see the remarks. The People row simply has not been written yet.
+        unresolved.push({ field, actorId, reason: 'person_page_missing', retryable: true });
+        continue;
+      }
+      values[field] = { kind: 'relation', externalPageIds: [pageId] };
+      continue;
+    }
+
+    values[field] = { kind: 'text', value: actorId === null ? null : value.displayName };
+  }
+
+  return { values, unresolved };
+}
+
 /** Something dropped to stay inside a Notion limit. */
 export interface MirrorTruncation {
   readonly field: string;

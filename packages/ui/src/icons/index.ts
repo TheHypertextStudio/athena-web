@@ -123,6 +123,7 @@ export { default as Trash2 } from '@mui/icons-material/DeleteOutlined';
 export { default as Undo } from '@mui/icons-material/Undo';
 export { default as Users } from '@mui/icons-material/People';
 export { default as User } from '@mui/icons-material/Person';
+export { default as UserOff } from '@mui/icons-material/PersonOffOutlined';
 export { default as VideoCamera } from '@mui/icons-material/VideocamOutlined';
 export { default as Workflow } from '@mui/icons-material/AccountTree';
 export { default as X } from '@mui/icons-material/Close';

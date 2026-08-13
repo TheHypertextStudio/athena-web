@@ -687,6 +687,19 @@ export const label = pgTable(
  * whose `createdBy` presumes a human author. `actorId` is nullable and NULL is an explicit,
  * queryable "unmatched" state (never a fallback): the reconciler resolves it by `email`
  * against an existing Actor, or a human resolves it via `manual` — see `matchedBy`.
+ *
+ * Three states, and the third is why `ignoredAt` exists:
+ *
+ * | `actorId` | `ignoredAt` | meaning                                                     |
+ * | --------- | ----------- | ----------------------------------------------------------- |
+ * | set       | null        | matched, by `email` or `manual` (see `matchedBy`)            |
+ * | null      | null        | **undecided** — nobody has said what this person maps to     |
+ * | null      | set         | **deliberately excluded** — a human said "don't sync them"   |
+ *
+ * Without the third state a decision to exclude somebody is byte-identical to never having
+ * decided, so the surface asking for it can never be finished and the answer is silently
+ * re-litigated by the next email pass. An ignored row is therefore immune to re-matching in
+ * exactly the way a `manual` one is — see `syncExternalActors`.
  */
 export const externalActor = pgTable(
   'external_actor',
@@ -704,6 +717,8 @@ export const externalActor = pgTable(
     avatarUrl: text('avatar_url'),
     actorId: text('actor_id').references(() => actor.id, { onDelete: 'set null' }),
     matchedBy: externalActorMatch('matched_by'),
+    /** When a human said not to sync this person; null when nobody has decided. */
+    ignoredAt: timestamp('ignored_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
       .notNull()

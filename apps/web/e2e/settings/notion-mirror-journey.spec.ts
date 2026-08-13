@@ -74,4 +74,26 @@ test('a person can reach Notion from Connections and create the databases', asyn
   await expect(decisions).toHaveCount(3);
   await decisions.first().click();
   await expect(decisions).toHaveCount(2, { timeout: TIMEOUTS.ui });
+
+  // "Don't sync them" is a decision like any other, and has to stick like one. This is the exact
+  // path that used to refresh the list and put the person straight back: the skip wrote a state
+  // indistinguishable from never having decided, so the count never fell.
+  await page.getByRole('combobox').first().selectOption('skip');
+  await decisions.first().click();
+  await expect(decisions).toHaveCount(1, { timeout: TIMEOUTS.ui });
+
+  // They are not gone, just decided — and the decision can be taken back.
+  const undo = page.getByRole('button', { name: 'Sort out' });
+  await expect(undo).toHaveCount(1);
+  await undo.first().click();
+  await expect(decisions).toHaveCount(2, { timeout: TIMEOUTS.ui });
+
+  // Back on the hub, the mirror can actually be run. Before this there was no affordance at all
+  // once the databases existed, which is what left a stalled sync with no way forward.
+  await page.goBack();
+  const syncNow = page.getByRole('button', { name: 'Sync now' });
+  await expect(syncNow).toBeVisible({ timeout: TIMEOUTS.pageReady });
+  await syncNow.click();
+  await expect(syncNow).toBeEnabled({ timeout: TIMEOUTS.sweep });
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });

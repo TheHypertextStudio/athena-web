@@ -73,6 +73,16 @@ export const queryKeys = {
   integrationLists: (orgId: string, integrationId: string) =>
     ['org', orgId, 'integrations', integrationId, 'lists'] as const,
   integrationsDirectory: (orgId: string) => ['org', orgId, 'integrations-directory'] as const,
+  /**
+   * One integration's recent sync runs.
+   *
+   * @remarks
+   * The durable per-run history, which is the only place a *purpose*-specific outcome survives.
+   * The integration's own roll-up (`status`, `lastSyncedAt`) is written by whichever purpose ran
+   * last, so a surface that owns one purpose has to read the runs to know how its own is doing.
+   */
+  integrationRuns: (orgId: string, integrationId: string) =>
+    ['org', orgId, 'integrations', integrationId, 'runs'] as const,
   /** The Docket-designed Notion databases for one integration. */
   notionMirrorDatabases: (orgId: string, integrationId: string) =>
     ['org', orgId, 'integrations', integrationId, 'notion', 'databases'] as const,

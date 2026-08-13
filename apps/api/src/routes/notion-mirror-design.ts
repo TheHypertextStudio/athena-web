@@ -46,6 +46,7 @@ import {
   defaultColumnTitle,
   defaultDatabaseTitle,
   defaultPropertyMap,
+  personCompanionKey,
   provisionedKind,
 } from '@docket/integrations';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
@@ -180,6 +181,11 @@ export async function loadDesign(
 /**
  * The fields an entity can expose, with titles resolved through the org vocabulary.
  *
+ * @remarks
+ * Derived companion columns are excluded. They are not a choice — they exist because a person
+ * column was set to `notion_person`, and offering one on its own would let somebody add a native
+ * Notion person column with nothing feeding it.
+ *
  * @param entity - The entity kind.
  * @param skin - The org's vocabulary skin.
  * @returns the designer's field palette.
@@ -188,13 +194,29 @@ export function availableFields(
   entity: NotionMirrorEntity,
   skin: VocabularySkin | null,
 ): NotionMirrorFieldOut[] {
-  return MIRROR_ENTITY_SPECS[entity].fields.map((field) => ({
-    field: field.field,
-    label: defaultColumnTitle(entity, field.field, skin) ?? field.label,
-    kind: field.kind,
-    personValued: field.personValued === true,
-    required: field.required === true,
-  }));
+  return MIRROR_ENTITY_SPECS[entity].fields
+    .filter((field) => field.personCompanionOf === undefined)
+    .map((field) => ({
+      field: field.field,
+      label: defaultColumnTitle(entity, field.field, skin) ?? field.label,
+      kind: field.kind,
+      personValued: field.personValued === true,
+      required: field.required === true,
+    }));
+}
+
+/**
+ * The representation a column was last saved with.
+ *
+ * @param row - The stored design.
+ * @param field - The field key.
+ * @returns the stored representation, or undefined when the column is new.
+ */
+function previousRepresentation(
+  row: MirrorDatabaseRow,
+  field: string,
+): NotionColumnBinding['representation'] {
+  return row.propertyMap[field]?.representation;
 }
 
 /**
@@ -240,6 +262,9 @@ export async function applyDesignPatch(
     // into one property — the second silently replacing the first, and both Docket fields then
     // binding to the same property id. The designer lets titles be edited freely, so this is one
     // ordinary rename away; refuse it here rather than lose a column on provision.
+    //
+    // Derived companions are checked against this same set as they are generated below, so a user
+    // column that happens to be called "Assignee (Notion)" collides here rather than at provision.
     const seenTitles = new Map<string, string>();
     for (const column of patch.columns) {
       const key = column.title.trim().toLowerCase();
@@ -257,6 +282,24 @@ export async function applyDesignPatch(
     for (const column of patch.columns) {
       const field = spec.fields.find((f) => f.field === column.field);
       if (!field) throw new ConflictError(`Unknown column "${column.field}".`);
+      // Companions are derived below, from their parent's representation. Accepting one from the
+      // client would let a stale browser desync a column from the choice that produces it.
+      if (field.personCompanionOf !== undefined) continue;
+
+      const representation =
+        field.personValued === true
+          ? (column.representation ?? previousRepresentation(row, column.field) ?? 'text')
+          : undefined;
+      // Docket owns no page ids in a database it did not create, so there is nothing it could
+      // write into a relation pointing at one — matching names against a foreign table is the same
+      // ambiguity the pull path already refuses. Refused here rather than accepted and silently
+      // left blank, which is what happened before.
+      if (representation === 'existing_table') {
+        throw new ConflictError(
+          `Linking ${field.label} to a database you already keep isn’t available yet. Use a name, a Notion person, or Docket’s own People database.`,
+        );
+      }
+
       const previous = row.propertyMap[column.field];
       const binding: NotionColumnBinding = {
         field: column.field,
@@ -268,9 +311,7 @@ export async function applyDesignPatch(
         order: order++,
         // Carried over so a rename never re-binds: the id is the identity, the title is a label.
         ...(previous?.propertyId !== undefined ? { propertyId: previous.propertyId } : {}),
-        ...(field.personValued === true
-          ? { representation: column.representation ?? previous?.representation ?? 'text' }
-          : {}),
+        ...(representation !== undefined ? { representation } : {}),
         ...(column.relationDataSourceId !== undefined
           ? { relationDataSourceId: column.relationDataSourceId }
           : previous?.relationDataSourceId !== undefined
@@ -278,9 +319,34 @@ export async function applyDesignPatch(
             : {}),
       };
       // A person column rendered as a relation must resolve its target before provisioning; the
-      // designer supplies it for `existing_table`, and the provisioner fills it for the Docket
-      // People table, so an unresolved one here is simply left for provisioning to complete.
+      // provisioner fills it in for the Docket People table, so an unresolved one here is simply
+      // left for provisioning to complete.
       next[column.field] = binding;
+
+      // The native-Notion companion, added BESIDE the column rather than replacing it. Notion's
+      // people property cannot hold anyone outside the workspace, so substituting it would drop
+      // every person without a Notion account from the database entirely.
+      if (representation === 'notion_person') {
+        const companionField = personCompanionKey(column.field);
+        const companionPrevious = row.propertyMap[companionField];
+        const companionTitle = `${binding.title} (Notion)`;
+        const claimed = seenTitles.get(companionTitle.trim().toLowerCase());
+        if (claimed !== undefined) {
+          throw new ConflictError(
+            `Adding a Notion account column for ${binding.title} needs the name "${companionTitle}", which another column already uses.`,
+          );
+        }
+        seenTitles.set(companionTitle.trim().toLowerCase(), companionField);
+        next[companionField] = {
+          field: companionField,
+          title: companionTitle,
+          kind: 'people',
+          order: order++,
+          ...(companionPrevious?.propertyId !== undefined
+            ? { propertyId: companionPrevious.propertyId }
+            : {}),
+        };
+      }
     }
     update.propertyMap = next;
     // Bumped so the sync engine knows the shape in Notion is behind the design.

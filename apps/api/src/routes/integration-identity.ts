@@ -29,6 +29,7 @@ export function toExternalActorOut(row: ExternalActorRow): z.input<typeof Extern
     avatarUrl: row.avatarUrl,
     actorId: row.actorId,
     matchedBy: row.matchedBy,
+    ignoredAt: row.ignoredAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -58,11 +59,15 @@ export function toExternalActorOut(row: ExternalActorRow): z.input<typeof Extern
  *   - `matchedBy: 'manual'` rows are NEVER modified by email matching — neither
  *     re-matched nor unmatched — even if emails now disagree. A human's explicit link
  *     always wins.
+ *   - `ignoredAt` rows are NEVER modified by email matching either, for the same reason:
+ *     "don't sync them" is as explicit a human decision as "this is Sam", and one that a
+ *     matching email would otherwise silently overturn on the very next pass. `ignoredAt`
+ *     itself is absent from `set`, so the exclusion survives untouched by definition.
  *   - `matchedBy: 'email'` rows are re-evaluated every call: if the email no longer
  *     matches any active member it becomes unmatched (`actorId: null, matchedBy: null`);
  *     if it now matches a different member, it updates.
- *   - Unmatched rows (`matchedBy: null`, including rows not seen before) are (re)evaluated
- *     every call.
+ *   - Undecided rows (`matchedBy: null` and no `ignoredAt`, including rows not seen
+ *     before) are (re)evaluated every call.
  * - Provider users no longer present in `users` are left in place — never deleted, since
  *   task history may still reference them as an assignee. Inactive users (`active:
  *   false`) still upsert; they remain valid historical assignees. Duplicate `externalId`s
@@ -125,6 +130,12 @@ export async function syncExternalActors(
   // manual PATCH can never be clobbered by a read-then-write gap (there is no read).
   // Provider-sourced fields (email/displayName/avatarUrl) refresh unconditionally.
   // `.returning()` yields the POST-upsert row, so manual rows report their preserved match.
+  //
+  // Both immunity clauses live in one expression so they cannot drift apart: a row is left
+  // alone when a human linked it (`manual`) OR when a human excluded it (`ignored_at`).
+  // Note `null = 'manual'` is NULL in Postgres — falsy — which is exactly what lets an
+  // undecided row fall through to the fresh proposal.
+  const decidedByHuman = sql`${externalActor.matchedBy} = 'manual' or ${externalActor.ignoredAt} is not null`;
   const upserted = await db
     .insert(externalActor)
     .values([...valueByExternalId.values()])
@@ -134,8 +145,8 @@ export async function syncExternalActors(
         email: sql`excluded.email`,
         displayName: sql`excluded.display_name`,
         avatarUrl: sql`excluded.avatar_url`,
-        actorId: sql`case when ${externalActor.matchedBy} = 'manual' then ${externalActor.actorId} else excluded.actor_id end`,
-        matchedBy: sql`case when ${externalActor.matchedBy} = 'manual' then ${externalActor.matchedBy} else excluded.matched_by end`,
+        actorId: sql`case when ${decidedByHuman} then ${externalActor.actorId} else excluded.actor_id end`,
+        matchedBy: sql`case when ${decidedByHuman} then ${externalActor.matchedBy} else excluded.matched_by end`,
         updatedAt: new Date(),
       },
     })

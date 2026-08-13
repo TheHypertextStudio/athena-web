@@ -15,6 +15,7 @@
 import { actor, db, externalActor, integration } from '@docket/db';
 import type { MirrorParentPage } from '@docket/integrations';
 import {
+  ConnectorConfig,
   NotionMirrorDatabaseOut,
   SyncRunOut,
   NotionMirrorDesignOut,
@@ -301,6 +302,43 @@ Requires \`manage\`. Returns 409 when another run already holds the integration'
       return ok(c, SyncRunOut, toSyncRunOut(run));
     },
   )
+  .post(
+    '/sync',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Run the Notion mirror now',
+      capability: 'manage',
+      response: SyncRunOut,
+      description: `Run one full mirror pass against the container page already chosen: create any designed-but-missing database, read back Notion's edits, then project Docket's rows. The same pass the background sweep runs, on demand.
+
+Distinct from \`POST /provision\`, which *chooses* the container page and rewrites the connection's config. This one only runs, so it is the safe repeat action — and the only way to re-run the mirror after setup, which is what makes a stalled sync recoverable without reconnecting.
+
+Runs on the shared leased sync spine, so it returns a real {@link SyncRunOut} with the same durable history as every other sync. **A failed run is a 200** carrying \`status: 'failed'\` — the outcome is reported, never optimistically swallowed — so a client must read \`status\` rather than treat the response code as success.
+
+Requires \`manage\`. Returns 409 when another run already holds the integration's lease, and 409 when no container page has been chosen yet: that is a setup step, not a sync failure, and running anyway would record a failure against a healthy connection and notify its owner about it.`,
+    }),
+    zParam(mirrorParam),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const row = await assertNotionIntegration(orgId, id);
+
+      // Checked HERE rather than left to the pass. `runNotionMirrorSync` throws without a
+      // container page, and the spine turns any throw into a recorded failure: the connection
+      // is demoted to `error` and its owner gets an inbox notification. Doing that to a healthy
+      // connection because somebody pressed Sync before finishing setup would be a lie about
+      // the connection's health, on top of an unwarranted notification.
+      const config = ConnectorConfig.safeParse(row.config).data ?? {};
+      if (config.notionMirror?.containerPageId === undefined) {
+        throw new ConflictError('Choose a Notion page for Docket to build its databases under.');
+      }
+
+      const run = await runNotionMirrorSync(row, { actorId, trigger: 'manual' });
+      if (!run) throw new ConflictError('A sync is already running for this connection.');
+      return ok(c, SyncRunOut, toSyncRunOut(run));
+    },
+  )
   .get(
     '/people',
     capabilityGuard('manage'),
@@ -312,6 +350,8 @@ Requires \`manage\`. Returns 409 when another run already holds the integration'
       description: `Every Notion workspace member the sync engine has seen, with the Docket actor each is matched to. Reads the stored \`external_actor\` rows rather than calling Notion, so the people surface renders instantly and works while the connection is down; the rows are refreshed by the sync pass.
 
 \`actorId: null\` is an explicit, queryable unmatched state — never hidden and never quietly defaulted to somebody. An unmatched person's assignments cannot reach Docket, which is what the surface has to make obvious.
+
+\`ignoredAt\` separates the two populations that share \`actorId: null\`: a person nobody has decided about yet (\`ignoredAt: null\`) still needs an answer, while one somebody deliberately excluded does not and should stop being asked about. Read them apart rather than lumping them together, or the "needs a decision" count never reaches zero.
 
 Notion's own user list mixes integration bots in with people (a real workspace usually has several); those are filtered out at the provider edge, because offering an automation as an assignable teammate would be nonsense.`,
     }),
@@ -332,6 +372,7 @@ Notion's own user list mixes integration bots in with people (a real workspace u
           avatarUrl: row.avatarUrl,
           actorId: row.actorId,
           matchedBy: row.matchedBy,
+          ignoredAt: row.ignoredAt?.toISOString() ?? null,
         })),
       });
     },
@@ -350,7 +391,11 @@ Notion's own user list mixes integration bots in with people (a real workspace u
 
 \`match_existing\` links them to an actor you name and marks the mapping \`manual\`, which makes it immune to the email re-matching every sync performs. A human's explicit decision always outranks an automatic one.
 
-\`skip\` leaves the mapping unmatched on purpose. It stays visible rather than disappearing, because an unmatched person is a queryable state, not an absence.
+\`skip\` stamps \`ignoredAt\`. That timestamp is the whole point: leaving the row as plain \`actorId: null\` would record the decision as indistinguishable from never having made one, so the person would resurface on the next read and — because the email pass re-evaluates undecided rows — could be auto-matched anyway. An ignored row is immune to re-matching in exactly the way a \`manual\` one is. It stays visible rather than disappearing, because a deliberate exclusion is a queryable state, not an absence.
+
+\`unignore\` clears all three fields, returning the person to undecided. It undoes a match as readily as an exclusion, which keeps one reversal path instead of one per prior decision.
+
+Every non-\`skip\` action clears \`ignoredAt\`: deciding anything about somebody supersedes an earlier "don't sync them", and a stale exclusion left behind would keep the row immune to re-matching forever.
 
 Requires \`manage\`. A missing mapping 404s (\`Person not found\`); \`match_existing\` without a valid same-org \`actorId\` 404s (\`Actor not found\`).`,
     }),
@@ -407,8 +452,14 @@ Requires \`manage\`. A missing mapping 404s (\`Person not found\`); \`match_exis
 
       const updated = await db
         .update(externalActor)
-        // `manual` on any explicit decision, so the next sync's email pass never overrides it.
-        .set({ actorId, matchedBy: actorId === null ? null : 'manual' })
+        // `manual` on any explicit match, so the next sync's email pass never overrides it; and
+        // `ignoredAt` set only by `skip`, cleared by everything else — a decision about somebody
+        // supersedes an earlier decision to exclude them.
+        .set({
+          actorId,
+          matchedBy: actorId === null ? null : 'manual',
+          ignoredAt: body.action === 'skip' ? new Date() : null,
+        })
         .where(eq(externalActor.id, mapping.id))
         .returning();
       const next = updated[0];
@@ -422,6 +473,7 @@ Requires \`manage\`. A missing mapping 404s (\`Person not found\`); \`match_exis
         avatarUrl: next.avatarUrl,
         actorId: next.actorId,
         matchedBy: next.matchedBy,
+        ignoredAt: next.ignoredAt?.toISOString() ?? null,
       });
     },
   )

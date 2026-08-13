@@ -355,11 +355,91 @@ most workspaces is not most of the roster. So how a person appears is chosen per
   with no Notion account and no Docket account.
 - **Notion person** — native @-mentions and notifications, for the matched subset only.
 - **A People table Docket creates** — everyone gets a row, account or not.
-- **A table you already keep** — a relation to an existing directory.
+- **A table you already keep** — a relation to an existing directory. Not implemented: Docket owns
+  no page ids in a database it did not create, so it could only fill such a column by matching
+  display names, the same ambiguity §8.9 refuses for person pull-back. `applyDesignPatch` rejects
+  it with a 409 rather than accepting the choice and silently leaving the column blank.
 
-The projected People database keeps its native `people` column _separate_ from its title, rather
-than treating it as a representation of the same field: the title must hold every actor, the
-native column can only hold the matched subset, and both are wanted at once.
+**Notion person adds a column; it never replaces one.** Choosing it provisions the parent column as
+rich text _and_ a derived companion column (`<field>NotionPerson`, titled `<Title> (Notion)`) as the
+native `people` property. Substituting one for the other would delete the only column able to hold a
+person with no Notion account — precisely the population the choice exists to serve. Companions are
+generated from the parent on every save, never sent by the client, and never offered in the
+designer's field palette, so a stale browser cannot desync a column from the choice that produces
+it. Consequently `provisionedKind` never returns `people` from a _representation_: a `people`
+property is always a column of its own.
+
+The projected People database keeps its native `people` column (`notionUser`) _separate_ from its
+title for the same reason: the title must hold every actor, the native column can only hold the
+matched subset, and both are wanted at once.
+
+**Resolution, and known-empty versus unknown.** Loaders emit a person field as an actor _reference_;
+`resolveMirrorValues` renders it once the pass has loaded two maps — `actorId → Notion user`
+(matched rows only) and `actorId → People page id`. The distinction that matters:
+
+- No assignee at all resolves to an empty value, which _clears_ the Notion property. Correct: the
+  assignee really was removed.
+- A page id not known _yet_ omits the field entirely, so it lands in neither the payload nor the
+  content hash. Writing an empty value would be indistinguishable from the first case and would
+  confidently erase a cell somebody may have filled in by hand. The pass reports it as
+  `unresolvedPending` and marks itself incomplete so the sweep returns; the next pass sees a
+  different hash and issues exactly one write.
+- A matched-subset column with no Notion account for that actor is an honest empty and is reported
+  as `unresolvedPermanent`. It deliberately does **not** mark the pass incomplete, or one
+  account-less person would keep a workspace from ever recording a full sync.
+
+### 8.3.1 Identity has three states, not two
+
+An `external_actor` row is matched, undecided, or **deliberately excluded**:
+
+| `actorId` | `ignoredAt` | meaning                                              |
+| --------- | ----------- | ---------------------------------------------------- |
+| set       | null        | matched, by `email` or `manual` (see `matchedBy`)    |
+| null      | null        | undecided — nobody has said what this person maps to |
+| null      | set         | excluded — somebody chose "don't sync them"          |
+
+The third state needs its own column, and the reason is concrete: without it, recording a skip
+wrote `{actorId: null, matchedBy: null}` — byte-identical to the row's existing state. The person
+reappeared in the "needs a decision" list on the very next read, so pressing Apply looked like it
+did nothing and the surface could never be finished. Worse, `syncExternalActors` re-evaluates any
+row that is not `manual`, so a matching email would silently overturn the decision on the next
+pass. An ignored row is therefore immune to re-matching in exactly the way a `manual` one is, and
+`ignoredAt` is absent from the upsert's `set` clause so the exclusion survives by construction.
+
+Every non-`skip` decision clears `ignoredAt` — including the generic
+`PATCH …/external-actors/:externalActorId` — since deciding anything about somebody supersedes an
+earlier decision to exclude them, and a stale exclusion would keep the row immune forever.
+
+A timestamp rather than a new `external_actor_match` value, for two reasons. `matchedBy` answers
+_how `actorId` was resolved_ and is non-null iff `actorId` is; an `'ignored'` member would break
+that invariant for every reader. And adding a value to a Postgres enum and using it in the same
+transaction fails with 55P04 — the hazard `packages/db/src/migrate.ts` maintains an
+`ENUM_PREFLIGHT` list for. A nullable timestamp is a plain `ADD COLUMN` with neither problem.
+
+### 8.3.2 Running the mirror by hand
+
+`POST /v1/orgs/:orgId/integrations/:id/notion/sync` runs one pass against the container page
+already chosen. Distinct from `/provision`, which _chooses_ that page and rewrites the connection's
+config; this one only runs, so it is the safe repeat action — and, until it existed, there was no
+way to re-run the mirror after setup at all, which left a stalled sync recoverable only by
+reconnecting.
+
+It answers 409 when no container page has been chosen, deliberately **without** calling through:
+`runNotionMirrorSync` throws in that case, and the leased spine records any throw as a connector
+failure — demoting a healthy connection to `error` and notifying its owner about a setup step
+nobody had finished. A held lease is also 409. A _failed_ run is a 200 carrying
+`status: 'failed'`, so clients must read `status` rather than the response code.
+
+The shared `POST /:id/sync` additionally runs the mirror for a Notion connection that has one
+configured. Both directions are needed for "Sync" to mean what it says there: running only the task
+pull reported success having never touched the mirror. One response cannot carry two runs, so the
+body is the failed run if either failed, otherwise the mirror's — failure wins, because only the
+opposite error lets a broken sync look healthy. Both remain readable at `GET /:id/runs` by
+`purpose`.
+
+`sweepNotionMirror` reports a `stalled` count for connections that can never run as configured (no
+container page, or no owning actor to borrow credentials from). They used to be skipped in silence,
+which made a permanently stuck workspace indistinguishable from one with nothing due.
 
 ### 8.4 Provenance lives in a side table
 
@@ -444,7 +524,14 @@ being clobbered by a projection that then rediscovers its own write as a remote 
 Provisioning runs in two waves, because a Notion relation must name an existing data source: every
 database is created with its scalar columns, then each is patched to add relations once their
 targets exist. It skips anything already carrying a data source id, which makes it the repair path
-too.
+too. Wave two also runs for any design holding a column with no property id yet — otherwise a
+column _added_ to an already-provisioned database would exist in Docket's map and nowhere in
+Notion, and every value written to it would be silently dropped.
+
+Projection is ordered by `MIRROR_PROJECTION_ORDER`, which puts **`person` first**. A relation can
+only carry a page id that already exists, so every other entity's person columns depend on the
+People rows having been written. The order is explicit rather than incidental: the design query
+returns rows in whatever order Postgres chooses, which also made budget spend unpredictable.
 
 A shared write budget (400 writes at ~3/second) is spent across every entity so one large database
 cannot starve the rest. A pass that exhausts it reports what it actually wrote and sets
@@ -463,9 +550,14 @@ by the container in `local`/`test` mode exactly as `MockConnector` is.
 `readMirrorProperties` (`notion-mirror-values.ts`) matching by property id, the same rename-safety
 rule everything else in this file follows. Deliberately narrower than the full projection catalog:
 
-- **Person fields** (`assignee`/`lead`) are excluded. They project as a resolved display name, and
-  reversing free text into an actor id is ambiguous — two actors can share a name, a typo matches
-  nobody — which risks silently assigning the wrong person, worse than not pulling it.
+- **Person fields** (`assignee`/`lead`) are excluded — but no longer because the ids are ambiguous.
+  A `people` or `relation` value carries an unambiguous id that resolves through `external_actor`
+  or `notion_mirror_row`. Three other reasons stand: one Docket field is now backed by _two_ Notion
+  properties (the column and its companion), so an edit to each is a conflict class with no rule
+  yet; Notion's `people` is multi-valued while `task.assigneeId` is not, so a two-person cell has
+  no honest single reading; and assignment has event and notification side effects that
+  `applyPulledValues`' plain column write bypasses — the reason `task.state` already routes through
+  `setTaskState` instead.
 - **`docketUrl`** is derived from the entity's own id and was never stored, so there is nothing to
   read back.
 

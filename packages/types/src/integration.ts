@@ -576,6 +576,12 @@ export const ExternalActorOut = z
     matchedBy: ExternalActorMatchedBy.nullable().describe(
       'How `actorId` was resolved (`email`/`manual`), or null when unmatched.',
     ),
+    ignoredAt: z
+      .string()
+      .nullable()
+      .describe(
+        'ISO-8601 timestamp somebody deliberately excluded this provider user from matching, or null. Distinguishes a decided exclusion from an undecided row — both have `actorId: null` — and, like a `manual` link, an ignored row is never re-matched by email. Linking or unlinking via `PATCH …/external-actors/:externalActorId` clears it.',
+      ),
     createdAt: z.string().describe('ISO-8601 timestamp the mapping row was first created.'),
     updatedAt: z
       .string()
@@ -595,11 +601,15 @@ export type ExternalActorOut = z.infer<typeof ExternalActorOut>;
  * `actorId` is a required key (never omitted) so the intent is always explicit: a string
  * links (and marks `matchedBy: 'manual'`, immune to future email re-matching), `null` unlinks
  * (and clears `matchedBy` too, so a later sync may re-match it by email).
+ *
+ * Either way `ignoredAt` is cleared: touching a mapping at all is a decision that supersedes an
+ * earlier "don't sync them", and leaving the exclusion behind would keep the row immune to the
+ * re-matching this route's own contract promises.
  */
 export const ExternalActorPatch = z
   .object({
     actorId: ActorId.nullable().describe(
-      "Set to a Docket Actor id to link manually — the actor MUST belong to the caller's org (404 `Actor not found` otherwise); the row is marked `matchedBy: 'manual'` and survives future email re-syncs untouched. Set to `null` to unlink — this also clears `matchedBy`, so the next email sync may re-match the row.",
+      "Set to a Docket Actor id to link manually — the actor MUST belong to the caller's org (404 `Actor not found` otherwise); the row is marked `matchedBy: 'manual'` and survives future email re-syncs untouched. Set to `null` to unlink — this also clears `matchedBy`, so the next email sync may re-match the row. Both clear `ignoredAt`.",
     ),
   })
   .meta({

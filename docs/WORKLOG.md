@@ -7,6 +7,74 @@
 
 ## Active Tasks
 
+### [NOTION-004] "Don't sync them" does something, and a stalled sync says so
+
+- **Status**: REVIEW
+- **Started**: 2026-08-12
+- **Priority**: P1
+- **Description**: On `Settings → Connections → Notion → People`, choosing "Don't sync them" and
+  pressing Apply refreshed the list and left the person exactly where they were. Reported
+  alongside "Notion sync still fails / sync is stalled".
+- **Approach**: Four distinct defects compounded into one experience; all four are fixed.
+
+  **The skip wrote nothing.** `skip` set `{actorId: null, matchedBy: null}` — byte-identical to
+  the row's existing state, because `external_actor` had no column able to hold a decision to
+  exclude somebody. The panel bucketed on `actorId` alone, so the person returned the instant the
+  refetch landed. And since `syncExternalActors` re-evaluates any row that is not `manual`, a
+  matching email would have overturned the decision on the next pass anyway. Added
+  `external_actor.ignored_at`, a third identity state, honored in the upsert's `ON CONFLICT`
+  guards; added `unignore` so the decision is reversible. A timestamp rather than an enum value:
+  `matchedBy` is non-null iff `actorId` is, and `ALTER TYPE … ADD VALUE` + use in one transaction
+  is the 55P04 hazard `migrate.ts` keeps a preflight list for.
+
+  **A failing sync rendered as "Connected".** The hub hardcoded the green chip and read no health
+  field at all, while a failed run demotes the integration to `error` server-side. The chip now
+  derives from `integration.status`, with a persistent alert beneath it. Mirror-specific health
+  comes from `GET /:id/runs` filtered to `purpose === 'notion_mirror'` — the integration's roll-up
+  is written by whichever purpose ran last, so a successful task pull would otherwise vouch for a
+  mirror that never ran. No web code names `lastError`; the policy test bans the identifier, and
+  the copy is application-owned per state.
+
+  **Nothing could run the mirror.** The only web caller of `runNotionMirrorSync` was `/provision`,
+  whose card renders only when nothing is provisioned; the connections-row "Sync" button ran the
+  linked-database spine and reported success having never touched the mirror. Added
+  `POST …/notion/sync` (409 without a container page, checked _before_ calling through — the pass
+  throws there, and the spine would record that as a connector failure and notify the owner) and a
+  "Sync now" affordance. The shared `/:id/sync` now drives both, reporting the failed run when
+  either fails. `sweepNotionMirror` reports a `stalled` count instead of skipping stuck
+  connections in silence.
+
+  **Matching people changed nothing in Notion.** No code produced a `people` or `relation` value:
+  every person field projected as plain text, and the People database's `notionUser` column was
+  provisioned and left permanently empty. Loaders now emit actor _references_;
+  `resolveMirrorValues` renders them per representation. Three corrections fell out of it —
+  `notion_person` provisioned `people` _instead of_ the text column, deleting the only column able
+  to hold a person with no Notion account (it is now a derived companion column added beside it);
+  `docket_people_table` resolved no relation target, so the column was dropped and never created in
+  Notion at all; and wave-two provisioning skipped any design without a relation, so a column added
+  later never reached Notion. `existing_table` is now refused rather than silently doing nothing.
+  Projection is ordered `person`-first, and an unresolved page id omits the field rather than
+  writing `[]`, which would clear a cell.
+
+- **Files Changed**: `packages/db/src/schema/crosscutting.ts`,
+  `drizzle/0082_external_actor_ignored.sql`, `drizzle/0083_notion_person_rebind.sql`,
+  `apps/api/src/routes/integration-identity.ts`, `notion-mirror.ts`, `notion-mirror-design.ts`,
+  `notion-mirror-entities.ts`, `notion-mirror-reconcile.ts`, `integrations.ts`,
+  `packages/integrations/src/notion-mirror-values.ts`, `notion-mirror-schema.ts`,
+  `packages/types/src/{integration,notion-mirror}.ts`,
+  `apps/web/src/components/settings/{integration-status.ts,integration-provider-card.tsx}`,
+  `.../notion/{notion-mirror-panel,notion-people-panel}.tsx`, `notion-copy.ts`,
+  `use-notion-mirror-controller.ts`, `packages/ui/src/icons/index.ts`,
+  `docs/engineering/specs/notion-sync.md`, plus tests.
+- **Learnings**: The bug was not in the code that ran — every request succeeded. It was that two
+  genuinely different situations shared one representation, so the surface could not tell a
+  question from its answer. The general lesson: when a decision is recorded as the absence of
+  something, it is not recorded. Second, the type system can enforce this class of fix — widening
+  `MirrorEntityRecord.values` to a _source_ union made every projection path that skipped
+  resolution a compile error, which is how all four call sites were found rather than three.
+  Third, `apps/web/tests/.../notion-people-panel.test.tsx` did not exist, which is precisely how a
+  no-op button shipped.
+
 ### [PERF-001] Creating something stops feeling like waiting for something
 
 - **Status**: REVIEW

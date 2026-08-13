@@ -13,6 +13,7 @@ import type * as DbModule from '@docket/db';
 import {
   orderedColumns,
   projectRow,
+  resolveMirrorValues,
   type MirrorChange,
   type MirrorDatabaseSpec,
   type MirrorExternalPerson,
@@ -35,6 +36,18 @@ import {
   type MirrorContext,
 } from '../../src/routes/notion-mirror-reconcile';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+
+/**
+ * A workspace where nobody is matched and no People rows exist yet.
+ *
+ * @remarks
+ * The default for cases that are not about person representation: with both maps empty, every
+ * person column resolves the same way it did before representations existed — a display name.
+ */
+const NO_PEOPLE = {
+  notionUserByActor: new Map<string, string>(),
+  personPageByActor: new Map<string, string>(),
+};
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -231,9 +244,18 @@ describe('Notion mirror reconciliation', () => {
       .insert(schema.task)
       .values({ organizationId: orgId, teamId, title: 'Second', state: 'backlog' });
 
-    expect(await projectEntity(ctx, design, 1)).toMatchObject({ written: 1, complete: false });
-    expect(await projectEntity(ctx, design, 10)).toMatchObject({ written: 1, complete: true });
-    expect(await projectEntity(ctx, design, 10)).toMatchObject({ written: 0, complete: true });
+    expect(await projectEntity(ctx, design, 1, NO_PEOPLE)).toMatchObject({
+      written: 1,
+      complete: false,
+    });
+    expect(await projectEntity(ctx, design, 10, NO_PEOPLE)).toMatchObject({
+      written: 1,
+      complete: true,
+    });
+    expect(await projectEntity(ctx, design, 10, NO_PEOPLE)).toMatchObject({
+      written: 0,
+      complete: true,
+    });
 
     await db
       .update(schema.task)
@@ -248,14 +270,21 @@ describe('Notion mirror reconciliation', () => {
           eq(schema.notionMirrorRow.entityId, first.id),
         ),
       );
-    expect(await projectEntity(ctx, design, 10)).toMatchObject({ written: 1, complete: true });
+    expect(await projectEntity(ctx, design, 10, NO_PEOPLE)).toMatchObject({
+      written: 1,
+      complete: true,
+    });
     expect(mirror.writes.some((write) => write.kind === 'create')).toBe(true);
     expect(mirror.writes.some((write) => write.kind === 'update')).toBe(true);
 
-    expect(await projectEntity(ctx, { ...design, externalDataSourceId: null }, 10)).toEqual({
+    expect(
+      await projectEntity(ctx, { ...design, externalDataSourceId: null }, 10, NO_PEOPLE),
+    ).toEqual({
       written: 0,
       conflicts: 0,
       complete: true,
+      unresolvedPending: 0,
+      unresolvedPermanent: 0,
     });
     const mirrored = await db
       .select()
@@ -285,7 +314,7 @@ describe('Notion mirror reconciliation', () => {
     );
     mirror.omitWriteResults = true;
 
-    expect(await projectEntity(ctx, design, 10)).toMatchObject({ written: 1 });
+    expect(await projectEntity(ctx, design, 10, NO_PEOPLE)).toMatchObject({ written: 1 });
     expect(
       await db
         .select()
@@ -301,7 +330,7 @@ describe('Notion mirror reconciliation', () => {
       externalPageId: 'page-no-result',
       contentHash: 'stale',
     });
-    expect(await projectEntity(ctx, design, 10)).toMatchObject({ written: 1 });
+    expect(await projectEntity(ctx, design, 10, NO_PEOPLE)).toMatchObject({ written: 1 });
   });
 
   it('adopts, pulls, records contested edits, and trashes archived rows in one pass', async () => {
@@ -374,7 +403,8 @@ describe('Notion mirror reconciliation', () => {
     const propertiesFor = (entityId: string) => {
       const record = records.find((candidate) => candidate.entityId === entityId);
       if (!record) throw new Error(`missing record ${entityId}`);
-      return projectRow(bindings, record.values).properties;
+      return projectRow(bindings, resolveMirrorValues(bindings, record.values, NO_PEOPLE).values)
+        .properties;
     };
     mirror.changes = [
       {
@@ -411,10 +441,12 @@ describe('Notion mirror reconciliation', () => {
     ];
     mirror.omitWriteResults = true;
 
-    expect(await pullBackEntity(ctx, design, 10)).toEqual({
+    expect(await pullBackEntity(ctx, design, 10, NO_PEOPLE)).toEqual({
       written: 4,
       conflicts: 1,
       complete: true,
+      unresolvedPending: 0,
+      unresolvedPermanent: 0,
     });
     expect(mirror.writes.some((write) => write.kind === 'update')).toBe(true);
     expect(mirror.writes.some((write) => write.kind === 'delete')).toBe(true);
@@ -471,13 +503,23 @@ describe('Notion mirror reconciliation', () => {
       },
     ];
 
-    expect(await pullBackEntity(ctx, design, 1)).toMatchObject({ written: 1, complete: true });
+    expect(await pullBackEntity(ctx, design, 1, NO_PEOPLE)).toMatchObject({
+      written: 1,
+      complete: true,
+    });
     expect(mirror.writes.at(-1)?.kind).toBe('create');
-    expect(await pullBackEntity(ctx, design, 0)).toMatchObject({ written: 0, complete: false });
-    expect(await pullBackEntity(ctx, { ...design, externalDataSourceId: null }, 10)).toEqual({
+    expect(await pullBackEntity(ctx, design, 0, NO_PEOPLE)).toMatchObject({
+      written: 0,
+      complete: false,
+    });
+    expect(
+      await pullBackEntity(ctx, { ...design, externalDataSourceId: null }, 10, NO_PEOPLE),
+    ).toEqual({
       written: 0,
       conflicts: 0,
       complete: true,
+      unresolvedPending: 0,
+      unresolvedPermanent: 0,
     });
   });
 
@@ -553,12 +595,160 @@ describe('Notion mirror reconciliation', () => {
       },
     ];
 
-    expect(await pullBackEntity(ctx, design, 10)).toEqual({
+    expect(await pullBackEntity(ctx, design, 10, NO_PEOPLE)).toEqual({
       written: 0,
       conflicts: 0,
       complete: true,
+      unresolvedPending: 0,
+      unresolvedPermanent: 0,
     });
     expect(mirror.writes).toHaveLength(0);
+  });
+
+  it('provisions a Docket People relation at the People database, not at nothing', async () => {
+    // Person-valued fields carry no `relationEntity` — they are not catalog relations — so this
+    // target used to resolve to undefined, the column was dropped from the spec, and the
+    // representation was selectable while creating nothing in Notion at all.
+    const { integration, designs, mirror, ctx } = await seedMirror();
+    const taskDesign = findDesign(designs, 'task');
+    await db
+      .update(schema.notionMirrorDatabase)
+      .set({ enabled: false })
+      .where(eq(schema.notionMirrorDatabase.integrationId, integration.id));
+    await db
+      .update(schema.notionMirrorDatabase)
+      .set({ enabled: true })
+      .where(eq(schema.notionMirrorDatabase.id, findDesign(designs, 'person').id));
+    await db
+      .update(schema.notionMirrorDatabase)
+      .set({
+        enabled: true,
+        propertyMap: {
+          ...taskDesign.propertyMap,
+          assignee: {
+            ...taskDesign.propertyMap['assignee']!,
+            representation: 'docket_people_table',
+          },
+        },
+      })
+      .where(eq(schema.notionMirrorDatabase.id, taskDesign.id));
+
+    await provisionMirror(ctx, 'parent-1');
+
+    const assigneeSpec = mirror.schemaUpdates
+      .flatMap((spec) => spec.columns)
+      .find((column) => column.field === 'assignee');
+    expect(assigneeSpec).toMatchObject({ kind: 'relation' });
+    expect(assigneeSpec?.relationDataSourceId).toEqual(expect.any(String));
+  });
+
+  it('writes People before the rows that point at it, and omits an id it does not have yet', async () => {
+    const { orgId, teamId, integration, designs, mirror, ctx } = await seedMirror();
+    const taskDesign = findDesign(designs, 'task');
+    await db
+      .update(schema.notionMirrorDatabase)
+      .set({ enabled: false })
+      .where(eq(schema.notionMirrorDatabase.integrationId, integration.id));
+    await db
+      .update(schema.notionMirrorDatabase)
+      .set({ enabled: true })
+      .where(eq(schema.notionMirrorDatabase.id, findDesign(designs, 'person').id));
+    await db
+      .update(schema.notionMirrorDatabase)
+      .set({
+        enabled: true,
+        propertyMap: {
+          ...taskDesign.propertyMap,
+          assignee: {
+            ...taskDesign.propertyMap['assignee']!,
+            representation: 'docket_people_table',
+          },
+        },
+      })
+      .where(eq(schema.notionMirrorDatabase.id, taskDesign.id));
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      teamId,
+      title: 'Assigned work',
+      state: 'backlog',
+      assigneeId: ctx.actorId,
+    });
+
+    await runNotionMirrorSync(integration, { actorId: ctx.actorId, trigger: 'manual' });
+
+    // Person rows are written first, so by the time the task is projected its assignee's page id
+    // already exists. Sorting the pass by entity is what guarantees this, rather than the select's
+    // row order — which is whatever Postgres happens to return.
+    const createdRows = await db
+      .select({
+        entityType: schema.notionMirrorRow.entityType,
+        entityId: schema.notionMirrorRow.entityId,
+        externalPageId: schema.notionMirrorRow.externalPageId,
+      })
+      .from(schema.notionMirrorRow)
+      .where(eq(schema.notionMirrorRow.integrationId, integration.id));
+    const personRow = createdRows.find((row) => row.entityType === 'person');
+    expect(personRow).toBeDefined();
+    expect(createdRows.map((row) => row.entityType)).toContain('task');
+
+    // Re-projecting now writes the assignee as a real relation to that People page. Driven
+    // through `projectEntity` because `runNotionMirrorSync` builds its own provider from the
+    // container, so the recording mirror above never sees its writes.
+    const refreshedTask = one(
+      await db
+        .select()
+        .from(schema.notionMirrorDatabase)
+        .where(eq(schema.notionMirrorDatabase.id, taskDesign.id)),
+    );
+    await db.delete(schema.notionMirrorRow).where(eq(schema.notionMirrorRow.entityType, 'task'));
+    await projectEntity(ctx, refreshedTask, 10, {
+      notionUserByActor: new Map(),
+      personPageByActor: new Map([[ctx.actorId, personRow!.externalPageId]]),
+    });
+
+    const written = mirror.writes.find((op) => op.kind === 'create');
+    expect(JSON.stringify(written?.properties)).toContain(personRow!.externalPageId);
+  });
+
+  it('leaves a relation out entirely when the People row does not exist yet', async () => {
+    // Not `[]` — an empty relation CLEARS the Notion property, which for "not written yet" would
+    // erase a cell rather than defer it. The omitted value also stays out of the content hash, so
+    // the pass that can resolve it sees a change and writes exactly once.
+    const { orgId, teamId, designs, mirror, ctx } = await seedMirror();
+    const taskDesign = findDesign(designs, 'task');
+    await db
+      .update(schema.notionMirrorDatabase)
+      .set({
+        externalDataSourceId: 'ds-task',
+        propertyMap: {
+          ...taskDesign.propertyMap,
+          assignee: {
+            ...taskDesign.propertyMap['assignee']!,
+            representation: 'docket_people_table',
+            propertyId: 'prop-assignee',
+          },
+        },
+      })
+      .where(eq(schema.notionMirrorDatabase.id, taskDesign.id));
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      teamId,
+      title: 'Assigned work',
+      state: 'backlog',
+      assigneeId: ctx.actorId,
+    });
+    const refreshed = one(
+      await db
+        .select()
+        .from(schema.notionMirrorDatabase)
+        .where(eq(schema.notionMirrorDatabase.id, taskDesign.id)),
+    );
+
+    const pass = await projectEntity(ctx, refreshed, 10, NO_PEOPLE);
+
+    expect(pass).toMatchObject({ written: 1, unresolvedPending: 1, complete: false });
+    const created = mirror.writes.find((op) => op.kind === 'create');
+    expect(created?.properties).not.toHaveProperty('prop-assignee');
   });
 
   it('runs the leased mirror honestly for configured and incomplete setups', async () => {
@@ -679,10 +869,15 @@ describe('Notion mirror reconciliation', () => {
       },
     ]);
 
+    // `stalled` covers the three that can never run as configured — no owning actor, and the two
+    // with no container page (absent and malformed config). They used to be skipped in silence,
+    // which made a permanently stuck workspace look exactly like one with nothing due. The
+    // zero-cadence row is NOT stalled: that is a deliberate manual-only connection.
     expect(await sweepNotionMirror(new Date('2030-01-01T00:00:00.000Z'))).toEqual({
       eligible: 2,
       ran: 1,
       failed: 0,
+      stalled: 3,
     });
   });
 });

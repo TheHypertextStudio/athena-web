@@ -300,6 +300,7 @@ describe('Notion mirror reconciliation', () => {
       complete: true,
       unresolvedPending: 0,
       unresolvedPermanent: 0,
+      pageByEntityId: expect.any(Map),
     });
     const mirrored = await db
       .select()
@@ -462,6 +463,7 @@ describe('Notion mirror reconciliation', () => {
       complete: true,
       unresolvedPending: 0,
       unresolvedPermanent: 0,
+      pageByEntityId: expect.any(Map),
     });
     expect(mirror.writes.some((write) => write.kind === 'update')).toBe(true);
     expect(mirror.writes.some((write) => write.kind === 'delete')).toBe(true);
@@ -535,6 +537,7 @@ describe('Notion mirror reconciliation', () => {
       complete: true,
       unresolvedPending: 0,
       unresolvedPermanent: 0,
+      pageByEntityId: expect.any(Map),
     });
   });
 
@@ -616,6 +619,7 @@ describe('Notion mirror reconciliation', () => {
       complete: true,
       unresolvedPending: 0,
       unresolvedPermanent: 0,
+      pageByEntityId: expect.any(Map),
     });
     expect(mirror.writes).toHaveLength(0);
   });

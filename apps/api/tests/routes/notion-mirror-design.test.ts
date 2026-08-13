@@ -243,6 +243,62 @@ describe('Notion mirror designs', () => {
     expect(withoutPreviousChoices.propertyMap['project']?.relationDataSourceId).toBeUndefined();
   });
 
+  it('survives the designer echoing its own companion back', async () => {
+    // The designer seeds its column list from the whole stored property map, companion included,
+    // so the SECOND save of a `notion_person` column resubmits it. Registering that echo in the
+    // duplicate-title check made the regenerated companion collide with itself, and every save
+    // after the first 409'd — the table could never be edited again.
+    const { orgId, humanActorId, integration } = await seedDesigner();
+    const seeded = (await ensureDesigns(orgId, integration.id, humanActorId)).find(
+      (d) => d.entityType === 'task',
+    );
+    if (!seeded) throw new Error('task design was not seeded');
+
+    const first = await applyDesignPatch(seeded, {
+      columns: [
+        { field: 'title', title: 'Name' },
+        { field: 'assignee', title: 'Assignee', representation: 'notion_person' },
+      ],
+    });
+    expect(first.propertyMap['assigneeNotionPerson']).toMatchObject({
+      title: 'Assignee (Notion)',
+      kind: 'people',
+    });
+
+    // Exactly what `columnsOf` in the designer produces from that map.
+    const echoed = Object.values(first.propertyMap)
+      .sort((a, b) => a.order - b.order)
+      .map((binding) => ({
+        field: binding.field,
+        title: binding.title,
+        ...(binding.representation !== undefined ? { representation: binding.representation } : {}),
+      }));
+
+    const second = await applyDesignPatch(first, { columns: echoed });
+    expect(second.propertyMap['assigneeNotionPerson']).toMatchObject({
+      title: 'Assignee (Notion)',
+    });
+    // Regenerated from the parent, never accepted from the client, so it lands beside it again.
+    expect(second.propertyMap['assignee']?.order).toBe(1);
+    expect(second.propertyMap['assigneeNotionPerson']?.order).toBe(2);
+  });
+
+  it('still refuses a real duplicate title', async () => {
+    const { orgId, humanActorId, integration } = await seedDesigner();
+    const seeded = (await ensureDesigns(orgId, integration.id, humanActorId)).find(
+      (d) => d.entityType === 'task',
+    );
+    if (!seeded) throw new Error('task design was not seeded');
+    await expect(
+      applyDesignPatch(seeded, {
+        columns: [
+          { field: 'title', title: 'Same' },
+          { field: 'assignee', title: 'Same' },
+        ],
+      }),
+    ).rejects.toThrow();
+  });
+
   it('describes person-valued and required fields explicitly', () => {
     const fields = availableFields('task', null);
     expect(fields.find((field) => field.field === 'title')).toMatchObject({ required: true });

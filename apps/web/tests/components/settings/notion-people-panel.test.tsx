@@ -9,7 +9,7 @@
  *
  * The cases here therefore pin the bucketing itself, not just that the request goes out.
  */
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -143,8 +143,11 @@ describe('NotionPeoplePanel — deciding about a person', () => {
     peopleGet.mockResolvedValue(okResponse({ items: [person({ actorId: 'act_1' })] }));
     renderPanel();
 
-    // Rendering at all proves the query resolved; neither decision affordance should be present.
-    await screen.findByText(/have no Notion account/);
+    // The un-ignore control is the marker for the ignored group and the select for the undecided
+    // one; a matched person belongs to neither, so both stay absent once the panel has rendered.
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    });
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: UNIGNORE_ACTION })).not.toBeInTheDocument();
   });
@@ -157,7 +160,8 @@ describe('NotionPeoplePanel — deciding about a person', () => {
     );
     renderPanel();
 
-    await screen.findByRole('button', { name: UNIGNORE_ACTION });
-    expect(screen.queryByText(/No Notion people yet/)).not.toBeInTheDocument();
+    // The empty state renders none of the group affordances, so the presence of the un-ignore
+    // control is itself the proof the panel did not take that branch.
+    expect(await screen.findByRole('button', { name: UNIGNORE_ACTION })).toBeInTheDocument();
   });
 });

@@ -103,6 +103,15 @@ export interface MirrorPassResult {
    * which creates pages for adopted rows but is not the authority on what this entity projects.
    */
   readonly pageByEntityId?: ReadonlyMap<string, string>;
+  /**
+   * Whether every row of this entity was written, regardless of what its references resolved to.
+   *
+   * @remarks
+   * The signal `settled` is built from. Distinct from {@link complete}, which is additionally
+   * false when a reference is still pending — a fact about OTHER entities that says nothing about
+   * whether this one's page set is final.
+   */
+  readonly wroteEveryRow?: boolean;
 }
 
 /** Everything a pass needs to reach Notion and the database. */
@@ -115,13 +124,22 @@ export interface MirrorContext {
   readonly now: Date;
 }
 
-/** A pass that had nothing to do. */
+/**
+ * A pass that had nothing to do.
+ *
+ * @remarks
+ * `pageByEntityId` is present and empty rather than absent, and `settled` follows from `complete`
+ * being true. An unprovisioned design projects nothing and will project nothing later in this
+ * pass either, so references to it are final — leaving it unsettled instead would classify them
+ * as retryable and withhold `stampFullSync` on this sweep and every one after it.
+ */
 const EMPTY_PASS: MirrorPassResult = {
   written: 0,
   conflicts: 0,
   complete: true,
   unresolvedPending: 0,
   unresolvedPermanent: 0,
+  pageByEntityId: new Map(),
 };
 
 /** Sleep between writes so a burst does not trip Notion's limiter. */
@@ -420,12 +438,17 @@ export async function projectEntity(
   for (const [entityId, row] of mirrors) pageByEntityId.set(entityId, row.externalPageId);
 
   let written = 0;
-  let complete = true;
+  // Budget exhaustion ONLY. Kept apart from the unresolved tallies because the two answer
+  // different questions: this one says whether every row of this entity got a page, which is what
+  // decides if a missing page elsewhere is final. Folding a deferred reference into it would let
+  // one back edge — `project.initiatives`, say — make `project` look unsettled to `milestone`,
+  // which would then defer an archived project's page for ever instead of clearing it.
+  let wroteEveryRow = true;
   let unresolvedPending = 0;
   let unresolvedPermanent = 0;
   for (const record of records) {
     if (written >= budget) {
-      complete = false;
+      wroteEveryRow = false;
       break;
     }
     const existing = mirrors.get(record.entityId);
@@ -501,10 +524,12 @@ export async function projectEntity(
     // A pending reference means a row this pass depends on has not been written yet, so the
     // projection is genuinely unfinished and the sweep must return. Permanent ones must not
     // count, or one account-less person would keep the workspace from ever recording a full sync.
-    complete: complete && unresolvedPending === 0,
+    complete: wroteEveryRow && unresolvedPending === 0,
     unresolvedPending,
     unresolvedPermanent,
     pageByEntityId,
+    // Deliberately NOT `complete`: see `wroteEveryRow`.
+    wroteEveryRow,
   };
 }
 
@@ -535,6 +560,15 @@ export async function pullBackEntity(
   const since = design.lastPulledAt?.toISOString();
   const changes = await ctx.mirror.queryChanges(dataSourceId, since);
   const mirrors = await loadMirrorRowsByPage(ctx.integrationId, design.entityType);
+
+  // Every page this entity has after the pull, so the projection loop can take it directly rather
+  // than re-reading the whole mirror table. Seeded from what already existed and grown by the
+  // adoptions below, which are the only thing a pull adds.
+  const adoptedPages = new Map<string, string>();
+  for (const row of mirrors.values()) adoptedPages.set(row.entityId, row.externalPageId);
+
+  // Read through a lazy, invalidate-on-write view rather than reloading per row — see below.
+  const records = recordLookup(ctx.orgId, ctx.integrationId, design.entityType);
   const bindings = orderedColumns(design.propertyMap);
 
   let written = 0;
@@ -568,12 +602,9 @@ export async function pullBackEntity(
         values,
       );
       if (entityId !== undefined) {
-        const record = await loadOneEntity(
-          ctx.orgId,
-          ctx.integrationId,
-          design.entityType,
-          entityId,
-        );
+        // Just created, so anything already loaded predates it.
+        records.invalidate();
+        const record = await records.get(entityId);
         const contentHash = record === undefined ? '' : projectedHash(bindings, record, refs);
         await db.insert(notionMirrorRow).values({
           organizationId: ctx.orgId,
@@ -585,6 +616,7 @@ export async function pullBackEntity(
           lastPushedAt: null,
           contentHash,
         });
+        adoptedPages.set(entityId, change.externalPageId);
         written += 1;
       }
       continue;
@@ -609,12 +641,9 @@ export async function pullBackEntity(
         // projection pass would see it as "changed" against a hash that predates the pull, and push
         // straight back to Notion the same values just read from it — a real wasted write, not
         // merely a stale flag, since the projected payload really would differ from what is stored.
-        const record = await loadOneEntity(
-          ctx.orgId,
-          ctx.integrationId,
-          design.entityType,
-          local.entityId,
-        );
+        // `applyPulledValues` just changed this row, so the hash must come from its new values.
+        records.invalidate();
+        const record = await records.get(local.entityId);
         const contentHash = record === undefined ? null : projectedHash(bindings, record, refs);
         // No Notion call here — this is a local DB write, not a Notion write, so it is not paced
         // against the rate limit. It IS counted against the pass's write budget: the budget's real
@@ -660,12 +689,7 @@ export async function pullBackEntity(
     }
 
     if (action.kind === 'push' || action.kind === 'create') {
-      const record = await loadOneEntity(
-        ctx.orgId,
-        ctx.integrationId,
-        design.entityType,
-        local?.entityId,
-      );
+      const record = await records.get(local?.entityId);
       if (record === undefined) continue;
       const projected = projectRow(
         bindings,
@@ -691,6 +715,7 @@ export async function pullBackEntity(
             contentHash: projected.contentHash,
           })
           .where(eq(notionMirrorRow.id, local.mirrorRowId));
+        adoptedPages.set(local.entityId, result.externalPageId);
       }
       written += 1;
       await pace();
@@ -721,7 +746,14 @@ export async function pullBackEntity(
 
   // The pull path resolves references only to recompute content hashes, never to write a
   // relation property, so an unresolved one here changes nothing about what was read back.
-  return { written, conflicts, complete, unresolvedPending: 0, unresolvedPermanent: 0 };
+  return {
+    written,
+    conflicts,
+    complete,
+    unresolvedPending: 0,
+    unresolvedPermanent: 0,
+    pageByEntityId: adoptedPages,
+  };
 }
 
 /** A mirror row plus the id needed to update it. */
@@ -776,16 +808,56 @@ function toLocalRow(row: typeof notionMirrorRow.$inferSelect): LoadedMirrorRow {
   };
 }
 
-/** Load one entity's current values, for a push planned from the remote side. */
-async function loadOneEntity(
+/** Reads one entity's records, reloading only after something has changed them. */
+interface RecordLookup {
+  /** The record for `entityId`, or undefined when there is no id or no matching row. */
+  get: (entityId: string | undefined) => Promise<MirrorEntityRecord | undefined>;
+  /** Mark the set stale, after a write that changed what a record projects to. */
+  invalidate: () => void;
+}
+
+/**
+ * A per-pass, invalidate-on-write view of one entity's projectable records.
+ *
+ * @remarks
+ * The pull used to call `loadEntityRows` per changed row and keep a single record of the result.
+ * That was already a full table scan per change; once the loaders grew their link-table queries it
+ * became several org-wide scans per change, so reconciling fifty rows issued hundreds of queries
+ * to read fifty records.
+ *
+ * Caching outright is not safe, though: `applyPulledValues` and `adoptEntity` both *change* the
+ * record whose hash is about to be computed, and a stale read there would store a hash describing
+ * the pre-write row — the very thing the pull branch recomputes the hash to avoid, since the next
+ * projection would see it as changed and push back the values it just read. So the set is loaded
+ * lazily and dropped whenever the pass writes. A pass that only pushes drift (the common one)
+ * loads once; a pass that mutates every row costs what it did before, and never reads stale.
+ *
+ * @param orgId - The tenant.
+ * @param integrationId - The Notion integration.
+ * @param entityType - Which entity to read.
+ * @returns the lookup.
+ */
+function recordLookup(
   orgId: string,
   integrationId: string,
   entityType: NotionMirrorEntity,
-  entityId: string | undefined,
-): Promise<MirrorEntityRecord | undefined> {
-  if (entityId === undefined) return undefined;
-  const records = await loadEntityRows(orgId, integrationId, entityType);
-  return records.find((record) => record.entityId === entityId);
+): RecordLookup {
+  let cached: Map<string, MirrorEntityRecord> | null = null;
+  return {
+    get: async (entityId) => {
+      if (entityId === undefined) return undefined;
+      cached ??= new Map(
+        (await loadEntityRows(orgId, integrationId, entityType)).map((record) => [
+          record.entityId,
+          record,
+        ]),
+      );
+      return cached.get(entityId);
+    },
+    invalidate: () => {
+      cached = null;
+    },
+  };
 }
 
 /** Re-exported so callers pace their own writes consistently. */
@@ -893,14 +965,14 @@ export async function runNotionMirrorSync(
       budget -= pulled.written;
       processed += pulled.written;
       if (!pulled.complete) complete = false;
+      // Adopting a row created in Notion mints a page the projection below can point at. Folded
+      // forward from what the pull already knows rather than re-reading every mirror row for
+      // every entity, which is a second full round of queries for a map we are holding.
+      // `settled` stays false: the pull is not the authority on what this entity projects.
+      if (pulled.pageByEntityId !== undefined) {
+        refs = withProjectedPages(refs, design.entityType, pulled.pageByEntityId, false);
+      }
     }
-
-    // Re-read after the pull loop: adopting a row created in Notion mints a page the projection
-    // below can point at. Cheap, and only once for the whole pass.
-    refs = await loadReferences(
-      ctx,
-      designs.map((design) => design.entityType),
-    );
 
     for (const design of designs) {
       if (budget <= 0) {
@@ -916,7 +988,12 @@ export async function runNotionMirrorSync(
       // id with no page after a complete run is one this entity does not project at all, which is
       // what lets the resolver call it permanent instead of retrying forever.
       if (pushed.pageByEntityId !== undefined) {
-        refs = withProjectedPages(refs, design.entityType, pushed.pageByEntityId, pushed.complete);
+        refs = withProjectedPages(
+          refs,
+          design.entityType,
+          pushed.pageByEntityId,
+          pushed.wroteEveryRow ?? pushed.complete,
+        );
       }
     }
 

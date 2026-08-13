@@ -432,10 +432,15 @@ nobody had finished. A held lease is also 409. A _failed_ run is a 200 carrying
 
 The shared `POST /:id/sync` additionally runs the mirror for a Notion connection that has one
 configured. Both directions are needed for "Sync" to mean what it says there: running only the task
-pull reported success having never touched the mirror. One response cannot carry two runs, so the
-body is the failed run if either failed, otherwise the mirror's — failure wins, because only the
-opposite error lets a broken sync look healthy. Both remain readable at `GET /:id/runs` by
-`purpose`.
+pull reported success having never touched the mirror.
+
+It is **started, not awaited**, and that is a deliberate asymmetry with `/notion/sync`. A mirror
+pass spends minutes pacing writes against Notion's rate limit; `/:id/sync` is the generic Sync
+button on every connector row, so awaiting it there would push a shared endpoint past gateway and
+browser timeouts and show the caller a network error for a run that was proceeding fine. The
+response therefore carries the `task_sync` run only and claims nothing about the mirror; the
+mirror's run is durable from the moment it starts and is read from `GET /:id/runs` by `purpose`.
+Use `POST /:id/notion/sync` when you need to wait for a pass and read its status directly.
 
 `sweepNotionMirror` reports a `stalled` count for connections that can never run as configured (no
 container page, or no owning actor to borrow credentials from). They used to be skipped in silence,
@@ -486,7 +491,18 @@ remainder _is_ written, because the missing ids are then known to be permanent.
 
 `projectEntity` returns the pages it now holds for its entity, and the pass folds them forward, so
 a relation written later in the same pass points at a page created earlier in it rather than
-waiting a whole sweep.
+waiting a whole sweep. The pull loop folds its adoptions the same way rather than re-reading every
+mirror row.
+
+`settled` is driven by whether the entity wrote every row, **not** by its `complete` flag: the
+latter is additionally false when one of this entity's own references is still pending, which is a
+fact about other entities and says nothing about whether this one's page set is final. Conflating
+them let a single back edge — `project.initiatives` — make `project` look unsettled to `milestone`,
+which would then defer an archived project's missing page for ever instead of clearing it.
+
+To-many groups are **sorted**. Postgres returns link rows in no guaranteed order while the content
+hash stringifies the relation array in order, so an unsorted group would hash differently between
+sweeps with nothing changed and rewrite every multi-link row on every pass.
 
 ### 8.4 Provenance lives in a side table
 

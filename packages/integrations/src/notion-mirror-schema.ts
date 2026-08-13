@@ -451,8 +451,13 @@ export function relationEdges(): MirrorRelationEdge[] {
 export function deferredRelationEdges(): MirrorRelationEdge[] {
   const position = new Map(MIRROR_PROJECTION_ORDER.map((entity, index) => [entity, index]));
   return relationEdges().filter((edge) => {
-    const from = position.get(edge.from) ?? 0;
-    const to = position.get(edge.to) ?? 0;
+    const from = position.get(edge.from);
+    const to = position.get(edge.to);
+    // An entity missing from the order is the misconfiguration this function exists to catch, so
+    // it counts as deferred rather than defaulting to position 0. Defaulting hid it twice over:
+    // the edge looked satisfied here, while `runNotionMirrorSync`'s `indexOf` sort read the same
+    // entity as -1 and projected it first — the two disagreeing with nothing to say so.
+    if (from === undefined || to === undefined) return true;
     return to > from;
   });
 }

@@ -34,7 +34,7 @@ import {
 import type { NotionMirrorEntity } from '@docket/types';
 import { personCompanionKey } from '@docket/integrations';
 import type { MirrorSourceValue, MirrorValue } from '@docket/integrations';
-import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { setTaskState } from '../lib/task-state';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -131,8 +131,14 @@ const refs = (entity: NotionMirrorEntity, ids: readonly string[]): MirrorSourceV
  * are narrow and org-scoped, and a projection pass already walks every row of the owning entity —
  * doing this per row would turn one pass into thousands of round trips.
  *
+ * Each group is **sorted**, and that is load-bearing rather than cosmetic: Postgres returns link
+ * rows in no guaranteed order, while the projected content hash stringifies the relation array in
+ * order. An unsorted group would hash differently from one sweep to the next with nothing changed,
+ * so every row with two or more links would be rewritten to Notion on every pass — burning the
+ * write budget on no-ops and starving the entities projected after it.
+ *
  * @param pairs - Rows of `{ ownerId, relatedId }`.
- * @returns the grouped map; an owner with no links is simply absent.
+ * @returns the grouped map, each group in a stable order; an owner with no links is simply absent.
  */
 function groupLinks(
   pairs: readonly { ownerId: string; relatedId: string }[],
@@ -143,6 +149,7 @@ function groupLinks(
     if (existing === undefined) grouped.set(pair.ownerId, [pair.relatedId]);
     else existing.push(pair.relatedId);
   }
+  for (const ids of grouped.values()) ids.sort();
   return grouped;
 }
 
@@ -313,14 +320,10 @@ export async function loadEntityRows(
         db
           .select({ ownerId: project.programId, relatedId: project.id })
           .from(project)
-          .where(
-            and(
-              eq(project.organizationId, orgId),
-              isNull(project.archivedAt),
-              isNotNull(project.programId),
-            ),
-          ),
+          .where(and(eq(project.organizationId, orgId), isNull(project.archivedAt))),
       ]);
+      // The narrowing IS the filter — no `isNotNull` predicate beside it, which would state the
+      // same rule twice and read as though a null could still reach the map.
       const projectsByProgram = groupLinks(
         ownedProjects.filter(
           (link): link is { ownerId: string; relatedId: string } => link.ownerId !== null,

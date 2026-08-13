@@ -26,6 +26,7 @@ import { serializableTx } from '../lib/serializable-tx';
 import { zJson, zParam } from '../lib/validate';
 import { buildInstallUrl, githubAppConfigFromEnv, signInstallState } from '../lib/github-app';
 import { seedDefaultAutomationRules } from '../lib/automation/rules-store';
+import { deferAfterResponse } from '../lib/after-response';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 import {
@@ -43,7 +44,7 @@ import {
   socialProviderId,
   toOut,
 } from './integration-provider';
-import { runSync, toSyncRunOut, type SyncRunRow } from './integration-sync';
+import { runSync, toSyncRunOut } from './integration-sync';
 import { runNotionMirrorSync } from './notion-mirror-reconcile';
 import { importItems, resolveImportTeam } from './integration-import';
 import { toExternalActorOut } from './integration-identity';
@@ -73,47 +74,49 @@ async function setIntegration(
 }
 
 /**
- * Run the Notion mirror pass too, when this integration has one configured.
+ * Start the Notion mirror pass too, when this integration has one configured.
  *
  * @remarks
  * "Sync" on a Notion connection has to mean both directions. The task-mirror spine pulls a
  * provider's work IN; the Notion mirror pushes Docket's work OUT into the designed databases.
- * Running only the first and reporting success is the never-report-success-when-nothing-happened
- * violation this exists to close — the mirror was untouched and the button said it synced.
+ * Running only the first is how the button came to report success having never touched the mirror.
  *
- * Skipped silently when no container page has been chosen: that is an unfinished setup, not a
- * failure, and running anyway would demote a healthy connection and notify its owner.
+ * Deferred rather than awaited, and that is not an optimization. A mirror pass spends up to
+ * `WRITE_BUDGET` Notion writes paced at a few per second — minutes of deliberate sleeping — and
+ * this route is the generic Sync button on every connector row. Awaiting it here would push a
+ * shared endpoint past gateway and browser timeouts, so the caller would see a network error for
+ * a run that was in fact proceeding. The run row is durable from the moment it starts, so
+ * `GET /:id/runs` is the honest place to read the outcome; the response below deliberately speaks
+ * only for the task sync it actually waited on.
+ *
+ * Skipped when no container page has been chosen: that is an unfinished setup, not a failure, and
+ * running anyway would demote a healthy connection and notify its owner.
  *
  * @param row - The integration just synced.
  * @param actorId - The acting Docket actor, as the spine requires.
- * @returns the mirror's run, or null when there was nothing to run or the lease was held.
+ * @returns true when a mirror pass was scheduled, so the caller can say so.
  */
-async function runConfiguredNotionMirror(
-  row: IntegrationRow,
-  actorId: string,
-): Promise<SyncRunRow | null> {
-  if (row.provider !== 'notion') return null;
+function scheduleConfiguredNotionMirror(row: IntegrationRow, actorId: string): boolean {
+  if (row.provider !== 'notion') return false;
   const config = ConnectorConfig.safeParse(row.config).data ?? {};
-  if (config.notionMirror?.containerPageId === undefined) return null;
-  return runNotionMirrorSync(row, { actorId, trigger: 'manual' });
-}
-
-/**
- * Pick which of two runs the response reports.
- *
- * @remarks
- * Failure wins. One response cannot carry two runs, and of the two possible lies — "it succeeded"
- * when half of it did not, versus "it failed" when half of it did — only the first one lets a
- * broken sync look healthy. Both runs are durable and separately readable at `GET /:id/runs`.
- *
- * @param primary - The task-mirror run, which always happened.
- * @param mirror - The Notion mirror run, when one ran.
- * @returns the run to serialize into the response.
- */
-function reportedRun(primary: SyncRunRow, mirror: SyncRunRow | null): SyncRunRow {
-  if (primary.status === 'failed') return primary;
-  if (mirror === null) return primary;
-  return mirror;
+  if (config.notionMirror?.containerPageId === undefined) return false;
+  deferAfterResponse('notion-mirror-sync', async () => {
+    const run = await runNotionMirrorSync(row, { actorId, trigger: 'manual' });
+    // `null` means the lease was taken between the task sync releasing it and this pass — the
+    // scheduled sweep, usually. Logged rather than swallowed: nothing else records a pass that
+    // never started, and silence here is indistinguishable from one that ran.
+    if (run === null) {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          source: 'api',
+          event: 'notion_mirror_lease_held',
+          integrationId: row.id,
+        }),
+      );
+    }
+  });
+  return true;
 }
 
 /** Load an org-scoped integration or 404 (existence-hiding across tenants). */
@@ -813,9 +816,9 @@ Requires \`contribute\` (it creates tasks, the same bar as authoring work direct
 
 Concurrency is guarded: only one sync may be in flight per integration, so if a run is already active this returns 409 (\`A sync is already in progress for this integration.\`) rather than starting a duplicate. A provider that can't sync yields 409 (\`Integration provider does not support sync\`); a missing/cross-tenant id 404s. The run is recorded with \`trigger='manual'\` (the background scheduler uses \`scheduled\`).
 
-For a Notion connection that has a **mirror** configured (a container page chosen via \`POST /:id/notion/provision\`), this also runs the mirror pass — the opposite direction, pushing Docket's work OUT into the designed databases. Both are needed for "Sync" to mean what it says on that connection: running only the task pull would report success having never touched the mirror. They run sequentially because they contend for the same lease, and the mirror pass also refreshes the Notion people roster.
+For a Notion connection that has a **mirror** configured (a container page chosen via \`POST /:id/notion/provision\`), this also runs the mirror pass — the opposite direction, pushing Docket's work OUT into the designed databases. Both are needed for "Sync" to mean what it says on that connection: running only the task pull would report success having never touched the mirror. They run one after the other because they contend for the same lease, and the mirror pass also refreshes the Notion people roster.
 
-Two runs, one response. The body is the **failed** run if either failed, otherwise the mirror run when one ran, otherwise the task run — so a partial failure can never be reported as success. Both runs are durable and separately inspectable at \`GET /:id/runs\`, keyed by \`purpose\` (\`task_sync\` / \`notion_mirror\`).
+The mirror pass is **started, not awaited**: it spends minutes pacing writes against Notion's rate limit, and blocking this shared endpoint on it would exceed gateway and browser timeouts for every provider. The response body is therefore the \`task_sync\` run only, and it claims nothing about the mirror. The mirror's own run is durable from the moment it starts and is the honest place to read its outcome: \`GET /:id/runs\`, keyed by \`purpose\` (\`task_sync\` / \`notion_mirror\`). Use \`POST /:id/notion/sync\` when you need to wait for a mirror pass and read its status directly.
 
 Requires \`manage\` — triggering org-wide mirroring is an administrative action (contrast the \`contribute\`-level \`POST /:id/import\`, which is a user pulling their own work in). Related: \`GET /:id/runs\`, \`POST /:id/verify\`, \`POST /:id/notion/sync\` (the mirror alone).`,
     }),
@@ -832,8 +835,8 @@ Requires \`manage\` — triggering org-wide mirroring is an administrative actio
       const run = await runSync(row, { actorId, trigger: 'manual' });
       if (!run) throw new ConflictError('A sync is already in progress for this integration.');
 
-      const mirrorRun = await runConfiguredNotionMirror(row, actorId);
-      return ok(c, SyncRunOut, toSyncRunOut(reportedRun(run, mirrorRun)));
+      scheduleConfiguredNotionMirror(row, actorId);
+      return ok(c, SyncRunOut, toSyncRunOut(run));
     },
   )
   // GitHub installation returns a URL with a signed `state` binding this integration + org.

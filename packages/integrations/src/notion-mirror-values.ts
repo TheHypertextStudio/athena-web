@@ -227,9 +227,15 @@ function resolveActor(
 function resolveReference(
   field: string,
   value: MirrorReferenceValue,
+  kind: NotionPropertyKind,
   refs: MirrorReferences,
   unresolved: MirrorUnresolvedRef[],
 ): MirrorValue | undefined {
+  // Page ids are meaningless in any other property type. A binding whose stored `kind` disagrees
+  // with the catalog — legacy data, a hand-edited property map — would otherwise fall into
+  // `propertyValue`'s text branch and `stringify` would write the raw Notion UUIDs into a
+  // rich-text cell. Omitting leaves the column untouched instead.
+  if (kind !== 'relation') return undefined;
   const target = refs.pages.get(value.entity);
   const externalPageIds: string[] = [];
   const deferred: MirrorUnresolvedRef[] = [];
@@ -305,10 +311,11 @@ export function resolveMirrorValues(
     // No column for this field: nothing to render it into, and `projectRow` would drop it anyway.
     if (binding === undefined) continue;
 
+    const kind = provisionedKind(binding);
     const resolved =
       value.kind === 'actor'
-        ? resolveActor(field, value, provisionedKind(binding), refs, unresolved)
-        : resolveReference(field, value, refs, unresolved);
+        ? resolveActor(field, value, kind, refs, unresolved)
+        : resolveReference(field, value, kind, refs, unresolved);
     if (resolved !== undefined) values[field] = resolved;
   }
 

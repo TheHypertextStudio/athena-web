@@ -258,6 +258,17 @@ export async function applyDesignPatch(
         `The ${required.label} column cannot be removed — Notion requires one title column.`,
       );
     }
+    // Companions are derived from their parent's representation, so a client echoing back the map
+    // it was given — which is exactly what the designer does — must have them dropped BEFORE
+    // anything else looks at the list. Leaving them in made the regenerated companion collide with
+    // its own echo in the title check below, so the second save of any `notion_person` column
+    // 409'd and the table could never be edited again.
+    const authored = patch.columns.filter((column) => {
+      const field = spec.fields.find((f) => f.field === column.field);
+      if (!field) throw new ConflictError(`Unknown column "${column.field}".`);
+      return field.personCompanionOf === undefined;
+    });
+
     // Notion keys a database's schema by property NAME, so two columns sharing a title collapse
     // into one property — the second silently replacing the first, and both Docket fields then
     // binding to the same property id. The designer lets titles be edited freely, so this is one
@@ -266,7 +277,7 @@ export async function applyDesignPatch(
     // Derived companions are checked against this same set as they are generated below, so a user
     // column that happens to be called "Assignee (Notion)" collides here rather than at provision.
     const seenTitles = new Map<string, string>();
-    for (const column of patch.columns) {
+    for (const column of authored) {
       const key = column.title.trim().toLowerCase();
       const claimed = seenTitles.get(key);
       if (claimed !== undefined) {
@@ -279,12 +290,10 @@ export async function applyDesignPatch(
 
     const next: Record<string, NotionColumnBinding> = {};
     let order = 0;
-    for (const column of patch.columns) {
+    for (const column of authored) {
       const field = spec.fields.find((f) => f.field === column.field);
+      /* v8 ignore next -- @preserve defensive: `authored` already threw on an unknown column. */
       if (!field) throw new ConflictError(`Unknown column "${column.field}".`);
-      // Companions are derived below, from their parent's representation. Accepting one from the
-      // client would let a stale browser desync a column from the choice that produces it.
-      if (field.personCompanionOf !== undefined) continue;
 
       const representation =
         field.personValued === true

@@ -1,5 +1,6 @@
 import { defaultCycleName, type SearchDocumentKind } from '@docket/types';
 
+import { markdownToPlainText } from '../../content/markdown-links';
 import { baseRankFor } from '../rank';
 import { entityRoute } from '../routes';
 import {
@@ -14,12 +15,34 @@ import {
 
 interface NamedWorkRow extends OrgScopedRow {
   name: string;
+  // The entity's own authored plain-text blurb — distinct from `description`, which is the full
+  // Markdown body. Preferred for the search document's `summary` (and thus any preview that reads
+  // it, like a mention hovercard) so a preview never has to render raw Markdown source.
+  summary?: string | null;
   description?: string | null;
   ownerId?: string | null;
   leadId?: string | null;
   status?: string | null;
   health?: string | null;
   visibility?: string | null;
+}
+
+/**
+ * The plain-text blurb a preview surface should show for a work object.
+ *
+ * @remarks
+ * Prefers the entity's own authored `summary` — it's already plain text by design — and only
+ * falls back to deriving one from the Markdown `description` when no summary was written. `body`
+ * (full-text search) keeps the untruncated Markdown regardless; only the *display* excerpt needs
+ * flattening.
+ */
+function displaySummary(
+  summary: string | null | undefined,
+  description: string | null | undefined,
+): string | null {
+  const authored = summary?.trim();
+  if (authored) return authored;
+  return description ? markdownToPlainText(description) || null : null;
 }
 
 interface TaskRow extends OrgScopedRow {
@@ -78,7 +101,7 @@ function workDocument(
 
 function namedWorkDocument(row: NamedWorkRow, kind: SearchDocumentKind): SearchDocumentDraft {
   return workDocument(row, kind, row.name, {
-    summary: row.description,
+    summary: displaySummary(row.summary, row.description),
     body: row.description,
     facet: { ownerId: row.ownerId, leadId: row.leadId, status: row.status, health: row.health },
     visibility: row.visibility,
@@ -88,7 +111,10 @@ function namedWorkDocument(row: NamedWorkRow, kind: SearchDocumentKind): SearchD
 /** Projector for Docket task search documents. */
 export const taskSearchProjector = preloadedProjector<TaskRow>('task', (row) => ({
   ...workDocument(row, 'task', row.title, {
-    summary: row.description,
+    // Task has no dedicated plain-text summary column, so the excerpt always derives from the
+    // Markdown description — the same rule `displaySummary` applies to Project/Program/Initiative,
+    // just with no authored summary ever available to prefer.
+    summary: displaySummary(undefined, row.description),
     body: row.description,
     facet: {
       state: row.state,

@@ -27,8 +27,13 @@ import {
 import { OpenInNew } from '@docket/ui/icons';
 import type { MentionCard, MentionRef } from '@docket/types';
 
-import { SEARCH_KIND_ICON, SEARCH_KIND_LABEL } from '@/components/command-palette/use-hub-search';
+import {
+  SEARCH_KIND_ICON,
+  SEARCH_KIND_LABEL,
+  searchKindFor,
+} from '@/components/command-palette/use-hub-search';
 
+import { ExcerptMarkdown } from './excerpt-markdown';
 import { MENTION_PROVIDER_LABEL, RESOURCE_TYPE_ICON, RESOURCE_TYPE_LABEL } from './mention-glyphs';
 
 /** Props for {@link MentionHoverCard}. */
@@ -51,6 +56,30 @@ function shortDate(iso: string | null): string | undefined {
 }
 
 /**
+ * The excerpt row: a provider's own description for an external resource, an entity's Markdown
+ * excerpt rendered with real (if reduced-fidelity) structure, or nothing at all.
+ *
+ * @remarks
+ * A provider's description is plain text, not our Markdown dialect, so it never goes through
+ * {@link ExcerptMarkdown}. `excerptMarkdown` falls back to the fully flattened `subtitle` only for
+ * an entity that has an authored summary but no body to excerpt from.
+ */
+function excerptRow(
+  external: { description: string | null } | undefined,
+  entity: { excerptMarkdown: string | null; subtitle: string | null } | undefined,
+): React.ReactNode {
+  const excerptClassName = 'text-body-medium text-on-surface-variant line-clamp-3';
+
+  if (external?.description) {
+    return <p className={excerptClassName}>{external.description}</p>;
+  }
+
+  const markdown = entity?.excerptMarkdown ?? entity?.subtitle;
+  if (!markdown) return null;
+  return <ExcerptMarkdown value={markdown} className={excerptClassName} />;
+}
+
+/**
  * Wrap a chip in its preview card.
  *
  * @returns The hover card.
@@ -70,24 +99,24 @@ export default function MentionHoverCard({
   const Glyph =
     entity === undefined
       ? RESOURCE_TYPE_ICON[external?.resourceType ?? 'unknown']
-      : SEARCH_KIND_ICON[entity.entityKind === 'actor' ? 'member' : entity.entityKind];
+      : SEARCH_KIND_ICON[searchKindFor(entity.entityKind)];
 
   const title = entity?.title ?? external?.title ?? fallbackLabel;
+  // The kind — "Initiative", "PDF" — reads as a kicker above the title rather than folded into
+  // the meta line below it. An entity's kind is known the moment the reference is authored (it's
+  // on `refValue`, not the network fetch), so it never needs to wait behind a skeleton; a
+  // resource's type is only known once the card resolves, same as everything else external.
+  const kicker =
+    refValue.kind === 'entity'
+      ? SEARCH_KIND_LABEL[searchKindFor(refValue.entityKind)]
+      : external
+        ? RESOURCE_TYPE_LABEL[external.resourceType]
+        : undefined;
   const meta = external
-    ? [
-        MENTION_PROVIDER_LABEL[external.provider],
-        RESOURCE_TYPE_LABEL[external.resourceType],
-        external.ownerLabel,
-      ]
+    ? [MENTION_PROVIDER_LABEL[external.provider], external.ownerLabel]
         .filter((part): part is string => part !== null)
         .join(' · ')
-    : [
-        entity === undefined
-          ? undefined
-          : SEARCH_KIND_LABEL[entity.entityKind === 'actor' ? 'member' : entity.entityKind],
-        entity?.state,
-        entity?.ownerLabel,
-      ]
+    : [entity?.state, entity?.ownerLabel]
         .filter((part): part is string => typeof part === 'string' && part !== '')
         .join(' · ');
   const modified = shortDate(external?.externalUpdatedAt ?? entity?.updatedAt ?? null);
@@ -118,22 +147,31 @@ export default function MentionHoverCard({
             ) : null}
 
             <div className="space-y-1 p-3">
+              {kicker === undefined ? (
+                <Skeleton className="h-3 w-16" />
+              ) : (
+                // No uppercase overline — the product bans that treatment for semantic labels
+                // (apps/web/tests/components/initiative-visual-contract.test.ts). Sentence case,
+                // set apart from the title only by size/weight/color.
+                <p className="text-label-medium text-on-surface-variant font-medium">{kicker}</p>
+              )}
+
               <div className="flex items-start gap-2">
                 <Glyph className="text-on-surface-variant mt-0.5 size-5! shrink-0" aria-hidden />
                 <p className="text-title-small line-clamp-2 font-medium">{title}</p>
               </div>
 
-              {meta === '' ? (
+              {card === undefined ? (
+                // `meta` alone can't tell "still loading" from "loaded, genuinely nothing to
+                // show" — state/owner are legitimately absent for plenty of accessible entities.
+                // `card` is the real loading signal; once it resolves, an empty `meta` collapses
+                // the row instead of leaving a skeleton stuck mid-load forever.
                 <Skeleton className="h-3 w-40" />
-              ) : (
+              ) : meta === '' ? null : (
                 <p className="text-label-medium text-on-surface-variant">{meta}</p>
               )}
 
-              {(external?.description ?? entity?.subtitle) ? (
-                <p className="text-body-medium text-on-surface-variant line-clamp-3">
-                  {external?.description ?? entity?.subtitle}
-                </p>
-              ) : null}
+              {excerptRow(external, entity)}
             </div>
 
             <div className="border-outline-variant flex items-center justify-between border-t px-3 py-2">

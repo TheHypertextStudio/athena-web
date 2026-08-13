@@ -12,7 +12,11 @@
 import { RESOURCE_PROVIDER_LABEL, type EntityMention } from '@docket/types';
 import type { JSX } from 'react';
 
-import { SEARCH_KIND_ICON, SEARCH_KIND_LABEL } from '@/components/command-palette/use-hub-search';
+import {
+  SEARCH_KIND_ICON,
+  SEARCH_KIND_LABEL,
+  searchKindFor,
+} from '@/components/command-palette/use-hub-search';
 import { RESOURCE_TYPE_ICON, RESOURCE_TYPE_LABEL } from '@/components/mentions/mention-glyphs';
 
 /** Props for {@link MentionedResources}. */
@@ -62,15 +66,11 @@ export default function MentionedResources({
             const external = mention.resource;
             const Glyph =
               mention.ref.kind === 'entity'
-                ? SEARCH_KIND_ICON[
-                    mention.ref.entityKind === 'actor' ? 'member' : mention.ref.entityKind
-                  ]
+                ? SEARCH_KIND_ICON[searchKindFor(mention.ref.entityKind)]
                 : RESOURCE_TYPE_ICON[external?.resourceType ?? 'unknown'];
             const kindLabel =
               mention.ref.kind === 'entity'
-                ? SEARCH_KIND_LABEL[
-                    mention.ref.entityKind === 'actor' ? 'member' : mention.ref.entityKind
-                  ]
+                ? SEARCH_KIND_LABEL[searchKindFor(mention.ref.entityKind)]
                 : `${RESOURCE_PROVIDER_LABEL[external?.provider ?? 'web']} · ${RESOURCE_TYPE_LABEL[external?.resourceType ?? 'unknown']}`;
             const isExternal = mention.ref.kind === 'external';
 

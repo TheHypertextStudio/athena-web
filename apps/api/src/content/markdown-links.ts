@@ -12,6 +12,8 @@
  */
 import { Lexer, type Token, type Tokens } from 'marked';
 
+import { snippetOf } from '@docket/mail';
+
 /** One link found in a Markdown field. */
 export interface MarkdownLink {
   /** Visible link text, with Markdown emphasis flattened away. */
@@ -153,4 +155,94 @@ export function extractMarkdownLinks(markdown: string): readonly MarkdownLink[] 
   const out: MarkdownLink[] = [];
   collectLinks(new Lexer().lex(markdown), out);
   return out;
+}
+
+/** Non-prose block kinds an excerpt should never quote: source, structure, or markup, not words. */
+const EXCERPT_SKIP_TOKEN_TYPES: ReadonlySet<string> = new Set([
+  'code',
+  'space',
+  'hr',
+  'html',
+  'def',
+]);
+
+/**
+ * Walk a token tree, reducing it to the plain words a reader would see, in document order.
+ *
+ * @remarks
+ * Generalizes {@link flattenText}'s "prefer parsed children over raw source" rule to every block
+ * shape the lexer produces, not just a link label: `childTokensOf` already knows how to reach into
+ * a list's items or a table's cells, so a token with no children of its own is the only case that
+ * contributes its own `text` — which is exactly the recursive-descent-then-leaf shape a heading,
+ * a paragraph, a nested list, and a blockquote all share.
+ *
+ * `budget` bounds the walk itself, not just the final output: once enough text has been collected,
+ * later sibling blocks are never visited or joined at all. A multi-section Initiative description
+ * only needs its opening sections lexed-and-walked to produce a 280-character excerpt, not every
+ * section all the way to the end — the budget is what keeps that true. It's deliberately generous
+ * versus the eventual `maxLength` (the caller still truncates at a word boundary afterward), since
+ * cutting a block off at exactly the display limit would leave `snippetOf` no slack to break on a
+ * word rather than mid-token.
+ *
+ * @returns `true` once `budget.charsRemaining` has been exhausted, so a recursive caller knows to
+ *   stop visiting further siblings too, rather than only stopping its own loop.
+ */
+function collectPlainText(
+  tokens: readonly Token[],
+  out: string[],
+  budget: { charsRemaining: number },
+): boolean {
+  for (const token of tokens) {
+    if (budget.charsRemaining <= 0) return true;
+    if (EXCERPT_SKIP_TOKEN_TYPES.has(token.type)) continue;
+
+    const children = childTokensOf(token);
+    if (children.length > 0) {
+      if (collectPlainText(children, out, budget)) return true;
+      continue;
+    }
+
+    const candidate: TextualToken = token;
+    if (typeof candidate.text === 'string' && candidate.text !== '') {
+      out.push(candidate.text);
+      budget.charsRemaining -= candidate.text.length + 1; // +1 for the join separator.
+    }
+  }
+  return false;
+}
+
+/**
+ * Reduce a Markdown field to a flat, plain-text excerpt — for anywhere a preview shows a snippet
+ * of prose rather than rendering it, so `# Executive Summary` reads as "Executive Summary" instead
+ * of a literal hash the reader has to mentally discard.
+ *
+ * @remarks
+ * Truncation is delegated to `snippetOf` (`@docket/mail`) rather than re-implemented here, so this
+ * excerpt and a mail-preview excerpt collapse whitespace and truncate the same way, tuned once in
+ * one place. Like `snippetOf`, this prefers a word boundary but is not guaranteed to find one: a
+ * source whose first `maxLength` characters contain no whitespace at all (a long pasted URL, for
+ * instance) still falls back to a hard cut — there is no word boundary to break on in that case,
+ * only a shorter or longer wrong place to cut.
+ *
+ * @param markdown - The stored Markdown field, which may be empty.
+ * @param maxLength - Longest excerpt to return, in characters. Defaults to 280, matching the
+ *   product's own authored-summary length convention.
+ * @returns Plain text with headings, emphasis, and links flattened to words, blocks joined by a
+ *   single space, and — only when the source exceeds `maxLength` — truncated with a trailing
+ *   ellipsis.
+ *
+ * @example
+ * ```typescript
+ * markdownToPlainText('# Executive Summary\n\nWe are going to *ship* it.');
+ * // 'Executive Summary We are going to ship it.'
+ * ```
+ */
+export function markdownToPlainText(markdown: string, maxLength = 280): string {
+  if (markdown.trim() === '') return '';
+  const parts: string[] = [];
+  // Headroom beyond `maxLength`, not the limit itself: `snippetOf` needs slack past the display
+  // length to find a real word boundary to break on, rather than being handed a string already
+  // cut exactly at the limit.
+  collectPlainText(new Lexer().lex(markdown), parts, { charsRemaining: maxLength * 2 });
+  return snippetOf(parts.join(' '), maxLength) ?? '';
 }

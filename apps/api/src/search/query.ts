@@ -7,6 +7,7 @@ import {
 import type { searchDocument } from '@docket/db';
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 
+import { markdownToPlainText } from '../content/markdown-links';
 import { encodeListCursor, seekAfter } from '../lib/list-cursor';
 import { resolveUsedIn, type UsedInTarget } from './used-in';
 import {
@@ -839,14 +840,34 @@ function snippetFor(
   terms: readonly string[],
 ): string | null {
   for (const value of [row.title, row.summary, row.body]) {
-    if (value?.toLowerCase().includes(queryLower)) return value;
+    if (value?.toLowerCase().includes(queryLower)) return snippetText(row, value);
   }
   for (const term of terms) {
     for (const value of [row.title, row.summary, row.body]) {
-      if (value?.toLowerCase().includes(term)) return value;
+      if (value?.toLowerCase().includes(term)) return snippetText(row, value);
     }
   }
-  return row.summary ?? row.body ?? null;
+  const fallback = row.summary ?? row.body;
+  return fallback === null ? null : snippetText(row, fallback);
+}
+
+/**
+ * Render a matched field as reader-facing text: the title verbatim, everything else stripped of
+ * Markdown.
+ *
+ * @remarks
+ * `summary` is already plain text by the time it reaches here (`work.ts`'s projectors flatten it
+ * at write time), but `body` still carries the full raw Markdown for full-text matching — a query
+ * that only matches inside `body` (past the summary excerpt, or inside a fenced code block the
+ * excerpt deliberately drops) would otherwise surface literal `#`/`*`/`[text](url)` source as the
+ * visible snippet on the command palette and `/search` page. Flattening here, at render time,
+ * covers every document kind uniformly rather than requiring each projector to keep `body` clean
+ * too — `body`'s job is to be matched against, not read verbatim.
+ */
+function snippetText(row: SearchDocumentRow, value: string): string {
+  if (value === row.title) return value;
+  const plain = markdownToPlainText(value);
+  return plain === '' ? value : plain;
 }
 
 /**

@@ -19,7 +19,11 @@ import { cn } from '@docket/ui/lib/utils';
 import type { MentionItem } from '@docket/types';
 import { CornerDownLeft } from '@docket/ui/icons';
 
-import { SEARCH_KIND_ICON, SEARCH_KIND_LABEL } from '@/components/command-palette/use-hub-search';
+import {
+  SEARCH_KIND_ICON,
+  SEARCH_KIND_LABEL,
+  searchKindFor,
+} from '@/components/command-palette/use-hub-search';
 
 import { MENTION_PROVIDER_LABEL, RESOURCE_TYPE_ICON, RESOURCE_TYPE_LABEL } from './mention-glyphs';
 
@@ -44,11 +48,11 @@ export default function MentionRow({
 }: MentionRowProps): React.JSX.Element {
   const Icon =
     item.origin === 'local'
-      ? SEARCH_KIND_ICON[item.entityKind === 'actor' ? 'member' : item.entityKind]
+      ? SEARCH_KIND_ICON[searchKindFor(item.entityKind)]
       : RESOURCE_TYPE_ICON[item.resourceType];
   const kindLabel =
     item.origin === 'local'
-      ? SEARCH_KIND_LABEL[item.entityKind === 'actor' ? 'member' : item.entityKind]
+      ? SEARCH_KIND_LABEL[searchKindFor(item.entityKind)]
       : RESOURCE_TYPE_LABEL[item.resourceType];
 
   return (

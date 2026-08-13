@@ -13,7 +13,7 @@
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { useEffect, useState } from 'react';
 
-import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
+import { SEARCH_KIND_ICON, searchKindFor } from '@/components/command-palette/use-hub-search';
 
 import MentionChip from './mention-chip';
 import { RESOURCE_TYPE_ICON } from './mention-glyphs';
@@ -49,7 +49,7 @@ export default function MentionNodeView({ node, selected }: NodeViewProps): Reac
   // chosen rather than as generic link text.
   const Glyph =
     ref.kind === 'entity'
-      ? SEARCH_KIND_ICON[ref.entityKind === 'actor' ? 'member' : ref.entityKind]
+      ? SEARCH_KIND_ICON[searchKindFor(ref.entityKind)]
       : RESOURCE_TYPE_ICON[card?.kind === 'external' ? card.resource.resourceType : 'unknown'];
 
   return (
@@ -77,7 +77,7 @@ export default function MentionNodeView({ node, selected }: NodeViewProps): Reac
             selected={selected}
             unresolved={unresolved}
             external={ref.kind === 'external'}
-            icon={<Glyph className="size-[0.9em]!" />}
+            icon={<Glyph fontSize="inherit" className="size-[0.85em]!" />}
           />
         </span>
       </MentionHoverCard>

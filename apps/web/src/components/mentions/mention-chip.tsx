@@ -75,8 +75,12 @@ export default function MentionChip({
       {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
       onClick={onClick}
       className={cn(
-        'inline-flex max-w-[22ch] items-baseline gap-1 truncate align-baseline whitespace-nowrap',
-        '-mx-px -my-px rounded-[0.3rem] px-1 py-px',
+        // 22ch was clipping most titles down to a fragment; 40ch shows a title in full in the
+        // common case and still caps how much of a line of prose one mention can take over.
+        'inline-flex max-w-[40ch] items-baseline gap-1 truncate align-baseline whitespace-nowrap',
+        // `rounded-md` matches `CONTROL_RADIUS` (packages/ui/src/primitives/control.tsx) — the
+        // same corner radius every other control in the system uses, rather than a one-off value.
+        '-mx-px -my-px rounded-md px-1 py-px',
         'text-[0.95em] font-medium no-underline',
         'transition-colors duration-(--dur-fast) ease-(--ease-out)',
         unresolved
@@ -89,7 +93,11 @@ export default function MentionChip({
       )}
     >
       {icon ? (
-        <span aria-hidden className="inline-flex shrink-0 translate-y-[0.1em] items-center">
+        // `self-center` overrides the anchor's own `items-baseline`: the icon has no text
+        // baseline of its own, so centering it on the row's cross-axis (set by the label's
+        // line height) reads correctly regardless of font size, instead of guessing a fixed
+        // translate offset that only happened to work at one size.
+        <span aria-hidden className="inline-flex shrink-0 self-center">
           {icon}
         </span>
       ) : null}

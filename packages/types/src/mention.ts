@@ -257,6 +257,13 @@ export const MentionCard = z.discriminatedUnion('kind', [
     accessible: z.boolean(),
     title: z.string().nullable(),
     subtitle: z.string().nullable(),
+    /**
+     * A short, still-Markdown-bearing excerpt of the entity's own description, for a hovercard
+     * that wants to render real (if reduced-fidelity) structure — bold, links, list markers —
+     * rather than the fully flattened `subtitle`. Cut at a generous length, not a syntactically
+     * safe one: the renderer that consumes this tolerates a truncated trailing token.
+     */
+    excerptMarkdown: z.string().nullable(),
     href: z.string().nullable(),
     /** Workflow state name for work items; null for kinds that have none. */
     state: z.string().nullable(),

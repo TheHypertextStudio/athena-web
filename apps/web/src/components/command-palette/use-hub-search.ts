@@ -1,6 +1,6 @@
 'use client';
 
-import type { SearchDocumentKind, SearchOut, SearchResult } from '@docket/types';
+import type { MentionEntityKind, SearchDocumentKind, SearchOut, SearchResult } from '@docket/types';
 import {
   Activity,
   Building,
@@ -81,6 +81,21 @@ export const SEARCH_KIND_LABEL: Record<SearchDocumentKind, string> = {
   activity: 'Activity',
   external_resource: 'Resource',
 };
+
+/**
+ * Normalize a mention's entity kind into the key {@link SEARCH_KIND_ICON}/{@link SEARCH_KIND_LABEL}
+ * are indexed by.
+ *
+ * @remarks
+ * `MentionEntityKind` and `SearchDocumentKind` agree on every name except one: a mentionable
+ * person is `'actor'` in the mention grammar (the row a Docket entity mention points at) but
+ * `'member'` in the search-kind vocabulary (the row a search hit belongs to). Every call site that
+ * looks up a mentioned entity's glyph or label needs this same one-name translation — centralizing
+ * it here means a future third name for "person" only needs to change in one place.
+ */
+export function searchKindFor(entityKind: MentionEntityKind): SearchDocumentKind {
+  return entityKind === 'actor' ? 'member' : entityKind;
+}
 
 interface SearchResultToPaletteItemInput {
   close: () => void;

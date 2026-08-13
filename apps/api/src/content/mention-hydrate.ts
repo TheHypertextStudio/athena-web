@@ -35,6 +35,7 @@ function inaccessibleCard(ref: EntityRef): MentionCard {
     accessible: false,
     title: null,
     subtitle: null,
+    excerptMarkdown: null,
     href: null,
     state: null,
     health: null,
@@ -44,6 +45,37 @@ function inaccessibleCard(ref: EntityRef): MentionCard {
   };
 }
 
+/**
+ * Longest raw Markdown excerpt handed to the client for rendering.
+ *
+ * @remarks
+ * Generous rather than syntactically safe on purpose: `ExcerptMarkdown` (the client renderer this
+ * feeds) tolerates a cut that lands mid-token — `marked`'s lexer degrades a truncated `**bold` or
+ * `[link](h` into ordinary text rather than throwing — so there is no need to find a "safe" cut
+ * point the way {@link markdownToPlainText} does for the fully-flattened `summary` field.
+ */
+const EXCERPT_MARKDOWN_LENGTH = 320;
+
+/**
+ * Cut a raw Markdown field down to a preview length, keeping the Markdown syntax — and, crucially,
+ * the newlines — intact.
+ *
+ * @remarks
+ * `snippetOf` (`@docket/mail`) is the wrong tool here: it collapses all whitespace to single
+ * spaces, and in Markdown a blank line is *significant* — it's what separates `# Heading` from the
+ * paragraph that follows it. Collapsing it merges the two into one line, which `marked` then reads
+ * as a single (very long) heading swallowing the paragraph, destroying exactly the block structure
+ * this excerpt exists to preserve. A plain length cut has no such failure mode.
+ */
+function excerptMarkdownOf(body: string | null): string | null {
+  if (body === null) return null;
+  const trimmed = body.trim();
+  if (trimmed === '') return null;
+  return trimmed.length <= EXCERPT_MARKDOWN_LENGTH
+    ? trimmed
+    : trimmed.slice(0, EXCERPT_MARKDOWN_LENGTH);
+}
+
 /** A reference to something outside Docket, narrowed from the union. */
 type ExternalRef = Extract<MentionRef, { kind: 'external' }>;
 
@@ -51,6 +83,8 @@ type ExternalRef = Extract<MentionRef, { kind: 'external' }>;
 interface VisibleEntitySummary {
   readonly title: string;
   readonly summary: string | null;
+  /** The full, untruncated Markdown body — `search_document.body`, never flattened. */
+  readonly body: string | null;
   readonly updatedAt: Date | null;
 }
 
@@ -69,7 +103,7 @@ async function loadVisibleEntities(
   return new Map(
     rows.map((row) => [
       row.entityId,
-      { title: row.title, summary: row.summary, updatedAt: row.sourceUpdatedAt },
+      { title: row.title, summary: row.summary, body: row.body, updatedAt: row.sourceUpdatedAt },
     ]),
   );
 }
@@ -151,6 +185,7 @@ export async function hydrateMentions(input: MentionHydrateRequest): Promise<Men
         accessible: true,
         title: found.title,
         subtitle: found.summary,
+        excerptMarkdown: excerptMarkdownOf(found.body),
         href: entityMentionHref(input.orgId, ref),
         state: null,
         health: null,

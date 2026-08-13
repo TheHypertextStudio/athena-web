@@ -1,3 +1,4 @@
+import { markdownToPlainText } from '../../content/markdown-links';
 import { baseRankFor } from '../rank';
 import { contentRoute } from '../routes';
 import {
@@ -66,7 +67,11 @@ export const commentSearchProjector = preloadedProjector<
     row.subjectType,
     row.subjectId,
     {
-      summary: row.body,
+      // `body` is Markdown (comments are authored in the same rich editor as everything else a
+      // reader mentions), so the display summary needs the same plain-text treatment `work.ts`
+      // gives Initiative/Project/Program/Task — otherwise a `@`-mentioned comment's hovercard
+      // shows raw `#`/`*` source.
+      summary: markdownToPlainText(row.body),
       body: row.body,
       facet: {
         authorId: row.authorId,
@@ -95,7 +100,9 @@ export const updateSearchProjector = preloadedProjector<
     row.subjectType,
     row.subjectId,
     {
-      summary: row.body,
+      // Same reasoning as `commentSearchProjector`: `body` is Markdown, so the summary shown in a
+      // preview needs the plain-text treatment, not the raw source.
+      summary: markdownToPlainText(row.body),
       body: row.body,
       facet: { authorId: row.authorId, health: row.health },
     },

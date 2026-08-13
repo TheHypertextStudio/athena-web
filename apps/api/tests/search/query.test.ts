@@ -388,6 +388,44 @@ describe('search query service', () => {
     expect(result.facets.some((facet) => facet.field === 'family')).toBe(true);
   });
 
+  it('strips Markdown from a snippet whose match only lands in the raw body field', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchMarkdownUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    // The match term lives only inside Markdown-formatted body text — the title and summary don't
+    // contain it — so the snippet can only come from `body`, which still carries raw Markdown.
+    await db.insert(schema.searchDocument).values({
+      id: `task:${orgId}:markdownsnippet_task`,
+      organizationId: orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: 'markdownsnippet_task',
+      title: 'Plain title with no match',
+      summary: 'Plain summary with no match either',
+      body: '# Repro Steps\n\nOpen the app and search for obsidiansnippetterm in *any* timezone.',
+      facet: {},
+      route: entityRoute(orgId, 'task', 'markdownsnippet_task'),
+      visibility: { mode: 'org_members' },
+      baseRank: 90,
+    });
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      caller: { kind: 'user', userId },
+      params: { q: 'obsidiansnippetterm', limit: 10 },
+    });
+
+    const hit = result.items.find((item) => item.id === `task:${orgId}:markdownsnippet_task`);
+    expect(hit?.matchedFields).toContain('body');
+    expect(hit?.snippet?.toLowerCase()).toContain('obsidiansnippetterm');
+    expect(hit?.snippet).not.toContain('#');
+    expect(hit?.snippet).not.toContain('*');
+  });
+
   it('supports org narrowing, filters, archived inclusion, and stable cursors', async () => {
     const schema = await getDb();
     const { db } = schema;

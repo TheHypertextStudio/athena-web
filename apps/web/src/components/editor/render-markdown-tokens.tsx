@@ -18,8 +18,17 @@ function safeHref(href: string): string | undefined {
   return /^(https?:|mailto:|\/|#)/i.test(href) ? href : undefined;
 }
 
-/** Render one token's inline (span-level) children — text, emphasis, links, code spans, etc. */
-function renderInline(tokens: readonly Token[], prefix: string): ReactNode[] {
+/**
+ * Render one token's inline (span-level) children — text, emphasis, links, code spans, etc.
+ *
+ * @remarks
+ * Exported so {@link ExcerptMarkdown} (`../mentions/excerpt-markdown`) can reuse the exact same
+ * emphasis/link/code handling for a preview excerpt, rather than a second hand-rolled copy: the
+ * two renderers differ only in which *block* shapes they allow (a full document's `<h1>`/`<table>`
+ * vs. a hovercard excerpt's single flowing line), never in how a `**bold**` or a `[link](url)`
+ * becomes a React node.
+ */
+export function renderInline(tokens: readonly Token[], prefix: string): ReactNode[] {
   return tokens.map((token, index) => {
     const key = `${prefix}-${index}`;
     switch (token.type) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractMarkdownLinks } from '../../src/content/markdown-links';
+import { extractMarkdownLinks, markdownToPlainText } from '../../src/content/markdown-links';
 
 describe('extractMarkdownLinks', () => {
   it('returns nothing for empty or whitespace-only prose', () => {
@@ -88,5 +88,65 @@ describe('extractMarkdownLinks', () => {
     const links = extractMarkdownLinks('[![alt](https://img.png)](https://target)');
     expect(links.map((l) => l.href)).toEqual(['https://target']);
     expect(links[0]?.label).not.toBe('');
+  });
+});
+
+describe('markdownToPlainText', () => {
+  it('returns an empty string for empty or whitespace-only prose', () => {
+    expect(markdownToPlainText('')).toBe('');
+    expect(markdownToPlainText('   \n\n  ')).toBe('');
+  });
+
+  it('strips heading markers rather than quoting the literal hash', () => {
+    expect(markdownToPlainText('# Executive Summary')).toBe('Executive Summary');
+  });
+
+  it('flattens emphasis and joins multiple blocks into one line', () => {
+    const markdown = [
+      '# Executive Summary',
+      '',
+      "I'm going to do things that spark joy in my everyday life.",
+      '',
+      '# Overview',
+      '',
+      '*A detailed description of the plan.*',
+    ].join('\n');
+    expect(markdownToPlainText(markdown)).toBe(
+      "Executive Summary I'm going to do things that spark joy in my everyday life. Overview A detailed description of the plan.",
+    );
+  });
+
+  it('flattens a link to its label text, not the raw markdown syntax', () => {
+    expect(markdownToPlainText('See [the plan](https://x/d/1 "docket:v1:external") today.')).toBe(
+      'See the plan today.',
+    );
+  });
+
+  it('includes list item text without bullet markup', () => {
+    const markdown = ['Goals:', '', '- Ship the launch', '- Write the retro'].join('\n');
+    expect(markdownToPlainText(markdown)).toBe('Goals: Ship the launch Write the retro');
+  });
+
+  it('drops fenced code blocks entirely rather than quoting source', () => {
+    const markdown = ['Before.', '', '```ts', 'const x = 1;', '```', '', 'After.'].join('\n');
+    expect(markdownToPlainText(markdown)).toBe('Before. After.');
+  });
+
+  it('collapses internal newlines and repeated whitespace to single spaces', () => {
+    expect(markdownToPlainText('Line one.\nLine   two.')).toBe('Line one. Line two.');
+  });
+
+  it('leaves text at or under the limit untouched', () => {
+    const text = 'Short summary.';
+    expect(markdownToPlainText(text, 280)).toBe('Short summary.');
+  });
+
+  it('truncates at a word boundary with a trailing ellipsis when over the limit', () => {
+    const words = Array.from({ length: 60 }, (_, i) => `word${i}`).join(' ');
+    const result = markdownToPlainText(words, 40);
+    expect(result.length).toBeLessThanOrEqual(41);
+    expect(result.endsWith('…')).toBe(true);
+    expect(result.slice(0, -1)).not.toMatch(/\s$/);
+    expect(words.startsWith(result.slice(0, -1))).toBe(true);
   });
 });

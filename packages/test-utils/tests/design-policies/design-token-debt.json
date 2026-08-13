@@ -288,9 +288,6 @@
   "apps/web/src/components/mentions/mention-chip.tsx": {
     "raw-type-utility": 2
   },
-  "apps/web/src/components/mentions/mention-hovercard.tsx": {
-    "raw-type-utility": 1
-  },
   "apps/web/src/components/mentions/mention-menu.tsx": {
     "raw-type-utility": 1
   },

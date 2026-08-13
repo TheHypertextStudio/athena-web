@@ -158,13 +158,14 @@ export default function MentionHoverCard({
               ) : (
                 // No uppercase overline — the product bans that treatment for semantic labels
                 // (apps/web/tests/components/initiative-visual-contract.test.ts). Sentence case,
-                // set apart from the title only by size/weight/color.
-                <p className="text-label-medium text-on-surface-variant font-medium">{kicker}</p>
+                // set apart from the title only by size/weight/color — both already carried by
+                // their `text-<role>` token, so no separate `font-*` utility is needed.
+                <p className="text-label-medium text-on-surface-variant">{kicker}</p>
               )}
 
               <div className="flex items-start gap-2">
                 <Glyph className="text-on-surface-variant mt-0.5 size-5! shrink-0" aria-hidden />
-                <p className="text-title-small line-clamp-2 font-medium">{title}</p>
+                <p className="text-title-small line-clamp-2">{title}</p>
               </div>
 
               {card === undefined ? (

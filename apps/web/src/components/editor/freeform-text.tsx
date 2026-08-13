@@ -43,6 +43,7 @@ import { useSlashCommands } from './use-slash-commands';
 import { createCodeBlockExtension } from './code-block-extension';
 import CodeBlockNodeView from './code-block-node-view';
 import { createMarkdownClipboardExtension } from './markdown-clipboard';
+import { createTaskListShortcutExtension } from './task-list-shortcut';
 
 /** Props for {@link FreeformTextEditor}. */
 export interface FreeformTextEditorProps {
@@ -172,6 +173,8 @@ export function FreeformTextEditor({
       createCodeBlockExtension(ReactNodeViewRenderer(CodeBlockNodeView)),
       TaskList,
       TaskItem.configure({ nested: true }),
+      // `- [ ] ` is the Markdown spelling bodies are stored in; see the extension's remarks.
+      createTaskListShortcutExtension(),
       Link.configure({
         openOnClick: false,
         autolink: true,

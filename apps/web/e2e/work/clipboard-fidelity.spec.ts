@@ -43,8 +43,8 @@ test.describe('Clipboard fidelity', () => {
     await page.keyboard.press('Delete');
     await prose.pressSequentially('# Rollout plan');
     await page.keyboard.press('Enter');
-    await prose.pressSequentially('- Flip the flag');
-    await expect(prose.locator('ul > li')).toHaveCount(1);
+    await prose.pressSequentially('- [ ] Flip the flag');
+    await expect(prose.locator('li[data-checked]')).toHaveCount(1);
 
     await page.keyboard.press('ControlOrMeta+a');
     await page.keyboard.press('ControlOrMeta+c');
@@ -57,7 +57,7 @@ test.describe('Clipboard fidelity', () => {
         message: 'the clipboard should hold the body as Markdown',
       })
       .toContain('# Rollout plan');
-    expect(await clipboardText(page)).toContain('- Flip the flag');
+    expect(await clipboardText(page)).toContain('[ ] Flip the flag');
 
     // --- Pasting Markdown back in ----------------------------------------------------------
     await page.evaluate(() =>

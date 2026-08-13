@@ -106,6 +106,60 @@ describe('reconcileDay', () => {
     expect((await dayFor(userId))?.status).toBe('ready');
   });
 
+  it('resolves the day from `now` when no date is named', async () => {
+    // The sweep always names a day, but the read and the agent tool can ask for "today" without
+    // computing it themselves \u2014 and computing it for them is the only way both agree on the
+    // boundary, since a caller's idea of today may come from a different clock.
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId);
+
+    const result = await reconcileDay(userId, undefined, NOW);
+
+    // The row it built is the one for today, which is what proves the date was derived rather than
+    // defaulted to something else.
+    expect(result.episodeCount).toBeGreaterThan(0);
+    const [day] = await db
+      .select({ localDate: schema.activityDay.localDate })
+      .from(schema.activityDay)
+      .where(eq(schema.activityDay.id, result.activityDayId));
+    expect(day?.localDate).toBe(DAY);
+  });
+
+  it('does not ask providers about a day that is already finished', async () => {
+    // A finished day cannot gain activity, so polling for one spends quota re-reading history that is
+    // already recorded. Asserted through `sync_run`, because the absence of a pull is the whole claim
+    // and a returned tally would not show it.
+    const { orgId, userId } = await seedPerson();
+    const actorId = one(
+      await db
+        .insert(schema.actor)
+        .values({ organizationId: orgId, kind: 'human', displayName: 'Past', userId })
+        .returning({ id: schema.actor.id }),
+    ).id;
+    const integrationId = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'github',
+          pattern: 'connector',
+          roles: ['code'],
+          status: 'connected',
+          createdBy: actorId,
+        })
+        .returning({ id: schema.integration.id }),
+    ).id;
+
+    // `NOW` is inside DAY, so reconciling the day before is reconciling a finished one.
+    await reconcileDay(userId, '2026-08-11', NOW);
+
+    const runs = await db
+      .select({ id: schema.syncRun.id })
+      .from(schema.syncRun)
+      .where(eq(schema.syncRun.integrationId, integrationId));
+    expect(runs).toHaveLength(0);
+  });
+
   it('collapses a day of work on one subject into a single story', async () => {
     // The product premise: six commits on one pull request is one line, not six.
     const { orgId, userId } = await seedPerson();

@@ -64,6 +64,53 @@ async function seedEvent(orgId: string, userId: string, subject = 'ENG-1'): Prom
 }
 
 /** A person with one narrated highlight on {@link DAY}. */
+/** A connected activity integration owned by `userId`, so the source has something to report. */
+async function seedActivityIntegration(
+  orgId: string,
+  userId: string,
+  provider: 'github' | 'gmail',
+  status: 'connected' | 'error' | 'disconnected' = 'connected',
+): Promise<{ actorId: string; integrationId: string }> {
+  const actorId = one(
+    await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Src', userId })
+      .returning({ id: schema.actor.id }),
+  ).id;
+  const integrationId = one(
+    await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider,
+        pattern: 'connector',
+        roles: provider === 'gmail' ? ['signal'] : ['code'],
+        status,
+        createdBy: actorId,
+      })
+      .returning({ id: schema.integration.id }),
+  ).id;
+  return { actorId, integrationId };
+}
+
+/** One finished activity pull for an integration. */
+async function seedActivityRun(
+  orgId: string,
+  integrationId: string,
+  status: 'succeeded' | 'failed',
+  finishedAt: Date,
+): Promise<void> {
+  await db.insert(schema.syncRun).values({
+    organizationId: orgId,
+    integrationId,
+    purpose: 'activity_pull',
+    status,
+    trigger: 'scheduled',
+    startedAt: finishedAt,
+    finishedAt,
+  });
+}
+
 async function seedNarratedDay() {
   const { orgId, userId } = await seedPerson();
   const eventId = await seedEvent(orgId, userId);
@@ -215,6 +262,28 @@ describe('buildHighlightsDayPayload', () => {
     expect(payload.date).toBe('2026-08-11');
   });
 
+  it('falls back to UTC for a hub that has never set a timezone', async () => {
+    // A hub's `preferences` defaults to `{}`, so a person who has not been through the timezone step
+    // has none. The day still has to resolve to *some* boundary rather than throwing, and UTC is the
+    // only defensible default \u2014 guessing from a request header would make the same person's day
+    // shift depending on where they opened it from.
+    const { orgId } = await seedBaseOrg(db, schema);
+    people += 1;
+    const userId = one(
+      await db
+        .insert(schema.user)
+        .values({ name: `NoTz ${String(people)}`, email: `notz-${String(people)}@example.test` })
+        .returning({ id: schema.user.id }),
+    ).id;
+    await db.insert(schema.hub).values({ userId });
+    void orgId;
+
+    const payload = await buildHighlightsDayPayload(userId, DAY, NOW);
+
+    expect(payload.timezone).toBe('UTC');
+    expect(payload.date).toBe(DAY);
+  });
+
   it('reports a genuinely quiet day as empty', async () => {
     const { userId } = await seedPerson();
     await reconcileDay(userId, DAY, NOW);
@@ -235,6 +304,102 @@ describe('buildHighlightsDayPayload', () => {
     }
     expect(payload.sources.some((source) => source.system === 'google_calendar')).toBe(true);
     expect(JSON.stringify(payload.sources)).not.toContain('lastError');
+  });
+
+  it('says a source is ok once it has been read inside the day', async () => {
+    // The counterpart to the stale case: a successful pull that finished after the day began is what
+    // earns `ok`, and it is the only state that claims the day is complete for that source.
+    const { orgId, userId } = await seedPerson();
+    const { integrationId } = await seedActivityIntegration(orgId, userId, 'github');
+    const insideDay = new Date('2026-08-12T10:00:00.000Z');
+    await seedActivityRun(orgId, integrationId, 'succeeded', insideDay);
+
+    const payload = await buildHighlightsDayPayload(userId, DAY, NOW);
+
+    const github = payload.sources.find((source) => source.system === 'github');
+    expect(github?.state).toBe('ok');
+    expect(github?.lastReadAt).toBe(insideDay.toISOString());
+  });
+
+  it('does not count a failed pull as having read the day', async () => {
+    // A failed run is not a read. Counting one would let a source that never answered report `ok`,
+    // which is the precise way a broken connector comes to look like a quiet day.
+    const { orgId, userId } = await seedPerson();
+    const { integrationId } = await seedActivityIntegration(orgId, userId, 'github');
+    await seedActivityRun(orgId, integrationId, 'failed', new Date('2026-08-12T10:00:00.000Z'));
+
+    const payload = await buildHighlightsDayPayload(userId, DAY, NOW);
+
+    const github = payload.sources.find((source) => source.system === 'github');
+    expect(github?.state).toBe('stale');
+    expect(github?.lastReadAt).toBeNull();
+  });
+
+  it('reports an integration in error as failed rather than merely stale', async () => {
+    const { orgId, userId } = await seedPerson();
+    await seedActivityIntegration(orgId, userId, 'github', 'error');
+
+    const payload = await buildHighlightsDayPayload(userId, DAY, NOW);
+
+    expect(payload.sources.find((source) => source.system === 'github')?.state).toBe('failed');
+  });
+
+  it('separates a calendar that was disconnected from one never connected', async () => {
+    // Two different facts with two different remedies: reconnect, versus connect for the first time.
+    // Collapsing them would tell somebody to set up a calendar they already had.
+    const neverConnected = await seedPerson();
+    expect(
+      (await buildHighlightsDayPayload(neverConnected.userId, DAY, NOW)).sources.find(
+        (source) => source.system === 'google_calendar',
+      )?.state,
+    ).toBe('never_connected');
+
+    const wasConnected = await seedPerson();
+    await db.insert(schema.account).values({
+      userId: wasConnected.userId,
+      providerId: 'google',
+      accountId: 'gone-1',
+    });
+    await db.insert(schema.calendarConnection).values({
+      userId: wasConnected.userId,
+      provider: 'google',
+      externalAccountId: 'gone-1',
+      status: 'disconnected',
+    });
+
+    expect(
+      (await buildHighlightsDayPayload(wasConnected.userId, DAY, NOW)).sources.find(
+        (source) => source.system === 'google_calendar',
+      )?.state,
+    ).toBe('disconnected');
+  });
+
+  it('takes the calendar’s freshness from the most recent of several connections', async () => {
+    // Calendar activity is projected from synced rows, so its freshness is the calendar sync's. With
+    // two connections the newer sync is what the day was read from.
+    const { userId } = await seedPerson();
+    const older = new Date('2026-08-12T08:00:00.000Z');
+    const newer = new Date('2026-08-12T11:00:00.000Z');
+    for (const [index, syncedAt] of [older, newer].entries()) {
+      await db.insert(schema.account).values({
+        userId,
+        providerId: 'google',
+        accountId: `multi-${String(index)}`,
+      });
+      await db.insert(schema.calendarConnection).values({
+        userId,
+        provider: 'google',
+        externalAccountId: `multi-${String(index)}`,
+        status: 'connected',
+        lastSyncedAt: syncedAt,
+      });
+    }
+
+    const calendar = (await buildHighlightsDayPayload(userId, DAY, NOW)).sources.find(
+      (source) => source.system === 'google_calendar',
+    );
+    expect(calendar?.state).toBe('ok');
+    expect(calendar?.lastReadAt).toBe(newer.toISOString());
   });
 
   it('says a connected source is stale until it has actually been read', async () => {

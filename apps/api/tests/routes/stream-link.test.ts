@@ -132,6 +132,45 @@ describe('GET / (org firehose visibility)', () => {
     });
   }
 
+  it('shows a caller with no user only the events nobody owns', async () => {
+    // An agent or machine principal has an actor context but no session user. It must not fall through
+    // to "everything", and it must not be handed a person's mail either \u2014 what it can legitimately
+    // see is the workspace activity that belongs to no one.
+    const owner = await seedWorkspace();
+    await seedOwned(owner.orgId, owner.userId, 'gmail', 'Re: offer letter');
+    seq += 1;
+    await db.insert(schema.event).values({
+      organizationId: owner.orgId,
+      sourceSystem: 'google_calendar',
+      kind: 'meeting_attended',
+      occurredAt: new Date('2026-08-12T10:00:00.000Z'),
+      title: 'Unowned all-hands',
+      entityAssociation: 'unmatched',
+      dedupeKey: `unowned-${String(seq)}`,
+    });
+
+    // Mounted with no session at all, which is what makes `callerUserId` null.
+    const app = new Hono<AppEnv>();
+    app.use('*', async (c, next) => {
+      c.set('actorCtx', {
+        orgId: owner.orgId,
+        actorId: owner.actorId,
+        roleId: 'role_test',
+        capabilities: ['view', 'contribute', 'assign'],
+      });
+      await next();
+    });
+    app.route('/', stream);
+    app.onError(onError);
+
+    const titles = (
+      (await (await app.request('/?limit=50')).json()) as { items: { title: string }[] }
+    ).items.map((item) => item.title);
+
+    expect(titles).toContain('Unowned all-hands');
+    expect(titles).not.toContain('Re: offer letter');
+  });
+
   it('hides one person\u2019s mail from their colleagues, and keeps shared work visible', async () => {
     // The leak this closes. Gmail activity carries an `organizationId` for tenancy but belongs to one
     // person, and the firehose had no `userId` predicate \u2014 so any member of the org, Guests included,
@@ -355,6 +394,39 @@ describe('POST /:eventId/link', () => {
 
     expect(res.status).toBe(404);
     expect((await eventRow(foreign))?.entityAssociation).toBe('unmatched');
+  });
+
+  it('links an event that has no subject of its own', async () => {
+    // Not every activity has an entity: a bare notification, or a source that reported a verb without
+    // anything to hang it on. The recipient routing has to cope with a null entity rather than assume
+    // one, since resolving such an event to a task is exactly when somebody is supplying the subject
+    // the source never gave.
+    const { orgId, teamId, actorId, app } = await seedWorkspace();
+    seq += 1;
+    const eventId = one(
+      await db
+        .insert(schema.event)
+        .values({
+          organizationId: orgId,
+          sourceSystem: 'google_calendar',
+          kind: 'meeting_attended',
+          occurredAt: new Date('2026-08-12T10:00:00.000Z'),
+          title: 'Untitled block',
+          entityAssociation: 'unmatched',
+          dedupeKey: `no-entity-${String(seq)}`,
+        })
+        .returning({ id: schema.event.id }),
+    ).id;
+    const taskId = await seedTask(orgId, teamId, actorId);
+
+    const res = await app.request(`/${eventId}/link`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ taskId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect((await eventRow(eventId))?.docketEntityId).toBe(taskId);
   });
 
   it('answers 404 for an event that does not exist', async () => {

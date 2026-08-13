@@ -79,8 +79,18 @@ function tzOffsetMs(instant: Date, tz: string): number {
  * @returns the instant local midnight occurred at.
  */
 export function localDayStartUtc(parts: ZonedParts, tz: string): Date {
-  const midnightGuess = Date.UTC(parts.y, parts.mo - 1, parts.d, 0, 0);
-  return new Date(midnightGuess - tzOffsetMs(new Date(midnightGuess), tz));
+  const wallAsUtc = Date.UTC(parts.y, parts.mo - 1, parts.d, 0, 0);
+  // Two passes, because one is wrong on DST-transition days. The offset has to be sampled *at the
+  // instant being solved for*, and the first sample can only be taken at the wall clock read as UTC —
+  // which sits up to a day away from local midnight and so can fall on the other side of a
+  // transition. Re-solving with the offset that actually applies at the candidate converges.
+  //
+  // Concretely: for 2026-04-05 in Pacific/Auckland the single pass returned 12:00Z on the 4th, an
+  // hour after local midnight, because it sampled +12 (NZST) when local midnight was still +13
+  // (NZDT). Sydney lands an hour late the same way and Santiago an hour early, so the error runs in
+  // both directions and no fixed correction absorbs it.
+  const firstPass = wallAsUtc - tzOffsetMs(new Date(wallAsUtc), tz);
+  return new Date(wallAsUtc - tzOffsetMs(new Date(firstPass), tz));
 }
 
 /** Format {@link ZonedParts} as an ISO calendar date (`YYYY-MM-DD`). */

@@ -55,6 +55,15 @@ async function timezoneFor(userId: string): Promise<string> {
   return row?.preferences.timezone ?? 'UTC';
 }
 
+/** The most recent `lastSyncedAt` across a set of calendar connections, or null when none has one. */
+function latestSyncedAt(rows: readonly { readonly lastSyncedAt: Date | null }[]): Date | null {
+  return rows.reduce<Date | null>(
+    (latest, row) =>
+      row.lastSyncedAt && (!latest || row.lastSyncedAt > latest) ? row.lastSyncedAt : latest,
+    null,
+  );
+}
+
 /** Decide one source's state from its connection and its last successful read. */
 function stateFor(input: {
   readonly connected: boolean;
@@ -154,33 +163,19 @@ async function readSourceHealth(
 
     if (system === 'google_calendar') {
       const live = calendars.filter((row) => row.status !== 'disconnected');
+      // Calendar activity is projected from already-synced rows, so its freshness is the calendar
+      // sync's rather than an activity run's.
+      const syncedAt = latestSyncedAt(live);
       return {
         system,
         state: stateFor({
           connected: live.length > 0,
           disconnected: calendars.length > 0 && live.length === 0,
-          // Calendar activity is projected from already-synced rows, so its freshness is the
-          // calendar sync's, not an activity run's.
-          lastReadAt: live.reduce<Date | null>(
-            (latest, row) =>
-              row.lastSyncedAt && (!latest || row.lastSyncedAt > latest)
-                ? row.lastSyncedAt
-                : latest,
-            null,
-          ),
+          lastReadAt: syncedAt,
           failing: false,
           dayStart,
         }),
-        lastReadAt:
-          live
-            .reduce<Date | null>(
-              (latest, row) =>
-                row.lastSyncedAt && (!latest || row.lastSyncedAt > latest)
-                  ? row.lastSyncedAt
-                  : latest,
-              null,
-            )
-            ?.toISOString() ?? null,
+        lastReadAt: syncedAt?.toISOString() ?? null,
         eventCount,
       };
     }

@@ -26,7 +26,20 @@ beforeAll(async () => {
  * production. Seeded through the real tables rather than a stub because the projection *is* the
  * query: a fake source would exercise none of the predicates that decide what counts as attended.
  */
-async function seedAttendedMeeting(userId: string, startsAt: Date, endsAt: Date): Promise<void> {
+async function seedAttendedMeeting(
+  userId: string,
+  startsAt: Date,
+  endsAt: Date,
+  over: {
+    attendees?: readonly {
+      email?: string;
+      self?: boolean;
+      responseStatus?: string;
+      displayName?: string;
+    }[];
+    recurrenceInstanceKey?: string;
+  } = {},
+): Promise<void> {
   // `calendar_connection` has a composite FK onto the Better Auth `account` row that holds the
   // Google grant, so the linked account has to exist before the calendar does.
   const externalAccountId = `acct-${String(++calSeq)}`;
@@ -74,10 +87,17 @@ async function seedAttendedMeeting(userId: string, startsAt: Date, endsAt: Date)
     title: 'Comp review',
     startsAt,
     endsAt,
+    // Spread into a fresh array: the column type is mutable, and the parameter is readonly so a
+    // caller's fixture cannot be rewritten by the insert.
     attendees: [
-      { email: 'ada@example.com', self: true, responseStatus: 'accepted' },
-      { email: 'colleague@example.com', responseStatus: 'accepted' },
+      ...(over.attendees ?? [
+        { email: 'ada@example.com', self: true, responseStatus: 'accepted' },
+        { email: 'colleague@example.com', responseStatus: 'accepted' },
+      ]),
     ],
+    ...(over.recurrenceInstanceKey === undefined
+      ? {}
+      : { recurrenceInstanceKey: over.recurrenceInstanceKey }),
   });
 }
 
@@ -260,6 +280,43 @@ describe('sweepActivitySources', () => {
     expect(await eventsFor(userId)).toHaveLength(0);
   });
 
+  it('reaches calendars from the cron sweep, not only from a direct pull', async () => {
+    // `sweepActivitySources` is what the scheduler calls. Every other calendar test here goes through
+    // `pullActivityForUser`, so the sweep's own selection of people with a live connection was
+    // untested \u2014 and a calendar leg that only works when called directly is a calendar leg that
+    // never runs in production.
+    const { userId } = await seedPerson();
+    await seedAttendedMeeting(
+      userId,
+      new Date('2026-08-12T15:00:00.000Z'),
+      new Date('2026-08-12T16:00:00.000Z'),
+    );
+
+    const result = await sweepActivitySources(new Date('2026-08-12T20:00:00.000Z'));
+
+    expect(result.users).toBeGreaterThanOrEqual(1);
+    expect(await eventsFor(userId)).toHaveLength(1);
+  });
+
+  it('skips a calendar the person disconnected', async () => {
+    // A disconnected calendar is not a source of activity, and sweeping it would keep projecting from
+    // rows the person has revoked access to.
+    const { userId } = await seedPerson();
+    await seedAttendedMeeting(
+      userId,
+      new Date('2026-08-12T15:00:00.000Z'),
+      new Date('2026-08-12T16:00:00.000Z'),
+    );
+    await db
+      .update(schema.calendarConnection)
+      .set({ status: 'disconnected' })
+      .where(eq(schema.calendarConnection.userId, userId));
+
+    await sweepActivitySources(new Date('2026-08-12T20:00:00.000Z'));
+
+    expect(await eventsFor(userId)).toHaveLength(0);
+  });
+
   it('writes a meeting into the personal workspace, and picks the same one every tick', async () => {
     // `event` is org-scoped and a meeting is not, so one org has to be chosen. An unordered
     // `LIMIT 1` let Postgres decide, which for anyone in two orgs was both arbitrary and free to
@@ -301,5 +358,137 @@ describe('sweepActivitySources', () => {
     const second = await eventsFor(userId);
     expect(second).toHaveLength(1);
     expect(second[0]?.organizationId).toBe(personalOrgId);
+  });
+
+  it('counts a meeting the person accepted with others, and nothing else', async () => {
+    // Attendance is never observed \u2014 what is observed is that they accepted, somebody else was
+    // invited, and the time elapsed. Each of those three is load-bearing, so each is asserted by
+    // removing it: a meeting nobody answered, one that was declined, and a block held alone.
+    const cases: readonly {
+      label: string;
+      attendees: readonly { email?: string; self?: boolean; responseStatus?: string }[];
+      counts: boolean;
+    }[] = [
+      {
+        label: 'accepted, with a colleague',
+        attendees: [
+          { email: 'ada@example.com', self: true, responseStatus: 'accepted' },
+          { email: 'colleague@example.com', responseStatus: 'accepted' },
+        ],
+        counts: true,
+      },
+      {
+        label: 'never answered',
+        attendees: [
+          { email: 'ada@example.com', self: true, responseStatus: 'needsAction' },
+          { email: 'colleague@example.com', responseStatus: 'accepted' },
+        ],
+        counts: false,
+      },
+      {
+        label: 'declined',
+        attendees: [
+          { email: 'ada@example.com', self: true, responseStatus: 'declined' },
+          { email: 'colleague@example.com', responseStatus: 'accepted' },
+        ],
+        counts: false,
+      },
+      {
+        label: 'a block held alone is a plan, not a meeting',
+        attendees: [{ email: 'ada@example.com', self: true, responseStatus: 'accepted' }],
+        counts: false,
+      },
+      {
+        label: 'no self entry at all',
+        attendees: [{ email: 'colleague@example.com', responseStatus: 'accepted' }],
+        counts: false,
+      },
+    ];
+
+    for (const { label, attendees, counts } of cases) {
+      const { userId } = await seedPerson();
+      await seedAttendedMeeting(
+        userId,
+        new Date('2026-08-12T15:00:00.000Z'),
+        new Date('2026-08-12T16:00:00.000Z'),
+        { attendees },
+      );
+
+      await pullActivityForUser(userId, new Date('2026-08-12T20:00:00.000Z'));
+
+      expect(await eventsFor(userId), label).toHaveLength(counts ? 1 : 0);
+    }
+  });
+
+  it('names the other attendees and never the person themselves', async () => {
+    // Participants exist so narration can say who was there rather than count heads. The person's own
+    // entry is excluded (they are the subject, not a participant), and an attendee the provider gave
+    // no address for is dropped rather than recorded as a blank someone.
+    const { userId } = await seedPerson();
+    await seedAttendedMeeting(
+      userId,
+      new Date('2026-08-12T15:00:00.000Z'),
+      new Date('2026-08-12T16:00:00.000Z'),
+      {
+        attendees: [
+          { email: 'ada@example.com', self: true, responseStatus: 'accepted' },
+          { email: 'named@example.com', displayName: 'Grace', responseStatus: 'accepted' },
+          { email: 'plain@example.com', responseStatus: 'accepted' },
+          // A room or a resource the provider listed without an address.
+          { responseStatus: 'accepted' },
+          { email: '', responseStatus: 'accepted' },
+        ],
+      },
+    );
+
+    await pullActivityForUser(userId, new Date('2026-08-12T20:00:00.000Z'));
+
+    const [event] = await eventsFor(userId);
+    // `ActorRef` keys a person by `externalId`, which for a calendar attendee is their address; the
+    // email itself is only used to resolve them and is deliberately not persisted a second time.
+    expect((event?.participants ?? []).map((p) => p.externalId)).toEqual([
+      'named@example.com',
+      'plain@example.com',
+    ]);
+    expect(event?.participants[0]).toMatchObject({ displayName: 'Grace' });
+    // The nameless one still resolves \u2014 an address is enough to attribute a person \u2014 and its
+    // missing name is an explicit null rather than an absent key.
+    expect(event?.participants[1]?.displayName).toBeNull();
+  });
+
+  it('leaves a meeting still in progress for the next tick', async () => {
+    // "Elapsed" is the whole claim. A meeting that has started but not finished is not yet something
+    // the person did, and recording it early would put a sentence in their day about a room they are
+    // still sitting in.
+    const { userId } = await seedPerson();
+    await seedAttendedMeeting(
+      userId,
+      new Date('2026-08-12T19:30:00.000Z'),
+      new Date('2026-08-12T20:30:00.000Z'),
+    );
+
+    await pullActivityForUser(userId, new Date('2026-08-12T20:00:00.000Z'));
+
+    expect(await eventsFor(userId)).toHaveLength(0);
+  });
+
+  it('keeps each occurrence of a standing meeting as its own story', async () => {
+    // A recurring series repeats one external id, so without the instance key every week of a weekly
+    // meeting would dedupe into one event and a standing meeting would appear to have happened once.
+    const { userId } = await seedPerson();
+    for (const week of ['2026-08-05', '2026-08-12']) {
+      await seedAttendedMeeting(
+        userId,
+        new Date(`${week}T15:00:00.000Z`),
+        new Date(`${week}T16:00:00.000Z`),
+        { recurrenceInstanceKey: `${week}T15:00:00Z` },
+      );
+    }
+
+    // A window wide enough to contain both, so the two are distinguished by key rather than by pass.
+    await pullActivityForUser(userId, new Date('2026-08-12T20:00:00.000Z'));
+    await pullActivityForUser(userId, new Date('2026-08-05T20:00:00.000Z'));
+
+    expect(await eventsFor(userId)).toHaveLength(2);
   });
 });

@@ -63,9 +63,11 @@ test.describe('Clipboard fidelity', () => {
     await page.evaluate(() =>
       navigator.clipboard.writeText('## From another tool\n\n- [ ] Flip the flag\n- [x] Backfill'),
     );
-    await prose.click();
-    await page.keyboard.press('ControlOrMeta+a');
-    await page.keyboard.press('ControlOrMeta+v');
+    // Keep the editor's replacement selection intact. A click here collapses it into the old task
+    // item, which would turn this into an insertion test instead of the replacement journey.
+    await prose.focus();
+    await prose.press('ControlOrMeta+a');
+    await prose.press('ControlOrMeta+v');
 
     // Real structure, from three lines of Markdown source.
     await expect(prose.locator('h2')).toHaveText('From another tool', { timeout: TIMEOUTS.ui });

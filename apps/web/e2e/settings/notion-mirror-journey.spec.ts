@@ -70,22 +70,34 @@ test('a person can reach Notion from Connections and create the databases', asyn
   // An unmatched person can actually be RESOLVED, not merely counted. The mock workspace has
   // three; resolving one must leave two, which is what proves the decision was applied rather
   // than the list simply re-rendering.
-  const decisions = page.getByRole('button', { name: 'Apply' });
+  const peopleNeedingDecision = page.locator('section[aria-label="People who need a decision"]');
+  const decisions = peopleNeedingDecision.getByRole('listitem');
   await expect(decisions).toHaveCount(3);
-  await decisions.first().click();
+
+  const dana = decisions.filter({ hasText: 'Dana Whitfield' });
+  await dana.getByRole('button', { name: 'Apply' }).click();
+  await expect(dana).toHaveCount(0, { timeout: TIMEOUTS.ui });
   await expect(decisions).toHaveCount(2, { timeout: TIMEOUTS.ui });
 
   // "Don't sync them" is a decision like any other, and has to stick like one. This is the exact
   // path that used to refresh the list and put the person straight back: the skip wrote a state
   // indistinguishable from never having decided, so the count never fell.
-  await page.getByRole('combobox').first().selectOption('skip');
-  await decisions.first().click();
+  const sam = decisions.filter({ hasText: 'Sam Ortega' });
+  const samDecision = sam.getByRole('combobox', {
+    name: 'What should Docket do about Sam Ortega?',
+  });
+  await samDecision.selectOption('skip');
+  await expect(samDecision).toHaveValue('skip');
+  await sam.getByRole('button', { name: 'Apply' }).click();
+  await expect(sam).toHaveCount(0, { timeout: TIMEOUTS.ui });
   await expect(decisions).toHaveCount(1, { timeout: TIMEOUTS.ui });
 
   // They are not gone, just decided — and the decision can be taken back.
-  const undo = page.getByRole('button', { name: 'Sort out' });
-  await expect(undo).toHaveCount(1);
-  await undo.first().click();
+  const ignored = page.locator('details').filter({ hasText: '1 person you’re not syncing' });
+  await ignored.locator('summary').click();
+  const undo = ignored.getByRole('button', { name: 'Sort out' });
+  await expect(undo).toBeVisible();
+  await undo.click();
   await expect(decisions).toHaveCount(2, { timeout: TIMEOUTS.ui });
 
   // Back on the hub, the mirror can actually be run. Before this there was no affordance at all

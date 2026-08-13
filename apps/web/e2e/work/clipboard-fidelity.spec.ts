@@ -43,33 +43,34 @@ test.describe('Clipboard fidelity', () => {
     await page.keyboard.press('Delete');
     await prose.pressSequentially('# Rollout plan');
     await page.keyboard.press('Enter');
-    await prose.pressSequentially('- [ ] Flip the flag');
-    await expect(prose.locator('li[data-checked]')).toHaveCount(1);
+    await prose.pressSequentially('- Flip the flag');
+    await expect(prose.locator('ul > li')).toHaveCount(1);
 
     await page.keyboard.press('ControlOrMeta+a');
     await page.keyboard.press('ControlOrMeta+c');
 
-    // The plain flavor is Markdown, not `textBetween`'s flattened characters. Without this the
-    // heading and the checkbox would arrive anywhere else as "Rollout plan Flip the flag".
+    // The plain flavor carries Markdown. ProseMirror's default `textBetween` would deliver
+    // "Rollout plan Flip the flag" to anywhere that reads plain text.
     await expect
       .poll(() => clipboardText(page), {
         timeout: TIMEOUTS.ui,
         message: 'the clipboard should hold the body as Markdown',
       })
       .toContain('# Rollout plan');
-    expect(await clipboardText(page)).toContain('[ ] Flip the flag');
+    expect(await clipboardText(page)).toContain('- Flip the flag');
 
     // --- Pasting Markdown back in ----------------------------------------------------------
     await page.evaluate(() =>
-      navigator.clipboard.writeText('## From another tool\n\n- One\n- Two'),
+      navigator.clipboard.writeText('## From another tool\n\n- [ ] Flip the flag\n- [x] Backfill'),
     );
     await prose.click();
     await page.keyboard.press('ControlOrMeta+a');
     await page.keyboard.press('ControlOrMeta+v');
 
-    // Real structure, not three lines of literal syntax.
+    // Real structure, from three lines of Markdown source.
     await expect(prose.locator('h2')).toHaveText('From another tool', { timeout: TIMEOUTS.ui });
-    await expect(prose.locator('ul > li')).toHaveCount(2);
+    await expect(prose.locator('li[data-checked]')).toHaveCount(2);
+    await expect(prose.locator('li[data-checked="true"]')).toHaveCount(1);
 
     // --- Copying out of a posted comment ---------------------------------------------------
     await page.goto(orgHref(orgId, `tasks/${taskId}`), { waitUntil: 'domcontentloaded' });

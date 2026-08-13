@@ -60,6 +60,20 @@
   - [x] SSR record prefetch on project/program/initiative/task detail; layout hairpin parallelized
   - [x] Quick-add accepts the next title while the previous saves, and returns a failed one
 - **Blockers**: None.
+- **Review round**: A code review found five defects, four of them introduced here, all fixed
+  before merge. The worst: splitting identity out of the composite let the masthead paint early,
+  but capabilities still came from the composite, so a cold open rendered the whole page
+  read-only — title not editable, pickers inert, inline composer absent — until the composite
+  landed, then flipped. Capabilities now come from the shared org roster keys (`useOrgMembership`)
+  and the page holds its gate until they resolve. Also: a second refused quick-add title was
+  discarded (refusals are now their own retryable rows); task-create error precedence was racy
+  between state and label resolution; deferred events were timestamped by the drain rather than
+  the handler; and the navigation bar restarted its own 150ms countdown on every superseding
+  click. Two source-policy failures surfaced on rebase — one mine (a field named `message` reads
+  like the leak the error policy exists to catch), one pre-existing on main (two files from
+  `fix(web): Standardize entity object interactions` carrying unrecorded design-token debt, now
+  recorded at their current counts so the gate is a floor rather than a red check to route
+  around).
 - **Notes**: Not measured end-to-end in a browser. A dev server from another worktree owns the
   local domains, so an authenticated click-to-paint number was not taken; the reasoning is from
   request counts and code paths, and the numbers in the plan are estimates rather than

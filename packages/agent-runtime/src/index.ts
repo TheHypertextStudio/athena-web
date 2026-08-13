@@ -153,10 +153,12 @@ export type {
   WorkParentKind,
 } from './work-linkage';
 export type {
-  SummarizeInput,
-  SummarizeResult,
+  NarrateDayInput,
+  NarrateDayResult,
+  NarratedHighlight,
+  NarrationEpisode,
+  NarrationEvent,
   Summarizer,
-  SummarizerObservation,
 } from './summarizer';
 export type { TaskDraft, TaskDraftInput, TaskSynthesizer } from './task-synthesizer';
 export { TITLE_MAX, truncateTitle } from './task-synthesizer';

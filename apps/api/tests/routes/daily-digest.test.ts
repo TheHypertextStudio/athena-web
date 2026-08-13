@@ -245,16 +245,18 @@ describe('sweepDailyDigests (the hero feature)', () => {
 
     const { getContainer } = await import('../../src/container');
     const summarizer = getContainer().summarizer;
-    const spy = vi.spyOn(summarizer, 'summarize');
+    const spy = vi.spyOn(summarizer, 'narrateDay');
 
     await sweepDailyDigests(NOW);
 
     expect(spy).toHaveBeenCalled();
-    const call = spy.mock.calls.find((args) =>
-      args[0].observations.some((o) => o.title === 'Rich event'),
-    );
-    const observation = call?.[0].observations.find((o) => o.title === 'Rich event');
-    expect(observation).toMatchObject({
+    // The event's own detail has to survive grouping and reach the prompt: an episode narrated from
+    // titles alone cannot say what actually changed.
+    const narrated = spy.mock.calls
+      .flatMap((args) => args[0].episodes)
+      .flatMap((ep) => ep.events.map((event) => ({ subject: ep.subject, ...event })))
+      .find((event) => event.title === 'Rich event');
+    expect(narrated).toMatchObject({
       summary: 'A one-line summary of the change',
       actor: 'Jane Doe',
       subject: 'Ship the thing',
@@ -296,7 +298,9 @@ describe('sweepDailyDigests (the hero feature)', () => {
     const summarizer = getContainer().summarizer;
     // Deliberately a non-Error rejection, to exercise the `err instanceof Error` false arm of the
     // digest's own catch block.
-    const spy = vi.spyOn(summarizer, 'summarize').mockRejectedValueOnce('a plain string rejection');
+    const spy = vi
+      .spyOn(summarizer, 'narrateDay')
+      .mockRejectedValueOnce('a plain string rejection');
 
     try {
       const result = await sweepDailyDigests(NOW);

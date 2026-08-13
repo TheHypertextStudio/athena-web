@@ -16,7 +16,9 @@
  */
 import { dailyDigest, db, event, hub, user } from '@docket/db';
 import type { ActorRef, DigestStats, EntityRef } from '@docket/db';
-import type { SummarizerObservation } from '@docket/agent-runtime';
+import type { NarrationEpisode } from '@docket/agent-runtime';
+import type { CanonicalEntityKind, EventDetail, EventKind, SourceSystemKind } from '@docket/types';
+import { groupSubjectDayEpisodes } from '@docket/types';
 import { and, asc, eq, gte, lte, sql } from 'drizzle-orm';
 
 import { getContainer } from '../container';
@@ -27,15 +29,27 @@ const DEFAULT_SEND_AT = '18:00';
 /** The same default as minutes-since-midnight (the fallback for an unparseable send time). */
 const DEFAULT_SEND_MINUTES = 18 * 60;
 
-/** The event columns the digest actually reads — avoids fetching the raw `detail` jsonb. */
+/**
+ * The event columns the digest reads.
+ *
+ * @remarks
+ * Wider than it once was because grouping needs identity: an episode is defined by its *subject*, so
+ * the entity and actor references and the resolved Docket id all have to be present before the day
+ * can be divided into stories.
+ */
 interface DigestRow {
-  readonly sourceSystem: string;
-  readonly kind: string;
+  readonly id: string;
+  readonly organizationId: string;
+  readonly sourceSystem: SourceSystemKind;
+  readonly kind: EventKind;
   readonly occurredAt: Date;
   readonly title: string;
   readonly summary: string | null;
   readonly actor: ActorRef | null;
   readonly entity: EntityRef | null;
+  readonly entityKind: CanonicalEntityKind | null;
+  readonly docketEntityId: string | null;
+  readonly detail: EventDetail | null;
 }
 
 /** The result of one daily-digest sweep. */
@@ -156,17 +170,89 @@ export function markdownToHtml(md: string): string {
   return out.join('\n');
 }
 
-/** Flatten an event row to the summarizer's compact shape. */
-function toSummarizerObservation(row: DigestRow): SummarizerObservation {
-  return {
-    provider: row.sourceSystem,
-    kind: row.kind,
-    occurredAt: row.occurredAt.toISOString(),
-    title: row.title,
-    ...(row.summary ? { summary: row.summary } : {}),
-    ...(row.actor?.displayName ? { actor: row.actor.displayName } : {}),
-    ...(row.entity?.title ? { subject: row.entity.title } : {}),
-  };
+/**
+ * Group a day's events into the episodes narration works on.
+ *
+ * @remarks
+ * Uses the shared grouping from `@docket/types`, the same function the client renders with, so the
+ * server cannot narrate a different set of stories than the app shows. Keyed by
+ * `(subject, local date)`, which is stable under the late and out-of-order arrivals a poll produces.
+ */
+function toNarrationEpisodes(rows: readonly DigestRow[], localDate: string): NarrationEpisode[] {
+  const episodes = groupSubjectDayEpisodes(
+    rows.map((row) => ({
+      id: row.id,
+      organizationId: row.organizationId,
+      system: row.sourceSystem,
+      kind: row.kind,
+      occurredAt: row.occurredAt.toISOString(),
+      entityKind: row.entityKind,
+      entityExternalId: row.entity?.externalId ?? null,
+      entityDocketId: row.docketEntityId,
+      actorDocketId: row.actor?.docketActorId ?? null,
+      actorSource: row.actor?.source ?? null,
+      actorExternalId: row.actor?.externalId ?? null,
+      actorName: row.actor?.displayName ?? null,
+      detail: row.detail,
+      // Carried through so the narration prompt can read them without a second lookup.
+      title: row.title,
+      summary: row.summary,
+      entityTitle: row.entity?.title ?? null,
+    })),
+    localDate,
+  );
+
+  return episodes.map((episode) => {
+    const anchor = episode.allEvents[0];
+    return {
+      key: episode.key,
+      /* v8 ignore next -- an episode always has at least one event */
+      provider: anchor?.system ?? 'docket',
+      ...(anchor?.entityTitle ? { subject: anchor.entityTitle } : {}),
+      /* v8 ignore next 2 -- as above */
+      startedAt: anchor?.occurredAt ?? localDate,
+      endedAt:
+        episode.allEvents[episode.allEvents.length - 1]?.occurredAt ??
+        anchor?.occurredAt ??
+        localDate,
+      // Only the substantive events are narrated; minor ones stay in the record and out of the
+      // prompt, so a burst of reactions cannot dominate the sentence about real work.
+      events: (episode.visibleEvents.length > 0 ? episode.visibleEvents : episode.allEvents).map(
+        (event) => ({
+          kind: event.kind,
+          occurredAt: event.occurredAt,
+          title: event.title,
+          ...(event.summary ? { summary: event.summary } : {}),
+          ...(event.actorName ? { actor: event.actorName } : {}),
+        }),
+      ),
+    };
+  });
+}
+
+/**
+ * Assemble the delivered Markdown from narrated highlights.
+ *
+ * @remarks
+ * Pure, and assembled at send time rather than stored by the narrator, so what somebody received is
+ * frozen at the moment it went out.
+ *
+ * @param input - The day label, the recipient, and the highlights to include.
+ * @returns the digest Markdown.
+ */
+export function assembleHighlightsMarkdown(input: {
+  readonly dateLabel: string;
+  readonly recipientName?: string | null;
+  readonly highlights: readonly { readonly sentence: string }[];
+}): string {
+  const greeting = input.recipientName
+    ? `Hi ${input.recipientName} — here's what you did on ${input.dateLabel}:`
+    : `Here's what you did on ${input.dateLabel}:`;
+  const body =
+    input.highlights.length > 0
+      ? input.highlights.map((highlight) => `- ${highlight.sentence}`).join('\n')
+      : '_No tracked activity today._';
+  return `# Your day\n\n${greeting}\n\n${body}`;
 }
 
 /** Build the per-source / per-kind stat counts for a day's events. */
@@ -210,6 +296,8 @@ async function generateForUser(
     const dayStart = localDayStartUtc(parts, candidate.tz);
     const rows = await db
       .select({
+        id: event.id,
+        organizationId: event.organizationId,
         sourceSystem: event.sourceSystem,
         kind: event.kind,
         occurredAt: event.occurredAt,
@@ -217,6 +305,9 @@ async function generateForUser(
         summary: event.summary,
         actor: event.actor,
         entity: event.entity,
+        entityKind: event.entityKind,
+        docketEntityId: event.docketEntityId,
+        detail: event.detail,
       })
       .from(event)
       .where(
@@ -245,10 +336,15 @@ async function generateForUser(
     }).format(now);
 
     const { summarizer } = getContainer();
-    const { markdown } = await summarizer.summarize({
+    const { highlights } = await summarizer.narrateDay({
       dateLabel,
       ...(candidate.name ? { recipientName: candidate.name } : {}),
-      observations: rows.map(toSummarizerObservation),
+      episodes: toNarrationEpisodes(rows, localDate),
+    });
+    const markdown = assembleHighlightsMarkdown({
+      dateLabel,
+      recipientName: candidate.name,
+      highlights,
     });
     const html = markdownToHtml(markdown);
 

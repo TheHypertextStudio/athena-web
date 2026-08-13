@@ -18,10 +18,10 @@
  * the attempt, a token failure flips the integration to `error` and notifies its owner, and a
  * provider outage is persisted rather than swallowed.
  */
-import { actor, calendarConnection, db, hub, integration, syncRun } from '@docket/db';
+import { actor, calendarConnection, db, hub, integration, organization, syncRun } from '@docket/db';
 import type { ActivitySource } from '@docket/integrations';
 import { ACTIVITY_PROVIDER_IDS } from '@docket/types';
-import { and, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 
 import { writeEventDrafts, type DraftWriteTally } from '../../events/write-drafts';
 import { connectorFor } from '../../routes/integration-provider';
@@ -230,12 +230,22 @@ async function projectCalendar(
   });
   if (pulled.drafts.length === 0) return { users: 1, truncated: pulled.truncated ? 1 : 0 };
 
-  // A meeting is not org-scoped, but `event` is. The person's own Hub organization is where their
-  // calendar activity belongs, which is the same choice the day's cross-org read already makes.
+  // A meeting is not org-scoped, but `event` is, so one org has to be chosen. A person's calendar
+  // belongs to their personal workspace — the one org that is theirs alone — and the oldest
+  // membership is the fallback when they have no personal org.
+  //
+  // The ordering is the whole point. An unordered `LIMIT 1` let Postgres return whichever actor row
+  // it liked, so for anyone in more than one org the choice was arbitrary *and* free to change
+  // between ticks. `dedupeKey` is unique per organization, so a flip does not dedupe against the
+  // earlier write: the same meeting lands a second time under a different org, in an append-only log
+  // that has no correction path. It also put meeting titles and every attendee's email address into
+  // a workspace with no claim on them.
   const [row] = await db
     .select({ organizationId: actor.organizationId })
     .from(actor)
+    .innerJoin(organization, eq(organization.id, actor.organizationId))
     .where(eq(actor.userId, userId))
+    .orderBy(desc(organization.isPersonal), asc(actor.createdAt))
     .limit(1);
   if (!row) return { users: 1 };
 

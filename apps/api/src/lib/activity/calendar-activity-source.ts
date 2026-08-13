@@ -19,7 +19,7 @@
  * invited. That is not the same claim as "they were in the room", and nothing here pretends it is —
  * see `event_kind.meeting_attended`.
  */
-import { calendarConnection, calendarItem, calendarList, db } from '@docket/db';
+import { calendarConnection, calendarItem, calendarLayer, db } from '@docket/db';
 import type { CalendarEventAttendee } from '@docket/db';
 import type { ActivityPullInput, ActivityPullResult, ActivitySource } from '@docket/integrations';
 import type { EventDraft } from '@docket/integrations';
@@ -80,7 +80,7 @@ export function calendarActivitySource(userId: string): ActivitySource {
           attendees: calendarItem.attendees,
         })
         .from(calendarItem)
-        .innerJoin(calendarList, eq(calendarList.id, calendarItem.layerId))
+        .innerJoin(calendarLayer, eq(calendarLayer.id, calendarItem.layerId))
         .innerJoin(calendarConnection, eq(calendarConnection.id, calendarItem.connectionId))
         .where(
           and(
@@ -91,7 +91,7 @@ export function calendarActivitySource(userId: string): ActivitySource {
             isNotNull(calendarItem.startsAt),
             isNotNull(calendarItem.endsAt),
             // A calendar the person has switched off is not part of their day.
-            eq(calendarList.selected, true),
+            eq(calendarLayer.selected, true),
             ne(calendarConnection.status, 'disconnected'),
             // The meeting has to have started inside the window and finished before its end —
             // "elapsed" is the whole claim, so an in-progress meeting is not yet activity.

@@ -18,6 +18,71 @@ beforeAll(async () => {
   db = schema.db;
 });
 
+/**
+ * A person's calendar with one elapsed, accepted, multi-attendee meeting.
+ *
+ * @remarks
+ * The calendar path had no coverage at all, which is how the org-attribution bug below reached
+ * production. Seeded through the real tables rather than a stub because the projection *is* the
+ * query: a fake source would exercise none of the predicates that decide what counts as attended.
+ */
+async function seedAttendedMeeting(userId: string, startsAt: Date, endsAt: Date): Promise<void> {
+  // `calendar_connection` has a composite FK onto the Better Auth `account` row that holds the
+  // Google grant, so the linked account has to exist before the calendar does.
+  const externalAccountId = `acct-${String(++calSeq)}`;
+  await db.insert(schema.account).values({
+    userId,
+    providerId: 'google',
+    accountId: externalAccountId,
+  });
+  const connectionId = one(
+    await db
+      .insert(schema.calendarConnection)
+      .values({
+        userId,
+        provider: 'google',
+        externalAccountId,
+        accountEmail: 'ada@example.com',
+        status: 'connected',
+      })
+      .returning({ id: schema.calendarConnection.id }),
+  ).id;
+  // `calendar_item.layer_id` keys `calendar_layer`, not the similarly-named `calendar_list`. The
+  // projection used to join the latter, so the inner join matched nothing and the calendar leg of
+  // the feature produced no events at all.
+  const layerId = one(
+    await db
+      .insert(schema.calendarLayer)
+      .values({
+        userId,
+        connectionId,
+        sourceKind: 'provider',
+        externalLayerId: `cal-${String(++calSeq)}`,
+        title: 'Work',
+        selected: true,
+      })
+      .returning({ id: schema.calendarLayer.id }),
+  ).id;
+  await db.insert(schema.calendarItem).values({
+    userId,
+    layerId,
+    connectionId,
+    kind: 'event',
+    status: 'confirmed',
+    provider: 'google',
+    externalEventId: `evt-${String(++calSeq)}`,
+    title: 'Comp review',
+    startsAt,
+    endsAt,
+    attendees: [
+      { email: 'ada@example.com', self: true, responseStatus: 'accepted' },
+      { email: 'colleague@example.com', responseStatus: 'accepted' },
+    ],
+  });
+}
+
+let calSeq = 0;
+
 /** A connected activity-capable integration owned by `actorId`. */
 async function seedIntegration(
   orgId: string,
@@ -193,5 +258,48 @@ describe('sweepActivitySources', () => {
 
     expect(result).toMatchObject({ integrations: 0, users: 0, events: 0 });
     expect(await eventsFor(userId)).toHaveLength(0);
+  });
+
+  it('writes a meeting into the personal workspace, and picks the same one every tick', async () => {
+    // `event` is org-scoped and a meeting is not, so one org has to be chosen. An unordered
+    // `LIMIT 1` let Postgres decide, which for anyone in two orgs was both arbitrary and free to
+    // change between ticks — and since `dedupeKey` is unique *per organization*, a flip writes the
+    // same meeting a second time under a different org, into a log with no correction path.
+    const { userId } = await seedPerson();
+    const personalOrgId = one(
+      await db
+        .insert(schema.organization)
+        .values({ name: 'Ada', slug: `ada-${String(++calSeq)}`, isPersonal: true })
+        .returning({ id: schema.organization.id }),
+    ).id;
+    // Created *after* the shared org, so ordering by age alone would pick the wrong one. That is
+    // what makes this assert `isPersonal` decides, rather than passing by accident.
+    await db
+      .insert(schema.actor)
+      .values({
+        organizationId: personalOrgId,
+        kind: 'human',
+        displayName: 'Ada',
+        userId,
+      })
+      .returning({ id: schema.actor.id });
+
+    const now = new Date('2026-08-12T20:00:00.000Z');
+    await seedAttendedMeeting(
+      userId,
+      new Date('2026-08-12T15:00:00.000Z'),
+      new Date('2026-08-12T16:00:00.000Z'),
+    );
+
+    await pullActivityForUser(userId, now);
+    const first = await eventsFor(userId);
+    expect(first).toHaveLength(1);
+    expect(first[0]?.organizationId).toBe(personalOrgId);
+
+    // Re-running must not produce a second copy under a different org.
+    await pullActivityForUser(userId, now);
+    const second = await eventsFor(userId);
+    expect(second).toHaveLength(1);
+    expect(second[0]?.organizationId).toBe(personalOrgId);
   });
 });

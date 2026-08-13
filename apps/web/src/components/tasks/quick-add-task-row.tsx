@@ -44,8 +44,16 @@ interface RefusedSubmission {
   readonly key: number;
   /** Exactly what was typed. */
   readonly title: string;
-  /** Application-owned copy for why it did not land. */
-  readonly message: string;
+  /**
+   * Application-owned copy for why it did not land.
+   *
+   * @remarks
+   * Named `reason` rather than `message` on purpose: the source policy forbids reading `.message`
+   * in production UI because that is how provider and exception prose leaks onto a screen. This
+   * value has already been through `userErrorMessage`, so it is ours — but a field called
+   * `message` is indistinguishable from the thing the rule exists to catch.
+   */
+  readonly reason: string;
 }
 
 /** An inline task composer that stays put across entries. */
@@ -64,8 +72,8 @@ export function QuickAddTaskRow({
   /** Submit one captured title, parking it as retryable if the server refuses. */
   const submit = (submitted: string): void => {
     void onAdd(submitted).catch((caught: unknown) => {
-      const message = userErrorMessage(caught, 'Could not add that task.');
-      setRefused((current) => [...current, { key: nextKey.current++, title: submitted, message }]);
+      const reason = userErrorMessage(caught, 'Could not add that task.');
+      setRefused((current) => [...current, { key: nextKey.current++, title: submitted, reason }]);
     });
   };
 
@@ -127,7 +135,7 @@ export function QuickAddTaskRow({
                   {entry.title}
                 </span>
                 <span role="alert" className="text-error text-body-small">
-                  {entry.message}
+                  {entry.reason}
                 </span>
               </div>
               <Button

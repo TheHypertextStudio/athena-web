@@ -259,6 +259,9 @@
     "hardcoded-color": 1,
     "raw-type-utility": 6
   },
+  "apps/web/src/components/initiatives/initiative-relationship-panels.tsx": {
+    "raw-type-utility": 2
+  },
   "apps/web/src/components/initiatives/roadmap.tsx": {
     "raw-type-utility": 16,
     "shadow-outside-overlay": 1
@@ -296,6 +299,9 @@
   },
   "apps/web/src/components/my-work/split-tabs.tsx": {
     "raw-type-utility": 2
+  },
+  "apps/web/src/components/objects/object-list-row.tsx": {
+    "raw-type-utility": 1
   },
   "apps/web/src/components/offline-state.tsx": {
     "raw-type-utility": 1

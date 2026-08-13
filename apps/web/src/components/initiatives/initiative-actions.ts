@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';
+import { useCopyOutcome } from '@/components/clipboard';
 import {
   initiativeDragObjectFromRef,
   writeInitiativeHierarchyMutation,
@@ -36,6 +37,7 @@ export function useRegisterInitiativeActions(): void {
   const router = useRouter();
   const queryClient = useQueryClient();
   const pickerOverlay = usePickerOverlay();
+  const reportOutcome = useCopyOutcome();
 
   const definitions = useMemo<readonly ActionDefinition[]>(
     () =>
@@ -54,7 +56,7 @@ export function useRegisterInitiativeActions(): void {
             if (href !== null) router.push(href);
           },
         },
-        copyObjectAction('initiative'),
+        copyObjectAction('initiative', reportOutcome),
         {
           id: 'initiative.changeParent',
           label: 'Change parent…',
@@ -120,7 +122,7 @@ export function useRegisterInitiativeActions(): void {
           },
         },
       ]),
-    [pickerOverlay, queryClient, router],
+    [pickerOverlay, queryClient, router, reportOutcome],
   );
 
   useRegisterActionDomain('initiative', definitions);

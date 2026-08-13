@@ -46,14 +46,20 @@ export type CopyableObjectKind = Extract<ObjectKind, ActionDomain>;
  * the input type erases the `Promise<void>` that check reads.
  *
  * @param kind - The kind this action is offered for.
+ * @param reportOutcome - Where to report whether the write reached the clipboard; from
+ * `useCopyOutcome`. The menu has closed by the time the write resolves, so the action cannot show
+ * its own state and a refused write would otherwise be entirely silent.
  * @returns The definition to include in that kind's domain.
  *
  * @example
  * ```ts
- * defineActionDomain('project', [openProject, copyObjectAction('project')])
+ * defineActionDomain('project', [openProject, copyObjectAction('project', reportOutcome)])
  * ```
  */
-export function copyObjectAction(kind: CopyableObjectKind) {
+export function copyObjectAction(
+  kind: CopyableObjectKind,
+  reportOutcome: (wrote: boolean) => void,
+) {
   const descriptor = describeObject(kind);
 
   return {
@@ -73,9 +79,12 @@ export function copyObjectAction(kind: CopyableObjectKind) {
     run: async (context: ActionContext) => {
       const payload = objectsToClipboard(context.objects, window.location.origin);
       if (payload.text === '') return;
-      await writeClipboard(payload);
+      reportOutcome(await writeClipboard(payload));
     },
     responsiveness: {
+      // No receipt of its own: the acknowledgement is the reported outcome, which is what a copy
+      // actually needs — a receipt would announce that the *action ran*, not that the clipboard
+      // took it, and those differ in precisely the case worth telling the user about.
       ownership: 'autonomous',
     },
   } satisfies ActionDefinitionInput;

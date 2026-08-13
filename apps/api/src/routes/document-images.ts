@@ -30,7 +30,7 @@
  * the tenant boundary is the org scope on every query, exactly as elsewhere.
  */
 import { db, documentImage, genId } from '@docket/db';
-import { DocumentImageMimeType, DocumentImageOut } from '@docket/types';
+import { DocumentImageMimeType, DocumentImageOut, DocumentImageRemoved } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -119,7 +119,7 @@ const documentImages = new Hono<AppEnv>()
       summary: 'Upload an inline image',
       capability: 'contribute',
       response: DocumentImageOut,
-      description: `Store an image for use inside an entity's prose — the destination for an image pasted or dropped into a rich-text body. **Multipart/form-data**, not JSON: a single \`file\` part (required, non-empty, ≤ ${String(MAX_IMAGE_MB)} MB). The type must be one of \`image/png\`, \`image/jpeg\`, \`image/gif\`, or \`image/webp\`; anything else (notably SVG, which can carry script) is rejected before any bytes are stored, because these bytes are later served **inline** rather than as a download. The stored MIME type is the validated one, never the client's claim. Bytes are written through the \`BlobStore\` port (local disk in dev, Vercel Blob in production) under an id-scoped key with no filename in the path. The row is org-scoped and hangs off no subject: the only reference to it is the \`![alt](url)\` in the Markdown, which is what lets a body be copied between entities. Requires \`contribute\`. Returns the created {@link DocumentImageOut}, whose \`url\` is what belongs in the Markdown.`,
+      description: `Store an image for use inside an entity's prose. **Multipart/form-data**: a single \`file\` part, non-empty and ≤ ${String(MAX_IMAGE_MB)} MB, of type \`image/png\`, \`image/jpeg\`, \`image/gif\`, or \`image/webp\` — any other type is rejected with 422. The image is org-scoped and belongs to no entity; reference it by writing the returned \`url\` into Markdown as \`![alt](url)\`. Requires \`contribute\`.`,
     }),
     zForm(uploadForm),
     async (c) => {
@@ -167,7 +167,7 @@ const documentImages = new Hono<AppEnv>()
     apiDoc({
       tag: 'Organizations',
       summary: 'Serve an inline image',
-      description: `Stream the bytes of a stored inline image. Returns raw bytes, not a JSON envelope, and is fetched by the browser as an \`<img src>\` rather than through the typed RPC client. Served **inline** with the MIME type recorded at upload — safe only because that type came from a raster allowlist and never from the client, with \`X-Content-Type-Options: nosniff\` so the browser cannot reinterpret it. The row is scoped to the path's organization, so a foreign or unknown id 404s. Requires org membership (\`view\`).`,
+      description: `Stream the bytes of a stored inline image. Returns raw bytes rather than a JSON envelope, served inline with the MIME type recorded at upload, so this URL can be used directly as an \`<img src>\`. Responses are immutable and privately cacheable. An unknown id, or one belonging to another organization, returns 404. Requires org membership (\`view\`).`,
     }),
     zParam(imageParam),
     async (c) => {
@@ -199,6 +199,39 @@ const documentImages = new Hono<AppEnv>()
           'Cache-Control': 'private, max-age=31536000, immutable',
         },
       });
+    },
+  )
+  .delete(
+    '/:imageId',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Organizations',
+      summary: 'Delete an inline image',
+      capability: 'contribute',
+      response: DocumentImageRemoved,
+      description: `Delete a stored inline image and its bytes. Images are not reference-counted, so deletion is explicit: call this to reclaim storage once no body references the image. Any Markdown still pointing at it renders its alt text instead. An unknown id, or one belonging to another organization, returns 404. Requires \`contribute\`.`,
+    }),
+    zParam(imageParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { imageId } = c.req.valid('param');
+
+      const rows = await db
+        .select()
+        .from(documentImage)
+        .where(and(eq(documentImage.id, imageId), eq(documentImage.organizationId, orgId)))
+        .limit(1);
+      const row = rows[0];
+      if (!row) throw new NotFoundError('Image not found');
+
+      // Bytes first: an orphaned blob is unreachable forever once its row is gone, while a row
+      // whose blob is missing is already a case the serve route handles.
+      await getContainer().blob.delete(row.blobKey);
+      await db
+        .delete(documentImage)
+        .where(and(eq(documentImage.id, imageId), eq(documentImage.organizationId, orgId)));
+
+      return ok(c, DocumentImageRemoved, { id: row.id, removed: true });
     },
   );
 

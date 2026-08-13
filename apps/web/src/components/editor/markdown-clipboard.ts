@@ -55,14 +55,20 @@ export type PastedImageUploader = (file: File) => Promise<string | null>;
 /** Options for {@link createMarkdownClipboardExtension}. */
 export interface MarkdownClipboardOptions {
   /**
-   * Rehost image bytes found on the clipboard, or `null` where uploads are unavailable.
+   * Resolve the current uploader for image bytes found on the clipboard, or `null` where uploads
+   * are unavailable.
    *
    * @remarks
+   * A resolver rather than the uploader itself, because an extension's options are captured when the
+   * editor is *created* and `useEditor` never rebuilds it. A surface that mounts before its workspace
+   * resolves would otherwise hold `null` for the rest of its life and silently drop every pasted
+   * screenshot. Asking at paste time is what keeps the answer current.
+   *
    * Injected rather than imported so this extension stays free of the API client and remains unit
-   * testable, and so surfaces with no workspace context (which have nowhere to upload *to*) simply
-   * omit it and fall through to the default paste.
+   * testable, and so surfaces with no workspace context (which have nowhere to upload *to*) fall
+   * through to the default paste.
    */
-  readonly uploadImage: PastedImageUploader | null;
+  readonly resolveUploader: () => PastedImageUploader | null;
 }
 
 /**
@@ -179,26 +185,42 @@ function imageOnlyFile(clipboardData: DataTransfer): File | null {
   return null;
 }
 
-/** Upload a pasted image and place it at the cursor, leaving the document untouched on failure. */
+/**
+ * Upload a pasted image and place it where it was pasted, leaving the document untouched on failure.
+ *
+ * @remarks
+ * The position is captured before the upload starts, not read after it finishes. An upload takes as
+ * long as the network does, and a person who pastes a screenshot and then carries on typing
+ * elsewhere would otherwise find the picture dropped wherever their cursor had drifted to.
+ *
+ * The editor may also be gone by the time the bytes land — the reader navigated away — so a
+ * destroyed editor is checked for rather than dispatched into.
+ *
+ * @param editor - The editor to insert into.
+ * @param upload - The uploader resolved at paste time.
+ * @param file - The pasted image.
+ * @param at - The document position the paste happened at.
+ */
 async function insertUploadedImage(
   editor: Editor,
   upload: PastedImageUploader,
   file: File,
+  at: number,
 ): Promise<void> {
   const src = await upload(file);
-  if (src === null) return;
-  editor.commands.insertContent({ type: IMAGE_NODE, attrs: { src, alt: file.name } });
+  if (src === null || editor.isDestroyed) return;
+  editor.commands.insertContentAt(at, { type: IMAGE_NODE, attrs: { src, alt: file.name } });
 }
 
 /**
  * Build the editor's clipboard extension.
  *
- * @param options - The pasted-image uploader, or `null` to decline image rehosting.
+ * @param options - How to resolve the pasted-image uploader at paste time.
  * @returns A Tiptap extension supplying the copy serializer and the paste handler.
  *
  * @example
  * ```ts
- * createMarkdownClipboardExtension({ uploadImage })
+ * createMarkdownClipboardExtension({ resolveUploader: () => uploadRef.current })
  * ```
  */
 export function createMarkdownClipboardExtension(
@@ -213,7 +235,7 @@ export function createMarkdownClipboardExtension(
 
     addProseMirrorPlugins() {
       const { editor } = this;
-      const uploadImage = this.options.uploadImage;
+      const resolveUploader = this.options.resolveUploader;
 
       return [
         new Plugin({
@@ -229,10 +251,15 @@ export function createMarkdownClipboardExtension(
               if (inCodeBlock(view.state)) return false;
 
               const image = imageOnlyFile(clipboardData);
+              const uploadImage = image === null ? null : resolveUploader();
               if (image !== null && uploadImage !== null) {
                 if (editor.schema.nodes[IMAGE_NODE] === undefined) return false;
                 event.preventDefault();
-                void insertUploadedImage(editor, uploadImage, image);
+                // The paste position, not wherever the cursor ends up while the upload is in flight.
+                const at = view.state.selection.from;
+                // A rejected insert must not escape as an unhandled rejection; the upload itself
+                // already reports its own failure through the surface that owns it.
+                void insertUploadedImage(editor, uploadImage, image, at).catch(() => undefined);
                 return true;
               }
 

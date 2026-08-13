@@ -33,7 +33,7 @@ function editorWith(value: string): Editor {
       TableKit,
       Image,
       Markdown.configure({ markedOptions: { gfm: true, breaks: false } }),
-      createMarkdownClipboardExtension({ uploadImage: null }),
+      createMarkdownClipboardExtension({ resolveUploader: () => null }),
     ],
     content: value,
     contentType: 'markdown',

@@ -154,6 +154,43 @@ describe('document image routes', () => {
     expect((await outsider.request(`/${created.id}`)).status).toBe(404);
   });
 
+  it('deletes an image and reclaims its bytes', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(documentImages, orgId, ['contribute'], humanActorId);
+    const created = await body<DocumentImageOut>(await upload(w, imageOfSize('gone.png', 6)));
+    const key = blobKeyFor(orgId, created.id);
+    expect(await getContainer().blob.get(key)).not.toBeNull();
+
+    const del = await w.request(`/${created.id}`, { method: 'DELETE' });
+
+    expect(del.status).toBe(200);
+    // The only reference to an image is the Markdown naming it, so nothing can infer when the last
+    // one goes away — reclaiming has to be something a caller can ask for outright.
+    expect(await getContainer().blob.get(key)).toBeNull();
+    expect((await w.request(`/${created.id}`)).status).toBe(404);
+  });
+
+  it('requires `contribute` to delete (403 for a viewer)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(documentImages, orgId, ['contribute'], humanActorId);
+    const created = await body<DocumentImageOut>(await upload(w, imageOfSize('keep.png', 4)));
+
+    const viewer = appWithActor(documentImages, orgId, ['view'], humanActorId);
+    expect((await viewer.request(`/${created.id}`, { method: 'DELETE' })).status).toBe(403);
+  });
+
+  it('does not delete another workspace’s image', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const owner = appWithActor(documentImages, orgId, ['contribute'], humanActorId);
+    const created = await body<DocumentImageOut>(await upload(owner, imageOfSize('a.png', 5)));
+
+    const other = await seedBaseOrg(db, schema);
+    const outsider = appWithActor(documentImages, other.orgId, ['contribute'], other.humanActorId);
+
+    expect((await outsider.request(`/${created.id}`, { method: 'DELETE' })).status).toBe(404);
+    expect(await getContainer().blob.get(blobKeyFor(orgId, created.id))).not.toBeNull();
+  });
+
   it('404s an unknown id', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const w = appWithActor(documentImages, orgId, ['view'], humanActorId);

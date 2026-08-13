@@ -48,3 +48,13 @@ export const DocumentImageOut = z
   .meta({ id: 'DocumentImageOut', description: 'An image stored for use inside prose.' });
 /** Document image representation value. */
 export type DocumentImageOut = z.infer<typeof DocumentImageOut>;
+
+/** Acknowledgement returned when a stored image is deleted. */
+export const DocumentImageRemoved = z
+  .object({
+    id: DocumentImageId.describe('Id of the removed image.'),
+    removed: z.literal(true).describe('Always `true`; confirms the image and its bytes are gone.'),
+  })
+  .meta({ id: 'DocumentImageRemoved', description: 'A removed-image acknowledgement.' });
+/** Removal acknowledgement value. */
+export type DocumentImageRemoved = z.infer<typeof DocumentImageRemoved>;

@@ -63,6 +63,15 @@ export interface CopyFeedback {
   readonly copy: (payload: ClipboardPayload) => Promise<void>;
   /** Write a single plain-text flavor, then acknowledge the outcome. */
   readonly copyText: (text: string) => Promise<void>;
+  /**
+   * Acknowledge a write this hook did not perform.
+   *
+   * @remarks
+   * For copies that happen away from any control that could show their own state — a context-menu
+   * item, which has closed by the time the write resolves. The caller does the writing; this only
+   * says what happened.
+   */
+  readonly report: (wrote: boolean) => void;
 }
 
 /**
@@ -130,5 +139,6 @@ export function useCopyFeedback(options: CopyFeedbackOptions = {}): CopyFeedback
     announcement: state === 'copied' ? copiedMessage : state === 'failed' ? failedMessage : '',
     copy,
     copyText,
+    report: settle,
   };
 }

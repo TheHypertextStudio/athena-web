@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';
+import { useCopyOutcome } from '@/components/clipboard';
 import {
   type ActionContext,
   defineActionDomain,
@@ -34,6 +35,7 @@ function target(context: ActionContext, kind: ObjectKind): string | null {
 /** Register the common Open action for Project, Program, Cycle, and Team objects. */
 export function useRegisterEntityNavigationActions(): void {
   const router = useRouter();
+  const reportOutcome = useCopyOutcome();
   const domains = useMemo(
     () => ({
       project: defineActionDomain('project', [
@@ -48,7 +50,7 @@ export function useRegisterEntityNavigationActions(): void {
             if (href !== null) router.push(href);
           },
         },
-        copyObjectAction('project'),
+        copyObjectAction('project', reportOutcome),
       ]),
       program: defineActionDomain('program', [
         {
@@ -62,7 +64,7 @@ export function useRegisterEntityNavigationActions(): void {
             if (href !== null) router.push(href);
           },
         },
-        copyObjectAction('program'),
+        copyObjectAction('program', reportOutcome),
       ]),
       cycle: defineActionDomain('cycle', [
         {
@@ -76,7 +78,7 @@ export function useRegisterEntityNavigationActions(): void {
             if (href !== null) router.push(href);
           },
         },
-        copyObjectAction('cycle'),
+        copyObjectAction('cycle', reportOutcome),
       ]),
       team: defineActionDomain('team', [
         {
@@ -90,10 +92,10 @@ export function useRegisterEntityNavigationActions(): void {
             if (href !== null) router.push(href);
           },
         },
-        copyObjectAction('team'),
+        copyObjectAction('team', reportOutcome),
       ]),
     }),
-    [router],
+    [router, reportOutcome],
   );
 
   useRegisterActionDomain('project', domains.project);

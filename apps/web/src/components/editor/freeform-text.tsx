@@ -115,7 +115,12 @@ export function FreeformTextEditor({
   // a personal space still needs somewhere to put a screenshot.
   const activeOrgId = useActiveOrgIdOptional();
   const images = useDocumentImageUpload(mentionOrgId ?? activeOrgId ?? undefined);
-  const uploadImage = images.upload;
+  // Through a ref, because the editor is created once: an extension's options are captured at
+  // creation and `useEditor` never rebuilds it, so a surface that mounted before its workspace
+  // resolved would hold `null` forever and silently drop every pasted screenshot.
+  const uploadImageRef = useRef(images.upload);
+  uploadImageRef.current = images.upload;
+  const resolveUploader = useCallback(() => uploadImageRef.current, []);
   // `useEditor`'s callbacks are created once and close over their first render's values, the same
   // reason `onChangeRef` exists a few lines up. The controller changes every keystroke, so the
   // handlers must reach it through a ref or they would act on a stale menu.
@@ -190,10 +195,10 @@ export function FreeformTextEditor({
       Image,
       Markdown.configure({ markedOptions: { gfm: true, breaks: false } }),
       // After Markdown: the clipboard extension reads the manager that extension installs.
-      createMarkdownClipboardExtension({ uploadImage }),
+      createMarkdownClipboardExtension({ resolveUploader }),
       ...slashExtensions,
     ],
-    [slashExtensions, uploadImage],
+    [slashExtensions, resolveUploader],
   );
 
   const editor = useEditor({

@@ -6,4 +6,8 @@
  * wearing `objectTargetProps` then becomes copyable with ⌘C, and any selection inside rendered
  * Markdown copies as Markdown. Surfaces contribute content; this contributes the gesture.
  */
-export { ClipboardProvider, type ClipboardProviderProps } from './clipboard-provider';
+export {
+  ClipboardProvider,
+  type ClipboardProviderProps,
+  useCopyOutcome,
+} from './clipboard-provider';

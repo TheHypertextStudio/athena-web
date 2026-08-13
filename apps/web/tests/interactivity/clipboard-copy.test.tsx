@@ -127,6 +127,51 @@ describe('copying rendered Markdown', () => {
     expect(flavors['text/plain']).toBe('# Rollout plan\n\n- Flip the flag');
   });
 
+  it('leaves a selection inside a code block to the browser, verbatim', () => {
+    render(
+      <InteractionProvider>
+        <div data-static-markdown="">
+          <div data-code-block="" data-code-language="ts">
+            <pre>
+              <code data-testid="code">const x = arr[0] * 2;</code>
+            </pre>
+          </div>
+        </div>
+      </InteractionProvider>,
+    );
+    const code = screen.getByTestId('code');
+    selectContentsOf(code);
+
+    // The walker would escape `[` and `*` and collapse the newlines; the platform copies source
+    // exactly, which is the only correct answer for code.
+    expect(copy(code).claimed).toBe(false);
+  });
+
+  it('reads the selection rather than focus, so a focused editor elsewhere does not block it', () => {
+    render(
+      <InteractionProvider>
+        <div data-editor-surface="">
+          <div data-testid="composer" contentEditable suppressContentEditableWarning>
+            Draft
+          </div>
+        </div>
+        <div data-static-markdown="">
+          <h2>Findings</h2>
+        </div>
+      </InteractionProvider>,
+    );
+    // Type in the composer, then select a comment above it — focus stays behind in the editor.
+    screen.getByTestId('composer').focus();
+    const container = document.querySelector('[data-static-markdown]');
+    if (container === null) throw new Error('rendered Markdown container is missing');
+    selectContentsOf(container);
+
+    const { claimed, flavors } = copy(container);
+
+    expect(claimed).toBe(true);
+    expect(flavors['text/plain']).toBe('## Findings');
+  });
+
   it('leaves an ordinary text selection to the browser', () => {
     render(
       <InteractionProvider>

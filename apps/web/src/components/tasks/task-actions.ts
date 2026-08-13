@@ -26,6 +26,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';
+import { useCopyOutcome } from '@/components/clipboard';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { api } from '@/lib/api';
 import {
@@ -88,6 +89,7 @@ export function useRegisterTaskActions(): void {
   const router = useRouter();
   const queryClient = useQueryClient();
   const pickerOverlay = usePickerOverlay();
+  const reportOutcome = useCopyOutcome();
 
   const definitions = useMemo<readonly ActionDefinition[]>(() => {
     /** Invalidate everything that shows a task after a write. */
@@ -209,7 +211,7 @@ export function useRegisterTaskActions(): void {
           await navigator.clipboard.writeText(new URL(href, window.location.origin).toString());
         },
       },
-      copyObjectAction('task'),
+      copyObjectAction('task', reportOutcome),
       {
         id: 'task.showInGraph',
         label: 'Show in dependency graph',
@@ -224,7 +226,7 @@ export function useRegisterTaskActions(): void {
         },
       },
     ]);
-  }, [router, queryClient, pickerOverlay]);
+  }, [router, queryClient, pickerOverlay, reportOutcome]);
 
   useRegisterActionDomain('task', definitions);
 }

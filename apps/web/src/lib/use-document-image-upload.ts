@@ -4,16 +4,12 @@
  * `lib/use-document-image-upload` — rehosting an image that arrived on the clipboard.
  *
  * @remarks
- * Pasting a screenshot into a body has to end with the image stored somewhere every reader of that
- * body can reach. The clipboard hands over bytes with no home, so those bytes are uploaded and the
- * Markdown records the URL they became addressable at — see `apps/api/src/routes/document-images`.
+ * A pasted screenshot arrives as bytes with no home. They are uploaded, and the Markdown records the
+ * URL they became addressable at — see `apps/api/src/routes/document-images`.
  *
- * ## Why this reports its own status
- *
- * An upload is the part of paste that resolves *after* the gesture is over, and it can fail: the
- * image is too large, the network is gone, the workspace is read-only. The user needs to know
- * whether the screenshot they pasted arrived, so the hook owns a small state machine and the
- * sentence describing it, and the editor renders both.
+ * The upload resolves after the paste gesture is over and can fail: the image is too large, the
+ * network is gone, the workspace is read-only. The hook holds a small state machine and the sentence
+ * describing it; the editor renders both.
  *
  * @see {@link ../components/editor/markdown-clipboard} for the paste handler that calls this.
  */
@@ -33,8 +29,7 @@ export interface DocumentImageUpload {
    * The uploader to hand the editor, or `null` when there is nowhere to upload to.
    *
    * @remarks
-   * `null` outside a workspace. The paste handler reads that as "decline this paste" and leaves the
-   * browser's own behavior in place.
+   * `null` outside a workspace, which the paste handler reads as "decline this paste".
    */
   readonly upload: PastedImageUploader | null;
   /** The current upload state, for a visible indicator. */

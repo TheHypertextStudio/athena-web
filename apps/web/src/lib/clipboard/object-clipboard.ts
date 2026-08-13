@@ -2,17 +2,14 @@
  * `lib/clipboard/object-clipboard` — what a task or a project *is* on the clipboard.
  *
  * @remarks
- * Copying a task means "give me this task so I can refer to it somewhere else", and the form that
- * survives leaving the app is a **linked title**. One object becomes
- * `[Fix the login redirect](https://…/tasks/01JY…)`; several become a list. Both flavors come from
- * the same data — Markdown for plain-text targets, an anchor or list for rich ones — so a doc gets
- * real links and an editor gets real Markdown.
+ * An object copies as a **linked title**: one becomes
+ * `[Fix the login redirect](https://…/tasks/01JY…)`, several become a list. Both flavors come from
+ * the same data — Markdown for plain-text targets, an anchor or list for rich ones.
  *
  * The payload carries the title and the link. An {@link ObjectRef} holds ids, so status, assignee
- * and dates would each cost a fetch, and each is a snapshot that goes stale the moment it lands. The
- * link stays true.
+ * and dates would each cost a fetch, and each goes stale the moment it lands.
  *
- * Pure and React-free, so it is unit-testable and callable from a `copy` listener.
+ * Pure and React-free, callable from a `copy` listener.
  *
  * @see {@link ./write} for the write itself.
  * @see {@link ../actions/object} for {@link objectHref}, the one route derivation.
@@ -24,8 +21,8 @@ import { escapeHtml, type ClipboardPayload } from './write';
  * Escape a title for use as Markdown link text.
  *
  * @remarks
- * Covers the characters that would end the link text or start a construct where it sits, so a task
- * called `Fix [Button] rendering` survives a round trip through a Markdown parser as that string.
+ * Covers the characters that end the link text or open a construct where it sits. A task called
+ * `Fix [Button] rendering` survives a round trip through a Markdown parser as that string.
  *
  * @param value - The raw title.
  * @returns The title, safe to place between `[` and `]`.
@@ -38,8 +35,7 @@ function escapeMarkdownLinkText(value: string): string {
  * Escape a URL for use as a Markdown link destination.
  *
  * @remarks
- * Parentheses and whitespace end a destination. The ids in a Docket URL are opaque, so the
- * destination is escaped on the way in.
+ * Parentheses and whitespace end a destination, and the ids in a Docket URL are opaque.
  *
  * @param value - The absolute URL.
  * @returns The URL, safe to place between `(` and `)`.
@@ -80,8 +76,7 @@ function toHtml(entry: LinkedObject): string {
  * Build both clipboard flavors for a set of core objects.
  *
  * @remarks
- * A single object comes back as a bare link, so pasting one task mid-sentence reads as a link in
- * that sentence.
+ * A single object comes back as a bare link, which reads as a link when pasted mid-sentence.
  *
  * @param objects - The objects to copy, in the order the user sees them.
  * @param origin - The absolute origin to resolve paths against, e.g. `window.location.origin`.

@@ -5,14 +5,12 @@
  *
  * @remarks
  * Docket confirms a transient action in place: the control that was pressed says what happened, and
- * a polite live region says the same thing for anyone not looking at it. This hook owns that pattern
- * — a three-state acknowledgement, a timer that returns to rest, and the sentence to announce.
- * Callers render `state` on the control and `announcement` inside an `aria-live="polite"` element.
+ * a polite live region says the same for anyone not looking at it. This hook holds that state — a
+ * three-state acknowledgement, a timer back to rest, and the sentence to announce. Callers render
+ * `state` on the control and `announcement` inside an `aria-live="polite"` element.
  *
- * The `failed` state carries weight. A clipboard write can be refused by permission policy, by a
- * non-secure context, or by the platform declining a write outside a user gesture, and the user
- * needs to know so they can retry. Writes report a boolean, and this hook turns `false` into
- * something they can see.
+ * A clipboard write can be refused by permission policy, by a non-secure context, or by the platform
+ * declining a write outside a user gesture. `failed` is how the user learns to retry.
  *
  * @see {@link ./clipboard/write} for the write itself.
  */
@@ -49,8 +47,8 @@ export interface CopyFeedback {
    * The sentence to render inside a polite live region, or `''` at rest.
    *
    * @remarks
-   * Empty at rest, so the live region element stays mounted. A region added to the DOM at the same
-   * moment its text appears is frequently missed by screen readers.
+   * Empty at rest, keeping the live region mounted. Screen readers frequently miss a region added
+   * to the DOM at the same moment its text appears.
    */
   readonly announcement: string;
   /** Write both flavors, then acknowledge the outcome. */
@@ -61,9 +59,8 @@ export interface CopyFeedback {
    * Acknowledge a write this hook did not perform.
    *
    * @remarks
-   * For copies that happen away from any control that could show their own state, such as a
-   * context-menu item that has closed by the time the write resolves. The caller does the writing;
-   * this says what happened.
+   * For copies away from any control that could show their own state, such as a context-menu item
+   * that has closed by the time the write resolves. The caller writes; this announces.
    */
   readonly report: (wrote: boolean) => void;
 }
@@ -89,8 +86,7 @@ export function useCopyFeedback(options: CopyFeedbackOptions = {}): CopyFeedback
   } = options;
 
   const [state, setState] = useState<CopyState>('idle');
-  // A write resolves after an await, by which time the caller may be gone, so the outcome is
-  // dropped once unmounted.
+  // A write resolves after an await; the outcome is dropped once unmounted.
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;

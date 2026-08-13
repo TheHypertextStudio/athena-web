@@ -2,16 +2,15 @@
  * `lib/clipboard/html-to-markdown` — reading Markdown back out of rendered Markdown.
  *
  * @remarks
- * Most of Docket's prose is *read* without an editor: a posted comment is walked from `marked`
- * tokens straight into React elements, which keeps a page of comments cheap. This walker gives that
- * rendered prose a Markdown serializer by reading its DOM back.
+ * Posted comments and read-only bodies render from `marked` tokens straight into React elements,
+ * with no editor behind them. This walker serializes that rendered DOM back to Markdown.
  *
- * Its input is always markup this app produced, from the closed set of elements
- * {@link ../../components/editor/render-markdown-tokens} emits. That closed set is what keeps the
- * walker small enough to be obviously correct, and unknown elements degrade to their children.
+ * Its input is markup this app produced, from the closed set of elements
+ * {@link ../../components/editor/render-markdown-tokens} emits. Unknown elements degrade to their
+ * children.
  *
- * It works from a selection's cloned fragment, which is what makes a *partial* selection come out
- * right: selecting the middle two bullets of a list copies two bullets.
+ * It reads a selection's cloned fragment, so a partial selection comes out right: selecting the
+ * middle two bullets of a list copies two bullets.
  *
  * @see {@link ../../components/clipboard/clipboard-provider} for the listener that calls this.
  */
@@ -40,8 +39,8 @@ const BLOCK_TAGS = new Set([
  * Escape the characters that would otherwise be read back as syntax.
  *
  * @remarks
- * A short list, holding only the characters that reliably change meaning. GFM leaves an underscore
- * inside a word alone, so `snake_case_name` survives as written.
+ * Holds the characters that reliably change meaning. GFM leaves an underscore inside a word alone,
+ * so `snake_case_name` survives as written.
  *
  * @param value - Raw text content.
  * @returns The text, safe to place in a Markdown document.
@@ -59,10 +58,9 @@ function normalizeWhitespace(value: string): string {
  * Prefix every line of a block, for blockquotes and nested list content.
  *
  * @remarks
- * Blank lines take their own prefix, and the two containers want different ones. Indenting a blank
- * line inside a list item leaves two trailing spaces, which Markdown reads as a hard line break, so
- * it gets `''`. A blank line inside a blockquote keeps the quote open only while it carries the
- * marker, so it gets `'>'`.
+ * Blank lines take their own prefix. Indenting one inside a list item leaves two trailing spaces,
+ * which Markdown reads as a hard line break, so a list passes `''`. A blank line inside a blockquote
+ * keeps the quote open only while it carries the marker, so a blockquote passes `'>'`.
  *
  * @param value - The block's Markdown.
  * @param first - Prefix for the first line.
@@ -96,7 +94,7 @@ function inlineOf(node: Node): string {
 
   switch (node.tagName) {
     case 'BR':
-      // Two trailing spaces is the hard break that survives a re-parse.
+      // Two trailing spaces: the hard break that survives a re-parse.
       return '  \n';
     case 'STRONG':
     case 'B':
@@ -111,7 +109,7 @@ function inlineOf(node: Node): string {
       // Matches what the editor writes; see the underline extension in `static-markdown`.
       return `++${children()}++`;
     case 'CODE':
-      // A code span's content is data, so it is taken as text with nothing escaped inside it.
+      // A code span's content is data; taken as text, unescaped.
       return `\`${node.textContent}\``;
     case 'IMG': {
       const src = node.getAttribute('src') ?? '';
@@ -143,8 +141,8 @@ function listOf(element: Element): string {
             ? '- [x] '
             : '- [ ] '
           : '- ';
-      // A task item wraps its prose in a `<div>` beside the checkbox `<label>`, so that div is the
-      // content and the checkbox stays out of the text.
+      // A task item wraps its prose in a `<div>` beside the checkbox `<label>`. That div is the
+      // content; the checkbox stays out of the text.
       const content = task ? (item.querySelector(':scope > div') ?? item) : item;
       const body = blocksOf(content);
       return prefixLines(body, marker, ' '.repeat(marker.length), '');
@@ -218,8 +216,8 @@ function blockOf(element: Element): string {
     case 'HR':
       return '---';
     default:
-      // A structural wrapper — the table's scroll container, a task item's content div — whose
-      // children carry the content.
+      // A structural wrapper — the table's scroll container, a task item's content div. Its children
+      // carry the content.
       return blocksOf(element);
   }
 }
@@ -228,9 +226,8 @@ function blockOf(element: Element): string {
  * Serialize a container's children, separating blocks by a blank line.
  *
  * @remarks
- * Loose inline content between blocks is gathered into an implicit paragraph, which is the shape a
- * partial selection routinely arrives in: its cloned fragment begins with a bare text node, because
- * the selection started in the middle of one.
+ * Loose inline content between blocks is gathered into an implicit paragraph. A partial selection
+ * arrives that way: its cloned fragment opens with a bare text node.
  *
  * @param root - The node whose children to serialize.
  * @returns Markdown for the subtree.

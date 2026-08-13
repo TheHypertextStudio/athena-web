@@ -4,13 +4,10 @@
  * `components/actions/copy-object-action` — the Copy action, defined once for every kind.
  *
  * @remarks
- * Six domains share one Copy item, built here from the kind's own descriptor: the label pluralizes
- * itself, the icon is the shared one, and the section is the same everywhere. Adding a kind is one
- * call.
+ * Six domains share one Copy item, built from the kind's own descriptor: the label pluralizes
+ * itself, the icon and section are fixed. Adding a kind is one call.
  *
- * The action is the menu's route to the payload ⌘C produces
- * ({@link ../clipboard/clipboard-provider}) — one serializer behind two entry points, so both agree
- * on what a copied task is.
+ * The menu and ⌘C ({@link ../clipboard/clipboard-provider}) run the same serializer.
  *
  * @see {@link ../../lib/clipboard/object-clipboard} for the payload.
  */
@@ -30,8 +27,8 @@ import { canWriteClipboard, writeClipboard } from '@/lib/clipboard/write';
  * The kinds that are also action domains, and so can own a `<kind>.copy` id.
  *
  * @remarks
- * Derived from the two closed sets, so it stays true as kinds are added. Calendar events and time
- * blocks fall outside it: they belong to the `calendar` domain and have no detail page to link to.
+ * Derived from the two closed sets, so it tracks new kinds. Calendar events and time blocks fall
+ * outside it: they belong to the `calendar` domain and have no detail page to link to.
  */
 export type CopyableObjectKind = Extract<ObjectKind, ActionDomain>;
 
@@ -39,13 +36,11 @@ export type CopyableObjectKind = Extract<ObjectKind, ActionDomain>;
  * Build the Copy action for one object kind.
  *
  * The return type is inferred. `defineActionDomain` validates each entry against its
- * *implementation's* return type, and that check reads the `Promise<void>` an annotation would
- * erase.
+ * *implementation's* return type, which an annotation would erase.
  *
  * @param kind - The kind this action is offered for.
- * @param reportOutcome - Where to report whether the write reached the clipboard; from
- * `useCopyOutcome`. The menu has closed by the time the write resolves, so the action cannot show
- * its own state and a refused write would otherwise be entirely silent.
+ * @param reportOutcome - Where to report whether the write reached the clipboard, from
+ * `useCopyOutcome`. The menu has closed by the time the write resolves.
  * @returns The definition to include in that kind's domain.
  *
  * @example
@@ -78,8 +73,7 @@ export function copyObjectAction(
       reportOutcome(await writeClipboard(payload));
     },
     responsiveness: {
-      // The acknowledgement is the reported outcome, which says whether the clipboard took the
-      // payload — the fact a copy turns on.
+      // The acknowledgement is the reported outcome: whether the clipboard took the payload.
       ownership: 'autonomous',
     },
   } satisfies ActionDefinitionInput;

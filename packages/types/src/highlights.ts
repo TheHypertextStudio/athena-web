@@ -164,3 +164,21 @@ export const StreamEventLinkBody = z
   });
 /** Stream-event-link-body value. */
 export type StreamEventLinkBody = z.infer<typeof StreamEventLinkBody>;
+
+/**
+ * Source systems whose activity is one person's own, not the workspace's.
+ *
+ * @remarks
+ * A mailbox and a personal calendar are private surfaces that happen to be reached through an
+ * org-scoped integration. Their `event` rows therefore carry an `organizationId` for tenancy while
+ * still belonging to exactly one person, and any org-wide read has to exclude them for everybody
+ * else — an email subject or a meeting title is not workspace activity just because the connection
+ * that produced it lives in a workspace.
+ *
+ * Deliberately a denylist of private sources rather than an allowlist of shareable ones: a new
+ * source added without thinking about this should default to being *hidden* from colleagues, not to
+ * being broadcast to them.
+ */
+export const PERSONAL_ACTIVITY_SOURCES = ['gmail', 'google_calendar'] as const;
+/** Personal-activity source value. */
+export type PersonalActivitySource = (typeof PERSONAL_ACTIVITY_SOURCES)[number];

@@ -6,8 +6,14 @@
  * SQL and keyset-paginated. Reads the workspace and viewer actor from `orgContextMiddleware`.
  */
 import { db, event, savedView, task as taskTable } from '@docket/db';
-import { StreamEventLinkBody, StreamEventOut, StreamPageOut, StreamQuery } from '@docket/types';
-import { and, asc, desc, eq, type SQL } from 'drizzle-orm';
+import {
+  PERSONAL_ACTIVITY_SOURCES,
+  StreamEventLinkBody,
+  StreamEventOut,
+  StreamPageOut,
+  StreamQuery,
+} from '@docket/types';
+import { and, asc, desc, eq, isNull, notInArray, or, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';
@@ -51,6 +57,29 @@ async function loadViewFilters(orgId: string, viewId: string) {
   return row.filters;
 }
 
+/**
+ * Restrict a query to events this caller may see, on top of the org scope.
+ *
+ * @remarks
+ * The org firehose is "everything that happened in this workspace", and for work items that is
+ * exactly right. It is wrong for a mailbox or a personal calendar: those reach Docket through an
+ * org-scoped integration but belong to one person, so their subjects, snippets and attendee
+ * addresses must not be readable by colleagues. An event from a personal source is therefore visible
+ * only to the person it belongs to; everything else keeps the workspace-wide behaviour.
+ *
+ * Expressed as a predicate rather than by omitting the rows at write time, because the event still
+ * has to exist in the org for tenancy, purge and the owner's own reads.
+ *
+ * @param callerUserId - The signed-in person, or `null` when there is no session user.
+ * @returns a condition to AND into the query.
+ */
+function visibleToCaller(callerUserId: string | null): SQL {
+  const notPersonal = notInArray(event.sourceSystem, [...PERSONAL_ACTIVITY_SOURCES]);
+  const own = callerUserId === null ? isNull(event.userId) : eq(event.userId, callerUserId);
+  /* v8 ignore next -- `or` with two defined operands always yields a condition */
+  return or(notPersonal, own) ?? notPersonal;
+}
+
 /** Workspace stream router: the org's full event firehose, plus manual subject resolution. */
 const stream = new Hono<AppEnv>()
   .get(
@@ -76,6 +105,7 @@ Filtering & paging: \`?system\` and \`?kind\` are convenience quick-filters; \`?
 
       const conds: SQL[] = [
         eq(event.organizationId, orgId),
+        visibleToCaller(c.get('session')?.user.id ?? null),
         ...buildFilterConditions(decodeFilter(q.filter)),
         ...buildFilterConditions(savedFilters),
       ];
@@ -133,6 +163,18 @@ The event's own content is never altered. Any event already resolved answers 404
         // Existence-hiding: an event in another workspace and an event that does not exist answer the
         // same way, so the route reveals nothing about either.
         if (!row) throw new NotFoundError('Event not found');
+        // Re-attributing somebody else's mailbox or calendar activity would silently rewrite what
+        // their narrated day says and what their digest delivers, so a personal event is the owner's
+        // to resolve. Reported as missing rather than forbidden, like every other scope check here.
+        // An unowned event is workspace activity and org membership is enough; an owned one from a
+        // personal source is that person's to resolve.
+        const callerUserId = c.get('session')?.user.id ?? null;
+        const personal = (PERSONAL_ACTIVITY_SOURCES as readonly string[]).includes(
+          row.sourceSystem,
+        );
+        if (personal && row.userId !== null && row.userId !== callerUserId) {
+          throw new NotFoundError('Event not found');
+        }
         // Gated on `matched`, not on `pending`. `MIRROR_LOOKUP` maps both `calendar_event` and `thread`
         // to null, so every meeting and mail thread lands `unmatched` — gating on `pending` would make
         // exactly the sources that most need this unlinkable. `unmatched` only ever meant "Docket

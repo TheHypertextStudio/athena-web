@@ -110,6 +110,73 @@ async function eventRow(eventId: string) {
   return row;
 }
 
+describe('GET / (org firehose visibility)', () => {
+  /** One event of a given source attributed to a given person. */
+  async function seedOwned(
+    orgId: string,
+    userId: string,
+    sourceSystem: 'gmail' | 'github',
+    title: string,
+  ): Promise<void> {
+    seq += 1;
+    await db.insert(schema.event).values({
+      organizationId: orgId,
+      userId,
+      sourceSystem,
+      kind: sourceSystem === 'gmail' ? 'message' : 'completed',
+      occurredAt: new Date('2026-08-12T10:00:00.000Z'),
+      title,
+      entityKind: sourceSystem === 'gmail' ? 'thread' : 'work_item',
+      entityAssociation: 'unmatched',
+      dedupeKey: `vis-${String(seq)}`,
+    });
+  }
+
+  it('hides one person\u2019s mail from their colleagues, and keeps shared work visible', async () => {
+    // The leak this closes. Gmail activity carries an `organizationId` for tenancy but belongs to one
+    // person, and the firehose had no `userId` predicate \u2014 so any member of the org, Guests included,
+    // could read a colleague's outgoing mail subjects and body snippets off the workspace stream.
+    const owner = await seedWorkspace();
+    const colleagueActorId = one(
+      await db
+        .insert(schema.actor)
+        .values({
+          organizationId: owner.orgId,
+          kind: 'human',
+          displayName: 'Colleague',
+          userId: await seedUserWithHub(db, schema, `Colleague${String(++seq)}`),
+        })
+        .returning({ id: schema.actor.id }),
+    ).id;
+    const [colleagueActor] = await db
+      .select({ userId: schema.actor.userId })
+      .from(schema.actor)
+      .where(eq(schema.actor.id, colleagueActorId))
+      .limit(1);
+
+    await seedOwned(owner.orgId, owner.userId, 'gmail', 'Re: salary discussion');
+    await seedOwned(owner.orgId, owner.userId, 'github', 'Ship the beta');
+
+    const asColleague = appFor(owner.orgId, colleagueActorId, colleagueActor?.userId ?? '');
+    const colleagueTitles = (
+      (await (await asColleague.request('/?limit=50')).json()) as {
+        items: { title: string }[];
+      }
+    ).items.map((item) => item.title);
+
+    expect(colleagueTitles).not.toContain('Re: salary discussion');
+    // Shared work stays shared \u2014 this is a firehose, and a pull request is workspace activity.
+    expect(colleagueTitles).toContain('Ship the beta');
+
+    const ownTitles = (
+      (await (await owner.app.request('/?limit=50')).json()) as {
+        items: { title: string }[];
+      }
+    ).items.map((item) => item.title);
+    expect(ownTitles).toContain('Re: salary discussion');
+  });
+});
+
 describe('POST /:eventId/link', () => {
   it('resolves an unmatched subject, which is what a meeting or a thread always is', async () => {
     // `MIRROR_LOOKUP` maps both `calendar_event` and `thread` to null, so these never reach
@@ -219,6 +286,48 @@ describe('POST /:eventId/link', () => {
 
     expect(res.status).toBe(404);
     expect((await eventRow(eventId))?.docketEntityId).toBeNull();
+  });
+
+  it('will not let one person re-attribute another person\u2019s mailbox activity', async () => {
+    // The leak this closes: a Gmail-sourced event carries the owner's `userId` but an org id for
+    // tenancy, so before this the route let any member of the org re-point it \u2014 silently rewriting
+    // what the owner's narrated day says and what their digest email delivers.
+    const { orgId, teamId, actorId, app } = await seedWorkspace();
+    const stranger = await seedWorkspace();
+    const foreign = one(
+      await db
+        .insert(schema.event)
+        .values({
+          organizationId: orgId,
+          userId: stranger.userId,
+          sourceSystem: 'gmail',
+          kind: 'message',
+          occurredAt: new Date('2026-08-12T10:00:00.000Z'),
+          title: 'Re: private thread',
+          entity: {
+            kind: 'thread',
+            source: 'gmail',
+            externalId: 'thread_private',
+            title: 'Re: private thread',
+            url: null,
+            docketEntityId: null,
+          },
+          entityKind: 'thread',
+          entityAssociation: 'unmatched',
+          dedupeKey: 'link-personal-guard',
+        })
+        .returning({ id: schema.event.id }),
+    ).id;
+    const taskId = await seedTask(orgId, teamId, actorId);
+
+    const res = await app.request(`/${foreign}/link`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ taskId }),
+    });
+
+    expect(res.status).toBe(404);
+    expect((await eventRow(foreign))?.entityAssociation).toBe('unmatched');
   });
 
   it('answers 404 for an event that does not exist', async () => {

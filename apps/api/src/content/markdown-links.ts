@@ -13,6 +13,7 @@
 import { Lexer, type Token, type Tokens } from 'marked';
 
 import { snippetOf } from '@docket/mail';
+import { EXCERPT_SKIP_TOKEN_TYPES, type TextualToken, childTokensOf } from '@docket/markdown-tree';
 
 /** One link found in a Markdown field. */
 export interface MarkdownLink {
@@ -24,69 +25,6 @@ export interface MarkdownLink {
   readonly title: string | undefined;
   /** Ordinal in document order, starting at zero. */
   readonly position: number;
-}
-
-/** A token that may carry inline children, which is most of them. */
-interface TokenWithChildren {
-  readonly tokens?: readonly Token[];
-}
-
-/** A token whose own text contributes to a flattened label. */
-interface TextualToken extends TokenWithChildren {
-  readonly type: string;
-  readonly text?: string;
-}
-
-/**
- * The container shapes marked uses, gathered into one type.
- *
- * @remarks
- * `marked`'s `Token` union does not expose these uniformly; naming them here avoids a cast at
- * every access, so a shape change fails to compile rather than silently missing links.
- */
-interface TokenContainer extends TokenWithChildren {
-  /**
-   * The token kind.
-   *
-   * @remarks
-   * Required so this is not an all-optional interface, which TypeScript's weak-type check would
-   * reject a `Token` from when it carries none of the other fields.
-   */
-  readonly type: string;
-  /** List items. */
-  readonly items?: readonly Token[];
-  /** Table body cells, nested one level deeper than everything else. */
-  readonly rows?: readonly (readonly TokenWithChildren[])[];
-  /** Table header cells. */
-  readonly header?: readonly TokenWithChildren[];
-}
-
-/** Read the inline children of a table cell, which are one indirection further in. */
-function cellTokens(cell: TokenWithChildren): readonly Token[] {
-  return cell.tokens ?? [];
-}
-
-/** Read a token as a container; one carrying no child fields reads as having no children. */
-function asContainer(token: Token): TokenContainer {
-  return token;
-}
-
-/** Token containers whose children can hold inline links. */
-function childTokensOf(token: Token): readonly Token[] {
-  const container = asContainer(token);
-  const parts: Token[] = [];
-
-  if (container.tokens) parts.push(...container.tokens);
-  if (container.items) parts.push(...container.items);
-  if (container.header) {
-    for (const cell of container.header) parts.push(...cellTokens(cell));
-  }
-  if (container.rows) {
-    for (const row of container.rows) {
-      for (const cell of row) parts.push(...cellTokens(cell));
-    }
-  }
-  return parts;
 }
 
 /**
@@ -157,24 +95,18 @@ export function extractMarkdownLinks(markdown: string): readonly MarkdownLink[] 
   return out;
 }
 
-/** Non-prose block kinds an excerpt should never quote: source, structure, or markup, not words. */
-const EXCERPT_SKIP_TOKEN_TYPES: ReadonlySet<string> = new Set([
-  'code',
-  'space',
-  'hr',
-  'html',
-  'def',
-]);
-
 /**
  * Walk a token tree, reducing it to the plain words a reader would see, in document order.
  *
  * @remarks
  * Generalizes {@link flattenText}'s "prefer parsed children over raw source" rule to every block
- * shape the lexer produces, not just a link label: `childTokensOf` already knows how to reach into
- * a list's items or a table's cells, so a token with no children of its own is the only case that
- * contributes its own `text` — which is exactly the recursive-descent-then-leaf shape a heading,
- * a paragraph, a nested list, and a blockquote all share.
+ * shape the lexer produces, not just a link label: `childTokensOf` (`@docket/markdown-tree`) already
+ * knows how to reach into a list's items or a table's cells, so a token with no children of its own
+ * is the only case that contributes its own `text` — which is exactly the recursive-descent-then-leaf
+ * shape a heading, a paragraph, a nested list, and a blockquote all share. `EXCERPT_SKIP_TOKEN_TYPES`
+ * is the same shared package's canonical answer to "which token types aren't real prose" — the
+ * client's `ExcerptMarkdown` (`apps/web/src/components/mentions/excerpt-markdown.tsx`) reads the
+ * identical constant, so the two can no longer silently disagree the way they once did.
  *
  * `budget` bounds the walk itself, not just the final output: once enough text has been collected,
  * later sibling blocks are never visited or joined at all. A multi-section Initiative description

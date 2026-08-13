@@ -426,6 +426,79 @@ describe('search query service', () => {
     expect(hit?.snippet).not.toContain('*');
   });
 
+  it('keeps the matched term in the snippet even when it sits past the excerpt truncation point', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchDeepMatchUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    // Padding pushes the match term well past the ~280-char excerpt length, so a snippet that
+    // always flattened from the start of the document would never contain it.
+    const padding = 'filler word '.repeat(40).trim();
+    const body = `${padding} zzzdeepmatchterm appears here, past the usual excerpt length.`;
+    await db.insert(schema.searchDocument).values({
+      id: `task:${orgId}:deepmatch_task`,
+      organizationId: orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: 'deepmatch_task',
+      title: 'Plain title with no match',
+      summary: 'Plain summary with no match either',
+      body,
+      facet: {},
+      route: entityRoute(orgId, 'task', 'deepmatch_task'),
+      visibility: { mode: 'org_members' },
+      baseRank: 90,
+    });
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      caller: { kind: 'user', userId },
+      params: { q: 'zzzdeepmatchterm', limit: 10 },
+    });
+
+    const hit = result.items.find((item) => item.id === `task:${orgId}:deepmatch_task`);
+    expect(hit?.matchedFields).toContain('body');
+    expect(hit?.snippet?.toLowerCase()).toContain('zzzdeepmatchterm');
+  });
+
+  it('returns an already-flattened summary as-is rather than re-flattening it', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchSummaryPassthroughUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    // A leading '#' that survived flattening as a literal character (e.g. from an author's escaped
+    // `\#`) must not be stripped a second time by re-running the flattener on already-flat text.
+    await db.insert(schema.searchDocument).values({
+      id: `task:${orgId}:summarypassthrough_task`,
+      organizationId: orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: 'summarypassthrough_task',
+      title: 'Plain title with no match',
+      summary: '# zzzsummarypassthroughterm literal, not a heading',
+      body: 'Unrelated body text.',
+      facet: {},
+      route: entityRoute(orgId, 'task', 'summarypassthrough_task'),
+      visibility: { mode: 'org_members' },
+      baseRank: 90,
+    });
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      caller: { kind: 'user', userId },
+      params: { q: 'zzzsummarypassthroughterm', limit: 10 },
+    });
+
+    const hit = result.items.find((item) => item.id === `task:${orgId}:summarypassthrough_task`);
+    expect(hit?.snippet).toBe('# zzzsummarypassthroughterm literal, not a heading');
+  });
+
   it('supports org narrowing, filters, archived inclusion, and stable cursors', async () => {
     const schema = await getDb();
     const { db } = schema;

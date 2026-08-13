@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
 
-import { hydrateMentions } from '../../src/content/mention-hydrate';
+import { excerptMarkdownOf, hydrateMentions } from '../../src/content/mention-hydrate';
 
 describe('hydrateMentions excerptMarkdown', () => {
   it('carries the raw Markdown body, distinct from the flattened subtitle', async () => {
@@ -159,5 +159,45 @@ describe('hydrateMentions excerptMarkdown', () => {
     expect(card.excerptMarkdown).not.toBeNull();
     expect(card.excerptMarkdown?.length).toBeLessThan(longBody.length);
     expect(card.excerptMarkdown?.length).toBeLessThanOrEqual(321);
+  });
+});
+
+describe('excerptMarkdownOf', () => {
+  it('returns null for an empty or whitespace-only body', () => {
+    expect(excerptMarkdownOf(null)).toBeNull();
+    expect(excerptMarkdownOf('   \n\n  ')).toBeNull();
+  });
+
+  it('leaves a body at or under the limit untouched, with no trailing ellipsis', () => {
+    expect(excerptMarkdownOf('Short body.')).toBe('Short body.');
+  });
+
+  it('breaks a truncated excerpt on a word boundary and appends an ellipsis', () => {
+    const body = 'word '.repeat(100).trim();
+    const result = excerptMarkdownOf(body);
+    expect(result?.endsWith('…')).toBe(true);
+    const withoutEllipsis = result?.slice(0, -1) ?? '';
+    // Every space-separated piece is a whole "word" — nothing was cut mid-token.
+    expect(withoutEllipsis.split(' ').every((piece) => piece === 'word')).toBe(true);
+  });
+
+  it('trims off a fenced code block left unterminated by truncation, rather than leaving it dangling', () => {
+    const intro = 'Intro text before the fence. ';
+    const body = `${intro}\n\n\`\`\`ts\n${'const line = 1;\n'.repeat(50)}`;
+    const result = excerptMarkdownOf(body);
+    // No lone, unterminated ``` survives into the excerpt.
+    expect(((result ?? '').match(/```/g) ?? []).length % 2).toBe(0);
+    expect(result).not.toContain('```');
+    expect(result).toContain('Intro text before the fence.');
+  });
+
+  it('never splits a surrogate pair at the truncation boundary', () => {
+    // An emoji (a two-code-unit surrogate pair) sitting right at the raw 320-character cutoff.
+    const body = `${'a'.repeat(319)}😀${'b'.repeat(50)}`;
+    const result = excerptMarkdownOf(body) ?? '';
+    // No unpaired high or low surrogate anywhere in the result.
+    expect(result).not.toMatch(
+      /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u,
+    );
   });
 });

@@ -19,39 +19,40 @@
  * The value this renders is already cut to a preview length server-side
  * (`excerptMarkdownOf` in `apps/api/src/content/mention-hydrate.ts`), generously rather than at a
  * syntactically safe boundary — a truncated `**bold` or `[link](h` degrades to ordinary text under
- * `marked`'s lexer rather than throwing, so there is nothing to guard against here.
+ * `marked`'s lexer rather than throwing. The one syntax that doesn't degrade gracefully, an
+ * unterminated fenced code block, is guarded against upstream in `excerptMarkdownOf` itself (it
+ * would otherwise swallow the rest of the excerpt into one `code` token, which
+ * `EXCERPT_SKIP_TOKEN_TYPES` below then drops entirely) rather than here, since the fix requires
+ * the original, un-lexed text.
+ *
+ * This is also one of *three* independent places in the codebase that walk a Markdown token tree
+ * with their own opinion on which block shapes to handle: `render-markdown-tokens.tsx`'s
+ * `renderBlocks` (a full document, every block becomes its own DOM element, so it needs real
+ * per-shape structure and stays its own thing), `markdown-links.ts`'s `collectPlainText` (a fully
+ * flattened, single-line plain-text excerpt), and this one (a reduced-fidelity
+ * single-line-but-still-formatted excerpt). The latter two share their token-walking primitives —
+ * `childTokensOf` and `EXCERPT_SKIP_TOKEN_TYPES` — via `@docket/markdown-tree`, so they can no
+ * longer silently disagree about which token types exist or which aren't real prose; what each one
+ * *does* with a given shape (fold into one line here, flatten to plain text there) still differs by
+ * design, and a change to one is still worth checking against the other.
  */
 import { marked, type Token, type Tokens } from 'marked';
 import { Fragment, type JSX, type ReactNode, useMemo } from 'react';
 
+import { EXCERPT_SKIP_TOKEN_TYPES, childTokensOf } from '@docket/markdown-tree';
+
 import { renderInline } from '../editor/render-markdown-tokens';
-
-/** Block shapes an excerpt should never show: source, structure, or markup a clamp can't handle. */
-const EXCERPT_BLOCK_SKIP: ReadonlySet<string> = new Set([
-  'code',
-  'table',
-  'html',
-  'hr',
-  'space',
-  'def',
-]);
-
-/** Read a token's own inline children, falling back to an empty run rather than throwing. */
-function inlineTokensOf(token: Token): readonly Token[] {
-  const withTokens = token as { tokens?: readonly Token[] };
-  return withTokens.tokens ?? [];
-}
 
 function renderExcerptBlocks(tokens: readonly Token[], prefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   tokens.forEach((token, index) => {
     const key = `${prefix}-${index}`;
-    if (EXCERPT_BLOCK_SKIP.has(token.type)) return;
+    if (EXCERPT_SKIP_TOKEN_TYPES.has(token.type)) return;
 
     if (token.type === 'heading') {
       nodes.push(
         <Fragment key={key}>
-          <strong>{renderInline(inlineTokensOf(token), key)}</strong>{' '}
+          <strong>{renderInline(childTokensOf(token), key)}</strong>{' '}
         </Fragment>,
       );
       return;
@@ -77,7 +78,7 @@ function renderExcerptBlocks(tokens: readonly Token[], prefix: string): ReactNod
 
     // paragraph, text, and anything else carrying inline children: render inline, then a
     // separating space, so the next block doesn't run directly into this one's last word.
-    const inline = inlineTokensOf(token);
+    const inline = childTokensOf(token);
     if (inline.length > 0) {
       nodes.push(<Fragment key={key}>{renderInline(inline, key)} </Fragment>);
     }

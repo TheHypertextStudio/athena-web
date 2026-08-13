@@ -28,6 +28,7 @@
     "@docket/api": "workspace:*",
     "@docket/env": "workspace:*",
     "@docket/integrations": "workspace:*",
+    "@docket/markdown-tree": "workspace:*",
     "@docket/notifications": "workspace:*",
     "@docket/types": "workspace:*",
     "@docket/ui": "workspace:*",

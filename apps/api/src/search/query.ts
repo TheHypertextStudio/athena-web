@@ -63,7 +63,22 @@ interface ScoredRow {
   score: number;
   sortTime: number;
   matchedFields: SearchOut['items'][number]['matchedFields'];
-  snippet: string | null;
+  snippetMatch: SnippetMatch | null;
+}
+
+/**
+ * Which raw field a snippet should be drawn from, and the exact substring that made it match.
+ *
+ * @remarks
+ * Picking the field is a cheap `.includes()` check and runs for every scored candidate. Turning it
+ * into reader-facing text (`snippetText`) is the expensive part — it strips Markdown — so it stays
+ * deferred until a row has actually survived pagination; see {@link pickSnippetMatch}.
+ */
+interface SnippetMatch {
+  readonly value: string;
+  /** The matched substring, kept visible when `value` gets excerpted; `''` when nothing specific
+   * matched and `value` is just a fallback to show something. */
+  readonly term: string;
 }
 
 type SearchDocumentRow = Awaited<ReturnType<typeof loadCandidateRows>>[number];
@@ -267,12 +282,13 @@ async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
  * nothing was matched against.
  */
 function browseRow(row: SearchDocumentRow): ScoredRow {
+  const fallback = row.summary ?? row.body;
   return {
     row,
     score: row.baseRank,
     sortTime: rowSortTime(row),
     matchedFields: [],
-    snippet: row.summary ?? row.body ?? null,
+    snippetMatch: fallback === null || fallback === '' ? null : { value: fallback, term: '' },
   };
 }
 
@@ -414,7 +430,7 @@ export async function loadRecentDocuments(
       score: 0,
       sortTime: rowSortTime(row),
       matchedFields: [],
-      snippet: null,
+      snippetMatch: null,
     }),
   );
 }
@@ -769,7 +785,7 @@ function scoreRow(
     score,
     sortTime,
     matchedFields: [...new Set(matchedFields)],
-    snippet: snippetFor(row, queryLower, terms),
+    snippetMatch: pickSnippetMatch(row, queryLower, terms),
   };
 }
 
@@ -834,40 +850,83 @@ function rowSortTime(row: SearchDocumentRow): number {
   return row.occurredAt?.getTime() ?? row.sourceUpdatedAt?.getTime() ?? row.updatedAt.getTime();
 }
 
-function snippetFor(
+/**
+ * Pick which raw field a snippet should be drawn from, and the exact substring that matched.
+ *
+ * @remarks
+ * Cheap on purpose — only string `.includes()` checks, mirroring `scoreRow`'s own matching logic
+ * exactly so the two never disagree about which field matched. This runs for every scored
+ * candidate (up to hundreds, pre-pagination); the expensive part, flattening Markdown, is
+ * {@link snippetText} and only runs for the page of rows actually returned — see
+ * `toSearchResult`.
+ */
+function pickSnippetMatch(
   row: SearchDocumentRow,
   queryLower: string,
   terms: readonly string[],
-): string | null {
+): SnippetMatch | null {
   for (const value of [row.title, row.summary, row.body]) {
-    if (value?.toLowerCase().includes(queryLower)) return snippetText(row, value);
+    if (value?.toLowerCase().includes(queryLower)) return { value, term: queryLower };
   }
   for (const term of terms) {
     for (const value of [row.title, row.summary, row.body]) {
-      if (value?.toLowerCase().includes(term)) return snippetText(row, value);
+      if (value?.toLowerCase().includes(term)) return { value, term };
     }
   }
   const fallback = row.summary ?? row.body;
-  return fallback === null ? null : snippetText(row, fallback);
+  return fallback === null || fallback === '' ? null : { value: fallback, term: '' };
+}
+
+/** Raw-text context kept on each side of a match, wide enough that flattening it still reads as a sentence. */
+const SNIPPET_CONTEXT_CHARS = 140;
+
+/** Escape a string for literal use inside a `RegExp` pattern. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** A window of `value` centered on the match at `matchIndex`, wide enough for readable context. */
+function windowAroundMatch(value: string, matchIndex: number, matchLength: number): string {
+  const start = Math.max(0, matchIndex - SNIPPET_CONTEXT_CHARS);
+  const end = Math.min(value.length, matchIndex + matchLength + SNIPPET_CONTEXT_CHARS);
+  return value.slice(start, end);
 }
 
 /**
- * Render a matched field as reader-facing text: the title verbatim, everything else stripped of
- * Markdown.
+ * Render a matched field as reader-facing text: the title/summary verbatim, everything else
+ * stripped of Markdown and windowed around the term that matched.
  *
  * @remarks
- * `summary` is already plain text by the time it reaches here (`work.ts`'s projectors flatten it
- * at write time), but `body` still carries the full raw Markdown for full-text matching — a query
- * that only matches inside `body` (past the summary excerpt, or inside a fenced code block the
- * excerpt deliberately drops) would otherwise surface literal `#`/`*`/`[text](url)` source as the
- * visible snippet on the command palette and `/search` page. Flattening here, at render time,
- * covers every document kind uniformly rather than requiring each projector to keep `body` clean
- * too — `body`'s job is to be matched against, not read verbatim.
+ * `title` and `summary` are already plain text by the time they reach here (`work.ts`'s projectors
+ * flatten `summary` at write time), so returning them as-is both skips needless work and avoids
+ * re-running the flattener on already-flat text — a second pass can strip a character a user
+ * escaped on purpose (`\#` flattens to a literal `#` once; flattening that again reads it as a
+ * real heading marker and strips it).
+ *
+ * `body` still carries the full raw Markdown, and a query can match deep inside it — windowing
+ * around the actual match position (rather than always flattening from the start of the document)
+ * is what keeps the returned snippet containing the term `matchedFields` says it matched on. When
+ * the term only existed inside Markdown syntax the flattener removes (a link href, a fenced code
+ * block), this falls back to the raw window itself so the snippet still shows what matched, rather
+ * than silently showing unrelated text.
  */
-function snippetText(row: SearchDocumentRow, value: string): string {
-  if (value === row.title) return value;
-  const plain = markdownToPlainText(value);
-  return plain === '' ? value : plain;
+function snippetText(row: SearchDocumentRow, match: SnippetMatch): string {
+  const { value, term } = match;
+  if (value === row.title || value === row.summary) return value;
+  if (term === '') {
+    const plain = markdownToPlainText(value);
+    return plain === '' ? value : plain;
+  }
+  // A case-insensitive regex search runs against `value` itself, unlike
+  // `value.toLowerCase().indexOf(term)` — some characters (e.g. Turkish "İ") lowercase to more
+  // UTF-16 units than they started with, which offsets an index found in a lowercased copy from
+  // its true position in the original string.
+  const matchIndex = value.search(new RegExp(escapeRegExp(term), 'i'));
+  const windowed = matchIndex === -1 ? value : windowAroundMatch(value, matchIndex, term.length);
+  const plain = markdownToPlainText(windowed);
+  if (plain.toLowerCase().includes(term)) return plain === '' ? value : plain;
+  const raw = windowed.replace(/\s+/g, ' ').trim();
+  return raw === '' ? value : raw;
 }
 
 /**
@@ -950,7 +1009,7 @@ function toSearchResult(
     family: row.family,
     title: row.title,
     summary: row.summary,
-    snippet: scored.snippet,
+    snippet: scored.snippetMatch ? snippetText(row, scored.snippetMatch) : null,
     matchedFields: scored.matchedFields,
     route: row.route as SearchOut['items'][number]['route'],
     subject:

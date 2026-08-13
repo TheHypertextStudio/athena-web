@@ -132,6 +132,17 @@ function renderTable(table: Tokens.Table, key: string): ReactNode {
 /**
  * Render a token tree from `marked.lexer` into React elements.
  *
+ * @remarks
+ * This is one of three places that walk a Markdown token tree with their own opinion on which
+ * block shapes to handle: this one (a full document, every block becomes its own real DOM element
+ * — `<ul>`/`<ol>` with real `<li>`s, a real `<table>`), `apps/web/src/components/mentions/excerpt-markdown.tsx`
+ * (a reduced-fidelity single-line excerpt), and `apps/api/src/content/markdown-links.ts`'s
+ * `collectPlainText` (a fully flattened plain-text excerpt). The latter two share their
+ * token-walking primitives via `@docket/markdown-tree`; this one doesn't, on purpose — it needs
+ * typed access to `list.items`/`table.header`/`table.rows` to build real structured markup, not
+ * the flattened-into-one-array view `childTokensOf` gives the other two. A change to which block
+ * shapes exist, or how one should be handled, is still worth checking against the other two.
+ *
  * @param tokens - Block-level tokens, typically the direct output of `marked.lexer`.
  * @param prefix - A key namespace for this call, so nested lists/blockquotes don't collide with
  * their siblings' React keys.

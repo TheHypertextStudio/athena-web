@@ -52,9 +52,57 @@ function inaccessibleCard(ref: EntityRef): MentionCard {
  * Generous rather than syntactically safe on purpose: `ExcerptMarkdown` (the client renderer this
  * feeds) tolerates a cut that lands mid-token — `marked`'s lexer degrades a truncated `**bold` or
  * `[link](h` into ordinary text rather than throwing — so there is no need to find a "safe" cut
- * point the way {@link markdownToPlainText} does for the fully-flattened `summary` field.
+ * point the way {@link markdownToPlainText} does for the fully-flattened `summary` field. The one
+ * syntax {@link excerptMarkdownOf} does still guard against is an unterminated fenced code block —
+ * see its own remarks.
  */
 const EXCERPT_MARKDOWN_LENGTH = 320;
+
+/**
+ * Grapheme-cluster-aware, so a cut can never land inside one — unlike a raw UTF-16 slice (which can
+ * split a surrogate pair, e.g. an emoji, into an unpaired half) or even a code-point slice (which
+ * still splits a multi-code-point cluster, e.g. a ZWJ emoji sequence or a base character plus its
+ * combining marks).
+ */
+const GRAPHEME_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/** Cut `text` back to at most `maxLength` grapheme clusters, never splitting one apart. */
+function truncateAtGrapheme(text: string, maxLength: number): { text: string; truncated: boolean } {
+  const clusters = Array.from(GRAPHEME_SEGMENTER.segment(text), (segment) => segment.segment);
+  if (clusters.length <= maxLength) return { text, truncated: false };
+  return { text: clusters.slice(0, maxLength).join(''), truncated: true };
+}
+
+/** Cut `text` back to the last space/newline before the cut, so a truncation doesn't land mid-word. */
+function trimToWordBoundary(text: string): string {
+  const lastBreak = Math.max(text.lastIndexOf(' '), text.lastIndexOf('\n'));
+  return lastBreak > text.length * 0.6 ? text.slice(0, lastBreak) : text;
+}
+
+/**
+ * Cut off a dangling, unterminated fenced-code-block opener rather than leaving one in the excerpt.
+ *
+ * @remarks
+ * A truncated ` ``` ` with no matching close doesn't stay inert: `marked`'s lexer reads everything
+ * from that opener to the end of the string as one giant `code` token, and the client's
+ * `ExcerptMarkdown` renderer drops `code` tokens outright — so an unlucky cut can make the whole
+ * excerpt render blank. Trimming back to just before the dangling fence keeps whatever prose came
+ * before it instead of losing the excerpt entirely.
+ *
+ * Only counts a ` ``` ` that opens a line (optionally indented up to three spaces, per CommonMark's
+ * own fence rule) as a fence marker — a codespan may also use ` ``` ` as its own delimiter when its
+ * content contains double backticks, but that always sits inline, never as the first thing on a
+ * line, so this doesn't mistake one for a dangling fence.
+ */
+const FENCE_LINE_START = /^ {0,3}```/gm;
+
+function closeUnterminatedFence(text: string): string {
+  const fenceLines = [...text.matchAll(FENCE_LINE_START)];
+  if (fenceLines.length % 2 === 0) return text;
+  const last = fenceLines[fenceLines.length - 1];
+  if (last === undefined) return text;
+  return text.slice(0, last.index).trimEnd();
+}
 
 /**
  * Cut a raw Markdown field down to a preview length, keeping the Markdown syntax — and, crucially,
@@ -65,15 +113,24 @@ const EXCERPT_MARKDOWN_LENGTH = 320;
  * spaces, and in Markdown a blank line is *significant* — it's what separates `# Heading` from the
  * paragraph that follows it. Collapsing it merges the two into one line, which `marked` then reads
  * as a single (very long) heading swallowing the paragraph, destroying exactly the block structure
- * this excerpt exists to preserve. A plain length cut has no such failure mode.
+ * this excerpt exists to preserve.
+ *
+ * The cut still breaks on a word boundary and ends with `…` when truncated, matching every other
+ * truncated preview in the product — a silent mid-word cut reads as broken, not "reduced fidelity."
+ * It also cuts on a grapheme-cluster boundary (see {@link truncateAtGrapheme}) so a character
+ * sitting right at the cutoff is never split, and it closes off any fence the cut left dangling
+ * (see {@link closeUnterminatedFence}). If those safety trims leave nothing behind, this returns
+ * `null` rather than a bare `…` — the caller already falls back to the entity's flattened
+ * `subtitle` when `excerptMarkdown` is null.
  */
-function excerptMarkdownOf(body: string | null): string | null {
+export function excerptMarkdownOf(body: string | null): string | null {
   if (body === null) return null;
   const trimmed = body.trim();
   if (trimmed === '') return null;
-  return trimmed.length <= EXCERPT_MARKDOWN_LENGTH
-    ? trimmed
-    : trimmed.slice(0, EXCERPT_MARKDOWN_LENGTH);
+  const { text, truncated } = truncateAtGrapheme(trimmed, EXCERPT_MARKDOWN_LENGTH);
+  if (!truncated) return text;
+  const cut = closeUnterminatedFence(trimToWordBoundary(text));
+  return cut === '' ? null : `${cut}…`;
 }
 
 /** A reference to something outside Docket, narrowed from the union. */

@@ -132,6 +132,15 @@ describe('markdownToPlainText', () => {
     expect(markdownToPlainText(markdown)).toBe('Before. After.');
   });
 
+  it('drops tables entirely, matching the mention hovercard excerpt renderer', () => {
+    // A flattened row/column jumble reads worse than showing nothing — the same call
+    // `apps/web/src/components/mentions/excerpt-markdown.tsx`'s EXCERPT_BLOCK_SKIP already makes.
+    const markdown = ['Before.', '', '| A | B |', '| --- | --- |', '| 1 | 2 |', '', 'After.'].join(
+      '\n',
+    );
+    expect(markdownToPlainText(markdown)).toBe('Before. After.');
+  });
+
   it('collapses internal newlines and repeated whitespace to single spaces', () => {
     expect(markdownToPlainText('Line one.\nLine   two.')).toBe('Line one. Line two.');
   });

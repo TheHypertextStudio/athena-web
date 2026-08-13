@@ -57,26 +57,32 @@ function shortDate(iso: string | null): string | undefined {
 
 /**
  * The excerpt row: a provider's own description for an external resource, an entity's Markdown
- * excerpt rendered with real (if reduced-fidelity) structure, or nothing at all.
+ * excerpt rendered with real (if reduced-fidelity) structure, the entity's flattened `subtitle` as
+ * plain text, or nothing at all.
  *
  * @remarks
- * A provider's description is plain text, not our Markdown dialect, so it never goes through
- * {@link ExcerptMarkdown}. `excerptMarkdown` falls back to the fully flattened `subtitle` only for
- * an entity that has an authored summary but no body to excerpt from.
+ * Only `excerptMarkdown` is actually Markdown — it goes through {@link ExcerptMarkdown}. A
+ * provider's description and `subtitle` are both already plain text (a `subtitle` reaches here
+ * only when an entity has an authored summary but no body to derive `excerptMarkdown` from), so
+ * neither one is fed to a Markdown renderer: a plain-text summary that happens to contain a
+ * literal `#` or `*` must render as those literal characters, not get lexed as Markdown syntax.
  */
-function excerptRow(
-  external: { description: string | null } | undefined,
-  entity: { excerptMarkdown: string | null; subtitle: string | null } | undefined,
+export function excerptRow(
+  external: Extract<MentionCard, { kind: 'external' }>['resource'] | undefined,
+  entity: Extract<MentionCard, { kind: 'entity' }> | undefined,
 ): React.ReactNode {
   const excerptClassName = 'text-body-medium text-on-surface-variant line-clamp-3';
 
   if (external?.description) {
     return <p className={excerptClassName}>{external.description}</p>;
   }
-
-  const markdown = entity?.excerptMarkdown ?? entity?.subtitle;
-  if (!markdown) return null;
-  return <ExcerptMarkdown value={markdown} className={excerptClassName} />;
+  if (entity?.excerptMarkdown) {
+    return <ExcerptMarkdown value={entity.excerptMarkdown} className={excerptClassName} />;
+  }
+  if (entity?.subtitle) {
+    return <p className={excerptClassName}>{entity.subtitle}</p>;
+  }
+  return null;
 }
 
 /**

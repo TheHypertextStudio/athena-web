@@ -306,6 +306,48 @@ export function objectMetaString(object: ObjectRef, key: string): string | null 
   return typeof value === 'string' ? value : null;
 }
 
+/**
+ * The path segment each kind's detail page lives under, or `null` for kinds that have no page.
+ *
+ * @remarks
+ * A calendar event and a time block are addressed by *when* they are, not by an id in a URL, so
+ * there is nothing to link to. Typed as a total map so adding a kind forces an answer here rather
+ * than silently inheriting one.
+ */
+const OBJECT_ROUTE_SEGMENTS: Readonly<Record<ObjectKind, string | null>> = {
+  task: 'tasks',
+  project: 'projects',
+  initiative: 'initiatives',
+  program: 'programs',
+  cycle: 'cycles',
+  team: 'teams',
+  calendar_event: null,
+  time_block: null,
+};
+
+/**
+ * The canonical in-app path for one object.
+ *
+ * @remarks
+ * The single derivation of "where does this thing live". Before this existed the same template
+ * literal was retyped in every action module and every row, which is how a kind ends up linked one
+ * way from a menu and another way from a list. Anything that needs to *name* an object's location —
+ * a menu's Open, a copied link, a drag's URL flavor — comes through here.
+ *
+ * @param object - The object to locate.
+ * @returns Its app-relative path, or `null` when the object has no detail page or no workspace.
+ *
+ * @example
+ * ```ts
+ * const href = objectHref(task); // '/orgs/01JX…/tasks/01JY…'
+ * ```
+ */
+export function objectHref(object: ObjectRef): string | null {
+  const segment = OBJECT_ROUTE_SEGMENTS[object.kind];
+  if (segment === null || object.organizationId === null) return null;
+  return `/orgs/${object.organizationId}/${segment}/${object.id}`;
+}
+
 /** The DOM attributes that mark an element as *being* a core object. */
 export interface ObjectTargetProps {
   /** The object's kind, read by the global context-menu handler. */

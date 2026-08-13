@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
+import { copyObjectAction } from '@/components/actions/copy-object-action';
 import {
   initiativeDragObjectFromRef,
   writeInitiativeHierarchyMutation,
@@ -15,6 +16,7 @@ import {
   type ActionContext,
   type ActionDefinition,
   defineActionDomain,
+  objectHref,
   objectMetaString,
   type ObjectRef,
   useRegisterActionDomain,
@@ -47,9 +49,12 @@ export function useRegisterInitiativeActions(): void {
           run: (context) => {
             const initiative = initiativeFrom(context);
             if (initiative === null || context.organizationId === null) return;
-            router.push(`/orgs/${context.organizationId}/initiatives/${initiative.id}`);
+            // Through `objectHref` so Open and a copied link can never point at different URLs.
+            const href = objectHref({ ...initiative, organizationId: context.organizationId });
+            if (href !== null) router.push(href);
           },
         },
+        copyObjectAction('initiative'),
         {
           id: 'initiative.changeParent',
           label: 'Change parent…',

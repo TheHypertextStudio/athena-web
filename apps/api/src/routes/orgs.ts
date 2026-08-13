@@ -54,6 +54,7 @@ import capture from './capture';
 import calendarSchedules from './calendar-schedules';
 import comments from './comments';
 import cycles from './cycles';
+import documentImages from './document-images';
 import emailSuggestions from './email-suggestions';
 import entityDisplay from './entity-display';
 import dependencyGraph from './dependency-graph';
@@ -464,6 +465,7 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/milestones', milestones)
   .route('/:orgId/labels', labels)
   .route('/:orgId/comments', comments)
+  .route('/:orgId/images', documentImages)
   .route('/:orgId/updates', updates)
   .route('/:orgId/saved-views', savedViews)
   .route('/:orgId/templates', templates)

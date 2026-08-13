@@ -32,6 +32,7 @@ export {
   type ObjectMeta,
   type ObjectRef,
   type ObjectTargetProps,
+  objectHref,
   objectKey,
   objectMetaString,
   objectTargetProps,

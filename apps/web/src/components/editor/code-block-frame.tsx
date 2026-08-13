@@ -2,11 +2,11 @@
 
 import { Button, Select } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+
+import { useCopyFeedback } from '@/lib/use-copy-feedback';
 
 import { CODE_LANGUAGES, codeLanguage, codeLanguageLabel } from './code-languages';
-
-type CopyState = 'idle' | 'copied' | 'failed';
 
 /** Props for the shared editable and static code-block presentation. */
 export interface CodeBlockFrameProps {
@@ -30,7 +30,16 @@ export function CodeBlockFrame({
   onLanguageChange,
   children,
 }: CodeBlockFrameProps): JSX.Element {
-  const [copyState, setCopyState] = useState<CopyState>('idle');
+  // Source is copied as plain text only: a fence has no richer form worth handing a paste target,
+  // and an HTML flavor would let a rich editor re-style the very characters that must stay exact.
+  const {
+    state: copyState,
+    announcement,
+    copyText,
+  } = useCopyFeedback({
+    copiedMessage: 'Code copied.',
+    failedMessage: 'Could not copy code. Try again.',
+  });
   const knownLanguage = codeLanguage(language);
   const options = useMemo(
     () =>
@@ -40,28 +49,12 @@ export function CodeBlockFrame({
     [knownLanguage, language],
   );
 
-  useEffect(() => {
-    if (copyState === 'idle') return;
-    const timeout = window.setTimeout(() => {
-      setCopyState('idle');
-    }, 3000);
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [copyState]);
-
-  async function copyCode(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopyState('copied');
-    } catch {
-      setCopyState('failed');
-    }
-  }
-
   return (
     <div
       data-code-block=""
+      // Read back when a selection containing this block is copied, so the fence is reconstructed
+      // with its language instead of the chrome's visible label leaking into the copied text.
+      data-code-language={language}
       className="border-outline-variant bg-surface-container-high my-3 overflow-hidden rounded-xl border"
     >
       <div
@@ -98,7 +91,7 @@ export function CodeBlockFrame({
           data-copy-state={copyState}
           className="relative min-h-10 min-w-16"
           onClick={() => {
-            void copyCode();
+            void copyText(code);
           }}
         >
           <span className={copyState === 'copied' ? '' : 'invisible'}>Copied</span>
@@ -108,11 +101,7 @@ export function CodeBlockFrame({
       </div>
       <pre className="text-body-small m-0 overflow-x-auto p-4 font-mono">{children}</pre>
       <p aria-live="polite" aria-atomic="true" className="sr-only" contentEditable={false}>
-        {copyState === 'copied'
-          ? 'Code copied.'
-          : copyState === 'failed'
-            ? 'Could not copy code. Try again.'
-            : ''}
+        {announcement}
       </p>
     </div>
   );

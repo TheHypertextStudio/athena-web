@@ -12,6 +12,10 @@
  *    refuses to say.
  * 3. {@link ObjectContextMenuProvider} — installs the app's single document-level `contextmenu`
  *    listener, which asks the registry what a right-clicked object can do.
+ * 4. {@link ClipboardProvider} — installs the app's single document-level `copy` listener, so ⌘C on
+ *    a focused object puts a linked title on the clipboard and a selection inside rendered Markdown
+ *    copies as Markdown. Innermost because it depends on neither of the others; it reads the same
+ *    DOM markings the menu does.
  *
  * Mount exactly one, as high in the authenticated tree as possible, so that every surface below
  * shares one registry, one drag record, and one right-click handler. Mounting a second would give
@@ -33,6 +37,7 @@
  */
 import { type JSX, type ReactNode, useMemo } from 'react';
 
+import { ClipboardProvider } from '@/components/clipboard/clipboard-provider';
 import { ObjectContextMenuProvider } from '@/components/context-menu/object-context-menu';
 import { DragProvider } from '@/components/dnd/drag-context';
 import { createRuntimeWatchdog } from '@/lib/interactions/runtime-watchdog';
@@ -122,7 +127,9 @@ export function InteractionProvider({
       {...(onActionResult === undefined ? {} : { onResult: onActionResult })}
     >
       <DragProvider>
-        <ObjectContextMenuProvider>{children}</ObjectContextMenuProvider>
+        <ObjectContextMenuProvider>
+          <ClipboardProvider>{children}</ClipboardProvider>
+        </ObjectContextMenuProvider>
       </DragProvider>
     </ActionRegistryProvider>
   );

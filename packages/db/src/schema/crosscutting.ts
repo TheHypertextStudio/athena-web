@@ -805,6 +805,41 @@ export const attachment = pgTable(
 );
 
 /**
+ * An image pasted or dropped into prose, stored so the Markdown that references it keeps working.
+ *
+ * @remarks
+ * Deliberately **not** an {@link attachment}. An attachment is a typed reference hanging off one
+ * subject — it is polymorphic on `(subjectType, subjectId)`, it is listed in a Resources tab, and
+ * its bytes are served `Content-Disposition: attachment` precisely so an uploaded HTML or SVG file
+ * can never execute in a viewer's session. Every one of those properties is wrong for an inline
+ * image: prose lives on seven different entities plus comments, an image inside a paragraph is not
+ * a listed resource, and an `<img src>` needs the bytes served *inline* to render at all.
+ *
+ * So this is a plain org-scoped blob with no subject. The reference is the Markdown itself:
+ * `![alt](/v1/orgs/:orgId/images/:id)` sitting in a `description` or `body` column. That means a
+ * body can be moved, copied, or quoted between entities without an ownership row having to follow
+ * it, which is exactly the property that makes copy and paste work at all.
+ *
+ * `mimeType` is written from a raster allowlist enforced at the route, never from the upload's own
+ * claim — see `document-image-routes`. Serving inline is only safe because SVG can never get in.
+ */
+export const documentImage = pgTable(
+  'document_image',
+  {
+    ...auditColumns(),
+    /** Storage key the bytes live under, via the `BlobStore` port. */
+    blobKey: text('blob_key').notNull(),
+    /** Original filename, kept for the `alt` fallback and for diagnostics. */
+    fileName: text('file_name'),
+    /** The validated raster MIME type the bytes are served back with. */
+    mimeType: text('mime_type').notNull(),
+    /** Size in bytes, recorded so storage can be accounted for per workspace. */
+    byteSize: integer('byte_size').notNull(),
+  },
+  (t) => [index('document_image_org_idx').on(t.organizationId)],
+);
+
+/**
  * An Athena-synthesized task suggestion drawn from an email thread — a *proposal*, not a task.
  *
  * @remarks

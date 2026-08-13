@@ -25,12 +25,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
+import { copyObjectAction } from '@/components/actions/copy-object-action';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { api } from '@/lib/api';
 import {
   type ActionContext,
   type ActionDefinition,
   defineActionDomain,
+  objectHref,
   objectMetaString,
   useRegisterActionDomain,
 } from '@/lib/actions';
@@ -44,6 +46,24 @@ const REOPEN_STATE = 'todo';
 /** Every task the context names, or an empty list when it names none. */
 function taskIds(context: ActionContext): readonly string[] {
   return context.objects.filter((o) => o.kind === 'task').map((o) => o.id);
+}
+
+/**
+ * The first task's detail path, or `null` when the context names none.
+ *
+ * @remarks
+ * Through {@link objectHref} so Open, Copy link, and a copied row can never disagree about where a
+ * task lives. The workspace falls back to the context's, because a row may carry the object without
+ * an org while the invocation always knows one.
+ */
+function taskHref(context: ActionContext): string | null {
+  const object = context.objects.find((o) => o.kind === 'task');
+  if (object === undefined) return null;
+  return objectHref(
+    object.organizationId === null && context.organizationId !== null
+      ? { ...object, organizationId: context.organizationId }
+      : object,
+  );
 }
 
 /** Whether every task in the context already sits in a completed state. */
@@ -86,9 +106,8 @@ export function useRegisterTaskActions(): void {
         section: 'primary',
         keywords: ['view', 'detail', 'go to'],
         run: (context) => {
-          const [id] = taskIds(context);
-          if (id === undefined || context.organizationId === null) return;
-          router.push(`/orgs/${context.organizationId}/tasks/${id}`);
+          const href = taskHref(context);
+          if (href !== null) router.push(href);
         },
       },
       {
@@ -185,15 +204,12 @@ export function useRegisterTaskActions(): void {
         // work on this device is noise, and there is nothing useful to say about why.
         appliesTo: () => 'clipboard' in navigator,
         run: async (context) => {
-          const [id] = taskIds(context);
-          if (id === undefined || context.organizationId === null) return;
-          const url = new URL(
-            `/orgs/${context.organizationId}/tasks/${id}`,
-            window.location.origin,
-          );
-          await navigator.clipboard.writeText(url.toString());
+          const href = taskHref(context);
+          if (href === null) return;
+          await navigator.clipboard.writeText(new URL(href, window.location.origin).toString());
         },
       },
+      copyObjectAction('task'),
       {
         id: 'task.showInGraph',
         label: 'Show in dependency graph',

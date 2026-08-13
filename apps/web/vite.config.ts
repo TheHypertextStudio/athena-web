@@ -79,6 +79,14 @@ const config = docketVitest({
     'src/components/selection/selection-model.ts',
     'src/components/selection/selection-registry.ts',
     'src/components/dnd/drag-payload.ts',
+    // The clipboard is a lossy edge: whatever a copy fails to write is simply gone, and the user
+    // finds out somewhere else entirely. These three are the pure, behavior-bearing halves of it —
+    // which flavors a write offers and how it degrades when the platform refuses one, what a copied
+    // object *is*, and how rendered prose is read back into the Markdown it came from. Each must
+    // stay correct independent of the React tree that triggers it.
+    'src/lib/clipboard/write.ts',
+    'src/lib/clipboard/object-clipboard.ts',
+    'src/lib/clipboard/html-to-markdown.ts',
   ],
 });
 

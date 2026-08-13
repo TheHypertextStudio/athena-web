@@ -62,6 +62,7 @@ describe('Initiative actions', () => {
     expect(registry.snapshot().ids).toEqual([
       'initiative.addSubinitiative',
       'initiative.changeParent',
+      'initiative.copy',
       'initiative.moveToTopLevel',
       'initiative.open',
     ]);

@@ -25,6 +25,7 @@ export * from './team';
 export * from './label';
 export * from './comment';
 export * from './attachment';
+export * from './document-image';
 export * from './athena-mail';
 export * from './resource-provider';
 export * from './resource';

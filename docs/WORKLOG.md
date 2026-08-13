@@ -136,6 +136,80 @@
   Third, `apps/web/tests/.../notion-people-panel.test.tsx` did not exist, which is precisely how a
   no-op button shipped.
 
+### [CLIPBOARD-001] Copy and paste stop losing the formatting
+
+- **Status**: REVIEW
+- **Started**: 2026-08-12
+- **Priority**: P1
+- **Description**: Docket stores every body as Markdown, edits it in Tiptap, and renders it from
+  `marked` tokens — yet nothing in the app touched the clipboard beyond
+  `navigator.clipboard.writeText`. Copying a task body handed over ProseMirror's default
+  `textBetween`, so `# Rollout plan` / `- [ ] Flip the flag` arrived anywhere else as
+  `Rollout plan Flip the flag`. Pasting from another tool dropped whatever the schema did not
+  model. Copying a task or project row gave whatever text was in the DOM.
+- **Approach**: Treat the clipboard as the multi-flavor surface it is, in both directions.
+
+  **One write path.** `lib/clipboard/write.ts` builds a single `ClipboardItem` carrying `text/html`
+  and `text/plain` at once, so the paste target chooses: rich editors take the HTML, plain targets
+  take Markdown. That is what removes the need for a "Copy as Markdown" mode — both answers are
+  already on the clipboard. It encapsulates two platform facts: WebKit only honors a write still
+  inside its user gesture (so the item is built from already-resolved promises before any `await`),
+  and `navigator.clipboard` is genuinely absent in a non-secure context despite being typed
+  otherwise. Failure is reported as a boolean, never thrown into an event handler.
+
+  **Out of the editor.** A Tiptap extension supplies `clipboardTextSerializer`, serializing the
+  copied slice through the very `MarkdownManager` that persists the document — so mentions keep
+  their `docket:v1:` markers and a Docket → anywhere → Docket round trip comes home as live chips.
+  An inline-only slice is wrapped in a paragraph first, since the top node type will not take one.
+
+  **Into the editor.** The same extension's `handlePaste` declines far more than it claims: never
+  inside a code fence, always deferring to `text/html` when the source provided it, and parsing
+  plain text only when it carries an unambiguous Markdown construct. Image bytes with no
+  accompanying text are uploaded and rehosted.
+
+  **Schema parity.** Table, Image, and Underline are registered so content pasted from Linear is
+  not silently dropped. All three ship their own Markdown hooks; underline round-trips as `++text++`,
+  which the read-only renderer now understands through a private `marked` instance so registering
+  the rule cannot reach the editor's own parser.
+
+  **Image storage.** A new org-scoped `document_image` table plus `POST`/`GET /v1/orgs/:orgId/images`.
+  Deliberately not an attachment: attachments are task-scoped and served
+  `Content-Disposition: attachment` precisely so an upload cannot execute, which is the opposite of
+  what an `<img src>` needs. Inline serving is earned with a raster allowlist enforced before any
+  bytes are stored, the validated type rather than the client's claim, and `nosniff`.
+
+  **Objects.** `objectHref` becomes the single kind→route derivation, replacing template literals
+  retyped across three action modules. A `<kind>.copy` action is registered for all six linkable
+  kinds, and one document-level `copy` listener — mirroring the object context menu's design —
+  copies the focused row, or the whole selection it belongs to, as a linked title.
+
+  **Rendered prose.** Posted comments have no editor behind them, so a DOM-to-Markdown walker reads
+  the selection's cloned fragment back into Markdown. Working from the fragment rather than source
+  offsets is what makes a _partial_ selection copy correctly.
+
+- **Subtasks**:
+  - [x] `lib/clipboard/write.ts`, `use-copy-feedback.ts`; existing code-block copy moved onto both
+  - [x] `markdown-clipboard.ts`: `clipboardTextSerializer` + `handlePaste`
+  - [x] Table/Image/Underline registered; `<u>` and `<img>` in the static renderer
+  - [x] `document_image` table, migration `0082`, org-scoped upload + inline serve routes
+  - [x] `objectHref`, `object-clipboard.ts`, `copyObjectAction`, `ClipboardProvider`
+  - [x] `html-to-markdown.ts` walker for rendered comments
+  - [x] Unit, component, and API tests; coverage allowlist extended; e2e journey added
+- **Validation**: Root `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` all pass — 20/20
+  turbo tasks, including 2,395 web tests across 292 files and 329 API files. Coverage stays above the
+  90% gate with three new pure modules added to `apps/web`'s allowlist. The live-browser check is
+  **not** done: `pnpm dev` in this worktree never bound `docket.localhost`, because another worktree
+  already holds that hostname's portless stack. Recorded as an environment gate, not as visual proof
+  — `e2e/work/clipboard-fidelity.spec.ts` encodes the journey for whoever runs the suite with the
+  origin free.
+- **Blockers**: None.
+- **Notes**: Two limits are real and documented rather than papered over. Images pasted from Linear
+  reference `uploads.linear.app` behind Linear's own auth, so Docket cannot rehost them — the remote
+  `src` is kept (nothing vanishes) and simply fails to load for anyone who cannot reach it; only
+  clipboard _bitmap_ data is uploaded. And ⌘C on a row needs the row focused, which today means
+  surfaces that mount a `SelectionProvider`; the context-menu Copy works everywhere. Wiring
+  multi-select into the entity tables remains separate work.
+
 ### [PERF-001] Creating something stops feeling like waiting for something
 
 - **Status**: REVIEW

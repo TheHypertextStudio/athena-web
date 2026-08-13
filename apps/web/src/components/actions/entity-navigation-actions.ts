@@ -5,19 +5,30 @@ import { ArrowRight } from '@docket/ui/icons';
 import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
+import { copyObjectAction } from '@/components/actions/copy-object-action';
 import {
   type ActionContext,
   defineActionDomain,
   type ObjectKind,
+  objectHref,
   useRegisterActionDomain,
 } from '@/lib/actions';
 
-/** Return the first id only when the context contains the expected kind and workspace. */
-function target(context: ActionContext, kind: ObjectKind): { orgId: string; id: string } | null {
+/**
+ * The first object's detail path, only when it is the expected kind.
+ *
+ * @remarks
+ * Routes through {@link objectHref} rather than building a path here, so a kind's location is
+ * derived in exactly one place and an Open never disagrees with a copied link.
+ */
+function target(context: ActionContext, kind: ObjectKind): string | null {
   const object = context.objects[0];
-  return object?.kind === kind && context.organizationId !== null
-    ? { orgId: context.organizationId, id: object.id }
-    : null;
+  if (object?.kind !== kind) return null;
+  return objectHref(
+    object.organizationId === null && context.organizationId !== null
+      ? { ...object, organizationId: context.organizationId }
+      : object,
+  );
 }
 
 /** Register the common Open action for Project, Program, Cycle, and Team objects. */
@@ -33,10 +44,11 @@ export function useRegisterEntityNavigationActions(): void {
           objectKinds: ['project'],
           section: 'primary',
           run: (context) => {
-            const value = target(context, 'project');
-            if (value) router.push(`/orgs/${value.orgId}/projects/${value.id}`);
+            const href = target(context, 'project');
+            if (href !== null) router.push(href);
           },
         },
+        copyObjectAction('project'),
       ]),
       program: defineActionDomain('program', [
         {
@@ -46,10 +58,11 @@ export function useRegisterEntityNavigationActions(): void {
           objectKinds: ['program'],
           section: 'primary',
           run: (context) => {
-            const value = target(context, 'program');
-            if (value) router.push(`/orgs/${value.orgId}/programs/${value.id}`);
+            const href = target(context, 'program');
+            if (href !== null) router.push(href);
           },
         },
+        copyObjectAction('program'),
       ]),
       cycle: defineActionDomain('cycle', [
         {
@@ -59,10 +72,11 @@ export function useRegisterEntityNavigationActions(): void {
           objectKinds: ['cycle'],
           section: 'primary',
           run: (context) => {
-            const value = target(context, 'cycle');
-            if (value) router.push(`/orgs/${value.orgId}/cycles/${value.id}`);
+            const href = target(context, 'cycle');
+            if (href !== null) router.push(href);
           },
         },
+        copyObjectAction('cycle'),
       ]),
       team: defineActionDomain('team', [
         {
@@ -72,10 +86,11 @@ export function useRegisterEntityNavigationActions(): void {
           objectKinds: ['team'],
           section: 'primary',
           run: (context) => {
-            const value = target(context, 'team');
-            if (value) router.push(`/orgs/${value.orgId}/teams/${value.id}`);
+            const href = target(context, 'team');
+            if (href !== null) router.push(href);
           },
         },
+        copyObjectAction('team'),
       ]),
     }),
     [router],

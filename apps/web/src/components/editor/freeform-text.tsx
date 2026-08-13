@@ -7,8 +7,10 @@
  * There is deliberately no toolbar, source toggle, or document chrome. Familiar keyboard input
  * and Markdown shortcuts work in place; the host only receives serialized Markdown on save.
  */
+import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
+import { TableKit } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
@@ -35,9 +37,12 @@ import {
 } from '@/components/mentions/link-upgrade';
 import { useMentionController } from '@/components/mentions/use-mention-controller';
 
+import { useDocumentImageUpload } from '@/lib/use-document-image-upload';
+
 import { useSlashCommands } from './use-slash-commands';
 import { createCodeBlockExtension } from './code-block-extension';
 import CodeBlockNodeView from './code-block-node-view';
+import { createMarkdownClipboardExtension } from './markdown-clipboard';
 
 /** Props for {@link FreeformTextEditor}. */
 export interface FreeformTextEditorProps {
@@ -104,6 +109,13 @@ export function FreeformTextEditor({
     orgId: mentionOrgId,
     enabled: mentionOrgId !== undefined && !readOnly && !disabled,
   });
+
+  // Pasted images are stored in whichever workspace the reader is in. `mentionOrgId` is only set on
+  // surfaces that opted into mentions, so the active workspace is the broader fallback — a body in
+  // a personal space still needs somewhere to put a screenshot.
+  const activeOrgId = useActiveOrgIdOptional();
+  const images = useDocumentImageUpload(mentionOrgId ?? activeOrgId ?? undefined);
+  const uploadImage = images.upload;
   // `useEditor`'s callbacks are created once and close over their first render's values, the same
   // reason `onChangeRef` exists a few lines up. The controller changes every keystroke, so the
   // handlers must reach it through a ref or they would act on a stale menu.
@@ -171,10 +183,17 @@ export function FreeformTextEditor({
           setLinkOfferRef.current(pending);
         },
       }),
+      // Registered so content arriving from another editor keeps its shape. All three ship their
+      // own Markdown hooks, so a pasted table, image, or underline survives the round trip through
+      // the Markdown the body is stored as rather than being dropped by the schema.
+      TableKit,
+      Image,
       Markdown.configure({ markedOptions: { gfm: true, breaks: false } }),
+      // After Markdown: the clipboard extension reads the manager that extension installs.
+      createMarkdownClipboardExtension({ uploadImage }),
       ...slashExtensions,
     ],
-    [slashExtensions],
+    [slashExtensions, uploadImage],
   );
 
   const editor = useEditor({
@@ -190,7 +209,7 @@ export function FreeformTextEditor({
           : { 'aria-label': ariaLabel, 'aria-multiline': 'true', role: 'textbox' }),
         'data-placeholder': placeholder,
         class:
-          "text-on-surface text-body-medium min-h-10 w-full cursor-text font-normal outline-none [&_a:not([data-mention-kind])]:text-primary [&_a:not([data-mention-kind])]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_[data-inline-code]]:border-outline-variant [&_[data-inline-code]]:bg-surface-container-high [&_[data-inline-code]]:rounded [&_[data-inline-code]]:border [&_[data-inline-code]]:px-1.5 [&_[data-inline-code]]:py-0.5 [&_[data-inline-code]]:font-mono [&_.hljs-keyword]:text-primary [&_.hljs-built_in]:text-primary [&_.hljs-type]:text-primary [&_.hljs-selector-tag]:text-primary [&_.hljs-title]:text-secondary [&_.hljs-function]:text-secondary [&_.hljs-section]:text-secondary [&_.hljs-string]:text-tertiary [&_.hljs-attr]:text-tertiary [&_.hljs-addition]:text-tertiary [&_.hljs-number]:text-secondary [&_.hljs-literal]:text-secondary [&_.hljs-symbol]:text-secondary [&_.hljs-comment]:text-on-surface-variant [&_.hljs-quote]:text-on-surface-variant [&_.hljs-meta]:text-on-surface-variant [&_.hljs-deletion]:text-error [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-large [&_h2]:mt-5 [&_h3]:text-title-medium [&_h3]:mt-4 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul[data-type='taskList']]:my-2 [&_ul[data-type='taskList']]:list-none [&_ul[data-type='taskList']]:pl-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:my-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:pl-6 [&_ul[data-type='taskList']_li[data-checked]]:flex [&_ul[data-type='taskList']_li[data-checked]]:items-start [&_ul[data-type='taskList']_li[data-checked]]:gap-2 [&_ul[data-type='taskList']_li[data-checked]]:my-1 [&_ul[data-type='taskList']_li[data-checked]>label]:relative [&_ul[data-type='taskList']_li[data-checked]>label]:mt-0.5 [&_ul[data-type='taskList']_li[data-checked]>label]:flex [&_ul[data-type='taskList']_li[data-checked]>label]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]>label]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-outline [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:size-4 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:appearance-none [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:rounded-[0.1875rem] [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-2 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:bg-transparent [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:transition-colors [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:border-primary [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:bg-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-on-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:pointer-events-none [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:absolute [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:top-[2px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:left-[5px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:h-[7px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:w-[3px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:rotate-45 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-r-2 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-b-2 [&_ul[data-type='taskList']_li[data-checked]>div]:min-w-0 [&_ul[data-type='taskList']_li[data-checked]>div]:flex-1 [&_ul[data-type='taskList']_li[data-checked]>div_p]:my-0 [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:text-on-surface-variant [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:line-through [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          "text-on-surface text-body-medium min-h-10 w-full cursor-text font-normal outline-none [&_a:not([data-mention-kind])]:text-primary [&_a:not([data-mention-kind])]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_[data-inline-code]]:border-outline-variant [&_[data-inline-code]]:bg-surface-container-high [&_[data-inline-code]]:rounded [&_[data-inline-code]]:border [&_[data-inline-code]]:px-1.5 [&_[data-inline-code]]:py-0.5 [&_[data-inline-code]]:font-mono [&_.hljs-keyword]:text-primary [&_.hljs-built_in]:text-primary [&_.hljs-type]:text-primary [&_.hljs-selector-tag]:text-primary [&_.hljs-title]:text-secondary [&_.hljs-function]:text-secondary [&_.hljs-section]:text-secondary [&_.hljs-string]:text-tertiary [&_.hljs-attr]:text-tertiary [&_.hljs-addition]:text-tertiary [&_.hljs-number]:text-secondary [&_.hljs-literal]:text-secondary [&_.hljs-symbol]:text-secondary [&_.hljs-comment]:text-on-surface-variant [&_.hljs-quote]:text-on-surface-variant [&_.hljs-meta]:text-on-surface-variant [&_.hljs-deletion]:text-error [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-large [&_h2]:mt-5 [&_h3]:text-title-medium [&_h3]:mt-4 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_img]:my-3 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg [&_table]:my-3 [&_table]:min-w-full [&_td]:border-outline-variant [&_td]:border [&_td]:p-2 [&_th]:border-outline-variant [&_th]:border [&_th]:p-2 [&_th]:text-left [&_th]:font-medium [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul[data-type='taskList']]:my-2 [&_ul[data-type='taskList']]:list-none [&_ul[data-type='taskList']]:pl-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:my-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:pl-6 [&_ul[data-type='taskList']_li[data-checked]]:flex [&_ul[data-type='taskList']_li[data-checked]]:items-start [&_ul[data-type='taskList']_li[data-checked]]:gap-2 [&_ul[data-type='taskList']_li[data-checked]]:my-1 [&_ul[data-type='taskList']_li[data-checked]>label]:relative [&_ul[data-type='taskList']_li[data-checked]>label]:mt-0.5 [&_ul[data-type='taskList']_li[data-checked]>label]:flex [&_ul[data-type='taskList']_li[data-checked]>label]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]>label]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-outline [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:size-4 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:appearance-none [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:rounded-[0.1875rem] [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-2 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:bg-transparent [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:transition-colors [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:border-primary [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:bg-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-on-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:pointer-events-none [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:absolute [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:top-[2px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:left-[5px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:h-[7px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:w-[3px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:rotate-45 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-r-2 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-b-2 [&_ul[data-type='taskList']_li[data-checked]>div]:min-w-0 [&_ul[data-type='taskList']_li[data-checked]>div]:flex-1 [&_ul[data-type='taskList']_li[data-checked]>div_p]:my-0 [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:text-on-surface-variant [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:line-through [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
       },
       handleKeyDown: (view, event) => {
         // First, because ProseMirror consults `editorProps.handleKeyDown` before any plugin
@@ -281,8 +300,15 @@ export function FreeformTextEditor({
         aria-controls={mentions.open ? mentions.listboxId : undefined}
         aria-activedescendant={mentions.open ? mentions.activeKey : undefined}
       />
+      {images.status === 'failed' ? (
+        <p className="text-error text-body-small mt-1">{images.announcement}</p>
+      ) : null}
       <p aria-live="polite" aria-atomic="true" className="sr-only">
-        {linkOffer === undefined ? '' : 'Link pasted. Press Tab to turn it into a chip.'}
+        {images.announcement !== ''
+          ? images.announcement
+          : linkOffer === undefined
+            ? ''
+            : 'Link pasted. Press Tab to turn it into a chip.'}
       </p>
       {mentions.open ? (
         <MentionMenu

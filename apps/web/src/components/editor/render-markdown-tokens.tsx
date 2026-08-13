@@ -19,6 +19,24 @@ function safeHref(href: string): string | undefined {
 }
 
 /**
+/**
+ * Allow only the sources this renderer is willing to point a real `<img src>` at.
+ *
+ * @remarks
+ * Narrower than {@link safeHref} on purpose. An image source is fetched without the reader doing
+ * anything, so the set has to be smaller than the set a reader may choose to *click*: `mailto:` and
+ * `#` are meaningless here, and `data:` is excluded so a body cannot carry an arbitrary inline
+ * payload past the upload route's raster allowlist.
+ *
+ * Absolute `https:` stays allowed because Markdown pasted from another tool references that tool's
+ * own host. Docket cannot rehost bytes it has no credentials for, so such an image is kept and
+ * rendered rather than silently deleted, and simply fails to load for anyone who cannot reach it.
+ */
+function safeImageSrc(src: string): string | undefined {
+  return /^(https?:|\/)/i.test(src) ? src : undefined;
+}
+
+/**
  * Render one token's inline (span-level) children — text, emphasis, links, code spans, etc.
  *
  * @remarks
@@ -66,8 +84,25 @@ export function renderInline(tokens: readonly Token[], prefix: string): ReactNod
           </a>
         );
       }
-      case 'image':
-        return <Fragment key={key}>{(token as Tokens.Image).text}</Fragment>;
+      case 'underline':
+        // Not standard Markdown — `++text++` is the syntax `@tiptap/markdown`'s Underline mark
+        // serializes to, so the reader must understand exactly what the editor writes.
+        return (
+          <u key={key}>
+            {token.tokens ? renderInline(token.tokens, key) : String(token['text'] ?? '')}
+          </u>
+        );
+      case 'image': {
+        const image = token as Tokens.Image;
+        const src = safeImageSrc(image.href);
+        // No source we are willing to fetch: fall back to the alt text, which is the whole reason
+        // alt text exists, rather than rendering nothing where a picture used to be.
+        return src === undefined ? (
+          <Fragment key={key}>{image.text}</Fragment>
+        ) : (
+          <img key={key} src={src} alt={image.text} title={image.title ?? undefined} />
+        );
+      }
       case 'html':
         return <Fragment key={key}>{(token as Tokens.HTML).text}</Fragment>;
       default: {

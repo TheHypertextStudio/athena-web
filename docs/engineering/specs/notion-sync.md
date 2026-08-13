@@ -441,6 +441,53 @@ opposite error lets a broken sync look healthy. Both remain readable at `GET /:i
 container page, or no owning actor to borrow credentials from). They used to be skipped in silence,
 which made a permanently stuck workspace indistinguishable from one with nothing due.
 
+### 8.3.3 Relations carry real page ids, and the order is a cycle
+
+Every relation column — `task.project`, `team.members`, `project.initiatives` — is filled the same
+way person columns are: the loader emits a **reference** (`{kind: 'reference', entity, entityIds}`)
+and `resolveMirrorValues` turns it into page ids from the target entity's `notion_mirror_row`
+anchors. The target entity is named on the value rather than looked up, because
+`NotionColumnBinding` is the stored column and which entity it points at is a fact about the
+catalog, not about the row being written.
+
+**No projection order satisfies every relation, because the catalog is cyclic.** `person`↔`team`,
+`project`↔`program` and `project`↔`initiative` each reference the other, so at least one edge per
+cycle must be deferred to a second pass. `MIRROR_PROJECTION_ORDER` chooses which three:
+`person.teams`, `program.projects`, `project.initiatives` — **none of which is a default column**,
+so a workspace that never opens the designer resolves everything on the first pass.
+
+That is a judgment a topological sort cannot make: it has no way to know that `team.members` ships
+by default and `person.teams` does not, and would break each cycle arbitrarily. So the order is
+written down, and `deferredRelationEdges()` recomputes the deferred set from the catalog. A test
+asserts it is exactly those three and that none is a default column, so adding a relation field
+that costs an extra pass fails loudly instead of quietly doubling every sync.
+
+**Three outcomes per reference, not two.** The person work established known-empty versus unknown;
+relations need one more, because a reference can point at something that will never have a page —
+`team_member` holds actors of every kind while the People database projects humans only, so an
+agent on a team has no row to point at.
+
+| situation                         | written                       | reported                                   |
+| --------------------------------- | ----------------------------- | ------------------------------------------ |
+| nothing referenced                | empty value (clears the cell) | —                                          |
+| target not projected **yet**      | field omitted entirely        | `unresolvedPending`, pass incomplete       |
+| target will **never** have a page | empty value (clears the cell) | `unresolvedPermanent`, pass still complete |
+
+The third row is what keeps a workspace from being permanently "not fully synced". A pass carries a
+`settled` flag per entity: once an entity has projected to completion, an id with no page is one
+its loader does not project at all, and retrying is pointless. An entity with **no entry at all** —
+its database disabled or never provisioned — is treated the same way, since nothing will ever
+create those pages.
+
+**A partially resolvable set defers whole.** If a task has three labels and one page is missing,
+the column is omitted rather than written with two: a two-of-three cell looks complete in Notion
+while silently dropping a label, and the next pass writes all three. Once the target is settled the
+remainder _is_ written, because the missing ids are then known to be permanent.
+
+`projectEntity` returns the pages it now holds for its entity, and the pass folds them forward, so
+a relation written later in the same pass points at a page created earlier in it rather than
+waiting a whole sweep.
+
 ### 8.4 Provenance lives in a side table
 
 `notion_mirror_database` (one per entity kind) and `notion_mirror_row` (one per projected record),
@@ -528,10 +575,8 @@ too. Wave two also runs for any design holding a column with no property id yet 
 column _added_ to an already-provisioned database would exist in Docket's map and nowhere in
 Notion, and every value written to it would be silently dropped.
 
-Projection is ordered by `MIRROR_PROJECTION_ORDER`, which puts **`person` first**. A relation can
-only carry a page id that already exists, so every other entity's person columns depend on the
-People rows having been written. The order is explicit rather than incidental: the design query
-returns rows in whatever order Postgres chooses, which also made budget spend unpredictable.
+Projection is ordered by `MIRROR_PROJECTION_ORDER`. A relation can only carry a page id that
+already exists, so an entity has to be written before anything that points at it — see §8.3.3.
 
 A shared write budget (400 writes at ~3/second) is spent across every entity so one large database
 cannot starve the rest. A pass that exhausts it reports what it actually wrote and sets

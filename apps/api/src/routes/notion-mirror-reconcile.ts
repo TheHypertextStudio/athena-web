@@ -24,9 +24,10 @@ import {
   MIRROR_ENTITY_SPECS,
   MIRROR_PROJECTION_ORDER,
   type MirrorColumnSpec,
+  type MirrorEntityPages,
+  type MirrorReferences,
   type MirrorValue,
   type NotionMirrorPort,
-  type PersonProjection,
   orderedColumns,
   projectRow,
   provisionedKind,
@@ -77,21 +78,31 @@ export interface MirrorPassResult {
    * True when the pass covered everything it was asked to.
    *
    * @remarks
-   * False when the write budget ran out, and false when a person reference could not be resolved
-   * *yet* — both mean the sweep should come back rather than record a complete sync.
+   * False when the write budget ran out, and false when a reference could not be resolved *yet* —
+   * both mean the sweep should come back rather than record a complete sync.
    */
   readonly complete: boolean;
-  /** Person references a later pass can still fill in (the People row is not written yet). */
+  /** References a later pass can still fill in, because the target row is not written yet. */
   readonly unresolvedPending: number;
   /**
-   * Person references nothing will ever fill in, because there is no Notion account to point at.
+   * References nothing will ever fill in, because the target has no page and never will.
    *
    * @remarks
-   * Reported but deliberately NOT allowed to mark the pass incomplete. An org with one
-   * account-less person would otherwise never record a full sync again — and the column is doing
-   * exactly what it says, holding the matched subset, with the name beside it in the text column.
+   * A person with no Notion account, or a related record the target database does not project at
+   * all — an agent on a team, an archived project. Reported but deliberately NOT allowed to mark
+   * the pass incomplete: one of either would otherwise stop the workspace ever recording a full
+   * sync, while the column is doing exactly what it says and holding the subset it can represent.
    */
   readonly unresolvedPermanent: number;
+  /**
+   * `entityId → page id` for this entity after the pass, when it projected one.
+   *
+   * @remarks
+   * Handed to the entities projected next, so a relation written later in the same pass points at
+   * a page created earlier in it rather than waiting a whole sweep. Absent on a pull-back pass,
+   * which creates pages for adopted rows but is not the authority on what this entity projects.
+   */
+  readonly pageByEntityId?: ReadonlyMap<string, string>;
 }
 
 /** Everything a pass needs to reach Notion and the database. */
@@ -127,40 +138,80 @@ function pace(): Promise<void> {
  *
  * @param bindings - The design's columns.
  * @param record - The Docket record.
- * @param people - The person id maps for this pass.
+ * @param refs - The pass's reference maps.
  * @returns the stable content hash.
  */
 function projectedHash(
   bindings: readonly NotionColumnBinding[],
   record: MirrorEntityRecord,
-  people: PersonProjection,
+  refs: MirrorReferences,
 ): string {
-  return projectRow(bindings, resolveMirrorValues(bindings, record.values, people).values)
+  return projectRow(bindings, resolveMirrorValues(bindings, record.values, refs).values)
     .contentHash;
 }
 
 /**
- * Load the id maps every person representation needs, once for the whole pass.
+ * Load every id map the pass needs to turn references into Notion ids.
  *
  * @remarks
- * Per-pass rather than per-row or per-entity: both maps are small, both are read by every entity
- * that has a person column, and re-reading them per row would turn a projection into a query
- * storm. Loaded *after* provisioning and after the People database is projected, so the page ids
- * are as complete as this pass can make them.
+ * Per-pass rather than per-row: the maps are small, they are read by every entity with a relation
+ * or person column, and re-reading them per row would turn a projection into a query storm.
+ *
+ * Only entities the pass will actually project get an entry. An absent entry is meaningful — it
+ * says the target database is disabled or unprovisioned, so references to it can never resolve and
+ * must be reported as permanent rather than deferred forever.
+ *
+ * Every entity starts `settled: false`, because at load time none has been projected yet.
  *
  * @param ctx - The sync context.
- * @returns the Notion-user and People-page maps, keyed by Docket actor id.
+ * @param entities - The entities this pass will project.
+ * @returns the reference maps for the start of the pass.
  */
-async function loadPersonProjection(ctx: MirrorContext): Promise<PersonProjection> {
-  const [notionUserByActor, personRows] = await Promise.all([
+async function loadReferences(
+  ctx: MirrorContext,
+  entities: readonly NotionMirrorEntity[],
+): Promise<MirrorReferences> {
+  const [notionUserByActor, rowsPerEntity] = await Promise.all([
     externalActorReverseMap(ctx.integrationId),
-    loadMirrorRows(ctx.integrationId, 'person'),
+    Promise.all(entities.map((entity) => loadMirrorRows(ctx.integrationId, entity))),
   ]);
-  const personPageByActor = new Map<string, string>();
-  for (const [actorId, row] of personRows) {
-    personPageByActor.set(actorId, row.externalPageId);
-  }
-  return { notionUserByActor, personPageByActor };
+
+  const pages = new Map<NotionMirrorEntity, MirrorEntityPages>();
+  entities.forEach((entity, index) => {
+    const pageByEntityId = new Map<string, string>();
+    for (const [entityId, row] of rowsPerEntity[index] ?? []) {
+      pageByEntityId.set(entityId, row.externalPageId);
+    }
+    pages.set(entity, { pageByEntityId, settled: false });
+  });
+
+  return { notionUserByActor, pages };
+}
+
+/**
+ * Fold one entity's freshly written pages back into the pass's reference maps.
+ *
+ * @remarks
+ * Called after each entity projects, so everything projected later points at real pages rather
+ * than waiting a whole sweep. `settled` is what turns "not written yet" into "will never be
+ * written": once an entity has projected to completion, an id with no page is one its loader does
+ * not project at all, and reporting that as retryable would keep the pass permanently unfinished.
+ *
+ * @param refs - The maps so far.
+ * @param entity - The entity just projected.
+ * @param pageByEntityId - Its pages, including any created in this pass.
+ * @param settled - Whether that projection ran to completion.
+ * @returns the updated maps.
+ */
+function withProjectedPages(
+  refs: MirrorReferences,
+  entity: NotionMirrorEntity,
+  pageByEntityId: ReadonlyMap<string, string>,
+  settled: boolean,
+): MirrorReferences {
+  const pages = new Map(refs.pages);
+  pages.set(entity, { pageByEntityId, settled });
+  return { notionUserByActor: refs.notionUserByActor, pages };
 }
 
 /**
@@ -347,14 +398,14 @@ function withPropertyIds(
  * @param ctx - The sync context.
  * @param design - The database to project into.
  * @param budget - Remaining Notion writes this pass may spend.
- * @param people - The person id maps, loaded once for the whole pass.
- * @returns what the pass wrote.
+ * @param refs - The reference maps, loaded once for the whole pass.
+ * @returns what the pass wrote, including the pages it now has for this entity.
  */
 export async function projectEntity(
   ctx: MirrorContext,
   design: MirrorDatabaseRow,
   budget: number,
-  people: PersonProjection,
+  refs: MirrorReferences,
 ): Promise<MirrorPassResult> {
   const dataSourceId = design.externalDataSourceId;
   if (dataSourceId === null) return EMPTY_PASS;
@@ -362,6 +413,11 @@ export async function projectEntity(
   const bindings = orderedColumns(design.propertyMap);
   const records = await loadEntityRows(ctx.orgId, ctx.integrationId, design.entityType);
   const mirrors = await loadMirrorRows(ctx.integrationId, design.entityType);
+
+  // Seeded from what already existed, then grown by this pass's creates, so the caller can hand
+  // the result straight to the entities projected after this one.
+  const pageByEntityId = new Map<string, string>();
+  for (const [entityId, row] of mirrors) pageByEntityId.set(entityId, row.externalPageId);
 
   let written = 0;
   let complete = true;
@@ -373,7 +429,7 @@ export async function projectEntity(
       break;
     }
     const existing = mirrors.get(record.entityId);
-    const resolved = resolveMirrorValues(bindings, record.values, people);
+    const resolved = resolveMirrorValues(bindings, record.values, refs);
     for (const ref of resolved.unresolved) {
       if (ref.retryable) unresolvedPending += 1;
       else unresolvedPermanent += 1;
@@ -397,6 +453,7 @@ export async function projectEntity(
           lastPushedAt: new Date(result.externalUpdatedAt),
           contentHash: projected.contentHash,
         });
+        pageByEntityId.set(record.entityId, result.externalPageId);
       }
       written += 1;
       await pace();
@@ -441,12 +498,13 @@ export async function projectEntity(
   return {
     written,
     conflicts: 0,
-    // A pending reference means a People row this pass depends on has not been written yet, so
-    // the projection is genuinely unfinished and the sweep must return. Permanent ones must not
+    // A pending reference means a row this pass depends on has not been written yet, so the
+    // projection is genuinely unfinished and the sweep must return. Permanent ones must not
     // count, or one account-less person would keep the workspace from ever recording a full sync.
     complete: complete && unresolvedPending === 0,
     unresolvedPending,
     unresolvedPermanent,
+    pageByEntityId,
   };
 }
 
@@ -468,7 +526,7 @@ export async function pullBackEntity(
   ctx: MirrorContext,
   design: MirrorDatabaseRow,
   budget: number,
-  people: PersonProjection,
+  refs: MirrorReferences,
 ): Promise<MirrorPassResult> {
   const dataSourceId = design.externalDataSourceId;
   if (dataSourceId === null) return EMPTY_PASS;
@@ -516,7 +574,7 @@ export async function pullBackEntity(
           design.entityType,
           entityId,
         );
-        const contentHash = record === undefined ? '' : projectedHash(bindings, record, people);
+        const contentHash = record === undefined ? '' : projectedHash(bindings, record, refs);
         await db.insert(notionMirrorRow).values({
           organizationId: ctx.orgId,
           integrationId: ctx.integrationId,
@@ -557,7 +615,7 @@ export async function pullBackEntity(
           design.entityType,
           local.entityId,
         );
-        const contentHash = record === undefined ? null : projectedHash(bindings, record, people);
+        const contentHash = record === undefined ? null : projectedHash(bindings, record, refs);
         // No Notion call here — this is a local DB write, not a Notion write, so it is not paced
         // against the rate limit. It IS counted against the pass's write budget: the budget's real
         // job is capping how long one sweep runs, and a pull that reads Notion's full property set
@@ -611,7 +669,7 @@ export async function pullBackEntity(
       if (record === undefined) continue;
       const projected = projectRow(
         bindings,
-        resolveMirrorValues(bindings, record.values, people).values,
+        resolveMirrorValues(bindings, record.values, refs).values,
       );
       const result = await ctx.mirror.writeRow(
         action.kind === 'create'
@@ -661,8 +719,8 @@ export async function pullBackEntity(
       .where(eq(notionMirrorDatabase.id, design.id));
   }
 
-  // The pull path resolves person values only to recompute content hashes, never to write a
-  // person property, so an unresolved reference here changes nothing about what was read back.
+  // The pull path resolves references only to recompute content hashes, never to write a
+  // relation property, so an unresolved one here changes nothing about what was read back.
   return { written, conflicts, complete, unresolvedPending: 0, unresolvedPermanent: 0 };
 }
 
@@ -804,10 +862,10 @@ export async function runNotionMirrorSync(
         ),
       );
 
-    // Sorted, because the select's order is whatever Postgres returns. `person` must project
-    // before anything that relates to it — a relation can only carry a page id that already
-    // exists — and a deterministic order also decides budget spend predictably rather than by
-    // accident of row layout.
+    // Sorted, because the select's order is whatever Postgres returns. A relation can only carry
+    // a page id that already exists, so an entity has to be written before anything pointing at
+    // it; `MIRROR_PROJECTION_ORDER` encodes that, and also makes budget spend predictable rather
+    // than an accident of row layout.
     const designs = [...found].sort(
       (a, b) =>
         MIRROR_PROJECTION_ORDER.indexOf(a.entityType) -
@@ -818,35 +876,47 @@ export async function runNotionMirrorSync(
     let processed = 0;
     let complete = true;
 
-    // Loaded before the pull loop and refreshed after it: the pull can adopt rows created in
-    // Notion, which mints People pages the projection below can then point at.
-    let people = await loadPersonProjection(ctx);
+    // Only the entities actually being projected get an entry. A relation pointing at one that is
+    // absent — disabled, or never provisioned — can never resolve, and the resolver reads the
+    // absence to say so rather than deferring forever.
+    let refs = await loadReferences(
+      ctx,
+      designs.map((design) => design.entityType),
+    );
 
     for (const design of designs) {
       if (budget <= 0) {
         complete = false;
         break;
       }
-      const pulled = await pullBackEntity(ctx, design, budget, people);
+      const pulled = await pullBackEntity(ctx, design, budget, refs);
       budget -= pulled.written;
       processed += pulled.written;
       if (!pulled.complete) complete = false;
     }
 
+    // Re-read after the pull loop: adopting a row created in Notion mints a page the projection
+    // below can point at. Cheap, and only once for the whole pass.
+    refs = await loadReferences(
+      ctx,
+      designs.map((design) => design.entityType),
+    );
+
     for (const design of designs) {
       if (budget <= 0) {
         complete = false;
         break;
       }
-      const pushed = await projectEntity(ctx, design, budget, people);
+      const pushed = await projectEntity(ctx, design, budget, refs);
       budget -= pushed.written;
       processed += pushed.written;
       if (!pushed.complete) complete = false;
-      // Re-read after People is written, so every entity projected after it sees the page ids it
-      // just created. Only then, and only once: this is the one entity whose output the rest of
-      // the pass reads back.
-      if (design.entityType === 'person' && pushed.written > 0) {
-        people = await loadPersonProjection(ctx);
+      // Fold this entity's pages forward so everything projected after it points at real pages
+      // instead of waiting a whole sweep. `settled` records whether the projection finished: an
+      // id with no page after a complete run is one this entity does not project at all, which is
+      // what lets the resolver call it permanent instead of retrying forever.
+      if (pushed.pageByEntityId !== undefined) {
+        refs = withProjectedPages(refs, design.entityType, pushed.pageByEntityId, pushed.complete);
       }
     }
 

@@ -16,6 +16,8 @@ import {
   db,
   health,
   initiative,
+  initiativeProgram,
+  initiativeProject,
   label,
   labelGroup,
   milestone,
@@ -23,14 +25,16 @@ import {
   project,
   projectStatus,
   task,
+  taskLabel,
   taskPriority,
   team,
+  teamMember,
   user,
 } from '@docket/db';
 import type { NotionMirrorEntity } from '@docket/types';
 import { personCompanionKey } from '@docket/integrations';
 import type { MirrorSourceValue, MirrorValue } from '@docket/integrations';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { setTaskState } from '../lib/task-state';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -99,6 +103,49 @@ const docketUrl = (orgId: string, path: string): MirrorValue => ({
   value: `/orgs/${orgId}/${path}`,
 });
 
+/**
+ * Wrap a to-one foreign key as a reference to another projected entity.
+ *
+ * @remarks
+ * A null key is an empty reference rather than an omitted field: "no project" is a fact worth
+ * writing, and it clears the Notion cell. Absence would defer instead — see `resolveMirrorValues`.
+ */
+const ref = (entity: NotionMirrorEntity, id: string | null): MirrorSourceValue => ({
+  kind: 'reference',
+  entity,
+  entityIds: id === null ? [] : [id],
+});
+
+/** Wrap a to-many set as a reference. */
+const refs = (entity: NotionMirrorEntity, ids: readonly string[]): MirrorSourceValue => ({
+  kind: 'reference',
+  entity,
+  entityIds: ids,
+});
+
+/**
+ * Group a join table's rows into `owner id → related ids`.
+ *
+ * @remarks
+ * One query per to-many relation, grouped in memory, rather than a query per row. The link tables
+ * are narrow and org-scoped, and a projection pass already walks every row of the owning entity —
+ * doing this per row would turn one pass into thousands of round trips.
+ *
+ * @param pairs - Rows of `{ ownerId, relatedId }`.
+ * @returns the grouped map; an owner with no links is simply absent.
+ */
+function groupLinks(
+  pairs: readonly { ownerId: string; relatedId: string }[],
+): Map<string, string[]> {
+  const grouped = new Map<string, string[]>();
+  for (const pair of pairs) {
+    const existing = grouped.get(pair.ownerId);
+    if (existing === undefined) grouped.set(pair.ownerId, [pair.relatedId]);
+    else existing.push(pair.relatedId);
+  }
+  return grouped;
+}
+
 /** Display names for the actors an org's records point at. */
 async function actorNames(orgId: string): Promise<Map<string, string>> {
   const rows = await db
@@ -135,27 +182,34 @@ export async function loadEntityRows(
   const names = await actorNames(orgId);
   /** One person-valued field, as both its own column and its native-Notion companion. */
   const personFields = (field: string, id: string | null): Record<string, MirrorSourceValue> => {
-    const ref: MirrorSourceValue = {
+    const actorRef: MirrorSourceValue = {
       kind: 'actor',
       actorId: id,
       displayName: id === null ? null : (names.get(id) ?? null),
     };
-    return { [field]: ref, [personCompanionKey(field)]: ref };
+    return { [field]: actorRef, [personCompanionKey(field)]: actorRef };
   };
 
   switch (entity) {
     case 'task': {
-      const rows = await db
-        .select()
-        .from(task)
-        .where(
-          and(
-            eq(task.organizationId, orgId),
-            isNull(task.archivedAt),
-            // Already mirrored into this Notion workspace by the linked-database connector.
-            sql`(${task.sourceIntegrationId} is distinct from ${integrationId})`,
+      const [rows, labelLinks] = await Promise.all([
+        db
+          .select()
+          .from(task)
+          .where(
+            and(
+              eq(task.organizationId, orgId),
+              isNull(task.archivedAt),
+              // Already mirrored into this Notion workspace by the linked-database connector.
+              sql`(${task.sourceIntegrationId} is distinct from ${integrationId})`,
+            ),
           ),
-        );
+        db
+          .select({ ownerId: taskLabel.taskId, relatedId: taskLabel.labelId })
+          .from(taskLabel)
+          .where(eq(taskLabel.organizationId, orgId)),
+      ]);
+      const labelsByTask = groupLinks(labelLinks);
       return rows.map((row) => ({
         entityId: row.id,
         values: {
@@ -167,15 +221,30 @@ export async function loadEntityRows(
           priority: option(row.priority),
           estimateMinutes: number(row.estimateMinutes),
           description: text(row.description),
+          project: ref('project', row.projectId),
+          cycle: ref('cycle', row.cycleId),
+          milestone: ref('milestone', row.milestoneId),
+          team: ref('team', row.teamId),
+          labels: refs('label', labelsByTask.get(row.id) ?? []),
           docketUrl: docketUrl(orgId, `tasks/${row.id}`),
         },
       }));
     }
     case 'project': {
-      const rows = await db
-        .select()
-        .from(project)
-        .where(and(eq(project.organizationId, orgId), isNull(project.archivedAt)));
+      const [rows, initiativeLinks] = await Promise.all([
+        db
+          .select()
+          .from(project)
+          .where(and(eq(project.organizationId, orgId), isNull(project.archivedAt))),
+        db
+          .select({
+            ownerId: initiativeProject.projectId,
+            relatedId: initiativeProject.initiativeId,
+          })
+          .from(initiativeProject)
+          .where(eq(initiativeProject.organizationId, orgId)),
+      ]);
+      const initiativesByProject = groupLinks(initiativeLinks);
       return rows.map((row) => ({
         entityId: row.id,
         values: {
@@ -186,15 +255,36 @@ export async function loadEntityRows(
           targetDate: date(row.targetDate),
           startDate: date(row.startDate),
           summary: text(row.summary),
+          program: ref('program', row.programId),
+          team: ref('team', row.teamId),
+          initiatives: refs('initiative', initiativesByProject.get(row.id) ?? []),
           docketUrl: docketUrl(orgId, `projects/${row.id}`),
         },
       }));
     }
     case 'initiative': {
-      const rows = await db
-        .select()
-        .from(initiative)
-        .where(and(eq(initiative.organizationId, orgId), isNull(initiative.archivedAt)));
+      const [rows, projectLinks, programLinks] = await Promise.all([
+        db
+          .select()
+          .from(initiative)
+          .where(and(eq(initiative.organizationId, orgId), isNull(initiative.archivedAt))),
+        db
+          .select({
+            ownerId: initiativeProject.initiativeId,
+            relatedId: initiativeProject.projectId,
+          })
+          .from(initiativeProject)
+          .where(eq(initiativeProject.organizationId, orgId)),
+        db
+          .select({
+            ownerId: initiativeProgram.initiativeId,
+            relatedId: initiativeProgram.programId,
+          })
+          .from(initiativeProgram)
+          .where(eq(initiativeProgram.organizationId, orgId)),
+      ]);
+      const projectsByInitiative = groupLinks(projectLinks);
+      const programsByInitiative = groupLinks(programLinks);
       return rows.map((row) => ({
         entityId: row.id,
         values: {
@@ -206,15 +296,36 @@ export async function loadEntityRows(
           targetDate: date(row.targetDate),
           updateCadence: option(row.updateCadence),
           summary: text(row.summary),
+          projects: refs('project', projectsByInitiative.get(row.id) ?? []),
+          programs: refs('program', programsByInitiative.get(row.id) ?? []),
           docketUrl: docketUrl(orgId, `initiatives/${row.id}`),
         },
       }));
     }
     case 'program': {
-      const rows = await db
-        .select()
-        .from(program)
-        .where(and(eq(program.organizationId, orgId), isNull(program.archivedAt)));
+      // `program.projects` has no link table: it is the reverse of `project.program_id`, so the
+      // grouping is by the FK on the projects themselves.
+      const [rows, ownedProjects] = await Promise.all([
+        db
+          .select()
+          .from(program)
+          .where(and(eq(program.organizationId, orgId), isNull(program.archivedAt))),
+        db
+          .select({ ownerId: project.programId, relatedId: project.id })
+          .from(project)
+          .where(
+            and(
+              eq(project.organizationId, orgId),
+              isNull(project.archivedAt),
+              isNotNull(project.programId),
+            ),
+          ),
+      ]);
+      const projectsByProgram = groupLinks(
+        ownedProjects.filter(
+          (link): link is { ownerId: string; relatedId: string } => link.ownerId !== null,
+        ),
+      );
       return rows.map((row) => ({
         entityId: row.id,
         values: {
@@ -223,21 +334,33 @@ export async function loadEntityRows(
           health: option(row.health),
           ...personFields('owner', row.ownerId),
           summary: text(row.summary),
+          projects: refs('project', projectsByProgram.get(row.id) ?? []),
           docketUrl: docketUrl(orgId, `programs/${row.id}`),
         },
       }));
     }
     case 'team': {
-      const rows = await db
-        .select()
-        .from(team)
-        .where(and(eq(team.organizationId, orgId), isNull(team.archivedAt)));
+      // `team_member` references actors of every kind, while the People database projects humans
+      // only. The agents and team-shadow actors among them therefore have no page, which the
+      // resolver reports as permanently unresolvable rather than waiting for one forever.
+      const [rows, memberLinks] = await Promise.all([
+        db
+          .select()
+          .from(team)
+          .where(and(eq(team.organizationId, orgId), isNull(team.archivedAt))),
+        db
+          .select({ ownerId: teamMember.teamId, relatedId: teamMember.actorId })
+          .from(teamMember)
+          .where(eq(teamMember.organizationId, orgId)),
+      ]);
+      const membersByTeam = groupLinks(memberLinks);
       return rows.map((row) => ({
         entityId: row.id,
         values: {
           name: text(row.name),
           key: text(row.key),
           summary: text(row.summary),
+          members: refs('person', membersByTeam.get(row.id) ?? []),
           docketUrl: docketUrl(orgId, `teams/${row.id}`),
         },
       }));
@@ -255,6 +378,7 @@ export async function loadEntityRows(
           status: option(row.status),
           startsAt: date(row.startsAt),
           endsAt: date(row.endsAt),
+          team: ref('team', row.teamId),
           docketUrl: docketUrl(orgId, `cycles/${row.id}`),
         },
       }));
@@ -270,6 +394,7 @@ export async function loadEntityRows(
           name: text(row.name),
           targetDate: date(row.targetDate),
           description: text(row.description),
+          project: ref('project', row.projectId),
           docketUrl: docketUrl(orgId, `projects/${row.projectId}`),
         },
       }));
@@ -305,19 +430,26 @@ export async function loadEntityRows(
       // an account-less person. That is the truth, and the right thing to show: falling back to
       // `external_actor.email` would be echoing Notion's own copy of the address back into Notion
       // as though Docket knew it.
-      const rows = await db
-        .select({
-          id: actor.id,
-          displayName: actor.displayName,
-          title: actor.title,
-          userId: actor.userId,
-          email: user.email,
-        })
-        .from(actor)
-        .leftJoin(user, eq(actor.userId, user.id))
-        .where(
-          and(eq(actor.organizationId, orgId), eq(actor.kind, 'human'), isNull(actor.archivedAt)),
-        );
+      const [rows, teamLinks] = await Promise.all([
+        db
+          .select({
+            id: actor.id,
+            displayName: actor.displayName,
+            title: actor.title,
+            userId: actor.userId,
+            email: user.email,
+          })
+          .from(actor)
+          .leftJoin(user, eq(actor.userId, user.id))
+          .where(
+            and(eq(actor.organizationId, orgId), eq(actor.kind, 'human'), isNull(actor.archivedAt)),
+          ),
+        db
+          .select({ ownerId: teamMember.actorId, relatedId: teamMember.teamId })
+          .from(teamMember)
+          .where(eq(teamMember.organizationId, orgId)),
+      ]);
+      const teamsByActor = groupLinks(teamLinks);
       return rows.map((row) => ({
         entityId: row.id,
         values: {
@@ -329,6 +461,7 @@ export async function loadEntityRows(
           // beginning, but never given a value — so the column was created in every workspace and
           // stayed permanently blank.
           notionUser: { kind: 'actor', actorId: row.id, displayName: row.displayName },
+          teams: refs('team', teamsByActor.get(row.id) ?? []),
           // `user_id` is what distinguishes a person with an account from one without — the
           // account-less actors this whole feature exists to keep first-class.
           hasDocketAccount: boolean(row.userId !== null),

@@ -6,6 +6,7 @@ import {
   MIRROR_ENTITY_SPECS,
   MIRROR_PROJECTION_ORDER,
   defaultColumnTitle,
+  deferredRelationEdges,
   defaultDatabaseTitle,
   defaultPropertyMap,
   fieldsByPropertyId,
@@ -13,6 +14,7 @@ import {
   orderedColumns,
   personCompanionKey,
   provisionedKind,
+  relationEdges,
   writableFields,
 } from '../../src/notion-mirror-schema';
 
@@ -194,6 +196,32 @@ describe('provisionedKind', () => {
         expect(companion).toMatchObject({ kind: 'people', personCompanionOf: field.field });
         expect(spec.defaultColumns).not.toContain(companion?.field);
       }
+    }
+  });
+
+  it('resolves every DEFAULT relation column on the first pass', () => {
+    // The claim `MIRROR_PROJECTION_ORDER` is chosen to make. The catalog has three cycles, so
+    // three edges must be deferred no matter what — but a workspace that never touches the
+    // designer must not be one of the affected ones.
+    const deferredDefaults = deferredRelationEdges().filter((edge) =>
+      MIRROR_ENTITY_SPECS[edge.from].defaultColumns.includes(edge.field),
+    );
+    expect(deferredDefaults).toEqual([]);
+  });
+
+  it('defers exactly the three edges the cycles force, and no more', () => {
+    // Pinned so that adding a relation field which costs an extra pass fails here, loudly, rather
+    // than quietly making every sync take two rounds to settle.
+    expect(deferredRelationEdges().map((edge) => `${edge.from}.${edge.field}`)).toEqual([
+      'project.initiatives',
+      'program.projects',
+      'person.teams',
+    ]);
+  });
+
+  it('gives every relation edge a target that is itself projected', () => {
+    for (const edge of relationEdges()) {
+      expect(MIRROR_PROJECTION_ORDER, `${edge.from}.${edge.field}`).toContain(edge.to);
     }
   });
 

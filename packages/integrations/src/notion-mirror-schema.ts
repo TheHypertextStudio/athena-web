@@ -368,25 +368,94 @@ export const MIRROR_ENTITY_ORDER: readonly NotionMirrorEntity[] = [
  * The order entities are **projected** in.
  *
  * @remarks
- * `person` first, and that is load-bearing rather than cosmetic: a relation to the People database
- * can only carry a page id that already exists, so every other entity's person columns depend on
- * the People rows having been written — this pass or a previous one.
+ * Load-bearing rather than cosmetic: a relation can only carry a page id that already exists, so
+ * an entity has to be written before anything that points at it.
+ *
+ * **No order satisfies every relation, because the catalog has cycles** — `person`↔`team`,
+ * `project`↔`program` and `project`↔`initiative` each reference the other. Three edges must
+ * therefore be deferred to a second pass no matter what, and this order chooses *which* three:
+ * `person.teams`, `program.projects` and `project.initiatives`, none of which is a default column.
+ * Every relation a workspace gets out of the box resolves on the first pass.
+ *
+ * That is a judgment about which columns people actually have, which is why the order is written
+ * down rather than derived by a topological sort — a sort cannot know that `team.members` is a
+ * default column and `person.teams` is not, and would break the cycle arbitrarily. The choice is
+ * pinned by a test that recomputes the deferred edges from the catalog, so adding a relation field
+ * that changes them fails loudly instead of quietly costing a pass.
+ *
+ * `person` stays first, as the person-representation work established.
  *
  * Distinct from {@link MIRROR_ENTITY_ORDER}, which is the order the *designer* lists entities in
  * and deliberately puts `person` last: the roster is the least interesting table to configure and
  * the most important one to write.
+ *
+ * @see {@link deferredRelationEdges}
  */
 export const MIRROR_PROJECTION_ORDER: readonly NotionMirrorEntity[] = [
   'person',
-  'task',
+  'team',
+  'label',
+  'program',
   'project',
   'initiative',
-  'program',
-  'team',
-  'cycle',
   'milestone',
-  'label',
+  'cycle',
+  'task',
 ];
+
+/** One entity's relation column, and the entity it points at. */
+export interface MirrorRelationEdge {
+  readonly from: NotionMirrorEntity;
+  readonly field: string;
+  readonly to: NotionMirrorEntity;
+}
+
+/**
+ * Every relation the catalog declares, as edges from the referring entity to its target.
+ *
+ * @remarks
+ * Person-valued fields are included: they become relations to the People database whenever
+ * somebody picks that representation, so they constrain the projection order exactly as a catalog
+ * relation does. Derived companion columns are not — a native Notion person property references
+ * workspace members, not a Docket database, so it depends on no projection.
+ *
+ * @returns one edge per relation column, in catalog order.
+ */
+export function relationEdges(): MirrorRelationEdge[] {
+  const edges: MirrorRelationEdge[] = [];
+  for (const entity of MIRROR_ENTITY_ORDER) {
+    for (const field of MIRROR_ENTITY_SPECS[entity].fields) {
+      if (field.personCompanionOf !== undefined) continue;
+      const to = field.personValued === true ? 'person' : field.relationEntity;
+      if (to === undefined) continue;
+      edges.push({ from: entity, field: field.field, to });
+    }
+  }
+  return edges;
+}
+
+/**
+ * The relations {@link MIRROR_PROJECTION_ORDER} cannot satisfy in one pass.
+ *
+ * @remarks
+ * An edge is deferred when its target is projected *after* the entity referring to it, which for a
+ * cyclic graph is unavoidable for at least one edge per cycle. Computed from the catalog rather
+ * than listed, so the answer stays true as fields are added.
+ *
+ * A self-edge (an entity relating to its own kind) is not deferred: by the time a row is written,
+ * earlier rows of the same entity already have pages, and the rest converge on the next pass the
+ * same way any other back edge does.
+ *
+ * @returns every edge whose target has not been projected by the time it is needed.
+ */
+export function deferredRelationEdges(): MirrorRelationEdge[] {
+  const position = new Map(MIRROR_PROJECTION_ORDER.map((entity, index) => [entity, index]));
+  return relationEdges().filter((edge) => {
+    const from = position.get(edge.from) ?? 0;
+    const to = position.get(edge.to) ?? 0;
+    return to > from;
+  });
+}
 
 /**
  * The database title an entity gets before the user renames it.

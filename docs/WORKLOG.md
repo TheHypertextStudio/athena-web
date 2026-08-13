@@ -7,6 +7,67 @@
 
 ## Active Tasks
 
+### [NOTION-005] Relation columns in Notion stop being decorative
+
+- **Status**: REVIEW
+- **Started**: 2026-08-12
+- **Priority**: P1
+- **Description**: Every `relation` column the mirror provisions — "Project" on Tasks, "Program" on
+  Projects, "Members" on Teams, "Milestone", "Cycle", "Labels" — was created in Notion, pointed at
+  the correct data source, and then never received a single value, because no loader ever produced
+  a `{kind: 'relation'}` value. Filed while fixing [NOTION-004], which established the machinery.
+- **Approach**: Extend the person-reference pattern to all relations rather than special-case them.
+
+  **References, not values.** Loaders now emit `{kind: 'reference', entity, entityIds}` for all
+  fourteen relation fields, and `resolveMirrorValues` turns them into page ids from the target's
+  `notion_mirror_row` anchors. The target entity rides on the value because `NotionColumnBinding` is
+  the stored column and its target is a fact about the catalog, not about the row being written.
+  To-many fields (`task.labels`, `team.members`, `project.initiatives`, `initiative.projects`,
+  `initiative.programs`, `person.teams`) load their link tables once per pass and group in memory;
+  `program.projects` has no link table at all and is the reverse of `project.program_id`.
+
+  **Ordering is a cycle, not a DAG.** `person`↔`team`, `project`↔`program` and `project`↔`initiative`
+  each reference the other, so at least one edge per cycle must be deferred no matter what.
+  `MIRROR_PROJECTION_ORDER` was also simply wrong for this — `task` preceded `project`, `team`,
+  `cycle` and `milestone`, so every one of those would have been unresolved on every first pass.
+  The new order defers exactly `person.teams`, `program.projects` and `project.initiatives`, none of
+  which is a default column, so an untouched workspace resolves everything in one pass. Written down
+  rather than derived: a topological sort cannot know which columns ship by default and would break
+  each cycle arbitrarily. `deferredRelationEdges()` recomputes the set from the catalog and a test
+  pins it, so adding a relation field that costs an extra pass fails loudly.
+
+  **A third outcome per reference.** The person work had known-empty (clear) versus unknown (omit).
+  Relations need "will never resolve": `team_member` holds actors of every kind while the People
+  database projects humans only, so an agent on a team has no row to point at. Deferring that
+  forever would keep `stampFullSync` false permanently — the exact failure the person work fixed for
+  account-less people. Each entity now carries a `settled` flag; once it has projected to
+  completion, a missing page is final and is cleared honestly rather than retried. An entity with no
+  entry at all — disabled or unprovisioned database — is treated the same way. This also fixes a
+  latent case in the person path: an agent assignee under `docket_people_table` would previously
+  have wedged the sync.
+
+  **Partial sets defer whole.** A task with three labels and one missing page omits the column
+  rather than writing two — a two-of-three cell looks complete in Notion while silently dropping a
+  label. Once the target is settled the remainder is written, since the gaps are then known final.
+
+  `projectEntity` returns the pages it holds for its entity and the pass folds them forward, so a
+  relation written later in a pass points at a page created earlier in the same one.
+
+- **Files Changed**: `packages/integrations/src/notion-mirror-values.ts` (`MirrorReferenceValue`,
+  `MirrorReferences`, `MirrorEntityPages`, generalized `resolveMirrorValues`),
+  `notion-mirror-schema.ts` (`MIRROR_PROJECTION_ORDER`, `relationEdges`, `deferredRelationEdges`),
+  `apps/api/src/routes/notion-mirror-entities.ts` (all fourteen relation emissions),
+  `notion-mirror-reconcile.ts` (`loadReferences`, `withProjectedPages`, the projection loop),
+  `docs/engineering/specs/notion-sync.md` §8.3.3, plus tests.
+- **Learnings**: The interesting part was not the plumbing but discovering the graph has cycles, so
+  "project targets before referrers" is unachievable and the real question is _which_ edges to
+  defer. Answering it by policy (never a default column) rather than by algorithm, and then pinning
+  that policy with a test computed from the catalog, is what keeps it true as fields are added.
+  Also: a third resolution outcome was needed the moment references could point at records the
+  target deliberately does not project — two states silently assumed every reference is eventually
+  satisfiable, which is how one agent on a team could have stopped a workspace ever recording a
+  full sync.
+
 ### [NOTION-004] "Don't sync them" does something, and a stalled sync says so
 
 - **Status**: REVIEW

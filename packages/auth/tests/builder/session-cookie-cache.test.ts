@@ -8,7 +8,7 @@
  *
  * Caching the session in a signed cookie removes those lookups, and the trade it makes is
  * explicit and bounded: a session revoked elsewhere keeps validating from the cookie until the
- * cache expires. These tests pin both halves — that the cache genuinely serves reads without the
+ * cache expires. These tests pin both halves — that the cache serves reads without the
  * row, and that the authoritative path still refuses a revoked session — so the window is a
  * decision the suite protects rather than an accident.
  */
@@ -40,7 +40,7 @@ beforeAll(async () => {
  * Sign a fresh user in through the real recovery-code HTTP flow.
  *
  * @remarks
- * The same approach the passkey-guard suite uses: a genuinely valid session cookie cannot be
+ * The same approach the passkey-guard suite uses: a valid session cookie cannot be
  * fabricated for a hand-inserted row, so this drives the already-proven ceremony instead of
  * hand-rolling cookie signing.
  *
@@ -112,7 +112,7 @@ describe('session cookie cache', () => {
     const session = await auth.api.getSession({ headers: new Headers({ cookie }) });
 
     expect(session?.user.id).toBe(userId);
-    // Proving the row is genuinely absent, so the read above cannot have come from it.
+    // Proving the row is absent, so the read above cannot have come from it.
     const rows = await db.select().from(sessionTable).where(eq(sessionTable.userId, userId));
     expect(rows).toHaveLength(0);
     await db.delete(user).where(eq(user.id, userId));

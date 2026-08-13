@@ -141,11 +141,17 @@ const initiatives = new Hono<AppEnv>()
         return created;
       });
       // Post-commit and unread by the response, so it runs after the caller has been answered.
+      // Stamped here rather than inside the deferred callback: `emitEvent` defaults `occurredAt`
+      // to the moment it runs, which is now after the response, so under concurrent creates the
+      // feed could order two entities against the order their rows were actually written. It is
+      // also part of the dedupe key, so it needs to name the domain event, not the drain.
+      const occurredAt = new Date();
       deferAfterResponse('initiative-created-event', () =>
         emitEvent({
           organizationId: orgId,
           kind: 'created',
           actorId,
+          occurredAt,
           title: row.name,
           subject: { type: 'initiative', id: row.id, title: row.name },
         }),

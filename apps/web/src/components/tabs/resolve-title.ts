@@ -111,7 +111,7 @@ export async function resolveTabTitle(ref: TabRef): Promise<string | null> {
         if (!res.ok) break;
         const detail = await res.json();
         // A session's name is the work it is doing; it carries no name of its own. Attached to a
-        // task, that task names it. Otherwise there is genuinely nothing to call it, and the
+        // task, that task names it. Otherwise there is nothing to call it, and the
         // right answer is to say so — the bar then reads "Session", which is true, rather than a
         // slice of its id, which was the previous behavior and told the reader nothing.
         if (!detail.taskId) break;

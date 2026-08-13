@@ -38,16 +38,39 @@ export default async function ProgramDetailPage({
   const queryClient = getServerQueryClient();
   const api = await getServerApi();
 
-  await queryClient
-    .prefetchQuery({
+  // The roster the page's capability checks read. Two cheap, `STALE.static`, org-wide reads that
+  // every list surface shares — prefetching them here is what stops a cold open rendering its
+  // controls inert while they resolve.
+  const roster = [
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.members(orgId),
+      queryFn: () =>
+        unwrap(
+          () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+          'Could not load members.',
+        ),
+    }),
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.roles(orgId),
+      queryFn: () =>
+        unwrap(
+          () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+          'Could not load roles.',
+        ),
+    }),
+  ];
+
+  await Promise.allSettled([
+    queryClient.prefetchQuery({
       queryKey: queryKeys.programRecord(orgId, programId),
       queryFn: () =>
         unwrap(
           () => api.v1.orgs[':orgId'].programs[':id'].$get({ param: { orgId, id: programId } }),
           'Could not load this program.',
         ),
-    })
-    .catch(() => undefined);
+    }),
+    ...roster,
+  ]);
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>

@@ -256,11 +256,17 @@ const projects = new Hono<AppEnv>()
       // jobs, which is most of what a create used to cost. A brand-new project also has no
       // inbound mentions to reconcile and no search row anyone is about to read, so there is
       // nothing for deferring to race — unlike an edit to existing prose, which stays awaited.
+      // Stamped here rather than inside the deferred callback: `emitEvent` defaults `occurredAt`
+      // to the moment it runs, which is now after the response, so under concurrent creates the
+      // feed could order two entities against the order their rows were actually written. It is
+      // also part of the dedupe key, so it needs to name the domain event, not the drain.
+      const occurredAt = new Date();
       deferAfterResponse('project-created-event', () =>
         emitEvent({
           organizationId: orgId,
           kind: 'created',
           actorId,
+          occurredAt,
           title: row.name,
           subject: { type: 'project', id: row.id, title: row.name },
         }),

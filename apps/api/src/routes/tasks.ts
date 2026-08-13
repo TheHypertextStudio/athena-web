@@ -157,19 +157,25 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       // a task created directly in a `completed`/`canceled` state lands with correct fields.
       // Labels were accepted by the DTO and silently dropped here until now; resolved against the
       // task's own team so a team-limited label is offerable, and left for the shared write path
-      // to collapse any exclusive-group collision. Neither read depends on the other.
+      // to collapse any exclusive-group collision. Neither read depends on the other, so they go
+      // out together — but both can reject, and a plain `Promise.all` would answer with whichever
+      // lost the race, so a body carrying an invalid state *and* an unknown label would report a
+      // different error from run to run. Settled in declaration order for the same reason the
+      // tenant guards above are.
       const firstState = teamRow.workflowStates[0];
-      const [transition, resolvedLabels] = await Promise.all([
-        firstState
-          ? resolveStateTransition(orgId, body.teamId, body.state ?? firstState.key)
-          : Promise.resolve({
-              state: body.state ?? 'backlog',
-              completedAt: null,
-              canceledAt: null,
-            }),
-        resolveLabelSet(orgId, body.labels, { teamId: body.teamId }),
+      const transitionRead = firstState
+        ? resolveStateTransition(orgId, body.teamId, body.state ?? firstState.key)
+        : Promise.resolve({
+            state: body.state ?? 'backlog',
+            completedAt: null,
+            canceledAt: null,
+          });
+      const labelsRead = resolveLabelSet(orgId, body.labels, { teamId: body.teamId });
+      await guardsInOrder([transitionRead, labelsRead]);
+      const [{ state, completedAt, canceledAt }, resolvedLabels] = await Promise.all([
+        transitionRead,
+        labelsRead,
       ]);
-      const { state, completedAt, canceledAt } = transition;
 
       const inserted = await db
         .insert(task)
@@ -208,12 +214,18 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       // transaction plus recipient routing, automations and indexing — the bulk of what creating
       // a task used to cost the person waiting on it. Deferred as one unit so `created` still
       // lands before `assignment`; the feed's order is part of its meaning.
+      // Stamped here rather than inside the deferred callback: `emitEvent` defaults `occurredAt`
+      // to the moment it runs, which is now after the response, so under concurrent creates the
+      // feed could order two entities against the order their rows were actually written. It is
+      // also part of the dedupe key, so it needs to name the domain event, not the drain.
       const subject = { type: 'task', id: row.id, title: row.title };
+      const occurredAt = new Date();
       deferAfterResponse('task-created-events', async () => {
         await emitEvent({
           organizationId: orgId,
           kind: 'created',
           actorId,
+          occurredAt,
           title: row.title,
           subject,
         });
@@ -222,6 +234,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
             organizationId: orgId,
             kind: 'assignment',
             actorId,
+            occurredAt,
             title: row.title,
             subject,
           });

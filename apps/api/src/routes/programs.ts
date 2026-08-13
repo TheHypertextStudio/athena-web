@@ -155,11 +155,17 @@ const programs = new Hono<AppEnv>()
       if (!row) throw new Error('program insert returned no row');
       // Stream: record the creation (mirrors projects.ts) so it surfaces to owners/followers.
       // Post-commit and unread by the response, so it runs after the caller has been answered.
+      // Stamped here rather than inside the deferred callback: `emitEvent` defaults `occurredAt`
+      // to the moment it runs, which is now after the response, so under concurrent creates the
+      // feed could order two entities against the order their rows were actually written. It is
+      // also part of the dedupe key, so it needs to name the domain event, not the drain.
+      const occurredAt = new Date();
       deferAfterResponse('program-created-event', () =>
         emitEvent({
           organizationId: orgId,
           kind: 'created',
           actorId,
+          occurredAt,
           title: row.name,
           subject: { type: 'program', id: row.id, title: row.name },
         }),

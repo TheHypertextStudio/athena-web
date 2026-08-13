@@ -38,6 +38,7 @@ import { api } from '@/lib/api';
 import { programRecordDef } from '@/lib/entity-records';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
+import { useOrgMembership } from '@/lib/use-org-membership';
 import { fetchProgramDetail } from '@/lib/fetch-program-detail';
 import { useProgramMutations } from '@/lib/use-program-mutations';
 import { userErrorMessage } from '@/lib/problem';
@@ -74,9 +75,13 @@ export default function ProgramDetailPage(): JSX.Element {
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
   useRegisterTabTitle('program', orgId, programId, program?.name);
   useDocumentTitle(program?.name);
-  const members = detail?.members ?? [];
+  // Capabilities come from the org-wide roster keys rather than the composite, so they resolve on
+  // their own fast path. `useOrgCapability` fails closed, which is right for a guest and wrong for
+  // a page that is merely still loading — and on screen the two are the same inert page.
+  const membership = useOrgMembership(orgId);
+  const members = detail?.members ?? membership.members;
   const agents = detail?.agents ?? [];
-  const roles = detail?.roles ?? [];
+  const roles = detail?.roles ?? membership.roles;
 
   const updatesQ = useApiQuery(
     apiQueryOptions(
@@ -139,12 +144,18 @@ export default function ProgramDetailPage(): JSX.Element {
     { value: 'updates', label: 'Updates' },
   ];
 
-  if (program === null && (detailQ.isPending || recordQ.isPending)) {
+  // Identity alone is not enough to render: without capabilities every control would be inert
+  // with nothing explaining why. Both roster keys are shared and `STALE.static`, so arriving from
+  // anywhere inside the app they are already warm and this costs nothing.
+  if (
+    (program === null && (detailQ.isPending || recordQ.isPending)) ||
+    (detail === null && membership.pending)
+  ) {
     // placeholder: the program's own record — name, summary, the metric strip, detail tabs,
     // and the projects under it. The route carries only a program
     // id; even the tab row's counts come from the same read.
     //
-    // Reached only on a genuinely cold open; arriving from a list or from the composer that just
+    // Reached only on a cold open; arriving from a list or from the composer that just
     // created it, the record is cached and the real masthead renders straight away.
     return <EntityDetailSkeleton tabCount={3} label={`Loading ${programLabel.toLowerCase()}`} />;
   }

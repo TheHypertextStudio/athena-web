@@ -14,6 +14,7 @@ import { projectRecordDef } from '@/lib/entity-records';
 import { projectDetailDef } from '@/lib/fetch-project-detail';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
+import { useOrgMembership } from '@/lib/use-org-membership';
 import { useProjectMutations } from '@/lib/use-project-mutations';
 
 /** All data, queries, and mutations the project detail page needs. */
@@ -59,18 +60,30 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
   // The row wins while the composite is still in flight; once both are settled they are the same
   // project, and the composite's copy is the one every other slice was derived alongside.
   const project = detail?.project ?? recordQ.data ?? null;
+  // Capabilities come from the org-wide roster keys rather than the composite, so they resolve
+  // on their own fast path. `useOrgCapability` fails closed, which is right for a guest and
+  // wrong for a page that is merely still loading — and the two are indistinguishable on screen.
+  // Reading them here means the page can wait for the answer instead of rendering the denial.
+  const membership = useOrgMembership(orgId);
+  const members = detail?.members ?? membership.members;
+  const roles = detail?.roles ?? membership.roles;
   /**
-   * Whether the page still has no identity to render.
+   * Whether the page still has nothing it can correctly render.
    *
    * @remarks
    * The gate the masthead gets, instead of the composite's own pending flag. A page that knows
    * its name, icon and properties should draw them and skeleton only the body it is still
    * waiting on — showing a whole-page placeholder over data already in hand is the thing that
    * made every navigation look slow.
+   *
+   * Capabilities are part of "correctly": rendering identity while they are unknown produces a
+   * page whose every control is inert with nothing saying why. Both roster keys are `STALE.static`
+   * and shared with every list surface, so arriving from anywhere inside the app they are already
+   * warm and this gate costs nothing.
    */
-  const identityPending = project === null && (detailQ.isPending || recordQ.isPending);
-  const members = detail?.members ?? [];
-  const roles = detail?.roles ?? [];
+  const identityPending =
+    (project === null && (detailQ.isPending || recordQ.isPending)) ||
+    (detail === null && membership.pending);
   const programs = detail?.programs ?? [];
   const initiatives = detail?.initiatives ?? [];
   const milestones = detail?.milestones ?? [];
@@ -105,6 +118,8 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
     detailQ,
     recordQ,
     identityPending,
+    members,
+    roles,
     updatesQ,
     resourcesQ,
     detail,

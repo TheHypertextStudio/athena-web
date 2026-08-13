@@ -131,6 +131,31 @@ describe('NavigationProgress', () => {
     expect(bar()).toBeNull();
   });
 
+  it('keeps counting across a superseding navigation', async () => {
+    render(
+      <ResponsiveNavigationProvider canonicalHref="/today" navigate={() => undefined}>
+        <NavigationProgress />
+        <Navigate href="/orgs/o1/projects/p1" />
+        <Navigate href="/orgs/o1/projects/p2" />
+      </ResponsiveNavigationProvider>,
+    );
+
+    const [first, second] = screen.getAllByRole('button', { name: 'go' });
+    fireEvent.click(first!);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(120);
+    });
+    fireEvent.click(second!);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60);
+    });
+
+    // 180ms of continuous waiting, split across two requests. Restarting the countdown on each
+    // one meant a run of quick clicks could keep the bar hidden through a wait of any length —
+    // exactly the case it exists for.
+    expect(bar()).not.toBeNull();
+  });
+
   it('is hidden from assistive technology', async () => {
     render(mount('/today', '/orgs/o1/projects/p1'));
     requestNavigation();

@@ -10,7 +10,7 @@
  *   on failure, and invalidates the related query keys on settle so dependent surfaces refetch.
  *
  * The hooks are exercised against a real {@link QueryClient} (so cache reads/writes and
- * invalidation are genuine) wrapped around the hook under test, with the Hono call replaced by a
+ * invalidation are real) wrapped around the hook under test, with the Hono call replaced by a
  * lightweight typed mock {@link RpcResponse} — no network, no `as any`.
  */
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -344,7 +344,7 @@ describe('useApiMutation', () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
     });
 
-    // The escape hatch for a caller that genuinely must not proceed until the refreshed data is
+    // The escape hatch for a caller that must not proceed until the refreshed data is
     // on the client. It has to keep working, or "opt in" means nothing.
     expect(result.current.isPending).toBe(true);
     releaseRefetch.resolve(undefined);

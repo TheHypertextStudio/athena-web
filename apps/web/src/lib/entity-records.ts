@@ -54,7 +54,7 @@ export function projectRecordDef(orgId: string, projectId: string) {
  *
  * @remarks
  * The endpoint answers `ProgramDetail` — the row plus a child-work roll-up — so a seed has to
- * supply that roll-up too. For a program that did not exist a moment ago the honest value is
+ * supply that roll-up too. For a program that did not exist a moment ago the correct value is
  * zero of each, which is also what the server will confirm.
  */
 export function programRecordDef(orgId: string, programId: string) {
@@ -157,7 +157,7 @@ export function seedInitiativeRecord(
 ): void {
   queryClient.setQueryData(initiativeRecordDef(orgId, created.id).queryKey, {
     ...created,
-    // An initiative is created with no associations, so its roll-up is genuinely empty rather
+    // An initiative is created with no associations, so its roll-up is empty rather
     // than merely unknown — and `rolledUpHealth` is null precisely because no child carries a
     // verdict, which is what the server will report on the refetch.
     childMix: { programs: 0, projects: 0 },

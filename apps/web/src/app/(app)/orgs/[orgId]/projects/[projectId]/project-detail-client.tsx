@@ -83,6 +83,8 @@ export default function ProjectDetailPage(): JSX.Element {
     detailKey,
     detailQ,
     identityPending,
+    members,
+    roles,
     updatesQ,
     resourcesQ,
     detail,
@@ -114,7 +116,9 @@ export default function ProjectDetailPage(): JSX.Element {
 
   // Deleting a project hits `capabilityGuard('manage')` server-side, so the affordance is gated on
   // `manage` — a strictly stronger bar than the `contribute`-level `canEdit` used for field edits.
-  const canDelete = useOrgCapability(detail?.members ?? [], detail?.roles ?? [], 'manage');
+  // Read from the same roster the hook uses, not from the composite: taking it from `detail` alone
+  // hid the action for the length of that read, which is indistinguishable from lacking `manage`.
+  const canDelete = useOrgCapability(members, roles, 'manage');
   const createLabel = useCreateLabel(orgId);
 
   // A `?milestoneId=` deep link (e.g. from search results) always resolves on the Overview tab,
@@ -252,7 +256,7 @@ export default function ProjectDetailPage(): JSX.Element {
     // milestone-grouped tasks, updates and resources beneath it.
     // The route carries only a project id, so none of this has a value to render before the read.
     //
-    // Reached only on a genuinely cold open. Arriving from a list, or straight from the composer
+    // Reached only on a cold open. Arriving from a list, or straight from the composer
     // that just created the project, the record is already cached and the page renders its real
     // masthead immediately with only the body still loading.
     return <EntityDetailSkeleton label={`Loading ${projectNoun.toLowerCase()}`} />;

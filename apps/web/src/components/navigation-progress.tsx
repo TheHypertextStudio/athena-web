@@ -21,7 +21,7 @@
  * that.
  */
 import { cn } from '@docket/ui/lib/utils';
-import { type JSX, useEffect, useState } from 'react';
+import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { useOptionalResponsiveRouter } from '@/lib/interactions/navigation';
 
@@ -42,19 +42,35 @@ export function NavigationProgress(): JSX.Element | null {
   const router = useOptionalResponsiveRouter();
   const pending = router?.requestedHref ?? null;
   const [visible, setVisible] = useState(false);
+  // Whether a navigation is outstanding at all, rather than which one. Clicking a second row
+  // supersedes the first request, changing `requestedHref` — and keying the countdown on the href
+  // restarted it every time, so a run of quick clicks could keep the bar hidden through a wait of
+  // any length. The waiting never stopped, so neither should the timer.
+  const waiting = pending !== null;
+  const startedWaitingAt = useRef<number | null>(null);
 
   useEffect(() => {
-    if (pending === null) {
+    if (!waiting) {
+      startedWaitingAt.current = null;
       setVisible(false);
+      return;
+    }
+    // `performance.now()` rather than `Date.now()`: a monotonic clock cannot be dragged backwards
+    // by a system time change mid-navigation.
+    const startedAt = startedWaitingAt.current ?? performance.now();
+    startedWaitingAt.current = startedAt;
+    const elapsed = performance.now() - startedAt;
+    if (elapsed >= APPEAR_AFTER_MS) {
+      setVisible(true);
       return;
     }
     const timer = setTimeout(() => {
       setVisible(true);
-    }, APPEAR_AFTER_MS);
+    }, APPEAR_AFTER_MS - elapsed);
     return () => {
       clearTimeout(timer);
     };
-  }, [pending]);
+  }, [waiting, pending]);
 
   if (!visible) return null;
 

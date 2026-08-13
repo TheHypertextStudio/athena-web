@@ -32,7 +32,8 @@ import { groupSubjectDayEpisodes } from '@docket/types';
 import { and, asc, eq, gte, lt } from 'drizzle-orm';
 
 import { getContainer } from '../../container';
-import { localDayFor, localDayStartOf } from '../../lib/activity/local-day';
+import { ConflictError } from '../../error';
+import { isFutureLocalDate, localDayFor, localDayStartOf } from '../../lib/activity/local-day';
 import { pullActivityForUser } from '../../lib/activity/sweep';
 
 /**
@@ -174,8 +175,7 @@ async function persistEpisodes(
   const episodes = groupSubjectDayEpisodes(rows.map(toEpisodeEvent), localDate);
   if (episodes.length === 0) return 0;
 
-  let sort = 0;
-  for (const episode of episodes) {
+  for (const [index, episode] of episodes.entries()) {
     const events = episode.allEvents;
     const first = events[0];
     const last = events[events.length - 1];
@@ -186,7 +186,7 @@ async function persistEpisodes(
       .values({
         activityDayId,
         episodeKey: episode.key,
-        sort: sort++,
+        sort: index,
         occurredAt: new Date(first.occurredAt),
         endedAt: new Date(last.occurredAt),
         sourceSystem: first.system,
@@ -203,7 +203,7 @@ async function persistEpisodes(
       .onConflictDoUpdate({
         target: [activityHighlight.activityDayId, activityHighlight.episodeKey],
         set: {
-          sort: sort - 1,
+          sort: index,
           endedAt: new Date(last.occurredAt),
           eventIds: events.map((e) => e.id),
           entityAssociation: first.entityAssociation,
@@ -270,6 +270,10 @@ export async function reconcileDay(
   const timezone = await timezoneFor(userId);
   const today = localDayFor(now, timezone);
   const date = localDate ?? today.localDate;
+  // A day that has not begun cannot be reconciled: doing so would persist an `empty` record for it.
+  if (isFutureLocalDate(date, now, timezone)) {
+    throw new ConflictError('That day has not happened yet.', 'validation_error');
+  }
   const dayStart = localDayStartOf(date, timezone) ?? today.startsAt;
   // A past day is read whole; today stops at `now`, because a day still happening has no end yet.
   const dayEnd = new Date(Math.min(dayStart.getTime() + 24 * 60 * 60 * 1000, now.getTime()));

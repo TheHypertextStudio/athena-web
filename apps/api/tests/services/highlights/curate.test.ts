@@ -198,6 +198,23 @@ describe('buildHighlightsDayPayload', () => {
     expect(payload.highlights).toEqual([]);
   });
 
+  it('refuses a day that has not happened, rather than calling it quiet', async () => {
+    // The finding this pins: the refusal used to live in the HTTP route only, so the agent tool —
+    // which reads the same builder — answered "nothing happened" for tomorrow. An empty day and an
+    // impossible day are different facts, and every caller needs them kept apart.
+    const { userId } = await seedPerson();
+
+    await expect(buildHighlightsDayPayload(userId, '2026-08-13', NOW)).rejects.toThrow(
+      /has not happened/i,
+    );
+  });
+
+  it('still reads a day already past', async () => {
+    const { userId } = await seedPerson();
+    const payload = await buildHighlightsDayPayload(userId, '2026-08-11', NOW);
+    expect(payload.date).toBe('2026-08-11');
+  });
+
   it('reports a genuinely quiet day as empty', async () => {
     const { userId } = await seedPerson();
     await reconcileDay(userId, DAY, NOW);

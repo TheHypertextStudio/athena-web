@@ -40,7 +40,6 @@ import { zJson, zQuery } from '../lib/validate';
 import { SearchHttpQuery } from '../search/http';
 import { searchWorkspace } from '../search/query';
 
-import { localDateOf, zonedParts } from '../lib/activity/local-day';
 import { curateHighlight } from '../services/highlights/curate';
 import { buildHighlightsDayPayload } from '../services/highlights/read';
 
@@ -326,14 +325,13 @@ Read-only. Building the day is a separate operation, so a response can legitimat
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
       const { date } = c.req.valid('query');
-      const now = new Date();
-      const payload = await buildHighlightsDayPayload(session.user.id, date, now);
-      // A future day cannot have happened. Comparing the resolved local date rather than the raw
-      // parameter is what makes this correct for a caller whose timezone is ahead of the server's.
-      if (date !== undefined && date > localDateOf(zonedParts(now, payload.timezone))) {
-        throw new ConflictError('That day has not happened yet.', 'validation_error');
-      }
-      return ok(c, HighlightsDayOut, payload);
+      // A future day is refused by the builder rather than here, so the agent tool that reads the
+      // same payload cannot answer a question the route would have declined.
+      return ok(
+        c,
+        HighlightsDayOut,
+        await buildHighlightsDayPayload(session.user.id, date, new Date()),
+      );
     },
   )
   .patch(

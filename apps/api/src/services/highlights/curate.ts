@@ -11,7 +11,7 @@
  * survives a change of mind. Reverting a rewrite clears `edited_narration` rather than overwriting
  * `narration`, so the generated sentence is still there to come back to.
  */
-import { activityDay, activityHighlight, db } from '@docket/db';
+import { activityDay, activityHighlight, db, event } from '@docket/db';
 import type { HighlightOut, HighlightPatch } from '@docket/types';
 import type { z } from 'zod';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -24,7 +24,6 @@ type HighlightRow = typeof activityHighlight.$inferSelect;
 
 /** Project one persisted highlight onto the wire shape. */
 async function toHighlightOut(row: HighlightRow): Promise<z.input<typeof HighlightOut>> {
-  const { event } = await import('@docket/db');
   const events =
     row.eventIds.length === 0
       ? []

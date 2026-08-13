@@ -20,9 +20,11 @@
 import {
   activityDay,
   activityHighlight,
+  actor,
   calendarConnection,
   db,
   event,
+  hub,
   integration,
   syncRun,
 } from '@docket/db';
@@ -31,8 +33,9 @@ import { ACTIVITY_PROVIDER_IDS, PROVIDER_CATALOG } from '@docket/types';
 import type { z } from 'zod';
 import { and, asc, desc, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
 
+import { ConflictError } from '../../error';
 import { toStreamEventOut } from '../../routes/stream-helpers';
-import { localDayFor, localDayStartOf } from '../../lib/activity/local-day';
+import { isFutureLocalDate, localDayFor, localDayStartOf } from '../../lib/activity/local-day';
 
 /** The source systems a narrated day can draw on, and therefore must account for. */
 const ACCOUNTABLE_SOURCES: readonly SourceSystemKind[] = [
@@ -44,7 +47,6 @@ const ACCOUNTABLE_SOURCES: readonly SourceSystemKind[] = [
 
 /** The person's timezone, defaulting to UTC exactly as the sweeps do. */
 async function timezoneFor(userId: string): Promise<string> {
-  const { hub } = await import('@docket/db');
   const [row] = await db
     .select({ preferences: hub.preferences })
     .from(hub)
@@ -82,8 +84,6 @@ async function readSourceHealth(
   dayStart: Date,
   dayEnd: Date,
 ): Promise<z.input<typeof HighlightsDayOut>['sources']> {
-  const { actor } = await import('@docket/db');
-
   const [ownActors, counts, calendars] = await Promise.all([
     db.select({ id: actor.id }).from(actor).where(eq(actor.userId, userId)),
     db
@@ -242,6 +242,11 @@ export async function buildHighlightsDayPayload(
   const timezone = await timezoneFor(userId);
   const today = localDayFor(now, timezone);
   const date = localDate ?? today.localDate;
+  // Refused here rather than in each caller: an empty answer for a day that has not begun would read
+  // as "nothing happened", and every caller wants the refusal.
+  if (isFutureLocalDate(date, now, timezone)) {
+    throw new ConflictError('That day has not happened yet.', 'validation_error');
+  }
   const dayStart = localDayStartOf(date, timezone) ?? today.startsAt;
   const dayEnd = new Date(Math.min(dayStart.getTime() + 24 * 60 * 60 * 1000, now.getTime()));
 

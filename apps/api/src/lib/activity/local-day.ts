@@ -120,3 +120,21 @@ export function localDayStartOf(localDate: string, tz: string): Date | null {
   const [, y, mo, d] = match;
   return localDayStartUtc({ y: Number(y), mo: Number(mo), d: Number(d), h: 0, mi: 0 }, tz);
 }
+
+/**
+ * Whether a named local date is still in the future for someone in `tz`.
+ *
+ * @remarks
+ * A pure predicate rather than a guard that throws, so the HTTP route and the agent tool can refuse
+ * in their own vocabularies while agreeing on the question. Both need to: a future day answered as
+ * "nothing happened" is the same conflation of *quiet* with *unknowable* that the per-source states
+ * exist to prevent.
+ *
+ * @param localDate - An ISO calendar date (`YYYY-MM-DD`).
+ * @param now - The reference instant.
+ * @param tz - An IANA timezone.
+ * @returns `true` when the date has not begun yet.
+ */
+export function isFutureLocalDate(localDate: string, now: Date, tz: string): boolean {
+  return localDate > localDateOf(zonedParts(now, tz));
+}

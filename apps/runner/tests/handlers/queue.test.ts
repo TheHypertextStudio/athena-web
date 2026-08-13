@@ -1,5 +1,5 @@
 import { consumeExecutionBatch } from '../../src/queue';
-import type { ExecutionMessage } from '../../src/protocol';
+import type { ExecutionMessage } from '@docket/athena/execution-protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 function queueMessage(body: ExecutionMessage, attempts = 1) {

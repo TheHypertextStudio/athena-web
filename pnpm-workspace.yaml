@@ -1,5 +1,6 @@
 packages:
   - 'apps/*'
+  - 'domains/*'
   - 'packages/*'
   - 'services/*'
   - 'tooling/*'
@@ -63,7 +64,8 @@ catalog:
   # natively). Same exact-pin rule as every other @better-auth/* runtime plugin.
   '@better-auth/oauth-provider': 1.6.14
   '@simplewebauthn/server': ^13.0.0
-  # @better-auth/cli is a *dev tool* (schema codegen for `db:auth:generate`), versioned
+  # @better-auth/cli is a *dev tool* used to capture a scratch schema while reconciling
+  # `packages/db/src/schema/auth.ts`, versioned
   # on its own track: it has never published a 1.6.x — its latest line is 1.4.x (1.4.21
   # `latest` / 1.4.22 `release-1.4`). DECISIONS.md §pins says "every @better-auth/* PLUGIN
   # =1.6.14"; the CLI is not a runtime plugin and 1.6.14 is unsatisfiable on the registry,

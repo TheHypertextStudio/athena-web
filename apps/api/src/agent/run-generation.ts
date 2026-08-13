@@ -8,6 +8,7 @@
  * workers so an expired process cannot resume writing after another worker takes over.
  */
 import { agentSession, agentSessionDispatch, agentSessionRun, db, genId, user } from '@docket/db';
+import { workflowIdFor, type ExecutionMessage } from '@docket/athena/execution-protocol';
 import { and, count, desc, eq, gt, lte, ne, or } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../error';
@@ -30,12 +31,8 @@ export interface RunGenerationLease {
   readonly leaseDurationMs: number;
 }
 
-/** Opaque execution identity allowed to cross the Docket/Cloudflare boundary. */
-export interface RunGenerationMessage {
-  readonly sessionId: string;
-  readonly generation: number;
-  readonly workflowId: string;
-}
+/** Athena's persisted execution identity, shared with its runner contract. */
+export type RunGenerationMessage = ExecutionMessage;
 
 /** Persisted queue admission returned before any Cloudflare side effect. */
 export interface QueuedRunGeneration {
@@ -229,7 +226,7 @@ export async function enqueueRunGeneration(
         organizationId: current.executorKind === 'registered_agent' ? current.organizationId : null,
         ownerUserId: current.executorKind === 'athena' ? current.ownerUserId : null,
         generation,
-        workflowInstanceId: `${current.id}:${String(generation)}`,
+        workflowInstanceId: workflowIdFor(current.id, generation),
         status: 'queued',
         // The dispatch reference every run carries: which admission produced it. Athena is the
         // dispatcher for all tracked work only if a run can name the admission it came from.
@@ -504,7 +501,7 @@ export async function claimRunGeneration(
             current.executorKind === 'registered_agent' ? current.organizationId : null,
           ownerUserId: current.executorKind === 'athena' ? current.ownerUserId : null,
           generation,
-          workflowInstanceId: `${current.id}:${String(generation)}`,
+          workflowInstanceId: workflowIdFor(current.id, generation),
           status: 'running',
           attempt: 1,
           leaseToken: token,

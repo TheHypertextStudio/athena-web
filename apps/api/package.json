@@ -32,6 +32,7 @@
   "dependencies": {
     "@docket/auth": "workspace:*",
     "@docket/authz": "workspace:*",
+    "@docket/athena": "workspace:*",
     "@docket/agent-runtime": "workspace:*",
     "@docket/billing": "workspace:*",
     "@docket/blob-store": "workspace:*",

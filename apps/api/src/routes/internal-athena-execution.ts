@@ -1,4 +1,5 @@
 /** Signed machine-only routes used by the Cloudflare Athena execution runner. */
+import { workflowIdFor } from '@docket/athena/execution-protocol';
 import type { ExecutionRequestDirection } from '@docket/db';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
@@ -18,7 +19,7 @@ const ExecutionAdvanceInput = z
     reason: z.enum(['run', 'wake']),
   })
   .strict()
-  .refine((value) => value.workflowId === `${value.sessionId}:${String(value.generation)}`);
+  .refine((value) => value.workflowId === workflowIdFor(value.sessionId, value.generation));
 
 const NonceClaimInput = z
   .object({

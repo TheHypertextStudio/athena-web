@@ -7,17 +7,13 @@
  * process restarts and horizontal scaling.
  */
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import {
+  canonicalInternalRequest,
+  INTERNAL_HMAC_HEADERS,
+  INTERNAL_HMAC_WINDOW_MS,
+} from '@docket/athena/execution-protocol';
 
-/** Signed internal-request header names shared with the Cloudflare runner. */
-export const INTERNAL_HMAC_HEADERS = {
-  bodyDigest: 'x-docket-content-sha256',
-  nonce: 'x-docket-nonce',
-  signature: 'x-docket-signature',
-  timestamp: 'x-docket-timestamp',
-} as const;
-
-/** Maximum accepted clock skew and nonce lifetime. */
-export const INTERNAL_HMAC_WINDOW_MS = 300_000;
+export { INTERNAL_HMAC_HEADERS, INTERNAL_HMAC_WINDOW_MS };
 
 /** Values covered by one outbound request signature. */
 export interface InternalRequestToSign {
@@ -49,16 +45,6 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function canonicalRequest(
-  method: string,
-  path: string,
-  bodyDigest: string,
-  timestamp: string,
-  nonce: string,
-): string {
-  return [method.toUpperCase(), path, bodyDigest, timestamp, nonce].join('\n');
-}
-
 function signature(secret: string, canonical: string): string {
   return createHmac('sha256', secret).update(canonical).digest('hex');
 }
@@ -78,7 +64,7 @@ export function signInternalRequest(input: InternalRequestToSign): Headers {
   const bodyDigest = sha256(input.body);
   const signed = signature(
     input.secret,
-    canonicalRequest(input.method, input.path, bodyDigest, timestamp, nonce),
+    canonicalInternalRequest(input.method, input.path, bodyDigest, timestamp, nonce),
   );
   return new Headers({
     'content-type': 'application/json',
@@ -113,7 +99,7 @@ export async function verifyInternalRequest(
   const expectedSignature = fixedDigest(
     signature(
       input.secret,
-      canonicalRequest(input.method, input.path, bodyDigest, timestamp, nonce),
+      canonicalInternalRequest(input.method, input.path, bodyDigest, timestamp, nonce),
     ),
   );
   if (

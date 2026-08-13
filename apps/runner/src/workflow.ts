@@ -1,8 +1,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers';
+import { isExecutionMessage, type ExecutionMessage } from '@docket/athena/execution-protocol';
 
 import { signInternalRequest } from './hmac';
-import { isExecutionMessage } from './protocol';
-import type { ExecutionMessage } from './protocol';
 
 /** Docket callback configuration shared by Workflow and scheduled requests. */
 export interface DocketWorkflowEnv {

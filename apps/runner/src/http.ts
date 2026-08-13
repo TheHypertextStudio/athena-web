@@ -1,5 +1,5 @@
 import { signInternalRequest, verifyInternalRequest } from './hmac';
-import { isExecutionMessage } from './protocol';
+import { isExecutionMessage } from '@docket/athena/execution-protocol';
 
 const NONCE_CLAIM_PATH = '/internal/athena/execution/nonces/claim';
 const MAX_REQUEST_BYTES = 4096;

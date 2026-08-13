@@ -1,4 +1,8 @@
-import { createExecutionMessage, isExecutionMessage, workflowIdFor } from '../../src/protocol';
+import {
+  createExecutionMessage,
+  isExecutionMessage,
+  workflowIdFor,
+} from '@docket/athena/execution-protocol';
 import { describe, expect, it } from 'vitest';
 
 describe('opaque execution protocol', () => {

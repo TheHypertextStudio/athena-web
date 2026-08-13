@@ -40,6 +40,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 
+import { workflowIdFor } from '@docket/athena/execution-protocol';
 import { agentSession, agentSessionRun, db, integration, task } from '@docket/db';
 import { parseLinearAgentWebhook, verifyLinearAgentWebhookSignature } from '@docket/integrations';
 import type {
@@ -121,7 +122,7 @@ async function queueAgentSessionRun(orgId: string, sessionId: string): Promise<v
     sessionId,
     organizationId: orgId,
     generation,
-    workflowInstanceId: `${sessionId}:${String(generation)}`,
+    workflowInstanceId: workflowIdFor(sessionId, generation),
     status: 'queued',
     // Not an Athena dispatch: Linear's Agent platform decided this run should exist. Named
     // explicitly rather than left to the column default so the run still says where it came from.

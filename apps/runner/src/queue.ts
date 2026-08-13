@@ -1,4 +1,4 @@
-import { isExecutionMessage, type ExecutionMessage } from './protocol';
+import { isExecutionMessage, type ExecutionMessage } from '@docket/athena/execution-protocol';
 
 /** Minimal Workflow instance surface required to resolve idempotent create conflicts. */
 export interface ExistingWorkflowInstance {

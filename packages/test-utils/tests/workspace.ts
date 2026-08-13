@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const PACKAGE_JSON = 'package.json';
-const SOURCE_GROUPS = new Set(['apps', 'packages']);
+const SOURCE_GROUPS = new Set(['apps', 'domains', 'packages']);
 
 export const WORKSPACE_ROOT = resolve(import.meta.dirname, '../../..');
 
@@ -35,7 +35,7 @@ export function relativeToWorkspaceRoot(path: string): string {
 /** Return the root manifest plus every package manifest declared by the workspace globs. */
 export function collectWorkspacePackages(): WorkspacePackage[] {
   const packages: WorkspacePackage[] = [readWorkspacePackage(WORKSPACE_ROOT, null)];
-  for (const group of ['apps', 'packages', 'tooling']) {
+  for (const group of ['apps', 'domains', 'packages', 'tooling']) {
     const base = resolve(WORKSPACE_ROOT, group);
     if (!existsSync(base)) continue;
     for (const entry of readdirSync(base, { withFileTypes: true })) {
@@ -49,7 +49,7 @@ export function collectWorkspacePackages(): WorkspacePackage[] {
   return packages;
 }
 
-/** Collect every non-test `.ts`/`.tsx` source file under each app/package `src` directory. */
+/** Collect every non-test `.ts`/`.tsx` source file under each product package's `src` directory. */
 export function collectWorkspaceSourceFiles(): string[] {
   const files: string[] = [];
   for (const pkg of collectWorkspacePackages()) {

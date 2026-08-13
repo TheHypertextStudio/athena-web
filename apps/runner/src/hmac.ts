@@ -1,13 +1,10 @@
-/** Signed internal-request header names shared by both execution directions. */
-export const INTERNAL_HMAC_HEADERS = {
-  bodyDigest: 'x-docket-content-sha256',
-  nonce: 'x-docket-nonce',
-  signature: 'x-docket-signature',
-  timestamp: 'x-docket-timestamp',
-} as const;
+import {
+  canonicalInternalRequest,
+  INTERNAL_HMAC_HEADERS,
+  INTERNAL_HMAC_WINDOW_MS,
+} from '@docket/athena/execution-protocol';
 
-/** Maximum accepted clock skew and replay window for internal requests. */
-export const INTERNAL_HMAC_WINDOW_MS = 300_000;
+export { INTERNAL_HMAC_HEADERS, INTERNAL_HMAC_WINDOW_MS };
 
 /** Inputs required to sign one internal request. */
 export interface InternalRequestToSign {
@@ -74,17 +71,6 @@ async function hmac(secret: string, value: string): Promise<string> {
   return toHex(await crypto.subtle.sign('HMAC', key, encoder.encode(value)));
 }
 
-/** Construct the method/path/body/timestamp/nonce string covered by HMAC. */
-function canonicalRequest(
-  method: string,
-  path: string,
-  bodyDigest: string,
-  timestamp: string,
-  nonce: string,
-): string {
-  return [method.toUpperCase(), path, bodyDigest, timestamp, nonce].join('\n');
-}
-
 /** Sign one directional request using current Workers Web Crypto primitives. */
 export async function signInternalRequest(input: InternalRequestToSign): Promise<Headers> {
   const timestamp = String(input.timestampMs ?? Date.now());
@@ -92,7 +78,7 @@ export async function signInternalRequest(input: InternalRequestToSign): Promise
   const bodyDigest = await sha256(input.body);
   const signature = await hmac(
     input.secret,
-    canonicalRequest(input.method, input.path, bodyDigest, timestamp, nonce),
+    canonicalInternalRequest(input.method, input.path, bodyDigest, timestamp, nonce),
   );
   return new Headers({
     'content-type': 'application/json',
@@ -126,7 +112,7 @@ export async function verifyInternalRequest(
   const digestMatches = crypto.subtle.timingSafeEqual(presentedDigest.bytes, expectedDigest.bytes);
   const signature = await hmac(
     input.secret,
-    canonicalRequest(input.method, input.path, bodyDigest, timestamp, nonce),
+    canonicalInternalRequest(input.method, input.path, bodyDigest, timestamp, nonce),
   );
   const expectedSignature = fixedDigest(signature);
   const signatureMatches = crypto.subtle.timingSafeEqual(

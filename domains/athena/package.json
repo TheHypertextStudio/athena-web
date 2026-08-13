@@ -1,0 +1,28 @@
+{
+  "name": "@docket/athena",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Athena domain contracts and pure execution rules shared by its delivery runtimes.",
+  "exports": {
+    "./execution-protocol": {
+      "types": "./src/execution-protocol.ts",
+      "default": "./src/execution-protocol.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf .turbo *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

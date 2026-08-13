@@ -4,7 +4,7 @@ import {
   executeGenerationWorkflow,
   type GenerationWorkflowStep,
 } from '../../src/workflow';
-import type { ExecutionMessage } from '../../src/protocol';
+import type { ExecutionMessage } from '@docket/athena/execution-protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 const message: ExecutionMessage = {

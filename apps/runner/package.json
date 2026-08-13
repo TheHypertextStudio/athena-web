@@ -22,6 +22,9 @@
     "wrangler:dry-run": "wrangler deploy --dry-run --outdir dist",
     "wrangler:startup": "wrangler check startup"
   },
+  "dependencies": {
+    "@docket/athena": "workspace:*"
+  },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.18.5",
     "@docket/eslint-config": "workspace:*",

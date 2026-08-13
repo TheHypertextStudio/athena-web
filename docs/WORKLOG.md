@@ -209,6 +209,7 @@
   clipboard _bitmap_ data is uploaded. And ⌘C on a row needs the row focused, which today means
   surfaces that mount a `SelectionProvider`; the context-menu Copy works everywhere. Wiring
   multi-select into the entity tables remains separate work.
+
 ### [ACTIVITY-001] Activity arrives on its own, and the day tells you what you did
 
 - **Status**: IN_PROGRESS

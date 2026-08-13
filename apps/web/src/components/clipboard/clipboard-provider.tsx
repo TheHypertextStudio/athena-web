@@ -214,7 +214,7 @@ export function ClipboardProvider({ children }: ClipboardProviderProps): JSX.Ele
       {feedback.state === 'failed' ? (
         <div
           data-copy-status="failed"
-          className="border-outline-variant bg-surface-container-high text-on-surface text-body-small pointer-events-none fixed inset-x-0 bottom-6 z-50 mx-auto w-fit rounded-lg border px-3 py-2 shadow-lg"
+          className="border-outline-variant bg-surface-container-high text-on-surface text-body-small pointer-events-none fixed inset-x-0 bottom-6 z-50 mx-auto w-fit rounded-lg border px-3 py-2"
         >
           {feedback.announcement}
         </div>

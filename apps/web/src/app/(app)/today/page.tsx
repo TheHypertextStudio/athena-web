@@ -3,6 +3,7 @@
 import { Button } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
+import { DayRecapEntry } from '@/components/today/day-recap-entry';
 import { GhostProposals } from '@/components/today/ghost-proposals';
 import { MorningReview } from '@/components/today/morning-review';
 import NeedsYou from '@/components/today/needs-you';
@@ -40,7 +41,7 @@ import { useTodayData } from './use-today-data';
  * into panes that each get a third of the width.
  */
 export default function TodayPage(): JSX.Element {
-  const { data, loading, error, refetch, orgName, heading, activeOrgId } = useTodayData();
+  const { data, loading, error, refetch, orgName, heading, activeOrgId, date } = useTodayData();
   const [session, setSession] = useState<{ draft: string } | null>(null);
 
   const openSession = useCallback((draft: string) => {
@@ -106,6 +107,10 @@ export default function TodayPage(): JSX.Element {
           />
 
           <TodaysWork plan={data?.plan ?? []} orgName={orgName} loading={loading} />
+
+          {/* Last, and only from mid-afternoon: this is the one backward-looking thing on a
+              forward-looking page, so it must not open the day on the past. */}
+          <DayRecapEntry date={date} />
         </>
       )}
     </div>

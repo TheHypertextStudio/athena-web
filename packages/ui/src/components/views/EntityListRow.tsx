@@ -67,6 +67,15 @@ export interface EntityListRowProps {
    */
   meta?: React.ReactNode;
   /**
+   * Let the subtitle wrap to two lines instead of truncating to one.
+   *
+   * @remarks
+   * Off by default, which is the right shape when a subtitle is supporting metadata. Turn it on when
+   * the subtitle IS the row's content — a narrated sentence truncated to one line at `text-xs` says
+   * almost nothing, which defeats the row entirely.
+   */
+  wrap?: boolean;
+  /**
    * The trailing slot, pinned to the row's end: a status badge, secondary count, or actions.
    * Combine with {@link EntityListRowProps.revealTrailingOnHover} to reveal hover actions.
    */
@@ -174,6 +183,7 @@ export function EntityListRow({
   title,
   subtitle,
   meta,
+  wrap = false,
   trailing,
   href,
   render,
@@ -227,7 +237,14 @@ export function EntityListRow({
           {title}
         </span>
         {subtitle !== undefined && subtitle !== null ? (
-          <span className="text-on-surface-variant min-w-0 truncate text-xs">{subtitle}</span>
+          <span
+            className={cn(
+              'text-on-surface-variant min-w-0',
+              wrap ? 'text-body-small line-clamp-2 break-words' : 'truncate text-xs',
+            )}
+          >
+            {subtitle}
+          </span>
         ) : null}
       </span>
       {meta !== undefined && meta !== null ? (

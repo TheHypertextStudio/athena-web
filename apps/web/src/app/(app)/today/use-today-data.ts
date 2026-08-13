@@ -20,6 +20,14 @@ export interface TodayPageData {
   activeOrgId: string | null;
   orgName: (orgId: string) => string;
   heading: string;
+  /**
+   * The local day this page is showing.
+   *
+   * @remarks
+   * Returned rather than recomputed by each section, so nothing on the page can end up reading a
+   * different day than the one it is displaying.
+   */
+  date: string;
 }
 
 /**
@@ -60,5 +68,6 @@ export function useTodayData(): TodayPageData {
     activeOrgId,
     orgName,
     heading,
+    date,
   };
 }

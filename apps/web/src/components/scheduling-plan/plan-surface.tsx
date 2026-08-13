@@ -20,6 +20,8 @@ import { useState } from 'react';
 
 import { DayCheckIns } from './day-check-ins';
 import { DayStartReview } from './day-start-review';
+import { DayHighlights } from '@/components/activity/day-highlights';
+
 import { EveningReview } from './evening-review';
 import {
   useAcknowledgeAgenda,
@@ -212,6 +214,9 @@ export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
           {review.data === undefined ? null : (
             <EveningReview
               review={review.data}
+              // Above the three steps: reconciling what was left over and answering what moved are
+              // both far easier once the day itself is on screen.
+              leadingPanel={<DayHighlights date={date} mode="review" headingLevel={3} />}
               busy={dispose.isPending || answer.isPending || confirm.isPending}
               onDispose={(input) => {
                 dispose.mutate(input);

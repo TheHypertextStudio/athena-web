@@ -163,6 +163,15 @@ export const queryKeys = {
     ['org', orgId, 'references', targetKind, targetId] as const,
   hubSearch: (query: string) => ['me', 'search', query] as const,
   today: (date: string) => ['me', 'today', date] as const,
+  /**
+   * One narrated day.
+   *
+   * @remarks
+   * Deliberately NOT nested under `['me','plan']`. Every review mutation invalidates that prefix, and
+   * the highlights panel sits above the review's steps: sharing the prefix would re-read the review
+   * and re-render the step tree on every debounced keystroke while somebody is mid-rewrite.
+   */
+  dayHighlights: (date: string) => ['me', 'highlights', date] as const,
   agenda: (date: string) => ['me', 'agenda', date] as const,
   dailyPlan: (date: string) => ['me', 'daily-plan', date] as const,
   calendarSettings: () => ['me', 'calendar-settings'] as const,

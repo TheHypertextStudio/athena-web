@@ -26,7 +26,7 @@ import {
   Toolbar,
 } from '@docket/ui/primitives';
 import { CheckCircle2, CircleDashed } from '@docket/ui/icons';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { useState } from 'react';
 
 import { WorkShapeChip } from './work-shape-chip';
@@ -43,6 +43,15 @@ export interface EveningReviewProps {
   readonly onAnswer: (input: { key: ReviewPromptKey; answer: string }) => void;
   readonly onConfirmTomorrow: (acceptedKeys: string[]) => void;
   readonly busy?: boolean;
+  /**
+   * An ungated panel rendered above step one.
+   *
+   * @remarks
+   * A slot rather than data, and that is the whole design: the review owns three steps and a gate, and
+   * must not grow a dependency on whatever surface sits above them. Reading what happened is not a
+   * decision, so it stays outside the gate — the step counter and every completion rule are unchanged.
+   */
+  readonly leadingPanel?: ReactNode;
 }
 
 /** Local clock reading. */
@@ -105,6 +114,10 @@ export function EveningReview(props: EveningReviewProps): JSX.Element {
           </div>
         ))}
       </Stack>
+
+      {props.leadingPanel === undefined ? null : (
+        <div data-testid="review-leading-panel">{props.leadingPanel}</div>
+      )}
 
       {/* Step one — every unfinished item gets a decision. */}
       <Stack gap={3}>

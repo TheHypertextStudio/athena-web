@@ -36,6 +36,10 @@ const config = docketVitest({
   },
   coverageInclude: [
     'src/components/settings/sections.ts',
+    // A narrated day's view-model. It decides whether an empty day reads as quiet or as
+    // incompletely-gathered, which is the difference between telling somebody nothing happened and
+    // telling them a source could not be reached — worth a gate of its own.
+    'src/components/activity/highlight-view.ts',
     // The open-documents route matcher is pure logic with a behavioral guard (it rejects
     // malformed ids so no junk "Session undefined" tab is ever opened), so it earns its own gate.
     'src/components/tabs/route-tabs.ts',

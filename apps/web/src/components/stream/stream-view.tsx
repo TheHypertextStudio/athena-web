@@ -195,7 +195,7 @@ export function StreamView(props: StreamViewProps): JSX.Element {
               <div>
                 {group.episodes.map((episode) => (
                   <StreamEpisodeView
-                    key={episode.id}
+                    key={episode.key}
                     episode={episode}
                     scope={props.scope}
                     {...(props.resolveOrgName

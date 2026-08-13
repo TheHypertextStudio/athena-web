@@ -2,20 +2,10 @@
 
 /** `stream` — an inline, subject-led episode in the context timeline. */
 import { cn } from '@docket/ui';
-import {
-  Activity,
-  Building,
-  CalendarToday,
-  FileText,
-  FolderKanban,
-  ListChecks,
-  MessageSquare,
-  Target,
-  type LucideIcon,
-} from '@docket/ui/icons';
 import { focusRing } from '@docket/ui/primitives';
 import { useState, type JSX } from 'react';
 
+import { entityGlyph, entityTypeLabel } from '@/components/activity/entity-glyph';
 import { OrgChip } from '@/components/org-chip';
 
 import { ProviderBadge } from './provider-badge';
@@ -29,36 +19,6 @@ export interface StreamEpisodeViewProps {
   readonly scope: 'me' | 'org';
   readonly orgName?: string;
   readonly onSelect?: (row: StreamEventRow) => void;
-}
-
-/** Resolve the quiet subject glyph from canonical entity semantics. */
-function subjectIcon(row: StreamEventRow): LucideIcon {
-  switch (row.entityKind) {
-    case 'work_item':
-      return ListChecks;
-    case 'project':
-    case 'program':
-      return FolderKanban;
-    case 'initiative':
-    case 'cycle':
-      return Target;
-    case 'calendar_event':
-      return CalendarToday;
-    case 'message':
-    case 'thread':
-      return MessageSquare;
-    case 'document':
-      return FileText;
-    case 'organization':
-      return Building;
-    default:
-      return Activity;
-  }
-}
-
-/** Human type label beneath the subject title. */
-function subjectType(row: StreamEventRow): string {
-  return row.entityKind ? row.entityKind.replaceAll('_', ' ') : 'Event';
 }
 
 /** One generated line that keeps an all-minor episode visible. */
@@ -90,7 +50,7 @@ export function StreamEpisodeView({
   const [expanded, setExpanded] = useState(false);
   const first = episode.allEvents[0];
   if (!first) return null;
-  const Icon = subjectIcon(first);
+  const Icon = entityGlyph(first.entityKind);
   const href = streamHref(first);
   const title = first.entityTitle ?? first.title;
   const systems = [...new Set(episode.allEvents.map((event) => event.system))].filter(
@@ -120,7 +80,7 @@ export function StreamEpisodeView({
             <h3 className="text-on-surface text-title-small truncate">{title}</h3>
           )}
           <div className="text-on-surface-variant text-label-small mt-1 flex flex-wrap items-center gap-2 capitalize">
-            <span>{subjectType(first)}</span>
+            <span>{entityTypeLabel(first.entityKind)}</span>
             {systems.map((system) => (
               <ProviderBadge key={system} system={system} />
             ))}

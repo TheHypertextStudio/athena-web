@@ -54,7 +54,7 @@ function episode(overrides: Partial<StreamEpisode> = {}): StreamEpisode {
     },
   });
   return {
-    id: completed.id,
+    key: `ep:${completed.id}`,
     subjectKey: 'org_1:docket:task_482',
     allEvents: [completed, changed],
     visibleEvents: [completed, changed],

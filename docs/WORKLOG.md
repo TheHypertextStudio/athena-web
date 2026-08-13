@@ -209,6 +209,66 @@
   clipboard _bitmap_ data is uploaded. And ⌘C on a row needs the row focused, which today means
   surfaces that mount a `SelectionProvider`; the context-menu Copy works everywhere. Wiring
   multi-select into the entity tables remains separate work.
+### [ACTIVITY-001] Activity arrives on its own, and the day tells you what you did
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-12
+- **Priority**: P1
+- **Description**: The Sunsama-style daily digest already existed end to end — a timezone-aware
+  sweep, an idempotent per-user watermark, an Anthropic narrator, an email — and yet it mostly
+  sent nothing. Three gaps, of which the first is the real one:
+  1. **Only webhooks could write activity.** `github` and `linear` produced `event` rows; Gmail,
+     Google Calendar, Google Tasks and Drive are `connector: true, webhook: false` and produced
+     **zero**. There was no poll-to-event path anywhere in the repository, so a person whose day
+     lives in Calendar and mail got `skipped_empty` every evening.
+  2. Narration was one prose blob, not the per-item first-person entries the product wants.
+  3. Nothing in the web app read `daily_digest` at all — it was email-only, with no in-app review.
+
+- **Approach**: Treat the `event` table as what it already is: the unified activity substrate.
+  The foundational change is a poll sibling to the webhook-shaped `Observer` port that emits the
+  same `EventDraft[]`, so both intake shapes converge on one writer and any future source becomes
+  a small adapter rather than a feature. Then episode grouping moves into `@docket/types` so the
+  server and the client cannot disagree about what one story is, narration becomes a separate
+  retryable pass over episodes, and the day surfaces as an ungated panel above the existing
+  end-of-day review.
+
+  Decisions worth recording because the obvious alternative is wrong:
+  - **An episode key is derived from identity, not membership.** `(subjectKey, localDate)`, not
+    the run's anchor event. The provider searches that feed the poll are eventually consistent, so
+    a backfilled event joining a run would move a membership-derived key and silently orphan
+    whatever a person had already curated under it.
+  - **Gmail's activity pull is cursorless**, using `q=from:me` over the sweep window rather than
+    the history feed. `syncState.mail.cursor` is a _consumed_ `historyId` owned by
+    `email_ingest`; sharing it would have made the two purposes alternately eat each other's
+    delta and quietly drop task suggestions.
+  - **Google Calendar is projected from local tables**, not re-polled. It lives in
+    `calendar_connection`, not `integration`, so a provider pull would need a second credential
+    path and a second "have we seen this" store — the exact drift the connector-reliability
+    invariant forbids.
+  - **The narrated day is its own aggregate**; the digest references it as one delivery of it.
+    Hanging durable content off a delivery envelope (`sentAt`, `deliveryMessageId`) is what had
+    kept the `lunch|eod|eow` cadence enum permanently hardcoded to `eod`.
+
+- **Subtasks**:
+  - [x] Share episode grouping between the stream and the digest (`@docket/types`)
+  - [ ] Extract the shared canonical-event writer
+  - [ ] Activity-source enums and the persisted narrated day
+  - [ ] The `ActivitySource` port with Gmail and GitHub adapters
+  - [ ] Poll every connected tool into the canonical event log
+  - [ ] Per-episode first-person narration
+  - [ ] Narrate and persist the day's highlights
+  - [ ] Read and curate endpoints
+  - [ ] The shared highlights component family
+  - [ ] Mount on the review, today, and task detail
+  - [ ] The MCP retrospective read
+  - [ ] Link an unresolved activity event to a task
+- **Blockers**: None.
+- **Notes**: Worked-versus-planned time (Sunsama's `WORKED / PLANNED` and its timeline strip) is
+  deliberately deferred; `time-tracking.md` §8.2–8.3 already specifies the semantics and the
+  calendar adapter records `durationMinutes` so the follow-up has its input. GitHub ships as pull
+  request authorship only — commits need a subject to group on and `CanonicalEntityKind` has no
+  `repository`, which is a third order-locked enum pair plus a compile error in the total
+  `MIRROR_LOOKUP` record. `/stream` gains no UX change, only the grouping extraction.
 
 ### [PERF-001] Creating something stops feeling like waiting for something
 

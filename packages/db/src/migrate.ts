@@ -46,7 +46,7 @@ const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../dr
  * Fresh databases create each enum complete in its own `CREATE TYPE`, so an undefined type
  * (`42704`) is the expected new-database case and is skipped rather than treated as a failure.
  */
-const ENUM_PREFLIGHT: readonly string[] = [
+export const ENUM_PREFLIGHT: readonly string[] = [
   `ALTER TYPE "public"."integration_status" ADD VALUE IF NOT EXISTS 'pending' BEFORE 'connected'`,
   `ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'notion_mirror'`,
   `ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'activity_pull'`,

@@ -4,31 +4,29 @@
  * `components/clipboard/clipboard-provider` — the app's one ⌘C handler.
  *
  * @remarks
- * Built the same way as {@link ../context-menu/object-context-menu}, and for the same reason:
- * exactly one document-level listener, which knows nothing about tasks, projects, or which surfaces
- * exist. It looks at what the user is actually copying and answers in the richest form available.
+ * The sibling of {@link ../context-menu/object-context-menu}, built the same way: exactly one
+ * document-level listener, which knows nothing about tasks, projects, or which surfaces exist. It
+ * reads what the user is copying and answers in the richest form available.
  *
- * Two things can be copied outside a text input, and this handler resolves them in priority order:
+ * Two things can be copied outside a text input, resolved in priority order:
  *
  * 1. **A selection inside rendered Markdown** — a posted comment, a read-only body. Those are walked
- *    from `marked` tokens directly into React elements rather than mounted in an editor, so they
- *    have no serializer of their own and the browser's plain flavor flattens every heading and
- *    bullet away. The selection's own DOM is read back into Markdown instead.
+ *    from `marked` tokens straight into React elements, so the selection's own DOM is read back into
+ *    Markdown.
  * 2. **A focused object with no selection** — a task row, a project row. The browser's answer here
- *    is an empty string, which is the only reason claiming ⌘C is defensible at all.
+ *    is an empty string, which is what makes claiming ⌘C defensible.
  *
- * Everything else is left alone, and the refusals matter more than the claims:
+ * Everything else keeps the platform's own copy, and the refusals matter as much as the claims:
  *
- * - Ordinary selected text outside rendered Markdown copies natively.
- * - Inputs, textareas, and the rich-text editor keep their own behavior — in the editor's case a
- *   Markdown serializer ({@link ../editor/markdown-clipboard}) that is better than this one.
- * - No selection and no object under focus means there is nothing to say.
+ * - Ordinary selected text outside rendered Markdown.
+ * - Inputs, textareas, and the rich-text editor, which carries its own Markdown serializer
+ *   ({@link ../editor/markdown-clipboard}).
+ * - No selection and no object under focus.
  *
  * ## Why it writes through the event
  *
- * `clipboardData.setData` needs no permission prompt, cannot lose the user gesture, and is
- * synchronous — all three of which the async clipboard API can fail at. A `copy` listener is the one
- * place the platform hands over the clipboard for free.
+ * `clipboardData.setData` is synchronous, needs no permission prompt, and holds the user gesture. A
+ * `copy` listener is the one place the platform hands over the clipboard for free.
  *
  * @see {@link ../../lib/clipboard/html-to-markdown} for the rendered-Markdown walker.
  * @see {@link ../../lib/clipboard/object-clipboard} for what an object looks like on the clipboard.
@@ -46,9 +44,8 @@ import { useCopyFeedback } from '@/lib/use-copy-feedback';
  * Elements whose own copy behavior is always preserved.
  *
  * @remarks
- * Kept in step with the context menu's equivalent list on purpose: the same surfaces that keep the
- * platform's menu keep the platform's copy. A divergence would mean a row that can be right-clicked
- * but not copied, or an editor whose selection is serialized twice.
+ * Kept in step with the context menu's equivalent list, so the same surfaces that keep the
+ * platform's menu keep the platform's copy.
  */
 const NATIVE_COPY_SELECTOR =
   '[data-native-context-menu="true"], [data-editor-surface], input, textarea, select, [contenteditable=""], [contenteditable="true"]';
@@ -63,12 +60,10 @@ const NON_CONTENT_SELECTOR = 'button, select, [aria-hidden="true"], .sr-only';
  * Code, where the prose walker must not go.
  *
  * @remarks
- * A selection *inside* a fence clones only text nodes and highlight spans — the `<pre>` itself is
- * not in the fragment — so the walker sees loose inline content and treats it as prose: it escapes
- * `[`, `*` and backticks, and collapses the newlines between lines of code. Two selected lines come
- * back as one line of backslash-littered source. Whole-block selections are fine (`codeOf` sees the
- * frame), so it is exactly the ordinary "select a few lines and copy" gesture that breaks. The
- * browser already copies code verbatim, so the right answer here is to decline.
+ * A selection *inside* a fence clones only text nodes and highlight spans, leaving the `<pre>` out of
+ * the fragment, so the walker reads loose inline content as prose: it escapes `[`, `*` and backticks
+ * and collapses the newlines between lines of code. The browser copies source verbatim, so these
+ * selections stay with the platform.
  */
 const CODE_SELECTOR = 'pre, [data-code-block]';
 
@@ -82,10 +77,9 @@ function elementOf(node: Node | null): Element | null {
  * The rich flavor for a rendered-Markdown selection.
  *
  * @remarks
- * The browser's own `text/html` would be reused if `preventDefault` did not discard it, so it is
- * rebuilt here — minus the chrome. A code block's language picker and its Copy button live inside
- * the block's own element, and without this they paste into a document as the words "TypeScript"
- * and "Copy" sitting above the code.
+ * `preventDefault` discards the browser's own `text/html`, so it is rebuilt here, minus the chrome.
+ * A code block's language picker and Copy button live inside the block's element, and dropping them
+ * keeps the words "TypeScript" and "Copy" out of the pasted document.
  *
  * @param fragment - The selection's cloned contents.
  * @returns An HTML fragment string.
@@ -120,9 +114,8 @@ function copyRenderedMarkdown(event: ClipboardEvent, selection: Selection): bool
  *
  * @remarks
  * `event.target` on a `copy` event is whatever the selection is anchored in, which with no selection
- * is the document body rather than the focused row. So focus is consulted first — it is what the
- * user would name if asked which thing they were on. Only reached when there is no selection; a
- * selection always speaks for itself.
+ * is the document body. Focus is consulted first, because it names the thing the user is on. Reached
+ * only when there is no selection; a selection speaks for itself.
  *
  * @param event - The copy event.
  * @returns The element to walk up from, or `null`.
@@ -142,7 +135,7 @@ function copyFocusedObject(event: ClipboardEvent): boolean {
   const object = readObjectTarget(host);
   if (object === null) return false;
 
-  // Copying inside a selection copies the selection, matching what the right-click menu does.
+  // Copying inside a selection copies the selection, matching the right-click menu.
   const surface = readSelectionSurfaceFor(host);
   const inSelection =
     surface?.selectedObjects.some((selected) => objectKey(selected) === objectKey(object)) ?? false;
@@ -168,13 +161,11 @@ const CopyOutcomeContext = createContext<CopyOutcomeReporter | null>(null);
  * Report whether a copy reached the clipboard.
  *
  * @remarks
- * A copy invoked from the context menu has nowhere to put its own acknowledgement: the menu closes
- * on select, so the pattern used by the code-block button — swap the label, announce politely — has
- * no control left to swap. Reporting here instead means a refused write (permission policy, an
- * embedded webview, a transient denial) is seen rather than leaving the user to discover it when
- * they paste something stale.
+ * A copy invoked from the context menu closes the menu on select, leaving no control to carry its
+ * own acknowledgement. Reporting here surfaces a refused write — permission policy, an embedded
+ * webview, a transient denial — while the user is still looking.
  *
- * @returns The reporter, or a no-op outside the provider so a caller never has to branch.
+ * @returns The reporter, or a no-op outside the provider, so a caller can always call it.
  */
 export function useCopyOutcome(): CopyOutcomeReporter {
   return useContext(CopyOutcomeContext) ?? noopReporter;
@@ -182,7 +173,7 @@ export function useCopyOutcome(): CopyOutcomeReporter {
 
 /** The reporter used outside the provider, so callers need no null check. */
 function noopReporter(): void {
-  // Intentionally nothing: with no provider there is nowhere to show an outcome.
+  // With no provider mounted there is nowhere to show an outcome.
 }
 
 /**
@@ -208,18 +199,17 @@ export function ClipboardProvider({ children }: ClipboardProviderProps): JSX.Ele
         !selection.isCollapsed &&
         selection.toString().trim() !== '';
 
-      // A copy is about what is *selected*, and only falls back to what is focused when nothing is.
-      // Asking focus first gets the common case wrong: type in the comment composer, then drag-select
-      // a comment above and press ⌘C — focus is still inside the editor, so a focus-keyed guard would
-      // hand back the browser's flattened text for a selection that is nowhere near it.
+      // A copy is about what is *selected*, and falls back to what is focused only when nothing is.
+      // Type in the comment composer, then drag-select a comment above and press ⌘C: focus is still
+      // inside the editor, and the selection is what the user means.
       const origin = hasSelection
         ? elementOf(selection.getRangeAt(0).commonAncestorContainer)
         : copyOrigin(event);
       // Text surfaces own their own copy, whatever is or is not selected inside them.
       if (origin?.closest(NATIVE_COPY_SELECTOR) != null) return;
 
-      // `preventDefault` only after a successful write: preventing it and then failing would leave
-      // the clipboard holding whatever it had before, with no sign anything went wrong.
+      // `preventDefault` only after a successful write, so a refused write leaves the browser's own
+      // copy in place.
       const claimed = hasSelection
         ? copyRenderedMarkdown(event, selection)
         : copyFocusedObject(event);
@@ -236,10 +226,8 @@ export function ClipboardProvider({ children }: ClipboardProviderProps): JSX.Ele
     <CopyOutcomeContext.Provider value={outcome}>
       {children}
       {/*
-        Only a failure is shown. A copy that worked needs no visual receipt — the clipboard now
-        holds what the user asked for, and a confirmation for every ⌘C would be noise. A copy that
-        did *not* work is the case worth interrupting for, because nothing else in the interface
-        will ever reveal it.
+        Failure is shown, because nothing else in the interface reveals it. Success stays in the
+        live region: the clipboard already holds what the user asked for.
       */}
       {feedback.state === 'failed' ? (
         <div

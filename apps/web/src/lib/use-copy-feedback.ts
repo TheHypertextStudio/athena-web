@@ -4,21 +4,15 @@
  * `lib/use-copy-feedback` — the one acknowledgement a copy gets.
  *
  * @remarks
- * Docket has no toast system, deliberately. Transient confirmation is done in place: the control
- * that was pressed says what happened, and a polite live region says the same thing for anyone not
- * looking at it. That pattern was invented once for the code-block copy button and then re-typed,
- * slightly differently, at every other copy site — one with a 2s reset, one with 3s, one that never
- * resets at all, and only one with a live region.
+ * Docket confirms a transient action in place: the control that was pressed says what happened, and
+ * a polite live region says the same thing for anyone not looking at it. This hook owns that pattern
+ * — a three-state acknowledgement, a timer that returns to rest, and the sentence to announce.
+ * Callers render `state` on the control and `announcement` inside an `aria-live="polite"` element.
  *
- * This hook is that pattern, owned in one place: a three-state acknowledgement, a timer that returns
- * to rest, and the sentence to announce. Callers render `state` on the control and `announcement`
- * inside an `aria-live="polite"` element.
- *
- * The `failed` state is not decoration. A clipboard write can be refused by permission policy, by a
- * non-secure context, or by the platform ignoring a write outside a user gesture, and a copy that
- * silently does nothing is the worst possible outcome — the user walks away believing they have the
- * content. So {@link ClipboardPayload} writes report a boolean and this hook turns `false` into
- * something the user can see and retry.
+ * The `failed` state carries weight. A clipboard write can be refused by permission policy, by a
+ * non-secure context, or by the platform declining a write outside a user gesture, and the user
+ * needs to know so they can retry. Writes report a boolean, and this hook turns `false` into
+ * something they can see.
  *
  * @see {@link ./clipboard/write} for the write itself.
  */
@@ -38,7 +32,7 @@ export interface CopyFeedbackOptions {
    * Announced after a successful copy.
    *
    * @remarks
-   * Application-owned copy, always. Never pass an exception or provider message through here.
+   * Application-owned copy, always. Exception and provider messages stay out of it.
    */
   readonly copiedMessage?: string;
   /** Announced after a failed copy — should tell the user retrying is worthwhile. */
@@ -55,8 +49,8 @@ export interface CopyFeedback {
    * The sentence to render inside a polite live region, or `''` at rest.
    *
    * @remarks
-   * Empty at rest rather than absent, so the live region element stays mounted. A region that is
-   * added to the DOM at the same moment its text appears is frequently not announced at all.
+   * Empty at rest, so the live region element stays mounted. A region added to the DOM at the same
+   * moment its text appears is frequently missed by screen readers.
    */
   readonly announcement: string;
   /** Write both flavors, then acknowledge the outcome. */
@@ -67,9 +61,9 @@ export interface CopyFeedback {
    * Acknowledge a write this hook did not perform.
    *
    * @remarks
-   * For copies that happen away from any control that could show their own state — a context-menu
-   * item, which has closed by the time the write resolves. The caller does the writing; this only
-   * says what happened.
+   * For copies that happen away from any control that could show their own state, such as a
+   * context-menu item that has closed by the time the write resolves. The caller does the writing;
+   * this says what happened.
    */
   readonly report: (wrote: boolean) => void;
 }
@@ -95,8 +89,8 @@ export function useCopyFeedback(options: CopyFeedbackOptions = {}): CopyFeedback
   } = options;
 
   const [state, setState] = useState<CopyState>('idle');
-  // A write resolves after an await, by which time the caller may be gone. Writing state into an
-  // unmounted component is a warning at best and a leak at worst, so the outcome is dropped.
+  // A write resolves after an await, by which time the caller may be gone, so the outcome is
+  // dropped once unmounted.
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;

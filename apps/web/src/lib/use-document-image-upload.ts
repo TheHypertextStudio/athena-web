@@ -10,11 +10,10 @@
  *
  * ## Why this reports its own status
  *
- * An upload is the one part of paste that can fail *after* the gesture is over: the image is too
- * large, the network is gone, the workspace is not writable. Failing silently there is the worst
- * available outcome — the user watched themselves paste a screenshot, saw nothing appear, and has
- * no idea whether to try again. So the hook owns a small state machine and the sentence describing
- * it, and the editor renders both.
+ * An upload is the part of paste that resolves *after* the gesture is over, and it can fail: the
+ * image is too large, the network is gone, the workspace is read-only. The user needs to know
+ * whether the screenshot they pasted arrived, so the hook owns a small state machine and the
+ * sentence describing it, and the editor renders both.
  *
  * @see {@link ../components/editor/markdown-clipboard} for the paste handler that calls this.
  */
@@ -34,9 +33,8 @@ export interface DocumentImageUpload {
    * The uploader to hand the editor, or `null` when there is nowhere to upload to.
    *
    * @remarks
-   * `null` outside a workspace rather than a function that always fails. The paste handler treats
-   * an absent uploader as "decline this paste", which lets the browser's default behavior stand
-   * instead of consuming the gesture and then reporting an error the user cannot act on.
+   * `null` outside a workspace. The paste handler reads that as "decline this paste" and leaves the
+   * browser's own behavior in place.
    */
   readonly upload: PastedImageUploader | null;
   /** The current upload state, for a visible indicator. */
@@ -84,7 +82,7 @@ export function useDocumentImageUpload(orgId: string | undefined): DocumentImage
         if (mountedRef.current) setStatus('idle');
         return created.url;
       } catch {
-        // The message is application-owned and fixed; nothing from the failure is rendered.
+        // The message is application-owned and fixed.
         if (mountedRef.current) setStatus('failed');
         return null;
       }

@@ -5,36 +5,29 @@
  *
  * @remarks
  * Docket's bodies are Markdown all the way down: stored as Markdown in a `text` column, loaded with
- * `contentType: 'markdown'`, saved with `editor.getMarkdown()`. The clipboard was the one place that
- * fact was thrown away. ProseMirror's default `text/plain` flavor is `textBetween`, which walks the
- * document collecting characters and nothing else — so `# Rollout plan` followed by `- [ ] Flip the
- * flag` left the editor as `Rollout plan Flip the flag`. Every heading, bullet, checkbox, and fence
- * was lost the moment the content landed anywhere that reads plain text.
+ * `contentType: 'markdown'`, saved with `editor.getMarkdown()`. This extension carries that through
+ * the clipboard in both directions.
  *
- * This extension makes the clipboard speak the document's own language in both directions:
+ * - **Copy** fills the plain flavor with Markdown, serialized through the same `MarkdownManager`
+ *   that persists the document. ProseMirror owns `text/html`, which it emits from each node's
+ *   `renderHTML`.
+ * - **Paste** accepts Markdown arriving as plain text, which is what most editors, chat apps and
+ *   issue trackers put on the clipboard.
  *
- * - **Copy** replaces the plain flavor with real Markdown, serialized through the very
- *   `MarkdownManager` that persists the document. `text/html` is left to ProseMirror, which already
- *   emits correct structure from each node's `renderHTML` — so rich targets were never the problem
- *   and are deliberately not touched.
- * - **Paste** accepts Markdown that arrives as plain text, which is what most editors, chat apps,
- *   and issue trackers put on the clipboard alongside their HTML, and what some put there alone.
+ * Both directions route through that one manager, and mentions declare their own
+ * `renderMarkdown`/`parseMarkdown` ({@link ../mentions/mention-extension}), so a Docket → anywhere →
+ * Docket round trip keeps its `docket:v1:` reference markers and comes home as live chips.
  *
- * Because both directions route through the same manager, and because mentions already declare
- * `renderMarkdown`/`parseMarkdown` ({@link ../mentions/mention-extension}), a Docket → anywhere →
- * Docket round trip keeps its `docket:v1:` reference markers and comes home as live chips rather
- * than as dead link text.
+ * ## What paste claims
  *
- * ## What paste deliberately does not claim
+ * The handler declines far more often than it acts, because a wrong paste destroys content the user
+ * cannot always recover. It interprets plain text only when all of these hold:
  *
- * The handler is written to *decline* far more often than it acts, because a paste it gets wrong
- * destroys content the user cannot always recover:
- *
- * - Inside a code block, nothing is interpreted. A fence is the one place Markdown syntax is data.
- * - When the clipboard carries `text/html`, that always wins. It is richer than the plain flavor and
- *   ProseMirror's own parser handles it against the real schema.
- * - Plain text is only parsed when it actually *looks* like Markdown ({@link looksLikeMarkdown}).
- *   Ordinary prose that happens to open with a hyphen must paste as ordinary prose.
+ * - The cursor sits outside a code block. A fence is where Markdown syntax is data.
+ * - The clipboard carries no `text/html`. ProseMirror's parser handles that flavor against the real
+ *   schema.
+ * - The text carries an unambiguous Markdown construct ({@link looksLikeMarkdown}), so ordinary
+ *   prose pastes as ordinary prose.
  *
  * @see {@link ../../lib/clipboard/write} for the non-editor clipboard path.
  */
@@ -59,14 +52,12 @@ export interface MarkdownClipboardOptions {
    * are unavailable.
    *
    * @remarks
-   * A resolver rather than the uploader itself, because an extension's options are captured when the
-   * editor is *created* and `useEditor` never rebuilds it. A surface that mounts before its workspace
-   * resolves would otherwise hold `null` for the rest of its life and silently drop every pasted
-   * screenshot. Asking at paste time is what keeps the answer current.
+   * A resolver, because an extension's options are captured when the editor is *created* and
+   * `useEditor` keeps that instance for its lifetime. Asking at paste time keeps the answer current
+   * for a surface that mounted before its workspace resolved.
    *
-   * Injected rather than imported so this extension stays free of the API client and remains unit
-   * testable, and so surfaces with no workspace context (which have nowhere to upload *to*) fall
-   * through to the default paste.
+   * Injected so this extension stays free of the API client and stays unit testable. Surfaces with
+   * no workspace context return `null` here and fall through to the default paste.
    */
   readonly resolveUploader: () => PastedImageUploader | null;
 }
@@ -75,13 +66,11 @@ export interface MarkdownClipboardOptions {
  * Whether plain text is worth parsing as Markdown.
  *
  * @remarks
- * The bar is a *positive* signal of syntax, never an absence of one. Getting this wrong in the
- * permissive direction is what turns a pasted paragraph into mangled structure, so every pattern
- * here requires a construct that prose does not produce by accident: a hash followed by a space at
- * the start of a line, a bullet with content after it, a fence, a bracketed link, a pipe table.
+ * Every pattern here requires a positive signal of syntax: a hash followed by a space at the start
+ * of a line, a bullet with content after it, a fence, a bracketed link, a pipe table. Prose produces
+ * none of them by accident, which is what keeps a pasted paragraph intact.
  *
- * Exported for its own test, because this predicate — not the parser — is what decides whether a
- * paste is interpreted at all.
+ * Exported for its own test: this predicate decides whether a paste is interpreted at all.
  *
  * @param text - The clipboard's plain-text flavor.
  * @returns `true` when the text carries at least one unambiguous Markdown construct.
@@ -107,9 +96,8 @@ export function looksLikeMarkdown(text: string): boolean {
  *
  * @remarks
  * The same instance that turned the stored Markdown into this document and turns it back on every
- * keystroke. Reusing it — rather than standing up a second serializer — is what guarantees a copy
- * and a save agree, including for the custom nodes (mentions, code blocks) that declare their own
- * `renderMarkdown`. The Markdown extension must therefore be registered before this one.
+ * keystroke, so a copy and a save agree — including for the custom nodes (mentions, code blocks)
+ * that declare their own `renderMarkdown`. The Markdown extension is registered before this one.
  */
 function markdownManager(editor: Editor): {
   serialize: (content: JSONContent) => string;
@@ -122,10 +110,10 @@ function markdownManager(editor: Editor): {
  * Serialize a copied slice to Markdown.
  *
  * @remarks
- * A slice is not a document. Selecting a few words inside one paragraph yields a fragment of *inline*
- * nodes, which the top node type will not accept, so an inline fragment is wrapped in a paragraph
- * first. Anything the manager cannot serialize falls back to ProseMirror's own text extraction —
- * a copy must always produce something, even when it cannot produce Markdown.
+ * Selecting a few words inside one paragraph yields a fragment of *inline* nodes, which the top node
+ * type accepts only once wrapped in a paragraph, so that wrapping happens here. Anything the manager
+ * cannot serialize falls back to ProseMirror's own text extraction, so a copy always produces
+ * something.
  *
  * @param editor - The editor whose schema and manager to serialize through.
  * @param slice - The copied slice.
@@ -145,8 +133,8 @@ export function serializeSliceToMarkdown(editor: Editor, slice: Slice): string {
         ? Fragment.from(paragraph.create(null, slice.content))
         : slice.content;
     const document = schema.topNodeType.create(null, content);
-    // Block serializers pad their output with newlines so blocks separate correctly *within* a
-    // document. A clipboard payload is not a document, and those edges paste as stray blank lines.
+    // Block serializers pad their output with newlines to separate blocks within a document. Those
+    // edges paste as stray blank lines, so they come off here.
     return markdownManager(editor)
       .serialize(document.toJSON() as JSONContent)
       .replace(/^\n+/, '')
@@ -156,7 +144,7 @@ export function serializeSliceToMarkdown(editor: Editor, slice: Slice): string {
   }
 }
 
-/** Whether the cursor sits inside a code block, where syntax is data rather than formatting. */
+/** Whether the cursor sits inside a code block, where Markdown syntax is content. */
 function inCodeBlock(state: EditorState): boolean {
   const { $from } = state.selection;
   for (let depth = $from.depth; depth >= 0; depth -= 1) {
@@ -169,10 +157,10 @@ function inCodeBlock(state: EditorState): boolean {
  * The single image on the clipboard, when the clipboard is carrying an image and nothing else.
  *
  * @remarks
- * The "nothing else" is load-bearing. Copying a rich document that *contains* an image puts both the
- * image bytes and the document's text on the clipboard; treating that as an image paste would insert
- * the picture and silently discard every word around it. A screenshot, or a browser's "Copy image",
- * carries no text — which is exactly the case worth rehosting.
+ * The "nothing else" is load-bearing. A screenshot, or a browser's "Copy image", puts bytes on the
+ * clipboard and no text, and that is the case worth rehosting. Copying a rich document that
+ * *contains* an image carries the document's text too, and takes the HTML path so every word around
+ * the picture survives.
  *
  * @param clipboardData - The paste event's data.
  * @returns The image file, or `null` when this is not an image-only paste.
@@ -189,12 +177,11 @@ function imageOnlyFile(clipboardData: DataTransfer): File | null {
  * Upload a pasted image and place it where it was pasted, leaving the document untouched on failure.
  *
  * @remarks
- * The position is captured before the upload starts, not read after it finishes. An upload takes as
- * long as the network does, and a person who pastes a screenshot and then carries on typing
- * elsewhere would otherwise find the picture dropped wherever their cursor had drifted to.
+ * The position is captured before the upload starts, so a person who pastes a screenshot and carries
+ * on typing elsewhere still gets the picture where they put it, however long the network takes.
  *
- * The editor may also be gone by the time the bytes land — the reader navigated away — so a
- * destroyed editor is checked for rather than dispatched into.
+ * The editor may be gone by the time the bytes land — the reader navigated away — so a destroyed
+ * editor ends the insert.
  *
  * @param editor - The editor to insert into.
  * @param upload - The uploader resolved at paste time.
@@ -247,7 +234,7 @@ export function createMarkdownClipboardExtension(
               const clipboardData = event.clipboardData;
               if (clipboardData === null) return false;
 
-              // A fence is the one place Markdown syntax is content. Never interpret it.
+              // A fence is where Markdown syntax is content, so it stays literal.
               if (inCodeBlock(view.state)) return false;
 
               const image = imageOnlyFile(clipboardData);
@@ -255,15 +242,15 @@ export function createMarkdownClipboardExtension(
               if (image !== null && uploadImage !== null) {
                 if (editor.schema.nodes[IMAGE_NODE] === undefined) return false;
                 event.preventDefault();
-                // The paste position, not wherever the cursor ends up while the upload is in flight.
+                // The paste position, held for the length of the upload.
                 const at = view.state.selection.from;
-                // A rejected insert must not escape as an unhandled rejection; the upload itself
-                // already reports its own failure through the surface that owns it.
+                // The upload reports its own failure through the surface that owns it, so a rejected
+                // insert is absorbed here.
                 void insertUploadedImage(editor, uploadImage, image, at).catch(() => undefined);
                 return true;
               }
 
-              // HTML is richer than the plain flavor and is parsed against the real schema.
+              // ProseMirror parses the HTML flavor against the real schema.
               if (clipboardData.getData('text/html') !== '') return false;
 
               const text = clipboardData.getData('text/plain');

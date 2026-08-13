@@ -3,31 +3,21 @@
  *
  * @remarks
  * The storage behind an image pasted into prose. A body is Markdown, so an image inside one is
- * `![alt](/v1/orgs/:orgId/images/:id)` — which means these two routes exist so that reference
- * resolves for everyone who can read the body.
+ * `![alt](/v1/orgs/:orgId/images/:id)`, and these routes make that reference resolve for everyone
+ * who can read the body.
  *
- * ## Why this is not the attachment upload
+ * ## Serving inline safely
  *
- * `attachment-routes` already uploads files, and it is the wrong tool here for two structural
- * reasons, not one stylistic one.
- *
- * It is mounted on the tasks router, so its subject is always a task. Prose lives on tasks,
- * projects, initiatives, programs, teams, milestones, comments, and updates — an image model that
- * can only belong to a task cannot serve prose.
- *
- * And it serves bytes as `Content-Disposition: attachment`, deliberately, so that an uploaded HTML
- * or SVG file downloads instead of executing in a viewer's session. An `<img src>` needs the exact
- * opposite. Rather than weaken that route's guarantee, this one earns the inline serving by never
- * accepting anything that could execute: the MIME type is validated against a **raster allowlist**
- * on the way in, the stored value is the validated one rather than the client's claim, and
- * `Content-Type-Options: nosniff` stops a browser from second-guessing it on the way out.
+ * These bytes go back to the browser inline, which is what an `<img src>` needs to render. Three
+ * things keep that safe: the MIME type is validated against a **raster allowlist** on the way in,
+ * the stored value is the validated one, and `X-Content-Type-Options: nosniff` holds the browser to
+ * it on the way out. An upload that could execute is rejected before any bytes reach storage.
  *
  * ## Ownership
  *
- * A row has no subject. The Markdown that names the URL is the only reference, which is what lets a
- * description be copied from one entity to another — the whole point of the surrounding feature —
- * without an ownership row having to be rewritten to follow it. Reads require org membership, so
- * the tenant boundary is the org scope on every query, exactly as elsewhere.
+ * A row belongs to the workspace and to no subject; the Markdown naming the URL is the reference.
+ * A description can therefore be copied from one entity to another on its own. Every query is
+ * org-scoped, which is the tenant boundary here as elsewhere.
  */
 import { db, documentImage, genId } from '@docket/db';
 import { DocumentImageMimeType, DocumentImageOut, DocumentImageRemoved } from '@docket/types';
@@ -54,16 +44,15 @@ const MAX_IMAGE_MB = MAX_IMAGE_BYTES / (1024 * 1024);
  * The subset of a multipart `File` this handler needs.
  *
  * @remarks
- * Structural rather than the nominal `File` for the same reason as the attachment upload: this
- * shape flows into the RPC contract, and the DOM `File` and Node's `node:buffer` `File` are
- * different nominal types.
+ * Structural, matching the attachment upload: this shape flows into the RPC contract, and the DOM
+ * `File` and Node's `node:buffer` `File` are distinct nominal types that both satisfy it.
  */
 interface UploadedImage {
   /** Original filename. */
   readonly name: string;
   /** Size in bytes. */
   readonly size: number;
-  /** MIME type as claimed by the client (never trusted as the stored value). */
+  /** MIME type as claimed by the client; the stored value comes from validation. */
   readonly type: string;
   /** Read the bytes. */
   arrayBuffer(): Promise<ArrayBuffer>;
@@ -73,9 +62,8 @@ interface UploadedImage {
  * Multipart body for an image upload.
  *
  * @remarks
- * The MIME check is part of *validation*, not of the handler, so a non-raster upload is rejected
- * with a 422 before any bytes reach storage. That ordering matters: an SVG that is written to the
- * blob store and only then rejected has still been stored.
+ * The MIME check sits in validation, so a non-raster upload is rejected with a 422 while its bytes
+ * are still in the request.
  */
 const uploadForm = z.object({
   file: z
@@ -126,10 +114,10 @@ const documentImages = new Hono<AppEnv>()
       const { orgId, actorId } = c.get('actorCtx');
       const { file } = c.req.valid('form');
 
-      // Validated above, so this parse cannot fail; taking the parsed value rather than `file.type`
-      // is what guarantees the stored type is from the allowlist.
+      // Validated above, so this parse holds. Taking the parsed value keeps the stored type inside
+      // the allowlist.
       const mimeType = DocumentImageMimeType.parse(file.type);
-      // Deterministic, id-scoped key (no filename in the path → no traversal surface).
+      // Deterministic, id-scoped key; the filename stays out of the path, closing traversal.
       const imageId = genId();
       const blobKey = `document-images/${orgId}/${imageId}`;
       const bytes = new Uint8Array(await file.arrayBuffer());
@@ -167,7 +155,7 @@ const documentImages = new Hono<AppEnv>()
     apiDoc({
       tag: 'Organizations',
       summary: 'Serve an inline image',
-      description: `Stream the bytes of a stored inline image. Returns raw bytes rather than a JSON envelope, served inline with the MIME type recorded at upload, so this URL can be used directly as an \`<img src>\`. Responses are immutable and privately cacheable. An unknown id, or one belonging to another organization, returns 404. Requires org membership (\`view\`).`,
+      description: `Stream the bytes of a stored inline image. Returns raw image bytes, served inline with the MIME type recorded at upload, so this URL can be used directly as an \`<img src>\`. Responses are immutable and privately cacheable. An unknown id, or one belonging to another organization, returns 404. Requires org membership (\`view\`).`,
     }),
     zParam(imageParam),
     async (c) => {
@@ -185,17 +173,16 @@ const documentImages = new Hono<AppEnv>()
       const bytes = await getContainer().blob.get(row.blobKey);
       if (!bytes) throw new NotFoundError('Image is no longer available.');
 
-      // Copy into a fresh `ArrayBuffer`-backed Uint8Array so the body is a valid `BodyInit`
-      // (mirrors the attachment download).
+      // Copy into a fresh `ArrayBuffer`-backed Uint8Array so the body is a valid `BodyInit`.
       return new Response(new Uint8Array(bytes), {
         status: 200,
         headers: {
           'Content-Type': row.mimeType,
-          // Inline is the whole point — an image told to download cannot render in prose.
+          // Inline, so the URL renders as an `<img src>`.
           'Content-Disposition': 'inline',
-          // Belt and braces: the type is already allowlisted, and the browser may not re-guess it.
+          // Holds the browser to the allowlisted type.
           'X-Content-Type-Options': 'nosniff',
-          // Immutable: an id addresses exactly one set of bytes, which are never rewritten.
+          // An id addresses one fixed set of bytes for its lifetime.
           'Cache-Control': 'private, max-age=31536000, immutable',
         },
       });
@@ -224,8 +211,8 @@ const documentImages = new Hono<AppEnv>()
       const row = rows[0];
       if (!row) throw new NotFoundError('Image not found');
 
-      // Bytes first: an orphaned blob is unreachable forever once its row is gone, while a row
-      // whose blob is missing is already a case the serve route handles.
+      // Bytes first: the row is what addresses the blob, and the serve route already 404s a row
+      // whose bytes are gone.
       await getContainer().blob.delete(row.blobKey);
       await db
         .delete(documentImage)

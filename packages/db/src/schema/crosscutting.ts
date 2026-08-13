@@ -808,20 +808,16 @@ export const attachment = pgTable(
  * An image pasted or dropped into prose, stored so the Markdown that references it keeps working.
  *
  * @remarks
- * Deliberately **not** an {@link attachment}. An attachment is a typed reference hanging off one
- * subject — it is polymorphic on `(subjectType, subjectId)`, it is listed in a Resources tab, and
- * its bytes are served `Content-Disposition: attachment` precisely so an uploaded HTML or SVG file
- * can never execute in a viewer's session. Every one of those properties is wrong for an inline
- * image: prose lives on seven different entities plus comments, an image inside a paragraph is not
- * a listed resource, and an `<img src>` needs the bytes served *inline* to render at all.
+ * A plain org-scoped blob, held by the Markdown that names it:
+ * `![alt](/v1/orgs/:orgId/images/:id)` sitting in a `description` or `body` column. Carrying the
+ * reference in the prose is what lets a body be moved, copied, or quoted between entities on its
+ * own, which is what makes copy and paste of a body work.
  *
- * So this is a plain org-scoped blob with no subject. The reference is the Markdown itself:
- * `![alt](/v1/orgs/:orgId/images/:id)` sitting in a `description` or `body` column. That means a
- * body can be moved, copied, or quoted between entities without an ownership row having to follow
- * it, which is exactly the property that makes copy and paste work at all.
+ * Prose lives on seven entities plus comments and updates, so an image belongs to the workspace and
+ * to no single subject. Its bytes are served inline, which is what an `<img src>` needs to render.
  *
- * `mimeType` is written from a raster allowlist enforced at the route, never from the upload's own
- * claim — see `document-image-routes`. Serving inline is only safe because SVG can never get in.
+ * `mimeType` is written from a raster allowlist enforced at the route — see `document-images` — so
+ * inline serving stays safe.
  */
 export const documentImage = pgTable(
   'document_image',

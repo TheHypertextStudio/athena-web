@@ -19,9 +19,10 @@ import { DocumentImageId, OrganizationId } from './primitives';
  * The raster image types Docket will store and serve inline.
  *
  * @remarks
- * Raster only, and deliberately no `image/svg+xml`. An SVG is a document that may carry script and
- * external references; served inline from Docket's own origin it would run with Docket's origin
- * privileges. Every other decision in this slice depends on this list staying raster.
+ * Raster formats only. These bytes are served inline from Docket's own origin, so the list holds
+ * formats a browser renders as pixels and stops there — an SVG is a document that can carry script
+ * and external references, and would run with Docket's origin privileges. The rest of this slice
+ * rests on the list staying raster.
  */
 export const DocumentImageMimeType = z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 /** Document image MIME value. */

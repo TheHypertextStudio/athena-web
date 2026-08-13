@@ -3,21 +3,17 @@
  *
  * @remarks
  * Most of Docket's prose is *read* without an editor: a posted comment is walked from `marked`
- * tokens straight into React elements, which is far cheaper than mounting ProseMirror per comment.
- * That leaves rendered prose with no Markdown serializer, so copying from it produced the browser's
- * default plain text — every heading, bullet, and fence flattened away — even though the copy came
- * from content Docket had itself just rendered from Markdown.
+ * tokens straight into React elements, which keeps a page of comments cheap. This walker gives that
+ * rendered prose a Markdown serializer by reading its DOM back.
  *
- * This walker closes that gap by reading the DOM back. It is **not** a general HTML-to-Markdown
- * converter and must not become one: its input is always markup this app produced, from the closed
- * set of elements {@link ../../components/editor/render-markdown-tokens} emits. That is what makes
- * it small enough to be obviously correct, and it is why unknown elements degrade to their children
- * rather than being guessed at.
+ * Its input is always markup this app produced, from the closed set of elements
+ * {@link ../../components/editor/render-markdown-tokens} emits. That closed set is what keeps the
+ * walker small enough to be obviously correct, and unknown elements degrade to their children.
  *
- * Working from a selection's cloned fragment rather than from source offsets is what makes a
- * *partial* selection work. Selecting the middle two bullets of a list copies two bullets.
+ * It works from a selection's cloned fragment, which is what makes a *partial* selection come out
+ * right: selecting the middle two bullets of a list copies two bullets.
  *
- * @see {@link ../../components/clipboard/markdown-copy} for the listener that calls this.
+ * @see {@link ../../components/clipboard/clipboard-provider} for the listener that calls this.
  */
 
 /** Elements that begin a new block, and so end whatever inline run preceded them. */
@@ -44,9 +40,8 @@ const BLOCK_TAGS = new Set([
  * Escape the characters that would otherwise be read back as syntax.
  *
  * @remarks
- * A deliberately short list. Over-escaping is its own bug: turning `snake_case_name` into
- * `snake\_case\_name` makes the plain flavor worse to read for a construct GFM does not treat as
- * emphasis inside a word anyway. Only characters that reliably change meaning are escaped.
+ * A short list, holding only the characters that reliably change meaning. GFM leaves an underscore
+ * inside a word alone, so `snake_case_name` survives as written.
  *
  * @param value - Raw text content.
  * @returns The text, safe to place in a Markdown document.
@@ -64,10 +59,10 @@ function normalizeWhitespace(value: string): string {
  * Prefix every line of a block, for blockquotes and nested list content.
  *
  * @remarks
- * Blank lines take `blank` rather than `rest`, and the distinction is not cosmetic. Indenting a
- * blank line inside a list item leaves two trailing spaces, which Markdown reads as a hard line
- * break; leaving a blank line unprefixed inside a blockquote ends the quote and starts a second one.
- * The two containers need opposite answers.
+ * Blank lines take their own prefix, and the two containers want different ones. Indenting a blank
+ * line inside a list item leaves two trailing spaces, which Markdown reads as a hard line break, so
+ * it gets `''`. A blank line inside a blockquote keeps the quote open only while it carries the
+ * marker, so it gets `'>'`.
  *
  * @param value - The block's Markdown.
  * @param first - Prefix for the first line.
@@ -101,7 +96,7 @@ function inlineOf(node: Node): string {
 
   switch (node.tagName) {
     case 'BR':
-      // Two trailing spaces is the only hard break Markdown has that survives a re-parse.
+      // Two trailing spaces is the hard break that survives a re-parse.
       return '  \n';
     case 'STRONG':
     case 'B':
@@ -116,7 +111,7 @@ function inlineOf(node: Node): string {
       // Matches what the editor writes; see the underline extension in `static-markdown`.
       return `++${children()}++`;
     case 'CODE':
-      // Text, not children: a code span's content is data, so nothing inside it is escaped.
+      // A code span's content is data, so it is taken as text with nothing escaped inside it.
       return `\`${node.textContent}\``;
     case 'IMG': {
       const src = node.getAttribute('src') ?? '';
@@ -148,8 +143,8 @@ function listOf(element: Element): string {
             ? '- [x] '
             : '- [ ] '
           : '- ';
-      // A task item wraps its prose in a `<div>` beside the checkbox `<label>`; taking that div
-      // keeps the checkbox itself from serializing as stray text.
+      // A task item wraps its prose in a `<div>` beside the checkbox `<label>`, so that div is the
+      // content and the checkbox stays out of the text.
       const content = task ? (item.querySelector(':scope > div') ?? item) : item;
       const body = blocksOf(content);
       return prefixLines(body, marker, ' '.repeat(marker.length), '');
@@ -223,8 +218,8 @@ function blockOf(element: Element): string {
     case 'HR':
       return '---';
     default:
-      // A structural wrapper — the table's scroll container, a task item's content div. Its
-      // children are the real content.
+      // A structural wrapper — the table's scroll container, a task item's content div — whose
+      // children carry the content.
       return blocksOf(element);
   }
 }
@@ -233,9 +228,9 @@ function blockOf(element: Element): string {
  * Serialize a container's children, separating blocks by a blank line.
  *
  * @remarks
- * Loose inline content between blocks is gathered into an implicit paragraph. That case is not
- * hypothetical: a partial selection's cloned fragment routinely begins with a bare text node,
- * because the selection started in the middle of one.
+ * Loose inline content between blocks is gathered into an implicit paragraph, which is the shape a
+ * partial selection routinely arrives in: its cloned fragment begins with a bare text node, because
+ * the selection started in the middle of one.
  *
  * @param root - The node whose children to serialize.
  * @returns Markdown for the subtree.

@@ -46,6 +46,7 @@ function categoryFor(kind: EventKind): string {
       return 'progress';
     case 'calendar_invite':
     case 'calendar_update':
+    case 'meeting_attended':
       return 'calendar';
     case 'timer_started':
     case 'timer_paused':

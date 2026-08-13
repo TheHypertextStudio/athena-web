@@ -182,15 +182,22 @@ export const syncTrigger = pgEnum('sync_trigger', ['manual', 'scheduled']);
  * in scheduling logic.
  *
  * @remarks
- * `notion_mirror` is an `ALTER TYPE … ADD VALUE` on an existing enum, which PostgreSQL requires
- * to COMMIT before the value can be used — see `ENUM_PREFLIGHT` in `./migrate.ts` for the
- * pre-commit that makes that safe under Drizzle's single-transaction migrator, and note that its
- * migration statement must therefore carry `IF NOT EXISTS`.
+ * `notion_mirror` and `activity_pull` are each an `ALTER TYPE … ADD VALUE` on an existing enum,
+ * which PostgreSQL requires to COMMIT before the value can be used — see `ENUM_PREFLIGHT` in
+ * `./migrate.ts` for the pre-commit that makes that safe under Drizzle's single-transaction
+ * migrator, and note that their migration statements must therefore carry `IF NOT EXISTS`.
+ *
+ * `activity_pull` is the poll counterpart to webhook ingestion: going and asking a provider what
+ * the person did, for sources that expose no webhook at all. It is deliberately its own purpose
+ * rather than folded into `task_sync`, because the two want different cadences and because a
+ * failure to refresh someone's activity feed is a different operational story from a failure to
+ * mirror their work items.
  */
 export const syncRunPurpose = pgEnum('sync_run_purpose', [
   'task_sync',
   'email_ingest',
   'notion_mirror',
+  'activity_pull',
 ]);
 /**
  * Integration pattern: replace (migration), complement (connector), or an installed
@@ -724,6 +731,15 @@ export const searchIndexJobStatus = pgEnum('search_index_job_status', [
  * (`ALTER TYPE … ADD VALUE`), because Postgres cannot remove or reorder an enum value and
  * stored rows must keep parsing. The `timer_*`, `elicitation_*` and `agent_*` families exist
  * so the recipient router and notification policy can branch without decoding `detail`.
+ *
+ * `meeting_attended` means **accepted and elapsed**, not observed presence. Docket cannot know
+ * whether somebody was in the room; what it knows is that they accepted an invitation, other
+ * people were invited, and the time has passed. The distinction matters because this log is
+ * append-only and deduped, so a false statement written here cannot later be corrected — which is
+ * why the copy derived from it says "I had a design review" and never "I attended one". It earns a
+ * value of its own rather than reusing `calendar_invite`/`calendar_update`, which mean "an invite
+ * arrived" and "a meeting moved": the recipient router, the minor-kind classifier and automation
+ * matchers all branch on `kind` alone, so collapsing the three would make them indistinguishable.
  */
 export const eventKind = pgEnum('event_kind', [
   'message',
@@ -752,6 +768,7 @@ export const eventKind = pgEnum('event_kind', [
   'agent_completed',
   'agent_failed',
   'field_change',
+  'meeting_attended',
 ]);
 
 /**
@@ -852,6 +869,41 @@ export const streamRelevance = pgEnum('stream_relevance', [
 ]);
 /** Cadence of a generated cross-org summary (lunch / end-of-day / end-of-week). */
 export const summaryCadence = pgEnum('summary_cadence', ['lunch', 'eod', 'eow']);
+
+/**
+ * How far one person's narrated day has got.
+ *
+ * @remarks
+ * Deliberately says nothing about *delivery*: a narrated day is a record, and an email or a push is
+ * one delivery of it (see `daily_digest`). That separation is why there is no `sent` here, and it is
+ * what lets several cadences share one day's episodes instead of each re-deriving them.
+ *
+ * `empty` is a real outcome rather than a failure — a day with no activity records that fact, so the
+ * cost control ("no events, no model call, no email") is a state rather than an absence of state.
+ */
+export const activityDayStatus = pgEnum('activity_day_status', [
+  'pending',
+  'reconciling',
+  'ready',
+  'empty',
+  'failed',
+]);
+
+/**
+ * How far one highlight's narration has got.
+ *
+ * @remarks
+ * Separate from {@link activityDayStatus} because episodes are cheap, reliable facts and narration
+ * is an expensive call to a model that can fail on its own. Persisting the episode first and
+ * filling the sentence in after means a model outage degrades the *prose* of a day rather than
+ * losing its *record*, and a retry is free because the episode key is already stable.
+ */
+export const activityNarrationState = pgEnum('activity_narration_state', [
+  'pending',
+  'generating',
+  'ready',
+  'failed',
+]);
 
 /**
  * RFC 5424 severity levels, as MCP's `logging/setLevel` and `notifications/message` use them.

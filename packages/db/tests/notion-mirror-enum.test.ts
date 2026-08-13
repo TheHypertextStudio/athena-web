@@ -12,6 +12,11 @@ const migration = readFileSync(
   'utf8',
 );
 
+const activityMigration = readFileSync(
+  resolve(import.meta.dirname, '../drizzle/0082_busy_trish_tilby.sql'),
+  'utf8',
+);
+
 describe('notion_mirror_entity enum', () => {
   it('matches the domain enum in the same order', () => {
     // Two independent declarations of one closed set: the entity kinds the mirror projects, and
@@ -36,18 +41,31 @@ describe('sync_run_purpose enum', () => {
     expect(syncRunPurpose.enumValues).toEqual(SyncRunPurpose.options);
   });
 
-  it('appends notion_mirror rather than reordering', () => {
+  it('appends new purposes rather than reordering existing ones', () => {
     // `ALTER TYPE ... ADD VALUE` positions a new member relative to existing ones, so the
-    // migration and this list have to agree on where it went.
-    expect(syncRunPurpose.enumValues.at(-1)).toBe('notion_mirror');
+    // migrations and this list have to agree on where each one went. The prefix is asserted rather
+    // than "which value is last", because the latter states the invariant in a way that breaks on
+    // the next legitimate append while saying nothing extra about the ones already here.
+    expect(syncRunPurpose.enumValues.slice(0, 4)).toEqual([
+      'task_sync',
+      'email_ingest',
+      'notion_mirror',
+      'activity_pull',
+    ]);
   });
 
-  it('keeps the migration idempotent with the enum preflight', () => {
-    // The migration runner commits this enum value before Drizzle opens its all-migrations
-    // transaction. Production therefore reaches this generated statement with the label already
+  it('keeps every preflighted migration idempotent', () => {
+    // The migration runner commits these enum values before Drizzle opens its all-migrations
+    // transaction. Production therefore reaches the generated statements with the labels already
     // present, and a plain ADD VALUE aborts the deployment with PostgreSQL 42710.
     expect(migration).toContain(
       `ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'notion_mirror';`,
+    );
+    expect(activityMigration).toContain(
+      `ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'activity_pull';`,
+    );
+    expect(activityMigration).toContain(
+      `ALTER TYPE "public"."event_kind" ADD VALUE IF NOT EXISTS 'meeting_attended';`,
     );
   });
 });

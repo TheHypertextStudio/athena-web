@@ -32,10 +32,16 @@ const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../dr
  *
  * - `integration_status.pending` — added by 0004, used as a column default by 0005.
  * - `sync_run_purpose.notion_mirror` — added by 0075, written by the Notion mirror's sync runs.
+ * - `sync_run_purpose.activity_pull` — written by the activity poll's sync runs.
+ * - `event_kind.meeting_attended` — written by the calendar activity projection.
  *
- * Because these run first, the corresponding migration statement would otherwise fail on a
- * duplicate label, so **every value listed here must be added with `IF NOT EXISTS` in its
- * migration too** (0004 line 3 is the precedent).
+ * The last two are listed for consistency with the `notion_mirror` precedent and as defence in
+ * depth, not because a migration references them today: 55P04 bites only when a *migration
+ * statement* uses a value added in the same transaction, and these are only ever written by
+ * application code, in a later transaction. What *is* load-bearing either way is the `IF NOT
+ * EXISTS` — because these run first, the corresponding migration statement would otherwise fail on
+ * a duplicate label on every database the preflight has already touched, so **every value listed
+ * here must be added with `IF NOT EXISTS` in its migration too** (0004 line 3 is the precedent).
  *
  * Fresh databases create each enum complete in its own `CREATE TYPE`, so an undefined type
  * (`42704`) is the expected new-database case and is skipped rather than treated as a failure.
@@ -43,6 +49,8 @@ const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../dr
 const ENUM_PREFLIGHT: readonly string[] = [
   `ALTER TYPE "public"."integration_status" ADD VALUE IF NOT EXISTS 'pending' BEFORE 'connected'`,
   `ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'notion_mirror'`,
+  `ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'activity_pull'`,
+  `ALTER TYPE "public"."event_kind" ADD VALUE IF NOT EXISTS 'meeting_attended'`,
 ];
 
 /**

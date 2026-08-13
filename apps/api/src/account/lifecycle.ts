@@ -12,6 +12,7 @@
  */
 import type { Database } from '@docket/db';
 import {
+  activityDay,
   dailyDigest,
   contactPoint,
   event,
@@ -46,7 +47,11 @@ export const USER_KEYED_NO_FK_TABLES = [
   event,
   eventRecipient,
   streamSubscription,
+  // `daily_digest` before `activity_day`: the digest references the day it delivered, so removing
+  // the deliveries first keeps the purge free of a set-null step that would immediately be deleted.
+  // `activity_highlight` needs no entry — it cascades from `activity_day`.
   dailyDigest,
+  activityDay,
   idempotencyKey,
 ] as const;
 

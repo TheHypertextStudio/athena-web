@@ -413,11 +413,11 @@ export const SyncTrigger = z
 /** Sync-trigger value. */
 export type SyncTrigger = z.infer<typeof SyncTrigger>;
 
-/** What a sync run pulled: the task mirror or the email-to-task ingest. */
+/** What a sync run pulled: the task mirror, the email-to-task ingest, or the activity feed. */
 export const SyncRunPurpose = z
-  .enum(['task_sync', 'email_ingest', 'notion_mirror'])
+  .enum(['task_sync', 'email_ingest', 'notion_mirror', 'activity_pull'])
   .describe(
-    'What the run did: `task_sync` (the connector task mirror / two-way sync), `email_ingest` (the email-to-task suggestion sweep), or `notion_mirror` (projecting Docket entities into Docket-designed Notion databases and reading edits back). All purposes run on the same leased spine and share this history.',
+    'What the run did: `task_sync` (the connector task mirror / two-way sync), `email_ingest` (the email-to-task suggestion sweep), `notion_mirror` (projecting Docket entities into Docket-designed Notion databases and reading edits back), or `activity_pull` (asking a provider what you did, for sources that expose no webhook). All purposes run on the same leased spine and share this history.',
   );
 /** Sync-run-purpose value. */
 export type SyncRunPurpose = z.infer<typeof SyncRunPurpose>;

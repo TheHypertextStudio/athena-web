@@ -13,7 +13,10 @@
  *   {@link auditColumns}, plus a `user_id` for the cross-org per-person digest.
  * - `event_recipient` — the "concerns me" fan-out read-model (one row per relevant user).
  * - `stream_subscription` — a user's explicit follow/mute of a canonical entity.
- * - `daily_digest` — the persisted cross-org per-user summary.
+ * - `activity_day` / `activity_highlight` — one person's narrated day, and the per-episode
+ *   sentences they can curate. The *record* (`event`) is append-only; the *story* is editable.
+ * - `daily_digest` — one delivery of a narrated day (email today, other channels later). Kept
+ *   distinct from `activity_day` so several cadences can share one day's episodes.
  * - `event_subscription` — external webhook/push-channel registrations (per integration).
  *
  * `audit_event` (a separate compliance ledger) is intentionally NOT here — different
@@ -35,6 +38,8 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import {
+  activityDayStatus,
+  activityNarrationState,
   canonicalEntityKind,
   dailyDigestStatus,
   entityAssociation,
@@ -250,13 +255,18 @@ export const streamSubscription = pgTable(
 );
 
 /**
- * One user's persisted summary (the Sunsama-style hero output).
+ * One *delivery* of a narrated day (the Sunsama-style hero output).
  *
  * @remarks
  * Cross-org and user-scoped (no `organization_id`), like `notification`/`daily_plan_item`.
  * The unique `(user_id, digest_date, cadence)` is the idempotency watermark — one digest per
  * user per local day *per cadence* (lunch/eod/eow). `status = 'generating'` doubles as the
  * in-progress lease.
+ *
+ * The content it delivers lives on {@link activityDay}; this row records that it went out, to which
+ * channel, when, and with what result. `summary_markdown`/`summary_html` are therefore the
+ * *delivered artifact* — assembled at send time from whichever highlights were kept, and frozen
+ * thereafter, so later curation cannot retroactively rewrite what somebody already received.
  */
 export const dailyDigest = pgTable(
   'daily_digest',
@@ -265,6 +275,12 @@ export const dailyDigest = pgTable(
     userId: text('user_id').notNull(),
     /** The local calendar day this digest covers (in the user's timezone). */
     digestDate: date('digest_date').notNull(),
+    /**
+     * The narrated day this delivered. Nullable only because rows predating the split have none.
+     */
+    activityDayId: text('activity_day_id').references(() => activityDay.id, {
+      onDelete: 'set null',
+    }),
     /** Which summary this row is — lunch / end-of-day / end-of-week. */
     cadence: summaryCadence('cadence').notNull().default('eod'),
     status: dailyDigestStatus('status').notNull().default('pending'),
@@ -284,6 +300,116 @@ export const dailyDigest = pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [uniqueIndex('daily_digest_user_date_cadence_uq').on(t.userId, t.digestDate, t.cadence)],
+);
+
+/**
+ * One person's narrated day — the durable answer to "what did I do".
+ *
+ * @remarks
+ * Cross-org and user-scoped, because a day does not respect organization boundaries. The unique
+ * `(user_id, local_date)` is the identity *and* the idempotency watermark: reconciling a day twice
+ * converges rather than duplicating.
+ *
+ * Deliberately separate from {@link dailyDigest}, which is a *delivery* record (it has `sent_at` and
+ * a `delivery_message_id`). Hanging the narrated content off the delivery envelope is what had kept
+ * the `lunch|eod|eow` cadence permanently hardcoded to one value — a second cadence over the same
+ * day would have needed a second copy of the episodes. One narrated day now has many deliveries.
+ *
+ * `timezone` is recorded rather than re-derived because it is the tz the day's *boundaries* were
+ * computed in, and somebody who travels would otherwise silently re-cut a day that has already been
+ * narrated and curated.
+ */
+export const activityDay = pgTable(
+  'activity_day',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    userId: text('user_id').notNull(),
+    /** The local calendar day this covers, in {@link timezone}. */
+    localDate: date('local_date').notNull(),
+    /** The IANA zone the day's boundaries were computed in. */
+    timezone: text('timezone').notNull(),
+    status: activityDayStatus('status').notNull().default('pending'),
+    /** Canonical events the day was built from — the honest emptiness/cost signal. */
+    eventCount: integer('event_count').notNull().default(0),
+    stats: jsonb('stats').$type<DigestStats>(),
+    /** When episodes were last rebuilt from the event log. */
+    reconciledAt: timestamp('reconciled_at'),
+    /** When narration last completed for every episode that could be narrated. */
+    narratedAt: timestamp('narrated_at'),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('activity_day_user_date_uq').on(t.userId, t.localDate),
+    index('activity_day_status_idx').on(t.status),
+  ],
+);
+
+/**
+ * One episode of a narrated day: what happened, and the sentence about it.
+ *
+ * @remarks
+ * A row per episode rather than a jsonb array on {@link activityDay}, because curation is
+ * interactive per-item editing. An array would force read-modify-write of the whole day for every
+ * save, so a phone and a laptop editing two different lines would silently lose one — and it would
+ * leave the API with no stable id to address a single line by.
+ *
+ * The division of authority is the point. `event` rows are append-only and are never edited: the
+ * record is fixed. `narration` is generated, `edited_narration` is the person's rewrite, and `kept`
+ * is their decision about whether the line belongs in their highlights — the story is editable.
+ * There is deliberately nowhere on `event` to write any of that.
+ *
+ * `event_ids` carries no foreign key. An episode is a derived presentation grouping over a log, not
+ * a durable relation; nothing asks "which highlights contain event X", a join table would add a
+ * write and buy no read, and the absence of the constraint means an event-retention purge can never
+ * orphan-block a day. A GIN index on the array is the cheap upgrade if the reverse read appears.
+ */
+export const activityHighlight = pgTable(
+  'activity_highlight',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    activityDayId: text('activity_day_id')
+      .notNull()
+      .references(() => activityDay.id, { onDelete: 'cascade' }),
+    /** The order-independent episode key from `@docket/types` — stable under backfill. */
+    episodeKey: text('episode_key').notNull(),
+    /** Chronological position within the day. */
+    sort: integer('sort').notNull(),
+    /** The episode's first and last event times — a span, never a duration worked. */
+    occurredAt: timestamp('occurred_at').notNull(),
+    endedAt: timestamp('ended_at').notNull(),
+    sourceSystem: sourceSystem('source_system').notNull(),
+    entityKind: canonicalEntityKind('entity_kind'),
+    docketEntityId: text('docket_entity_id'),
+    /** Whether the subject resolved to Docket work — what gates the manual link action. */
+    entityAssociation: entityAssociation('entity_association').notNull().default('unmatched'),
+    /** The subject's label, denormalized so reading a day needs no join. */
+    subjectTitle: text('subject_title'),
+    /** The append-only events this narrates. See the remarks on the missing FK. */
+    eventIds: text('event_ids').array().notNull(),
+    narrationState: activityNarrationState('narration_state').notNull().default('pending'),
+    /** The generated sentence; null until narration succeeds. Never edited in place. */
+    narration: text('narration'),
+    /** The person's rewrite. Null means "use `narration`". */
+    editedNarration: text('edited_narration'),
+    /** False = dropped from the highlights. The event log is untouched either way. */
+    kept: boolean('kept').notNull().default(true),
+    /** When a person last touched this line; null = untouched by a human. */
+    curatedAt: timestamp('curated_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('activity_highlight_day_episode_uq').on(t.activityDayId, t.episodeKey),
+    index('activity_highlight_day_sort_idx').on(t.activityDayId, t.sort),
+  ],
 );
 
 /**

@@ -38,7 +38,7 @@ import {
  * Families:
  * - **work** — `created`/`completed`/`status_change`/`assignment`/`task_assignment`/`field_change`
  * - **conversation** — `message`/`mention`/`comment`/`reaction`/`email_received`
- * - **calendar** — `calendar_invite`/`calendar_update`
+ * - **calendar** — `calendar_invite`/`calendar_update`/`meeting_attended`
  * - **tracking** — the `timer_*` family ({@link TIMER_EVENT_KINDS})
  * - **assistance** — the `elicitation_*` ({@link ELICITATION_EVENT_KINDS}) and `agent_*`
  *   ({@link AGENT_EVENT_KINDS}) families
@@ -79,6 +79,11 @@ export const EventKind = z.enum([
   'agent_failed',
   // Work — one entity's metadata moving (the per-entity activity log line).
   'field_change',
+  // Calendar — a meeting the person accepted and that has since elapsed. NOT observed presence:
+  // Docket cannot know who was in the room. Distinct from `calendar_invite` ("an invite arrived")
+  // and `calendar_update` ("a meeting moved") because those describe the calendar changing, while
+  // this describes the day having happened — and the day is what a retrospective reads.
+  'meeting_attended',
 ]);
 /** Event-kind value. */
 export type EventKind = z.infer<typeof EventKind>;
@@ -426,6 +431,54 @@ export const EventDetail = z
        * match `detail.fields contains 'dueDate'` without walking an array of objects.
        */
       fields: z.array(z.string()).min(1).max(50),
+    }),
+    z.object({
+      /**
+       * A meeting the person accepted and that has since elapsed.
+       *
+       * @remarks
+       * Everything here is a fact about the *calendar entry*, never a claim about the room. The
+       * event's `meeting_attended` kind carries the same caution; see its enum documentation.
+       */
+      schema: z.literal('google_calendar.meeting'),
+      /** ISO-8601 start and end, as the calendar recorded them. */
+      startsAt: z.string(),
+      endsAt: z.string(),
+      /**
+       * Scheduled length in minutes.
+       *
+       * @remarks
+       * Recorded now although nothing reads it yet: it is exactly the input the deferred
+       * planned-versus-actual reflection needs (`time-tracking.md` §8.3), and deriving it later
+       * from historical rows would mean re-reading Google for days already summarized. It is a
+       * *scheduled* duration — never treat it as time worked, which is what the Time Ledger's
+       * intervals are for.
+       */
+      durationMinutes: z.number().int().nonnegative(),
+      /** How many people were invited, the person included. */
+      attendeeCount: z.number().int().nonnegative(),
+      /** The organizer's address, when the calendar exposed one. */
+      organizerEmail: z.string().nullable(),
+      /** Whether this was one instance of a recurring series. */
+      recurring: z.boolean(),
+    }),
+    z.object({
+      /**
+       * A message the person sent.
+       *
+       * @remarks
+       * `isReply` is what lets a narration say "I replied on …" rather than "I emailed …" — a
+       * distinction drawn from the message's own `In-Reply-To` header rather than guessed at.
+       */
+      schema: z.literal('gmail.message'),
+      /** The conversation it belongs to — also the episode subject, so a day's replies collapse. */
+      threadId: z.string(),
+      /** The subject line, as sent. */
+      subject: z.string(),
+      /** How many addresses it went to. */
+      recipientCount: z.number().int().nonnegative(),
+      /** Whether it continued an existing conversation. */
+      isReply: z.boolean(),
     }),
     z.object({
       schema: z.literal('generic'),

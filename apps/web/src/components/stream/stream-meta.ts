@@ -102,6 +102,9 @@ const KIND_ACTION: Record<EventKind, string> = {
   completed: 'completed the task',
   calendar_invite: 'sent a calendar invitation',
   calendar_update: 'updated the schedule',
+  // "had", not "attended": the event records an accepted invitation that has elapsed, which is
+  // not the same claim as having been in the room. See `EventKind`'s remarks.
+  meeting_attended: 'had this meeting',
   timer_started: 'started tracking time',
   timer_paused: 'paused time tracking',
   timer_resumed: 'resumed time tracking',
@@ -138,6 +141,7 @@ const KIND_VERB: Record<EventKind, string> = {
   completed: 'completed',
   calendar_invite: 'invited you to',
   calendar_update: 'updated',
+  meeting_attended: 'had',
   timer_started: 'started tracking',
   timer_paused: 'paused tracking',
   timer_resumed: 'resumed tracking',
@@ -168,6 +172,7 @@ export const KIND_LABEL: Record<EventKind, string> = {
   completed: 'Completed',
   calendar_invite: 'Calendar invite',
   calendar_update: 'Calendar update',
+  meeting_attended: 'Meeting',
   timer_started: 'Tracking started',
   timer_paused: 'Tracking paused',
   timer_resumed: 'Tracking resumed',
@@ -267,6 +272,14 @@ export function streamEventDetailLabel(row: StreamEventRow): string | null {
       return detail.snippet ?? detail.subject;
     case 'docket.email_suggestion':
       return detail.snippet || detail.subject;
+    case 'google_calendar.meeting': {
+      // The scheduled length, never presented as time worked — the Time Ledger owns that claim.
+      const people =
+        detail.attendeeCount <= 1 ? 'just you' : `${String(detail.attendeeCount)} people`;
+      return `${durationLabel(detail.durationMinutes * 60_000)} · ${people}`;
+    }
+    case 'gmail.message':
+      return detail.subject;
     case 'linear.issue':
       return detail.stateName;
     case 'github.pull_request':
@@ -374,6 +387,7 @@ export function kindGlyph(kind: EventKind): KindGlyph {
       return { icon: 'reaction', tone: 'text-on-surface-variant' };
     case 'calendar_invite':
     case 'calendar_update':
+    case 'meeting_attended':
       return { icon: 'calendar', tone: 'text-on-surface-variant' };
     case 'timer_started':
     case 'timer_paused':

@@ -197,6 +197,33 @@ describe('POST /:eventId/link', () => {
     expect(row?.docketEntityId).toBe(taskId);
   });
 
+  it('queues the task for reindexing, not the meeting the event was about', async () => {
+    // The task is what gained activity, so the task is what has a stale search document. Deriving
+    // the target from the event's `entityKind` instead sent `calendar_event` + the task's id, a row
+    // no calendar table has, and sent nothing at all for a mail thread. Asserting the table and id
+    // rather than merely that some job exists is the whole point: the broken version enqueued a job.
+    const { orgId, teamId, actorId, app } = await seedWorkspace();
+    const eventId = await seedEvent(orgId, { association: 'unmatched' });
+    const taskId = await seedTask(orgId, teamId, actorId);
+
+    await app.request(`/${eventId}/link`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ taskId }),
+    });
+
+    const jobs = await db
+      .select({
+        sourceTable: schema.searchIndexJob.sourceTable,
+        entityId: schema.searchIndexJob.entityId,
+        reason: schema.searchIndexJob.reason,
+      })
+      .from(schema.searchIndexJob)
+      .where(eq(schema.searchIndexJob.sourceEventId, eventId));
+
+    expect(jobs).toEqual([{ sourceTable: 'task', entityId: taskId, reason: 'event_log' }]);
+  });
+
   it('resolves a pending subject too, so an unimported issue can be named by hand', async () => {
     const { orgId, teamId, actorId, app } = await seedWorkspace();
     const eventId = await seedEvent(orgId, { association: 'pending', entityKind: 'work_item' });

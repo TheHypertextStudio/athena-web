@@ -31,7 +31,6 @@ import { zJson, zQuery } from '../lib/validate';
 
 import { routeAndWriteRecipients } from '../consumers/routing';
 import { enqueueSearchIndexJobs } from '../search/enqueue';
-import { eventSearchReindexTarget } from '../search/event-log';
 import { toStreamEventOut } from './stream-helpers';
 
 /**
@@ -223,20 +222,22 @@ The event's own content is never altered. Any event already resolved answers 404
         return updated;
       });
 
-      // The task now has activity it did not visibly have, so its search document is stale.
-      const target = eventSearchReindexTarget(linked.entityKind, linked.docketEntityId);
-      if (target) {
-        await enqueueSearchIndexJobs([
-          {
-            organizationId: orgId,
-            sourceTable: target.sourceTable,
-            entityId: target.entityId,
-            operation: 'upsert',
-            reason: 'event_log',
-            sourceEventId: linked.id,
-          },
-        ]);
-      }
+      // The task is what gained activity, so the task is what gets reprojected. Deriving the target
+      // from `entityKind` instead reindexes the event's own subject, which is wrong in both
+      // directions for exactly the sources this route exists to serve: `calendar_event` maps to the
+      // calendar table and would be asked to reproject a row under the *task's* id, which no calendar
+      // row has, and `thread` maps to nothing at all, so a linked mail thread refreshed no document.
+      // The kind describes what the event was about; the link is a statement about the task.
+      await enqueueSearchIndexJobs([
+        {
+          organizationId: orgId,
+          sourceTable: 'task',
+          entityId: taskId,
+          operation: 'upsert',
+          reason: 'event_log',
+          sourceEventId: linked.id,
+        },
+      ]);
 
       return ok(c, StreamEventOut, toStreamEventOut(linked, null, new Set([actorId])));
     },

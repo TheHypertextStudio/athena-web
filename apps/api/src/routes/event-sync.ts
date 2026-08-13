@@ -6,11 +6,14 @@
  * write-ahead inbox ({@link inboundEvent}) the same way {@link sweepConnectorSync} drives
  * connector syncs: a per-row lease (`status='processing'` + `processingStartedAt`)
  * serializes concurrent/retried sweeps, and every row ends `processed`, `skipped`, or
- * `failed` — never silently dropped. For each event it resolves the provider {@link Observer},
- * normalizes the payload into canonical {@link event} rows (deduped by
- * `(organizationId, dedupeKey)`), and fans each out through the SINGLE shared relevance
- * resolver ({@link routeAndWriteRecipients}) — the same Strategy the internal emit path uses —
- * then publishes live via {@link publishEvent}.
+ * `failed` — never silently dropped.
+ *
+ * This module owns only the *webhook* half of that: the lease, the provider {@link Observer}, the
+ * Linear freshness side-trip, and the inbox row's own lifecycle. Turning the resulting drafts into
+ * canonical rows — identity resolution, dedupe, recipient fan-out, search, live publish and
+ * automations — belongs to {@link writeEventDrafts}, which a polled activity source calls with
+ * exactly the same drafts. Webhook and poll are two ways of *acquiring* activity, not two ways of
+ * recording it.
  *
  * Notifications are a deferred Phase-2 consumer: the old inline "mention/assignment → Hub
  * notification" bridge was removed. The personal feed (event_recipient) is the surface now.
@@ -18,35 +21,15 @@
  * Kept behind one function so a `/v1/cron/process-events` tick and any future Cloud Tasks
  * push share identical, idempotent behavior. `now` is always passed in (never module scope).
  */
-import { account, actor, db, event, inboundEvent, integration } from '@docket/db';
-import type { EventDraft, Observer, ObserverProvider } from '@docket/integrations';
-import type {
-  ActorRef,
-  CanonicalEntityKind,
-  EntityAssociation,
-  EntityRef,
-  SourceSystemKind,
-  StreamRelevance,
-} from '@docket/types';
-import { EventKind, providerSourceSystem, sourceIdentityProvider } from '@docket/types';
-import { and, eq, inArray, lt, or } from 'drizzle-orm';
+import { actor, db, inboundEvent, integration } from '@docket/db';
+import type { Observer, ObserverProvider } from '@docket/integrations';
+import { providerSourceSystem } from '@docket/types';
+import { and, eq, lt, or } from 'drizzle-orm';
 
-import { routeAndWriteRecipients, type RoutableEntity } from '../consumers/routing';
 import { buildObserver, toAppRuntimeEnv, type AppRuntimeEnv } from '../container';
-import { projectInboundDraft } from '../lib/automation/event';
-import { runAutomationsForEvent } from '../lib/automation/runtime';
-import { resolveExternalActor } from '../lib/identity/resolve-external-actor';
-import {
-  externalEntityKey,
-  isAssociableKind,
-  resolveExternalEntities,
-  type ResolvedEntities,
-} from '../lib/identity/resolve-external-entity';
-import { enqueueSearchIndexJobs } from '../search/enqueue';
-import { eventSearchReindexTarget } from '../search/event-log';
+import { EMPTY_DRAFT_TALLY, writeEventDrafts, type DraftWriteTally } from '../events/write-drafts';
 import { asObserverProvider } from './integration-provider';
 import { LEASE_STALE_MS, runSync } from './integration-sync';
-import { publishEvent } from './stream-helpers';
 
 /** The selected `inbound_event` row shape. */
 type InboundEventRow = typeof inboundEvent.$inferSelect;
@@ -83,16 +66,6 @@ export interface DrainResult {
   /** Events that errored (recorded + attempts incremented). */
   readonly failed: number;
 }
-
-/** What one inbound event produced, accumulated into {@link DrainResult}. */
-interface ProcessedTally {
-  readonly events: number;
-  readonly associated: number;
-  readonly recipients: number;
-}
-
-/** The tally for an event that produced nothing (unrouted, unsupported, or no drafts). */
-const NO_OUTPUT: ProcessedTally = { events: 0, associated: 0, recipients: 0 };
 
 /** Atomically claim one inbound event for processing. */
 async function claimEvent(id: string, now: Date, staleBefore: Date): Promise<boolean> {
@@ -152,117 +125,8 @@ async function ownerUserId(ctx: SweepCtx, integrationId: string): Promise<string
   return userId;
 }
 
-/**
- * Resolve an event's external participants (mentioned users, by their native id) to the Docket
- * users who have linked that identity — the mention-attribution seam.
- *
- * @param source - The event's canonical source system.
- * @param participants - The normalized participants (external actor refs) from the draft.
- * @param kind - The event kind, used to choose mention vs participant relevance.
- */
-async function resolveLinkedIdentityRecipients(
-  source: SourceSystemKind,
-  participants: EventDraft['participants'],
-  kind: EventKind,
-): Promise<Map<string, StreamRelevance>> {
-  const providerId = sourceIdentityProvider(source);
-  const recipients = new Map<string, StreamRelevance>();
-  if (!providerId || !participants || participants.length === 0) return recipients;
-  const externalIds = participants.map((p) => p.externalId);
-  const rows = await db
-    .select({ userId: account.userId })
-    .from(account)
-    .where(and(eq(account.providerId, providerId), inArray(account.accountId, externalIds)));
-  const reason: StreamRelevance = kind === 'mention' ? 'mention' : 'participant';
-  for (const row of rows) recipients.set(row.userId, reason);
-  return recipients;
-}
-
-/**
- * Lift a draft actor into a canonical {@link ActorRef} stamped with the resolved source,
- * enriching it with the Docket actor it maps to (if any) via {@link resolveExternalActor}.
- *
- * @remarks
- * Passes the draft's email through when the provider exposed one, which is what reaches the ad-hoc
- * email fallback — the only rung of {@link resolveExternalActor} that can match a person who has
- * neither linked their account nor been seen by a full sync. Providers that expose no email still
- * resolve through the manual-override, linked-account and email-matched-`external_actor` rungs.
- */
-async function toActorRef(
-  orgId: string,
-  draftActor: EventDraft['actor'],
-  source: SourceSystemKind,
-): Promise<ActorRef | null> {
-  if (!draftActor) return null;
-  const resolved = await resolveExternalActor(orgId, {
-    source,
-    externalId: draftActor.externalId,
-    ...(draftActor.email ? { email: draftActor.email } : {}),
-  });
-  return {
-    source,
-    externalId: draftActor.externalId,
-    displayName: draftActor.displayName ?? null,
-    avatarUrl: draftActor.avatarUrl ?? null,
-    docketActorId: resolved.actorId as ActorRef['docketActorId'],
-  };
-}
-
-/**
- * Lift a draft entity into a canonical {@link EntityRef} stamped with the resolved source.
- *
- * @remarks
- * `docketEntityId` stays null here even when association succeeded, and that is deliberate. Four
- * consumers read this jsonb field — owner fan-out, search reindex, activity-document visibility and
- * automation subject matching — so filling it in is indistinguishable from switching all four on in
- * one commit. The resolved id goes to the `event.docket_entity_id` column instead, which nothing
- * reads yet; each consumer is repointed at it separately so a regression is attributable.
- */
-function toEntityRef(
-  draftEntity: EventDraft['entity'],
-  source: SourceSystemKind,
-): EntityRef | null {
-  if (!draftEntity) return null;
-  return {
-    kind: draftEntity.kind,
-    source,
-    externalId: draftEntity.externalId,
-    title: draftEntity.title ?? null,
-    url: draftEntity.url ?? null,
-    docketEntityId: null,
-  };
-}
-
-/** One draft's association outcome — the state and, at `matched`, the id it resolved to. */
-interface DraftAssociation {
-  readonly state: EntityAssociation;
-  readonly docketEntityId: string | null;
-}
-
-/**
- * Decide one draft's association from the batch-resolved lookup.
- *
- * @param draftEntity - The draft's subject, when it has one.
- * @param resolved - Docket ids resolved for this whole delivery.
- * @returns the association state, and the Docket id when it matched.
- */
-function associationFor(
-  draftEntity: EventDraft['entity'],
-  resolved: ResolvedEntities,
-): DraftAssociation {
-  // No subject at all: nothing to associate, and it must never enter the sweep's working set.
-  if (!draftEntity) return { state: 'unmatched', docketEntityId: null };
-  const docketEntityId = resolved.get(externalEntityKey(draftEntity.kind, draftEntity.externalId));
-  if (docketEntityId) return { state: 'matched', docketEntityId };
-  // `pending` only when a mirror could plausibly appear later; otherwise retrying is pure waste.
-  return {
-    state: isAssociableKind(draftEntity.kind) ? 'pending' : 'unmatched',
-    docketEntityId: null,
-  };
-}
-
 /** Normalize + persist one inbound event's canonical events; returns what it produced. */
-async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<ProcessedTally> {
+async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<DraftWriteTally> {
   const now = ctx.now;
   const provider = asObserverProvider(ev.provider);
   const orgId = ev.organizationId;
@@ -274,7 +138,7 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<Processed
       .update(inboundEvent)
       .set({ status: 'skipped', processedAt: now })
       .where(eq(inboundEvent.id, ev.id));
-    return NO_OUTPUT;
+    return EMPTY_DRAFT_TALLY;
   }
 
   // Linear Issue webhooks are both activity and a freshness signal. Reconcile through the same
@@ -306,164 +170,19 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<Processed
 
   const userId = ev.integrationId ? await ownerUserId(ctx, ev.integrationId) : null;
 
-  // Associate every subject in this delivery at once — one query per distinct entity kind, not one
-  // per draft. Without an integration there is no tenancy to scope a mirror lookup by, so nothing
-  // resolves and `associationFor` settles each draft on kind alone.
-  const resolvedEntities = ev.integrationId
-    ? await resolveExternalEntities(
-        { organizationId: orgId, integrationId: ev.integrationId },
-        drafts.flatMap((draft) => (draft.entity ? [draft.entity] : [])),
-      )
-    : new Map<string, string>();
-
-  let created = 0;
-  let associated = 0;
-  let recipientsWritten = 0;
-  for (const draft of drafts) {
-    const kind = EventKind.safeParse(draft.kind);
-    if (!kind.success) continue; // skip drafts whose kind isn't a known enum value
-    const occurredAt = new Date(draft.occurredAt);
-    const entityKind: CanonicalEntityKind | null = draft.entity?.kind ?? null;
-    const entityRef = toEntityRef(draft.entity, source);
-    const association = associationFor(draft.entity, resolvedEntities);
-    // Resolve mentioned external users → linked Docket users, so the mention routes to whoever was
-    // actually named (the integration-owner fallback below still applies for unlinked participants).
-    const externalRecipients = await resolveLinkedIdentityRecipients(
-      source,
-      draft.participants,
-      kind.data,
-    );
-    // Resolved outside the transaction (like externalRecipients above): read-only Docket-actor
-    // lookups, not part of the event write's atomicity.
-    const actorRef = await toActorRef(orgId, draft.actor, source);
-    const participantRefs = (
-      await Promise.all((draft.participants ?? []).map((p) => toActorRef(orgId, p, source)))
-    ).filter((ref): ref is ActorRef => ref !== null);
-
-    // Insert + fan-out in one transaction (the routing Strategy writes the recipient rows).
-    const result = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .insert(event)
-        .values({
-          organizationId: orgId,
-          userId,
-          sourceSystem: source,
-          integrationId: ev.integrationId,
-          externalUrl: draft.permalink ?? null,
-          kind: kind.data,
-          occurredAt,
-          title: draft.title,
-          summary: draft.summary ?? null,
-          permalink: draft.permalink ?? null,
-          actor: actorRef,
-          entity: entityRef,
-          entityKind,
-          entityAssociation: association.state,
-          docketEntityId: association.docketEntityId,
-          participants: participantRefs,
-          detail: draft.detail ?? null,
-          sourceEventId: ev.id,
-          externalId: draft.externalId ?? null,
-          dedupeKey: draft.dedupeKey,
-        })
-        .onConflictDoNothing({ target: [event.organizationId, event.dedupeKey] })
-        .returning({ id: event.id });
-
-      if (!row) return null; // duplicate — already recorded
-
-      // The resolved association is what lets `OWNER_RULES` run at all: they query a Docket row
-      // by id, and until now every external event handed them null. An assignee, lead or creator
-      // who was only ever told about Docket-side changes now hears about the upstream ones too.
-      const routableEntity: RoutableEntity | null = entityRef
-        ? {
-            kind: entityRef.kind,
-            source: entityRef.source,
-            externalId: entityRef.externalId,
-            docketEntityId: association.docketEntityId,
-          }
-        : null;
-      const recipients = await routeAndWriteRecipients(
-        tx,
-        row.id,
-        {
-          organizationId: orgId,
-          kind: kind.data,
-          entity: routableEntity,
-          ownerUserId: userId,
-          externalRecipients,
-        },
-        occurredAt,
-      );
-      return { eventId: row.id, recipients };
-    });
-
-    if (result) {
-      created += 1;
-      if (association.state === 'matched') associated += 1;
-      recipientsWritten += result.recipients.size;
-      // Association resolved this event to a Docket entity, so the entity's search document is
-      // now stale — external activity refreshing the thing it concerns is the first consumer to
-      // act on the resolved id.
-      const entityReindexTarget = eventSearchReindexTarget(entityKind, association.docketEntityId);
-      await enqueueSearchIndexJobs([
-        {
-          organizationId: orgId,
-          userId,
-          sourceTable: 'event',
-          entityId: result.eventId,
-          operation: 'upsert',
-          reason: 'event_log',
-          sourceEventId: result.eventId,
-        },
-        ...(entityReindexTarget
-          ? [
-              {
-                organizationId: orgId,
-                sourceTable: entityReindexTarget.sourceTable,
-                entityId: entityReindexTarget.entityId,
-                operation: 'upsert' as const,
-                reason: 'event_log' as const,
-                sourceEventId: result.eventId,
-              },
-            ]
-          : []),
-      ]);
-      const recipients = [...result.recipients].map(([uid, reason]) => ({ userId: uid, reason }));
-      await publishEvent(result.eventId, recipients).catch(() => undefined);
-      // Observer hook: external events trigger automation rules too. Never throws — an
-      // automation failure must not fail the drain row (it still transitions to processed).
-      await runAutomationsForEvent(
-        projectInboundDraft({
-          organizationId: orgId,
-          kind: kind.data,
-          source,
-          entityKind,
-          // Rules can finally address the Docket entity an external event is about. This widens
-          // the shipped "archive the email when its task is completed" rule to reach completions
-          // that happened in Linear or GitHub: the task is a mirror of that issue, so closing it
-          // upstream is closing it. See `docs/engineering/hub-architecture.md`, which traces
-          // `Linear → event → task → attachment → Gmail` as the intended path.
-          docketEntityId: association.docketEntityId,
-          // The subject's own external id and permalink, which is what lets a rule route an
-          // external item that resolved to no Docket entity at all into a task, and lets a
-          // later event about the SAME item (a PR opened, then closed) find that task instead
-          // of creating a second one. `draft.externalId` is the delivery's id; the entity ref
-          // is the item's, so the entity wins when both are present.
-          externalId: draft.entity?.externalId ?? draft.externalId ?? null,
-          externalUrl: entityRef?.url ?? draft.permalink ?? null,
-          title: draft.title,
-          detail: draft.detail ?? null,
-          occurredAt,
-        }),
-      );
-    }
-  }
+  const tally = await writeEventDrafts(drafts, {
+    organizationId: orgId,
+    userId,
+    sourceSystem: source,
+    integrationId: ev.integrationId,
+    sourceEventId: ev.id,
+  });
 
   await db
     .update(inboundEvent)
     .set({ status: 'processed', processedAt: now })
     .where(eq(inboundEvent.id, ev.id));
-  return { events: created, associated, recipients: recipientsWritten };
+  return tally;
 }
 
 /**

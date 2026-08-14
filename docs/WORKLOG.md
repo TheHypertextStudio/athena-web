@@ -5120,6 +5120,42 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   button to another page is two controls spent saying "not here"; moving the editor to where the
   value is displayed removes both and the caption between them.
 
+### [WORK-LOCATION-001] One answer for current and expected work location
+
+- **Completed**: 2026-08-14
+- **Duration**: 2 days
+- **Priority**: P1
+- **Summary**: Added a user-scoped canonical work-location domain that independently resolves
+  current evidence and expected schedules. People can save any number of arbitrary regular places;
+  an optional singular home designation is stored separately from place identity, while Google
+  home, office, and custom classifications are per-account projection mappings. The service now
+  owns full-day and partial-day schedules, weekly recurrence and exceptions, manual and foreground
+  device evidence, planning bindings, deterministic resolution, durable multi-account Google
+  import/projection, actionable sync states, personal export and deletion, and shared Agenda,
+  Calendar, and settings surfaces.
+- **Files Changed**: Work-location contracts and validation in `packages/types`; Drizzle schemas and
+  migration in `packages/db`; canonical repositories, resolution, provider mapping, sync workers,
+  routes, export/deletion, scheduling, and calendar integration in `apps/api`; saved-place,
+  schedule, foreground-device, current-override, sync-status, and shared location-strip surfaces in
+  `apps/web`; deployment, provider research, design, worklog, and focused unit, integration, web,
+  and Playwright coverage.
+- **Validation**: `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` pass across the
+  repository. The focused Chromium journey at
+  `apps/web/e2e/settings/work-locations.spec.ts` also passes against the local HTTPS application.
+- **Learnings**: A place is a durable user-owned identity, not a provider vocabulary value. Home is
+  useful as an optional profile relationship, while office/custom classifications belong at the
+  provider projection boundary. Keeping current evidence separate from expected schedule preserves
+  truthful provenance and prevents foreground device observations from becoming schedule events.
+- **Retrospective**:
+  - **What went well**: Contract-first recurrence, ownership, and convergence tests kept the
+    canonical model independent from Google while exercising the complete two-account journey.
+  - **What could improve**: The shared date and time primitives should have been selected before
+    the first settings pass; the final accessibility audit found and corrected those integrations.
+  - **What was learned**: Provider recurring masters and occurrence exceptions can remain lossless
+    only when stored as canonical series plus per-date changes instead of bounded materializations.
+  - **What should change**: New provider adapters should begin with the capability contract and
+    fixture suite, then add transport only after the mapping semantics are complete.
+
 ### [OBJECT-SURFACES-001] Make a thing behave like itself everywhere
 
 - **Completed**: 2026-08-11

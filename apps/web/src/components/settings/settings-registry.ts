@@ -24,6 +24,7 @@ import {
   LayoutTemplate,
   type LucideIcon,
   Link,
+  MapPin,
   Settings,
   Shield,
   Sparkles,
@@ -112,6 +113,13 @@ export const PERSONAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Set scheduling defaults and calendar sharing.',
     icon: Calendar,
     href: 'calendar',
+  },
+  {
+    key: 'work-locations',
+    label: 'Work locations',
+    description: 'Manage regular places, location schedules, and account sync.',
+    icon: MapPin,
+    href: 'work-locations',
   },
   {
     key: 'security',

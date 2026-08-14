@@ -255,6 +255,10 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
     load: async () => (await import('@/app/(app)/settings/security/page')).default,
   },
   {
+    pattern: '/settings/work-locations',
+    load: async () => (await import('@/app/(app)/settings/work-locations/page')).default,
+  },
+  {
     pattern: '/stream',
     load: async () => (await import('@/app/(app)/stream/page')).default,
   },

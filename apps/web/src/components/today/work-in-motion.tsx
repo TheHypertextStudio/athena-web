@@ -29,10 +29,7 @@ export default function WorkInMotion({ cards, orgName }: WorkInMotionProps): JSX
     <section aria-labelledby="work-in-motion-heading">
       <div className="mb-3 flex items-end justify-between gap-4">
         <div>
-          <h2
-            id="work-in-motion-heading"
-            className="text-on-surface text-title-large font-semibold"
-          >
+          <h2 id="work-in-motion-heading" className="text-on-surface text-title-large">
             Work in motion
           </h2>
           <p className="text-on-surface-variant text-body-small mt-0.5">
@@ -67,7 +64,7 @@ export default function WorkInMotion({ cards, orgName }: WorkInMotionProps): JSX
                   </p>
                   <Link
                     href={href}
-                    className="text-on-surface focus-visible:ring-ring mt-1 block font-semibold hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
+                    className="text-on-surface text-title-small focus-visible:ring-ring mt-1 block hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
                   >
                     {card.name}
                   </Link>
@@ -126,7 +123,7 @@ export default function WorkInMotion({ cards, orgName }: WorkInMotionProps): JSX
               <Link
                 href={href}
                 aria-label={`Open ${card.name}`}
-                className="text-primary focus-visible:ring-ring mt-3 flex min-h-11 items-center justify-end gap-1 text-sm font-medium focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
+                className="text-primary text-label-large focus-visible:ring-ring mt-3 flex min-h-11 items-center justify-end gap-1 focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
               >
                 Open {card.kind} <ArrowRight className="size-4" />
               </Link>

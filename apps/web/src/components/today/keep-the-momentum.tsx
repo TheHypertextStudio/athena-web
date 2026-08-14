@@ -44,7 +44,7 @@ export default function KeepTheMomentum({
           <Sparkles aria-hidden="true" className="size-4" />
         </span>
         <div>
-          <h2 id="momentum-heading" className="text-on-surface text-title-large font-semibold">
+          <h2 id="momentum-heading" className="text-on-surface text-title-large">
             Keep the momentum
           </h2>
           <p className="text-on-surface-variant text-body-medium mt-0.5">
@@ -63,7 +63,7 @@ export default function KeepTheMomentum({
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
                       href={`/orgs/${suggestion.organizationId}/tasks/${suggestion.id}`}
-                      className="text-on-surface focus-visible:ring-ring font-semibold hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
+                      className="text-on-surface text-title-small focus-visible:ring-ring hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
                     >
                       {suggestion.title}
                     </Link>
@@ -132,7 +132,7 @@ export default function KeepTheMomentum({
         </ul>
       ) : (
         <div className="mt-4 pl-12">
-          <p className="text-on-surface text-body-medium font-medium">
+          <p className="text-on-surface text-body-medium">
             {blockedPlan ? 'Nothing else fits around the block.' : 'You’re clear.'}
           </p>
           <p className="text-on-surface-variant text-body-small mt-1">

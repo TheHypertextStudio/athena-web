@@ -77,20 +77,18 @@ function FocusCard({
       aria-label={`${label}: ${item.title}`}
       className={
         primary
-          ? 'border-primary/25 bg-surface-container-lowest shadow-elevation-1 rounded-2xl border p-5 @xl:p-6'
+          ? 'border-primary/25 bg-surface-container-lowest rounded-2xl border p-5 @xl:p-6'
           : 'border-outline-variant bg-surface-container-low/55 rounded-xl border p-4 @xl:ml-8'
       }
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p
-            className={`${primary ? 'text-primary' : 'text-on-surface-variant'} text-label-large font-semibold`}
-          >
+          <p className={`${primary ? 'text-primary' : 'text-on-surface-variant'} text-label-large`}>
             {label}
           </p>
           <Link
             href={`/orgs/${item.organizationId}/tasks/${item.id}`}
-            className="text-on-surface focus-visible:ring-ring mt-1 block text-lg font-semibold text-balance hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
+            className="text-on-surface text-title-large focus-visible:ring-ring mt-1 block text-balance hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
           >
             {item.title}
           </Link>
@@ -288,7 +286,7 @@ export default function FocusSequence({
   if (!focus.now && !focus.after) return null;
   return (
     <section aria-labelledby="whats-next-heading" className="flex flex-col gap-3">
-      <h2 id="whats-next-heading" className="text-on-surface text-title-large font-semibold">
+      <h2 id="whats-next-heading" className="text-on-surface text-title-large">
         What’s next
       </h2>
       {focus.now ? (

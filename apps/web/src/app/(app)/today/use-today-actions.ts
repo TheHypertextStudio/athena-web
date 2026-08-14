@@ -8,6 +8,7 @@ import { useAgendaTimeboxMutation } from '@/components/agenda/agenda-timebox-mut
 import { CALENDAR_ITEMS_PREFIX } from '@/components/calendar/calendar-mutation-cache';
 import { useTimerControls } from '@/components/time-tracking/use-timer';
 import { api } from '@/lib/api';
+import { userErrorMessage } from '@/lib/problem';
 import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
 /** Inline actions available from Today without reproducing detailed workflows. */
@@ -220,7 +221,9 @@ export function useTodayActions(date: string): TodayActions {
   return {
     completing: completeMutation.isPending,
     suggestionBusy: addMutation.isPending || starting,
-    error: startError ?? (mutationError ? mutationError.message : null),
+    error:
+      startError ??
+      (mutationError ? userErrorMessage(mutationError, 'Could not update today.') : null),
     complete: (item) => {
       completeMutation.mutate(item);
     },

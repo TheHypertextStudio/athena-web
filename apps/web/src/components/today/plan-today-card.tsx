@@ -17,10 +17,10 @@ export default function PlanTodayCard({ onPlan }: PlanTodayCardProps): JSX.Eleme
       <div className="bg-primary/10 absolute -top-12 -right-10 size-32 rounded-full" aria-hidden />
       <div className="relative flex flex-col items-start justify-between gap-5 @xl:flex-row @xl:items-center">
         <div className="max-w-xl">
-          <p className="text-primary text-label-large mb-1 flex items-center gap-2 font-semibold">
+          <p className="text-primary text-label-large mb-1 flex items-center gap-2">
             <Sparkles aria-hidden="true" className="size-4" /> Athena can shape this day
           </p>
-          <h2 className="text-on-surface text-title-large font-semibold">Plan today with Athena</h2>
+          <h2 className="text-on-surface text-title-large">Plan today with Athena</h2>
           <p className="text-on-surface-variant text-body-medium mt-1.5">
             Fit priorities and deadlines around the time you actually have. Review the plan before
             anything changes.

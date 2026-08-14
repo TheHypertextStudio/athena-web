@@ -19,6 +19,7 @@ import {
   OrganizationId,
   TaskId,
   TeamId,
+  WorkPlaceId,
 } from './primitives';
 import { TaskOut } from './task';
 
@@ -410,6 +411,9 @@ export const CalendarItemOut = z
     title: z.string().describe('Item title.'),
     description: z.string().nullable().describe('Item description/body, if present.'),
     location: z.string().nullable().describe('Item location, if present.'),
+    workPlaceId: WorkPlaceId.nullable()
+      .default(null)
+      .describe('Canonical saved-place binding; independent of free-form display location text.'),
     htmlLink: z.url().nullable().describe('Provider deep link to the item, if applicable.'),
     startsAt: z.string().nullable().describe('Timed item start timestamp; null for all-day.'),
     endsAt: z.string().nullable().describe('Timed item end timestamp; null for all-day.'),
@@ -514,6 +518,7 @@ const CalendarItemCreateFields = z.object({
   title: z.string().min(1).describe('Block title. Required, non-empty.'),
   description: z.string().optional().describe('Optional description/body for the block.'),
   location: z.string().optional().describe('Optional location for the block.'),
+  workPlaceId: WorkPlaceId.optional().describe('Optional canonical saved-place binding.'),
   timezone: z.string().optional().describe('Optional timezone id for the block.'),
   endTimezone: z
     .string()
@@ -594,6 +599,9 @@ export const CalendarItemUpdate = z
       .describe(
         'New location. An empty string clears it (mapped to NULL server-side). Omit to leave unchanged.',
       ),
+    workPlaceId: WorkPlaceId.nullable()
+      .optional()
+      .describe('New canonical saved-place binding; null clears it.'),
     timezone: z.string().optional().describe('New timezone id. Omit to leave unchanged.'),
     endTimezone: z
       .string()
@@ -624,6 +632,7 @@ export const CalendarItemUpdate = z
       v.title !== undefined ||
       v.description !== undefined ||
       v.location !== undefined ||
+      v.workPlaceId !== undefined ||
       v.timezone !== undefined ||
       v.endTimezone !== undefined ||
       v.startsAt !== undefined ||

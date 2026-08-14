@@ -18,4 +18,5 @@ projects
 takeout
 time
 ui
+work-location
 web

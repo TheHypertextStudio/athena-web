@@ -31,6 +31,15 @@ import {
   organization,
   streamSubscription,
   user,
+  workLocationAssertion,
+  workLocationException,
+  workLocationExternalBinding,
+  workLocationObservation,
+  workLocationProfile,
+  workLocationSyncAccount,
+  workLocationWrite,
+  workPlace,
+  workPlaceProviderMapping,
 } from '@docket/db';
 import { and, eq, inArray, lte } from 'drizzle-orm';
 
@@ -138,34 +147,83 @@ export async function collectAccountExport(
       orgs.map(async (org) => ({ organization: org, work: await collectWorkLayer(org.id, db) })),
     ),
     (async () => {
-      const [planItems, notifications, events, recipients, digests, days, follows] =
-        await Promise.all([
-          hubId
-            ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
-            : Promise.resolve([]),
-          includesPersonal
-            ? db.select().from(notification).where(eq(notification.userId, userId))
-            : [],
-          includesPersonal ? db.select().from(event).where(eq(event.userId, userId)) : [],
-          includesPersonal
-            ? db.select().from(eventRecipient).where(eq(eventRecipient.userId, userId))
-            : [],
-          includesPersonal
-            ? db.select().from(dailyDigest).where(eq(dailyDigest.userId, userId))
-            : [],
-          // The narrated day and its highlights, because `edited_narration` is the person's own
-          // writing about their own work — the clearest case there is of content an export owes them.
-          includesPersonal
-            ? db
-                .select()
-                .from(activityDay)
-                .leftJoin(activityHighlight, eq(activityHighlight.activityDayId, activityDay.id))
-                .where(eq(activityDay.userId, userId))
-            : [],
-          includesPersonal
-            ? db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId))
-            : [],
-        ]);
+      const [
+        planItems,
+        notifications,
+        events,
+        recipients,
+        digests,
+        days,
+        follows,
+        places,
+        locationProfiles,
+        locationAssertions,
+        locationExceptions,
+        locationObservations,
+        placeProviderMappings,
+        locationSyncAccounts,
+        locationExternalBindings,
+        locationWrites,
+      ] = await Promise.all([
+        hubId
+          ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
+          : Promise.resolve([]),
+        includesPersonal
+          ? db.select().from(notification).where(eq(notification.userId, userId))
+          : [],
+        includesPersonal ? db.select().from(event).where(eq(event.userId, userId)) : [],
+        includesPersonal
+          ? db.select().from(eventRecipient).where(eq(eventRecipient.userId, userId))
+          : [],
+        includesPersonal ? db.select().from(dailyDigest).where(eq(dailyDigest.userId, userId)) : [],
+        // The narrated day and its highlights, because `edited_narration` is the person's own
+        // writing about their own work — the clearest case there is of content an export owes them.
+        includesPersonal
+          ? db
+              .select()
+              .from(activityDay)
+              .leftJoin(activityHighlight, eq(activityHighlight.activityDayId, activityDay.id))
+              .where(eq(activityDay.userId, userId))
+          : [],
+        includesPersonal
+          ? db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId))
+          : [],
+        hubId ? db.select().from(workPlace).where(eq(workPlace.hubId, hubId)) : [],
+        hubId
+          ? db.select().from(workLocationProfile).where(eq(workLocationProfile.hubId, hubId))
+          : [],
+        hubId
+          ? db.select().from(workLocationAssertion).where(eq(workLocationAssertion.hubId, hubId))
+          : [],
+        hubId
+          ? db.select().from(workLocationException).where(eq(workLocationException.hubId, hubId))
+          : [],
+        hubId
+          ? db
+              .select()
+              .from(workLocationObservation)
+              .where(eq(workLocationObservation.hubId, hubId))
+          : [],
+        hubId
+          ? db
+              .select()
+              .from(workPlaceProviderMapping)
+              .where(eq(workPlaceProviderMapping.hubId, hubId))
+          : [],
+        hubId
+          ? db
+              .select()
+              .from(workLocationSyncAccount)
+              .where(eq(workLocationSyncAccount.hubId, hubId))
+          : [],
+        hubId
+          ? db
+              .select()
+              .from(workLocationExternalBinding)
+              .where(eq(workLocationExternalBinding.hubId, hubId))
+          : [],
+        hubId ? db.select().from(workLocationWrite).where(eq(workLocationWrite.hubId, hubId)) : [],
+      ]);
       return {
         hub: hubRow ?? null,
         dailyPlan: planItems,
@@ -175,12 +233,23 @@ export async function collectAccountExport(
         dailyDigests: digests,
         activityDays: days,
         streamSubscriptions: follows,
+        workLocation: {
+          places,
+          profiles: locationProfiles,
+          assertions: locationAssertions,
+          exceptions: locationExceptions,
+          observations: locationObservations,
+          providerMappings: placeProviderMappings,
+          syncAccounts: locationSyncAccounts,
+          externalBindings: locationExternalBindings,
+          writes: locationWrites,
+        },
       };
     })(),
   ]);
 
   const document = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     identity: includesAccount
       ? { user: userRow ?? null, linkedAccounts: identities, connectedApps: consents }
       : null,

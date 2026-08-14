@@ -6,6 +6,7 @@ import {
   scheduleOverlapHorizontalStyle,
 } from '@/components/scheduling/scheduling-overlap-layout';
 import { quadraticOverlapLayoutOracle } from './scheduling-overlap-layout-oracle';
+import { assertDefined } from '@docket/test-utils';
 
 const STANDARD_PIXELS_PER_HOUR = 60;
 const MINIMUM_INTERACTIVE_PIXELS = 18;
@@ -182,7 +183,11 @@ describe('layoutScheduleOverlaps', () => {
       expected,
     );
     expect(
-      layoutScheduleOverlaps([inputs[1]!, inputs[2]!, inputs[0]!], STANDARD_PIXELS_PER_HOUR, 0),
+      layoutScheduleOverlaps(
+        [assertDefined(inputs[1]), assertDefined(inputs[2]), assertDefined(inputs[0])],
+        STANDARD_PIXELS_PER_HOUR,
+        0,
+      ),
     ).toEqual(expected);
   });
 
@@ -416,7 +421,12 @@ describe('layoutScheduleOverlaps', () => {
     ).toEqual(expected);
     expect(
       layoutScheduleOverlaps(
-        [inputs[2]!, inputs[0]!, inputs[3]!, inputs[1]!],
+        [
+          assertDefined(inputs[2]),
+          assertDefined(inputs[0]),
+          assertDefined(inputs[3]),
+          assertDefined(inputs[1]),
+        ],
         STANDARD_PIXELS_PER_HOUR,
         MINIMUM_INTERACTIVE_PIXELS,
       ),

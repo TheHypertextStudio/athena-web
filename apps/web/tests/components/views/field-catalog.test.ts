@@ -27,6 +27,7 @@ import {
   optionsFor,
   sortableFields,
 } from '../../../src/components/views/field-catalog';
+import { assertDefined } from '@docket/test-utils';
 
 /** A row type for the fixtures. */
 interface Row {
@@ -92,9 +93,9 @@ describe('field partitions', () => {
 
 describe('optionsFor', () => {
   it('prefers sync options, falls back to a lazy resolver, else empty', () => {
-    const statusField = findField(catalog, 'status')!;
-    const leadField = findField(catalog, 'leadId')!;
-    const nameField = findField(catalog, 'name')!;
+    const statusField = assertDefined(findField(catalog, 'status'));
+    const leadField = assertDefined(findField(catalog, 'leadId'));
+    const nameField = assertDefined(findField(catalog, 'name'));
     expect(optionsFor(statusField).map((o) => o.value)).toEqual(['active']);
     expect(optionsFor(leadField).map((o) => o.value)).toEqual(['u1']);
     expect(optionsFor(nameField)).toEqual([]);
@@ -103,9 +104,9 @@ describe('optionsFor', () => {
 
 describe('labelForValue', () => {
   it('resolves through an explicit resolver, then an option label, then the raw value', () => {
-    const statusField = findField(catalog, 'status')!;
+    const statusField = assertDefined(findField(catalog, 'status'));
     const leadField: FieldDescriptor<Row> = {
-      ...findField(catalog, 'leadId')!,
+      ...assertDefined(findField(catalog, 'leadId')),
       resolveLabel: (v) => (v === 'u1' ? 'Ada' : v),
     };
     expect(labelForValue(statusField, 'active')).toBe('Active');

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { EMPTY_VIEW_STATE, type ViewState } from '@/components/views/field-catalog';
 import { streamQueryFromViewState, streamQueryKeyPart } from '@/components/stream/stream-query';
+import { assertDefined } from '@docket/test-utils';
 
 function decode(filter: string): unknown {
   return JSON.parse(Buffer.from(filter, 'base64url').toString('utf8'));
@@ -20,7 +21,7 @@ describe('streamQueryFromViewState', () => {
     };
     const params = streamQueryFromViewState(state);
     expect(params.filter).toBeDefined();
-    expect(decode(params.filter!)).toEqual([
+    expect(decode(assertDefined(params.filter))).toEqual([
       { field: 'system', op: 'in', value: ['linear', 'slack'] },
     ]);
   });
@@ -41,7 +42,7 @@ describe('streamQueryFromViewState', () => {
       sort: [],
     };
     const params = streamQueryFromViewState(state);
-    expect(decode(params.filter!)).toEqual([
+    expect(decode(assertDefined(params.filter))).toEqual([
       { field: 'actor', op: 'contains', value: 'Mañana 🌮' },
     ]);
   });

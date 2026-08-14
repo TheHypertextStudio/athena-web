@@ -91,6 +91,7 @@ import {
 } from '../../src/app/(app)/calendar/calendar-shared-item-details';
 import type { CalendarDateAxisState } from '../../src/app/(app)/calendar/use-calendar-date-axis';
 import type { CalendarPeopleAxisState } from '../../src/app/(app)/calendar/use-calendar-people-axis';
+import { assertDefined } from '@docket/test-utils';
 
 const ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
@@ -318,7 +319,7 @@ function renderSurface(
 
 /** Return the latest props received by the callback-driven canvas mock. */
 function canvasProps(): SchedulingCanvasProps {
-  return canvas.props!;
+  return assertDefined(canvas.props);
 }
 
 beforeEach(() => {
@@ -402,9 +403,9 @@ describe('CalendarSchedulingSurface persistence', () => {
     const source = { ...calendarItem(), syncState };
     renderSurface('dates', source);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
     const content = props.renderItem?.({
-      item: lane.items[0]!,
+      item: assertDefined(lane.items[0]),
       lane,
       allDay: false,
       density: 'full',
@@ -422,9 +423,9 @@ describe('CalendarSchedulingSurface persistence', () => {
     const source = { ...calendarItem(), syncState: 'clean' as const };
     renderSurface('dates', source);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
     const content = props.renderItem?.({
-      item: lane.items[0]!,
+      item: assertDefined(lane.items[0]),
       lane,
       allDay: false,
       density: 'full',
@@ -441,9 +442,9 @@ describe('CalendarSchedulingSurface persistence', () => {
     const source = { ...calendarItem(), syncState: 'provider_error' as const };
     renderSurface('dates', source);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
     const content = props.renderItem?.({
-      item: lane.items[0]!,
+      item: assertDefined(lane.items[0]),
       lane,
       allDay: false,
       density: 'compact',
@@ -498,10 +499,10 @@ describe('CalendarSchedulingSurface persistence', () => {
       };
       renderSurface('dates', source);
       const props = canvasProps();
-      const lane = props.lanes[0]!;
+      const lane = assertDefined(props.lanes[0]);
 
       const action = props.renderItemAction?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         lane,
         allDay: false,
         density: 'full',
@@ -519,10 +520,10 @@ describe('CalendarSchedulingSurface persistence', () => {
       };
       renderSurface('dates', source);
       const props = canvasProps();
-      const lane = props.lanes[0]!;
+      const lane = assertDefined(props.lanes[0]);
 
       const action = props.renderItemAction?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         lane,
         allDay: false,
         density: 'full',
@@ -535,9 +536,14 @@ describe('CalendarSchedulingSurface persistence', () => {
     it('renders no timer control for a non-task-shaped item, a task-shaped item with no linked task, or a link that is not contained', () => {
       renderSurface(); // default fixture is a plain native_event
       let props = canvasProps();
-      let lane = props.lanes[0]!;
+      let lane = assertDefined(props.lanes[0]);
       expect(
-        props.renderItemAction?.({ item: lane.items[0]!, lane, allDay: false, density: 'full' }),
+        props.renderItemAction?.({
+          item: assertDefined(lane.items[0]),
+          lane,
+          allDay: false,
+          density: 'full',
+        }),
       ).toBeNull();
 
       cleanup();
@@ -548,9 +554,14 @@ describe('CalendarSchedulingSurface persistence', () => {
       };
       renderSurface('dates', timeboxNoTask);
       props = canvasProps();
-      lane = props.lanes[0]!;
+      lane = assertDefined(props.lanes[0]);
       expect(
-        props.renderItemAction?.({ item: lane.items[0]!, lane, allDay: false, density: 'full' }),
+        props.renderItemAction?.({
+          item: assertDefined(lane.items[0]),
+          lane,
+          allDay: false,
+          density: 'full',
+        }),
       ).toBeNull();
 
       cleanup();
@@ -561,9 +572,14 @@ describe('CalendarSchedulingSurface persistence', () => {
       };
       renderSurface('dates', relatedOnly);
       props = canvasProps();
-      lane = props.lanes[0]!;
+      lane = assertDefined(props.lanes[0]);
       expect(
-        props.renderItemAction?.({ item: lane.items[0]!, lane, allDay: false, density: 'full' }),
+        props.renderItemAction?.({
+          item: assertDefined(lane.items[0]),
+          lane,
+          allDay: false,
+          density: 'full',
+        }),
       ).toBeNull();
     });
 
@@ -576,9 +592,9 @@ describe('CalendarSchedulingSurface persistence', () => {
       };
       const { onOpenItem } = renderSurface('dates', source);
       const props = canvasProps();
-      const lane = props.lanes[0]!;
+      const lane = assertDefined(props.lanes[0]);
       const action = props.renderItemAction?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         lane,
         allDay: false,
         density: 'full',
@@ -626,8 +642,8 @@ describe('CalendarSchedulingSurface persistence', () => {
   it('converts exact LA move and both resize payloads through the display timezone', () => {
     renderSurface();
     const props = canvasProps();
-    const item = props.lanes[0]!.items[0]!;
-    const july13 = props.lanes[0]!;
+    const item = assertDefined(assertDefined(props.lanes[0]).items[0]);
+    const july13 = assertDefined(props.lanes[0]);
     const july14: ScheduleLane = { ...july13, id: 'date:2026-07-14', date: '2026-07-14' };
 
     act(() => {
@@ -684,8 +700,8 @@ describe('CalendarSchedulingSurface persistence', () => {
     expect(canvasProps().onResizeItem).toBeUndefined();
 
     act(() => {
-      const lane = canvasProps().lanes[0]!;
-      canvasProps().onOpenItem?.({ item: lane.items[0]!, lane });
+      const lane = assertDefined(canvasProps().lanes[0]);
+      canvasProps().onOpenItem?.({ item: assertDefined(lane.items[0]), lane });
     });
 
     const dialog = screen.getByRole('dialog', { name: 'Shared detail' });
@@ -706,8 +722,8 @@ describe('CalendarSchedulingSurface persistence', () => {
     const { onOpenItem, onOpenSharedItem } = renderSurface('people');
 
     act(() => {
-      const lane = canvasProps().lanes[0]!;
-      canvasProps().onOpenItem?.({ item: lane.items[1]!, lane });
+      const lane = assertDefined(canvasProps().lanes[0]);
+      canvasProps().onOpenItem?.({ item: assertDefined(lane.items[1]), lane });
     });
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -808,10 +824,10 @@ describe('CalendarSchedulingSurface persistence', () => {
     multiDay.endsAt = '2026-07-14T08:30:00Z';
     renderSurface('dates', multiDay);
     let props = canvasProps();
-    let lane = props.lanes[0]!;
+    let lane = assertDefined(props.lanes[0]);
     act(() => {
       props.onMoveItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: lane,
         startMinutes: 600,
@@ -835,10 +851,10 @@ describe('CalendarSchedulingSurface persistence', () => {
     allDay.allDayEndDate = '2026-07-14';
     renderSurface('dates', allDay);
     props = canvasProps();
-    lane = props.lanes[0]!;
+    lane = assertDefined(props.lanes[0]);
     act(() => {
       props.onResizeItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         lane,
         edge: 'end',
         startMinutes: 0,
@@ -849,7 +865,7 @@ describe('CalendarSchedulingSurface persistence', () => {
 
     act(() => {
       props.onMoveAllDayItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: { ...lane, id: 'date:2026-07-14', date: '2026-07-14' },
         startDate: '2026-07-14',
@@ -878,11 +894,11 @@ describe('CalendarSchedulingSurface persistence', () => {
     };
     renderSurface('dates', allDay);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onMoveAllDayItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: { ...lane, id: 'date:2026-07-14', date: '2026-07-14' },
         startDate: '2026-07-14',
@@ -899,11 +915,11 @@ describe('CalendarSchedulingSurface persistence', () => {
     overnight.endsAt = '2026-07-14T08:30:00Z';
     renderSurface('dates', overnight, '2026-07-14');
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onResizeItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         lane,
         edge: 'end',
         startMinutes: 0,
@@ -926,11 +942,11 @@ describe('CalendarSchedulingSurface persistence', () => {
     endingAtMidnight.endsAt = '2026-07-14T06:00:00Z';
     renderSurface('dates', endingAtMidnight);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onMoveItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: lane,
         startMinutes: 23 * 60,
@@ -953,11 +969,11 @@ describe('CalendarSchedulingSurface persistence', () => {
     laterFold.endsAt = '2026-11-01T10:30:00Z';
     renderSurface('dates', laterFold, '2026-11-01');
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onResizeItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         lane,
         edge: 'end',
         startMinutes: 90,
@@ -977,10 +993,10 @@ describe('CalendarSchedulingSurface persistence', () => {
     fold.endsAt = '2026-11-01T10:30:00Z';
     renderSurface('dates', fold, '2026-11-01');
     let props = canvasProps();
-    let lane = props.lanes[0]!;
+    let lane = assertDefined(props.lanes[0]);
     act(() => {
       props.onMoveItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: lane,
         startMinutes: 75,
@@ -999,10 +1015,10 @@ describe('CalendarSchedulingSurface persistence', () => {
     spring.endsAt = '2026-03-08T10:00:00Z';
     renderSurface('dates', spring, '2026-03-08');
     props = canvasProps();
-    lane = props.lanes[0]!;
+    lane = assertDefined(props.lanes[0]);
     act(() => {
       props.onResizeItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         lane,
         edge: 'start',
         startMinutes: 150,
@@ -1018,11 +1034,11 @@ describe('CalendarSchedulingSurface persistence', () => {
     ordinary.endsAt = '2026-11-01T08:00:00Z';
     renderSurface('dates', ordinary, '2026-11-01');
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onMoveItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: lane,
         startMinutes: 90,
@@ -1037,7 +1053,11 @@ describe('CalendarSchedulingSurface persistence', () => {
     const { onSelectRegion } = renderSurface();
     let props = canvasProps();
     act(() => {
-      props.onSelectRegion?.({ lane: props.lanes[0]!, startMinutes: 540, endMinutes: 600 });
+      props.onSelectRegion?.({
+        lane: assertDefined(props.lanes[0]),
+        startMinutes: 540,
+        endMinutes: 600,
+      });
     });
     expect(onSelectRegion).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1055,7 +1075,11 @@ describe('CalendarSchedulingSurface persistence', () => {
     const spring = renderSurface('dates', calendarItem(), '2026-03-08');
     props = canvasProps();
     act(() => {
-      props.onSelectRegion?.({ lane: props.lanes[0]!, startMinutes: 150, endMinutes: 180 });
+      props.onSelectRegion?.({
+        lane: assertDefined(props.lanes[0]),
+        startMinutes: 150,
+        endMinutes: 180,
+      });
     });
     expect(spring.onSelectRegion).not.toHaveBeenCalled();
 
@@ -1063,7 +1087,11 @@ describe('CalendarSchedulingSurface persistence', () => {
     const fold = renderSurface('dates', calendarItem(), '2026-11-01');
     props = canvasProps();
     act(() => {
-      props.onSelectRegion?.({ lane: props.lanes[0]!, startMinutes: 90, endMinutes: 150 });
+      props.onSelectRegion?.({
+        lane: assertDefined(props.lanes[0]),
+        startMinutes: 90,
+        endMinutes: 150,
+      });
     });
     expect(fold.onSelectRegion).not.toHaveBeenCalled();
   });
@@ -1082,8 +1110,8 @@ describe('CalendarSchedulingSurface persistence', () => {
           organizationId: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
           title: 'Draft launch memo',
         },
-        targetItem: props.lanes[0]!.items[0]!,
-        targetLane: props.lanes[0]!,
+        targetItem: assertDefined(assertDefined(props.lanes[0]).items[0]),
+        targetLane: assertDefined(props.lanes[0]),
       });
     });
 
@@ -1106,8 +1134,8 @@ describe('CalendarSchedulingSurface persistence', () => {
           organizationId: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
           title: 'Draft launch memo',
         },
-        targetItem: props.lanes[0]!.items[0]!,
-        targetLane: props.lanes[0]!,
+        targetItem: assertDefined(assertDefined(props.lanes[0]).items[0]),
+        targetLane: assertDefined(props.lanes[0]),
       });
     });
     expect(mutationState.link.mutate).not.toHaveBeenCalled();
@@ -1118,8 +1146,8 @@ describe('CalendarSchedulingSurface persistence', () => {
     act(() => {
       props.onDropObjectOnItem?.({
         object: { kind: 'calendar_item', itemId: ITEM_ID, title: 'Planning session' },
-        targetItem: props.lanes[0]!.items[0]!,
-        targetLane: props.lanes[0]!,
+        targetItem: assertDefined(assertDefined(props.lanes[0]).items[0]),
+        targetLane: assertDefined(props.lanes[0]),
       });
     });
     expect(mutationState.relate.mutate).not.toHaveBeenCalled();

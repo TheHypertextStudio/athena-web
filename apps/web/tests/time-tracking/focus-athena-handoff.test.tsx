@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { FocusAthenaTransport } from '@/components/time-tracking/focus-athena-handoff';
 import type { PersonalAthenaSessionDetail } from '@/lib/athena/presentation';
+import { assertDefined } from '@docket/test-utils';
 
 const { default: FocusAthenaHandoff, FOCUS_ATHENA_HANDOFF_KEY } =
   await import('@/components/time-tracking/focus-athena-handoff');
@@ -76,7 +77,7 @@ describe('FocusAthenaHandoff', () => {
     fireEvent.change(field, {
       target: { value: 'I just remembered I need to create a dentist appointment' },
     });
-    fireEvent.submit(field.closest('form')!);
+    fireEvent.submit(assertDefined(field.closest('form')));
 
     await waitFor(() => {
       expect(transport.create).toHaveBeenCalledWith({
@@ -127,7 +128,7 @@ describe('FocusAthenaHandoff', () => {
     renderHandoff(status);
     const field = screen.getByRole('textbox', { name: 'Hand something to Athena' });
     fireEvent.change(field, { target: { value: 'Remember this' } });
-    fireEvent.submit(field.closest('form')!);
+    fireEvent.submit(assertDefined(field.closest('form')));
 
     expect(await screen.findByText(receipt)).toBeInTheDocument();
     expect(screen.queryByText(/Raw provider/)).toBeNull();

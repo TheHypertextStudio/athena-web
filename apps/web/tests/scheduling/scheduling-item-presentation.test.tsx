@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SchedulingCanvas, type ScheduleItem, type ScheduleLane } from '@/components/scheduling';
+import { assertDefined } from '@docket/test-utils';
 
 function item(id: string, title: string): ScheduleItem {
   return {
@@ -95,9 +96,9 @@ describe('SchedulingCanvas item presentation', () => {
       />,
     );
 
-    const card = document.querySelector<HTMLElement>('[data-schedule-item="focus"]')!;
-    const surface = card.querySelector<HTMLElement>('[data-schedule-item-surface]')!;
-    const accent = card.querySelector<HTMLElement>('[data-schedule-item-accent]')!;
+    const card = assertDefined(document.querySelector<HTMLElement>('[data-schedule-item="focus"]'));
+    const surface = assertDefined(card.querySelector<HTMLElement>('[data-schedule-item-surface]'));
+    const accent = assertDefined(card.querySelector<HTMLElement>('[data-schedule-item-accent]'));
     expect(surface).toHaveClass('bottom-px');
     expect(accent).toHaveStyle({ width: '2px' });
     expect(card.style.borderLeftWidth).toBe('');

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { parsePrefix, useLabelPaletteMode } from '@/components/command-palette/sub-modes';
 import { makeQueryWrapper } from '../../support/query';
+import { assertDefined } from '@docket/test-utils';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -95,7 +96,7 @@ describe('useLabelPaletteMode', () => {
     });
     expect(result.current.items[0]).toMatchObject({ label: 'Bug' });
 
-    result.current.items[0]!.run();
+    assertDefined(result.current.items[0]).run();
     expect(close).toHaveBeenCalledOnce();
     vi.doUnmock('@/lib/api');
   });
@@ -189,7 +190,7 @@ describe('useLabelPaletteMode', () => {
     await waitFor(() => {
       expect(result.current.items).toHaveLength(1);
     });
-    const icon = result.current.items[0]!.icon;
+    const icon = assertDefined(result.current.items[0]).icon;
     // A rendered swatch node, not a `LucideIcon` component reference.
     expect(typeof icon).not.toBe('function');
     expect(icon).toMatchObject({ props: { style: { background: '#ef4444' } } });

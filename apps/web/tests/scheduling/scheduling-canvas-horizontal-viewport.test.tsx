@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SchedulingCanvas, type ScheduleItem, type ScheduleLane } from '@/components/scheduling';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * Locate one lane's sticky header cell by lane id.
@@ -255,7 +256,7 @@ describe('SchedulingCanvas horizontal viewport', () => {
     const viewport = screen.getByRole('region', { name: 'Schedule' });
     // `.parentElement`: the label is a child span of the gutter cell, and the width is on the
     // cell. Reading it off the span gives `NaN`, which `toBe` then happily matches against `NaN`.
-    const gutter = screen.getByText('All day').parentElement!;
+    const gutter = assertDefined(screen.getByText('All day').parentElement);
     const anchorLane = laneHeader('anchor');
 
     const gutterWidth = Number.parseFloat(gutter.style.width);

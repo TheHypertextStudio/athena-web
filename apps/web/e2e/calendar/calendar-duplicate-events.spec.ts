@@ -26,6 +26,7 @@ import {
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
 import { scheduleItem } from '../helpers/calendar-ui';
 import { expect, test } from '../helpers/fixtures';
+import { assertDefined } from '@docket/test-utils';
 
 const ANCHOR_DATE = '2026-07-13';
 const WORK_LAYER = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVA1');
@@ -132,7 +133,7 @@ test('renders one block for an event that synced from two accounts, and says whe
   ).find((id) => id === WORK_COPY || id === PERSONAL_COPY);
   expect(survivor, 'one copy of the duplicated meeting survived').toBeDefined();
 
-  await scheduleItem(page, survivor!).body.click();
+  await scheduleItem(page, assertDefined(survivor)).body.click();
   const drawer = page.getByRole('dialog');
   await expect(drawer.getByRole('heading', { name: 'Also on' })).toBeVisible();
   await expect(

@@ -13,6 +13,7 @@ import { RP_ID } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { apiFetch, apiJson, waitForApiResponse } from '../helpers/net';
 import { installSignalSpy } from '../helpers/webauthn';
+import { assertDefined } from '@docket/test-utils';
 
 /** The passkey rows returned by `/api/auth/passkey/list-user-passkeys`. */
 interface PasskeyRow {
@@ -35,7 +36,7 @@ test.describe('passkey signal', () => {
     // 2. Capture the registered credential, then delete the passkey server-side.
     const before = await apiJson<PasskeyRow[]>(page, '/api/auth/passkey/list-user-passkeys');
     expect(before.length, 'expected a registered passkey').toBeGreaterThan(0);
-    const { id: passkeyRowId, credentialID: credentialId } = before[0]!;
+    const { id: passkeyRowId, credentialID: credentialId } = assertDefined(before[0]);
     expect(credentialId, 'passkey row missing credentialID').toBeTruthy();
 
     const del = await apiFetch(page, '/api/auth/passkey/delete-passkey', {

@@ -22,6 +22,7 @@ import {
   ResponsiveNavigationProvider,
   useResponsiveRouter,
 } from '../../src/lib/interactions/navigation';
+import { assertDefined } from '@docket/test-utils';
 
 /** The bar's element, or `null` when it is not showing. */
 function bar(): Element | null {
@@ -141,11 +142,11 @@ describe('NavigationProgress', () => {
     );
 
     const [first, second] = screen.getAllByRole('button', { name: 'go' });
-    fireEvent.click(first!);
+    fireEvent.click(assertDefined(first));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(120);
     });
-    fireEvent.click(second!);
+    fireEvent.click(assertDefined(second));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60);
     });

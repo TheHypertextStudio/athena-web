@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { arrangeDenseScheduleItems } from '@/components/scheduling/scheduling-dense-overflow';
 import { positionScheduleLaneItems } from '@/components/scheduling/scheduling-overlap-layout';
 import type { ScheduleItem, ScheduleLane } from '@/components/scheduling/scheduling-types';
+import { assertDefined } from '@docket/test-utils';
 
 /** Build one UTC item with deterministic wall-clock bounds. */
 function item(id: string, startsAt: string, endsAt: string): ScheduleItem {
@@ -118,8 +119,10 @@ describe('arrangeDenseScheduleItems', () => {
     );
 
     expect(result.overflowGroups[0]).toMatchObject({ top: 9 * 60, height: 18 });
-    expect(result.overflowGroups[0]!.top + result.overflowGroups[0]!.height).toBeLessThanOrEqual(
-      result.directItems.find(({ item: direct }) => direct.id === 'next')!.top,
+    expect(
+      assertDefined(result.overflowGroups[0]).top + assertDefined(result.overflowGroups[0]).height,
+    ).toBeLessThanOrEqual(
+      assertDefined(result.directItems.find(({ item: direct }) => direct.id === 'next')).top,
     );
   });
 

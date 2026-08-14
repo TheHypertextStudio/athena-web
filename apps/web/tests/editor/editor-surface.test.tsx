@@ -16,6 +16,7 @@ import { CommentActivityFeed } from '@/components/task-detail/CommentActivityFee
 
 import { makeQueryWrapper } from '../support/query';
 import { installProseMirrorLayoutShims } from './prosemirror-jsdom';
+import { assertDefined } from '@docket/test-utils';
 
 vi.mock('@/components/active-org', () => ({
   useOptionalActiveOrg: () => null,
@@ -183,7 +184,7 @@ describe('clicking an editor-shaped surface starts editing', () => {
   it('does not hijack a click that landed on the text itself', async () => {
     renderEditor(<EntityDocument value="A single line." canEdit onSave={vi.fn()} />);
     const surface = await screen.findByRole('textbox', { name: 'Description' });
-    const box = surface.closest('[data-editor-surface]')!;
+    const box = assertDefined(surface.closest('[data-editor-surface]'));
     const handler = vi.fn();
     box.addEventListener('mousedown', handler);
     fireEvent.mouseDown(surface);
@@ -310,7 +311,7 @@ describe('description edit sessions', () => {
 
     renderEditor(<LaggingControlledEditor />);
     const surface = await screen.findByRole('textbox', { name: 'Description' });
-    fireEvent.mouseDown(surface.closest<HTMLElement>('[data-editor-surface]')!);
+    fireEvent.mouseDown(assertDefined(surface.closest<HTMLElement>('[data-editor-surface]')));
     await waitFor(() => expect(surface).toHaveFocus());
     await user.keyboard(' final');
 
@@ -326,7 +327,7 @@ describe('description edit sessions', () => {
     renderEditor(<EntityDocument value="Persisted" canEdit onSave={onSave} />);
     const surface = await screen.findByRole('textbox', { name: 'Description' });
 
-    fireEvent.mouseDown(surface.closest<HTMLElement>('.entity-document')!);
+    fireEvent.mouseDown(assertDefined(surface.closest<HTMLElement>('.entity-document')));
     await waitFor(() => expect(surface).toHaveFocus());
     await user.keyboard(' final');
     expect(onSave).not.toHaveBeenCalled();
@@ -344,7 +345,7 @@ describe('description edit sessions', () => {
     const mounted = renderEditor(<EntityDocument value="Persisted" canEdit onSave={onSave} />);
     const surface = await screen.findByRole('textbox', { name: 'Description' });
 
-    fireEvent.mouseDown(surface.closest<HTMLElement>('.entity-document')!);
+    fireEvent.mouseDown(assertDefined(surface.closest<HTMLElement>('.entity-document')));
     await waitFor(() => expect(surface).toHaveFocus());
     await user.keyboard(' final');
     expect(onSave).not.toHaveBeenCalled();

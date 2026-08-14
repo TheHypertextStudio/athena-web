@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SchedulingCanvas, type ScheduleItem, type ScheduleLane } from '@/components/scheduling';
+import { assertDefined } from '@docket/test-utils';
 
 const OFFSITE: ScheduleItem = {
   id: 'offsite',
@@ -154,7 +155,9 @@ describe('SchedulingCanvas all-day pointer editing', () => {
         onMoveAllDayItem={onMoveAllDayItem}
       />,
     );
-    const sourceLane = document.querySelector(`[data-schedule-all-day-lane="${LANES[0]!.id}"]`);
+    const sourceLane = document.querySelector(
+      `[data-schedule-all-day-lane="${assertDefined(LANES[0]).id}"]`,
+    );
     if (!(sourceLane instanceof HTMLElement)) throw new Error('Missing source all-day lane');
     const body = within(sourceLane).getByRole('button', { name: 'Team offsite' });
     installPointerCapture(body);

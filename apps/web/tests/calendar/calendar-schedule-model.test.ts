@@ -20,6 +20,7 @@ import {
   itemBoundsInLane,
 } from '../../src/components/scheduling/scheduling-date-lanes';
 import { positionScheduleLaneItems } from '../../src/components/scheduling/scheduling-overlap-layout';
+import { assertDefined } from '@docket/test-utils';
 
 const ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
@@ -247,7 +248,7 @@ describe('calendar schedule timezone model', () => {
     });
     const dateLane = buildDateLane('2026-07-02', [timed], new Map(), 'Asia/Tokyo');
     expect(dateLane.items).toHaveLength(1);
-    expect(itemBoundsInLane(dateLane.items[0]!, dateLane, 'Asia/Tokyo')).toEqual({
+    expect(itemBoundsInLane(assertDefined(dateLane.items[0]), dateLane, 'Asia/Tokyo')).toEqual({
       startMinutes: 510,
       endMinutes: 570,
     });

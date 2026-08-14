@@ -16,6 +16,7 @@ import {
   type ScheduleItemRenderContext,
   type ScheduleLane,
 } from '@/components/scheduling';
+import { assertDefined } from '@docket/test-utils';
 
 const TIMED_ITEM: ScheduleItem = {
   id: 'focus',
@@ -275,8 +276,8 @@ describe('SchedulingCanvas', () => {
     expect(timedBody?.tagName).not.toBe('BUTTON');
     expect(allDayBody?.tagName).not.toBe('BUTTON');
     expect(timedBody).toHaveTextContent('Private timed block, 9:00 AM – 9:05 AM');
-    fireEvent.click(timedBody!);
-    fireEvent.click(allDayBody!);
+    fireEvent.click(assertDefined(timedBody));
+    fireEvent.click(assertDefined(allDayBody));
     expect(onOpenItem).not.toHaveBeenCalled();
   });
 
@@ -1728,7 +1729,7 @@ describe('SchedulingCanvas', () => {
         />,
       );
 
-      const firstItem = items[0]!;
+      const firstItem = assertDefined(items[0]);
       const firstCard = renderedItem(firstItem.id);
       expect(firstCard).toHaveAttribute('data-layout-column', '0');
       expect(firstCard).toHaveAttribute('data-layout-column-count', '2');
@@ -1942,7 +1943,7 @@ describe('SchedulingCanvas', () => {
     await user.keyboard('[Space]');
     await user.tab();
     expect(buttons[2]).toHaveFocus();
-    await user.click(buttons[2]!);
+    await user.click(assertDefined(buttons[2]));
 
     expect(onOpenItem).toHaveBeenCalledTimes(3);
     expect(onOpenItem.mock.calls.map(([request]) => request.item.id)).toEqual([

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildStreamGroups, isSubstantiveStreamEvent } from '@/components/stream/stream-grouping';
 import type { StreamEventRow } from '@/components/stream/stream-meta';
+import { assertDefined } from '@docket/test-utils';
 
 function row(
   id: string,
@@ -44,20 +45,21 @@ describe('buildStreamGroups episode boundaries', () => {
     const sameNewer = row('a-newer', '2026-06-29T12:00:00.000Z');
     const sameOlder = row('a-older', '2026-06-29T11:30:00.000Z');
     const groups = buildStreamGroups([sameNewer, sameOlder], NOW);
-    expect(groups[0]!.episodes).toHaveLength(1);
-    expect(groups[0]!.episodes[0]!.allEvents.map((event) => event.id)).toEqual([
-      'a-newer',
-      'a-older',
-    ]);
+    expect(assertDefined(groups[0]).episodes).toHaveLength(1);
+    expect(
+      assertDefined(assertDefined(groups[0]).episodes[0]).allEvents.map((event) => event.id),
+    ).toEqual(['a-newer', 'a-older']);
 
     const other = row('b', '2026-06-29T11:45:00.000Z', { entityDocketId: 'task_b' });
-    expect(buildStreamGroups([sameNewer, other, sameOlder], NOW)[0]!.episodes).toHaveLength(3);
+    expect(
+      assertDefined(buildStreamGroups([sameNewer, other, sameOlder], NOW)[0]).episodes,
+    ).toHaveLength(3);
   });
 
   it('closes an episode after a two-hour adjacent gap', () => {
     const newer = row('newer', '2026-06-29T12:00:00.000Z');
     const older = row('older', '2026-06-29T08:59:59.000Z');
-    expect(buildStreamGroups([newer, older], NOW)[0]!.episodes).toHaveLength(2);
+    expect(assertDefined(buildStreamGroups([newer, older], NOW)[0]).episodes).toHaveLength(2);
   });
 
   it('falls back to source identity and keeps subjectless events separate', () => {
@@ -83,8 +85,12 @@ describe('buildStreamGroups episode boundaries', () => {
       entityExternalId: null,
       entityDocketId: null,
     });
-    expect(buildStreamGroups([externalA, externalB], NOW)[0]!.episodes).toHaveLength(1);
-    expect(buildStreamGroups([subjectlessA, subjectlessB], NOW)[0]!.episodes).toHaveLength(2);
+    expect(assertDefined(buildStreamGroups([externalA, externalB], NOW)[0]).episodes).toHaveLength(
+      1,
+    );
+    expect(
+      assertDefined(buildStreamGroups([subjectlessA, subjectlessB], NOW)[0]).episodes,
+    ).toHaveLength(2);
   });
 
   it('preserves recency buckets and omits empty buckets', () => {
@@ -168,7 +174,9 @@ describe('buildStreamGroups meaning preservation', () => {
     const completion = row('done', '2026-06-29T12:00:00.000Z', { kind: 'completed' });
     const reaction = row('reaction', '2026-06-29T11:58:00.000Z', { kind: 'reaction' });
     const status = row('status', '2026-06-29T11:56:00.000Z', { kind: 'status_change' });
-    const episode = buildStreamGroups([completion, reaction, status], NOW)[0]!.episodes[0]!;
+    const episode = assertDefined(
+      assertDefined(buildStreamGroups([completion, reaction, status], NOW)[0]).episodes[0],
+    );
     expect(episode.visibleEvents.map((event) => event.id)).toEqual(['done', 'status']);
     expect(episode.relatedEvents.map((event) => event.id)).toEqual(['reaction']);
     expect(episode.allEvents.map((event) => event.id)).toEqual(['done', 'reaction', 'status']);
@@ -178,7 +186,9 @@ describe('buildStreamGroups meaning preservation', () => {
   it('produces a summary-only episode when every event is minor', () => {
     const first = row('one', '2026-06-29T12:00:00.000Z', { kind: 'timer_started' });
     const second = row('two', '2026-06-29T11:59:00.000Z', { kind: 'reaction' });
-    const episode = buildStreamGroups([first, second], NOW)[0]!.episodes[0]!;
+    const episode = assertDefined(
+      assertDefined(buildStreamGroups([first, second], NOW)[0]).episodes[0],
+    );
     expect(episode.visibleEvents).toEqual([]);
     expect(episode.relatedEvents).toEqual([first, second]);
     expect(episode.minorOnly).toBe(true);
@@ -193,7 +203,9 @@ describe('buildStreamGroups meaning preservation', () => {
       kind: 'completed',
       detail: { schema: 'docket.state_change', fromState: 'in_progress', toState: 'done' },
     });
-    const episode = buildStreamGroups([first, repeat], NOW)[0]!.episodes[0]!;
+    const episode = assertDefined(
+      assertDefined(buildStreamGroups([first, repeat], NOW)[0]).episodes[0],
+    );
     expect(episode.visibleEvents.map((event) => event.id)).toEqual(['first']);
     expect(episode.relatedEvents.map((event) => event.id)).toEqual(['repeat']);
     expect(episode.allEvents).toEqual([first, repeat]);

@@ -22,6 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ViewState } from '../../../src/components/views/field-catalog';
 import { buildTaskCatalog } from '../../../src/components/views/task-catalog';
 import { ViewRunner } from '../../../src/components/views/view-runner';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * jsdom reports zero element sizes; stub them so `@tanstack/react-virtual` (inside `ListView`)
@@ -140,7 +141,7 @@ describe('ViewRunner — switching the active grouping field', () => {
     expect(screen.getByText('Belongs nowhere')).toBeInTheDocument();
 
     // Collapse the "No project" bucket.
-    fireEvent.click(screen.getByText('No project').closest('[role="row"]')!);
+    fireEvent.click(assertDefined(screen.getByText('No project').closest('[role="row"]')));
     expect(screen.queryByText('Belongs nowhere')).not.toBeInTheDocument();
 
     // Switch the active grouping to a *different* field whose empty bucket the viewer never
@@ -171,7 +172,7 @@ describe('ViewRunner — switching the active grouping field', () => {
     const byProject: ViewState = { filters: [], groupBy: { field: 'projectId' }, sort: [] };
     const { rerender } = renderRunner(byProject);
 
-    fireEvent.click(screen.getByText('No project').closest('[role="row"]')!);
+    fireEvent.click(assertDefined(screen.getByText('No project').closest('[role="row"]')));
     expect(screen.queryByText('Belongs nowhere')).not.toBeInTheDocument();
 
     // Re-render with the identical state (e.g. a parent re-render triggered by unrelated props).

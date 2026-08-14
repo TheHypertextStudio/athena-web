@@ -15,6 +15,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { SchedulingCanvas, type ScheduleItem, type ScheduleLane } from '@/components/scheduling';
+import { assertDefined } from '@docket/test-utils';
 
 /** A 90-minute meeting that is under way at `now`. */
 const IN_PROGRESS: ScheduleItem = {
@@ -67,9 +68,9 @@ describe('in-progress item labelling', () => {
 
     // `position: sticky` resolves against the nearest scrolling ancestor. An `overflow-hidden`
     // body counts as one, which would strand the label at the item's top edge — the original bug.
-    const body = document.querySelector<HTMLElement>(
-      `[data-schedule-item-body="${IN_PROGRESS.id}"]`,
-    )!;
+    const body = assertDefined(
+      document.querySelector<HTMLElement>(`[data-schedule-item-body="${IN_PROGRESS.id}"]`),
+    );
     expect(body.className).not.toContain('overflow-hidden');
     const card = body.closest('[data-schedule-item]');
     expect(card?.className).toContain('overflow-visible');

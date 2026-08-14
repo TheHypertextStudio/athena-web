@@ -8,6 +8,7 @@ import { SchedulingDenseOverflow } from '@/components/scheduling/scheduling-dens
 import { arrangeDenseScheduleItems } from '@/components/scheduling/scheduling-dense-overflow';
 import { positionScheduleLaneItems } from '@/components/scheduling/scheduling-overlap-layout';
 import type { ScheduleItem, ScheduleLane } from '@/components/scheduling/scheduling-types';
+import { assertDefined } from '@docket/test-utils';
 
 const lane: ScheduleLane = {
   id: 'date:2026-07-13',
@@ -29,7 +30,7 @@ describe('SchedulingDenseOverflow', () => {
   it('exposes every width-constrained event from a keyboard-operable disclosure', async () => {
     const user = userEvent.setup();
     const positioned = positionScheduleLaneItems(lane, 'UTC', 60, 18);
-    const group = arrangeDenseScheduleItems(positioned, 240).overflowGroups[0]!;
+    const group = assertDefined(arrangeDenseScheduleItems(positioned, 240).overflowGroups[0]);
     const onOpenItem = vi.fn();
     render(
       <SchedulingDenseOverflow
@@ -62,7 +63,7 @@ describe('SchedulingDenseOverflow', () => {
   it('offers a touch-sized action that reveals the real interactive card', async () => {
     const user = userEvent.setup();
     const positioned = positionScheduleLaneItems(lane, 'UTC', 60, 18);
-    const group = arrangeDenseScheduleItems(positioned, 240).overflowGroups[0]!;
+    const group = assertDefined(arrangeDenseScheduleItems(positioned, 240).overflowGroups[0]);
     const onRevealItem = vi.fn();
     render(
       <SchedulingDenseOverflow

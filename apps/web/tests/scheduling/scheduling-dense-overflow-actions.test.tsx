@@ -10,6 +10,7 @@ import {
   type ScheduleItem,
   type ScheduleLane,
 } from '@/components/scheduling';
+import { assertDefined } from '@docket/test-utils';
 
 /** Build one fully interactive event in a deliberately dense collision cluster. */
 function denseItem(index: number): ScheduleItem {
@@ -92,8 +93,8 @@ describe('SchedulingCanvas dense-overflow actions', () => {
       dropEffect: 'none',
       getData: (type: string) => (type === SCHEDULE_DRAG_MIME ? JSON.stringify(task) : ''),
     };
-    fireEvent.dragOver(promoted!, { dataTransfer: transfer });
-    fireEvent.drop(promoted!, { dataTransfer: transfer });
+    fireEvent.dragOver(assertDefined(promoted), { dataTransfer: transfer });
+    fireEvent.drop(assertDefined(promoted), { dataTransfer: transfer });
     expect(onDropObjectOnItem).toHaveBeenLastCalledWith({
       object: task,
       targetItem: items[4],

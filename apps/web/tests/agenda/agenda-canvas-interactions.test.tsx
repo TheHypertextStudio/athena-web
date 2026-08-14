@@ -128,6 +128,7 @@ vi.mock('../../src/components/agenda/agenda-entry-card', () => ({
 }));
 
 import AgendaCanvas from '../../src/components/agenda/agenda-canvas';
+import { assertDefined } from '@docket/test-utils';
 
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
 const TASK_ID = TaskId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA0');
@@ -213,7 +214,7 @@ function renderTimeline(entries: readonly AgendaEntry[]): void {
 
 /** Return the latest props received by the callback-driven scheduling canvas mock. */
 function canvasProps(): SchedulingCanvasProps {
-  return canvas.props!;
+  return assertDefined(canvas.props);
 }
 
 beforeEach(() => {
@@ -250,7 +251,7 @@ describe('Agenda scheduling interactions', () => {
   it('projects a click-or-drag time selection and opens one local quick-create draft', () => {
     renderTimeline([]);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onSelectRegion?.({ lane, startMinutes: 9 * 60, endMinutes: 9 * 60 + 30 });
@@ -273,7 +274,7 @@ describe('Agenda scheduling interactions', () => {
 
   it('keeps the controlled draft callback stable while projecting edited bounds', () => {
     renderTimeline([]);
-    const lane = canvasProps().lanes[0]!;
+    const lane = assertDefined(canvasProps().lanes[0]);
 
     act(() => {
       canvasProps().onSelectRegion?.({ lane, startMinutes: 9 * 60, endMinutes: 9 * 60 + 30 });
@@ -298,7 +299,7 @@ describe('Agenda scheduling interactions', () => {
   it('opens an all-day draft for the selected Agenda date', () => {
     renderTimeline([]);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
     const anchor = document.createElement('button');
 
     act(() => {
@@ -317,7 +318,7 @@ describe('Agenda scheduling interactions', () => {
     mediaState.isDesktop = false;
     renderTimeline([]);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onSelectRegion?.({ lane, startMinutes: 9 * 60, endMinutes: 9 * 60 + 30 });
@@ -356,11 +357,11 @@ describe('Agenda scheduling interactions', () => {
     const entry = planTimebox();
     renderTimeline([entry]);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onMoveItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: lane,
         startMinutes: 540,
@@ -418,7 +419,7 @@ describe('Agenda scheduling interactions', () => {
     renderTimeline(entries);
 
     const editable = new Map(
-      canvasProps().lanes[0]!.items.map((item) => [item.title, item.editable]),
+      assertDefined(canvasProps().lanes[0]).items.map((item) => [item.title, item.editable]),
     );
     expect(editable).toEqual(
       new Map([
@@ -432,7 +433,7 @@ describe('Agenda scheduling interactions', () => {
       ]),
     );
     const readOnlyLabels = new Map(
-      canvasProps().lanes[0]!.items.map((item) => [
+      assertDefined(canvasProps().lanes[0]).items.map((item) => [
         item.title,
         (item as typeof item & { readonly readOnlyLabel?: string }).readOnlyLabel,
       ]),
@@ -456,7 +457,7 @@ describe('Agenda scheduling interactions', () => {
       endsAt: '2026-07-14T08:30:00Z',
     });
     renderTimeline([calendarEntry(item)]);
-    const scheduleItem = canvasProps().lanes[0]!.items[0]!;
+    const scheduleItem = assertDefined(assertDefined(canvasProps().lanes[0]).items[0]);
 
     expect(scheduleItem).toMatchObject({
       editable: true,
@@ -466,9 +467,9 @@ describe('Agenda scheduling interactions', () => {
 
     act(() => {
       const props = canvasProps();
-      const lane = props.lanes[0]!;
+      const lane = assertDefined(props.lanes[0]);
       props.onMoveItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: lane,
         startMinutes: 540,
@@ -493,8 +494,8 @@ describe('Agenda scheduling interactions', () => {
     });
     renderTimeline([calendarEntry(item)]);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
-    const scheduleItem = lane.items[0]!;
+    const lane = assertDefined(props.lanes[0]);
+    const scheduleItem = assertDefined(lane.items[0]);
 
     expect(scheduleItem).toMatchObject({
       allDay: true,
@@ -547,7 +548,10 @@ describe('Agenda scheduling interactions', () => {
       ),
     ]);
 
-    expect(canvasProps().lanes[0]!.items.map((item) => item.editable)).toEqual([false, true]);
+    expect(assertDefined(canvasProps().lanes[0]).items.map((item) => item.editable)).toEqual([
+      false,
+      true,
+    ]);
   });
 
   it('preserves exact elapsed duration when moving across the fall-back transition', () => {
@@ -558,11 +562,11 @@ describe('Agenda scheduling interactions', () => {
     agendaState.date = '2026-11-01';
     renderTimeline([calendarEntry(crossingFold)]);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onMoveItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: lane,
         startMinutes: 45,
@@ -584,10 +588,10 @@ describe('Agenda scheduling interactions', () => {
     agendaState.date = '2026-11-01';
     renderTimeline([calendarEntry(laterFold)]);
     let props = canvasProps();
-    let lane = props.lanes[0]!;
+    let lane = assertDefined(props.lanes[0]);
     act(() => {
       props.onResizeItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         lane,
         edge: 'end',
         startMinutes: 90,
@@ -608,10 +612,10 @@ describe('Agenda scheduling interactions', () => {
     agendaState.date = '2026-03-08';
     renderTimeline([calendarEntry(spring)]);
     props = canvasProps();
-    lane = props.lanes[0]!;
+    lane = assertDefined(props.lanes[0]);
     act(() => {
       props.onResizeItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         lane,
         edge: 'start',
         startMinutes: 150,
@@ -629,18 +633,18 @@ describe('Agenda scheduling interactions', () => {
     agendaState.date = '2026-11-01';
     renderTimeline([calendarEntry(ordinary)]);
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onMoveItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: lane,
         startMinutes: 60,
         endMinutes: 80,
       });
       props.onResizeItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         lane,
         edge: 'end',
         startMinutes: 30,
@@ -659,11 +663,11 @@ describe('Agenda scheduling interactions', () => {
     mutationState.link.reset.mockClear();
     mutationState.relate.reset.mockClear();
     const props = canvasProps();
-    const lane = props.lanes[0]!;
+    const lane = assertDefined(props.lanes[0]);
 
     act(() => {
       props.onMoveItem?.({
-        item: lane.items[0]!,
+        item: assertDefined(lane.items[0]),
         fromLane: lane,
         toLane: lane,
         startMinutes: 600,
@@ -697,8 +701,8 @@ describe('Agenda scheduling interactions', () => {
           organizationId: ORG_ID,
           title: 'Draft launch memo',
         },
-        targetItem: props.lanes[0]!.items[0]!,
-        targetLane: props.lanes[0]!,
+        targetItem: assertDefined(assertDefined(props.lanes[0]).items[0]),
+        targetLane: assertDefined(props.lanes[0]),
       });
     });
     expect(mutationState.link.mutate).not.toHaveBeenCalled();
@@ -710,8 +714,8 @@ describe('Agenda scheduling interactions', () => {
     act(() => {
       props.onDropObjectOnItem?.({
         object: { kind: 'calendar_item', itemId: target.id, title: target.title },
-        targetItem: props.lanes[0]!.items[0]!,
-        targetLane: props.lanes[0]!,
+        targetItem: assertDefined(assertDefined(props.lanes[0]).items[0]),
+        targetLane: assertDefined(props.lanes[0]),
       });
     });
     expect(mutationState.relate.mutate).not.toHaveBeenCalled();

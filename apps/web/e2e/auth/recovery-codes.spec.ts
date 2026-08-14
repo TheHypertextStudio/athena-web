@@ -12,6 +12,7 @@ import { loseDevice, signOut, signUpAndOnboard } from '../helpers/app';
 import { TIMEOUTS, settingsHref } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { attachShot, expectAlert } from '../helpers/ui';
+import { assertDefined } from '@docket/test-utils';
 
 test.describe('recovery codes', () => {
   test('generate recovery codes, then recover a locked-out account', async ({ page }, testInfo) => {
@@ -50,7 +51,7 @@ test.describe('recovery codes', () => {
     // ── Recover with a backup code ──────────────────────────────────────────────────────────
     await page.goto('/recover', { waitUntil: 'networkidle' });
     await page.fill('#email', user.email);
-    await page.fill('#code', codes[0]!);
+    await page.fill('#code', assertDefined(codes[0]));
     await page.getByRole('button', { name: 'Recover account' }).click();
 
     // Verified (no passkey) → the "you're back in" re-enrolment screen.
@@ -69,7 +70,7 @@ test.describe('recovery codes', () => {
     await signOut(page);
     await page.goto('/recover', { waitUntil: 'networkidle' });
     await page.fill('#email', user.email);
-    await page.fill('#code', codes[0]!);
+    await page.fill('#code', assertDefined(codes[0]));
     await page.getByRole('button', { name: 'Recover account' }).click();
     await expectAlert(page).toBeVisible({ timeout: TIMEOUTS.ceremony });
     await expect(page).toHaveURL(/\/recover/);

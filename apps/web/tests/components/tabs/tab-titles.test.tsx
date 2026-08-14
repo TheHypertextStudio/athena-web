@@ -16,6 +16,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertDefined } from '@docket/test-utils';
 
 const resolveTabTitle = vi.fn<(ref: unknown) => Promise<string | null>>();
 
@@ -66,7 +67,7 @@ describe('an unnamed tab', () => {
     await waitFor(() => {
       expect(result.current.tabs).toHaveLength(1);
     });
-    const tab = result.current.tabs[0]!;
+    const tab = assertDefined(result.current.tabs[0]);
 
     expect(tab.title).toBeNull();
     expect(tabLabel(tab)).toBe('Project');

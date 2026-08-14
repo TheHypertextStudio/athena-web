@@ -22,6 +22,7 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import { deduplicateCalendarItems } from '../../src/components/calendar/calendar-event-dedup';
+import { assertDefined } from '@docket/test-utils';
 
 const WORK_LAYER = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVA1');
 const PERSONAL_LAYER = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVA2');
@@ -110,9 +111,9 @@ describe('deduplicateCalendarItems', () => {
 
     expect(result.items).toHaveLength(1);
     // The provenance of the copy that was folded away is exactly what the detail view renders.
-    expect(result.duplicatesByItemId.get(result.items[0]!.id)?.map((copy) => copy.id)).toEqual([
-      result.items[0]!.id === ITEM_A ? ITEM_B : ITEM_A,
-    ]);
+    expect(
+      result.duplicatesByItemId.get(assertDefined(result.items[0]).id)?.map((copy) => copy.id),
+    ).toEqual([assertDefined(result.items[0]).id === ITEM_A ? ITEM_B : ITEM_A]);
   });
 
   it('collapses an identically-titled, identically-timed holiday from two accounts', () => {
@@ -145,13 +146,13 @@ describe('deduplicateCalendarItems', () => {
     );
 
     expect(result.items).toHaveLength(1);
-    expect(result.duplicatesByItemId.get(result.items[0]!.id)).toHaveLength(1);
+    expect(result.duplicatesByItemId.get(assertDefined(result.items[0]).id)).toHaveLength(1);
   });
 
   it('collapses three copies of one event into a single block naming both others', () => {
     const copies = [WORK_LAYER, PERSONAL_LAYER, THIRD_LAYER].map((layerId, index) =>
       item({
-        id: [ITEM_A, ITEM_B, ITEM_C][index]!,
+        id: assertDefined([ITEM_A, ITEM_B, ITEM_C][index]),
         externalEventId: 'evt-9',
         layerId,
       }),
@@ -163,7 +164,7 @@ describe('deduplicateCalendarItems', () => {
     );
 
     expect(result.items).toHaveLength(1);
-    expect(result.duplicatesByItemId.get(result.items[0]!.id)).toHaveLength(2);
+    expect(result.duplicatesByItemId.get(assertDefined(result.items[0]).id)).toHaveLength(2);
   });
 
   it('keeps the copy you can edit, so the surviving block stays draggable', () => {

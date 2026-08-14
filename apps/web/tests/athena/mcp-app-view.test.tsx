@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MCP_UI_METHODS, MCP_UI_MIME_TYPE, MCP_UI_PROTOCOL_VERSION } from '@docket/types';
 
 import { McpAppView } from '@/components/athena/mcp-app-view';
+import { assertDefined } from '@docket/test-utils';
 
 const SANDBOX_ORIGIN = 'https://api.docket.test';
 
@@ -63,7 +64,7 @@ function mount(overrides: Partial<Parameters<typeof McpAppView>[0]> = {}) {
     />,
   );
 
-  const frame = view.container.querySelector('iframe')!;
+  const frame = assertDefined(view.container.querySelector('iframe'));
   // jsdom gives a same-document window; standing in for it lets the test both capture what the
   // host posts and impersonate the proxy when posting back.
   const proxyWindow = {

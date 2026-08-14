@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/lib/api', () => ({ api: { v1: { orgs: { ':orgId': {} } } } }));
 
 import { RepeatProjectDialog } from '../../src/components/recurrence/repeat-project-dialog';
+import { assertDefined } from '@docket/test-utils';
 
 afterEach(cleanup);
 
@@ -67,11 +68,11 @@ describe('RepeatProjectDialog', () => {
           tasks={[
             {
               task: task('TSK00000000000000000000001', 'Publish the event'),
-              milestoneId: MILESTONES[0]!.id,
+              milestoneId: assertDefined(MILESTONES[0]).id,
             },
             {
               task: task('TSK00000000000000000000002', 'Host workshop'),
-              milestoneId: MILESTONES[0]!.id,
+              milestoneId: assertDefined(MILESTONES[0]).id,
             },
             { task: task('TSK00000000000000000000003', 'Send follow-ups'), milestoneId: null },
           ]}

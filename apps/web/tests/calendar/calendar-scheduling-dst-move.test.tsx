@@ -40,6 +40,7 @@ vi.mock('../../src/components/calendar/calendar-layer-panel', () => ({
 }));
 
 import { CalendarSchedulingSurface } from '../../src/app/(app)/calendar/calendar-scheduling-surface';
+import { assertDefined } from '@docket/test-utils';
 
 const ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
@@ -127,8 +128,8 @@ describe('CalendarSchedulingSurface DST moves', () => {
     const scheduleItem = {
       id: source.id,
       title: source.title,
-      startsAt: source.startsAt!,
-      endsAt: source.endsAt!,
+      startsAt: assertDefined(source.startsAt),
+      endsAt: assertDefined(source.endsAt),
       editable: true,
     };
     const lane: ScheduleLane = {
@@ -282,8 +283,8 @@ describe('CalendarSchedulingSurface DST moves', () => {
     const scheduleItem = {
       id: source.id,
       title: source.title,
-      startsAt: source.startsAt!,
-      endsAt: source.endsAt!,
+      startsAt: assertDefined(source.startsAt),
+      endsAt: assertDefined(source.endsAt),
       editable: true,
     };
     const lane: ScheduleLane = {

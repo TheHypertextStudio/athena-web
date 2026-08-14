@@ -34,6 +34,7 @@ vi.mock('../../src/lib/api', () => ({
 }));
 
 import { LinkedTasksSection } from '../../src/components/calendar/item-drawer/linked-tasks-section';
+import { assertDefined } from '@docket/test-utils';
 
 afterEach(() => {
   cleanup();
@@ -108,7 +109,9 @@ describe('calendar event process setup', () => {
     ).toBeTruthy();
     expect(await screen.findByRole('option', { name: 'Meetup event work' })).toBeTruthy();
 
-    const submit = screen.getAllByRole('button', { name: 'Add tasks for each event' }).at(-1)!;
+    const submit = assertDefined(
+      screen.getAllByRole('button', { name: 'Add tasks for each event' }).at(-1),
+    );
     expect((submit as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(submit);
 

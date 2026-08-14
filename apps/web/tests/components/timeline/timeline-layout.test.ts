@@ -30,6 +30,7 @@ import {
   rowHeightFor,
 } from '@/components/timeline/timeline-geometry';
 import { buildTimelineLayout } from '@/components/timeline/timeline-layout';
+import { assertDefined } from '@docket/test-utils';
 
 /** A minimal row fixture: an id, a name, and an optional span. */
 interface Row {
@@ -73,7 +74,7 @@ describe('resolveSpan', () => {
   it('anchors a single-date row to that instant instead of treating it as unscheduled', () => {
     const span = resolveSpan(5 * DAY, null);
     expect(span).toEqual({ start: 5 * DAY, end: 5 * DAY });
-    expect(isAnchor(span!)).toBe(true);
+    expect(isAnchor(assertDefined(span))).toBe(true);
   });
 
   it('order-normalizes so a target before a start still yields a drawable span', () => {

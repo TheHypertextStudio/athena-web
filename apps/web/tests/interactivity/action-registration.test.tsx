@@ -18,6 +18,7 @@ import {
 import type { ActionContext } from '../../src/lib/actions/types';
 
 import { taskRef } from './harness';
+import { assertDefined } from '@docket/test-utils';
 
 afterEach(() => {
   cleanup();
@@ -206,13 +207,13 @@ describe('one definition, many entry points', () => {
     const completeButtons = screen.getAllByRole('button', { name: 'Complete' });
     expect(completeButtons).toHaveLength(2);
 
-    fireEvent.click(completeButtons[0]!);
+    fireEvent.click(assertDefined(completeButtons[0]));
     await waitFor(() => {
       expect(invocations).toHaveLength(1);
     });
     expect(invocations[0]?.source).toBe('button');
 
-    fireEvent.click(completeButtons[1]!);
+    fireEvent.click(assertDefined(completeButtons[1]));
     await waitFor(() => {
       expect(invocations).toHaveLength(2);
     });

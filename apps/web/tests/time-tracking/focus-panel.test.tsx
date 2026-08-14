@@ -16,6 +16,7 @@ import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertDefined } from '@docket/test-utils';
 
 const { activeGet, timelineGet, recordsPost, recordAction, recordPatch, taskGet, teamGet } =
   vi.hoisted(() => ({
@@ -400,7 +401,7 @@ describe('FocusPanel', () => {
       running: false,
       title: 'Resumed work',
     }).record;
-    const originalInterval = resumedBase.intervals[0]!;
+    const originalInterval = assertDefined(resumedBase.intervals[0]);
     const resumed = {
       ...resumedBase,
       id: 'rec_resumed',

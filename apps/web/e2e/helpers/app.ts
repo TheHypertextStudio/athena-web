@@ -9,6 +9,7 @@ import { TIMEOUTS } from './constants';
 import { expect } from './fixtures';
 import { apiFetch, waitForApiResponse, type ApiInit } from './net';
 import { clearVirtualCredentials } from './webauthn';
+import { assertDefined } from '@docket/test-utils';
 
 /** A throwaway test account: display name + unique email. */
 export interface TestUser {
@@ -170,7 +171,7 @@ async function onboardJustMe(page: Page): Promise<string> {
 
   const orgId = await orgIdFromResponse;
   expect(orgId, 'onboarding did not return a personal org id').toBeTruthy();
-  return orgId!;
+  return assertDefined(orgId);
 }
 
 /** Sign up a fresh user and onboard the "Just me" personal workspace; returns `{ user, orgId }`. */

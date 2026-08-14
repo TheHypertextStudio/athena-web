@@ -70,6 +70,7 @@ vi.mock('../../../src/components/settings/use-can-manage-org', () => ({
 }));
 
 import { PublishingSettings } from '../../../src/components/publishing/publishing-settings';
+import { assertDefined } from '@docket/test-utils';
 
 afterEach(() => {
   cleanup();
@@ -201,7 +202,7 @@ describe('PublishingSettings — Workspace address display', () => {
 
     const addressSection = document.getElementById('workspace-address')?.closest('section');
     expect(addressSection).not.toBeNull();
-    const reachableLink = within(addressSection!)
+    const reachableLink = within(assertDefined(addressSection))
       .getAllByRole('link')
       .find((link) => link.getAttribute('href')?.startsWith('https://'));
     expect(reachableLink).toHaveAttribute('href', 'https://updates.acme.com/');
@@ -235,8 +236,12 @@ describe('PublishingSettings — custom domain verification state', () => {
     expect(verifyMutateMock).toHaveBeenCalledWith('dom_1');
     const domainRow = screen.getByText('updates.acme.com').closest('li');
     expect(domainRow).not.toBeNull();
-    expect(within(domainRow!).queryByRole('button', { name: /check/i })).not.toBeInTheDocument();
-    expect(within(domainRow!).getByRole('button', { name: /remove/i })).toBeInTheDocument();
+    expect(
+      within(assertDefined(domainRow)).queryByRole('button', { name: /check/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(assertDefined(domainRow)).getByRole('button', { name: /remove/i }),
+    ).toBeInTheDocument();
   });
 
   it('offers a manual check for an unverified domain, and does not auto-verify it', () => {
@@ -261,6 +266,8 @@ describe('PublishingSettings — custom domain verification state', () => {
     expect(verifyMutateMock).not.toHaveBeenCalled();
     const domainRow = screen.getByText('pending.acme.com').closest('li');
     expect(domainRow).not.toBeNull();
-    expect(within(domainRow!).getByRole('button', { name: /check/i })).toBeInTheDocument();
+    expect(
+      within(assertDefined(domainRow)).getByRole('button', { name: /check/i }),
+    ).toBeInTheDocument();
   });
 });

@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SchedulingCanvas, type ScheduleItem, type ScheduleLane } from '@/components/scheduling';
+import { assertDefined } from '@docket/test-utils';
 
 const OFFSITE: ScheduleItem = {
   id: 'offsite',
@@ -63,50 +64,58 @@ describe('SchedulingCanvas all-day direct manipulation', () => {
     );
 
     expect(
-      within(allDayLane(LANES[0]!)).getByRole('button', { name: 'Move Team offsite' }),
+      within(allDayLane(assertDefined(LANES[0]))).getByRole('button', {
+        name: 'Move Team offsite',
+      }),
     ).toHaveClass('touch-none');
     expect(
-      within(allDayLane(LANES[0]!)).getByRole('button', {
+      within(allDayLane(assertDefined(LANES[0]))).getByRole('button', {
         name: 'Resize Team offsite from start',
       }),
     ).toBeInTheDocument();
     expect(
-      within(allDayLane(LANES[0]!)).queryByRole('button', {
+      within(allDayLane(assertDefined(LANES[0]))).queryByRole('button', {
         name: 'Resize Team offsite from end',
       }),
     ).not.toBeInTheDocument();
 
     expect(
-      within(allDayLane(LANES[1]!)).queryByRole('button', { name: 'Move Team offsite' }),
+      within(allDayLane(assertDefined(LANES[1]))).queryByRole('button', {
+        name: 'Move Team offsite',
+      }),
     ).not.toBeInTheDocument();
     expect(
-      within(allDayLane(LANES[1]!)).queryByRole('button', { name: /Resize Team offsite/ }),
+      within(allDayLane(assertDefined(LANES[1]))).queryByRole('button', {
+        name: /Resize Team offsite/,
+      }),
     ).not.toBeInTheDocument();
 
     expect(
-      within(allDayLane(LANES[2]!)).getByRole('button', {
+      within(allDayLane(assertDefined(LANES[2]))).getByRole('button', {
         name: 'Resize Team offsite from end',
       }),
     ).toBeInTheDocument();
     expect(
-      within(allDayLane(LANES[2]!))
+      within(allDayLane(assertDefined(LANES[2])))
         .getByRole('button', {
           name: 'Drag Team offsite to create a relationship',
         })
         .closest('[data-schedule-all-day-item]'),
     ).toHaveClass('pr-3', '[@media(pointer:coarse)]:pr-10');
     expect(
-      within(allDayLane(LANES[2]!)).queryByRole('button', { name: 'Move Team offsite' }),
+      within(allDayLane(assertDefined(LANES[2]))).queryByRole('button', {
+        name: 'Move Team offsite',
+      }),
     ).not.toBeInTheDocument();
   });
 
   it('moves a range by keyboard across a read-only lane while preserving its day count', () => {
     const onMoveAllDayItem = vi.fn();
     const lanes = [
-      LANES[0]!,
+      assertDefined(LANES[0]),
       dateLane('2026-07-02', { editable: false }),
-      LANES[2]!,
-      LANES[3]!,
+      assertDefined(LANES[2]),
+      assertDefined(LANES[3]),
     ] as const;
     render(
       <SchedulingCanvas
@@ -180,7 +189,7 @@ describe('SchedulingCanvas all-day direct manipulation', () => {
       readOnlyLabel: 'Read-only',
     };
     const lane: ScheduleLane = {
-      ...LANES[0]!,
+      ...assertDefined(LANES[0]),
       items: [readOnlyItem],
     };
     render(
@@ -206,7 +215,7 @@ describe('SchedulingCanvas all-day direct manipulation', () => {
       ...OFFSITE,
       startsAt: '2026-07-01T09:00:00.000Z',
     };
-    const lane: ScheduleLane = { ...LANES[0]!, items: [malformed] };
+    const lane: ScheduleLane = { ...assertDefined(LANES[0]), items: [malformed] };
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -233,7 +242,7 @@ describe('SchedulingCanvas all-day direct manipulation', () => {
       allDay: true,
       dropTarget: true,
     };
-    const lane: ScheduleLane = { ...LANES[0]!, items: [OFFSITE, target] };
+    const lane: ScheduleLane = { ...assertDefined(LANES[0]), items: [OFFSITE, target] };
     render(
       <SchedulingCanvas
         displayTimezone="UTC"

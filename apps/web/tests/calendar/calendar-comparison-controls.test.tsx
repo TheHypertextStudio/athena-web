@@ -6,6 +6,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CalendarComparisonControls } from '../../src/app/(app)/calendar/calendar-comparison-controls';
+import { assertDefined } from '@docket/test-utils';
 
 const WORKSPACES: readonly OrgSummary[] = [
   {
@@ -38,7 +39,7 @@ async function openPopover(
   render(
     <CalendarComparisonControls
       workspaces={WORKSPACES}
-      workspaceId={WORKSPACES[0]!.id}
+      workspaceId={assertDefined(WORKSPACES[0]).id}
       members={MEMBERS}
       selectedActorIds={['actor-1']}
       membersPending={false}
@@ -57,7 +58,7 @@ describe('CalendarComparisonControls', () => {
     render(
       <CalendarComparisonControls
         workspaces={WORKSPACES}
-        workspaceId={WORKSPACES[0]!.id}
+        workspaceId={assertDefined(WORKSPACES[0]).id}
         members={MEMBERS}
         selectedActorIds={[]}
         membersPending={false}
@@ -96,8 +97,8 @@ describe('CalendarComparisonControls', () => {
     expect(workspace.className.split(/\s+/)).not.toContain('bg-surface');
     expect(workspace.className).not.toContain('shadow');
 
-    fireEvent.change(workspace, { target: { value: WORKSPACES[0]!.id } });
-    expect(onWorkspaceChange).toHaveBeenCalledWith(WORKSPACES[0]!.id);
+    fireEvent.change(workspace, { target: { value: assertDefined(WORKSPACES[0]).id } });
+    expect(onWorkspaceChange).toHaveBeenCalledWith(assertDefined(WORKSPACES[0]).id);
   });
 
   it('gives each person an inline identity glyph and an honest selected state', async () => {

@@ -11,6 +11,7 @@ import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-r
 import { ORIGIN } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { setColorScheme } from '../helpers/ui';
+import { assertDefined } from '@docket/test-utils';
 
 const DAY = '2026-08-10';
 const API_ORIGIN = process.env['API_URL'] ?? `https://api.${new URL(ORIGIN).hostname}`;
@@ -91,12 +92,15 @@ test('Agenda quick create stays outside the rail across responsive themes', asyn
   expect(asideBox).not.toBeNull();
   expect(draftBox).not.toBeNull();
   expect(titleBox).not.toBeNull();
-  expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(asideBox!.x);
-  const draftGap = draftBox!.x - (dialogBox!.x + dialogBox!.width);
+  expect(assertDefined(dialogBox).x + assertDefined(dialogBox).width).toBeLessThanOrEqual(
+    assertDefined(asideBox).x,
+  );
+  const draftGap =
+    assertDefined(draftBox).x - (assertDefined(dialogBox).x + assertDefined(dialogBox).width);
   expect(draftGap).toBeGreaterThanOrEqual(0);
   expect(draftGap).toBeLessThanOrEqual(96);
-  const draftCenter = draftBox!.y + draftBox!.height / 2;
-  const titleCenter = titleBox!.y + titleBox!.height / 2;
+  const draftCenter = assertDefined(draftBox).y + assertDefined(draftBox).height / 2;
+  const titleCenter = assertDefined(titleBox).y + assertDefined(titleBox).height / 2;
   expect(Math.abs(titleCenter - draftCenter)).toBeLessThanOrEqual(24);
 
   await setColorScheme(page, 'light');
@@ -114,22 +118,24 @@ test('Agenda quick create stays outside the rail across responsive themes', asyn
   await page.mouse.up();
   await expect
     .poll(async () => (await dialog.boundingBox())?.x ?? Number.POSITIVE_INFINITY)
-    .toBeLessThanOrEqual(dialogBox!.x - 170);
+    .toBeLessThanOrEqual(assertDefined(dialogBox).x - 170);
   const overlayHost = page.locator('[data-shell-overlay-host]');
   const draggedBox = await dialog.boundingBox();
   const draggedHostBox = await overlayHost.boundingBox();
   expect(draggedBox).not.toBeNull();
   expect(draggedHostBox).not.toBeNull();
-  expect(draggedBox!.x).toBeLessThan(dialogBox!.x);
-  expect(draggedBox!.x + draggedBox!.width).toBeLessThanOrEqual(asideBox!.x);
+  expect(assertDefined(draggedBox).x).toBeLessThan(assertDefined(dialogBox).x);
+  expect(assertDefined(draggedBox).x + assertDefined(draggedBox).width).toBeLessThanOrEqual(
+    assertDefined(asideBox).x,
+  );
   await page.setViewportSize({ width: 1500, height: 900 });
   await page.waitForTimeout(100);
   const resizedDraggedBox = await dialog.boundingBox();
   const resizedHostBox = await overlayHost.boundingBox();
   expect(resizedDraggedBox).not.toBeNull();
   expect(resizedHostBox).not.toBeNull();
-  const draggedLocalX = draggedBox!.x - draggedHostBox!.x;
-  const resizedLocalX = resizedDraggedBox!.x - resizedHostBox!.x;
+  const draggedLocalX = assertDefined(draggedBox).x - assertDefined(draggedHostBox).x;
+  const resizedLocalX = assertDefined(resizedDraggedBox).x - assertDefined(resizedHostBox).x;
   expect(Math.abs(resizedLocalX - draggedLocalX)).toBeLessThanOrEqual(2);
   await page.setViewportSize({ width: 1440, height: 900 });
   expect(state.itemCreates).toHaveLength(0);

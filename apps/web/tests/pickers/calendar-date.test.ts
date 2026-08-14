@@ -27,6 +27,7 @@ import {
   formatDay,
   formatDayRange,
 } from '@/components/date-picker';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * The calendar arithmetic behind every date picker.
@@ -127,7 +128,7 @@ describe('calendar day arithmetic', () => {
     const weeks = monthGrid('2026-08-15', 0);
     const flat = weeks.flat();
     for (let index = 1; index < flat.length; index += 1) {
-      expect(flat[index]!.iso).toBe(addDays(flat[index - 1]!.iso, 1));
+      expect(assertDefined(flat[index]).iso).toBe(addDays(assertDefined(flat[index - 1]).iso, 1));
     }
     const inMonth = flat.filter((cell) => cell.inMonth).map((cell) => cell.iso);
     expect(inMonth[0]).toBe('2026-08-01');

@@ -18,6 +18,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCP_UI_METHODS, MCP_UI_MIME_TYPE, MCP_UI_PROTOCOL_VERSION } from '@docket/types';
+import { assertDefined } from '@docket/test-utils';
 
 const WIDGET = {
   connectionId: 'conn-1',
@@ -97,7 +98,7 @@ function captureFrame(): {
   readonly posted: { message: Record<string, unknown>; origin: string }[];
   readonly fromProxy: (data: unknown) => void;
 } {
-  const frame = document.querySelector('iframe')!;
+  const frame = assertDefined(document.querySelector('iframe'));
   const posted: { message: Record<string, unknown>; origin: string }[] = [];
   const proxyWindow = {
     postMessage: (message: Record<string, unknown>, origin: string) =>
@@ -115,7 +116,7 @@ function captureFrame(): {
 /** Open the fixture card and complete the view's half of the MCP Apps handshake. */
 async function showAndHandshake(): Promise<ReturnType<typeof captureFrame>> {
   const button = await screen.findByText(WIDGET.description);
-  button.closest('button')!.click();
+  assertDefined(button.closest('button')).click();
 
   await waitFor(() => {
     expect(document.querySelector('iframe')).not.toBeNull();

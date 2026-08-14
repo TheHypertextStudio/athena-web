@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PropertiesPanel } from '../../../src/components/project-detail/properties-panel';
 import { choosePickerOption } from '../../support/pickers';
+import { assertDefined } from '@docket/test-utils';
 
 afterEach(cleanup);
 
@@ -101,7 +102,7 @@ describe('Project PropertiesPanel', () => {
     // option — rather than a hand-rolled per-label toggle button in the row.
     fireEvent.click(screen.getByRole('button', { name: 'Labels — none' }));
     choosePickerOption(/Legislative/);
-    expect(callbacks.onLabelsChange).toHaveBeenCalledWith([LABELS[0]!.id]);
+    expect(callbacks.onLabelsChange).toHaveBeenCalledWith([assertDefined(LABELS[0]).id]);
   });
 
   it('renders plain values when editing is unavailable', () => {

@@ -27,7 +27,10 @@ import {
   PROGRAM_STATUS_OPTIONS,
   VISIBILITY_OPTIONS,
 } from '@/components/pickers/options';
-import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
+import {
+  ENTITY_METADATA_CHIP_CLASS,
+  EntityMetadataItem,
+} from '@/components/views/entity-detail-layout';
 
 /** Props for {@link ProgramPropertiesPanel}. */
 export interface ProgramPropertiesPanelProps {
@@ -79,49 +82,57 @@ export function ProgramPropertiesPanel({
 
   return (
     <>
-      <EnumPicker<ProgramStatus>
-        options={PROGRAM_STATUS_OPTIONS}
-        value={status}
-        onChange={(next) => {
-          if (next) onStatusChange(next);
-        }}
-        placeholder="Set status"
-        ariaLabel="Status"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <EnumPicker<Health>
-        options={HEALTH_OPTIONS}
-        value={health}
-        onChange={onHealthChange}
-        placeholder="Set health"
-        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
-        clearLabel="No health"
-        ariaLabel="Health"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <ActorPicker
-        options={memberOptions}
-        value={ownerId}
-        onChange={onOwnerChange}
-        placeholder="Set owner"
-        clearLabel="No owner"
-        ariaLabel="Owner"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <EnumPicker<Visibility>
-        options={VISIBILITY_OPTIONS}
-        value={visibility}
-        onChange={(next) => {
-          if (next) onVisibilityChange(next);
-        }}
-        placeholder="Set visibility"
-        ariaLabel="Visibility"
-        readOnly={readOnly}
-        {...CHIP}
-      />
+      <EntityMetadataItem priority={0}>
+        <EnumPicker<ProgramStatus>
+          options={PROGRAM_STATUS_OPTIONS}
+          value={status}
+          onChange={(next) => {
+            if (next) onStatusChange(next);
+          }}
+          placeholder="Set status"
+          ariaLabel="Status"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={1}>
+        <EnumPicker<Health>
+          options={HEALTH_OPTIONS}
+          value={health}
+          onChange={onHealthChange}
+          placeholder="Set health"
+          triggerIcon={<Activity className="text-on-surface-variant size-4" />}
+          clearLabel="No health"
+          ariaLabel="Health"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={2}>
+        <ActorPicker
+          options={memberOptions}
+          value={ownerId}
+          onChange={onOwnerChange}
+          placeholder="Set owner"
+          clearLabel="No owner"
+          ariaLabel="Owner"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={3}>
+        <EnumPicker<Visibility>
+          options={VISIBILITY_OPTIONS}
+          value={visibility}
+          onChange={(next) => {
+            if (next) onVisibilityChange(next);
+          }}
+          placeholder="Set visibility"
+          ariaLabel="Visibility"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
     </>
   );
 }

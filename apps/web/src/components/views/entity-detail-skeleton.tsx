@@ -18,7 +18,12 @@
 import { Skeleton, SkeletonChip, SkeletonGlyph, SkeletonText } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
-import { EntityDetailLayout, EntityMetadataRow } from './entity-detail-layout';
+import {
+  EntityDetailLayout,
+  EntityMetadataItem,
+  EntityMetadataRow,
+  type EntityMetadataPriority,
+} from './entity-detail-layout';
 
 /** Props for {@link EntityDetailSkeleton}. */
 export interface EntityDetailSkeletonProps {
@@ -78,7 +83,12 @@ export function EntityDetailSkeleton({
           <EntityMetadataRow ariaLabel={label}>
             {Array.from({ length: chipCount }, (_, index) => (
               // placeholder: one property whose value is part of the record being read.
-              <SkeletonChip key={index} />
+              <EntityMetadataItem
+                key={index}
+                priority={Math.min(index, 7) as EntityMetadataPriority}
+              >
+                <SkeletonChip />
+              </EntityMetadataItem>
             ))}
           </EntityMetadataRow>
         }

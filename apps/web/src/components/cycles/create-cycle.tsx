@@ -223,7 +223,8 @@ export const CreateCycleDialog = withComposerReset(function CreateCycleComposer(
           setStartsAt(start);
           setEndsAt(end);
         }}
-        placeholder="Set dates"
+        startPlaceholder="Set start date"
+        endPlaceholder="Set end date"
         formatLabel={triggerDate}
         ariaLabel="Dates"
         startLabel="Starts"

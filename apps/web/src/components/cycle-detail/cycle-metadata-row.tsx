@@ -24,7 +24,10 @@ import { DateRangePicker, EnumPicker } from '@docket/ui/components';
 import type { JSX } from 'react';
 
 import { CYCLE_STATUS_OPTIONS } from '@/components/pickers/options';
-import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
+import {
+  ENTITY_METADATA_CHIP_CLASS,
+  EntityMetadataItem,
+} from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** Props for {@link CycleMetadata}. */
@@ -90,28 +93,33 @@ export function CycleMetadata({
 
   return (
     <>
-      <EnumPicker<CycleStatus>
-        options={CYCLE_STATUS_OPTIONS}
-        value={status}
-        onChange={(next) => {
-          if (next) onStatusChange(next);
-        }}
-        placeholder="Set status"
-        ariaLabel="Status"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <DateRangePicker
-        value={{ start: startsAt, end: endsAt }}
-        onChange={onWindowChange}
-        placeholder="Set window"
-        formatLabel={(value) => formatCalendarDate(value, dayOptions) ?? undefined}
-        ariaLabel="Window"
-        startLabel="Starts"
-        endLabel="Ends"
-        readOnly={readOnly}
-        {...CHIP}
-      />
+      <EntityMetadataItem priority={0}>
+        <EnumPicker<CycleStatus>
+          options={CYCLE_STATUS_OPTIONS}
+          value={status}
+          onChange={(next) => {
+            if (next) onStatusChange(next);
+          }}
+          placeholder="Set status"
+          ariaLabel="Status"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={1} className="max-w-none">
+        <DateRangePicker
+          value={{ start: startsAt, end: endsAt }}
+          onChange={onWindowChange}
+          startPlaceholder="Set start date"
+          endPlaceholder="Set end date"
+          formatLabel={(value) => formatCalendarDate(value, dayOptions) ?? undefined}
+          ariaLabel="Window"
+          startLabel="Starts"
+          endLabel="Ends"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
     </>
   );
 }

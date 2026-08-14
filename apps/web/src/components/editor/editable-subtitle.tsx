@@ -16,6 +16,8 @@ import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 
+import { useAutosizeTextarea } from './use-autosize-textarea';
+
 /** Props for {@link EditableSubtitle}. */
 export interface EditableSubtitleProps {
   /** The persisted summary, or null/undefined when none has been written yet. */
@@ -75,15 +77,9 @@ export function EditableSubtitle({
     field.select();
   }, [focused]);
 
-  // Grow to the wrapped content so the field occupies exactly the height its text needs, which is
-  // what lets an always-live control sit where a `<span>` used to without clipping or reserving
-  // slack. `scrollHeight` is 0 in jsdom, so the guard stops a test collapsing the field.
-  useEffect(() => {
-    const field = fieldRef.current;
-    if (!field) return;
-    field.style.height = 'auto';
-    if (field.scrollHeight > 0) field.style.height = `${String(field.scrollHeight)}px`;
-  }, [draft]);
+  // The available width changes as the pane and its masthead change state, so value-only sizing
+  // would leave this field at its former one-line height and clip the newly wrapped text.
+  useAutosizeTextarea(fieldRef, draft);
 
   if (!canEdit) {
     return <span className={cn('block', className)}>{baseline.length > 0 ? baseline : ''}</span>;
@@ -118,7 +114,7 @@ export function EditableSubtitle({
         }
       }}
       className={cn(
-        'm-0 w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 outline-none',
+        'm-0 [field-sizing:content] w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 outline-none',
         className,
       )}
     />

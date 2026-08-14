@@ -13,7 +13,9 @@
  * here so no page can diverge from it.
  */
 import { useOwnPageScroll } from '@docket/ui/components';
+import { Ellipsis } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
+import { Button, Popover, PopoverContent, PopoverTrigger } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 
 import { ObjectSurface } from '@/components/objects/object-surface';
@@ -33,7 +35,7 @@ export interface EntityDetailLayoutProps {
    * identity and cover read as one object rather than a caption under a photograph.
    */
   cover?: ReactNode;
-  /** The breadcrumb (e.g. the Initiative breadcrumb), sharing a row with {@link actions}. */
+  /** The breadcrumb (e.g. the Initiative breadcrumb), rendered above the identity row. */
   eyebrow?: ReactNode;
   /** The entity icon rendered above the title (an editable picker or a static glyph, ~40px). */
   icon: ReactNode;
@@ -43,7 +45,7 @@ export interface EntityDetailLayoutProps {
   subtitle?: ReactNode;
   /** The inline metadata row — typically an {@link EntityMetadataRow} of property pickers. */
   metadata?: ReactNode;
-  /** Masthead actions (e.g. the ⋯ menu), sharing the eyebrow row rather than the title's. */
+  /** Masthead actions (e.g. publish and ⋯), aligned with the icon/title identity row. */
   actions?: ReactNode;
   /** The tab bar (a `Tabs` element). A {@link Separator} is rendered directly beneath it. */
   tabs: ReactNode;
@@ -59,12 +61,10 @@ export interface EntityDetailLayoutProps {
  * The standard entity-detail arrangement.
  *
  * @remarks
- * Renders (top to bottom): an eyebrow/actions row, a masthead whose identity pair stacks the icon
- * above the title + subtitle (title filling the available width, subtitle wrapping like ordinary
- * text), the metadata row, then the tab bar, then the active panel. `actions` shares the eyebrow's
- * row rather than the title's — a title can run to any length without ever having to compete with
- * the ⋯ menu or the publish action for width, so it never gets squeezed into clipping. Status/
- * health and every other property live in the metadata slot, never inline with the title.
+ * Renders (top to bottom): an optional eyebrow, a masthead whose primary row holds the identity and
+ * actions, the collapsible subtitle/metadata block, the tab bar, and the active panel. The identity
+ * owns the remaining width and truncates only at the compact endpoint, so actions never create a
+ * second header row. Status/health and every other property live in the metadata slot.
  *
  * @param props - The {@link EntityDetailLayoutProps}.
  * @returns the composed detail page.
@@ -92,28 +92,28 @@ export function EntityDetailLayout({
   const scrollRef = useDetailHeaderCollapse({ hasCover: Boolean(cover) });
 
   const header = (
-    <header className="page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-0 pt-1 pb-1">
+    <header className="detail-header page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-0">
       {/* The backdrop is a layer of this header, not a section above it. `isolate` traps it in
           the header's own stacking context, so it cannot paint over anything outside — the class
           of bug that made an opaque icon look transparent. It has no height of its own: it is
           whatever the header is, so collapsing the header collapses the artwork with it. */}
       {cover ? <div className="absolute inset-0 -z-10 overflow-hidden">{cover}</div> : null}
 
-      {eyebrow || actions ? (
-        <div className="mb-3 flex items-center justify-between gap-3 pt-3">
-          <div className="min-w-0">{eyebrow}</div>
-          {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
-        </div>
-      ) : null}
+      {eyebrow ? <div className="mb-3 min-w-0">{eyebrow}</div> : null}
 
       {cover ? <div aria-hidden="true" className="detail-backdrop-space" /> : null}
 
       <div className="detail-masthead">
-        <div className="detail-identity">
-          <div className="detail-glyph">{icon}</div>
-          <h1 className="detail-title text-on-surface text-headline-medium min-w-0 font-medium">
-            {title}
-          </h1>
+        <div className="detail-primary">
+          <div className="detail-identity">
+            <div className="detail-glyph">{icon}</div>
+            <h1 className="detail-title text-on-surface text-headline-medium min-w-0 font-medium">
+              {title}
+            </h1>
+          </div>
+          {actions ? (
+            <div className="detail-actions flex shrink-0 items-center gap-1">{actions}</div>
+          ) : null}
         </div>
 
         <div className="detail-secondary">
@@ -146,7 +146,7 @@ export function EntityDetailLayout({
           children through the nested grid, so nothing inside has to know it sits in a bleeding
           section. */}
       {object ? (
-        <ObjectSurface object={object} surfaceId="entity-detail">
+        <ObjectSurface object={object} dragDisabled surfaceId="entity-detail">
           {header}
         </ObjectSurface>
       ) : (
@@ -168,7 +168,42 @@ export function EntityDetailLayout({
  * metadata row reads as the same calm, tappable chip.
  */
 export const ENTITY_METADATA_CHIP_CLASS =
-  'bg-surface-container-low hover:bg-surface-container-high min-h-10 gap-1.5 rounded-full px-3';
+  'bg-surface-container-low hover:bg-surface-container-high min-h-10 min-w-0 max-w-full shrink gap-1.5 rounded-full px-3';
+
+/** Ordered visibility tier for one property in the inline metadata row. */
+export type EntityMetadataPriority = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** Props for {@link EntityMetadataItem}. */
+export interface EntityMetadataItemProps {
+  /** Lower priorities remain inline at narrower widths; priority zero is always visible. */
+  priority: EntityMetadataPriority;
+  /** Optional width policy for property types that must remain intrinsically readable. */
+  className?: string;
+  /** One property picker or compact read-only value. */
+  children: ReactNode;
+}
+
+/**
+ * Annotate one property for progressive inline disclosure while keeping it in overflow.
+ *
+ * @param props - The property control and its inline priority.
+ * @returns A width-capped metadata item understood by {@link EntityMetadataRow}.
+ */
+export function EntityMetadataItem({
+  priority,
+  className,
+  children,
+}: EntityMetadataItemProps): JSX.Element {
+  return (
+    <div
+      data-entity-metadata-item=""
+      data-entity-metadata-priority={priority}
+      className={cn('max-w-64 min-w-0 shrink-0 items-center [&>*]:min-w-0', className)}
+    >
+      {children}
+    </div>
+  );
+}
 
 /** Props for {@link EntityMetadataRow}. */
 export interface EntityMetadataRowProps {
@@ -179,15 +214,53 @@ export interface EntityMetadataRowProps {
 }
 
 /**
- * The inline, wrapping row that holds all of an entity's property chips below the identity block.
+ * A single-line property row with a stable overflow surface.
+ *
+ * @remarks
+ * Each property is rendered inline at its declared priority and rendered again inside the popover.
+ * The popover copy is mounted only while open, so picker state never competes between two live
+ * controls. This mirrors the task-header rule: narrow widths remove controls from the row, never
+ * from the product.
  *
  * @param props - The {@link EntityMetadataRowProps}.
  * @returns a labelled group wrapping its property chips.
  */
 export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProps): JSX.Element {
   return (
-    <div role="group" aria-label={ariaLabel} className="flex flex-wrap items-center gap-2">
-      {children}
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="entity-metadata-row flex min-w-0 flex-nowrap items-center gap-2"
+    >
+      <div
+        data-entity-metadata-inline=""
+        className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden"
+      >
+        {children}
+      </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            iconOnly
+            className="shrink-0"
+            aria-label={`More ${ariaLabel}`}
+          >
+            <Ellipsis aria-hidden />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80 max-w-[calc(100vw-1.5rem)] p-2">
+          <div
+            role="group"
+            aria-label={`More ${ariaLabel}`}
+            data-entity-metadata-overflow=""
+            className="flex min-w-0 flex-col items-stretch gap-1"
+          >
+            {children}
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

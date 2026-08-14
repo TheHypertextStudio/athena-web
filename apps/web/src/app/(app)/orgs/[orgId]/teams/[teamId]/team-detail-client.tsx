@@ -162,7 +162,7 @@ export default function TeamDetailClient(): JSX.Element {
           iconKey={display.iconKey}
           colorKey={display.colorKey}
           customColor={display.customColor}
-          size={40}
+          size={48}
         />
       }
       title={

@@ -290,9 +290,10 @@ describe('cycle detail — one window, stated once', () => {
     expect(occurrences(readableText(container), 'Jul 27 – Aug 2')).toBe(1);
   });
 
-  it('shows the same dates on the Window property chip', () => {
+  it('shows the same dates on separate Window boundary chips', () => {
     renderPage();
-    expect(screen.getByRole('button', { name: 'Window — Jul 27 → Aug 2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Window Starts — Jul 27' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Window Ends — Aug 2' })).toBeInTheDocument();
   });
 
   it('gives the subtitle to the runway alone when the title already carries the window', () => {

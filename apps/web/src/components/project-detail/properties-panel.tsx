@@ -15,7 +15,10 @@ import { Activity, Layers, Target } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';
 
 import { HEALTH_OPTIONS, labelOptions, PROJECT_STATUS_OPTIONS } from '@/components/pickers/options';
-import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
+import {
+  ENTITY_METADATA_CHIP_CLASS,
+  EntityMetadataItem,
+} from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** Props for {@link PropertiesPanel}. */
@@ -91,87 +94,100 @@ export function PropertiesPanel({
 
   return (
     <>
-      <EnumPicker<ProjectStatus>
-        options={PROJECT_STATUS_OPTIONS}
-        value={status}
-        onChange={(next) => {
-          if (next) onStatusChange(next);
-        }}
-        placeholder="Set status"
-        ariaLabel="Status"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <EnumPicker<Health>
-        options={HEALTH_OPTIONS}
-        value={health}
-        onChange={onHealthChange}
-        placeholder="Set health"
-        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
-        clearLabel="No health"
-        ariaLabel="Health"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <DateRangePicker
-        value={{ start: startDate, end: targetDate }}
-        onChange={onTimelineChange}
-        placeholder="Set timeline"
-        formatLabel={(value) => formatCalendarDate(value) ?? undefined}
-        ariaLabel="Timeline"
-        startLabel="Start"
-        endLabel="Target"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <EntityPicker
-        options={programOptions}
-        value={programId}
-        onChange={onProgramChange}
-        placeholder={`Set ${programLabel.toLowerCase()}`}
-        triggerIcon={<Layers className="text-on-surface-variant size-4" />}
-        clearLabel={`No ${programLabel.toLowerCase()}`}
-        searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
-        ariaLabel={programLabel}
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <EntityMultiPicker
-        options={initiativeOptions}
-        value={initiativeIds}
-        onToggle={(initiativeId) => {
-          const next = initiativeIds.includes(initiativeId)
-            ? initiativeIds.filter((id) => id !== initiativeId)
-            : [...initiativeIds, initiativeId];
-          onInitiativesChange(next);
-        }}
-        placeholder={`Add ${initiativeLabel.toLowerCase()}s`}
-        triggerIcon={<Target className="text-on-surface-variant size-4" />}
-        singularLabel={initiativeLabel.toLowerCase()}
-        pluralLabel={`${initiativeLabel.toLowerCase()}s`}
-        searchPlaceholder={`Search ${initiativeLabel.toLowerCase()}s…`}
-        emptyText={`No ${initiativeLabel.toLowerCase()}s`}
-        ariaLabel={`${initiativeLabel}s`}
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <LabelsPicker
-        options={labelPickerOptions}
-        value={labelIds}
-        onToggle={(labelId) => {
-          const next = labelIds.includes(labelId)
-            ? labelIds.filter((id) => id !== labelId)
-            : [...labelIds, labelId];
-          onLabelsChange(next);
-        }}
-        {...(onCreateLabel ? { onCreate: onCreateLabel } : {})}
-        placeholder="Add labels"
-        searchPlaceholder="Filter labels…"
-        emptyText="No labels"
-        ariaLabel="Labels"
-        readOnly={readOnly}
-        {...CHIP}
-      />
+      <EntityMetadataItem priority={0}>
+        <EnumPicker<ProjectStatus>
+          options={PROJECT_STATUS_OPTIONS}
+          value={status}
+          onChange={(next) => {
+            if (next) onStatusChange(next);
+          }}
+          placeholder="Set status"
+          ariaLabel="Status"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={1}>
+        <EnumPicker<Health>
+          options={HEALTH_OPTIONS}
+          value={health}
+          onChange={onHealthChange}
+          placeholder="Set health"
+          triggerIcon={<Activity className="text-on-surface-variant size-4" />}
+          clearLabel="No health"
+          ariaLabel="Health"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={2} className="max-w-none">
+        <DateRangePicker
+          value={{ start: startDate, end: targetDate }}
+          onChange={onTimelineChange}
+          startPlaceholder="Set start date"
+          endPlaceholder="Set target date"
+          formatLabel={(value) => formatCalendarDate(value) ?? undefined}
+          ariaLabel="Timeline"
+          startLabel="Start"
+          endLabel="Target"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={3}>
+        <EntityPicker
+          options={programOptions}
+          value={programId}
+          onChange={onProgramChange}
+          placeholder={`Set ${programLabel.toLowerCase()}`}
+          triggerIcon={<Layers className="text-on-surface-variant size-4" />}
+          clearLabel={`No ${programLabel.toLowerCase()}`}
+          searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
+          ariaLabel={programLabel}
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={4}>
+        <EntityMultiPicker
+          options={initiativeOptions}
+          value={initiativeIds}
+          onToggle={(initiativeId) => {
+            const next = initiativeIds.includes(initiativeId)
+              ? initiativeIds.filter((id) => id !== initiativeId)
+              : [...initiativeIds, initiativeId];
+            onInitiativesChange(next);
+          }}
+          placeholder={`Add ${initiativeLabel.toLowerCase()}s`}
+          triggerIcon={<Target className="text-on-surface-variant size-4" />}
+          singularLabel={initiativeLabel.toLowerCase()}
+          pluralLabel={`${initiativeLabel.toLowerCase()}s`}
+          searchPlaceholder={`Search ${initiativeLabel.toLowerCase()}s…`}
+          emptyText={`No ${initiativeLabel.toLowerCase()}s`}
+          ariaLabel={`${initiativeLabel}s`}
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={5}>
+        <LabelsPicker
+          options={labelPickerOptions}
+          value={labelIds}
+          onToggle={(labelId) => {
+            const next = labelIds.includes(labelId)
+              ? labelIds.filter((id) => id !== labelId)
+              : [...labelIds, labelId];
+            onLabelsChange(next);
+          }}
+          {...(onCreateLabel ? { onCreate: onCreateLabel } : {})}
+          placeholder="Add labels"
+          searchPlaceholder="Filter labels…"
+          emptyText="No labels"
+          ariaLabel="Labels"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
     </>
   );
 }

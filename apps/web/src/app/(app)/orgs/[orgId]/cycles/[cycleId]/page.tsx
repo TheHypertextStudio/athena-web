@@ -297,9 +297,9 @@ export default function CycleDetailPage(): JSX.Element {
         title: cycle.displayName,
       }}
       icon={
-        <span className="flex size-10 shrink-0 items-center justify-center">
-          <span className="bg-surface-container-high text-on-surface-variant flex size-8 items-center justify-center rounded-full">
-            <RefreshCw aria-hidden className="size-4" />
+        <span className="flex size-12 shrink-0 items-center justify-center">
+          <span className="bg-surface-container-high text-on-surface-variant flex size-12 items-center justify-center rounded-full">
+            <RefreshCw aria-hidden className="size-6" />
           </span>
         </span>
       }

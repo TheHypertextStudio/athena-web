@@ -883,7 +883,8 @@
   --detail-collapse-range: 4rem;
   --detail-collapse-progress: 0;
   --detail-collapse-delay: 0s;
-  --detail-expanded-glyph-row: 3.25rem;
+  --detail-expanded-glyph-size: 3rem;
+  --detail-expanded-glyph-row: 3.75rem;
   --detail-compact-identity-inset: 3rem;
   container-type: size;
   overflow-anchor: none;
@@ -917,6 +918,20 @@
   animation-name: detail-masthead-collapse;
 }
 
+.detail-header {
+  padding-block-start: 1.25rem;
+  padding-block-end: 0.5rem;
+  animation-name: detail-header-collapse;
+}
+
+.detail-primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 0.75rem;
+  min-width: 0;
+}
+
 .detail-identity {
   position: relative;
   min-width: 0;
@@ -927,8 +942,10 @@
   position: absolute;
   inset-block-start: 0;
   inset-inline-start: 0;
-  width: fit-content;
+  width: var(--detail-expanded-glyph-size);
+  height: var(--detail-expanded-glyph-size);
   transform-origin: left center;
+  animation-name: detail-glyph-collapse;
 }
 
 .detail-title {
@@ -936,10 +953,82 @@
   overflow: hidden;
   overflow-wrap: anywhere;
   padding-block-start: var(--detail-expanded-glyph-row);
+  white-space: normal;
+}
+
+.detail-title textarea {
+  text-overflow: inherit;
+  white-space: inherit;
 }
 
 .detail-tabs {
-  margin-block-start: 0.25rem;
+  margin-block-start: 1rem;
+  animation-name: detail-tabs-collapse;
+}
+
+/*
+ * Strategic-work properties are one row at every width. Lower-priority items disappear from the
+ * inline lane at conservative container thresholds and remain available in the adjacent overflow
+ * popover. The popover copy is vertical and always reveals every item.
+ */
+.entity-metadata-row {
+  container-type: inline-size;
+}
+
+[data-entity-metadata-inline] [data-entity-metadata-item] {
+  display: none;
+}
+
+[data-entity-metadata-inline] [data-entity-metadata-priority='0'],
+[data-entity-metadata-overflow] [data-entity-metadata-item] {
+  display: flex;
+}
+
+[data-entity-metadata-overflow] [data-entity-metadata-item] {
+  width: 100%;
+  max-width: none;
+}
+
+@container (min-width: 28rem) {
+  [data-entity-metadata-inline] [data-entity-metadata-priority='1'] {
+    display: flex;
+  }
+}
+
+@container (min-width: 40rem) {
+  [data-entity-metadata-inline] [data-entity-metadata-priority='2'] {
+    display: flex;
+  }
+}
+
+@container (min-width: 52rem) {
+  [data-entity-metadata-inline] [data-entity-metadata-priority='3'] {
+    display: flex;
+  }
+}
+
+@container (min-width: 64rem) {
+  [data-entity-metadata-inline] [data-entity-metadata-priority='4'] {
+    display: flex;
+  }
+}
+
+@container (min-width: 76rem) {
+  [data-entity-metadata-inline] [data-entity-metadata-priority='5'] {
+    display: flex;
+  }
+}
+
+@container (min-width: 88rem) {
+  [data-entity-metadata-inline] [data-entity-metadata-priority='6'] {
+    display: flex;
+  }
+}
+
+@container (min-width: 100rem) {
+  [data-entity-metadata-inline] [data-entity-metadata-priority='7'] {
+    display: flex;
+  }
 }
 
 /*
@@ -958,9 +1047,12 @@
 }
 
 .detail-backdrop-space,
+.detail-header,
 .detail-masthead,
+.detail-glyph,
 .detail-title,
-.detail-secondary {
+.detail-secondary,
+.detail-tabs {
   animation-delay: var(--detail-collapse-delay);
   animation-duration: 1s;
   animation-fill-mode: both;
@@ -1014,6 +1106,25 @@
   }
 }
 
+@keyframes detail-header-collapse {
+  to {
+    padding-block-start: 0.25rem;
+    padding-block-end: 0.25rem;
+  }
+}
+
+@keyframes detail-glyph-collapse {
+  to {
+    transform: scale(0.833333);
+  }
+}
+
+@keyframes detail-tabs-collapse {
+  to {
+    margin-block-start: 0.25rem;
+  }
+}
+
 @keyframes detail-title-collapse {
   from {
     padding-block-start: var(--detail-expanded-glyph-row);
@@ -1021,6 +1132,8 @@
     padding-inline-start: 0;
     font-size: var(--text-headline-medium);
     line-height: var(--text-headline-medium--line-height);
+    text-overflow: clip;
+    white-space: normal;
   }
   99% {
     white-space: normal;

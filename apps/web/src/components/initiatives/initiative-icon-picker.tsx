@@ -17,6 +17,8 @@ export interface InitiativeIconPickerProps {
   initiativeName: string;
   editable: boolean;
   pending: boolean;
+  /** Visual glyph diameter; detail mastheads use 48dp while list surfaces keep 32dp. */
+  size?: number;
   onChange: (
     iconKey: EntityDisplayIconKey,
     colorKey: EntityDisplayColorKey,
@@ -30,6 +32,7 @@ export function InitiativeIconPicker({
   initiativeName,
   editable,
   pending,
+  size = 32,
   onChange,
 }: InitiativeIconPickerProps): JSX.Element {
   const [search, setSearch] = useState('');
@@ -46,12 +49,17 @@ export function InitiativeIconPicker({
       iconKey={display.iconKey}
       colorKey={display.colorKey}
       customColor={display.customColor}
+      size={size}
     />
   );
 
   if (!editable) {
     return (
-      <span className="flex size-10 shrink-0 items-center justify-center" title={initiativeName}>
+      <span
+        className="flex shrink-0 items-center justify-center"
+        style={{ width: Math.max(40, size), height: Math.max(40, size) }}
+        title={initiativeName}
+      >
         {glyph}
       </span>
     );
@@ -62,7 +70,8 @@ export function InitiativeIconPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="hover:bg-surface-container-high focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          className="hover:bg-surface-container-high focus-visible:ring-ring flex shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          style={{ width: Math.max(40, size), height: Math.max(40, size) }}
           aria-label={`Customize ${initiativeName} icon`}
           disabled={pending}
         >

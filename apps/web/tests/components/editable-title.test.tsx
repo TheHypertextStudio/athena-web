@@ -31,7 +31,9 @@ describe('EditableTitle', () => {
 
   it('is always an editable input, never a click-to-edit toggle', () => {
     render(<EditableTitle value="Old" onSave={vi.fn()} canEdit ariaLabel="Task title" />);
-    expect(screen.getByLabelText('Task title')).toBeTruthy();
+    const field = screen.getByLabelText('Task title');
+    expect(field).toBeTruthy();
+    expect(field.className).toContain('[field-sizing:content]');
   });
 
   it('autosaves a trimmed, changed value after a quiet debounce, without disabling the field', () => {

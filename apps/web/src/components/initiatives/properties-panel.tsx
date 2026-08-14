@@ -19,7 +19,10 @@ import { type JSX, useMemo } from 'react';
 
 import { RolledUpHealthPill } from '@/components/initiatives/health-pill';
 import { enumOptions, HEALTH_OPTIONS, labelOptions } from '@/components/pickers/options';
-import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
+import {
+  ENTITY_METADATA_CHIP_CLASS,
+  EntityMetadataItem,
+} from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** Human labels for each Initiative lifecycle status (shared with the page's print + child rows). */
@@ -127,86 +130,102 @@ export function InitiativePropertiesPanel({
 
   return (
     <>
-      <EnumPicker<InitiativeStatus>
-        options={enumOptions(STATUS_ORDER, INITIATIVE_STATUS_LABEL)}
-        value={status}
-        onChange={(next) => {
-          if (next) onStatusChange(next);
-        }}
-        placeholder="Choose status"
-        ariaLabel="Status"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <EnumPicker<Health>
-        options={HEALTH_OPTIONS}
-        value={health}
-        onChange={onHealthChange}
-        placeholder="No health"
-        clearLabel="No health"
-        ariaLabel="Initiative health"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <RolledUpHealthPill health={rolledUpHealth} className="min-h-10 px-3" />
-      <DatePicker
-        value={targetDate ? targetDate.slice(0, 10) : null}
-        onChange={onTargetChange}
-        placeholder="Set target date"
-        formatLabel={(value) => formatCalendarDate(value) ?? undefined}
-        ariaLabel="Target date"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <ActorPicker
-        options={memberOptions}
-        value={ownerId}
-        onChange={onOwnerChange}
-        placeholder="Set owner"
-        clearLabel="No owner"
-        ariaLabel="Owner"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <EnumPicker<InitiativePriority>
-        options={enumOptions(PRIORITY_ORDER, INITIATIVE_PRIORITY_LABEL)}
-        value={priority}
-        onChange={(next) => {
-          if (next) onPriorityChange(next);
-        }}
-        placeholder="Choose priority"
-        ariaLabel="Priority"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <EnumPicker<InitiativeUpdateCadence>
-        options={enumOptions(CADENCE_ORDER, INITIATIVE_CADENCE_LABEL)}
-        value={updateCadence}
-        onChange={(next) => {
-          if (next) onCadenceChange(next);
-        }}
-        placeholder="Choose cadence"
-        ariaLabel="Update cadence"
-        readOnly={readOnly}
-        {...CHIP}
-      />
-      <LabelsPicker
-        options={labelPickerOptions}
-        value={labelIds}
-        onToggle={(labelId) => {
-          const next = labelIds.includes(labelId)
-            ? labelIds.filter((id) => id !== labelId)
-            : [...labelIds, labelId];
-          onLabelsChange(next);
-        }}
-        {...(onCreateLabel ? { onCreate: onCreateLabel } : {})}
-        placeholder="Add labels"
-        searchPlaceholder="Filter labels…"
-        emptyText="No labels"
-        ariaLabel="Labels"
-        readOnly={readOnly}
-        {...CHIP}
-      />
+      <EntityMetadataItem priority={0}>
+        <EnumPicker<InitiativeStatus>
+          options={enumOptions(STATUS_ORDER, INITIATIVE_STATUS_LABEL)}
+          value={status}
+          onChange={(next) => {
+            if (next) onStatusChange(next);
+          }}
+          placeholder="Choose status"
+          ariaLabel="Status"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={1}>
+        <EnumPicker<Health>
+          options={HEALTH_OPTIONS}
+          value={health}
+          onChange={onHealthChange}
+          placeholder="No health"
+          clearLabel="No health"
+          ariaLabel="Initiative health"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={2}>
+        <RolledUpHealthPill health={rolledUpHealth} className="min-h-10 px-3" />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={3}>
+        <DatePicker
+          value={targetDate ? targetDate.slice(0, 10) : null}
+          onChange={onTargetChange}
+          placeholder="Set target date"
+          formatLabel={(value) => formatCalendarDate(value) ?? undefined}
+          ariaLabel="Target date"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={4}>
+        <ActorPicker
+          options={memberOptions}
+          value={ownerId}
+          onChange={onOwnerChange}
+          placeholder="Set owner"
+          clearLabel="No owner"
+          ariaLabel="Owner"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={5}>
+        <EnumPicker<InitiativePriority>
+          options={enumOptions(PRIORITY_ORDER, INITIATIVE_PRIORITY_LABEL)}
+          value={priority}
+          onChange={(next) => {
+            if (next) onPriorityChange(next);
+          }}
+          placeholder="Choose priority"
+          ariaLabel="Priority"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={6}>
+        <EnumPicker<InitiativeUpdateCadence>
+          options={enumOptions(CADENCE_ORDER, INITIATIVE_CADENCE_LABEL)}
+          value={updateCadence}
+          onChange={(next) => {
+            if (next) onCadenceChange(next);
+          }}
+          placeholder="Choose cadence"
+          ariaLabel="Update cadence"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={7}>
+        <LabelsPicker
+          options={labelPickerOptions}
+          value={labelIds}
+          onToggle={(labelId) => {
+            const next = labelIds.includes(labelId)
+              ? labelIds.filter((id) => id !== labelId)
+              : [...labelIds, labelId];
+            onLabelsChange(next);
+          }}
+          {...(onCreateLabel ? { onCreate: onCreateLabel } : {})}
+          placeholder="Add labels"
+          searchPlaceholder="Filter labels…"
+          emptyText="No labels"
+          ariaLabel="Labels"
+          readOnly={readOnly}
+          {...CHIP}
+        />
+      </EntityMetadataItem>
     </>
   );
 }

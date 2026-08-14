@@ -35,6 +35,7 @@ describe('entity detail collapse contract', () => {
 
   it('morphs one identity from stacked to compact without duplicating the icon', () => {
     expect(layout).toContain('className="detail-identity"');
+    expect(layout).toContain('className="detail-primary"');
     expect(layout).toContain('className="detail-masthead"');
     expect(layout).toContain('className="detail-tabs"');
     expect(layout.match(/className="detail-glyph/g)).toHaveLength(1);
@@ -42,14 +43,30 @@ describe('entity detail collapse contract', () => {
     expect(css).toContain('padding-block-start: var(--detail-expanded-glyph-row)');
     expect(css).toContain('padding-inline-start: var(--detail-compact-identity-inset)');
     expect(css).toContain('font-size: var(--text-title-medium)');
+    expect(css).toContain('--detail-expanded-glyph-size: 3rem');
+    expect(css).toMatch(/@keyframes detail-glyph-collapse[\s\S]*scale\(0\.833333\)/);
   });
 
-  it('keeps the full-size identity and removes collapsed secondary whitespace above tabs', () => {
+  it('keeps masthead actions in the compact identity row and disables body dragging', () => {
+    expect(layout).toContain('<ObjectSurface object={object} dragDisabled');
+    expect(layout).toMatch(/detail-primary[\s\S]*detail-identity[\s\S]*detail-actions/);
+    expect(css).toMatch(
+      /\.detail-primary\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto/,
+    );
+  });
+
+  it('keeps expanded text readable and restores spacing that collapses with the masthead', () => {
     expect(css).toContain('--detail-compact-identity-inset: 3rem');
-    expect(css).not.toContain('scale: 0.6');
     expect(css).toContain('animation-name: detail-masthead-collapse');
     expect(css).toMatch(/@keyframes detail-masthead-collapse[\s\S]*row-gap:\s*0/);
-    expect(css).toMatch(/\.detail-tabs\s*\{[\s\S]*margin-block-start:\s*0\.25rem/);
+    expect(layout).toContain('className="detail-header');
+    expect(css).toMatch(/\.detail-header\s*\{[\s\S]*padding-block-start:\s*1\.25rem/);
+    expect(css).toMatch(/\.detail-tabs\s*\{[\s\S]*margin-block-start:\s*1rem/);
+    expect(css).toMatch(/@keyframes detail-header-collapse[\s\S]*padding-block-start:\s*0\.25rem/);
+    expect(css).toMatch(/@keyframes detail-tabs-collapse[\s\S]*margin-block-start:\s*0\.25rem/);
+    expect(css).toMatch(
+      /@keyframes detail-title-collapse\s*\{[\s\S]*from\s*\{[\s\S]*white-space:\s*normal/,
+    );
   });
 
   it('uses a discrete compact state for reduced motion', () => {

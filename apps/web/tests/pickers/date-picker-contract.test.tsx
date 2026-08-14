@@ -262,13 +262,12 @@ describe('DateRangePicker ordering', () => {
       <DateRangePicker
         value={{ start: '2026-08-10', end: null }}
         onChange={onChange}
-        placeholder="Set timeline"
+        startPlaceholder="Set start date"
+        endPlaceholder="Set end date"
         ariaLabel="Timeline"
       />,
     );
-    await user.click(screen.getByRole('button', { name: /Timeline/ }));
-    // Move to the End bound; days before the start are then unreachable.
-    await user.click(screen.getByRole('tab', { name: /End/ }));
+    await user.click(screen.getByRole('button', { name: /Timeline End/ }));
     const grid = await screen.findByRole('grid', { name: /Timeline End/ });
     expect(within(grid).getByRole('button', { name: '2026-08-09' })).toBeDisabled();
     await user.click(within(grid).getByRole('button', { name: '2026-08-09' }));
@@ -285,11 +284,12 @@ describe('DateRangePicker ordering', () => {
       <DateRangePicker
         value={{ start: '2026-08-01', end: '2026-08-10' }}
         onChange={onChange}
-        placeholder="Set timeline"
+        startPlaceholder="Set start date"
+        endPlaceholder="Set end date"
         ariaLabel="Timeline"
       />,
     );
-    await user.click(screen.getByRole('button', { name: /Timeline/ }));
+    await user.click(screen.getByRole('button', { name: /Timeline Start/ }));
     const grid = await screen.findByRole('grid', { name: /Timeline Start/ });
     // While editing the start, days after the current end are out of bounds.
     expect(within(grid).getByRole('button', { name: '2026-08-20' })).toBeDisabled();
@@ -297,17 +297,18 @@ describe('DateRangePicker ordering', () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith({ start: '2026-08-05', end: '2026-08-10' });
   });
 
-  it('summarizes a half-open window without a broken string', () => {
+  it('renders a half-open window as separate controls without a broken string', () => {
     render(
       <DateRangePicker
         value={{ start: '2026-08-01', end: 'not-a-date' }}
         onChange={vi.fn()}
-        placeholder="Set timeline"
+        startPlaceholder="Set start date"
+        endPlaceholder="Set end date"
         ariaLabel="Timeline"
       />,
     );
-    const trigger = screen.getByRole('button', { name: /Timeline/ });
-    expect(trigger).toHaveTextContent('Aug 1, 2026');
-    expect(trigger.textContent).not.toMatch(/invalid date/i);
+    expect(screen.getByRole('button', { name: /Timeline Start/ })).toHaveTextContent('Aug 1, 2026');
+    expect(screen.getByRole('button', { name: /Timeline End/ })).toHaveTextContent('Set end date');
+    expect(document.body.textContent).not.toMatch(/invalid date|→/i);
   });
 });

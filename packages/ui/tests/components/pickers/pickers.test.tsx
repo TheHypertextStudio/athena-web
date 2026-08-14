@@ -870,82 +870,87 @@ describe('DatePicker', () => {
 });
 
 describe('DateRangePicker', () => {
-  it('summarizes both bounds and reports a changed start', async () => {
+  it('renders independent start and end triggers without an arrow summary', () => {
+    render(
+      <DateRangePicker
+        value={{ start: '2026-01-01', end: '2026-02-01' }}
+        onChange={vi.fn()}
+        startPlaceholder="Set start date"
+        endPlaceholder="Set end date"
+        ariaLabel="Timeline"
+      />,
+    );
+
+    const startTrigger = screen.getByRole('button', { name: /Timeline Start/ });
+    const endTrigger = screen.getByRole('button', { name: /Timeline End/ });
+    expect(startTrigger).toHaveTextContent('Jan 1, 2026');
+    expect(endTrigger).toHaveTextContent('Feb 1, 2026');
+    expect(startTrigger).toHaveClass('shrink-0', 'whitespace-nowrap');
+    expect(endTrigger).toHaveClass('shrink-0', 'whitespace-nowrap');
+    expect(startTrigger.parentElement).toHaveClass('gap-2');
+    expect(screen.queryByText(/→/)).not.toBeInTheDocument();
+  });
+
+  it('reports a changed start while preserving the end', async () => {
     const onChange = vi.fn();
     render(
       <DateRangePicker
         value={{ start: '2026-01-01', end: '2026-02-01' }}
         onChange={onChange}
-        placeholder="Set timeline"
+        startPlaceholder="Set start date"
+        endPlaceholder="Set end date"
         ariaLabel="Timeline"
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
-    // The range picker opens on its Start bound; the grid is bounded above by the current end,
-    // so an inverted window cannot be produced by any sequence of clicks.
+    fireEvent.click(screen.getByRole('button', { name: /Timeline Start/ }));
     const grid = await screen.findByRole('grid', { name: 'Timeline Start' });
     fireEvent.click(within(grid).getByRole('button', { name: '2026-01-15' }));
     expect(onChange).toHaveBeenCalledWith({ start: '2026-01-15', end: '2026-02-01' });
   });
 
-  it('shows the calm prompt when neither bound is set', () => {
+  it('shows a distinct calm prompt for each unset bound', () => {
     render(
       <DateRangePicker
         value={{ start: null, end: null }}
         onChange={vi.fn()}
-        placeholder="Set timeline"
+        startPlaceholder="Set start date"
+        endPlaceholder="Set target date"
         ariaLabel="Timeline"
+        endLabel="Target"
       />,
     );
-    expect(screen.getByText('Set timeline')).toBeInTheDocument();
+    expect(screen.getByText('Set start date')).toBeInTheDocument();
+    expect(screen.getByText('Set target date')).toBeInTheDocument();
   });
 
-  it('renders read-only with no opener', () => {
+  it('renders both bounds read-only with no opener', () => {
     render(
       <DateRangePicker
         value={{ start: '2026-01-01', end: '2026-02-01' }}
         onChange={vi.fn()}
-        placeholder="Set timeline"
+        startPlaceholder="Set start date"
+        endPlaceholder="Set end date"
         ariaLabel="Timeline"
         readOnly
       />,
     );
-    expect(screen.getByText(/2026/)).toBeInTheDocument();
+    expect(screen.getByText('Jan 1, 2026')).toBeInTheDocument();
+    expect(screen.getByText('Feb 1, 2026')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('advances to the End tab when an in-range start is chosen, keeping the existing end', async () => {
+  it('sets the end bound from its own trigger', async () => {
     const onChange = vi.fn();
     render(
       <DateRangePicker
         value={{ start: '2026-01-01', end: '2026-02-01' }}
         onChange={onChange}
-        placeholder="Set timeline"
+        startPlaceholder="Set start date"
+        endPlaceholder="Set end date"
         ariaLabel="Timeline"
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
-    const startGrid = await screen.findByRole('grid', { name: 'Timeline Start' });
-    fireEvent.click(within(startGrid).getByRole('button', { name: '2026-01-15' }));
-    expect(onChange).toHaveBeenCalledWith({ start: '2026-01-15', end: '2026-02-01' });
-    // Selecting a start advances the segmented control to End.
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /^End/ })).toHaveAttribute('aria-selected', 'true');
-    });
-  });
-
-  it('sets the end bound and closes when the End tab is active', async () => {
-    const onChange = vi.fn();
-    render(
-      <DateRangePicker
-        value={{ start: '2026-01-01', end: '2026-02-01' }}
-        onChange={onChange}
-        placeholder="Set timeline"
-        ariaLabel="Timeline"
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: /^End/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Timeline End/ }));
     const endGrid = await screen.findByRole('grid', { name: 'Timeline End' });
     fireEvent.click(within(endGrid).getByRole('button', { name: '2026-02-15' }));
     expect(onChange).toHaveBeenCalledWith({ start: '2026-01-01', end: '2026-02-15' });
@@ -954,56 +959,20 @@ describe('DateRangePicker', () => {
     });
   });
 
-  it('jumps the start bound to today and advances to the End tab', async () => {
-    const onChange = vi.fn();
-    render(
-      <DateRangePicker
-        value={{ start: '1970-01-01', end: null }}
-        onChange={onChange}
-        placeholder="Set timeline"
-        ariaLabel="Timeline"
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Today' }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ end: null }));
-    await waitFor(() => {
-      expect(screen.getByRole('tab', { name: /^End/ })).toHaveAttribute('aria-selected', 'true');
-    });
-  });
-
-  it('jumps the end bound to today and closes when the End tab is active', async () => {
-    const onChange = vi.fn();
-    render(
-      <DateRangePicker
-        value={{ start: '1970-01-01', end: '1970-01-02' }}
-        onChange={onChange}
-        placeholder="Set timeline"
-        ariaLabel="Timeline"
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
-    fireEvent.click(await screen.findByRole('tab', { name: /^End/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Today' }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ start: '1970-01-01' }));
-    await waitFor(() => {
-      expect(screen.queryByRole('grid')).not.toBeInTheDocument();
-    });
-  });
-
-  it('clears both bounds and resets to the Start tab', async () => {
+  it('clears only the bound whose picker is open', async () => {
     const onChange = vi.fn();
     render(
       <DateRangePicker
         value={{ start: '2026-01-01', end: '2026-02-01' }}
         onChange={onChange}
-        placeholder="Set timeline"
+        startPlaceholder="Set start date"
+        endPlaceholder="Set end date"
         ariaLabel="Timeline"
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Timeline End/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
-    expect(onChange).toHaveBeenCalledWith({ start: null, end: null });
+    expect(onChange).toHaveBeenCalledWith({ start: '2026-01-01', end: null });
     await waitFor(() => {
       expect(screen.queryByRole('grid')).not.toBeInTheDocument();
     });

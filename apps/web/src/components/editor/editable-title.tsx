@@ -34,6 +34,8 @@ import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 
+import { useAutosizeTextarea } from './use-autosize-textarea';
+
 /** Delay before a single click on a `doubleClick`-mode title opens the row, so a double-click wins. */
 const OPEN_AFTER_SINGLE_CLICK_MS = 220;
 
@@ -113,16 +115,9 @@ export function EditableTitle({
     field.select();
   }, [focused]);
 
-  // Grow the field to fit its wrapped content, so the heading occupies exactly the space its text
-  // needs. This is what lets an always-live control replace a `<span>` without clipping: the box
-  // is the heading rather than a one-line window onto it. `scrollHeight` is 0 in jsdom, so the
-  // guard keeps a test environment from collapsing the field to nothing.
-  useEffect(() => {
-    const field = fieldRef.current;
-    if (!field) return;
-    field.style.height = 'auto';
-    if (field.scrollHeight > 0) field.style.height = `${String(field.scrollHeight)}px`;
-  }, [draft]);
+  // A detail title can gain or lose lines when the viewport or its adjacent actions change width,
+  // even though its value did not change. Keep its height fitted for both causes.
+  useAutosizeTextarea(fieldRef, draft);
 
   const clearOpenTimer = (): void => {
     if (openTimer.current) {
@@ -208,7 +203,7 @@ export function EditableTitle({
         }
       }}
       className={cn(
-        'm-0 w-full resize-none overflow-hidden border-0 bg-transparent p-0 outline-none',
+        'm-0 [field-sizing:content] w-full resize-none overflow-hidden border-0 bg-transparent p-0 outline-none',
         className,
       )}
     />

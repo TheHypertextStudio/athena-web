@@ -60,7 +60,8 @@ describe('Project PropertiesPanel', () => {
 
     expect(screen.queryByText('Not set')).toBeNull();
     expect(screen.getByText('Set health')).toBeTruthy();
-    expect(screen.getByText('Set timeline')).toBeTruthy();
+    expect(screen.getByText('Set start date')).toBeTruthy();
+    expect(screen.getByText('Set target date')).toBeTruthy();
     expect(screen.getByText('Set program')).toBeTruthy();
     expect(screen.getByText('Add initiatives')).toBeTruthy();
   });

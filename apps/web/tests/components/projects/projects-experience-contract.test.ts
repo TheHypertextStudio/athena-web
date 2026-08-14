@@ -72,8 +72,14 @@ describe('Projects experience contract', () => {
     expect(detail).toContain('<EntityDetailLayout');
     expect(detail).toContain('<EntityMetadataRow ariaLabel="Project properties">');
     expect(detail).toContain('<PropertiesPanel');
+    expect(detail).toContain('<ProjectPeopleRow');
     expect(detail).toContain('<InitiativeIconPicker');
-    expect(detail).toContain('aria-label="Project people"');
+    expect(detail.indexOf('<ProjectPeopleRow')).toBeLessThan(
+      detail.indexOf('<EntityMetadataRow ariaLabel="Project properties">'),
+    );
+    expect(detail).toContain('assignedPeople={participants}');
+    expect(detail).toContain('patchProject({ leadId })');
+    expect(detail).not.toContain('aria-label="Project people"');
     // The canonical title token lives once in the shell as headline-medium; no detail page may
     // diverge to headline-large or restate the token.
     expect(layout).toContain('text-headline-medium');
@@ -87,6 +93,19 @@ describe('Projects experience contract', () => {
     expect(detail).not.toContain('No people yet');
     expect(detail).not.toContain('Project info');
     expect(detail).not.toContain('Print');
+  });
+
+  it('keeps Repeat project inside the Project actions menu', () => {
+    const detail = source(detailPath);
+    const repeatMutation = detail.indexOf('setRepeatProjectOpen(true)');
+    const containingMenuItem = detail.lastIndexOf('<DropdownMenuItem', repeatMutation);
+    const containingButton = detail.lastIndexOf('<Button', repeatMutation);
+
+    expect(repeatMutation).toBeGreaterThan(-1);
+    expect(containingMenuItem).toBeGreaterThan(containingButton);
+    expect(detail.slice(containingMenuItem, repeatMutation + 200)).toContain(
+      'Repeat {projectNoun.toLowerCase()}',
+    );
   });
 
   it('operates properties as an inline metadata chip row, not an anchored disclosure', () => {

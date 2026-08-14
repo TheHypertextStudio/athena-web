@@ -191,8 +191,8 @@ export default function ProgramDetailPage(): JSX.Element {
         title: program.name,
       }}
       icon={
-        <span className="flex size-10 shrink-0 items-center justify-center">
-          <EntityIconGlyph iconKey="layers" colorKey="primary" customColor={null} />
+        <span className="flex size-12 shrink-0 items-center justify-center">
+          <EntityIconGlyph iconKey="layers" colorKey="primary" customColor={null} size={48} />
         </span>
       }
       title={

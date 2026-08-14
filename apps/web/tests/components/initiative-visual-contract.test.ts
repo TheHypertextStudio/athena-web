@@ -165,8 +165,9 @@ describe('Initiative visual contract', () => {
     expect(overview).not.toContain('<ChevronDown');
   });
 
-  it('keeps icon-only Initiative controls in 40px interactive targets', () => {
+  it('keeps icon-only Initiative controls at least 40px and uses a 48px detail glyph', () => {
     const overview = source(overviewPath);
+    const detail = source(detailPath);
     const picker = source(iconPickerPath);
     const button = source(buttonPath);
     const dialog = source(dialogPath);
@@ -180,7 +181,9 @@ describe('Initiative visual contract', () => {
     expect(control).toMatch(/xl:\s*\{[^}]*width: 'w-10'/);
     expect(dialog).toContain('h-10 w-10');
     expect(overview).toContain('size="icon"');
-    expect(picker).toContain('flex size-10 shrink-0 items-center justify-center');
+    expect(picker).toContain('size = 32');
+    expect(picker).toContain('Math.max(40, size)');
+    expect(detail).toContain('size={48}');
     expect(overview).not.toContain('@2xl:size-6');
   });
 

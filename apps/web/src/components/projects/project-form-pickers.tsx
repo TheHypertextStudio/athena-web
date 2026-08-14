@@ -158,7 +158,8 @@ export function ProjectComposerPickers({
           <DateRangePicker
             value={{ start: references.startDate, end: references.targetDate }}
             onChange={references.onTimelineChange}
-            placeholder="Set timeline"
+            startPlaceholder="Set start date"
+            endPlaceholder="Set target date"
             formatLabel={triggerDate}
             ariaLabel="Timeline"
             startLabel="Start"

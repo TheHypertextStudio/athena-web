@@ -9,7 +9,6 @@ import type {
   TaskOut,
 } from '@docket/types';
 import { ProjectId, TeamId } from '@docket/types';
-import { ActorAvatar } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, RefreshCw, Trash2 } from '@docket/ui/icons';
 import {
@@ -18,6 +17,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Tabs,
   type TabsItem,
@@ -39,6 +39,7 @@ import { AgentsStrip } from '@/components/project-detail/agents-strip';
 import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
 import { ProjectDependenciesPanel } from '@/components/project-detail/project-dependencies';
 import { ProjectMilestonesPanel } from '@/components/project-detail/project-milestones';
+import { ProjectPeopleRow } from '@/components/project-detail/project-people-row';
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
@@ -95,6 +96,7 @@ export default function ProjectDetailPage(): JSX.Element {
     milestoneTasks,
     resolveActor,
     canEdit,
+    memberOptions,
     programOptions,
     initiativeOptions,
     agentsHere,
@@ -230,15 +232,13 @@ export default function ProjectDetailPage(): JSX.Element {
   const renameTask = useRenameTask(orgId, [detailKey]);
 
   const participantIds = useMemo(() => {
-    if (!project) return [];
     const ids = new Set<string>();
-    if (project.leadId) ids.add(project.leadId);
     for (const { task } of milestoneTasks) {
       if (task.assigneeId) ids.add(task.assigneeId);
       if (task.delegateId) ids.add(task.delegateId);
     }
     return [...ids];
-  }, [milestoneTasks, project]);
+  }, [milestoneTasks]);
   const participants = useMemo(
     () => participantIds.map((actorId) => ({ actorId, ...resolveActor(actorId) })),
     [participantIds, resolveActor],
@@ -297,6 +297,7 @@ export default function ProjectDetailPage(): JSX.Element {
           initiativeName={project.name}
           editable={canEdit}
           pending={displayMutation.isPending}
+          size={48}
           onChange={(iconKey, colorKey, customColor) => {
             displayMutation.mutate({ iconKey, colorKey, customColor });
           }}
@@ -325,7 +326,16 @@ export default function ProjectDetailPage(): JSX.Element {
         />
       }
       metadata={
-        <>
+        <div className="flex min-w-0 flex-col gap-2">
+          <ProjectPeopleRow
+            ownerId={project.leadId ?? null}
+            ownerOptions={memberOptions}
+            assignedPeople={participants}
+            canEdit={canEdit}
+            onOwnerChange={(leadId) => {
+              patchProject({ leadId });
+            }}
+          />
           <EntityMetadataRow ariaLabel="Project properties">
             <PropertiesPanel
               health={health}
@@ -374,7 +384,7 @@ export default function ProjectDetailPage(): JSX.Element {
               {propsError}
             </p>
           ) : null}
-        </>
+        </div>
       }
       actions={
         // One ControlGroup at the row level, and no control inside it declares a height. That is
@@ -389,17 +399,7 @@ export default function ProjectDetailPage(): JSX.Element {
             noun={projectNoun}
             canPublish={canEdit}
           />
-          {canEdit ? (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setRepeatProjectOpen(true);
-              }}
-            >
-              <RefreshCw className="size-4" /> Repeat {projectNoun.toLowerCase()}
-            </Button>
-          ) : null}
-          {canDelete ? (
+          {canEdit || canDelete ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" iconOnly aria-label={`${projectNoun} actions`}>
@@ -407,15 +407,27 @@ export default function ProjectDetailPage(): JSX.Element {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  className="text-error focus:text-error"
-                  onSelect={() => {
-                    deleteProject.reset();
-                    setConfirmDeleteOpen(true);
-                  }}
-                >
-                  <Trash2 className="size-4" /> Delete {projectNoun.toLowerCase()}
-                </DropdownMenuItem>
+                {canEdit ? (
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setRepeatProjectOpen(true);
+                    }}
+                  >
+                    <RefreshCw className="size-4" /> Repeat {projectNoun.toLowerCase()}
+                  </DropdownMenuItem>
+                ) : null}
+                {canEdit && canDelete ? <DropdownMenuSeparator /> : null}
+                {canDelete ? (
+                  <DropdownMenuItem
+                    className="text-error focus:text-error"
+                    onSelect={() => {
+                      deleteProject.reset();
+                      setConfirmDeleteOpen(true);
+                    }}
+                  >
+                    <Trash2 className="size-4" /> Delete {projectNoun.toLowerCase()}
+                  </DropdownMenuItem>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
@@ -440,16 +452,6 @@ export default function ProjectDetailPage(): JSX.Element {
           className="flex flex-col gap-8"
         >
           <ProjectRepeatingWorkBacklink orgId={orgId} entityId={projectId} />
-          {participants.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5" aria-label="Project people">
-              {participants.map((participant) => (
-                <span key={participant.actorId} className="flex h-8 items-center gap-1.5 pr-2">
-                  <ActorAvatar kind={participant.kind} name={participant.name} size={24} />
-                  <span className="text-on-surface text-label-medium">{participant.name}</span>
-                </span>
-              ))}
-            </div>
-          ) : null}
 
           {latestUpdate ? (
             <section className="bg-surface-container-low rounded-xl p-4" aria-label="Latest update">

@@ -50,6 +50,7 @@ import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton'
 import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityDetailLayout,
+  EntityMetadataItem,
   EntityMetadataRow,
 } from '@/components/views/entity-detail-layout';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
@@ -319,6 +320,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           initiativeName={detail.name}
           editable={canEdit}
           pending={displayMutation.isPending}
+          size={48}
           onChange={(iconKey, colorKey, customColor) => {
             displayMutation.mutate({ iconKey, colorKey, customColor });
           }}
@@ -396,22 +398,24 @@ export default function InitiativeDetailPage(): JSX.Element {
                 );
               }}
             />
-            <Button
-              variant="ghost"
-              className={ENTITY_METADATA_CHIP_CLASS}
-              onClick={(event) => {
-                pickerOverlay.open({
-                  kind: 'initiative-hierarchy',
-                  mode: 'parent',
-                  organizationId: orgId,
-                  subject: initiativeObject,
-                  anchor: event.currentTarget,
-                });
-              }}
-            >
-              <CornerDownLeft aria-hidden className="size-5" />
-              {detail.parent ? detail.parent.name : 'Set parent'}
-            </Button>
+            <EntityMetadataItem priority={7}>
+              <Button
+                variant="ghost"
+                className={ENTITY_METADATA_CHIP_CLASS}
+                onClick={(event) => {
+                  pickerOverlay.open({
+                    kind: 'initiative-hierarchy',
+                    mode: 'parent',
+                    organizationId: orgId,
+                    subject: initiativeObject,
+                    anchor: event.currentTarget,
+                  });
+                }}
+              >
+                <CornerDownLeft aria-hidden className="size-5" />
+                {detail.parent ? detail.parent.name : 'Set parent'}
+              </Button>
+            </EntityMetadataItem>
           </EntityMetadataRow>
           {mutations.propsError ? (
             <p role="alert" className="text-error mt-2 text-sm">

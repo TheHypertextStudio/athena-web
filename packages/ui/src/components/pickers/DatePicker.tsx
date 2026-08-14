@@ -27,6 +27,7 @@
 import * as React from 'react';
 
 import { Calendar } from '../../icons';
+import { cn } from '../../lib/utils';
 import {
   Button,
   ControlGroup,
@@ -34,7 +35,6 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  Text,
 } from '../../primitives';
 
 import {
@@ -213,9 +213,11 @@ export interface DateRangePickerProps {
   value: DateRange;
   /** Report a changed range (either bound may be `null`). */
   onChange: (value: DateRange) => void;
-  /** The calm empty prompt shown when neither bound is set (e.g. "Set timeline"). */
-  placeholder: string;
-  /** Format an ISO date for the trigger summary; defaults to a short locale day. */
+  /** The calm empty prompt shown for an unset start bound. */
+  startPlaceholder: string;
+  /** The calm empty prompt shown for an unset end bound. */
+  endPlaceholder: string;
+  /** Format an ISO date for each trigger; defaults to a short locale day. */
   formatLabel?: (value: string | null) => string | undefined;
   /** Accessible label prefix (e.g. "Timeline"). */
   ariaLabel?: string;
@@ -238,22 +240,22 @@ export interface DateRangePickerProps {
 }
 
 /**
- * The compact date-range picker (e.g. a project's start → target timeline).
+ * Two independent date chips for one bounded range.
  *
  * @remarks
- * One calendar, two ends. A segmented Start/End control says which end the next selection lands
- * on, and choosing a start advances it to the end — so setting a whole window is click, click,
- * done, with no second grid to hunt for. The end can never precede the start (each end passes
- * the other as a bound), so the ordering invariant the API enforces is *unexpressible* here
- * rather than merely rejected after the fact.
+ * Start and end are separate properties on screen, so neither an arrow summary nor a compressed
+ * segmented heading has to explain which value is missing or being edited. The two controls still
+ * share the range invariant: the committed end caps the start calendar, and the committed start
+ * floors the end calendar. Either bound may be cleared without erasing the other.
  *
  * @param props - The {@link DateRangePickerProps}.
- * @returns the rendered range trigger and its calendar popover.
+ * @returns the non-wrapping pair of date controls.
  */
 export function DateRangePicker({
   value,
   onChange,
-  placeholder,
+  startPlaceholder,
+  endPlaceholder,
   formatLabel = defaultFormat,
   ariaLabel = 'Timeline',
   startLabel = 'Start',
@@ -265,140 +267,41 @@ export function DateRangePicker({
   min = CALENDAR_MIN_DAY,
   max = CALENDAR_MAX_DAY,
 }: DateRangePickerProps): React.JSX.Element {
-  const [open, setOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<'start' | 'end'>('start');
   const start = toCalendarDay(value.start);
   const end = toCalendarDay(value.end);
-  const startText = formatLabel(start);
-  const endText = formatLabel(end);
-  const summary = startText || endText ? `${startText ?? '—'} → ${endText ?? '—'}` : undefined;
-  const today = todayIso();
-
-  const trigger = (
-    <PropertyTrigger
-      icon={<Calendar className="text-on-surface-variant size-4" />}
-      label={summary}
-      placeholder={placeholder}
-      ariaLabel={`${ariaLabel} — ${summary ?? 'not set'}`}
-      disabled={disabled}
-      readOnly={readOnly}
-      variant={triggerVariant}
-      className={triggerClassName}
-    />
-  );
-
-  if (readOnly) return trigger;
-
-  const editingStart = editing === 'start';
-  const gridMin = editingStart ? min : (start ?? min);
-  const gridMax = editingStart ? (end ?? max) : max;
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) setEditing('start');
-      }}
-    >
-      <PopoverTrigger asChild disabled={disabled}>
-        {trigger}
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-auto p-3"
-        collisionPadding={OVERLAY_COLLISION_PADDING}
-        data-date-picker=""
-      >
-        <div className="flex flex-col gap-2">
-          <ControlGroup
-            controlSize="sm"
-            role="tablist"
-            aria-label={`${ariaLabel} bound`}
-            className="w-full"
-          >
-            {(
-              [
-                ['start', startLabel, startText],
-                ['end', endLabel, endText],
-              ] as const
-            ).map(([bound, boundLabel, boundText]) => (
-              <Button
-                key={bound}
-                type="button"
-                role="tab"
-                aria-selected={editing === bound}
-                variant={editing === bound ? 'secondary' : 'ghost'}
-                className="min-w-0 flex-1 justify-start"
-                onClick={() => {
-                  setEditing(bound);
-                }}
-              >
-                <span className="flex min-w-0 flex-col items-start">
-                  <Text token="label-small" tone="muted">
-                    {boundLabel}
-                  </Text>
-                  <Text token="label-large" truncate>
-                    {boundText ?? 'Not set'}
-                  </Text>
-                </span>
-              </Button>
-            ))}
-          </ControlGroup>
-
-          <CalendarGrid
-            value={editingStart ? start : end}
-            rangeEnd={editingStart ? end : start}
-            onSelect={(next) => {
-              if (editingStart) {
-                // A start after the current end would invert the window; drop the stale end
-                // rather than silently storing an impossible range. Belt-and-suspenders: the
-                // grid this fires from is itself bounded above by `gridMax = end ?? max` while
-                // editing the start, so a day past `end` is rendered `disabled` and can never
-                // reach this callback — the inversion branch cannot be exercised through the UI.
-                /* v8 ignore next -- unreachable: the calling grid's own min/max already bars
-                   selecting a day after `end`, so `compareIso(next, end) > 0` is never true here. */
-                const nextEnd = end && compareIso(next, end) > 0 ? null : end;
-                onChange({ start: next, end: nextEnd });
-                setEditing('end');
-                return;
-              }
-              onChange({ start, end: next });
-              setOpen(false);
-            }}
-            min={gridMin}
-            max={gridMax}
-            ariaLabel={`${ariaLabel} ${editingStart ? startLabel : endLabel}`}
-            autoFocus
-          />
-
-          <PickerFooter
-            todayDisabled={compareIso(today, gridMin) < 0 || compareIso(today, gridMax) > 0}
-            onToday={() => {
-              if (editingStart) {
-                // Same inversion guard as the grid's onSelect above, and unreachable for the same
-                // reason: `todayDisabled` (bound to the same `gridMax = end ?? max`) already
-                // disables this control whenever today would fall after `end`.
-                /* v8 ignore next -- unreachable: `todayDisabled` bars this handler from firing
-                   whenever `compareIso(today, end) > 0` would hold. */
-                onChange({ start: today, end: end && compareIso(today, end) > 0 ? null : end });
-                setEditing('end');
-                return;
-              }
-              onChange({ start, end: today });
-              setOpen(false);
-            }}
-            onClear={
-              start || end
-                ? () => {
-                    onChange({ start: null, end: null });
-                    setEditing('start');
-                    setOpen(false);
-                  }
-                : null
-            }
-          />
-        </div>
-      </PopoverContent>
-    </Popover>
+    <div role="group" aria-label={ariaLabel} className="flex max-w-full flex-nowrap gap-2">
+      <DatePicker
+        value={start}
+        onChange={(nextStart) => {
+          onChange({ start: nextStart, end });
+        }}
+        placeholder={startPlaceholder}
+        formatLabel={formatLabel}
+        ariaLabel={`${ariaLabel} ${startLabel}`}
+        disabled={disabled}
+        readOnly={readOnly}
+        triggerVariant={triggerVariant}
+        triggerClassName={cn(triggerClassName, 'min-w-0 shrink-0 whitespace-nowrap')}
+        min={min}
+        max={end ?? max}
+      />
+      <DatePicker
+        value={end}
+        onChange={(nextEnd) => {
+          onChange({ start, end: nextEnd });
+        }}
+        placeholder={endPlaceholder}
+        formatLabel={formatLabel}
+        ariaLabel={`${ariaLabel} ${endLabel}`}
+        disabled={disabled}
+        readOnly={readOnly}
+        triggerVariant={triggerVariant}
+        triggerClassName={cn(triggerClassName, 'min-w-0 shrink-0 whitespace-nowrap')}
+        min={start ?? min}
+        max={max}
+      />
+    </div>
   );
 }

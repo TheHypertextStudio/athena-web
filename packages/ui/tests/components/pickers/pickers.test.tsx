@@ -15,6 +15,7 @@ import { OptionPicker } from '../../../src/components/pickers/OptionPicker';
 import { PickerList } from '../../../src/components/pickers/PickerList';
 import { PropertyTrigger } from '../../../src/components/pickers/PropertyTrigger';
 import { optionMatches, type PickerOption } from '../../../src/components/pickers/types';
+import { assertDefined } from '@docket/test-utils';
 
 const ACTORS: PickerOption[] = [
   { value: 'a1', label: 'Ada Lovelace', keywords: ['ada@calc.org'] },
@@ -29,7 +30,7 @@ const PROJECTS: PickerOption[] = [
 
 describe('optionMatches', () => {
   it('matches everything on an empty query', () => {
-    expect(optionMatches(ACTORS[0]!, '')).toBe(true);
+    expect(optionMatches(assertDefined(ACTORS[0]), '')).toBe(true);
   });
 
   it('matches against the label, case-insensitively', () => {
@@ -38,7 +39,7 @@ describe('optionMatches', () => {
   });
 
   it('matches against hidden keywords', () => {
-    expect(optionMatches(ACTORS[0]!, 'calc.org')).toBe(true);
+    expect(optionMatches(assertDefined(ACTORS[0]), 'calc.org')).toBe(true);
   });
 });
 

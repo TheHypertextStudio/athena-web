@@ -40,6 +40,7 @@ import { RAIL_MIN_INLINE_SIZE_PX } from '../../../src/components/shell/ShellAsid
 import { ContextProvider } from '../../../src/components/shell/ContextProvider';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
 import type { Workspace } from '../../../src/components/shell/workspaces';
+import { assertDefined } from '@docket/test-utils';
 
 const ACME: Workspace = { id: 'ORG00000000000000000000001', name: 'Acme Co' };
 
@@ -274,8 +275,8 @@ describe('AppShell layout contract — <main> keeps its floor, and widening neve
       // for a 288px navigation column.
       for (const widths of [COMPACT_WIDTHS, DESKTOP_WIDTHS]) {
         for (let i = 1; i < widths.length; i += 1) {
-          const previous = widths[i - 1]!;
-          const current = widths[i]!;
+          const previous = assertDefined(widths[i - 1]);
+          const current = assertDefined(widths[i]);
           const before = mainWidth(geometry, previous, expanded, sidebarCollapsed);
           const after = mainWidth(geometry, current, expanded, sidebarCollapsed);
           expect(

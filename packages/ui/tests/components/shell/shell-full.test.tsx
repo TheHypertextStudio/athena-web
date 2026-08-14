@@ -29,6 +29,7 @@ import { SidebarNavItem } from '../../../src/components/shell/SidebarNavItem';
 import { TabBar, type OpenTab } from '../../../src/components/shell/TabBar';
 import { WorkspaceSwitcher } from '../../../src/components/shell/WorkspaceSwitcher';
 import type { Workspace } from '../../../src/components/shell/workspaces';
+import { assertDefined } from '@docket/test-utils';
 
 const ACME: Workspace = { id: 'ORG00000000000000000000001', name: 'Acme Co' };
 const GLOBEX: Workspace = { id: 'ORG00000000000000000000002', name: 'Globex' };
@@ -906,7 +907,7 @@ describe('Sidebar', () => {
     // `shrink-0` is what keeps the footer from being squeezed by the scrolling middle sibling.
     expect(footerButton.parentElement).toHaveClass('shrink-0');
     // The switcher and the footer are outside the scrollable region; only the middle scrolls.
-    const aside = container.querySelector('aside')!;
+    const aside = assertDefined(container.querySelector('aside'));
     expect(aside).not.toHaveClass('overflow-y-auto');
     const scrollRegion = aside.querySelector(':scope > .overflow-y-auto');
     expect(scrollRegion).not.toBeNull();
@@ -1138,8 +1139,12 @@ describe('TabBar', () => {
     expect(bar).not.toHaveClass('bg-surface-container-low', 'border-b');
     // Every tab is a detached pill at the control radius, NOT welded to the panel below: no
     // top-only rounding, no self-stretch.
-    const activeTab = screen.getByText('Q3 Launch').closest<HTMLElement>('[role="tab"]')!;
-    const inactiveTab = screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]')!;
+    const activeTab = assertDefined(
+      screen.getByText('Q3 Launch').closest<HTMLElement>('[role="tab"]'),
+    );
+    const inactiveTab = assertDefined(
+      screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]'),
+    );
     for (const tab of [activeTab, inactiveTab]) {
       expect(tab).toHaveClass('rounded-md');
       expect(tab).not.toHaveClass('rounded-t-lg', 'self-stretch');
@@ -1162,7 +1167,9 @@ describe('TabBar', () => {
         onClose={() => undefined}
       />,
     );
-    const tab = screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]')!;
+    const tab = assertDefined(
+      screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]'),
+    );
     // A width RANGE rather than one rigid width: tabs shrink toward `min-w-24` so more of them fit
     // before the strip has to scroll on a phone, and stop at `max-w-60` so a lone tab is not
     // stretched across the bar. The floor is what keeps a crowded bar readable instead of

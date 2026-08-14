@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ListView, type GroupKey, NO_GROUP_LABEL } from '../../../src/components/views/ListView';
 import { TaskRow, type TaskRowData } from '../../../src/components/views/ListRow';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * jsdom reports zero element sizes; stub them so `@tanstack/react-virtual` mounts the
@@ -148,7 +149,7 @@ describe('ListView — subGroupBy returning null', () => {
   it('routes a sub-group-less item into the no-group sub-bucket', () => {
     render(
       <ListView<MockTask>
-        items={[{ ...TASKS[0]!, id: 'X1', title: 'NoSub' }]}
+        items={[{ ...assertDefined(TASKS[0]), id: 'X1', title: 'NoSub' }]}
         groupBy={() => ({ id: 'G', label: 'Group' })}
         subGroupBy={() => null}
         getItemKey={(t) => t.id}
@@ -183,7 +184,7 @@ describe('ListView — controlled collapse', () => {
 
     // Clicking the (collapsed) group header calls onToggle but does not change state
     // (the parent owns it), so the row stays hidden.
-    fireEvent.click(screen.getByText('Proj').closest('[role="row"]')!);
+    fireEvent.click(assertDefined(screen.getByText('Proj').closest('[role="row"]')));
     expect(onToggle).toHaveBeenCalledWith('P');
     expect(screen.queryByText('One')).not.toBeInTheDocument();
   });
@@ -201,7 +202,7 @@ describe('ListView — controlled collapse', () => {
         renderRow={(t) => <TaskRow task={t} />}
       />,
     );
-    fireEvent.click(screen.getByText('In Progress').closest('[role="row"]')!);
+    fireEvent.click(assertDefined(screen.getByText('In Progress').closest('[role="row"]')));
     expect(onToggle).toHaveBeenCalledWith('P/started');
   });
 });
@@ -219,7 +220,7 @@ describe('ListView — uncontrolled collapse with defaultCollapsed', () => {
       />,
     );
     expect(screen.queryByText('One')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('Proj').closest('[role="row"]')!);
+    fireEvent.click(assertDefined(screen.getByText('Proj').closest('[role="row"]')));
     expect(screen.getByText('One')).toBeInTheDocument();
   });
 });
@@ -262,7 +263,7 @@ describe('ListView — keyboard navigation + activation', () => {
     fireEvent.keyDown(grid, { key: 'ArrowDown' }); // -> 2 (data row)
     fireEvent.keyDown(grid, { key: 'Enter' });
     expect(onActivateItem).toHaveBeenCalledTimes(1);
-    expect(onActivateItem.mock.calls[0]![0]).toMatchObject({ id: 'T1' });
+    expect(assertDefined(onActivateItem.mock.calls[0])[0]).toMatchObject({ id: 'T1' });
   });
 
   it('supports Home, End, ArrowUp, and Escape navigation', () => {
@@ -278,7 +279,7 @@ describe('ListView — keyboard navigation + activation', () => {
   it('clicking a data row activates the item via onActivate', () => {
     const onActivateItem = vi.fn();
     renderForKeyboard(onActivateItem);
-    fireEvent.click(screen.getByText('One').closest('[role="row"]')!);
+    fireEvent.click(assertDefined(screen.getByText('One').closest('[role="row"]')));
     expect(onActivateItem).toHaveBeenCalledTimes(1);
   });
 });

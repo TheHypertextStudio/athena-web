@@ -8,6 +8,7 @@ import {
   EntityTable,
   type EntityTableGroup,
 } from '../../../src/components/views/EntityTable';
+import { assertDefined } from '@docket/test-utils';
 
 /** A minimal row shape for the table under test. */
 interface Row {
@@ -254,7 +255,7 @@ describe('EntityTable — rows + chrome', () => {
     const links = screen.getAllByTestId('link');
     expect(links[0]).toHaveAttribute('href', '/items/r1');
     expect(links[0]).toHaveClass('min-h-(--row-h)');
-    expect(within(links[0]!).getByText('Billing revamp')).toBeInTheDocument();
+    expect(within(assertDefined(links[0])).getByText('Billing revamp')).toBeInTheDocument();
   });
 });
 
@@ -324,8 +325,8 @@ describe('EntityTable — prefetch', () => {
 describe('EntityTable — grouping', () => {
   // Group labels deliberately distinct from any cell text so a `row` name matcher is unambiguous.
   const GROUPS: EntityTableGroup<Row>[] = [
-    { id: 'g-one', label: 'First bucket', rows: [ROWS[0]!] },
-    { id: 'g-two', label: 'Second bucket', rows: [ROWS[1]!] },
+    { id: 'g-one', label: 'First bucket', rows: [assertDefined(ROWS[0])] },
+    { id: 'g-two', label: 'Second bucket', rows: [assertDefined(ROWS[1])] },
   ];
 
   it('renders full-width group header rows spanning the table with their data rows beneath', () => {
@@ -433,7 +434,7 @@ describe('EntityTable — keyboard navigation', () => {
 
   it('Enter on an active group header row toggles that group', () => {
     const GROUPS: EntityTableGroup<Row>[] = [
-      { id: 'g-one', label: 'First bucket', rows: [ROWS[0]!] },
+      { id: 'g-one', label: 'First bucket', rows: [assertDefined(ROWS[0])] },
     ];
     render(
       <EntityTable aria-label="Items" columns={COLUMNS} groups={GROUPS} getRowKey={getRowKey} />,
@@ -474,7 +475,7 @@ describe('EntityTable — property-key hotkeys', () => {
     fireEvent.keyDown(grid, { key: 'ArrowDown' });
     fireEvent.keyDown(grid, { key: 'l' });
     expect(onRowPropertyKey).toHaveBeenCalledTimes(1);
-    const [key, row, anchor] = onRowPropertyKey.mock.calls[0]!;
+    const [key, row, anchor] = assertDefined(onRowPropertyKey.mock.calls[0]);
     expect(key).toBe('l');
     expect(row).toBe(ROWS[0]);
     expect(anchor).toBe(screen.getByRole('row', { name: /Billing revamp/ }));
@@ -509,7 +510,7 @@ describe('EntityTable — property-key hotkeys', () => {
     const onRowPropertyKey =
       vi.fn<(key: string, row: Row, anchor: HTMLElement | null) => boolean>();
     const GROUPS: EntityTableGroup<Row>[] = [
-      { id: 'g-one', label: 'First bucket', rows: [ROWS[0]!] },
+      { id: 'g-one', label: 'First bucket', rows: [assertDefined(ROWS[0])] },
     ];
     render(
       <EntityTable

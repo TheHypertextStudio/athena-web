@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { type DiscordMessage } from '../../src/expand';
 import { buildEnvelope, forwardMessage } from '../../src/relay';
+import { assertDefined } from '@docket/test-utils';
 
 const BASE = { ingestUrl: 'https://api.docket.test/internal/ingest/discord', ingestToken: 'tok_1' };
 
@@ -34,9 +35,9 @@ describe('forwardMessage', () => {
     });
     expect(ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const call = fetchMock.mock.calls[0]!;
+    const call = assertDefined(fetchMock.mock.calls[0]);
     expect(call[0]).toBe('https://api.docket.test/internal/ingest/discord/tok_1');
-    expect(JSON.parse(call[1]!.body as string)).toEqual({
+    expect(JSON.parse(assertDefined(call[1]).body as string)).toEqual({
       t: 'MESSAGE_CREATE',
       d: msg,
       mentioned_user_ids: ['U2'],

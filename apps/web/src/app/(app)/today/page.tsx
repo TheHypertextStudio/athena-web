@@ -67,7 +67,7 @@ export default function TodayPage(): JSX.Element {
           titles are 20px, not a marketing 24px+"), and it sat over a separate date line and a
           time-of-day greeting no spec ever asked for — three lines of masthead before the first
           thing you can act on. */}
-      <h1 className="text-on-surface text-title-large shrink-0 font-semibold">
+      <h1 aria-label="Today" className="text-on-surface text-title-large shrink-0 font-semibold">
         Today
         <span className="text-on-surface-variant ml-2 font-normal">{heading}</span>
       </h1>

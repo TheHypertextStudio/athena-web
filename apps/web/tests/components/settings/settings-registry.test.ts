@@ -46,6 +46,7 @@ describe('Personal group', () => {
       'connected-apps',
       'notifications',
       'calendar',
+      'work-locations',
       'security',
       'data-privacy',
     ]);

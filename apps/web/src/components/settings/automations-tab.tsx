@@ -22,11 +22,15 @@ type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 const SAVED_LINGER_MS = 2000;
 
 /** Supported guided templates for creating a rule without exposing the rule grammar. */
-export type AutomationTemplate = 'archive_completed_email' | 'dismiss_promotions';
+export type AutomationTemplate =
+  | 'archive_completed_email'
+  | 'dismiss_promotions'
+  | 'assign_new_tasks_to_cycle';
 
 const TEMPLATE_NAMES: Record<AutomationTemplate, string> = {
   archive_completed_email: 'Archive source email when its task is completed',
   dismiss_promotions: 'Dismiss promotional email suggestions',
+  assign_new_tasks_to_cycle: 'Assign new tasks to the current cycle',
 };
 
 /** Build a validated automation-rule payload from one guided user-facing template. */
@@ -41,6 +45,15 @@ export function automationTemplateInput(
       on: { kind: 'completed', subjectType: 'task' },
       when: { op: 'and', nodes: [] },
       then: [{ type: 'mail.archive', params: {} }],
+    };
+  }
+  if (template === 'assign_new_tasks_to_cycle') {
+    return {
+      name: name.trim(),
+      enabled: true,
+      on: { kind: 'created', subjectType: 'task' },
+      when: { op: 'and', nodes: [] },
+      then: [{ type: 'task.assignToCycle', params: {} }],
     };
   }
   return {
@@ -221,6 +234,7 @@ export default function AutomationsTab({
               >
                 <option value="archive_completed_email">Archive email after task completion</option>
                 <option value="dismiss_promotions">Dismiss promotional suggestions</option>
+                <option value="assign_new_tasks_to_cycle">Assign new tasks to current cycle</option>
               </Select>
             </label>
             <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">

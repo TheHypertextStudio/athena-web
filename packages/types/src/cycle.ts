@@ -488,3 +488,21 @@ export const CycleClosed = z
   .meta({ id: 'CycleClosed', description: 'A closed-cycle acknowledgement.' });
 /** Closed-cycle acknowledgement value. */
 export type CycleClosed = z.infer<typeof CycleClosed>;
+
+/**
+ * Acknowledgement returned by the backlog-backfill action: how many previously-unscoped tasks
+ * on the cycle's team were assigned to it. Only ever fills the gap (`cycle_id IS NULL`) on a
+ * non-terminal task — it never moves a task someone deliberately parked on another cycle.
+ */
+export const CycleBackfillOut = z
+  .object({
+    assignedCount: z
+      .number()
+      .int()
+      .describe(
+        'How many previously-unscoped, non-terminal tasks on the team were assigned to this cycle.',
+      ),
+  })
+  .meta({ id: 'CycleBackfillOut', description: 'A cycle-backfill acknowledgement.' });
+/** Cycle-backfill acknowledgement value. */
+export type CycleBackfillOut = z.infer<typeof CycleBackfillOut>;

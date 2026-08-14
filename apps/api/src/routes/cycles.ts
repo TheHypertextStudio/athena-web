@@ -1,6 +1,7 @@
 /** `@docket/api` — cycles router (mounted at `/v1/orgs/:orgId/cycles`). */
 import { cycle, db, task, team } from '@docket/db';
 import {
+  CycleBackfillOut,
   CycleBurnupOut,
   CycleClosed,
   CycleCloseBody,
@@ -43,6 +44,7 @@ import {
   taskToOut,
   toOut,
 } from './cycle-helpers';
+import { backfillCycleBacklog } from './cycle-backfill';
 import { buildCycleBurnupPayload } from './cycle-burnup';
 
 /**
@@ -429,6 +431,26 @@ const cycles = new Hono<AppEnv>()
       await enqueueSearchUpsert(orgId, 'cycle', id);
       await Promise.all(changedTaskIds.map((taskId) => enqueueSearchUpsert(orgId, 'task', taskId)));
       return ok(c, CycleClosed, { closed: true, keptCount, movedCount, triagedCount });
+    },
+  )
+  .post(
+    '/:id/backfill',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Cycles',
+      summary: 'Assign backlog tasks to a cycle',
+      capability: 'contribute',
+      response: CycleBackfillOut,
+      description: `Sweep this cycle's team for tasks with no cycle yet and assign them here. Only ever fills the gap: a task already on ANY cycle (this one or another) is left untouched — this never moves work someone deliberately parked elsewhere, mirroring the reviewed-carryover posture of \`POST /:id/close\`. Tasks in a terminal workflow state (\`completed\`/\`canceled\`) are excluded — a done or abandoned task has no reason to join an active cycle. Idempotent: a repeat call only ever touches tasks still missing a cycle. The cycle must exist in the caller's org (404 \`Cycle not found\`). Requires \`contribute\`. Returns {@link CycleBackfillOut} \`{ assignedCount }\`.`,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const { taskIds } = await backfillCycleBacklog(orgId, id);
+      await enqueueSearchUpsert(orgId, 'cycle', id);
+      await Promise.all(taskIds.map((taskId) => enqueueSearchUpsert(orgId, 'task', taskId)));
+      return ok(c, CycleBackfillOut, { assignedCount: taskIds.length });
     },
   );
 

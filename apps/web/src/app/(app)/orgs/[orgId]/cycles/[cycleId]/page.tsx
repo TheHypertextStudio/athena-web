@@ -150,6 +150,10 @@ export default function CycleDetailPage(): JSX.Element {
     onActionChange,
     onTargetChange,
     confirmClose,
+    backfillCycle,
+    backfilling,
+    backfillResult,
+    backfillError,
   } = useCycleMutations(orgId, cycleId, cycleNounLower, tasks, otherCycles, detailKey);
 
   const canEditCycle = useOrgCapability(members, roles, 'contribute');
@@ -344,9 +348,35 @@ export default function CycleDetailPage(): JSX.Element {
       }
       actions={
         isCompleted ? null : (
-          <Button variant="outline" size="sm" onClick={openCloseDialog}>
-            Close {cycleNounLower}
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={backfilling}
+                onClick={() => {
+                  backfillCycle();
+                }}
+              >
+                {backfilling ? 'Assigning…' : 'Assign backlog'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={openCloseDialog}>
+                Close {cycleNounLower}
+              </Button>
+            </div>
+            {backfillResult !== null ? (
+              <p className="text-on-surface-variant text-xs">
+                {backfillResult === 0
+                  ? `No open ${taskNounPlural} were waiting for a cycle.`
+                  : `${backfillResult} ${backfillResult === 1 ? taskNoun : taskNounPlural} assigned.`}
+              </p>
+            ) : null}
+            {backfillError ? (
+              <p role="alert" className="text-error text-xs">
+                {backfillError}
+              </p>
+            ) : null}
+          </div>
         )
       }
       tabs={

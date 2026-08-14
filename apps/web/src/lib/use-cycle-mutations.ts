@@ -1,4 +1,5 @@
 import {
+  type CycleBackfillOut,
   type CycleCarryoverAction,
   CycleId,
   type CycleOut,
@@ -38,6 +39,10 @@ export interface CycleMutations {
   onActionChange: (taskId: string, action: CycleCarryoverAction) => void;
   onTargetChange: (taskId: string, targetCycleId: string) => void;
   confirmClose: () => void;
+  backfillCycle: () => void;
+  backfilling: boolean;
+  backfillResult: number | null;
+  backfillError: string | null;
 }
 
 /** useCycleMutations coordinates use cycle mutations state, loading, and mutations for its screen. */
@@ -55,6 +60,8 @@ export function useCycleMutations(
   const [dialogOpen, setDialogOpen] = useState(false);
   const [decisions, setDecisions] = useState<readonly CarryoverItem[]>([]);
   const [closeError, setCloseError] = useState<string | null>(null);
+  const [backfillResult, setBackfillResult] = useState<number | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
 
   const incompleteTasks = useMemo(
     () => tasks.filter((task) => stateTypeOf(task.state) !== 'completed'),
@@ -147,6 +154,31 @@ export function useCycleMutations(
     closeM.mutate(decisions);
   }, [closeM, decisions]);
 
+  // Assigns the team's still-unscoped, open tasks to this cycle — idempotent, so a repeat click
+  // only ever picks up whatever is still missing a cycle.
+  const backfillM = useApiMutation<CycleBackfillOut, undefined>({
+    mutationFn: () =>
+      unwrap(
+        () => api.v1.orgs[':orgId'].cycles[':id'].backfill.$post({ param: { orgId, id: cycleId } }),
+        `Could not assign backlog tasks to this ${cycleNounLower}.`,
+      ),
+    onSuccess: (result) => {
+      setBackfillResult(result.assignedCount);
+    },
+    onError: (err) => {
+      setBackfillError(
+        userErrorMessage(err, `Could not assign backlog tasks to this ${cycleNounLower}.`),
+      );
+    },
+    invalidateKeys: [detailKey, cyclesKey],
+  });
+
+  const backfillCycle = useCallback((): void => {
+    setBackfillError(null);
+    setBackfillResult(null);
+    backfillM.mutate(undefined);
+  }, [backfillM]);
+
   const patch = useApiMutation<
     CycleOut,
     { status?: CycleStatus; startsAt?: string; endsAt?: string; name?: string },
@@ -197,5 +229,9 @@ export function useCycleMutations(
     onActionChange,
     onTargetChange,
     confirmClose,
+    backfillCycle,
+    backfilling: backfillM.isPending,
+    backfillResult,
+    backfillError,
   };
 }

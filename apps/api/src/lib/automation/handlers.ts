@@ -12,7 +12,7 @@
 import { actor, attachment, db, emailSuggestion, notification, task, taskLabel } from '@docket/db';
 import { Priority } from '@docket/types';
 import type { MailAction } from '@docket/integrations';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { attachLabels, resolveAttachedLabels, resolveLabelSet } from '../labels';
@@ -21,8 +21,9 @@ import { acceptSuggestion } from '../email-to-task/accept';
 import { emitEvent } from '../../routes/event-emit';
 import { enqueueSearchUpsert } from '../../search/write-through';
 import type { ActionContext } from './engine';
-import type { AutomationEvent } from './event';
 import { createRegistry, type Registry } from './registry';
+import { eventOf, taskOf } from './handler-context';
+import { registerCycleAssignAction } from './handlers-cycle';
 import { RouteTaskParams, routeInboundItemToTask } from './route-task';
 import { materializeOccurrence } from '../recurrence/materialize';
 import { loadRecurrenceSeries, seriesRevisionAt } from '../recurrence/series';
@@ -40,11 +41,6 @@ export type MailApplier = (input: {
 /** Services the handlers close over (injected so the registry is testable offline). */
 export interface HandlerDeps {
   readonly mailApplier: MailApplier;
-}
-
-/** Read the structured event off the action context. */
-function eventOf(ctx: ActionContext): AutomationEvent {
-  return ctx.event as AutomationEvent;
 }
 
 /** Builds the concrete {@link MailAction} for a handler from the rule's `then` params. */
@@ -135,23 +131,6 @@ const NotificationSendParams = z.object({
   title: z.string().min(1),
   summary: z.string().optional(),
 });
-
-/** Load the firing task subject (org-scoped, active), or `undefined` for a no-op. */
-async function taskOf(event: AutomationEvent): Promise<typeof task.$inferSelect | undefined> {
-  if (event.subjectType !== 'task' || !event.subjectId) return undefined;
-  const rows = await db
-    .select()
-    .from(task)
-    .where(
-      and(
-        eq(task.id, event.subjectId),
-        eq(task.organizationId, event.organizationId),
-        isNull(task.archivedAt),
-      ),
-    )
-    .limit(1);
-  return rows[0];
-}
 
 /** Resolve a Docket actor id to its Better Auth user id (notification target), org-scoped. */
 async function userIdOfActor(orgId: string, actorId: string): Promise<string | undefined> {
@@ -281,6 +260,9 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
       });
     },
   });
+
+  // task.assignToCycle — registered from its own module; see handlers-cycle.ts.
+  registerCycleAssignAction(registry);
 
   // task.setPriority — set the firing task's priority.
   registry.register({

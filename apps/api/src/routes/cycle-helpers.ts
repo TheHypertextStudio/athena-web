@@ -276,6 +276,20 @@ export function isCompleted(t: CycleStatTask): boolean {
   return t.completedAt !== null;
 }
 
+/**
+ * The team's workflow-state keys that are NOT terminal (not `completed`/`canceled`).
+ *
+ * @remarks
+ * Used to keep a backlog-backfill sweep from sweeping a done or abandoned task into an active
+ * cycle — the same terminal-state predicate used elsewhere (e.g.
+ * `apps/api/src/calendar/calendar-read.ts`).
+ */
+export function nonTerminalStateKeys(t: TeamRow): string[] {
+  return t.workflowStates
+    .filter((s) => s.type !== 'completed' && s.type !== 'canceled')
+    .map((s) => s.key);
+}
+
 /** A task's effort weight: its estimate, treating an unestimated task as 0. */
 export function effort(t: CycleStatTask): number {
   return t.estimate ?? 0;

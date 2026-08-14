@@ -12,6 +12,7 @@ import {
   personalMcpCredential,
   user,
 } from '../../src/schema';
+import { assertDefined } from '@docket/test-utils';
 
 const client = new PGlite('memory://');
 const db = drizzle(client);
@@ -52,13 +53,13 @@ describe('personal Athena schema', () => {
     expect(connection?.ownerUserId).toBe(ownerUserId);
 
     await db.insert(personalMcpCredential).values({
-      connectionId: connection!.id,
+      connectionId: assertDefined(connection).id,
       ownerUserId,
       ciphertext: 'v1:gcm:test',
     });
     await expect(
       db.insert(personalMcpCredential).values({
-        connectionId: connection!.id,
+        connectionId: assertDefined(connection).id,
         ownerUserId: otherUserId,
         ciphertext: 'v1:gcm:wrong-owner',
       }),

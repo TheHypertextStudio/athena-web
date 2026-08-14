@@ -22,6 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { fullSchema, type Database } from '../../src/client';
 import { cycle, milestone, organization, project, task, team } from '../../src/schema';
+import { assertDefined } from '@docket/test-utils';
 
 let client!: PGlite;
 let db!: Database;
@@ -57,18 +58,25 @@ describe('work island constraints', () => {
     await migrate(d, { migrationsFolder: resolve(import.meta.dirname, '../../drizzle') });
     db = d;
 
-    orgId = (
-      await db
-        .insert(organization)
-        .values({ name: 'Constraints', slug: `c-${Date.now()}` })
-        .returning()
-    )[0]!.id;
-    teamId = (
-      await db.insert(team).values({ organizationId: orgId, name: 'Core', key: 'CORE' }).returning()
-    )[0]!.id;
-    projectId = (
-      await db.insert(project).values({ organizationId: orgId, name: 'Redesign' }).returning()
-    )[0]!.id;
+    orgId = assertDefined(
+      (
+        await db
+          .insert(organization)
+          .values({ name: 'Constraints', slug: `c-${Date.now()}` })
+          .returning()
+      )[0],
+    ).id;
+    teamId = assertDefined(
+      (
+        await db
+          .insert(team)
+          .values({ organizationId: orgId, name: 'Core', key: 'CORE' })
+          .returning()
+      )[0],
+    ).id;
+    projectId = assertDefined(
+      (await db.insert(project).values({ organizationId: orgId, name: 'Redesign' }).returning())[0],
+    ).id;
   });
 
   afterAll(async () => {
@@ -207,7 +215,7 @@ describe('work island constraints', () => {
   describe('relationships stay well-formed', () => {
     it('refuses a task that is its own parent', async () => {
       const rows = await db.insert(task).values(baseTask()).returning();
-      const id = rows[0]!.id;
+      const id = assertDefined(rows[0]).id;
       await expectRefusedBy(
         db.update(task).set({ parentTaskId: id }).where(eq(task.id, id)),
         'task_not_own_parent',

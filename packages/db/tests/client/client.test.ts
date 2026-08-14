@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * Tests for the driver-selecting client.
@@ -139,7 +140,7 @@ describe('db client driver selection', () => {
     vi.stubEnv('DATABASE_URL', 'pglite://memory');
     const { closeDb, db } = await import('../../src/client');
     expect(typeof touch(db, 'select')).toBe('function');
-    const firstClient = clientMocks.pgliteClients[0]!;
+    const firstClient = assertDefined(clientMocks.pgliteClients[0]);
 
     await closeDb();
 
@@ -178,7 +179,7 @@ describe('db client driver selection', () => {
 
     const unlisten = await listenToChannel('mcp_notify', handler);
 
-    const client = clientMocks.pgliteClients[0]!;
+    const client = assertDefined(clientMocks.pgliteClients[0]);
     expect(client.listen).toHaveBeenCalledWith('mcp_notify', handler);
     expect(typeof unlisten).toBe('function');
     // The resolved value is `client.listen`'s own resolved unsub function, returned as-is.

@@ -54,6 +54,7 @@ import {
   timeRecord,
   user,
 } from '../../src/schema';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * Update-path coverage for every schema table whose `updatedAt` column carries a
@@ -79,109 +80,145 @@ const ids: Record<string, string> = {};
 beforeAll(async () => {
   await migrate(db, { migrationsFolder: resolve(import.meta.dirname, '../../drizzle') });
 
-  ids['user'] = (
-    await db
-      .insert(user)
-      .values({ name: 'Grace', email: 'grace@example.com', emailVerified: true })
-      .returning()
-  )[0]!.id;
-  ids['org'] = (
-    await db.insert(organization).values({ name: 'Lifecycle Co', slug: 'lifecycle-co' }).returning()
-  )[0]!.id;
-  ids['humanActor'] = (
-    await db
-      .insert(actor)
-      .values({
-        organizationId: ids['org'],
-        kind: 'human',
-        displayName: 'Grace',
-        userId: ids['user'],
-      })
-      .returning()
-  )[0]!.id;
-  ids['agentActor'] = (
-    await db
-      .insert(actor)
-      .values({ organizationId: ids['org'], kind: 'agent', displayName: 'Bot' })
-      .returning()
-  )[0]!.id;
-  ids['team'] = (
-    await db
-      .insert(team)
-      .values({ organizationId: ids['org'], name: 'Core', key: 'CORE' })
-      .returning()
-  )[0]!.id;
-  ids['hub'] = (await db.insert(hub).values({ userId: ids['user'] }).returning())[0]!.id;
-  ids['task'] = (
-    await db
-      .insert(task)
-      .values({
-        organizationId: ids['org'],
-        title: 'Ship the feature',
-        teamId: ids['team'],
-        state: 'backlog',
-      })
-      .returning()
-  )[0]!.id;
-  ids['agent'] = (
-    await db
-      .insert(agent)
-      .values({ organizationId: ids['org'], actorId: ids['agentActor'] })
-      .returning()
-  )[0]!.id;
-  ids['agentSession'] = (
-    await db
-      .insert(agentSession)
-      .values({ organizationId: ids['org'], agentId: ids['agent'], trigger: 'delegation' })
-      .returning()
-  )[0]!.id;
+  ids['user'] = assertDefined(
+    (
+      await db
+        .insert(user)
+        .values({ name: 'Grace', email: 'grace@example.com', emailVerified: true })
+        .returning()
+    )[0],
+  ).id;
+  ids['org'] = assertDefined(
+    (
+      await db
+        .insert(organization)
+        .values({ name: 'Lifecycle Co', slug: 'lifecycle-co' })
+        .returning()
+    )[0],
+  ).id;
+  ids['humanActor'] = assertDefined(
+    (
+      await db
+        .insert(actor)
+        .values({
+          organizationId: ids['org'],
+          kind: 'human',
+          displayName: 'Grace',
+          userId: ids['user'],
+        })
+        .returning()
+    )[0],
+  ).id;
+  ids['agentActor'] = assertDefined(
+    (
+      await db
+        .insert(actor)
+        .values({ organizationId: ids['org'], kind: 'agent', displayName: 'Bot' })
+        .returning()
+    )[0],
+  ).id;
+  ids['team'] = assertDefined(
+    (
+      await db
+        .insert(team)
+        .values({ organizationId: ids['org'], name: 'Core', key: 'CORE' })
+        .returning()
+    )[0],
+  ).id;
+  ids['hub'] = assertDefined(
+    (await db.insert(hub).values({ userId: ids['user'] }).returning())[0],
+  ).id;
+  ids['task'] = assertDefined(
+    (
+      await db
+        .insert(task)
+        .values({
+          organizationId: ids['org'],
+          title: 'Ship the feature',
+          teamId: ids['team'],
+          state: 'backlog',
+        })
+        .returning()
+    )[0],
+  ).id;
+  ids['agent'] = assertDefined(
+    (
+      await db
+        .insert(agent)
+        .values({ organizationId: ids['org'], actorId: ids['agentActor'] })
+        .returning()
+    )[0],
+  ).id;
+  ids['agentSession'] = assertDefined(
+    (
+      await db
+        .insert(agentSession)
+        .values({ organizationId: ids['org'], agentId: ids['agent'], trigger: 'delegation' })
+        .returning()
+    )[0],
+  ).id;
 
   // --- calendar chain: account -> connection -> list/event, layer -> item -> task-link/write ---
   await db
     .insert(account)
     .values({ userId: ids['user'], providerId: 'google', accountId: 'gcal-1' });
-  ids['calendarConnection'] = (
-    await db
-      .insert(calendarConnection)
-      .values({ userId: ids['user'], provider: 'google', externalAccountId: 'gcal-1' })
-      .returning()
-  )[0]!.id;
-  ids['calendarList'] = (
-    await db
-      .insert(calendarList)
-      .values({
-        userId: ids['user'],
-        connectionId: ids['calendarConnection'],
-        externalCalendarId: 'primary',
-        title: 'Primary',
-      })
-      .returning()
-  )[0]!.id;
-  ids['calendarEvent'] = (
-    await db
-      .insert(calendarEvent)
-      .values({
-        userId: ids['user'],
-        connectionId: ids['calendarConnection'],
-        calendarId: ids['calendarList'],
-        externalCalendarId: 'primary',
-        externalEventId: 'evt-1',
-        title: 'Standup',
-      })
-      .returning()
-  )[0]!.id;
-  ids['calendarLayer'] = (
-    await db
-      .insert(calendarLayer)
-      .values({ userId: ids['user'], sourceKind: 'native', title: 'My Layer' })
-      .returning()
-  )[0]!.id;
-  ids['calendarItem'] = (
-    await db
-      .insert(calendarItem)
-      .values({ userId: ids['user'], layerId: ids['calendarLayer'], kind: 'block', title: 'Focus' })
-      .returning()
-  )[0]!.id;
+  ids['calendarConnection'] = assertDefined(
+    (
+      await db
+        .insert(calendarConnection)
+        .values({ userId: ids['user'], provider: 'google', externalAccountId: 'gcal-1' })
+        .returning()
+    )[0],
+  ).id;
+  ids['calendarList'] = assertDefined(
+    (
+      await db
+        .insert(calendarList)
+        .values({
+          userId: ids['user'],
+          connectionId: ids['calendarConnection'],
+          externalCalendarId: 'primary',
+          title: 'Primary',
+        })
+        .returning()
+    )[0],
+  ).id;
+  ids['calendarEvent'] = assertDefined(
+    (
+      await db
+        .insert(calendarEvent)
+        .values({
+          userId: ids['user'],
+          connectionId: ids['calendarConnection'],
+          calendarId: ids['calendarList'],
+          externalCalendarId: 'primary',
+          externalEventId: 'evt-1',
+          title: 'Standup',
+        })
+        .returning()
+    )[0],
+  ).id;
+  ids['calendarLayer'] = assertDefined(
+    (
+      await db
+        .insert(calendarLayer)
+        .values({ userId: ids['user'], sourceKind: 'native', title: 'My Layer' })
+        .returning()
+    )[0],
+  ).id;
+  ids['calendarItem'] = assertDefined(
+    (
+      await db
+        .insert(calendarItem)
+        .values({
+          userId: ids['user'],
+          layerId: ids['calendarLayer'],
+          kind: 'block',
+          title: 'Focus',
+        })
+        .returning()
+    )[0],
+  ).id;
   await db.insert(calendarItemTaskLink).values({
     calendarItemId: ids['calendarItem'],
     taskId: ids['task'],
@@ -193,32 +230,36 @@ beforeAll(async () => {
     organizationId: ids['org'],
     createdBy: ids['humanActor'],
   });
-  ids['calendarItemWrite'] = (
-    await db
-      .insert(calendarItemWrite)
-      .values({
-        userId: ids['user'],
-        calendarItemId: ids['calendarItem'],
-        connectionId: ids['calendarConnection'],
-        provider: 'google',
-        operation: 'update',
-        patch: {},
-      })
-      .returning()
-  )[0]!.id;
+  ids['calendarItemWrite'] = assertDefined(
+    (
+      await db
+        .insert(calendarItemWrite)
+        .values({
+          userId: ids['user'],
+          calendarItemId: ids['calendarItem'],
+          connectionId: ids['calendarConnection'],
+          provider: 'google',
+          operation: 'update',
+          patch: {},
+        })
+        .returning()
+    )[0],
+  ).id;
 
   // --- agent-adjacent personal/org islands ---
-  ids['sessionActivity'] = (
-    await db
-      .insert(sessionActivity)
-      .values({
-        sessionId: ids['agentSession'],
-        organizationId: ids['org'],
-        type: 'thought',
-        body: { text: 'thinking' },
-      })
-      .returning()
-  )[0]!.id;
+  ids['sessionActivity'] = assertDefined(
+    (
+      await db
+        .insert(sessionActivity)
+        .values({
+          sessionId: ids['agentSession'],
+          organizationId: ids['org'],
+          type: 'thought',
+          body: { text: 'thinking' },
+        })
+        .returning()
+    )[0],
+  ).id;
   await db.insert(personalMcpConnection).values({
     ownerUserId: ids['user'],
     name: 'My MCP',
@@ -233,9 +274,9 @@ beforeAll(async () => {
     entityId: ids['task'],
     objective: 'Ship it',
   });
-  ids['latticeConnection'] = (
-    await db.insert(latticeConnection).values({ ownerUserId: ids['user'] }).returning()
-  )[0]!.id;
+  ids['latticeConnection'] = assertDefined(
+    (await db.insert(latticeConnection).values({ ownerUserId: ids['user'] }).returning())[0],
+  ).id;
   await db.insert(latticeCredential).values({
     connectionId: ids['latticeConnection'],
     ownerUserId: ids['user'],
@@ -244,12 +285,14 @@ beforeAll(async () => {
   await db.insert(athenaMailbox).values({ ownerUserId: ids['user'], key: 'grace-abc123' });
 
   // --- crosscutting extras ---
-  ids['integration'] = (
-    await db
-      .insert(integration)
-      .values({ organizationId: ids['org'], provider: 'linear', pattern: 'connector' })
-      .returning()
-  )[0]!.id;
+  ids['integration'] = assertDefined(
+    (
+      await db
+        .insert(integration)
+        .values({ organizationId: ids['org'], provider: 'linear', pattern: 'connector' })
+        .returning()
+    )[0],
+  ).id;
   await db.insert(externalActor).values({
     organizationId: ids['org'],
     integrationId: ids['integration'],
@@ -299,18 +342,22 @@ beforeAll(async () => {
   await db.insert(dailyDigest).values({ userId: ids['user'], digestDate: '2026-08-02' });
 
   // --- initiative hierarchy ---
-  ids['parentInitiative'] = (
-    await db
-      .insert(initiative)
-      .values({ organizationId: ids['org'], name: 'Parent Vision' })
-      .returning()
-  )[0]!.id;
-  ids['childInitiative'] = (
-    await db
-      .insert(initiative)
-      .values({ organizationId: ids['org'], name: 'Child Vision' })
-      .returning()
-  )[0]!.id;
+  ids['parentInitiative'] = assertDefined(
+    (
+      await db
+        .insert(initiative)
+        .values({ organizationId: ids['org'], name: 'Parent Vision' })
+        .returning()
+    )[0],
+  ).id;
+  ids['childInitiative'] = assertDefined(
+    (
+      await db
+        .insert(initiative)
+        .values({ organizationId: ids['org'], name: 'Child Vision' })
+        .returning()
+    )[0],
+  ).id;
   await db.insert(initiativeHierarchyLink).values({
     contextOrganizationId: ids['org'],
     parentInitiativeId: ids['parentInitiative'],
@@ -363,20 +410,22 @@ beforeAll(async () => {
   });
 
   // --- time ledger ---
-  ids['timeCategory'] = (
-    await db.insert(timeCategory).values({ hubId: ids['hub'], name: 'Deep work' }).returning()
-  )[0]!.id;
-  ids['timeRecord'] = (
-    await db
-      .insert(timeRecord)
-      .values({
-        hubId: ids['hub'],
-        createdByUserId: ids['user'],
-        taskId: ids['task'],
-        title: 'Working the feature',
-      })
-      .returning()
-  )[0]!.id;
+  ids['timeCategory'] = assertDefined(
+    (await db.insert(timeCategory).values({ hubId: ids['hub'], name: 'Deep work' }).returning())[0],
+  ).id;
+  ids['timeRecord'] = assertDefined(
+    (
+      await db
+        .insert(timeRecord)
+        .values({
+          hubId: ids['hub'],
+          createdByUserId: ids['user'],
+          taskId: ids['task'],
+          title: 'Working the feature',
+        })
+        .returning()
+    )[0],
+  ).id;
   await db.insert(timeAllocation).values({
     timeRecordId: ids['timeRecord'],
     targetKind: 'task',
@@ -395,7 +444,7 @@ describe('calendar island updates ($onUpdate coverage)', () => {
     const [connection] = await db
       .update(calendarConnection)
       .set({ lastSyncedAt: new Date() })
-      .where(eq(calendarConnection.id, ids['calendarConnection']!))
+      .where(eq(calendarConnection.id, assertDefined(ids['calendarConnection'])))
       .returning();
     expect(connection?.lastSyncedAt).toBeInstanceOf(Date);
     expect(connection?.updatedAt).toBeInstanceOf(Date);
@@ -403,7 +452,7 @@ describe('calendar island updates ($onUpdate coverage)', () => {
     const [list] = await db
       .update(calendarList)
       .set({ selected: false })
-      .where(eq(calendarList.id, ids['calendarList']!))
+      .where(eq(calendarList.id, assertDefined(ids['calendarList'])))
       .returning();
     expect(list?.selected).toBe(false);
     expect(list?.updatedAt).toBeInstanceOf(Date);
@@ -411,7 +460,7 @@ describe('calendar island updates ($onUpdate coverage)', () => {
     const [event] = await db
       .update(calendarEvent)
       .set({ title: 'Standup (moved)' })
-      .where(eq(calendarEvent.id, ids['calendarEvent']!))
+      .where(eq(calendarEvent.id, assertDefined(ids['calendarEvent'])))
       .returning();
     expect(event?.title).toBe('Standup (moved)');
     expect(event?.updatedAt).toBeInstanceOf(Date);
@@ -421,7 +470,7 @@ describe('calendar island updates ($onUpdate coverage)', () => {
     const [layer] = await db
       .update(calendarLayer)
       .set({ selected: false })
-      .where(eq(calendarLayer.id, ids['calendarLayer']!))
+      .where(eq(calendarLayer.id, assertDefined(ids['calendarLayer'])))
       .returning();
     expect(layer?.selected).toBe(false);
     expect(layer?.updatedAt).toBeInstanceOf(Date);
@@ -429,7 +478,7 @@ describe('calendar island updates ($onUpdate coverage)', () => {
     const [item] = await db
       .update(calendarItem)
       .set({ title: 'Focus (renamed)' })
-      .where(eq(calendarItem.id, ids['calendarItem']!))
+      .where(eq(calendarItem.id, assertDefined(ids['calendarItem'])))
       .returning();
     expect(item?.title).toBe('Focus (renamed)');
     expect(item?.updatedAt).toBeInstanceOf(Date);
@@ -437,7 +486,7 @@ describe('calendar island updates ($onUpdate coverage)', () => {
     const [link] = await db
       .update(calendarItemTaskLink)
       .set({ note: 'reviewed' })
-      .where(eq(calendarItemTaskLink.calendarItemId, ids['calendarItem']!))
+      .where(eq(calendarItemTaskLink.calendarItemId, assertDefined(ids['calendarItem'])))
       .returning();
     expect(link?.note).toBe('reviewed');
     expect(link?.updatedAt).toBeInstanceOf(Date);
@@ -445,7 +494,7 @@ describe('calendar island updates ($onUpdate coverage)', () => {
     const [share] = await db
       .update(calendarLayerShare)
       .set({ access: 'busy_only' })
-      .where(eq(calendarLayerShare.layerId, ids['calendarLayer']!))
+      .where(eq(calendarLayerShare.layerId, assertDefined(ids['calendarLayer'])))
       .returning();
     expect(share?.access).toBe('busy_only');
     expect(share?.updatedAt).toBeInstanceOf(Date);
@@ -453,7 +502,7 @@ describe('calendar island updates ($onUpdate coverage)', () => {
     const [write] = await db
       .update(calendarItemWrite)
       .set({ status: 'sent' })
-      .where(eq(calendarItemWrite.id, ids['calendarItemWrite']!))
+      .where(eq(calendarItemWrite.id, assertDefined(ids['calendarItemWrite'])))
       .returning();
     expect(write?.status).toBe('sent');
     expect(write?.updatedAt).toBeInstanceOf(Date);
@@ -465,7 +514,7 @@ describe('agent-adjacent islands updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(sessionActivity)
       .set({ approvalStatus: 'approved' })
-      .where(eq(sessionActivity.id, ids['sessionActivity']!))
+      .where(eq(sessionActivity.id, assertDefined(ids['sessionActivity'])))
       .returning();
     expect(row?.approvalStatus).toBe('approved');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -475,7 +524,7 @@ describe('agent-adjacent islands updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(personalMcpConnection)
       .set({ status: 'connected', toolCount: 12 })
-      .where(eq(personalMcpConnection.ownerUserId, ids['user']!))
+      .where(eq(personalMcpConnection.ownerUserId, assertDefined(ids['user'])))
       .returning();
     expect(row?.toolCount).toBe(12);
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -485,7 +534,7 @@ describe('agent-adjacent islands updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(athenaAssignment)
       .set({ status: 'paused', pausedReason: 'waiting on input' })
-      .where(eq(athenaAssignment.ownerUserId, ids['user']!))
+      .where(eq(athenaAssignment.ownerUserId, assertDefined(ids['user'])))
       .returning();
     expect(row?.status).toBe('paused');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -495,7 +544,7 @@ describe('agent-adjacent islands updates ($onUpdate coverage)', () => {
     const [connection] = await db
       .update(latticeConnection)
       .set({ deviceName: 'Grace’s MacBook' })
-      .where(eq(latticeConnection.id, ids['latticeConnection']!))
+      .where(eq(latticeConnection.id, assertDefined(ids['latticeConnection'])))
       .returning();
     expect(connection?.deviceName).toBe('Grace’s MacBook');
     expect(connection?.updatedAt).toBeInstanceOf(Date);
@@ -503,7 +552,7 @@ describe('agent-adjacent islands updates ($onUpdate coverage)', () => {
     const [credential] = await db
       .update(latticeCredential)
       .set({ ciphertext: 'v1:gcm:refreshed' })
-      .where(eq(latticeCredential.connectionId, ids['latticeConnection']!))
+      .where(eq(latticeCredential.connectionId, assertDefined(ids['latticeConnection'])))
       .returning();
     expect(credential?.ciphertext).toBe('v1:gcm:refreshed');
     expect(credential?.updatedAt).toBeInstanceOf(Date);
@@ -512,8 +561,8 @@ describe('agent-adjacent islands updates ($onUpdate coverage)', () => {
   it('bumps updatedAt when an Athena mailbox is rehomed to a workspace', async () => {
     const [row] = await db
       .update(athenaMailbox)
-      .set({ organizationId: ids['org']! })
-      .where(eq(athenaMailbox.ownerUserId, ids['user']!))
+      .set({ organizationId: assertDefined(ids['org']) })
+      .where(eq(athenaMailbox.ownerUserId, assertDefined(ids['user'])))
       .returning();
     expect(row?.organizationId).toBe(ids['org']);
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -525,7 +574,7 @@ describe('crosscutting extras updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(entityDisplay)
       .set({ colorKey: 'blue' })
-      .where(eq(entityDisplay.organizationId, ids['org']!))
+      .where(eq(entityDisplay.organizationId, assertDefined(ids['org'])))
       .returning();
     expect(row?.colorKey).toBe('blue');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -535,7 +584,7 @@ describe('crosscutting extras updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(notificationIntent)
       .set({ status: 'queued' })
-      .where(eq(notificationIntent.createdBy, ids['humanActor']!))
+      .where(eq(notificationIntent.createdBy, assertDefined(ids['humanActor'])))
       .returning();
     expect(row?.status).toBe('queued');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -545,7 +594,7 @@ describe('crosscutting extras updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(notificationPreference)
       .set({ timezone: 'America/Los_Angeles' })
-      .where(eq(notificationPreference.userId, ids['user']!))
+      .where(eq(notificationPreference.userId, assertDefined(ids['user'])))
       .returning();
     expect(row?.timezone).toBe('America/Los_Angeles');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -555,7 +604,7 @@ describe('crosscutting extras updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(contactPoint)
       .set({ status: 'active', verifiedAt: new Date() })
-      .where(eq(contactPoint.userId, ids['user']!))
+      .where(eq(contactPoint.userId, assertDefined(ids['user'])))
       .returning();
     expect(row?.status).toBe('active');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -564,8 +613,8 @@ describe('crosscutting extras updates ($onUpdate coverage)', () => {
   it('bumps updatedAt when an external actor is matched to a Docket actor', async () => {
     const [row] = await db
       .update(externalActor)
-      .set({ actorId: ids['humanActor']!, matchedBy: 'manual' })
-      .where(eq(externalActor.integrationId, ids['integration']!))
+      .set({ actorId: assertDefined(ids['humanActor']), matchedBy: 'manual' })
+      .where(eq(externalActor.integrationId, assertDefined(ids['integration'])))
       .returning();
     expect(row?.actorId).toBe(ids['humanActor']);
     expect(row?.matchedBy).toBe('manual');
@@ -578,7 +627,7 @@ describe('elicitation island updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(agentElicitation)
       .set({ status: 'answered', resolver: 'user', answer: true, settledAt: new Date() })
-      .where(eq(agentElicitation.taskId, ids['task']!))
+      .where(eq(agentElicitation.taskId, assertDefined(ids['task'])))
       .returning();
     expect(row?.status).toBe('answered');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -588,7 +637,7 @@ describe('elicitation island updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(athenaPresence)
       .set({ focusedAt: new Date() })
-      .where(eq(athenaPresence.userId, ids['user']!))
+      .where(eq(athenaPresence.userId, assertDefined(ids['user'])))
       .returning();
     expect(row?.focusedAt).toBeInstanceOf(Date);
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -600,7 +649,7 @@ describe('cross-org feed and hierarchy updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(dailyDigest)
       .set({ status: 'sent', sentAt: new Date() })
-      .where(eq(dailyDigest.userId, ids['user']!))
+      .where(eq(dailyDigest.userId, assertDefined(ids['user'])))
       .returning();
     expect(row?.status).toBe('sent');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -609,8 +658,8 @@ describe('cross-org feed and hierarchy updates ($onUpdate coverage)', () => {
   it('bumps updatedAt when an initiative hierarchy link is re-pointed', async () => {
     const [row] = await db
       .update(initiativeHierarchyLink)
-      .set({ createdBy: ids['humanActor']! })
-      .where(eq(initiativeHierarchyLink.parentInitiativeId, ids['parentInitiative']!))
+      .set({ createdBy: assertDefined(ids['humanActor']) })
+      .where(eq(initiativeHierarchyLink.parentInitiativeId, assertDefined(ids['parentInitiative'])))
       .returning();
     expect(row?.createdBy).toBe(ids['humanActor']);
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -622,7 +671,7 @@ describe('phone binding updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(phoneNumber)
       .set({ status: 'verified', verifiedAt: new Date() })
-      .where(eq(phoneNumber.userId, ids['user']!))
+      .where(eq(phoneNumber.userId, assertDefined(ids['user'])))
       .returning();
     expect(row?.status).toBe('verified');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -634,7 +683,7 @@ describe('weekly scheduling and daily-directive loop updates ($onUpdate coverage
     const [row] = await db
       .update(schedulingPreference)
       .set({ timezone: 'America/New_York' })
-      .where(eq(schedulingPreference.hubId, ids['hub']!))
+      .where(eq(schedulingPreference.hubId, assertDefined(ids['hub'])))
       .returning();
     expect(row?.timezone).toBe('America/New_York');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -644,7 +693,7 @@ describe('weekly scheduling and daily-directive loop updates ($onUpdate coverage
     const [row] = await db
       .update(dayDirective)
       .set({ posture: 'at_risk' })
-      .where(eq(dayDirective.hubId, ids['hub']!))
+      .where(eq(dayDirective.hubId, assertDefined(ids['hub'])))
       .returning();
     expect(row?.posture).toBe('at_risk');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -654,7 +703,7 @@ describe('weekly scheduling and daily-directive loop updates ($onUpdate coverage
     const [row] = await db
       .update(dayCheckIn)
       .set({ respondedAt: new Date(), response: 'on_track' })
-      .where(eq(dayCheckIn.hubId, ids['hub']!))
+      .where(eq(dayCheckIn.hubId, assertDefined(ids['hub'])))
       .returning();
     expect(row?.response).toBe('on_track');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -664,7 +713,7 @@ describe('weekly scheduling and daily-directive loop updates ($onUpdate coverage
     const [row] = await db
       .update(dayReview)
       .set({ completedAt: new Date() })
-      .where(eq(dayReview.hubId, ids['hub']!))
+      .where(eq(dayReview.hubId, assertDefined(ids['hub'])))
       .returning();
     expect(row?.completedAt).toBeInstanceOf(Date);
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -674,7 +723,7 @@ describe('weekly scheduling and daily-directive loop updates ($onUpdate coverage
     const [row] = await db
       .update(directiveAcknowledgment)
       .set({ note: 'client applied posture late' })
-      .where(eq(directiveAcknowledgment.hubId, ids['hub']!))
+      .where(eq(directiveAcknowledgment.hubId, assertDefined(ids['hub'])))
       .returning();
     expect(row?.note).toBe('client applied posture late');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -686,7 +735,7 @@ describe('search projection updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(searchDocument)
       .set({ title: 'Ship the feature (renamed)' })
-      .where(eq(searchDocument.id, ids['searchDocument']!))
+      .where(eq(searchDocument.id, assertDefined(ids['searchDocument'])))
       .returning();
     expect(row?.title).toBe('Ship the feature (renamed)');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -698,7 +747,7 @@ describe('time ledger updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(timeCategory)
       .set({ color: '#3b82f6' })
-      .where(eq(timeCategory.id, ids['timeCategory']!))
+      .where(eq(timeCategory.id, assertDefined(ids['timeCategory'])))
       .returning();
     expect(row?.color).toBe('#3b82f6');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -708,7 +757,7 @@ describe('time ledger updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(timeRecord)
       .set({ status: 'closed', closedAt: new Date() })
-      .where(eq(timeRecord.id, ids['timeRecord']!))
+      .where(eq(timeRecord.id, assertDefined(ids['timeRecord'])))
       .returning();
     expect(row?.status).toBe('closed');
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -718,7 +767,7 @@ describe('time ledger updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(timeAllocation)
       .set({ basisPoints: 5_000 })
-      .where(eq(timeAllocation.timeRecordId, ids['timeRecord']!))
+      .where(eq(timeAllocation.timeRecordId, assertDefined(ids['timeRecord'])))
       .returning();
     expect(row?.basisPoints).toBe(5_000);
     expect(row?.updatedAt).toBeInstanceOf(Date);
@@ -728,7 +777,7 @@ describe('time ledger updates ($onUpdate coverage)', () => {
     const [row] = await db
       .update(agentExecution)
       .set({ status: 'completed', endedAt: new Date() })
-      .where(eq(agentExecution.sessionId, ids['agentSession']!))
+      .where(eq(agentExecution.sessionId, assertDefined(ids['agentSession'])))
       .returning();
     expect(row?.status).toBe('completed');
     expect(row?.updatedAt).toBeInstanceOf(Date);

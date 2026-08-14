@@ -23,6 +23,7 @@ import {
   user,
 } from '../../src/schema';
 import type { SessionActivityBody } from '../../src/types';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * Schema coverage for the Athena agent additions: the durable session transcript,
@@ -38,47 +39,57 @@ const ids: Record<string, string> = {};
 beforeAll(async () => {
   await migrate(db, { migrationsFolder: resolve(import.meta.dirname, '../../drizzle') });
 
-  ids['user'] = (
-    await db
-      .insert(user)
-      .values({ name: 'Willie', email: 'w@example.com', emailVerified: true })
-      .returning()
-  )[0]!.id;
-  ids['otherUser'] = (
-    await db
-      .insert(user)
-      .values({ name: 'Alice', email: 'alice@example.com', emailVerified: true })
-      .returning()
-  )[0]!.id;
-  ids['org'] = (
-    await db.insert(organization).values({ name: 'Acme', slug: 'acme' }).returning()
-  )[0]!.id;
-  ids['otherOrg'] = (
-    await db.insert(organization).values({ name: 'Other', slug: 'other' }).returning()
-  )[0]!.id;
-  ids['humanActor'] = (
-    await db
-      .insert(actor)
-      .values({
-        organizationId: ids['org'],
-        kind: 'human',
-        displayName: 'Willie',
-        userId: ids['user'],
-      })
-      .returning()
-  )[0]!.id;
-  ids['agentActor'] = (
-    await db
-      .insert(actor)
-      .values({ organizationId: ids['org'], kind: 'agent', displayName: 'Athena' })
-      .returning()
-  )[0]!.id;
-  ids['agent'] = (
-    await db
-      .insert(agent)
-      .values({ organizationId: ids['org'], actorId: ids['agentActor'] })
-      .returning()
-  )[0]!.id;
+  ids['user'] = assertDefined(
+    (
+      await db
+        .insert(user)
+        .values({ name: 'Willie', email: 'w@example.com', emailVerified: true })
+        .returning()
+    )[0],
+  ).id;
+  ids['otherUser'] = assertDefined(
+    (
+      await db
+        .insert(user)
+        .values({ name: 'Alice', email: 'alice@example.com', emailVerified: true })
+        .returning()
+    )[0],
+  ).id;
+  ids['org'] = assertDefined(
+    (await db.insert(organization).values({ name: 'Acme', slug: 'acme' }).returning())[0],
+  ).id;
+  ids['otherOrg'] = assertDefined(
+    (await db.insert(organization).values({ name: 'Other', slug: 'other' }).returning())[0],
+  ).id;
+  ids['humanActor'] = assertDefined(
+    (
+      await db
+        .insert(actor)
+        .values({
+          organizationId: ids['org'],
+          kind: 'human',
+          displayName: 'Willie',
+          userId: ids['user'],
+        })
+        .returning()
+    )[0],
+  ).id;
+  ids['agentActor'] = assertDefined(
+    (
+      await db
+        .insert(actor)
+        .values({ organizationId: ids['org'], kind: 'agent', displayName: 'Athena' })
+        .returning()
+    )[0],
+  ).id;
+  ids['agent'] = assertDefined(
+    (
+      await db
+        .insert(agent)
+        .values({ organizationId: ids['org'], actorId: ids['agentActor'] })
+        .returning()
+    )[0],
+  ).id;
 });
 
 afterAll(async () => {
@@ -97,62 +108,74 @@ describe('athena schema additions', () => {
 
   it('defaults agent_session.kind to job and accepts chat', async () => {
     expect(sessionKind.enumValues).toEqual(['chat', 'job']);
-    const job = (
-      await db
-        .insert(agentSession)
-        .values({ organizationId: ids['org']!, agentId: ids['agent']!, trigger: 'delegation' })
-        .returning()
-    )[0]!;
+    const job = assertDefined(
+      (
+        await db
+          .insert(agentSession)
+          .values({
+            organizationId: assertDefined(ids['org']),
+            agentId: assertDefined(ids['agent']),
+            trigger: 'delegation',
+          })
+          .returning()
+      )[0],
+    );
     expect(job.kind).toBe('job');
     expect(job.executorKind).toBe('registered_agent');
     expect(job.ownerUserId).toBeNull();
 
-    const chat = (
-      await db
-        .insert(agentSession)
-        .values({
-          organizationId: ids['org']!,
-          agentId: ids['agent']!,
-          trigger: 'delegation',
-          kind: 'chat',
-        })
-        .returning()
-    )[0]!;
+    const chat = assertDefined(
+      (
+        await db
+          .insert(agentSession)
+          .values({
+            organizationId: assertDefined(ids['org']),
+            agentId: assertDefined(ids['agent']),
+            trigger: 'delegation',
+            kind: 'chat',
+          })
+          .returning()
+      )[0],
+    );
     expect(chat.kind).toBe('chat');
     ids['session'] = job.id;
   });
 
   it('enforces the executor ownership shape at the database boundary', async () => {
-    const athena = (
-      await db
-        .insert(agentSession)
-        .values({
-          executorKind: 'athena',
-          organizationId: null,
-          contextOrganizationId: ids['org']!,
-          agentId: null,
-          ownerUserId: ids['user']!,
-          trigger: 'delegation',
-          initiatorId: ids['humanActor']!,
-        })
-        .returning()
-    )[0]!;
+    const athena = assertDefined(
+      (
+        await db
+          .insert(agentSession)
+          .values({
+            executorKind: 'athena',
+            organizationId: null,
+            contextOrganizationId: assertDefined(ids['org']),
+            agentId: null,
+            ownerUserId: assertDefined(ids['user']),
+            trigger: 'delegation',
+            initiatorId: assertDefined(ids['humanActor']),
+          })
+          .returning()
+      )[0],
+    );
     expect(athena.ownerUserId).toBe(ids['user']);
     expect(athena.contextOrganizationId).toBe(ids['org']);
     ids['athenaSession'] = athena.id;
 
-    const contextFreeAthena = (
-      await db
-        .insert(agentSession)
-        .values({
-          executorKind: 'athena',
-          organizationId: null,
-          agentId: null,
-          ownerUserId: ids['user']!,
-          trigger: 'delegation',
-        })
-        .returning()
-    )[0]!;
+    const contextFreeAthena = assertDefined(
+      (
+        await db
+          .insert(agentSession)
+          .values({
+            executorKind: 'athena',
+            organizationId: null,
+            agentId: null,
+            ownerUserId: assertDefined(ids['user']),
+            trigger: 'delegation',
+          })
+          .returning()
+      )[0],
+    );
     ids['contextFreeAthenaSession'] = contextFreeAthena.id;
     expect(contextFreeAthena.contextOrganizationId).toBeNull();
 
@@ -168,19 +191,19 @@ describe('athena schema additions', () => {
     await expect(
       db.insert(agentSession).values({
         executorKind: 'athena',
-        organizationId: ids['org']!,
-        contextOrganizationId: ids['org']!,
+        organizationId: assertDefined(ids['org']),
+        contextOrganizationId: assertDefined(ids['org']),
         agentId: null,
-        ownerUserId: ids['user']!,
+        ownerUserId: assertDefined(ids['user']),
         trigger: 'delegation',
       }),
     ).rejects.toThrow();
     await expect(
       db.insert(agentSession).values({
         executorKind: 'registered_agent',
-        organizationId: ids['org']!,
-        agentId: ids['agent']!,
-        ownerUserId: ids['user']!,
+        organizationId: assertDefined(ids['org']),
+        agentId: assertDefined(ids['agent']),
+        ownerUserId: assertDefined(ids['user']),
         trigger: 'delegation',
       }),
     ).rejects.toThrow();
@@ -195,35 +218,37 @@ describe('athena schema additions', () => {
       'failed',
       'canceled',
     ]);
-    const run = (
-      await db
-        .insert(agentSessionRun)
-        .values({
-          sessionId: ids['session']!,
-          organizationId: ids['org']!,
-          generation: 1,
-          workflowInstanceId: `${ids['session']!}:1`,
-        })
-        .returning()
-    )[0]!;
+    const run = assertDefined(
+      (
+        await db
+          .insert(agentSessionRun)
+          .values({
+            sessionId: assertDefined(ids['session']),
+            organizationId: assertDefined(ids['org']),
+            generation: 1,
+            workflowInstanceId: `${assertDefined(ids['session'])}:1`,
+          })
+          .returning()
+      )[0],
+    );
     expect(run.status).toBe('queued');
     expect(run.attempt).toBe(0);
 
     await expect(
       db.insert(agentSessionRun).values({
-        sessionId: ids['session']!,
-        organizationId: ids['org']!,
+        sessionId: assertDefined(ids['session']),
+        organizationId: assertDefined(ids['org']),
         generation: 1,
-        workflowInstanceId: `${ids['session']!}:retry`,
+        workflowInstanceId: `${assertDefined(ids['session'])}:retry`,
       }),
     ).rejects.toThrow();
 
     await expect(
       db.insert(agentSessionRun).values({
-        sessionId: ids['session']!,
-        organizationId: ids['org']!,
+        sessionId: assertDefined(ids['session']),
+        organizationId: assertDefined(ids['org']),
         generation: 2,
-        workflowInstanceId: `${ids['session']!}:not-the-generation`,
+        workflowInstanceId: `${assertDefined(ids['session'])}:not-the-generation`,
       }),
     ).rejects.toThrow();
   });
@@ -240,11 +265,11 @@ describe('athena schema additions', () => {
     const [run] = await db
       .insert(agentSessionRun)
       .values({
-        sessionId: ids['contextFreeAthenaSession']!,
+        sessionId: assertDefined(ids['contextFreeAthenaSession']),
         organizationId: null,
-        ownerUserId: ids['user']!,
+        ownerUserId: assertDefined(ids['user']),
         generation: 7,
-        workflowInstanceId: `${ids['contextFreeAthenaSession']!}:7`,
+        workflowInstanceId: `${assertDefined(ids['contextFreeAthenaSession'])}:7`,
         status: 'running',
         leaseToken: 'worker-token',
         leaseExpiresAt: new Date(Date.now() + 60_000),
@@ -255,47 +280,51 @@ describe('athena schema additions', () => {
   });
 
   it('attributes Athena runs and transcripts to their owning user', async () => {
-    const run = (
-      await db
-        .insert(agentSessionRun)
-        .values({
-          sessionId: ids['athenaSession']!,
-          organizationId: null,
-          ownerUserId: ids['user']!,
-          generation: 1,
-          workflowInstanceId: `${ids['athenaSession']!}:1`,
-        })
-        .returning()
-    )[0]!;
+    const run = assertDefined(
+      (
+        await db
+          .insert(agentSessionRun)
+          .values({
+            sessionId: assertDefined(ids['athenaSession']),
+            organizationId: null,
+            ownerUserId: assertDefined(ids['user']),
+            generation: 1,
+            workflowInstanceId: `${assertDefined(ids['athenaSession'])}:1`,
+          })
+          .returning()
+      )[0],
+    );
     expect(run.ownerUserId).toBe(ids['user']);
 
-    const transcript = (
-      await db
-        .insert(agentSessionTranscript)
-        .values({
-          sessionId: ids['athenaSession']!,
-          organizationId: null,
-          ownerUserId: ids['user']!,
-          messages: [],
-        })
-        .returning()
-    )[0]!;
+    const transcript = assertDefined(
+      (
+        await db
+          .insert(agentSessionTranscript)
+          .values({
+            sessionId: assertDefined(ids['athenaSession']),
+            organizationId: null,
+            ownerUserId: assertDefined(ids['user']),
+            messages: [],
+          })
+          .returning()
+      )[0],
+    );
     expect(transcript.ownerUserId).toBe(ids['user']);
 
     await expect(
       db.insert(agentSessionRun).values({
-        sessionId: ids['athenaSession']!,
-        organizationId: ids['org']!,
-        ownerUserId: ids['user']!,
+        sessionId: assertDefined(ids['athenaSession']),
+        organizationId: assertDefined(ids['org']),
+        ownerUserId: assertDefined(ids['user']),
         generation: 2,
-        workflowInstanceId: `${ids['athenaSession']!}:2`,
+        workflowInstanceId: `${assertDefined(ids['athenaSession'])}:2`,
       }),
     ).rejects.toThrow();
     await expect(
       db.insert(agentSessionTranscript).values({
-        sessionId: ids['contextFreeAthenaSession']!,
-        organizationId: ids['org']!,
-        ownerUserId: ids['user']!,
+        sessionId: assertDefined(ids['contextFreeAthenaSession']),
+        organizationId: assertDefined(ids['org']),
+        ownerUserId: assertDefined(ids['user']),
         messages: [],
       }),
     ).rejects.toThrow();
@@ -304,36 +333,38 @@ describe('athena schema additions', () => {
   it('requires run and transcript attribution to match their parent session', async () => {
     await expect(
       db.insert(agentSessionRun).values({
-        sessionId: ids['contextFreeAthenaSession']!,
+        sessionId: assertDefined(ids['contextFreeAthenaSession']),
         organizationId: null,
-        ownerUserId: ids['otherUser']!,
+        ownerUserId: assertDefined(ids['otherUser']),
         generation: 1,
-        workflowInstanceId: `${ids['contextFreeAthenaSession']!}:wrong-owner`,
+        workflowInstanceId: `${assertDefined(ids['contextFreeAthenaSession'])}:wrong-owner`,
       }),
     ).rejects.toThrow();
     await expect(
       db.insert(agentSessionTranscript).values({
-        sessionId: ids['contextFreeAthenaSession']!,
+        sessionId: assertDefined(ids['contextFreeAthenaSession']),
         organizationId: null,
-        ownerUserId: ids['otherUser']!,
+        ownerUserId: assertDefined(ids['otherUser']),
         messages: [],
       }),
     ).rejects.toThrow();
 
-    const registeredSession = (
-      await db
-        .insert(agentSession)
-        .values({
-          organizationId: ids['org']!,
-          agentId: ids['agent']!,
-          trigger: 'delegation',
-        })
-        .returning()
-    )[0]!;
+    const registeredSession = assertDefined(
+      (
+        await db
+          .insert(agentSession)
+          .values({
+            organizationId: assertDefined(ids['org']),
+            agentId: assertDefined(ids['agent']),
+            trigger: 'delegation',
+          })
+          .returning()
+      )[0],
+    );
     await expect(
       db.insert(agentSessionRun).values({
         sessionId: registeredSession.id,
-        organizationId: ids['otherOrg']!,
+        organizationId: assertDefined(ids['otherOrg']),
         generation: 1,
         workflowInstanceId: `${registeredSession.id}:wrong-org`,
       }),
@@ -341,7 +372,7 @@ describe('athena schema additions', () => {
     await expect(
       db.insert(agentSessionTranscript).values({
         sessionId: registeredSession.id,
-        organizationId: ids['otherOrg']!,
+        organizationId: assertDefined(ids['otherOrg']),
         messages: [],
       }),
     ).rejects.toThrow();
@@ -359,16 +390,18 @@ describe('athena schema additions', () => {
       },
     ];
     await db.insert(agentSessionTranscript).values({
-      sessionId: ids['session']!,
-      organizationId: ids['org']!,
+      sessionId: assertDefined(ids['session']),
+      organizationId: assertDefined(ids['org']),
       messages,
     });
-    const row = (
-      await db
-        .select()
-        .from(agentSessionTranscript)
-        .where(eq(agentSessionTranscript.sessionId, ids['session']!))
-    )[0]!;
+    const row = assertDefined(
+      (
+        await db
+          .select()
+          .from(agentSessionTranscript)
+          .where(eq(agentSessionTranscript.sessionId, assertDefined(ids['session'])))
+      )[0],
+    );
     expect(row.messages).toEqual(messages);
     expect(row.updatedAt).toBeInstanceOf(Date);
   });
@@ -387,19 +420,21 @@ describe('athena schema additions', () => {
         mode: 'proposal',
       },
     };
-    const row = (
-      await db
-        .insert(sessionActivity)
-        .values({
-          sessionId: ids['session']!,
-          organizationId: ids['org']!,
-          type: 'action',
-          body,
-          approvalStatus: 'proposed',
-          proposalGroupId: '01HZPROPOSALGROUP000000001',
-        })
-        .returning()
-    )[0]!;
+    const row = assertDefined(
+      (
+        await db
+          .insert(sessionActivity)
+          .values({
+            sessionId: assertDefined(ids['session']),
+            organizationId: assertDefined(ids['org']),
+            type: 'action',
+            body,
+            approvalStatus: 'proposed',
+            proposalGroupId: '01HZPROPOSALGROUP000000001',
+          })
+          .returning()
+      )[0],
+    );
     expect(row.proposalGroupId).toBe('01HZPROPOSALGROUP000000001');
     expect(row.body.action?.toolCall?.tool).toBe('create_task');
 
@@ -411,48 +446,54 @@ describe('athena schema additions', () => {
   });
 
   it('allows personal activity without workspace attribution', async () => {
-    const row = (
-      await db
-        .insert(sessionActivity)
-        .values({
-          sessionId: ids['athenaSession']!,
-          organizationId: null,
-          type: 'response',
-          body: { text: 'What should I work on today?' },
-        })
-        .returning()
-    )[0]!;
+    const row = assertDefined(
+      (
+        await db
+          .insert(sessionActivity)
+          .values({
+            sessionId: assertDefined(ids['athenaSession']),
+            organizationId: null,
+            type: 'response',
+            body: { text: 'What should I work on today?' },
+          })
+          .returning()
+      )[0],
+    );
     expect(row.organizationId).toBeNull();
   });
 
   it('stores an org-held integration credential 1:1 with its integration', async () => {
-    ids['integration'] = (
-      await db
-        .insert(integration)
-        .values({
-          organizationId: ids['org']!,
-          provider: 'mcp',
-          pattern: 'connector',
-          config: { url: 'https://mcp.sunsama.com', label: 'Sunsama', alias: 'sunsama' },
-        })
-        .returning()
-    )[0]!.id;
-    const cred = (
-      await db
-        .insert(integrationCredential)
-        .values({
-          organizationId: ids['org']!,
-          integrationId: ids['integration'],
-          ciphertext: 'v1:gcm:deadbeef',
-        })
-        .returning()
-    )[0]!;
+    ids['integration'] = assertDefined(
+      (
+        await db
+          .insert(integration)
+          .values({
+            organizationId: assertDefined(ids['org']),
+            provider: 'mcp',
+            pattern: 'connector',
+            config: { url: 'https://mcp.sunsama.com', label: 'Sunsama', alias: 'sunsama' },
+          })
+          .returning()
+      )[0],
+    ).id;
+    const cred = assertDefined(
+      (
+        await db
+          .insert(integrationCredential)
+          .values({
+            organizationId: assertDefined(ids['org']),
+            integrationId: ids['integration'],
+            ciphertext: 'v1:gcm:deadbeef',
+          })
+          .returning()
+      )[0],
+    );
     expect(cred.ciphertext).toBe('v1:gcm:deadbeef');
 
     // 1:1 — a second credential row for the same integration is rejected.
     await expect(
       db.insert(integrationCredential).values({
-        organizationId: ids['org']!,
+        organizationId: assertDefined(ids['org']),
         integrationId: ids['integration'],
         ciphertext: 'v1:gcm:other',
       }),
@@ -460,18 +501,18 @@ describe('athena schema additions', () => {
   });
 
   it('cascades transcript and credential deletes from their parents', async () => {
-    await db.delete(agentSession).where(eq(agentSession.id, ids['session']!));
+    await db.delete(agentSession).where(eq(agentSession.id, assertDefined(ids['session'])));
     const transcripts = await db
       .select()
       .from(agentSessionTranscript)
-      .where(eq(agentSessionTranscript.sessionId, ids['session']!));
+      .where(eq(agentSessionTranscript.sessionId, assertDefined(ids['session'])));
     expect(transcripts).toHaveLength(0);
 
-    await db.delete(integration).where(eq(integration.id, ids['integration']!));
+    await db.delete(integration).where(eq(integration.id, assertDefined(ids['integration'])));
     const creds = await db
       .select()
       .from(integrationCredential)
-      .where(eq(integrationCredential.integrationId, ids['integration']!));
+      .where(eq(integrationCredential.integrationId, assertDefined(ids['integration'])));
     expect(creds).toHaveLength(0);
   });
 });

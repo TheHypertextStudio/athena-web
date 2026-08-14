@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * Tests for the offline migration runner.
@@ -59,10 +60,10 @@ describe('migrate main()', () => {
     expect(migrateMocks.migratePglite).toHaveBeenCalledWith(expect.anything(), {
       migrationsFolder: expect.stringContaining('packages/db/drizzle'),
     });
-    expect(migrateMocks.clients[0]!.exec).toHaveBeenCalledWith(
+    expect(assertDefined(migrateMocks.clients[0]).exec).toHaveBeenCalledWith(
       expect.stringContaining("ADD VALUE IF NOT EXISTS 'pending'"),
     );
-    expect(migrateMocks.clients[0]!.close).toHaveBeenCalledTimes(1);
+    expect(assertDefined(migrateMocks.clients[0]).close).toHaveBeenCalledTimes(1);
     expect(log).toHaveBeenCalledWith(expect.stringContaining('migrations applied (pglite)'));
   });
 
@@ -75,7 +76,7 @@ describe('migrate main()', () => {
 
     expect(migrateMocks.openPglite).toHaveBeenCalledWith('pglite:');
     expect(migrateMocks.migratePglite).toHaveBeenCalledTimes(1);
-    expect(migrateMocks.clients[0]!.close).toHaveBeenCalledTimes(1);
+    expect(assertDefined(migrateMocks.clients[0]).close).toHaveBeenCalledTimes(1);
   });
 
   it('migrates a pglite:// URL with the :memory: alias', async () => {
@@ -97,7 +98,7 @@ describe('migrate main()', () => {
     await expect(main()).resolves.toBeUndefined();
 
     expect(migrateMocks.openPglite).toHaveBeenCalledWith(`pglite://${dir}`);
-    expect(migrateMocks.clients[0]!.close).toHaveBeenCalledTimes(1);
+    expect(assertDefined(migrateMocks.clients[0]).close).toHaveBeenCalledTimes(1);
   });
 
   it('prefers DATABASE_URL_UNPOOLED over DATABASE_URL', async () => {

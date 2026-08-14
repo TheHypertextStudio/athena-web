@@ -179,6 +179,7 @@ import {
   calendarLayerShareRelations,
   organizationRelations,
 } from '../../src/relations';
+import { assertDefined } from '@docket/test-utils';
 
 describe('genId', () => {
   it('returns a 26-char Crockford ULID', () => {
@@ -486,303 +487,367 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
     db = d;
 
     // --- auth island (user/session/account/verification/passkey) ---
-    ids['user'] = (
-      await db.insert(user).values({ name: 'Ada', email: 'ada@example.com' }).returning()
-    )[0]!.id;
-    ids['session'] = (
-      await db
-        .insert(session)
-        .values({ token: 'tok-1', userId: ids['user'], expiresAt: new Date(Date.now() + 3.6e6) })
-        .returning()
-    )[0]!.id;
-    ids['account'] = (
-      await db
-        .insert(account)
-        .values({ accountId: 'acc-1', providerId: 'credential', userId: ids['user'] })
-        .returning()
-    )[0]!.id;
-    ids['verification'] = (
-      await db
-        .insert(verification)
-        .values({
-          identifier: 'ada@example.com',
-          value: 'v',
-          expiresAt: new Date(Date.now() + 3.6e6),
-        })
-        .returning()
-    )[0]!.id;
-    ids['passkey'] = (
-      await db
-        .insert(passkey)
-        .values({
-          publicKey: 'pk',
-          userId: ids['user'],
-          credentialID: 'cred-1',
-          counter: 0,
-          deviceType: 'singleDevice',
-          backedUp: false,
-        })
-        .returning()
-    )[0]!.id;
+    ids['user'] = assertDefined(
+      (await db.insert(user).values({ name: 'Ada', email: 'ada@example.com' }).returning())[0],
+    ).id;
+    ids['session'] = assertDefined(
+      (
+        await db
+          .insert(session)
+          .values({ token: 'tok-1', userId: ids['user'], expiresAt: new Date(Date.now() + 3.6e6) })
+          .returning()
+      )[0],
+    ).id;
+    ids['account'] = assertDefined(
+      (
+        await db
+          .insert(account)
+          .values({ accountId: 'acc-1', providerId: 'credential', userId: ids['user'] })
+          .returning()
+      )[0],
+    ).id;
+    ids['verification'] = assertDefined(
+      (
+        await db
+          .insert(verification)
+          .values({
+            identifier: 'ada@example.com',
+            value: 'v',
+            expiresAt: new Date(Date.now() + 3.6e6),
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['passkey'] = assertDefined(
+      (
+        await db
+          .insert(passkey)
+          .values({
+            publicKey: 'pk',
+            userId: ids['user'],
+            credentialID: 'cred-1',
+            counter: 0,
+            deviceType: 'singleDevice',
+            backedUp: false,
+          })
+          .returning()
+      )[0],
+    ).id;
     // oauthProvider island: client → refresh-token → access-token, + consent (FK on clientId;
     // access-token's refreshId FKs the refresh-token row).
     const oauthClientId = 'docket-mcp-client';
-    ids['oauthClient'] = (
-      await db
-        .insert(oauthClient)
-        .values({
-          name: 'Docket MCP',
-          clientId: oauthClientId,
-          clientSecret: 'sec',
-          redirectUris: ['https://docket.example/callback'],
-          type: 'web',
-          userId: ids['user'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['oauthRefreshToken'] = (
-      await db
-        .insert(oauthRefreshToken)
-        .values({
-          token: 'rt-1',
-          clientId: oauthClientId,
-          userId: ids['user'],
-          expiresAt: new Date(Date.now() + 8.64e7),
-          scopes: ['openid', 'profile'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['oauthAccessToken'] = (
-      await db
-        .insert(oauthAccessToken)
-        .values({
-          token: 'at-1',
-          clientId: oauthClientId,
-          userId: ids['user'],
-          refreshId: ids['oauthRefreshToken'],
-          expiresAt: new Date(Date.now() + 3.6e6),
-          scopes: ['openid', 'profile'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['oauthConsent'] = (
-      await db
-        .insert(oauthConsent)
-        .values({
-          clientId: oauthClientId,
-          userId: ids['user'],
-          scopes: ['openid', 'profile'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['jwks'] = (
-      await db
-        .insert(jwks)
-        .values({ publicKey: 'pub-1', privateKey: 'priv-1', createdAt: new Date() })
-        .returning()
-    )[0]!.id;
+    ids['oauthClient'] = assertDefined(
+      (
+        await db
+          .insert(oauthClient)
+          .values({
+            name: 'Docket MCP',
+            clientId: oauthClientId,
+            clientSecret: 'sec',
+            redirectUris: ['https://docket.example/callback'],
+            type: 'web',
+            userId: ids['user'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['oauthRefreshToken'] = assertDefined(
+      (
+        await db
+          .insert(oauthRefreshToken)
+          .values({
+            token: 'rt-1',
+            clientId: oauthClientId,
+            userId: ids['user'],
+            expiresAt: new Date(Date.now() + 8.64e7),
+            scopes: ['openid', 'profile'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['oauthAccessToken'] = assertDefined(
+      (
+        await db
+          .insert(oauthAccessToken)
+          .values({
+            token: 'at-1',
+            clientId: oauthClientId,
+            userId: ids['user'],
+            refreshId: ids['oauthRefreshToken'],
+            expiresAt: new Date(Date.now() + 3.6e6),
+            scopes: ['openid', 'profile'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['oauthConsent'] = assertDefined(
+      (
+        await db
+          .insert(oauthConsent)
+          .values({
+            clientId: oauthClientId,
+            userId: ids['user'],
+            scopes: ['openid', 'profile'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['jwks'] = assertDefined(
+      (
+        await db
+          .insert(jwks)
+          .values({ publicKey: 'pub-1', privateKey: 'priv-1', createdAt: new Date() })
+          .returning()
+      )[0],
+    ).id;
 
     // --- identity island ---
-    ids['hub'] = (await db.insert(hub).values({ userId: ids['user'] }).returning())[0]!.id;
-    ids['org'] = (
-      await db.insert(organization).values({ name: 'Acme', slug: 'acme' }).returning()
-    )[0]!.id;
-    ids['role'] = (
-      await db
-        .insert(role)
-        .values({
-          organizationId: ids['org'],
-          key: 'owner',
-          name: 'Owner',
-          isSystem: true,
-          baseCapability: 'manage',
-          capabilities: ['manage'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['actor'] = (
-      await db
-        .insert(actor)
-        .values({
-          organizationId: ids['org'],
-          kind: 'human',
-          displayName: 'Ada',
-          userId: ids['user'],
-          roleId: ids['role'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['team'] = (
-      await db
-        .insert(team)
-        .values({ organizationId: ids['org'], name: 'Core', key: 'CORE' })
-        .returning()
-    )[0]!.id;
+    ids['hub'] = assertDefined(
+      (await db.insert(hub).values({ userId: ids['user'] }).returning())[0],
+    ).id;
+    ids['org'] = assertDefined(
+      (await db.insert(organization).values({ name: 'Acme', slug: 'acme' }).returning())[0],
+    ).id;
+    ids['role'] = assertDefined(
+      (
+        await db
+          .insert(role)
+          .values({
+            organizationId: ids['org'],
+            key: 'owner',
+            name: 'Owner',
+            isSystem: true,
+            baseCapability: 'manage',
+            capabilities: ['manage'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['actor'] = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({
+            organizationId: ids['org'],
+            kind: 'human',
+            displayName: 'Ada',
+            userId: ids['user'],
+            roleId: ids['role'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['team'] = assertDefined(
+      (
+        await db
+          .insert(team)
+          .values({ organizationId: ids['org'], name: 'Core', key: 'CORE' })
+          .returning()
+      )[0],
+    ).id;
     await db
       .insert(teamMember)
       .values({ teamId: ids['team'], actorId: ids['actor'], organizationId: ids['org'] });
-    ids['invitation'] = (
-      await db
-        .insert(invitation)
-        .values({
-          organizationId: ids['org'],
-          email: 'new@example.com',
-          roleId: ids['role'],
-          token: 'inv-tok',
-          expiresAt: new Date(Date.now() + 3.6e6),
-        })
-        .returning()
-    )[0]!.id;
+    ids['invitation'] = assertDefined(
+      (
+        await db
+          .insert(invitation)
+          .values({
+            organizationId: ids['org'],
+            email: 'new@example.com',
+            roleId: ids['role'],
+            token: 'inv-tok',
+            expiresAt: new Date(Date.now() + 3.6e6),
+          })
+          .returning()
+      )[0],
+    ).id;
 
     // --- crosscutting island ---
-    ids['grant'] = (
-      await db
-        .insert(grant)
-        .values({
-          organizationId: ids['org'],
-          subjectKind: 'role',
-          subjectId: ids['role'],
-          resourceKind: 'organization',
-          resourceId: ids['org'],
-          capabilities: ['manage'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['integration'] = (
-      await db
-        .insert(integration)
-        .values({ organizationId: ids['org'], provider: 'linear', pattern: 'connector' })
-        .returning()
-    )[0]!.id;
-    ids['label'] = (
-      await db
-        .insert(label)
-        .values({ organizationId: ids['org'], name: 'bug', color: '#f00' })
-        .returning()
-    )[0]!.id;
-    ids['notification'] = (
-      await db
-        .insert(notification)
-        .values({ userId: ids['user'], type: 'mention', body: { title: 'You were mentioned' } })
-        .returning()
-    )[0]!.id;
-    ids['dailyPlanItem'] = (
-      await db
-        .insert(dailyPlanItem)
-        .values({
-          hubId: ids['hub'],
-          refOrganizationId: ids['org'],
-          refTaskId: 'task-ref',
-          date: '2026-06-05',
-        })
-        .returning()
-    )[0]!.id;
-    ids['savedView'] = (
-      await db.insert(savedView).values({ organizationId: ids['org'], name: 'My View' }).returning()
-    )[0]!.id;
+    ids['grant'] = assertDefined(
+      (
+        await db
+          .insert(grant)
+          .values({
+            organizationId: ids['org'],
+            subjectKind: 'role',
+            subjectId: ids['role'],
+            resourceKind: 'organization',
+            resourceId: ids['org'],
+            capabilities: ['manage'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['integration'] = assertDefined(
+      (
+        await db
+          .insert(integration)
+          .values({ organizationId: ids['org'], provider: 'linear', pattern: 'connector' })
+          .returning()
+      )[0],
+    ).id;
+    ids['label'] = assertDefined(
+      (
+        await db
+          .insert(label)
+          .values({ organizationId: ids['org'], name: 'bug', color: '#f00' })
+          .returning()
+      )[0],
+    ).id;
+    ids['notification'] = assertDefined(
+      (
+        await db
+          .insert(notification)
+          .values({ userId: ids['user'], type: 'mention', body: { title: 'You were mentioned' } })
+          .returning()
+      )[0],
+    ).id;
+    ids['dailyPlanItem'] = assertDefined(
+      (
+        await db
+          .insert(dailyPlanItem)
+          .values({
+            hubId: ids['hub'],
+            refOrganizationId: ids['org'],
+            refTaskId: 'task-ref',
+            date: '2026-06-05',
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['savedView'] = assertDefined(
+      (
+        await db
+          .insert(savedView)
+          .values({ organizationId: ids['org'], name: 'My View' })
+          .returning()
+      )[0],
+    ).id;
 
     // --- work island ---
-    ids['initiative'] = (
-      await db.insert(initiative).values({ organizationId: ids['org'], name: 'Vision' }).returning()
-    )[0]!.id;
-    ids['program'] = (
-      await db.insert(program).values({ organizationId: ids['org'], name: 'Ops' }).returning()
-    )[0]!.id;
-    ids['project'] = (
-      await db
-        .insert(project)
-        .values({
-          organizationId: ids['org'],
-          name: 'Launch',
-          programId: ids['program'],
-          teamId: ids['team'],
-          leadId: ids['actor'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['milestone'] = (
-      await db
-        .insert(milestone)
-        .values({ organizationId: ids['org'], projectId: ids['project'], name: 'Alpha' })
-        .returning()
-    )[0]!.id;
-    ids['cycle'] = (
-      await db
-        .insert(cycle)
-        .values({
-          organizationId: ids['org'],
-          teamId: ids['team'],
-          number: 1,
-          startsAt: new Date(),
-          endsAt: new Date(Date.now() + 8.64e7),
-        })
-        .returning()
-    )[0]!.id;
-    ids['task'] = (
-      await db
-        .insert(task)
-        .values({
-          organizationId: ids['org'],
-          title: 'Do the thing',
-          teamId: ids['team'],
-          state: 'backlog',
-          projectId: ids['project'],
-          milestoneId: ids['milestone'],
-          cycleId: ids['cycle'],
-          assigneeId: ids['actor'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['task2'] = (
-      await db
-        .insert(task)
-        .values({
-          organizationId: ids['org'],
-          title: 'Second',
-          teamId: ids['team'],
-          state: 'backlog',
-        })
-        .returning()
-    )[0]!.id;
+    ids['initiative'] = assertDefined(
+      (
+        await db
+          .insert(initiative)
+          .values({ organizationId: ids['org'], name: 'Vision' })
+          .returning()
+      )[0],
+    ).id;
+    ids['program'] = assertDefined(
+      (await db.insert(program).values({ organizationId: ids['org'], name: 'Ops' }).returning())[0],
+    ).id;
+    ids['project'] = assertDefined(
+      (
+        await db
+          .insert(project)
+          .values({
+            organizationId: ids['org'],
+            name: 'Launch',
+            programId: ids['program'],
+            teamId: ids['team'],
+            leadId: ids['actor'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['milestone'] = assertDefined(
+      (
+        await db
+          .insert(milestone)
+          .values({ organizationId: ids['org'], projectId: ids['project'], name: 'Alpha' })
+          .returning()
+      )[0],
+    ).id;
+    ids['cycle'] = assertDefined(
+      (
+        await db
+          .insert(cycle)
+          .values({
+            organizationId: ids['org'],
+            teamId: ids['team'],
+            number: 1,
+            startsAt: new Date(),
+            endsAt: new Date(Date.now() + 8.64e7),
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['task'] = assertDefined(
+      (
+        await db
+          .insert(task)
+          .values({
+            organizationId: ids['org'],
+            title: 'Do the thing',
+            teamId: ids['team'],
+            state: 'backlog',
+            projectId: ids['project'],
+            milestoneId: ids['milestone'],
+            cycleId: ids['cycle'],
+            assigneeId: ids['actor'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['task2'] = assertDefined(
+      (
+        await db
+          .insert(task)
+          .values({
+            organizationId: ids['org'],
+            title: 'Second',
+            teamId: ids['team'],
+            state: 'backlog',
+          })
+          .returning()
+      )[0],
+    ).id;
 
     // entities that reference work + crosscutting subjects
-    ids['update'] = (
-      await db
-        .insert(update)
-        .values({
-          organizationId: ids['org'],
-          subjectType: 'project',
-          subjectId: ids['project'],
-          body: 'Going well',
-          health: 'on_track',
-          authorId: ids['actor'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['comment'] = (
-      await db
-        .insert(comment)
-        .values({
-          organizationId: ids['org'],
-          subjectType: 'task',
-          subjectId: ids['task'],
-          body: 'Nice',
-          authorId: ids['actor'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['auditEvent'] = (
-      await db
-        .insert(auditEvent)
-        .values({
-          organizationId: ids['org'],
-          subjectType: 'task',
-          subjectId: ids['task'],
-          type: 'created',
-          actorId: ids['actor'],
-        })
-        .returning()
-    )[0]!.id;
+    ids['update'] = assertDefined(
+      (
+        await db
+          .insert(update)
+          .values({
+            organizationId: ids['org'],
+            subjectType: 'project',
+            subjectId: ids['project'],
+            body: 'Going well',
+            health: 'on_track',
+            authorId: ids['actor'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['comment'] = assertDefined(
+      (
+        await db
+          .insert(comment)
+          .values({
+            organizationId: ids['org'],
+            subjectType: 'task',
+            subjectId: ids['task'],
+            body: 'Nice',
+            authorId: ids['actor'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['auditEvent'] = assertDefined(
+      (
+        await db
+          .insert(auditEvent)
+          .values({
+            organizationId: ids['org'],
+            subjectType: 'task',
+            subjectId: ids['task'],
+            type: 'created',
+            actorId: ids['actor'],
+          })
+          .returning()
+      )[0],
+    ).id;
 
     // --- joins island ---
     await db.insert(initiativeProject).values({
@@ -805,80 +870,96 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
     });
 
     // --- agents island ---
-    ids['agentActor'] = (
-      await db
-        .insert(actor)
-        .values({ organizationId: ids['org'], kind: 'agent', displayName: 'Bot' })
-        .returning()
-    )[0]!.id;
-    ids['agent'] = (
-      await db
-        .insert(agent)
-        .values({
-          organizationId: ids['org'],
-          actorId: ids['agentActor'],
-          connection: { endpoint: 'https://bot', protocol: 'mcp' },
-          accountableOwnerId: ids['actor'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['agentSession'] = (
-      await db
-        .insert(agentSession)
-        .values({
-          organizationId: ids['org'],
-          agentId: ids['agent'],
-          taskId: ids['task'],
-          trigger: 'assignment',
-          initiatorId: ids['actor'],
-        })
-        .returning()
-    )[0]!.id;
-    ids['sessionActivity'] = (
-      await db
-        .insert(sessionActivity)
-        .values({
-          sessionId: ids['agentSession'],
-          organizationId: ids['org'],
-          type: 'thought',
-          body: { text: 'thinking' },
-          approvalStatus: 'proposed',
-        })
-        .returning()
-    )[0]!.id;
+    ids['agentActor'] = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({ organizationId: ids['org'], kind: 'agent', displayName: 'Bot' })
+          .returning()
+      )[0],
+    ).id;
+    ids['agent'] = assertDefined(
+      (
+        await db
+          .insert(agent)
+          .values({
+            organizationId: ids['org'],
+            actorId: ids['agentActor'],
+            connection: { endpoint: 'https://bot', protocol: 'mcp' },
+            accountableOwnerId: ids['actor'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['agentSession'] = assertDefined(
+      (
+        await db
+          .insert(agentSession)
+          .values({
+            organizationId: ids['org'],
+            agentId: ids['agent'],
+            taskId: ids['task'],
+            trigger: 'assignment',
+            initiatorId: ids['actor'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['sessionActivity'] = assertDefined(
+      (
+        await db
+          .insert(sessionActivity)
+          .values({
+            sessionId: ids['agentSession'],
+            organizationId: ids['org'],
+            type: 'thought',
+            body: { text: 'thinking' },
+            approvalStatus: 'proposed',
+          })
+          .returning()
+      )[0],
+    ).id;
 
     // --- admin island ---
-    ids['staffUser'] = (
-      await db.insert(staffUser).values({ userId: ids['user'], role: 'superadmin' }).returning()
-    )[0]!.id;
-    ids['impersonation'] = (
-      await db
-        .insert(impersonationSession)
-        .values({
-          staffUserId: ids['staffUser'],
-          targetUserId: ids['user'],
-          reason: 'support',
-          expiresAt: new Date(Date.now() + 3.6e6),
-        })
-        .returning()
-    )[0]!.id;
-    ids['lifecycleHold'] = (
-      await db
-        .insert(lifecycleHold)
-        .values({ organizationId: ids['org'], reason: 'dispute', placedBy: ids['staffUser'] })
-        .returning()
-    )[0]!.id;
-    ids['operatorAudit'] = (
-      await db
-        .insert(operatorAuditEvent)
-        .values({
-          staffUserId: ids['staffUser'],
-          type: 'hold_placed',
-          subjectType: 'organization',
-          subjectId: ids['org'],
-        })
-        .returning()
-    )[0]!.id;
+    ids['staffUser'] = assertDefined(
+      (
+        await db.insert(staffUser).values({ userId: ids['user'], role: 'superadmin' }).returning()
+      )[0],
+    ).id;
+    ids['impersonation'] = assertDefined(
+      (
+        await db
+          .insert(impersonationSession)
+          .values({
+            staffUserId: ids['staffUser'],
+            targetUserId: ids['user'],
+            reason: 'support',
+            expiresAt: new Date(Date.now() + 3.6e6),
+          })
+          .returning()
+      )[0],
+    ).id;
+    ids['lifecycleHold'] = assertDefined(
+      (
+        await db
+          .insert(lifecycleHold)
+          .values({ organizationId: ids['org'], reason: 'dispute', placedBy: ids['staffUser'] })
+          .returning()
+      )[0],
+    ).id;
+    ids['operatorAudit'] = assertDefined(
+      (
+        await db
+          .insert(operatorAuditEvent)
+          .values({
+            staffUserId: ids['staffUser'],
+            type: 'hold_placed',
+            subjectType: 'organization',
+            subjectId: ids['org'],
+          })
+          .returning()
+      )[0],
+    ).id;
 
     // --- infra island ---
     await db.insert(idempotencyKey).values({
@@ -908,9 +989,10 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
       'passkey',
     ];
     for (const table of coreTables) {
-      const res = await client!.query<{ reg: string | null }>('select to_regclass($1) as reg', [
-        `public.${table}`,
-      ]);
+      const res = await assertDefined(client).query<{ reg: string | null }>(
+        'select to_regclass($1) as reg',
+        [`public.${table}`],
+      );
       expect(res.rows[0]?.reg, `table ${table} should exist`).not.toBeNull();
     }
   });
@@ -924,102 +1006,137 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
   it('updates the rows whose updatedAt has an $onUpdate callback', async () => {
     // Distinct $onUpdate source locations: auth (user/session/account/verification),
     // crosscutting (role/dailyPlanItem), identity auditColumns + hub/organization/actor/team.
-    await db.update(user).set({ name: 'Ada L.' }).where(eq(user.id, ids['user']!));
-    await db.update(session).set({ ipAddress: '127.0.0.1' }).where(eq(session.id, ids['session']!));
-    await db.update(account).set({ scope: 'email' }).where(eq(account.id, ids['account']!));
+    await db
+      .update(user)
+      .set({ name: 'Ada L.' })
+      .where(eq(user.id, assertDefined(ids['user'])));
+    await db
+      .update(session)
+      .set({ ipAddress: '127.0.0.1' })
+      .where(eq(session.id, assertDefined(ids['session'])));
+    await db
+      .update(account)
+      .set({ scope: 'email' })
+      .where(eq(account.id, assertDefined(ids['account'])));
     await db
       .update(verification)
       .set({ value: 'v2' })
-      .where(eq(verification.id, ids['verification']!));
+      .where(eq(verification.id, assertDefined(ids['verification'])));
     // oauthProvider tables.
     await db
       .update(oauthClient)
       .set({ name: 'Docket MCP v2' })
-      .where(eq(oauthClient.id, ids['oauthClient']!));
+      .where(eq(oauthClient.id, assertDefined(ids['oauthClient'])));
     await db
       .update(oauthRefreshToken)
       .set({ revoked: new Date() })
-      .where(eq(oauthRefreshToken.id, ids['oauthRefreshToken']!));
+      .where(eq(oauthRefreshToken.id, assertDefined(ids['oauthRefreshToken'])));
     await db
       .update(oauthAccessToken)
       .set({ scopes: ['openid'] })
-      .where(eq(oauthAccessToken.id, ids['oauthAccessToken']!));
+      .where(eq(oauthAccessToken.id, assertDefined(ids['oauthAccessToken'])));
     await db
       .update(oauthConsent)
       .set({ scopes: ['openid'] })
-      .where(eq(oauthConsent.id, ids['oauthConsent']!));
-    await db.update(role).set({ name: 'Owner v2' }).where(eq(role.id, ids['role']!));
+      .where(eq(oauthConsent.id, assertDefined(ids['oauthConsent'])));
+    await db
+      .update(role)
+      .set({ name: 'Owner v2' })
+      .where(eq(role.id, assertDefined(ids['role'])));
     await db
       .update(dailyPlanItem)
       .set({ status: 'done' })
-      .where(eq(dailyPlanItem.id, ids['dailyPlanItem']!));
-    await db.update(hub).set({ name: 'Home' }).where(eq(hub.id, ids['hub']!));
-    await db.update(organization).set({ name: 'Acme Inc' }).where(eq(organization.id, ids['org']!));
-    await db.update(actor).set({ displayName: 'Ada Lovelace' }).where(eq(actor.id, ids['actor']!));
-    await db.update(team).set({ name: 'Core Team' }).where(eq(team.id, ids['team']!));
+      .where(eq(dailyPlanItem.id, assertDefined(ids['dailyPlanItem'])));
+    await db
+      .update(hub)
+      .set({ name: 'Home' })
+      .where(eq(hub.id, assertDefined(ids['hub'])));
+    await db
+      .update(organization)
+      .set({ name: 'Acme Inc' })
+      .where(eq(organization.id, assertDefined(ids['org'])));
+    await db
+      .update(actor)
+      .set({ displayName: 'Ada Lovelace' })
+      .where(eq(actor.id, assertDefined(ids['actor'])));
+    await db
+      .update(team)
+      .set({ name: 'Core Team' })
+      .where(eq(team.id, assertDefined(ids['team'])));
     // auditColumns()-backed table (task spreads auditColumns → its own $onUpdate).
-    await db.update(task).set({ title: 'Done thing' }).where(eq(task.id, ids['task']!));
+    await db
+      .update(task)
+      .set({ title: 'Done thing' })
+      .where(eq(task.id, assertDefined(ids['task'])));
 
     const refreshed = await db
       .select({ name: organization.name })
       .from(organization)
-      .where(eq(organization.id, ids['org']!));
+      .where(eq(organization.id, assertDefined(ids['org'])));
     expect(refreshed[0]?.name).toBe('Acme Inc');
   });
 
   it('stores user-scoped Google Calendar accounts, calendars, and events', async () => {
-    const userId = ids['user']!;
-    const linkedAccount = (
-      await db
-        .insert(account)
-        .values({ userId, providerId: 'google', accountId: 'google-sub-1' })
-        .returning()
-    )[0]!;
-    const conn = (
-      await db
-        .insert(calendarConnection)
-        .values({
-          userId,
-          provider: 'google',
-          externalAccountId: 'google-sub-1',
-          accountEmail: 'ada@example.com',
-          accountName: 'Ada Lovelace',
-          status: 'connected',
-        })
-        .returning()
-    )[0]!;
-    const cal = (
-      await db
-        .insert(calendarList)
-        .values({
-          userId,
-          connectionId: conn.id,
-          externalCalendarId: 'primary',
-          title: 'Ada',
-          timezone: 'America/Los_Angeles',
-          selected: true,
-          visibleByDefault: true,
-        })
-        .returning()
-    )[0]!;
-    const event = (
-      await db
-        .insert(calendarEvent)
-        .values({
-          userId,
-          connectionId: conn.id,
-          calendarId: cal.id,
-          externalCalendarId: 'primary',
-          externalEventId: 'event-1',
-          status: 'confirmed',
-          title: 'Design review',
-          startsAt: new Date('2026-06-30T16:00:00.000Z'),
-          endsAt: new Date('2026-06-30T17:00:00.000Z'),
-          organizer: { email: 'ada@example.com', displayName: 'Ada', self: true },
-          attendees: [{ email: 'grace@example.com', responseStatus: 'accepted' }],
-        })
-        .returning()
-    )[0]!;
+    const userId = assertDefined(ids['user']);
+    const linkedAccount = assertDefined(
+      (
+        await db
+          .insert(account)
+          .values({ userId, providerId: 'google', accountId: 'google-sub-1' })
+          .returning()
+      )[0],
+    );
+    const conn = assertDefined(
+      (
+        await db
+          .insert(calendarConnection)
+          .values({
+            userId,
+            provider: 'google',
+            externalAccountId: 'google-sub-1',
+            accountEmail: 'ada@example.com',
+            accountName: 'Ada Lovelace',
+            status: 'connected',
+          })
+          .returning()
+      )[0],
+    );
+    const cal = assertDefined(
+      (
+        await db
+          .insert(calendarList)
+          .values({
+            userId,
+            connectionId: conn.id,
+            externalCalendarId: 'primary',
+            title: 'Ada',
+            timezone: 'America/Los_Angeles',
+            selected: true,
+            visibleByDefault: true,
+          })
+          .returning()
+      )[0],
+    );
+    const event = assertDefined(
+      (
+        await db
+          .insert(calendarEvent)
+          .values({
+            userId,
+            connectionId: conn.id,
+            calendarId: cal.id,
+            externalCalendarId: 'primary',
+            externalEventId: 'event-1',
+            status: 'confirmed',
+            title: 'Design review',
+            startsAt: new Date('2026-06-30T16:00:00.000Z'),
+            endsAt: new Date('2026-06-30T17:00:00.000Z'),
+            organizer: { email: 'ada@example.com', displayName: 'Ada', self: true },
+            attendees: [{ email: 'grace@example.com', responseStatus: 'accepted' }],
+          })
+          .returning()
+      )[0],
+    );
 
     expect(event.calendarId).toBe(cal.id);
     expect(event.organizer?.email).toBe('ada@example.com');

@@ -19,13 +19,19 @@
  * (see the task brief; a fire-and-forget version is a future optimization if webhook
  * timeouts ever become a problem).
  */
-import { calendarLayer, db } from '@docket/db';
+import { calendarConnection, calendarLayer, db, workLocationSyncAccount } from '@docket/db';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import { validateGoogleWebhookHeaders } from './calendar-google-adapter';
 import { syncSingleLayer } from './calendar-sync-engine';
 import { createDefaultCalendarSyncModules } from './calendar-sync-modules';
+import { env } from '../env';
+import { createGoogleWorkLocationTransport } from '../services/work-location/google-transport';
+import {
+  drainWorkLocationWrites,
+  syncUserWorkLocations,
+} from '../services/work-location/sync-engine';
 
 /** Look up the `calendar_layer` row a Google push channel id was registered against. */
 async function findLayerByGoogleChannelId(channelId: string): Promise<{
@@ -47,12 +53,57 @@ async function findLayerByGoogleChannelId(channelId: string): Promise<{
   return rows[0] ?? null;
 }
 
+/** Look up an independent primary-calendar work-location watch channel. */
+async function findWorkLocationAccountByGoogleChannelId(channelId: string): Promise<{
+  userId: string;
+  watchToken: string | null;
+  watchResourceId: string | null;
+} | null> {
+  const row = (
+    await db
+      .select({
+        userId: calendarConnection.userId,
+        watchToken: workLocationSyncAccount.watchToken,
+        watchResourceId: workLocationSyncAccount.watchResourceId,
+      })
+      .from(workLocationSyncAccount)
+      .innerJoin(
+        calendarConnection,
+        eq(calendarConnection.id, workLocationSyncAccount.connectionId),
+      )
+      .where(eq(workLocationSyncAccount.watchChannelId, channelId))
+      .limit(1)
+  )[0];
+  return row ?? null;
+}
+
 /** The calendar-webhook app: provider push-notification pings, validated and turned into syncs. */
 const calendarWebhook = new Hono().post('/:provider', async (c) => {
   const provider = c.req.param('provider');
   if (provider !== 'google') return c.json({ error: 'not found' }, 404);
 
   const channelId = c.req.header('x-goog-channel-id');
+  const workLocationAccount = channelId
+    ? await findWorkLocationAccountByGoogleChannelId(channelId)
+    : null;
+  if (workLocationAccount) {
+    const outcome = validateGoogleWebhookHeaders(
+      {
+        channelToken: c.req.header('x-goog-channel-token'),
+        resourceId: c.req.header('x-goog-resource-id'),
+        resourceState: c.req.header('x-goog-resource-state'),
+      },
+      workLocationAccount,
+    );
+    if (outcome === 'invalid') return c.json({ error: 'not found' }, 404);
+    if (outcome === 'sync') return c.json({ received: true });
+    const transport = createGoogleWorkLocationTransport();
+    await syncUserWorkLocations(db, { userId: workLocationAccount.userId, transport });
+    if (env.WORK_LOCATION_PROJECTION_ENABLED) {
+      await drainWorkLocationWrites(db, { userId: workLocationAccount.userId, transport });
+    }
+    return c.json({ received: true });
+  }
   const layer = channelId ? await findLayerByGoogleChannelId(channelId) : null;
   if (!layer) return c.json({ error: 'not found' }, 404);
 

@@ -46,6 +46,7 @@ function validApiEnv(): Record<string, string> {
     BETTER_AUTH_PASSKEY_RP_ID: 'localhost',
     BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
     GOOGLE_OAUTH_PUBLIC: 'false',
+    WORK_LOCATION_PROJECTION_ENABLED: 'false',
     AGENT_MAX_TURNS: '24',
     ATHENA_ASYNC_RUNNER_ENABLED: 'false',
     CRON_SECRET: 'test-cron-secret',
@@ -156,6 +157,8 @@ describe('slices', () => {
     expect(() => stripeServer.BILLING_ENABLED.parse('yes')).toThrow();
     expect(() => authServer.GOOGLE_OAUTH_PUBLIC.parse(undefined)).toThrow();
     expect(authServer.GOOGLE_OAUTH_PUBLIC.parse('false')).toBe(false);
+    expect(() => authServer.WORK_LOCATION_PROJECTION_ENABLED.parse(undefined)).toThrow();
+    expect(authServer.WORK_LOCATION_PROJECTION_ENABLED.parse('false')).toBe(false);
   });
 
   it('keeps genuinely-optional vars optional and fails fast on required ops/client vars', () => {

@@ -108,21 +108,22 @@ required.
 
 Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VALUE" --repo owner/repo`.
 
-| Variable                    | Set by               | Description                                                                                                              |
-| --------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `GCP_PROJECT_ID`            | bootstrap            | GCP project ID (e.g. `my-project-123`)                                                                                   |
-| `GCP_REGION`                | bootstrap            | Deployment region (e.g. `us-central1`)                                                                                   |
-| `GCP_SERVICE_ACCOUNT`       | bootstrap            | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                         |
-| `GCP_WIF_PROVIDER`          | bootstrap            | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions` |
-| `PASSKEY_RP_ID`             | bootstrap/manual     | WebAuthn relying-party domain. Use `hypertext.studio` for the production `*.hypertext.studio` hosts.                     |
-| `NEON_PROJECT_ID`           | bootstrap            | Neon project ID (from Neon console)                                                                                      |
-| `API_URL`                   | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                              |
-| `WEB_URL`                   | manual (post-deploy) | Public custom-domain origin of the Vercel web app                                                                        |
-| `ADMIN_URL`                 | manual (post-deploy) | Public custom-domain origin of `docket-admin`                                                                            |
-| `BETTER_AUTH_ALLOWED_HOSTS` | manual               | `docket.hypertext.studio,docket-api.hypertext.studio,docket-admin.hypertext.studio`                                      |
-| `GOOGLE_OAUTH_PUBLIC`       | manual               | `false` during review; `true` only after Google approval                                                                 |
-| `GOOGLE_OAUTH_TEST_EMAILS`  | manual               | Staged Docket user allowlist, initially `willieechalmers@gmail.com`                                                      |
-| `API_SECRET_BINDINGS`       | bootstrap            | Non-secret multiline Cloud Run env-to-Secret Manager mapping; includes only configured providers                         |
+| Variable                           | Set by               | Description                                                                                                              |
+| ---------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `GCP_PROJECT_ID`                   | bootstrap            | GCP project ID (e.g. `my-project-123`)                                                                                   |
+| `GCP_REGION`                       | bootstrap            | Deployment region (e.g. `us-central1`)                                                                                   |
+| `GCP_SERVICE_ACCOUNT`              | bootstrap            | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                         |
+| `GCP_WIF_PROVIDER`                 | bootstrap            | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions` |
+| `PASSKEY_RP_ID`                    | bootstrap/manual     | WebAuthn relying-party domain. Use `hypertext.studio` for the production `*.hypertext.studio` hosts.                     |
+| `NEON_PROJECT_ID`                  | bootstrap            | Neon project ID (from Neon console)                                                                                      |
+| `API_URL`                          | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                              |
+| `WEB_URL`                          | manual (post-deploy) | Public custom-domain origin of the Vercel web app                                                                        |
+| `ADMIN_URL`                        | manual (post-deploy) | Public custom-domain origin of `docket-admin`                                                                            |
+| `BETTER_AUTH_ALLOWED_HOSTS`        | manual               | `docket.hypertext.studio,docket-api.hypertext.studio,docket-admin.hypertext.studio`                                      |
+| `GOOGLE_OAUTH_PUBLIC`              | manual               | `false` during review; `true` only after Google approval                                                                 |
+| `GOOGLE_OAUTH_TEST_EMAILS`         | manual               | Staged Docket user allowlist, initially `willieechalmers@gmail.com`                                                      |
+| `WORK_LOCATION_PROJECTION_ENABLED` | manual               | `false` during canonical bootstrap; `true` enables outbound linked-account projection                                    |
+| `API_SECRET_BINDINGS`              | bootstrap            | Non-secret multiline Cloud Run env-to-Secret Manager mapping; includes only configured providers                         |
 
 ### Secrets (`secrets.*`)
 
@@ -438,6 +439,7 @@ Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work 
 | `account-deletion-sweep`               | Purge accounts past their 14-day grace window                                                                                                       | daily 03:30              |
 | `account-export-sweep`                 | Generate pending personal-data exports + email the link                                                                                             | every 10 min             |
 | `sync-calendars`                       | Re-sync every connected user's calendars, drain the write outbox, renew push watches                                                                | every 10 min             |
+| `sync-work-locations`                  | Bootstrap linked accounts, converge canonical work-location edits, drain projection writes, renew watches                                           | every 10 min             |
 | `run-linear-agent-sessions`            | Drive queued Linear Agent session runs and relay the activity back to Linear                                                                        | every 1 min              |
 | `expired-sessions-sweep`               | Delete session rows past their `expiresAt` (Better Auth only prunes lazily)                                                                         | hourly                   |
 | `athena-triggers`                      | Run every due user-owned scheduled Athena trigger (five-minute minimum schedule)                                                                    | every 1 min              |
@@ -448,7 +450,7 @@ Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work 
 | `directive-posture`                    | Recompute each configured Hub's daily posture and notify subscribed clients only on change                                                          | every 5 min              |
 | `day-cadence`                          | Materialize each configured Hub's check-ins, re-cut a drifted day's remainder, fire every check-in that has come due                                | every 5 min              |
 
-All seventeen jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
+All nineteen jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
 truth. It runs automatically after every API deploy (the `Ensure Cloud Scheduler jobs` step in
 the `deploy-api` job) and can be run by hand. The script is idempotent — it `describe`s each job
 and `update`s or `create`s it — and reads the secret from `docket-cron-secret` (never logged).

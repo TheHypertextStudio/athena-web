@@ -190,6 +190,16 @@ export const CORE_VARS: readonly VarSpec[] = [
       'Public HTTPS URL for POST /webhooks/calendar/google (absent ⇒ push hints disabled, scheduled sweep still polls)',
   },
   {
+    name: 'WORK_LOCATION_PROJECTION_ENABLED',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: true,
+    zod: authServer.WORK_LOCATION_PROJECTION_ENABLED,
+    where:
+      'true enables outbound provider projection; false keeps canonical reads, edits, and inbound bootstrap active',
+  },
+  {
     name: 'GITHUB_APP_ID',
     slice: 'auth',
     scope: 'server',

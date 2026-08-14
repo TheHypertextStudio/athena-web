@@ -18,6 +18,7 @@
         "BETTER_AUTH_*",
         "OAUTH_PROXY_*",
         "GOOGLE_*",
+        "WORK_LOCATION_*",
         "GITHUB_*",
         "LINEAR_*",
         "LATTICE_*",

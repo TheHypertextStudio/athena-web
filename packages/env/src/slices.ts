@@ -72,6 +72,8 @@ export const authServer = {
    * disabled, but the scheduled sweep still polls every layer, so sync keeps working).
    */
   GOOGLE_CALENDAR_WEBHOOK_URL: z.string().optional(),
+  /** Kill switch for outbound canonical work-location projection; inbound bootstrap remains on. */
+  WORK_LOCATION_PROJECTION_ENABLED: boolFromString(),
   /**
    * GitHub App numeric id — the JWT `iss` used to mint short-lived installation access tokens
    * (the firehose/mirror data plane). The single GitHub App is the ONLY GitHub credential:

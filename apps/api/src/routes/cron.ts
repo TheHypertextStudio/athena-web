@@ -37,6 +37,8 @@ import { reapIdleSessions } from '../mcp/session-registry';
 import { sweepElicitations } from '../services/elicitation-service';
 import { sweepExpiredSessions } from './session-sweep';
 import { sweepRecurrenceMaterialization } from '../lib/recurrence/sweep';
+import { createGoogleWorkLocationTransport } from '../services/work-location/google-transport';
+import { sweepWorkLocations } from '../services/work-location/sweep';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -170,6 +172,18 @@ const cron = new Hono()
   .post('/sync-calendars', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepCalendarSync(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Dedicated work-location sync is independent of calendar-layer visibility. It bootstraps and
+  // adopts primary-calendar location changes even while outbound projection is kill-switched.
+  .post('/sync-work-locations', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepWorkLocations(db, {
+      transport: createGoogleWorkLocationTransport(),
+      now: new Date(),
+      callbackUrl: env.GOOGLE_CALENDAR_WEBHOOK_URL ?? null,
+      outboundProjectionEnabled: env.WORK_LOCATION_PROJECTION_ENABLED,
+    });
     return c.json({ swept: true, ...result });
   })
   // Rolling recurrence materialization: keep future work visible far enough ahead for planning,

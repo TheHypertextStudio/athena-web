@@ -114,6 +114,13 @@ export const JOBS: readonly CronJob[] = [
       'Docket: calendar sweep (re-syncs every connected user, drains the write outbox, renews push-notification watches).',
   },
   {
+    name: 'docket-sync-work-locations',
+    path: '/internal/cron/sync-work-locations',
+    schedule: '*/10 * * * *',
+    description:
+      'Docket: work-location sweep (bootstraps linked accounts, converges canonical edits, drains projection writes, renews watches).',
+  },
+  {
     name: 'docket-recurrence-materialization',
     path: '/internal/cron/recurrence-materialization',
     schedule: '*/15 * * * *',

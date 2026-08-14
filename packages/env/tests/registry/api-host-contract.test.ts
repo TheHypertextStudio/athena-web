@@ -21,6 +21,7 @@ function validApiEnv(): Record<string, string> {
     BETTER_AUTH_PASSKEY_RP_ID: 'localhost',
     BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
     GOOGLE_OAUTH_PUBLIC: 'false',
+    WORK_LOCATION_PROJECTION_ENABLED: 'false',
     AGENT_MAX_TURNS: '24',
     ATHENA_ASYNC_RUNNER_ENABLED: 'false',
     CRON_SECRET: 'test-cron-secret',

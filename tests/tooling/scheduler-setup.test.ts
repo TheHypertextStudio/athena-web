@@ -48,6 +48,7 @@ const EXPECTED_PATHS = [
   '/internal/cron/search-index',
   '/internal/cron/sync-calendars',
   '/internal/cron/sync-connectors',
+  '/internal/cron/sync-work-locations',
   '/internal/cron/unfurl-resources',
 ] as const;
 

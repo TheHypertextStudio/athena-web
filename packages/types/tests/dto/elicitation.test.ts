@@ -26,6 +26,7 @@ import {
   type ElicitationControl,
   type ElicitationSpec,
 } from '../../src/elicitation';
+import { assertDefined } from '@docket/test-utils';
 
 /** Every key a spec exposes, flattened, so "complete control set" is checkable. */
 function controlKeys(spec: ElicitationControl, prefix = ''): readonly string[] {
@@ -542,15 +543,22 @@ describe('the six response types', () => {
 
 describe('elicitationFieldMessage', () => {
   it('translates every Zod issue code this grammar can produce into Docket copy', () => {
-    expect(elicitationFieldMessage(z.email().safeParse('not-an-email').error!.issues[0]!)).toBe(
-      'This answer is not in the expected format.',
-    );
-    expect(elicitationFieldMessage(z.enum(['a', 'b']).safeParse('c').error!.issues[0]!)).toBe(
-      'Choose one of the options offered.',
-    );
     expect(
       elicitationFieldMessage(
-        z.object({ a: z.string() }).strict().safeParse({ a: 'x', b: 'y' }).error!.issues[0]!,
+        assertDefined(assertDefined(z.email().safeParse('not-an-email').error).issues[0]),
+      ),
+    ).toBe('This answer is not in the expected format.');
+    expect(
+      elicitationFieldMessage(
+        assertDefined(assertDefined(z.enum(['a', 'b']).safeParse('c').error).issues[0]),
+      ),
+    ).toBe('Choose one of the options offered.');
+    expect(
+      elicitationFieldMessage(
+        assertDefined(
+          assertDefined(z.object({ a: z.string() }).strict().safeParse({ a: 'x', b: 'y' }).error)
+            .issues[0],
+        ),
       ),
     ).toBe('This answer includes something that was not asked for.');
   });
@@ -559,7 +567,9 @@ describe('elicitationFieldMessage', () => {
     // `not_multiple_of` cannot be produced by any control this module builds (no control declares
     // a `multipleOf` constraint), so it exercises the same neutral fallback an unforeseen future
     // Zod issue code would hit — proof the switch cannot go silent instead of refusing.
-    const issue = z.number().multipleOf(2).safeParse(3).error!.issues[0]!;
+    const issue = assertDefined(
+      assertDefined(z.number().multipleOf(2).safeParse(3).error).issues[0],
+    );
     expect(elicitationFieldMessage(issue)).toBe('This answer could not be accepted.');
   });
 

@@ -23,6 +23,7 @@ import {
   ScheduleComparisonQuery,
 } from '../../src/calendar';
 import type { CalendarItemLinkedTaskOut } from '../../src/calendar';
+import { assertDefined } from '@docket/test-utils';
 
 /** Plain ULID strings — used as-is (never pre-parsed) to exercise brand acceptance via `z.input`. */
 const LAYER_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -210,7 +211,7 @@ describe('CalendarItemOut', () => {
     expect(parsed.linkedTasks).toHaveLength(1);
     const [linkedTask] = parsed.linkedTasks;
     expect(linkedTask).toBeDefined();
-    const parsedTask: CalendarItemLinkedTaskOut = linkedTask!;
+    const parsedTask: CalendarItemLinkedTaskOut = assertDefined(linkedTask);
     expect(parsedTask.role).toBe('agenda');
     expect(parsedTask.done).toBe(false);
   });

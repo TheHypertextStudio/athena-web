@@ -73,7 +73,14 @@ function rebuild(node: ts.Node, sourceFile: ts.SourceFile, sourceText: string): 
     return sourceText.slice(node.getStart(sourceFile), node.getEnd());
   }
   let result = '';
-  let cursor = node.getStart(sourceFile);
+  // A plain `getStart()` skips leading trivia — fine for nested nodes, since
+  // the parent's own gap-slice (below) already carries a child's leading
+  // comment. But for the top-level SourceFile there is no parent slice to
+  // carry it, so `getStart()` would skip straight past a file-leading
+  // doc-comment, silently dropping it (and, worse, desyncing every
+  // downstream position `insertImport` computes against the *original*
+  // source once `rebuilt` is shorter than it should be).
+  let cursor = ts.isSourceFile(node) ? 0 : node.getStart(sourceFile);
   for (const child of children) {
     result += sourceText.slice(cursor, child.getStart(sourceFile));
     let childText = rebuild(child, sourceFile, sourceText);

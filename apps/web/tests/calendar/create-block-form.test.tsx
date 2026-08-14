@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
+import { WorkPlaceId, type WorkPlaceOut } from '@docket/types';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -26,6 +27,17 @@ import CreateBlockForm, {
 const SELECTION = {
   startsAt: '2026-08-10T17:00:00.000Z',
   endsAt: '2026-08-10T18:00:00.000Z',
+};
+const LIBRARY_ID = WorkPlaceId.parse('01BX5ZZKBKACTAV9WEVGEMMWV1');
+const LIBRARY: WorkPlaceOut = {
+  id: LIBRARY_ID,
+  name: 'Eastside library',
+  geofence: null,
+  providerMappings: [],
+  sort: 0,
+  archivedAt: null,
+  createdAt: '2026-08-10T00:00:00.000Z',
+  updatedAt: '2026-08-10T00:00:00.000Z',
 };
 
 afterEach(() => {
@@ -144,6 +156,30 @@ describe('CreateBlockForm progressive quick create', () => {
         endsAt: '2026-08-10T18:00:00Z',
         timezone: 'America/Los_Angeles',
       },
+      expect.any(Object),
+    );
+  });
+
+  it('binds a created block to any selected regular place', async () => {
+    render(
+      <CreateBlockForm
+        presentation="agenda"
+        displayTimezone="America/Los_Angeles"
+        selection={SELECTION}
+        workPlaces={[LIBRARY]}
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('Title'), { target: { value: 'Research' } });
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.change(screen.getByLabelText('Saved place'), { target: { value: LIBRARY_ID } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Research',
+        workPlaceId: LIBRARY_ID,
+        location: 'Eastside library',
+      }),
       expect.any(Object),
     );
   });

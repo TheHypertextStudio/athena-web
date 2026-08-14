@@ -1,7 +1,7 @@
 'use client';
 
-import type { CalendarItemOut } from '@docket/types';
-import { Input, Textarea } from '@docket/ui/primitives';
+import { WorkPlaceId, type CalendarItemOut, type WorkPlaceOut } from '@docket/types';
+import { Input, Select, Textarea } from '@docket/ui/primitives';
 import { type JSX, useEffect, useId, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
@@ -27,6 +27,8 @@ export interface CoreFieldsFormProps {
   item: CalendarItemOut;
   /** Report unsaved field changes so the owning drawer can guard dismissal. */
   onDirtyChange?: (dirty: boolean) => void;
+  /** Caller-loaded arbitrary saved places available for canonical binding. */
+  workPlaces?: readonly WorkPlaceOut[];
 }
 
 /** Inline title, description, location, and time editor for one calendar item. */
@@ -34,6 +36,7 @@ export function CoreFieldsForm({
   displayTimezone,
   item,
   onDirtyChange,
+  workPlaces = [],
 }: CoreFieldsFormProps): JSX.Element {
   const update = useUpdateCalendarItem(item.id);
   const canEdit = item.permissions.canEditCore;
@@ -52,6 +55,7 @@ export function CoreFieldsForm({
   const [title, setTitle] = useRebasedField(item.title);
   const [description, setDescription] = useRebasedField(item.description ?? '');
   const [location, setLocation] = useRebasedField(item.location ?? '');
+  const [workPlaceId, setWorkPlaceId] = useRebasedField(item.workPlaceId ?? '');
   const startTime = useRebasedLocalTimeField(startSeed, startOccurrenceSeed);
   const endTime = useRebasedLocalTimeField(endSeed, endOccurrenceSeed);
   const { wallValue: startsAt, occurrence: startOccurrence } = startTime;
@@ -201,6 +205,24 @@ export function CoreFieldsForm({
             {titleError}
           </span>
         ) : null}
+      </label>
+      <label className="flex flex-col gap-1 text-xs font-medium">
+        <span className="text-on-surface-variant">Saved place</span>
+        <Select
+          value={workPlaceId}
+          onChange={(event) => {
+            const next = event.target.value;
+            setWorkPlaceId(next);
+            update.mutate({ workPlaceId: next ? WorkPlaceId.parse(next) : null });
+          }}
+        >
+          <option value="">No saved place</option>
+          {workPlaces.map((place) => (
+            <option key={place.id} value={place.id}>
+              {place.name}
+            </option>
+          ))}
+        </Select>
       </label>
       <label className="flex flex-col gap-1 text-xs font-medium">
         <span className="text-on-surface-variant">Description</span>

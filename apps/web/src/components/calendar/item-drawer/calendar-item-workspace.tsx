@@ -1,6 +1,6 @@
 'use client';
 
-import type { CalendarItemOut, CalendarLayerOut } from '@docket/types';
+import type { CalendarItemOut, CalendarLayerOut, WorkPlaceOut } from '@docket/types';
 import { Badge, SheetDescription, SheetTitle } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
@@ -31,6 +31,8 @@ export interface CalendarItemWorkspaceProps {
    * discoverable rather than silent — see {@link CalendarItemDuplicateSources}.
    */
   duplicates?: readonly CalendarItemOut[] | undefined;
+  /** Arbitrary canonical saved places available for binding. */
+  workPlaces?: readonly WorkPlaceOut[] | undefined;
   /** Close the drawer after deletion. */
   onClose: () => void;
   /** Report whether editable core fields differ from their saved values. */
@@ -48,6 +50,7 @@ export function CalendarItemWorkspace({
   layer,
   layers = [],
   duplicates = [],
+  workPlaces = [],
   onClose,
   onDirtyChange,
   onOpenTask,
@@ -111,6 +114,7 @@ export function CalendarItemWorkspace({
         <CoreFieldsForm
           displayTimezone={displayTimezone}
           item={item}
+          workPlaces={workPlaces}
           onDirtyChange={onDirtyChange}
         />
       </section>

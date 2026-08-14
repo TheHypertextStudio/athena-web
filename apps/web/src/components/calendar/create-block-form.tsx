@@ -7,6 +7,7 @@ import {
   type CalendarItemCreateIntent,
   type CalendarLayerOut,
   type CalendarPreferences,
+  type WorkPlaceOut,
 } from '@docket/types';
 import { SHELL_DESKTOP_QUERY, useShellOverlayHost } from '@docket/ui/components';
 import { Plus, X } from '@docket/ui/icons';
@@ -89,6 +90,8 @@ export interface CreateBlockFormProps {
   readonly onDirtyChange?: ((dirty: boolean) => void) | undefined;
   /** Agenda-owned sibling host used below the shell desktop breakpoint. */
   readonly agendaMobileHost?: HTMLElement | null | undefined;
+  /** Caller-loaded arbitrary saved places available for canonical binding. */
+  readonly workPlaces?: readonly WorkPlaceOut[] | undefined;
 }
 
 /** Focus-managed quick create; Agenda uses a draggable sibling hosted outside its rail. */
@@ -104,6 +107,7 @@ export default function CreateBlockForm({
   onDraftChange,
   onDirtyChange,
   agendaMobileHost,
+  workPlaces = [],
 }: CreateBlockFormProps): JSX.Element {
   const agendaDesktop = useMediaQuery(SHELL_DESKTOP_QUERY);
   const shellOverlayHost = useShellOverlayHost();
@@ -116,6 +120,7 @@ export default function CreateBlockForm({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
+  const [workPlaceId, setWorkPlaceId] = useState('');
   const [showDetails, setShowDetails] = useState(false);
   const [intent, setIntent] = useState<CalendarItemCreateIntent>(
     preferences?.defaultCreateIntent ?? 'event',
@@ -165,6 +170,7 @@ export default function CreateBlockForm({
     setTitle('');
     setDescription('');
     setLocation('');
+    setWorkPlaceId('');
     setShowDetails(false);
     setDirty(false);
     intentEdited.current = false;
@@ -249,7 +255,12 @@ export default function CreateBlockForm({
       intent,
       title: title.trim(),
       ...(description.trim() ? { description: description.trim() } : {}),
-      ...(location.trim() ? { location: location.trim() } : {}),
+      ...(location.trim()
+        ? { location: location.trim() }
+        : workPlaceId
+          ? { location: workPlaces.find((place) => place.id === workPlaceId)?.name }
+          : {}),
+      ...(workPlaceId ? { workPlaceId } : {}),
       ...(allDayDraft
         ? { allDayStartDate: allDayDraft.start, allDayEndDate: allDayDraft.end }
         : resolvedTime && !('invalidField' in resolvedTime)
@@ -362,6 +373,23 @@ export default function CreateBlockForm({
               }}
               placeholder="Add location"
             />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-label-medium text-on-surface-variant">Saved place</span>
+            <Select
+              value={workPlaceId}
+              onChange={(event) => {
+                setWorkPlaceId(event.target.value);
+                setDirty(true);
+              }}
+            >
+              <option value="">No saved place</option>
+              {workPlaces.map((place) => (
+                <option key={place.id} value={place.id}>
+                  {place.name}
+                </option>
+              ))}
+            </Select>
           </label>
         </div>
       ) : null}

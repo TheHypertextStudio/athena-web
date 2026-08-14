@@ -41,6 +41,7 @@ function calendarItem(overrides: Partial<CalendarItemOut> = {}): CalendarItemOut
     title: 'Focus block',
     description: null,
     location: null,
+    workPlaceId: null,
     htmlLink: null,
     startsAt: '2026-07-02T06:30:00Z',
     endsAt: '2026-07-02T07:30:00Z',

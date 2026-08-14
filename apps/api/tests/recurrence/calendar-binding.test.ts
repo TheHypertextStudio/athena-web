@@ -29,6 +29,7 @@ import {
   materializeCalendarProcessBindings,
 } from '../../src/lib/recurrence/calendar-binding';
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
+import { assertDefined } from '@docket/test-utils';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
@@ -58,26 +59,26 @@ describe('calendar process bindings', () => {
       .returning();
     const [workTeam] = await db
       .insert(team)
-      .values({ organizationId: workspace!.id, name: 'Events', key: 'EVENTS' })
+      .values({ organizationId: assertDefined(workspace).id, name: 'Events', key: 'EVENTS' })
       .returning();
     const [coordinator] = await db
       .insert(actor)
       .values({
-        organizationId: workspace!.id,
-        userId: identity!.id,
+        organizationId: assertDefined(workspace).id,
+        userId: assertDefined(identity).id,
         kind: 'human',
         displayName: 'Meetup coordinator',
       })
       .returning();
     await db.insert(account).values({
-      userId: identity!.id,
+      userId: assertDefined(identity).id,
       providerId: 'google',
       accountId: 'calendar-binding-account',
     });
     const [connection] = await db
       .insert(calendarConnection)
       .values({
-        userId: identity!.id,
+        userId: assertDefined(identity).id,
         provider: 'google',
         externalAccountId: 'calendar-binding-account',
       })
@@ -85,8 +86,8 @@ describe('calendar process bindings', () => {
     const [layer] = await db
       .insert(calendarLayer)
       .values({
-        userId: identity!.id,
-        connectionId: connection!.id,
+        userId: assertDefined(identity).id,
+        connectionId: assertDefined(connection).id,
         provider: 'google',
         sourceKind: 'provider',
         externalLayerId: 'primary',
@@ -97,9 +98,9 @@ describe('calendar process bindings', () => {
     const [firstEvent] = await db
       .insert(calendarItem)
       .values({
-        userId: identity!.id,
-        layerId: layer!.id,
-        connectionId: connection!.id,
+        userId: assertDefined(identity).id,
+        layerId: assertDefined(layer).id,
+        connectionId: assertDefined(connection).id,
         kind: 'provider_event',
         provider: 'google',
         externalCalendarId: 'primary',
@@ -113,8 +114,8 @@ describe('calendar process bindings', () => {
       })
       .returning();
     const process = await createPublishedProcessDefinition(db, {
-      organizationId: workspace!.id,
-      actorId: coordinator!.id,
+      organizationId: assertDefined(workspace).id,
+      actorId: assertDefined(coordinator).id,
       definition: {
         name: 'Meetup event work',
         creationMode: 'all_at_once',
@@ -123,7 +124,7 @@ describe('calendar process bindings', () => {
           {
             key: 'announce',
             title: 'Make announcement for meetup',
-            teamId: TeamId.parse(workTeam!.id),
+            teamId: TeamId.parse(assertDefined(workTeam).id),
             priority: 'none',
             labelIds: [],
             timing: { kind: 'relative_to_trigger', offsetDays: -7 },
@@ -131,7 +132,7 @@ describe('calendar process bindings', () => {
           {
             key: 'host',
             title: 'Host meetup',
-            teamId: TeamId.parse(workTeam!.id),
+            teamId: TeamId.parse(assertDefined(workTeam).id),
             priority: 'none',
             labelIds: [],
             timing: { kind: 'on_trigger' },
@@ -142,10 +143,10 @@ describe('calendar process bindings', () => {
     });
 
     const command = {
-      organizationId: workspace!.id,
-      actorId: coordinator!.id,
-      userId: identity!.id,
-      calendarItemId: firstEvent!.id,
+      organizationId: assertDefined(workspace).id,
+      actorId: assertDefined(coordinator).id,
+      userId: assertDefined(identity).id,
+      calendarItemId: assertDefined(firstEvent).id,
       processDefinitionId: ProcessDefinitionId.parse(process.definitionId),
     };
     const first = await bindProcessToCalendarItem(db, command);
@@ -155,7 +156,7 @@ describe('calendar process bindings', () => {
     expect(first).toMatchObject({
       scope: 'event_series',
       externalSeriesId: 'monthly-meetup-series',
-      calendarItemId: firstEvent!.id,
+      calendarItemId: assertDefined(firstEvent).id,
       seriesName: 'Las Vegans for Better Transit meetup work',
     });
     expect(await db.select().from(calendarProcessBinding)).toHaveLength(1);
@@ -163,7 +164,7 @@ describe('calendar process bindings', () => {
     expect(await db.select().from(processOccurrence)).toHaveLength(1);
 
     const september = {
-      calendarLayerId: layer!.id,
+      calendarLayerId: assertDefined(layer).id,
       externalSeriesId: 'monthly-meetup-series',
       externalOccurrenceKey: 'meetup-september',
       scheduledFor: '2026-09-11',
@@ -186,8 +187,11 @@ describe('calendar process bindings', () => {
     ).toEqual({ materialized: 1, errors: [] });
 
     expect(await db.select().from(processOccurrence)).toHaveLength(3);
-    expect(await db.select().from(task).where(eq(task.organizationId, workspace!.id))).toHaveLength(
-      6,
-    );
+    expect(
+      await db
+        .select()
+        .from(task)
+        .where(eq(task.organizationId, assertDefined(workspace).id)),
+    ).toHaveLength(6);
   });
 });

@@ -12,6 +12,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -40,7 +41,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [role] = await db
     .insert(schema.role)
@@ -64,8 +65,8 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       organizationId: orgId,
       kind: 'human',
       displayName: 'Ada',
-      userId: user!.id,
-      roleId: role!.id,
+      userId: assertDefined(user).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
 
@@ -78,7 +79,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     await db.insert(schema.grant).values({
       organizationId: orgId,
       subjectKind: 'role',
-      subjectId: role!.id,
+      subjectId: assertDefined(role).id,
       resourceKind: 'organization',
       resourceId: orgId,
       capabilities: [...capabilities],
@@ -100,19 +101,24 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .values({
       organizationId: orgId,
       name: 'Platform Migration',
-      teamId: team!.id,
-      createdBy: human!.id,
+      teamId: assertDefined(team).id,
+      createdBy: assertDefined(human).id,
     })
     .returning({ id: schema.project.id });
 
   return {
     orgId,
-    teamId: team!.id,
-    actorId: human!.id,
-    sarahId: sarah!.id,
-    projectId: project!.id,
+    teamId: assertDefined(team).id,
+    actorId: assertDefined(human).id,
+    sarahId: assertDefined(sarah).id,
+    projectId: assertDefined(project).id,
     ctx: {
-      principal: { kind: 'user', userId: user!.id, userName: 'Ada', userEmail: email },
+      principal: {
+        kind: 'user',
+        userId: assertDefined(user).id,
+        userName: 'Ada',
+        userEmail: email,
+      },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     },
   };
@@ -134,7 +140,7 @@ async function seedTask(
       ...values,
     })
     .returning({ id: schema.task.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 const harnesses: { close(): Promise<void> }[] = [];
@@ -158,7 +164,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   resetAuthMocks();
 });
 
@@ -491,7 +497,7 @@ describe('update guardrails', () => {
     const theirs = await seedTask(s, {
       title: 'Theirs',
       projectId: s.projectId,
-      teamId: otherTeam!.id,
+      teamId: assertDefined(otherTeam).id,
     });
 
     const client = await connect(s.ctx);
@@ -563,8 +569,8 @@ describe('every settable field reaches a column', () => {
       .where(eq(schema.task.id, id));
     expect(row).toEqual({
       description: 'The full brief',
-      delegateId: agent!.id,
-      teamId: otherTeam!.id,
+      delegateId: assertDefined(agent).id,
+      teamId: assertDefined(otherTeam).id,
     });
   });
 

@@ -11,6 +11,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -36,7 +37,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [role] = await db
     .insert(schema.role)
@@ -60,15 +61,15 @@ async function seedOrg(): Promise<Seed> {
       organizationId: orgId,
       kind: 'human',
       displayName: 'Ada',
-      userId: user!.id,
-      roleId: role!.id,
+      userId: assertDefined(user).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
 
   await db.insert(schema.grant).values({
     organizationId: orgId,
     subjectKind: 'role',
-    subjectId: role!.id,
+    subjectId: assertDefined(role).id,
     resourceKind: 'organization',
     resourceId: orgId,
     capabilities: ['contribute'],
@@ -86,10 +87,15 @@ async function seedOrg(): Promise<Seed> {
 
   return {
     orgId,
-    teamId: team!.id,
-    actorId: human!.id,
+    teamId: assertDefined(team).id,
+    actorId: assertDefined(human).id,
     ctx: {
-      principal: { kind: 'user', userId: user!.id, userName: 'Ada', userEmail: email },
+      principal: {
+        kind: 'user',
+        userId: assertDefined(user).id,
+        userName: 'Ada',
+        userEmail: email,
+      },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     },
   };
@@ -116,7 +122,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   resetAuthMocks();
 });
 
@@ -154,8 +160,8 @@ describe('organize', () => {
     expect(out.matched).toBe(0);
 
     const byRef = new Map(out.placed.map((row) => [row.ref, row]));
-    const projectId = byRef.get('proj')!.id;
-    const initiativeId = byRef.get('init')!.id;
+    const projectId = assertDefined(byRef.get('proj')).id;
+    const initiativeId = assertDefined(byRef.get('init')).id;
 
     // The project is linked to the initiative created in the same call.
     const links = await db
@@ -280,8 +286,8 @@ describe('organize', () => {
     const [row] = await db
       .select({ projectId: schema.task.projectId })
       .from(schema.task)
-      .where(eq(schema.task.id, out.placed[0]!.id));
-    expect(row?.projectId).toBe(existing!.id);
+      .where(eq(schema.task.id, assertDefined(out.placed[0]).id));
+    expect(row?.projectId).toBe(assertDefined(existing).id);
   });
 
   it('reverses the whole plan as one change', async () => {

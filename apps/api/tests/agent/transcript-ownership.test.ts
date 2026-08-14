@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { getMigratedDb } from '../support/db';
 import { saveTranscript } from '../../src/agent/transcript';
+import { assertDefined } from '@docket/test-utils';
 
 describe('saveTranscript ownership', () => {
   it('ignores workspace context when updating a user-owned Athena transcript', async () => {
@@ -21,34 +22,34 @@ describe('saveTranscript ownership', () => {
       .values({
         executorKind: 'athena',
         organizationId: null,
-        contextOrganizationId: org!.id,
+        contextOrganizationId: assertDefined(org).id,
         agentId: null,
-        ownerUserId: owner!.id,
+        ownerUserId: assertDefined(owner).id,
         trigger: 'delegation',
       })
       .returning({ id: schema.agentSession.id });
     await schema.db.insert(schema.agentSessionTranscript).values({
-      sessionId: session!.id,
+      sessionId: assertDefined(session).id,
       organizationId: null,
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       messages: [],
     });
 
     await saveTranscript(
       schema.db,
-      session!.id,
-      org!.id,
+      assertDefined(session).id,
+      assertDefined(org).id,
       [{ role: 'user', content: [{ type: 'text', text: 'Private context' }] }],
-      owner!.id,
+      assertDefined(owner).id,
     );
 
     const [transcript] = await schema.db
       .select()
       .from(schema.agentSessionTranscript)
-      .where(eq(schema.agentSessionTranscript.sessionId, session!.id));
+      .where(eq(schema.agentSessionTranscript.sessionId, assertDefined(session).id));
     expect(transcript).toMatchObject({
       organizationId: null,
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
     });
   });
 });

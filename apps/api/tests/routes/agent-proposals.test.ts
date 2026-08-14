@@ -14,6 +14,7 @@ import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { getContainer as GetContainer } from '../../src/container';
 import { fakeSession } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -69,7 +70,7 @@ async function seedOrg(): Promise<Seed> {
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       key: `owner-${slug}`,
       name: 'Owner',
       capabilities: ['view', 'contribute', 'assign'],
@@ -78,28 +79,33 @@ async function seedOrg(): Promise<Seed> {
   const [human] = await db
     .insert(schema.actor)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       kind: 'human',
       displayName: 'Ada',
-      userId: u!.id,
-      roleId: role!.id,
+      userId: assertDefined(u).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
   await db.insert(schema.grant).values({
-    organizationId: org!.id,
+    organizationId: assertDefined(org).id,
     subjectKind: 'role',
-    subjectId: role!.id,
+    subjectId: assertDefined(role).id,
     resourceKind: 'organization',
-    resourceId: org!.id,
+    resourceId: assertDefined(org).id,
     capabilities: ['view', 'contribute', 'assign'],
     effect: 'allow',
   });
   const [team] = await db
     .insert(schema.team)
-    .values({ organizationId: org!.id, name: 'Core', key: 'CORE' })
+    .values({ organizationId: assertDefined(org).id, name: 'Core', key: 'CORE' })
     .returning({ id: schema.team.id });
-  userIdByActor.set(human!.id, u!.id);
-  return { userId: u!.id, orgId: org!.id, teamId: team!.id, humanActorId: human!.id };
+  userIdByActor.set(assertDefined(human).id, assertDefined(u).id);
+  return {
+    userId: assertDefined(u).id,
+    orgId: assertDefined(org).id,
+    teamId: assertDefined(team).id,
+    humanActorId: assertDefined(human).id,
+  };
 }
 
 /** Mount the sessions router behind an injected actor context. */
@@ -192,7 +198,7 @@ describe('the batch proposal flow (import-shaped)', () => {
     expect(listed.status).toBe(200);
     const groups = (await listed.json()) as ProposalGroupOut[];
     expect(groups).toHaveLength(1);
-    const group = groups[0]!;
+    const group = assertDefined(groups[0]);
     expect(group.items).toHaveLength(3);
     expect(group.items.map((i) => i.ghost?.title)).toEqual([
       'Send the contractor agreement',
@@ -203,7 +209,7 @@ describe('the batch proposal flow (import-shaped)', () => {
     // 3) Inline ghost edit: retitle the third proposal before blessing it. A capture's editable
     // field is its `text` — the title is derived from the first line, so editing the text is
     // exactly how a reviewer renames the ghost.
-    const third = group.items[2]!;
+    const third = assertDefined(group.items[2]);
     const patched = await app.request(`/${session.id}/activity/${third.activityId}/proposal`, {
       method: 'PATCH',
       headers: J,
@@ -218,7 +224,10 @@ describe('the batch proposal flow (import-shaped)', () => {
       method: 'POST',
       headers: J,
       body: JSON.stringify({
-        activityIds: [group.items[0]!.activityId, group.items[1]!.activityId],
+        activityIds: [
+          assertDefined(group.items[0]).activityId,
+          assertDefined(group.items[1]).activityId,
+        ],
       }),
     });
     expect(subset.status).toBe(200);
@@ -256,7 +265,7 @@ describe('the batch proposal flow (import-shaped)', () => {
     const groups = (await listed.json()) as ProposalGroupOut[];
 
     const rejected = await app.request(
-      `/${session.id}/proposals/${groups[0]!.proposalGroupId}/reject`,
+      `/${session.id}/proposals/${assertDefined(groups[0]).proposalGroupId}/reject`,
       { method: 'POST', headers: J, body: JSON.stringify({}) },
     );
     expect(rejected.status).toBe(200);
@@ -296,7 +305,7 @@ describe('the batch proposal flow (import-shaped)', () => {
     const groups = (await (
       await app.request(`/${session.id}/proposals`, { method: 'GET' })
     ).json()) as ProposalGroupOut[];
-    const group = groups[0]!;
+    const group = assertDefined(groups[0]);
     await app.request(`/${session.id}/proposals/${group.proposalGroupId}/approve`, {
       method: 'POST',
       headers: J,
@@ -304,7 +313,7 @@ describe('the batch proposal flow (import-shaped)', () => {
     });
 
     const res = await app.request(
-      `/${session.id}/activity/${group.items[0]!.activityId}/proposal`,
+      `/${session.id}/activity/${assertDefined(group.items[0]).activityId}/proposal`,
       { method: 'PATCH', headers: J, body: JSON.stringify({ input: { title: 'x' } }) },
     );
     expect(res.status).toBe(409);
@@ -325,11 +334,14 @@ describe('SSE live tail', () => {
     const groups = (await (
       await app.request(`/${session.id}/proposals`, { method: 'GET' })
     ).json()) as ProposalGroupOut[];
-    await app.request(`/${session.id}/proposals/${groups[0]!.proposalGroupId}/approve`, {
-      method: 'POST',
-      headers: J,
-      body: JSON.stringify({}),
-    });
+    await app.request(
+      `/${session.id}/proposals/${assertDefined(groups[0]).proposalGroupId}/approve`,
+      {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({}),
+      },
+    );
 
     // Terminal session: full replay, then the stream ends (no infinite tail).
     const stream = await app.request(`/${session.id}/stream`, { method: 'GET' });
@@ -344,7 +356,7 @@ describe('SSE live tail', () => {
       .from(schema.sessionActivity)
       .where(eq(schema.sessionActivity.sessionId, session.id))
       .orderBy(asc(schema.sessionActivity.id));
-    const lastId = activities.at(-1)!.id;
+    const lastId = assertDefined(activities.at(-1)).id;
     const resumed = await app.request(`/${session.id}/stream`, {
       method: 'GET',
       headers: { 'last-event-id': lastId },

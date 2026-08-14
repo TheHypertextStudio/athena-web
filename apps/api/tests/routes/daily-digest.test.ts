@@ -6,6 +6,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as DigestModule from '../../src/routes/daily-digest';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -48,13 +49,13 @@ async function seedDigestUser(opts: {
     .values({ name: `User ${String(seq)}`, email })
     .returning({ id: schema.user.id });
   await db.insert(schema.hub).values({
-    userId: u!.id,
+    userId: assertDefined(u).id,
     preferences: {
       timezone: opts.tz ?? 'UTC',
       digest: { enabled: opts.enabled, sendAtLocalTime: opts.sendAt ?? '18:00' },
     },
   });
-  return { userId: u!.id, email };
+  return { userId: assertDefined(u).id, email };
 }
 
 /** Seed one event attributed to `userId`, occurring earlier on the reference day. */
@@ -84,12 +85,12 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .select()
       .from(schema.dailyDigest)
       .where(eq(schema.dailyDigest.userId, userId));
-    expect(digest!.status).toBe('sent');
-    expect(digest!.digestDate).toBe('2026-06-28');
-    expect(digest!.eventCount).toBe(2);
-    expect(digest!.summaryMarkdown).toBeTruthy();
-    expect(digest!.summaryHtml).toBeTruthy();
-    expect(digest!.stats?.total).toBe(2);
+    expect(assertDefined(digest).status).toBe('sent');
+    expect(assertDefined(digest).digestDate).toBe('2026-06-28');
+    expect(assertDefined(digest).eventCount).toBe(2);
+    expect(assertDefined(digest).summaryMarkdown).toBeTruthy();
+    expect(assertDefined(digest).summaryHtml).toBeTruthy();
+    expect(assertDefined(digest).stats?.total).toBe(2);
 
     expect(outbox.some((m) => m.to === email && m.subject.includes('digest'))).toBe(true);
     const sent = outbox.find((m) => m.to === email && m.subject.includes('digest'));
@@ -122,8 +123,8 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .select()
       .from(schema.dailyDigest)
       .where(eq(schema.dailyDigest.userId, userId));
-    expect(digest!.status).toBe('skipped_empty');
-    expect(digest!.eventCount).toBe(0);
+    expect(assertDefined(digest).status).toBe('skipped_empty');
+    expect(assertDefined(digest).eventCount).toBe(0);
     expect(outbox.some((m) => m.to === email)).toBe(false);
   });
 
@@ -179,16 +180,16 @@ describe('sweepDailyDigests (the hero feature)', () => {
     // No `timezone`, no `digest.sendAtLocalTime` — only the flag the sweep's own WHERE clause reads.
     await db
       .insert(schema.hub)
-      .values({ userId: u!.id, preferences: { digest: { enabled: true } } });
-    await seedEvent(orgId, u!.id, 'Bare-preferences event');
+      .values({ userId: assertDefined(u).id, preferences: { digest: { enabled: true } } });
+    await seedEvent(orgId, assertDefined(u).id, 'Bare-preferences event');
 
     await sweepDailyDigests(NOW); // 20:00 UTC — past the 18:00 default in UTC.
 
     const [digest] = await db
       .select()
       .from(schema.dailyDigest)
-      .where(eq(schema.dailyDigest.userId, u!.id));
-    expect(digest!.status).toBe('sent');
+      .where(eq(schema.dailyDigest.userId, assertDefined(u).id));
+    expect(assertDefined(digest).status).toBe('sent');
   });
 
   it('omits the greeting name when the user has no name on file', async () => {
@@ -200,19 +201,19 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .values({ name: '', email })
       .returning({ id: schema.user.id });
     await db.insert(schema.hub).values({
-      userId: u!.id,
+      userId: assertDefined(u).id,
       preferences: { timezone: 'UTC', digest: { enabled: true, sendAtLocalTime: '18:00' } },
     });
-    await seedEvent(orgId, u!.id, 'Nameless-user event');
+    await seedEvent(orgId, assertDefined(u).id, 'Nameless-user event');
 
     await sweepDailyDigests(NOW);
 
     const [digest] = await db
       .select()
       .from(schema.dailyDigest)
-      .where(eq(schema.dailyDigest.userId, u!.id));
-    expect(digest!.summaryMarkdown).toContain("Here's what you did");
-    expect(digest!.summaryMarkdown).not.toContain('Hi ');
+      .where(eq(schema.dailyDigest.userId, assertDefined(u).id));
+    expect(assertDefined(digest).summaryMarkdown).toContain("Here's what you did");
+    expect(assertDefined(digest).summaryMarkdown).not.toContain('Hi ');
   });
 
   it('passes an event’s summary, actor display name, and entity title through to the summarizer', async () => {
@@ -284,8 +285,8 @@ describe('sweepDailyDigests (the hero feature)', () => {
         .select()
         .from(schema.dailyDigest)
         .where(eq(schema.dailyDigest.userId, userId));
-      expect(digest!.status).toBe('failed');
-      expect(digest!.lastError).toBe('digest notification delivery failed');
+      expect(assertDefined(digest).status).toBe('failed');
+      expect(assertDefined(digest).lastError).toBe('digest notification delivery failed');
     } finally {
       sendSpy.mockRestore();
     }
@@ -315,22 +316,22 @@ describe('sweepDailyDigests (the hero feature)', () => {
         .select()
         .from(schema.dailyDigest)
         .where(eq(schema.dailyDigest.userId, userId));
-      expect(digest!.status).toBe('failed');
-      expect(digest!.sentAt).toBeNull();
-      expect(digest!.lastError).toContain('narrated');
+      expect(assertDefined(digest).status).toBe('failed');
+      expect(assertDefined(digest).sentAt).toBeNull();
+      expect(assertDefined(digest).lastError).toContain('narrated');
 
       // The day's record survives the narration failure — that is the whole point of the split.
       const [day] = await db
         .select()
         .from(schema.activityDay)
         .where(eq(schema.activityDay.userId, userId));
-      expect(day!.eventCount).toBeGreaterThan(0);
+      expect(assertDefined(day).eventCount).toBeGreaterThan(0);
       const highlights = await db
         .select()
         .from(schema.activityHighlight)
-        .where(eq(schema.activityHighlight.activityDayId, day!.id));
+        .where(eq(schema.activityHighlight.activityDayId, assertDefined(day).id));
       expect(highlights).toHaveLength(1);
-      expect(highlights[0]!.narrationState).toBe('failed');
+      expect(assertDefined(highlights[0]).narrationState).toBe('failed');
     } finally {
       spy.mockRestore();
     }
@@ -355,7 +356,7 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .select()
       .from(schema.dailyDigest)
       .where(eq(schema.dailyDigest.userId, userId));
-    expect(afterFailure!.status).toBe('failed');
+    expect(assertDefined(afterFailure).status).toBe('failed');
 
     // The same day, a later tick. Nothing about the day changed — only that the transient failure is
     // over.
@@ -365,8 +366,8 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .select()
       .from(schema.dailyDigest)
       .where(eq(schema.dailyDigest.userId, userId));
-    expect(afterRetry!.status).toBe('sent');
-    expect(afterRetry!.sentAt).not.toBeNull();
+    expect(assertDefined(afterRetry).status).toBe('sent');
+    expect(assertDefined(afterRetry).sentAt).not.toBeNull();
     // Still one row: the retry takes the existing claim back rather than creating a second digest.
     const all = await db
       .select()
@@ -397,8 +398,8 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .select()
       .from(schema.dailyDigest)
       .where(eq(schema.dailyDigest.userId, userId));
-    expect(digest!.status).toBe('skipped_empty');
-    expect(digest!.sentAt).toBeNull();
+    expect(assertDefined(digest).status).toBe('skipped_empty');
+    expect(assertDefined(digest).sentAt).toBeNull();
   });
 });
 

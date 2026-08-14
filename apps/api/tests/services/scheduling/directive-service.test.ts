@@ -35,6 +35,7 @@ import {
 } from '../../../src/services/scheduling/directive-service';
 import { ensureDayDirective } from '../../../src/services/scheduling/repository';
 import { instantAt } from '../../../src/services/scheduling/zoned-time';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -134,21 +135,21 @@ describe('ensureCheckIns/readCheckIns on a day with no blocks at all', () => {
     // Read with `now` between the first and second check-in: the first is due and superseded by
     // the second (also due) — "missed" — while the second is due but nothing later is, so it is
     // not missed. The third is not due yet at all.
-    const now = new Date(rows[1]!.scheduledAt.getTime() + 1_000);
+    const now = new Date(assertDefined(rows[1]).scheduledAt.getTime() + 1_000);
     const items = await readCheckIns(db, context, now);
-    const first = items.find((i) => i.id === rows[0]!.id);
-    const second = items.find((i) => i.id === rows[1]!.id);
-    const third = items.find((i) => i.id === rows[2]!.id);
+    const first = items.find((i) => i.id === assertDefined(rows[0]).id);
+    const second = items.find((i) => i.id === assertDefined(rows[1]).id);
+    const third = items.find((i) => i.id === assertDefined(rows[2]).id);
     expect(first).toBeDefined();
     expect(second).toBeDefined();
     expect(third).toBeDefined();
 
     expect(first?.blockTitle).toBeNull();
     expect(first?.prompt).toBe('Nothing is blocked out right now — how is the day going?');
-    expect(first?.firedAt).toBe(rows[0]!.scheduledAt.toISOString());
+    expect(first?.firedAt).toBe(assertDefined(rows[0]).scheduledAt.toISOString());
     expect(first?.missed, 'a superseded, unanswered check-in reads as missed').toBe(true);
 
-    expect(second?.firedAt).toBe(rows[1]!.scheduledAt.toISOString());
+    expect(second?.firedAt).toBe(assertDefined(rows[1]).scheduledAt.toISOString());
     expect(second?.missed, 'the most recent due check-in is not itself missed').toBe(false);
 
     expect(third?.firedAt).toBeNull();
@@ -376,8 +377,8 @@ describe('proposeTomorrow — a carried item with no recorded times', () => {
       .from(schema.dayReview)
       .where(eq(schema.dayReview.hubId, hubId));
     expect(reviewRow).toBeDefined();
-    const untimedItems = reviewRow!.items.map((i) =>
-      i.key === item!.key
+    const untimedItems = assertDefined(reviewRow).items.map((i) =>
+      i.key === assertDefined(item).key
         ? {
             ...i,
             disposition: 'rescheduled' as const,
@@ -390,13 +391,17 @@ describe('proposeTomorrow — a carried item with no recorded times', () => {
     await db
       .update(schema.dayReview)
       .set({ items: untimedItems, tomorrowProposals: [] })
-      .where(eq(schema.dayReview.id, reviewRow!.id));
+      .where(eq(schema.dayReview.id, assertDefined(reviewRow).id));
 
     const reopened = await readDayReview(db, context);
-    const proposal = reopened.tomorrowProposals.find((p) => p.carriedFromKey === item!.key);
+    const proposal = reopened.tomorrowProposals.find(
+      (p) => p.carriedFromKey === assertDefined(item).key,
+    );
     expect(proposal).toBeDefined();
     const durationMinutes =
-      (new Date(proposal!.endsAt).getTime() - new Date(proposal!.startsAt).getTime()) / 60_000;
+      (new Date(assertDefined(proposal).endsAt).getTime() -
+        new Date(assertDefined(proposal).startsAt).getTime()) /
+      60_000;
     expect(durationMinutes).toBe(60);
   });
 });

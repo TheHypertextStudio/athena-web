@@ -9,6 +9,7 @@ import type * as DbModule from '@docket/db';
 import type { internalUserContext as InternalUserContext } from '../../src/mcp/internal-session';
 import type { openToolbox as OpenToolbox } from '../../src/agent/toolbox';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -39,7 +40,7 @@ async function seedUserWorkspace(): Promise<Seed> {
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       key: `owner-${slug}`,
       name: 'Owner',
       capabilities: ['view', 'contribute'],
@@ -52,32 +53,32 @@ async function seedUserWorkspace(): Promise<Seed> {
   const [human] = await db
     .insert(schema.actor)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       kind: 'human',
       displayName: 'Ada',
-      userId: user!.id,
-      roleId: role!.id,
+      userId: assertDefined(user).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
   await db.insert(schema.grant).values({
-    organizationId: org!.id,
+    organizationId: assertDefined(org).id,
     subjectKind: 'role',
-    subjectId: role!.id,
+    subjectId: assertDefined(role).id,
     resourceKind: 'organization',
-    resourceId: org!.id,
+    resourceId: assertDefined(org).id,
     capabilities: ['view', 'contribute'],
     effect: 'allow',
   });
   const [team] = await db
     .insert(schema.team)
-    .values({ organizationId: org!.id, name: 'Core', key: `A${slug.slice(-4)}` })
+    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `A${slug.slice(-4)}` })
     .returning({ id: schema.team.id });
   return {
-    userId: user!.id,
-    orgId: org!.id,
-    actorId: human!.id,
-    roleId: role!.id,
-    teamId: team!.id,
+    userId: assertDefined(user).id,
+    orgId: assertDefined(org).id,
+    actorId: assertDefined(human).id,
+    roleId: assertDefined(role).id,
+    teamId: assertDefined(team).id,
   };
 }
 

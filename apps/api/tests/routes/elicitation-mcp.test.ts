@@ -27,6 +27,7 @@ import type {
   sweepElicitations as SweepElicitations,
 } from '../../src/services/elicitation-service';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -61,7 +62,7 @@ async function seed(): Promise<Fixture> {
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       key: `owner-${slug}`,
       name: 'Owner',
       capabilities: ['view', 'contribute'],
@@ -71,30 +72,30 @@ async function seed(): Promise<Fixture> {
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@example.com` })
     .returning({ id: schema.user.id });
-  await db.insert(schema.hub).values({ userId: owner!.id, preferences: {} });
+  await db.insert(schema.hub).values({ userId: assertDefined(owner).id, preferences: {} });
   await db.insert(schema.actor).values({
-    organizationId: org!.id,
+    organizationId: assertDefined(org).id,
     kind: 'human',
     displayName: 'Ada',
-    userId: owner!.id,
-    roleId: role!.id,
+    userId: assertDefined(owner).id,
+    roleId: assertDefined(role).id,
   });
   await db
     .insert(schema.team)
-    .values({ organizationId: org!.id, name: 'Core', key: `M${slug.slice(-4)}` });
+    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `M${slug.slice(-4)}` });
   const [session] = await db
     .insert(schema.agentSession)
     .values({
       executorKind: 'athena',
-      ownerUserId: owner!.id,
-      contextOrganizationId: org!.id,
+      ownerUserId: assertDefined(owner).id,
+      contextOrganizationId: assertDefined(org).id,
       kind: 'chat',
       trigger: 'delegation',
       status: 'running',
       workLinkage: 'conversation',
     })
     .returning({ id: schema.agentSession.id });
-  return { ownerUserId: owner!.id, sessionId: session!.id };
+  return { ownerUserId: assertDefined(owner).id, sessionId: assertDefined(session).id };
 }
 
 /** Connect a bare MCP server to an Athena-shaped client and return both halves. */

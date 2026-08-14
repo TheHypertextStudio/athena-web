@@ -20,6 +20,7 @@ import { env } from '../../src/env';
 import type * as IntegrationSyncModule from '../../src/routes/integration-sync';
 import type * as IntegrationProviderModule from '../../src/routes/integration-provider';
 import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * `env`'s fields are `readonly` at the type level (the fail-fast 12-factor contract), but the
@@ -143,12 +144,12 @@ describe('runSync — work-graph branch (Linear)', () => {
 
     const run = await runSync(row, { actorId: humanActorId, trigger: 'scheduled' });
     expect(run).not.toBeNull();
-    expect(run!.status).toBe('succeeded');
+    expect(assertDefined(run).status).toBe('succeeded');
     // The full 7-item LINEAR_WORK_GRAPH fixture: 6 items materialize (the 7th is a tombstone
     // with no prior local row — a no-op, never an insert, per the reconciler's rule that
     // absence/removal never destroys/creates from nothing).
-    expect(run!.total).toBe(7);
-    expect(run!.processed).toBe(6);
+    expect(assertDefined(run).total).toBe(7);
+    expect(assertDefined(run).processed).toBe(6);
 
     const after = await reload(row.id);
     expect(after.lastFullSyncedAt).not.toBeNull();
@@ -160,7 +161,7 @@ describe('runSync — work-graph branch (Linear)', () => {
     const row = await seedLinearIntegration(orgId, humanActorId);
 
     const first = await runSync(row, { actorId: humanActorId, trigger: 'scheduled' });
-    expect(first!.total).toBe(7);
+    expect(assertDefined(first).total).toBe(7);
     const afterFirst = await reload(row.id);
     expect(afterFirst.lastFullSyncedAt).not.toBeNull();
     expect(afterFirst.lastSyncedAt).not.toBeNull();
@@ -172,16 +173,18 @@ describe('runSync — work-graph branch (Linear)', () => {
     // items strictly by that cutoff, so the incremental pull returns an EMPTY item set —
     // proving `updatedAfter` was genuinely threaded through (a full pull would return 7 again).
     const second = await runSync(afterFirst, { actorId: humanActorId, trigger: 'scheduled' });
-    expect(second!.status).toBe('succeeded');
-    expect(second!.total).toBe(0);
-    expect(second!.processed).toBe(0);
+    expect(assertDefined(second).status).toBe('succeeded');
+    expect(assertDefined(second).total).toBe(0);
+    expect(assertDefined(second).processed).toBe(0);
 
     const afterSecond = await reload(row.id);
     // lastFullSyncedAt does NOT advance on an incremental run...
-    expect(afterSecond.lastFullSyncedAt!.getTime()).toBe(afterFirst.lastFullSyncedAt!.getTime());
+    expect(assertDefined(afterSecond.lastFullSyncedAt).getTime()).toBe(
+      assertDefined(afterFirst.lastFullSyncedAt).getTime(),
+    );
     // ...but lastSyncedAt DOES advance on every successful run, full or incremental.
-    expect(afterSecond.lastSyncedAt!.getTime()).toBeGreaterThanOrEqual(
-      afterFirst.lastSyncedAt!.getTime(),
+    expect(assertDefined(afterSecond.lastSyncedAt).getTime()).toBeGreaterThanOrEqual(
+      assertDefined(afterFirst.lastSyncedAt).getTime(),
     );
   });
 
@@ -195,12 +198,12 @@ describe('runSync — work-graph branch (Linear)', () => {
 
     const manual = await runSync(afterFirst, { actorId: humanActorId, trigger: 'manual' });
     // Full again: all 7 items are re-pulled (nothing changed, so nothing is re-processed).
-    expect(manual!.total).toBe(7);
-    expect(manual!.processed).toBe(0);
+    expect(assertDefined(manual).total).toBe(7);
+    expect(assertDefined(manual).processed).toBe(0);
 
     const afterManual = await reload(row.id);
-    expect(afterManual.lastFullSyncedAt!.getTime()).toBeGreaterThanOrEqual(
-      afterFirst.lastFullSyncedAt!.getTime(),
+    expect(assertDefined(afterManual.lastFullSyncedAt).getTime()).toBeGreaterThanOrEqual(
+      assertDefined(afterFirst.lastFullSyncedAt).getTime(),
     );
   });
 });
@@ -436,8 +439,8 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
 
     const run = await runSync(scoped, { actorId: humanActorId, trigger: 'scheduled' });
 
-    expect(run!.status).toBe('succeeded');
-    expect(run!.total).toBe(5);
+    expect(assertDefined(run).status).toBe('succeeded');
+    expect(assertDefined(run).total).toBe(5);
   });
 
   it('records a fallback "Connector error" message when the executor throws a non-Error value', async () => {
@@ -453,8 +456,8 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       },
     );
 
-    expect(run!.status).toBe('failed');
-    expect(run!.error).toBe('Connector error');
+    expect(assertDefined(run).status).toBe('failed');
+    expect(assertDefined(run).error).toBe('Connector error');
   });
 
   it('records a needs-reauth failure and notifies the owner when the executor throws an auth ConnectorError', async () => {
@@ -468,13 +471,18 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       .returning({ id: schema.user.id });
     const [owner] = await db
       .insert(schema.actor)
-      .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', userId: u!.id })
+      .values({
+        organizationId: orgId,
+        kind: 'human',
+        displayName: 'Owner',
+        userId: assertDefined(u).id,
+      })
       .returning({ id: schema.actor.id });
-    const row = await seedLinearIntegration(orgId, owner!.id);
+    const row = await seedLinearIntegration(orgId, assertDefined(owner).id);
 
     const run = await runLeasedSync(
       row,
-      { actorId: owner!.id, trigger: 'scheduled', purpose: 'task_sync' },
+      { actorId: assertDefined(owner).id, trigger: 'scheduled', purpose: 'task_sync' },
       async () => {
         throw new ConnectorError('token rejected by provider', {
           provider: 'linear',
@@ -483,18 +491,21 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       },
     );
 
-    expect(run!.status).toBe('failed');
-    expect(run!.error).toBe('token rejected by provider');
+    expect(assertDefined(run).status).toBe('failed');
+    expect(assertDefined(run).error).toBe('token rejected by provider');
 
     const notif = await db
       .select()
       .from(schema.notification)
       .where(
-        and(eq(schema.notification.userId, u!.id), eq(schema.notification.organizationId, orgId)),
+        and(
+          eq(schema.notification.userId, assertDefined(u).id),
+          eq(schema.notification.organizationId, orgId),
+        ),
       );
     expect(notif).toHaveLength(1);
-    expect(notif[0]!.type).toBe('connector_needs_reauth');
-    expect(notif[0]!.body.title).toBe('Reconnect Linear');
+    expect(assertDefined(notif[0]).type).toBe('connector_needs_reauth');
+    expect(assertDefined(notif[0]).body.title).toBe('Reconnect Linear');
   });
 
   it('records a needs-reauth failure with a reconnect message when the live token resolver cannot resolve a credential', async () => {
@@ -505,25 +516,33 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       .returning({ id: schema.user.id });
     const [owner] = await db
       .insert(schema.actor)
-      .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', userId: u!.id })
+      .values({
+        organizationId: orgId,
+        kind: 'human',
+        displayName: 'Owner',
+        userId: assertDefined(u).id,
+      })
       .returning({ id: schema.actor.id });
     // `owner` has a linked Better Auth user but no linked `linear` account at all.
-    const row = await seedLinearIntegration(orgId, owner!.id);
+    const row = await seedLinearIntegration(orgId, assertDefined(owner).id);
 
     mutableEnv.APP_MODE = 'production';
-    const run = await runSync(row, { actorId: owner!.id, trigger: 'scheduled' });
+    const run = await runSync(row, { actorId: assertDefined(owner).id, trigger: 'scheduled' });
 
-    expect(run!.status).toBe('failed');
-    expect(run!.error).toContain('Sign in with');
+    expect(assertDefined(run).status).toBe('failed');
+    expect(assertDefined(run).error).toContain('Sign in with');
 
     const notif = await db
       .select()
       .from(schema.notification)
       .where(
-        and(eq(schema.notification.userId, u!.id), eq(schema.notification.organizationId, orgId)),
+        and(
+          eq(schema.notification.userId, assertDefined(u).id),
+          eq(schema.notification.organizationId, orgId),
+        ),
       );
     expect(notif).toHaveLength(1);
-    expect(notif[0]!.type).toBe('connector_needs_reauth');
+    expect(assertDefined(notif[0]).type).toBe('connector_needs_reauth');
   });
 
   it('never notifies an owner that cannot be resolved (integration.createdBy is null)', async () => {
@@ -536,7 +555,7 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
     const [row] = await db
       .insert(schema.integration)
       .values({
-        organizationId: org!.id,
+        organizationId: assertDefined(org).id,
         provider: 'github',
         pattern: 'connector',
         roles: ['work'],
@@ -544,15 +563,18 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       })
       .returning();
 
-    const run = await runSync(row!, { actorId: 'actor_bootstrap', trigger: 'scheduled' });
+    const run = await runSync(assertDefined(row), {
+      actorId: 'actor_bootstrap',
+      trigger: 'scheduled',
+    });
 
-    expect(run!.status).toBe('failed');
-    expect(run!.error).toMatch(/team/i);
+    expect(assertDefined(run).status).toBe('failed');
+    expect(assertDefined(run).error).toMatch(/team/i);
     // No owner to notify — notifyOwner's `!row.createdBy` guard returns before any DB write.
     const notif = await db
       .select()
       .from(schema.notification)
-      .where(eq(schema.notification.organizationId, org!.id));
+      .where(eq(schema.notification.organizationId, assertDefined(org).id));
     expect(notif).toHaveLength(0);
   });
 
@@ -564,7 +586,12 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       .returning({ id: schema.user.id });
     const [owner] = await db
       .insert(schema.actor)
-      .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', userId: u!.id })
+      .values({
+        organizationId: orgId,
+        kind: 'human',
+        displayName: 'Owner',
+        userId: assertDefined(u).id,
+      })
       .returning({ id: schema.actor.id });
     // `slack` is not a connector provider (`asConnectorProvider` returns null) — this bypasses
     // the HTTP route's own guard (`POST /:id/sync` 409s before ever calling `runSync`) to
@@ -577,26 +604,32 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
         pattern: 'connector',
         roles: ['signal'],
         status: 'connected',
-        createdBy: owner!.id,
+        createdBy: assertDefined(owner).id,
       })
       .returning();
 
-    const run = await runSync(row!, { actorId: owner!.id, trigger: 'scheduled' });
+    const run = await runSync(assertDefined(row), {
+      actorId: assertDefined(owner).id,
+      trigger: 'scheduled',
+    });
 
-    expect(run!.status).toBe('failed');
-    expect(run!.error).toBe('Integration provider does not support sync');
+    expect(assertDefined(run).status).toBe('failed');
+    expect(assertDefined(run).error).toBe('Integration provider does not support sync');
 
     const notif = await db
       .select()
       .from(schema.notification)
       .where(
-        and(eq(schema.notification.userId, u!.id), eq(schema.notification.organizationId, orgId)),
+        and(
+          eq(schema.notification.userId, assertDefined(u).id),
+          eq(schema.notification.organizationId, orgId),
+        ),
       );
     expect(notif).toHaveLength(1);
-    expect(notif[0]!.type).toBe('connector_sync_failed');
+    expect(assertDefined(notif[0]).type).toBe('connector_sync_failed');
     // The provider-fallback branch: `asConnectorProvider('slack')` is null, so the notification
     // names the raw provider string rather than the directory's display name.
-    expect(notif[0]!.body.title).toBe('slack sync failed');
+    expect(assertDefined(notif[0]).body.title).toBe('slack sync failed');
   });
 
   it('threads connection.externalWorkspaceId and config.listIds through the flat import path', async () => {
@@ -614,10 +647,10 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       })
       .returning();
 
-    const run = await runSync(row!, { actorId: humanActorId, trigger: 'scheduled' });
+    const run = await runSync(assertDefined(row), { actorId: humanActorId, trigger: 'scheduled' });
 
-    expect(run!.status).toBe('succeeded');
-    expect(run!.total).toBe(1); // the mock github fixture, unaffected by listIds/workspace scoping
+    expect(assertDefined(run).status).toBe('succeeded');
+    expect(assertDefined(run).total).toBe(1); // the mock github fixture, unaffected by listIds/workspace scoping
   });
 
   it('treats a config that fails ConnectorConfig validation as empty rather than crashing', async () => {
@@ -636,10 +669,10 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       })
       .returning();
 
-    const run = await runSync(row!, { actorId: humanActorId, trigger: 'scheduled' });
+    const run = await runSync(assertDefined(row), { actorId: humanActorId, trigger: 'scheduled' });
 
-    expect(run!.status).toBe('succeeded');
-    expect(run!.total).toBe(1);
+    expect(assertDefined(run).status).toBe('succeeded');
+    expect(assertDefined(run).total).toBe(1);
   });
 
   it('the flat import path stamps lastFullSyncedAt too, not only the work-graph branch', async () => {
@@ -658,11 +691,11 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       })
       .returning();
 
-    expect(row!.lastFullSyncedAt).toBeNull();
-    const run = await runSync(row!, { actorId: humanActorId, trigger: 'scheduled' });
-    expect(run!.status).toBe('succeeded');
+    expect(assertDefined(row).lastFullSyncedAt).toBeNull();
+    const run = await runSync(assertDefined(row), { actorId: humanActorId, trigger: 'scheduled' });
+    expect(assertDefined(run).status).toBe('succeeded');
 
-    const after = await reload(row!.id);
+    const after = await reload(assertDefined(row).id);
     expect(after.lastFullSyncedAt).not.toBeNull();
   });
 
@@ -679,15 +712,17 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       })
       .returning();
 
-    await runSync(row!, { actorId: humanActorId, trigger: 'scheduled' });
-    const afterFirst = await reload(row!.id);
+    await runSync(assertDefined(row), { actorId: humanActorId, trigger: 'scheduled' });
+    const afterFirst = await reload(assertDefined(row).id);
     expect(afterFirst.lastFullSyncedAt).not.toBeNull();
 
     await runSync(afterFirst, { actorId: humanActorId, trigger: 'scheduled' });
-    const afterSecond = await reload(row!.id);
+    const afterSecond = await reload(assertDefined(row).id);
     // Went incremental, so the full-sync stamp does not move — same assertion shape as the
     // work-graph branch's equivalent test above.
-    expect(afterSecond.lastFullSyncedAt!.getTime()).toBe(afterFirst.lastFullSyncedAt!.getTime());
+    expect(assertDefined(afterSecond.lastFullSyncedAt).getTime()).toBe(
+      assertDefined(afterFirst.lastFullSyncedAt).getTime(),
+    );
   });
 
   it('lookbackISO widens the incremental cutoff by the cadence overlap, treating a null cadence as zero overlap', async () => {
@@ -702,7 +737,7 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       actorId: humanActorId,
       trigger: 'scheduled',
     });
-    expect(first!.total).toBe(7); // first run is always a full backfill
+    expect(assertDefined(first).total).toBe(7); // first run is always a full backfill
 
     // Second run is incremental (still inside the full-sync window); with a null cadence the
     // `updatedAfter` cutoff is exactly `lastSyncedAt` (no overlap widening), which is still far
@@ -712,8 +747,8 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       actorId: humanActorId,
       trigger: 'scheduled',
     });
-    expect(second!.status).toBe('succeeded');
-    expect(second!.total).toBe(0);
+    expect(assertDefined(second).status).toBe('succeeded');
+    expect(assertDefined(second).total).toBe(0);
   });
 
   it('toSyncRunOut serializes a still-running run (finishedAt null) without throwing', () => {

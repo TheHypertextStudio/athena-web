@@ -6,6 +6,7 @@ import type { EmailSuggestionOut } from '@docket/types';
 
 import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
 import type emailSuggestionsRouter from '../../src/routes/email-suggestions';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -92,7 +93,10 @@ describe('email-suggestions router', () => {
 
     // A real task now exists, titled from the suggestion, with the suggested priority.
     const taskRow = one(
-      await db.select().from(schema.task).where(eq(schema.task.id, accepted.createdTaskId!)),
+      await db
+        .select()
+        .from(schema.task)
+        .where(eq(schema.task.id, assertDefined(accepted.createdTaskId))),
     );
     expect(taskRow.title).toBe('Schedule the SWE interview with Google');
     expect(taskRow.priority).toBe('high');
@@ -103,7 +107,7 @@ describe('email-suggestions router', () => {
       .from(schema.attachment)
       .where(
         and(
-          eq(schema.attachment.subjectId, accepted.createdTaskId!),
+          eq(schema.attachment.subjectId, assertDefined(accepted.createdTaskId)),
           eq(schema.attachment.kind, 'email'),
         ),
       );
@@ -142,7 +146,10 @@ describe('email-suggestions router', () => {
     });
     const accepted = await body<EmailSuggestionOut>(res);
     const taskRow = one(
-      await db.select().from(schema.task).where(eq(schema.task.id, accepted.createdTaskId!)),
+      await db
+        .select()
+        .from(schema.task)
+        .where(eq(schema.task.id, assertDefined(accepted.createdTaskId))),
     );
     expect(taskRow.title).toBe('Reply to Google recruiter');
     expect(taskRow.priority).toBe('urgent');

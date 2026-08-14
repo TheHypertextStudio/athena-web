@@ -22,6 +22,7 @@ import type {
   resolveVoiceWorkspace as ResolveVoiceWorkspace,
 } from '../../src/routes/voice-session-service';
 import { addMember, getDb, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -140,7 +141,7 @@ describe('closing a session this process is not driving', () => {
     const [row] = await db
       .insert(schema.voiceSession)
       .values({
-        conversationId: conversation[0]!.id,
+        conversationId: assertDefined(conversation[0]).id,
         userId: person.userId,
         organizationId: person.orgId,
         channel: 'web',
@@ -149,12 +150,12 @@ describe('closing a session this process is not driving', () => {
       })
       .returning({ id: schema.voiceSession.id });
 
-    await closeVoiceSession(row!.id, 'transport_closed');
+    await closeVoiceSession(assertDefined(row).id, 'transport_closed');
 
     const [closed] = await db
       .select()
       .from(schema.voiceSession)
-      .where(eq(schema.voiceSession.id, row!.id));
+      .where(eq(schema.voiceSession.id, assertDefined(row).id));
     expect(closed).toMatchObject({ status: 'ended', endedReason: 'transport_closed' });
     expect(closed?.endedAt).toBeInstanceOf(Date);
   });
@@ -175,7 +176,7 @@ describe('closing a session this process is not driving', () => {
     const [row] = await db
       .insert(schema.voiceSession)
       .values({
-        conversationId: conversation[0]!.id,
+        conversationId: assertDefined(conversation[0]).id,
         userId: person.userId,
         organizationId: person.orgId,
         channel: 'web',
@@ -186,12 +187,12 @@ describe('closing a session this process is not driving', () => {
       })
       .returning({ id: schema.voiceSession.id });
 
-    await closeVoiceSession(row!.id, 'transport_closed');
+    await closeVoiceSession(assertDefined(row).id, 'transport_closed');
 
     const [unchanged] = await db
       .select()
       .from(schema.voiceSession)
-      .where(eq(schema.voiceSession.id, row!.id));
+      .where(eq(schema.voiceSession.id, assertDefined(row).id));
     // The conditional update only matches an 'active' row, so a session already closed keeps its
     // original reason rather than being silently overwritten.
     expect(unchanged).toMatchObject({ status: 'ended', endedReason: 'caller_hung_up' });
@@ -211,7 +212,7 @@ describe('recentConversation', () => {
         status: 'running',
       })
       .returning({ id: schema.agentSession.id });
-    const conversationId = conversation[0]!.id;
+    const conversationId = assertDefined(conversation[0]).id;
     await db.insert(schema.sessionActivity).values({
       sessionId: conversationId,
       organizationId: null,
@@ -233,7 +234,7 @@ describe('recentConversation', () => {
         status: 'running',
       })
       .returning({ id: schema.agentSession.id });
-    const conversationId = conversation[0]!.id;
+    const conversationId = assertDefined(conversation[0]).id;
     await db.insert(schema.sessionActivity).values({
       sessionId: conversationId,
       organizationId: null,
@@ -258,7 +259,7 @@ describe('recentTurns', () => {
       })
       .returning({ id: schema.agentSession.id });
     await db.insert(schema.sessionActivity).values({
-      sessionId: conversation[0]!.id,
+      sessionId: assertDefined(conversation[0]).id,
       organizationId: null,
       type: 'response',
       body: {
@@ -293,13 +294,13 @@ describe('recentTurns', () => {
       .returning({ id: schema.agentSession.id });
     await db.insert(schema.sessionActivity).values([
       {
-        sessionId: conversation[0]!.id,
+        sessionId: assertDefined(conversation[0]).id,
         organizationId: null,
         type: 'response',
         body: { text: 'Typed with no voice marker.', author: 'user' },
       },
       {
-        sessionId: conversation[0]!.id,
+        sessionId: assertDefined(conversation[0]).id,
         organizationId: null,
         type: 'response',
         // `voice` present but explicitly null — `typeof null === 'object'`, so this exercises the
@@ -307,7 +308,7 @@ describe('recentTurns', () => {
         body: { text: 'Voice marker was null.', author: 'user', voice: null },
       },
       {
-        sessionId: conversation[0]!.id,
+        sessionId: assertDefined(conversation[0]).id,
         organizationId: null,
         type: 'response',
         // A row with no text at all is dropped entirely.

@@ -7,6 +7,7 @@ import {
   type DispatchNotificationIntentInput,
 } from '@docket/notifications/dispatch';
 import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -95,13 +96,13 @@ describe('dispatchNotificationIntent — web channel', () => {
       .where(eq(schema.notificationDelivery.notificationId, result.intentId));
     expect(deliveries).toHaveLength(1);
     expect(deliveries[0]).toMatchObject({
-      recipientId: recipients[0]!.id,
+      recipientId: assertDefined(recipients[0]).id,
       channel: 'web',
       destinationType: 'in_app',
       destination: { type: 'in_app' },
       status: 'sent',
     });
-    expect(deliveries[0]!.sentAt).toBeInstanceOf(Date);
+    expect(assertDefined(deliveries[0]).sentAt).toBeInstanceOf(Date);
 
     const inboxRows = await db
       .select()
@@ -109,7 +110,7 @@ describe('dispatchNotificationIntent — web channel', () => {
       .where(eq(schema.notification.intentId, result.intentId));
     expect(inboxRows).toHaveLength(1);
     expect(inboxRows[0]).toMatchObject({
-      deliveryId: deliveries[0]!.id,
+      deliveryId: assertDefined(deliveries[0]).id,
       userId,
       organizationId: null,
       type: 'service_announcement',

@@ -26,6 +26,7 @@ import type {
 } from '../../src/services/elicitation-service';
 import type { notifyElicitation as NotifyElicitation } from '../../src/services/elicitation-notify';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -79,7 +80,7 @@ async function seed(options: { withTask?: boolean } = {}): Promise<Fixture> {
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       key: `owner-${slug}`,
       name: 'Owner',
       capabilities: ['view', 'contribute'],
@@ -89,47 +90,47 @@ async function seed(options: { withTask?: boolean } = {}): Promise<Fixture> {
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@example.com` })
     .returning({ id: schema.user.id });
-  await db.insert(schema.hub).values({ userId: owner!.id, preferences: {} });
+  await db.insert(schema.hub).values({ userId: assertDefined(owner).id, preferences: {} });
   const [ownerActor] = await db
     .insert(schema.actor)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       kind: 'human',
       displayName: 'Ada',
-      userId: owner!.id,
-      roleId: role!.id,
+      userId: assertDefined(owner).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
   await db
     .insert(schema.team)
-    .values({ organizationId: org!.id, name: 'Core', key: `E${slug.slice(-4)}` });
+    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `E${slug.slice(-4)}` });
 
   let taskId = '';
   if (options.withTask) {
     const [teamRow] = await db
       .select({ id: schema.team.id })
       .from(schema.team)
-      .where(eq(schema.team.organizationId, org!.id))
+      .where(eq(schema.team.organizationId, assertDefined(org).id))
       .limit(1);
     const [created] = await db
       .insert(schema.task)
       .values({
-        organizationId: org!.id,
+        organizationId: assertDefined(org).id,
         title: 'Weekly sprint update',
-        teamId: teamRow!.id,
+        teamId: assertDefined(teamRow).id,
         state: 'backlog',
-        createdBy: ownerActor!.id,
+        createdBy: assertDefined(ownerActor).id,
       })
       .returning({ id: schema.task.id });
-    taskId = created!.id;
+    taskId = assertDefined(created).id;
   }
 
   const [session] = await db
     .insert(schema.agentSession)
     .values({
       executorKind: 'athena',
-      ownerUserId: owner!.id,
-      contextOrganizationId: org!.id,
+      ownerUserId: assertDefined(owner).id,
+      contextOrganizationId: assertDefined(org).id,
       kind: 'chat',
       trigger: 'delegation',
       status: 'awaiting_input',
@@ -139,10 +140,10 @@ async function seed(options: { withTask?: boolean } = {}): Promise<Fixture> {
     .returning({ id: schema.agentSession.id });
 
   return {
-    ownerUserId: owner!.id,
-    ownerActorId: ownerActor!.id,
-    orgId: org!.id,
-    sessionId: session!.id,
+    ownerUserId: assertDefined(owner).id,
+    ownerActorId: assertDefined(ownerActor).id,
+    orgId: assertDefined(org).id,
+    sessionId: assertDefined(session).id,
     taskId,
   };
 }
@@ -362,12 +363,14 @@ describe('ATH-49 / ATH-53 — every question has a deadline and a task', () => {
     await expect(
       db.insert(schema.agentElicitation).values({
         sessionId: fixture.sessionId,
-        activityId: (
-          await db
-            .insert(schema.sessionActivity)
-            .values({ sessionId: fixture.sessionId, type: 'elicitation', body: {} })
-            .returning({ id: schema.sessionActivity.id })
-        )[0]!.id,
+        activityId: assertDefined(
+          (
+            await db
+              .insert(schema.sessionActivity)
+              .values({ sessionId: fixture.sessionId, type: 'elicitation', body: {} })
+              .returning({ id: schema.sessionActivity.id })
+          )[0],
+        ).id,
         askedUserId: fixture.ownerUserId,
         taskId: fixture.taskId,
         question: 'q',
@@ -578,7 +581,7 @@ describe('ATH-52 — every question names the action it authorizes', () => {
     expect(activity?.body['elicitationId']).toBe(raised.elicitation.id);
 
     const [entry] = await listElicitationsFor(fixture.ownerUserId);
-    const out = toElicitationOut(entry!);
+    const out = toElicitationOut(assertDefined(entry));
     expect(out.actionSummary).toBe('Post the sprint update to the Acme project channel');
     expect(out.task.id).toBe(raised.taskId);
     expect(out.task.title).toBeTruthy();
@@ -618,7 +621,7 @@ describe('the agent loop’s ask_user path', () => {
 
     const [materialized] = await materializeElicitations(fixture.sessionId);
 
-    expect(materialized?.elicitation.activityId).toBe(activity!.id);
+    expect(materialized?.elicitation.activityId).toBe(assertDefined(activity).id);
     expect(materialized?.elicitation.spec).toEqual(SELECT_SPEC);
     expect(materialized?.elicitation.toolUseId).toBe('toolu_9');
     expect(materialized?.elicitation.timeSensitive).toBe(true);
@@ -825,7 +828,7 @@ describe('ATH-55 — notification delivery is reported, never assumed', () => {
     const [row] = await db
       .select()
       .from(schema.contactPoint)
-      .where(eq(schema.contactPoint.id, point!.id));
+      .where(eq(schema.contactPoint.id, assertDefined(point).id));
     expect(row?.status).toBe('disabled');
   });
 });

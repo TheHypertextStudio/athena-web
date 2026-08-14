@@ -23,6 +23,7 @@ import type { processSearchIndexJobs as ProcessSearchIndexJobs } from '../../src
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -54,7 +55,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: `Acme ${slug}`, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [role] = await db
     .insert(schema.role)
@@ -78,15 +79,15 @@ async function seedOrg(): Promise<Seed> {
       organizationId: orgId,
       kind: 'human',
       displayName: 'Ada',
-      userId: user!.id,
-      roleId: role!.id,
+      userId: assertDefined(user).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
 
   await db.insert(schema.grant).values({
     organizationId: orgId,
     subjectKind: 'role',
-    subjectId: role!.id,
+    subjectId: assertDefined(role).id,
     resourceKind: 'organization',
     resourceId: orgId,
     capabilities: ['contribute', 'assign', 'manage', 'comment'],
@@ -105,11 +106,16 @@ async function seedOrg(): Promise<Seed> {
   return {
     orgId,
     orgSlug: slug,
-    teamId: team!.id,
-    actorId: human!.id,
-    userId: user!.id,
+    teamId: assertDefined(team).id,
+    actorId: assertDefined(human).id,
+    userId: assertDefined(user).id,
     ctx: {
-      principal: { kind: 'user', userId: user!.id, userName: 'Ada', userEmail: email },
+      principal: {
+        kind: 'user',
+        userId: assertDefined(user).id,
+        userName: 'Ada',
+        userEmail: email,
+      },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     },
   };
@@ -137,7 +143,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   resetAuthMocks();
 });
 
@@ -155,12 +161,12 @@ async function joinOrg(userId: string, lifecycleState?: OrgLifecycleState): Prom
     .values({ name: slug, slug, ...(lifecycleState ? { lifecycleState } : {}) })
     .returning({ id: schema.organization.id });
   await db.insert(schema.actor).values({
-    organizationId: org!.id,
+    organizationId: assertDefined(org).id,
     kind: 'human',
     displayName: 'Ada',
     userId,
   });
-  return org!.id;
+  return assertDefined(org).id;
 }
 
 /** Call a tool and fail loudly with the server's own message when it errors. */
@@ -188,7 +194,7 @@ describe('capability: get references for all my workspaces', () => {
       })
       .returning({ id: schema.organization.id });
     await db.insert(schema.actor).values({
-      organizationId: org2!.id,
+      organizationId: assertDefined(org2).id,
       kind: 'human',
       displayName: 'Ada',
       userId: first.userId,
@@ -201,7 +207,7 @@ describe('capability: get references for all my workspaces', () => {
     };
     const ids = out.workspaces.map((w) => w.id);
     expect(ids).toContain(first.orgId);
-    expect(ids).toContain(org2!.id);
+    expect(ids).toContain(assertDefined(org2).id);
     // Names and slugs come back, so the next call can be addressed the way a person says it.
     expect(out.workspaces.find((w) => w.id === first.orgId)?.slug).toBe(first.orgSlug);
   });
@@ -299,7 +305,7 @@ describe('capability: create and edit projects', () => {
     const [row] = await db
       .select({ name: schema.project.name })
       .from(schema.project)
-      .where(eq(schema.project.id, out.placed[0]!.id));
+      .where(eq(schema.project.id, assertDefined(out.placed[0]).id));
     expect(row?.name).toBe('Billing Revamp');
   });
 
@@ -600,7 +606,7 @@ describe('capability: find any object', () => {
     expect(out.items).toHaveLength(1);
     expect(out.items[0]).toMatchObject({
       name: 'Bus Buddies',
-      href: `/orgs/${s.orgId}/projects/${out.items[0]!.id}`,
+      href: `/orgs/${s.orgId}/projects/${assertDefined(out.items[0]).id}`,
     });
     expect(out.missing).toEqual([]);
   });
@@ -745,7 +751,7 @@ describe('capability: create and edit programs', () => {
     const [row] = await db
       .select({ name: schema.program.name, ownerId: schema.program.ownerId })
       .from(schema.program)
-      .where(eq(schema.program.id, out.placed[0]!.id));
+      .where(eq(schema.program.id, assertDefined(out.placed[0]).id));
     expect(row).toEqual({ name: 'Reliability', ownerId: s.actorId });
   });
 

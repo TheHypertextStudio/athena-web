@@ -13,6 +13,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { DocketVoiceToolRunner as DocketVoiceToolRunnerClass } from '../../src/routes/voice-tools';
 import type { VoiceSessionContext } from '../../src/routes/voice-engine';
 import { getDb, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -203,7 +204,10 @@ describe('DocketVoiceToolRunner', () => {
         title: 'water',
       });
       expect(outcome).toEqual({ ok: true, summary: 'Closed “Water the plants”.' });
-      const [after] = await db.select().from(schema.task).where(eq(schema.task.id, row!.id));
+      const [after] = await db
+        .select()
+        .from(schema.task)
+        .where(eq(schema.task.id, assertDefined(row).id));
       expect(after?.completedAt).not.toBeNull();
     });
 
@@ -269,5 +273,5 @@ async function seedOrgWithoutTeam(): Promise<string> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  return org!.id;
+  return assertDefined(org).id;
 }

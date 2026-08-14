@@ -26,6 +26,7 @@ import type { claimRunGeneration as ClaimRunGeneration } from '../../src/agent/r
 import type * as ToolboxModule from '../../src/agent/toolbox';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 const openToolbox = vi.fn();
 vi.mock('../../src/agent/toolbox', async (importOriginal) => ({
@@ -62,22 +63,32 @@ async function seedSession(status: 'awaiting_approval' = 'awaiting_approval'): P
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
     .returning({ id: schema.user.id });
-  await db.insert(schema.hub).values({ userId: u!.id });
+  await db.insert(schema.hub).values({ userId: assertDefined(u).id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
-  const agent = await ensureDefaultAgent(orgId, human!.id);
+  const agent = await ensureDefaultAgent(orgId, assertDefined(human).id);
   const [session] = await db
     .insert(schema.agentSession)
     .values({ organizationId: orgId, agentId: agent.id, trigger: 'delegation', status })
     .returning({ id: schema.agentSession.id });
-  return { orgId, humanActorId: human!.id, agentId: agent.id, sessionId: session!.id };
+  return {
+    orgId,
+    humanActorId: assertDefined(human).id,
+    agentId: agent.id,
+    sessionId: assertDefined(session).id,
+  };
 }
 
 describe('a claimed tool call that throws instead of returning an error result', () => {
@@ -115,7 +126,7 @@ describe('a claimed tool call that throws instead of returning an error result',
       .select()
       .from(schema.agentSession)
       .where(eq(schema.agentSession.id, seed.sessionId));
-    const lease = await claimRunGeneration(sessionRow!, {
+    const lease = await claimRunGeneration(assertDefined(sessionRow), {
       runnableStatuses: ['awaiting_approval'],
       resumeSession: false,
     });
@@ -126,7 +137,7 @@ describe('a claimed tool call that throws instead of returning an error result',
     const [after] = await db
       .select({ status: schema.sessionActivity.approvalStatus, body: schema.sessionActivity.body })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(after?.status).toBe('executing');
     expect(after?.body.action?.result).toEqual({
       content: 'MCP transport crashed mid-call',
@@ -174,7 +185,7 @@ describe('a claimed tool call that throws instead of returning an error result',
       .select()
       .from(schema.agentSession)
       .where(eq(schema.agentSession.id, seed.sessionId));
-    const lease = await claimRunGeneration(sessionRow!, {
+    const lease = await claimRunGeneration(assertDefined(sessionRow), {
       runnableStatuses: ['awaiting_approval'],
       resumeSession: false,
     });
@@ -185,7 +196,7 @@ describe('a claimed tool call that throws instead of returning an error result',
     const [after] = await db
       .select({ body: schema.sessionActivity.body })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(after?.body.action?.result).toEqual({
       content: 'Approved action execution failed',
       isError: true,
@@ -221,12 +232,14 @@ describe('executeApprovedGeneration when the toolbox itself never opens', () => 
         seed.orgId,
         seed.humanActorId,
         seed.sessionId,
-        (
-          await db
-            .select({ id: schema.sessionActivity.id })
-            .from(schema.sessionActivity)
-            .where(eq(schema.sessionActivity.sessionId, seed.sessionId))
-        )[0]!.id,
+        assertDefined(
+          (
+            await db
+              .select({ id: schema.sessionActivity.id })
+              .from(schema.sessionActivity)
+              .where(eq(schema.sessionActivity.sessionId, seed.sessionId))
+          )[0],
+        ).id,
         { decision: 'approve' },
       ),
     ).rejects.toThrow('could not reach the MCP transport');
@@ -272,9 +285,15 @@ describe('executeApprovedGeneration when the toolbox itself never opens', () => 
       .where(eq(schema.sessionActivity.sessionId, seed.sessionId));
 
     await expect(
-      approveAndResume(seed.orgId, seed.humanActorId, seed.sessionId, activityId!.id, {
-        decision: 'approve',
-      }),
+      approveAndResume(
+        seed.orgId,
+        seed.humanActorId,
+        seed.sessionId,
+        assertDefined(activityId).id,
+        {
+          decision: 'approve',
+        },
+      ),
     ).rejects.toBe('a raw string rejection');
 
     const [run] = await db

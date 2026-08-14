@@ -6,6 +6,7 @@ import type * as DbModule from '@docket/db';
 import { appWithActor, fakeSession, getDb } from '../support/routes-harness';
 import type grantsRouter from '../../src/routes/grants';
 import type membersRouter from '../../src/routes/members';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -32,7 +33,7 @@ async function seedOrgWithOwner(opts: { personal?: boolean } = {}) {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active', isPersonal: opts.personal ?? false })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const [ownerRole] = await db
     .insert(schema.role)
     .values({
@@ -55,13 +56,18 @@ async function seedOrgWithOwner(opts: { personal?: boolean } = {}) {
     .returning({ id: schema.role.id });
   const [owner] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', roleId: ownerRole!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Owner',
+      roleId: assertDefined(ownerRole).id,
+    })
     .returning({ id: schema.actor.id });
   return {
     orgId,
-    ownerRoleId: ownerRole!.id,
-    memberRoleId: memberRole!.id,
-    ownerActorId: owner!.id,
+    ownerRoleId: assertDefined(ownerRole).id,
+    memberRoleId: assertDefined(memberRole).id,
+    ownerActorId: assertDefined(owner).id,
   };
 }
 
@@ -232,7 +238,7 @@ describe('members router', () => {
       .insert(schema.user)
       .values({ name: 'New', email: `new-${Math.random()}@e.com` })
       .returning({ id: schema.user.id });
-    const userId = user!.id;
+    const userId = assertDefined(user).id;
 
     /** Insert an invitation row with a known token + unique email; returns the token. */
     async function makeInvite(status: 'pending' | 'accepted', expiresAt: Date): Promise<string> {
@@ -338,14 +344,14 @@ describe('members router', () => {
     const token = `tok-${Math.random().toString(36).slice(2)}`;
     await db.insert(schema.invitation).values({
       organizationId: orgId,
-      email: user!.email,
+      email: assertDefined(user).email,
       roleId: memberRoleId,
       token,
       invitedBy: ownerActorId,
       status: 'pending',
       expiresAt: new Date(Date.now() + 86_400_000),
     });
-    const session = fakeSession(user!.id, '', user!.email);
+    const session = fakeSession(assertDefined(user).id, '', assertDefined(user).email);
     const w = appWithActor(members, orgId, ['view'], ownerActorId, session);
     const res = await w.request('/accept-invite', {
       method: 'POST',
@@ -353,7 +359,7 @@ describe('members router', () => {
       body: JSON.stringify({ token }),
     });
     expect(res.status).toBe(200);
-    expect((await body<{ displayName: string }>(res)).displayName).toBe(user!.email);
+    expect((await body<{ displayName: string }>(res)).displayName).toBe(assertDefined(user).email);
   });
 
   it('patch: plain update + target-not-found + last-owner-guard conflict + downgrade allowed', async () => {
@@ -365,7 +371,7 @@ describe('members router', () => {
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'M', roleId: memberRoleId })
       .returning({ id: schema.actor.id });
-    const memberActorId = m!.id;
+    const memberActorId = assertDefined(m).id;
 
     const patched = await w.request(`/${memberActorId}`, {
       method: 'PATCH',
@@ -437,7 +443,7 @@ describe('members router', () => {
       .values({ organizationId: a.orgId, kind: 'human', displayName: 'M', roleId: a.memberRoleId })
       .returning({ id: schema.actor.id });
 
-    const res = await w.request(`/${m!.id}`, {
+    const res = await w.request(`/${assertDefined(m).id}`, {
       method: 'PATCH',
       headers: J,
       body: JSON.stringify({ roleId: b.memberRoleId }),
@@ -449,8 +455,8 @@ describe('members router', () => {
     const [row] = await db
       .select({ roleId: schema.actor.roleId })
       .from(schema.actor)
-      .where(eq(schema.actor.id, m!.id));
-    expect(row!.roleId).toBe(a.memberRoleId);
+      .where(eq(schema.actor.id, assertDefined(m).id));
+    expect(assertDefined(row).roleId).toBe(a.memberRoleId);
   });
 
   it('patch: when the org has no owner role, the guard is skipped', async () => {
@@ -460,13 +466,13 @@ describe('members router', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
-    const orgId = org!.id;
+    const orgId = assertDefined(org).id;
     const [actorRow] = await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'X' })
       .returning({ id: schema.actor.id });
-    const w = appWithActor(members, orgId, ['manage'], actorRow!.id);
-    const res = await w.request(`/${actorRow!.id}`, {
+    const w = appWithActor(members, orgId, ['manage'], assertDefined(actorRow).id);
+    const res = await w.request(`/${assertDefined(actorRow).id}`, {
       method: 'PATCH',
       headers: J,
       body: JSON.stringify({ status: 'suspended' }),
@@ -475,7 +481,7 @@ describe('members router', () => {
     const updated = await db
       .select({ status: schema.actor.status })
       .from(schema.actor)
-      .where(eq(schema.actor.id, actorRow!.id))
+      .where(eq(schema.actor.id, assertDefined(actorRow).id))
       .limit(1);
     expect(updated[0]?.status).toBe('suspended');
   });

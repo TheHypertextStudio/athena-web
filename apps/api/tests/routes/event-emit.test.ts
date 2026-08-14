@@ -5,6 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as EmitModule from '../../src/routes/event-emit';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -38,9 +39,9 @@ async function seedUserActor(orgId: string): Promise<{ userId: string; actorId: 
     .returning({ id: schema.user.id });
   const [a] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'U', userId: u!.id })
+    .values({ organizationId: orgId, kind: 'human', displayName: 'U', userId: assertDefined(u).id })
     .returning({ id: schema.actor.id });
-  return { userId: u!.id, actorId: a!.id };
+  return { userId: assertDefined(u).id, actorId: assertDefined(a).id };
 }
 
 async function seedTask(
@@ -60,7 +61,7 @@ async function seedTask(
       createdBy,
     })
     .returning({ id: schema.task.id });
-  return t!.id;
+  return assertDefined(t).id;
 }
 
 async function recipients(eventId: string): Promise<{ userId: string; reason: string }[]> {
@@ -92,10 +93,10 @@ describe('emitEvent', () => {
       .from(schema.event)
       .where(and(eq(schema.event.organizationId, orgId), eq(schema.event.sourceSystem, 'docket')));
     expect(evs).toHaveLength(1);
-    expect(evs[0]!.kind).toBe('status_change');
-    expect(evs[0]!.entity?.externalId).toBe(taskId);
+    expect(assertDefined(evs[0]).kind).toBe('status_change');
+    expect(assertDefined(evs[0]).entity?.externalId).toBe(taskId);
 
-    const recips = await recipients(evs[0]!.id);
+    const recips = await recipients(assertDefined(evs[0]).id);
     expect(recips).toEqual([{ userId: assignee.userId, reason: 'owned' }]);
 
     const searchJobs = await db
@@ -106,20 +107,20 @@ describe('emitEvent', () => {
         sourceEventId: schema.searchIndexJob.sourceEventId,
       })
       .from(schema.searchIndexJob)
-      .where(eq(schema.searchIndexJob.sourceEventId, evs[0]!.id));
+      .where(eq(schema.searchIndexJob.sourceEventId, assertDefined(evs[0]).id));
     expect(searchJobs).toEqual(
       expect.arrayContaining([
         {
           sourceTable: 'event',
-          entityId: evs[0]!.id,
+          entityId: assertDefined(evs[0]).id,
           reason: 'event_log',
-          sourceEventId: evs[0]!.id,
+          sourceEventId: assertDefined(evs[0]).id,
         },
         {
           sourceTable: 'task',
           entityId: taskId,
           reason: 'event_log',
-          sourceEventId: evs[0]!.id,
+          sourceEventId: assertDefined(evs[0]).id,
         },
       ]),
     );
@@ -148,7 +149,7 @@ describe('emitEvent', () => {
       .from(schema.event)
       .where(and(eq(schema.event.organizationId, orgId), eq(schema.event.sourceSystem, 'docket')));
     expect(evs).toHaveLength(1);
-    expect(await recipients(evs[0]!.id)).toHaveLength(1);
+    expect(await recipients(assertDefined(evs[0]).id)).toHaveLength(1);
   });
 
   it("labels an assignee 'assignment' on an assignment event", async () => {
@@ -170,7 +171,7 @@ describe('emitEvent', () => {
       .select({ id: schema.event.id })
       .from(schema.event)
       .where(and(eq(schema.event.organizationId, orgId), eq(schema.event.kind, 'assignment')));
-    expect((await recipients(ev!.id))[0]).toEqual({
+    expect((await recipients(assertDefined(ev).id))[0]).toEqual({
       userId: assignee.userId,
       reason: 'assignment',
     });
@@ -196,7 +197,7 @@ describe('emitEvent', () => {
       .select({ id: schema.event.id })
       .from(schema.event)
       .where(and(eq(schema.event.organizationId, orgId), eq(schema.event.title, 'self change')));
-    const recips = await recipients(ev!.id);
+    const recips = await recipients(assertDefined(ev).id);
     expect(recips).toEqual([{ userId: creator.userId, reason: 'owned' }]);
   });
 });
@@ -225,10 +226,15 @@ describe('typed producers', () => {
       .from(schema.event)
       .where(and(eq(schema.event.organizationId, orgId), eq(schema.event.kind, 'timer_started')));
     // The task still carries the event, so its own history reads correctly …
-    expect(ev!.entity?.externalId).toBe(taskId);
-    expect(ev!.detail).toMatchObject({ schema: 'docket.timer', timeRecordId: 'tr_1' });
+    expect(assertDefined(ev).entity?.externalId).toBe(taskId);
+    expect(assertDefined(ev).detail).toMatchObject({
+      schema: 'docket.timer',
+      timeRecordId: 'tr_1',
+    });
     // … but the task's assignee/creator hears nothing about someone else's stopwatch.
-    expect(await recipients(ev!.id)).toEqual([{ userId: tracker.userId, reason: 'owned' }]);
+    expect(await recipients(assertDefined(ev).id)).toEqual([
+      { userId: tracker.userId, reason: 'owned' },
+    ]);
   });
 
   it('records freeform tracking with no canonical subject rather than dropping it', async () => {
@@ -250,9 +256,9 @@ describe('typed producers', () => {
       .select()
       .from(schema.event)
       .where(and(eq(schema.event.organizationId, orgId), eq(schema.event.kind, 'timer_stopped')));
-    expect(ev!.title).toBe('Stopped tracking Reading email');
-    expect(ev!.entity).toBeNull();
-    expect(ev!.entityKind).toBeNull();
+    expect(assertDefined(ev).title).toBe('Stopped tracking Reading email');
+    expect(assertDefined(ev).entity).toBeNull();
+    expect(assertDefined(ev).entityKind).toBeNull();
   });
 
   it('gives every timer transition its own verb and its own sentence', async () => {
@@ -327,12 +333,14 @@ describe('typed producers', () => {
     // Two fields moving in one mutation is ONE event — not one per field …
     expect(evs).toHaveLength(2);
     const multi = evs.find((e) => e.summary === 'Due, Project');
-    expect(multi!.detail).toMatchObject({
+    expect(assertDefined(multi).detail).toMatchObject({
       schema: 'docket.field_change',
       fields: ['dueDate', 'projectId'],
     });
     // … and the owner learns their task changed.
-    expect(await recipients(multi!.id)).toEqual([{ userId: owner.userId, reason: 'owned' }]);
+    expect(await recipients(assertDefined(multi).id)).toEqual([
+      { userId: owner.userId, reason: 'owned' },
+    ]);
   });
 
   it('says nothing when nothing moved, and names the fields when the subject has no title', async () => {
@@ -408,8 +416,10 @@ describe('typed producers', () => {
       .where(
         and(eq(schema.event.organizationId, orgId), eq(schema.event.kind, 'elicitation_requested')),
       );
-    expect(ev!.entityKind).toBe('agent_session');
-    expect(await recipients(ev!.id)).toEqual([{ userId: asked.userId, reason: 'awaiting_you' }]);
+    expect(assertDefined(ev).entityKind).toBe('agent_session');
+    expect(await recipients(assertDefined(ev).id)).toEqual([
+      { userId: asked.userId, reason: 'awaiting_you' },
+    ]);
   });
 
   it('records an expiry as actorless, so a timeout can never read as a human decision', async () => {
@@ -434,8 +444,8 @@ describe('typed producers', () => {
       .where(
         and(eq(schema.event.organizationId, orgId), eq(schema.event.kind, 'elicitation_expired')),
       );
-    expect(ev!.actor).toBeNull();
-    expect(ev!.detail).toMatchObject({ answer: null, autoResolvedValue: 'Acme' });
+    expect(assertDefined(ev).actor).toBeNull();
+    expect(assertDefined(ev).detail).toMatchObject({ answer: null, autoResolvedValue: 'Acme' });
   });
 
   it('grades agent milestones: a block waits on you, bare progress addresses nobody', async () => {
@@ -474,9 +484,12 @@ describe('typed producers', () => {
       .where(and(eq(schema.event.organizationId, orgId), eq(schema.event.kind, 'agent_blocked')));
 
     // Progress is still recorded and still reaches live observers — it just addresses no one.
-    expect(progress!.detail).toMatchObject({ parentSessionId: 'sess_1', progress: 40 });
-    expect(await recipients(progress!.id)).toEqual([]);
-    expect(await recipients(blocked!.id)).toEqual([
+    expect(assertDefined(progress).detail).toMatchObject({
+      parentSessionId: 'sess_1',
+      progress: 40,
+    });
+    expect(await recipients(assertDefined(progress).id)).toEqual([]);
+    expect(await recipients(assertDefined(blocked).id)).toEqual([
       { userId: owner.userId, reason: 'awaiting_you' },
     ]);
   });
@@ -525,12 +538,14 @@ describe('typed producers', () => {
       .select()
       .from(schema.event)
       .where(and(eq(schema.event.organizationId, orgId), eq(schema.event.kind, 'email_received')));
-    expect(ev!.entityKind).toBe('message');
-    expect(ev!.detail).toMatchObject({
+    expect(assertDefined(ev).entityKind).toBe('message');
+    expect(assertDefined(ev).detail).toMatchObject({
       schema: 'docket.inbound_email',
       fromAddress: 'dani@example.com',
       capturedEntityId: 'task_9',
     });
-    expect(await recipients(ev!.id)).toEqual([{ userId: mailbox.userId, reason: 'owned' }]);
+    expect(await recipients(assertDefined(ev).id)).toEqual([
+      { userId: mailbox.userId, reason: 'owned' },
+    ]);
   });
 });

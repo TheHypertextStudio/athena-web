@@ -13,6 +13,7 @@ import type * as EmitModule from '../../src/routes/event-emit';
 import type * as DrainModule from '../../src/routes/event-sync';
 import type * as RuntimeModule from '../../src/lib/automation/runtime';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 const runSpy = vi.fn<(event: unknown) => void>();
 
@@ -153,7 +154,12 @@ describe('hook site 2 — the external drain runs automation rules per created e
     const actor = one(
       await db
         .insert(schema.actor)
-        .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Ada',
+          userId: assertDefined(u).id,
+        })
         .returning({ id: schema.actor.id }),
     );
     const integration = one(

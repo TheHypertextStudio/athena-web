@@ -6,6 +6,7 @@ import type * as DbModule from '@docket/db';
 import type * as RulesModule from '../../src/lib/automation/rules-store';
 import type * as DrainModule from '../../src/routes/event-sync';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -31,9 +32,14 @@ async function seedUserActor(orgId: string): Promise<{ userId: string; actorId: 
     .returning({ id: schema.user.id });
   const [a] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
-  return { userId: u!.id, actorId: a!.id };
+  return { userId: assertDefined(u).id, actorId: assertDefined(a).id };
 }
 
 /** Seed a connected Linear integration owned by `actorId`. */
@@ -50,7 +56,7 @@ async function seedIntegration(orgId: string, actorId: string): Promise<string> 
       createdBy: actorId,
     })
     .returning({ id: schema.integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /**
@@ -81,7 +87,7 @@ async function seedInboundEvent(
 async function soleEvent(orgId: string) {
   const rows = await db.select().from(schema.event).where(eq(schema.event.organizationId, orgId));
   expect(rows).toHaveLength(1);
-  return rows[0]!;
+  return assertDefined(rows[0]);
 }
 
 describe('entity association in the drain', () => {
@@ -108,7 +114,7 @@ describe('entity association in the drain', () => {
 
     const row = await soleEvent(orgId);
     expect(row.entityAssociation).toBe('matched');
-    expect(row.docketEntityId).toBe(taskRow!.id);
+    expect(row.docketEntityId).toBe(assertDefined(taskRow).id);
   });
 
   it('leaves the resolved id out of the entity jsonb, so no consumer acts on it yet', async () => {
@@ -184,7 +190,9 @@ describe('entity association in the drain', () => {
       })
       .from(schema.searchIndexJob)
       .where(eq(schema.searchIndexJob.sourceEventId, row.id));
-    expect(jobs).toEqual(expect.arrayContaining([{ sourceTable: 'task', entityId: taskRow!.id }]));
+    expect(jobs).toEqual(
+      expect.arrayContaining([{ sourceTable: 'task', entityId: assertDefined(taskRow).id }]),
+    );
   });
 
   it('enqueues no entity reindex when the subject never resolved', async () => {
@@ -246,10 +254,10 @@ describe('entity association in the drain', () => {
       .values({
         organizationId: orgId,
         subjectType: 'task',
-        subjectId: taskRow!.id,
+        subjectId: assertDefined(taskRow).id,
         kind: 'email',
         title: 'Re: the thing',
-        sourceIntegrationId: mailIntg!.id,
+        sourceIntegrationId: assertDefined(mailIntg).id,
         externalId: 'thread-abc',
       })
       .returning({ id: schema.attachment.id });
@@ -269,8 +277,8 @@ describe('entity association in the drain', () => {
     const [after] = await db
       .select({ lastEmailStateAction: schema.attachment.lastEmailStateAction })
       .from(schema.attachment)
-      .where(eq(schema.attachment.id, attachmentRow!.id));
-    expect(after!.lastEmailStateAction).toBe('mail.archive');
+      .where(eq(schema.attachment.id, assertDefined(attachmentRow).id));
+    expect(assertDefined(after).lastEmailStateAction).toBe('mail.archive');
   });
 
   it('leaves the mail thread alone when the completion resolves to no Docket task', async () => {

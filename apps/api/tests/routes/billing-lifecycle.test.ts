@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type billingRouter from '../../src/routes/billing';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -34,7 +35,7 @@ async function lifecycleOf(
     .from(schema.organization)
     .where(eq(schema.organization.id, orgId))
     .limit(1);
-  return rows[0]!;
+  return assertDefined(rows[0]);
 }
 
 // A valid ULID-shaped id that no seeded row uses (a path-level org id mismatch).
@@ -80,7 +81,9 @@ describe('billing lifecycle: POST /lifecycle/start-export-window', () => {
     expect(body.exportReadyAt).not.toBeNull();
     expect(body.deleteAfterAt).not.toBeNull();
     // deleteAfterAt is ~14 days after exportReadyAt.
-    const delta = new Date(body.deleteAfterAt!).getTime() - new Date(body.exportReadyAt!).getTime();
+    const delta =
+      new Date(assertDefined(body.deleteAfterAt)).getTime() -
+      new Date(assertDefined(body.exportReadyAt)).getTime();
     expect(delta).toBe(14 * 24 * 60 * 60 * 1000);
 
     const persisted = await lifecycleOf(orgId);

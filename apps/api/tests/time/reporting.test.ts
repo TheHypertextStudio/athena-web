@@ -18,6 +18,7 @@ import type {
   listOrganizationTimeSubmissions as ListOrganizationTimeSubmissions,
 } from '../../src/time/reporting';
 import { addMember, getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -85,8 +86,8 @@ async function seedRecord(
   intervals: readonly IntervalSpec[],
   allocations: readonly AllocationSpec[],
 ): Promise<string> {
-  const start = new Date(ANCHOR + intervals[0]!.startMin * 60_000);
-  const end = new Date(ANCHOR + intervals[intervals.length - 1]!.endMin * 60_000);
+  const start = new Date(ANCHOR + assertDefined(intervals[0]).startMin * 60_000);
+  const end = new Date(ANCHOR + assertDefined(intervals[intervals.length - 1]).endMin * 60_000);
   const recordId = one(
     await db
       .insert(schema.timeRecord)

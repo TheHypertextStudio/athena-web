@@ -19,6 +19,7 @@ import { listWork } from '../../src/mcp/list-work';
 import { stateOptionsOf, stateTypeOf, teamWorkflows } from '../../src/mcp/workflow-states';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -60,7 +61,7 @@ async function seedTeams(): Promise<{
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [renamed] = await db
     .insert(schema.team)
@@ -87,7 +88,12 @@ async function seedTeams(): Promise<{
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada' })
     .returning({ id: schema.actor.id });
 
-  return { orgId, renamed: renamed!.id, other: other!.id, actorId: author!.id };
+  return {
+    orgId,
+    renamed: assertDefined(renamed).id,
+    other: assertDefined(other).id,
+    actorId: assertDefined(author).id,
+  };
 }
 
 describe('teamWorkflows', () => {

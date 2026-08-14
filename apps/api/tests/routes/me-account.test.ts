@@ -12,6 +12,7 @@ import {
   seedOrg,
   seedUserWithHub,
 } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 /** The migrated db module + the lazily-imported me-account router (both memoized). */
 async function setup() {
@@ -283,7 +284,7 @@ describe('DELETE /me/account (schedule deletion)', () => {
     expect(h.state).toBe('pending_deletion');
 
     expect(outbox).toHaveLength(before + 1);
-    const sent = outbox[outbox.length - 1]!;
+    const sent = assertDefined(outbox[outbox.length - 1]);
     expect(sent.to).toBe('ada@example.com');
     expect(sent.subject).toContain('scheduled for deletion');
     const intent = await notificationIntentForSubject(schema, sent.subject, userId);
@@ -336,7 +337,7 @@ describe('POST /me/account/reactivation', () => {
     expect(((await res.json()) as { deletionState: string }).deletionState).toBe('active');
 
     expect(outbox).toHaveLength(before + 1);
-    const sent = outbox[outbox.length - 1]!;
+    const sent = assertDefined(outbox[outbox.length - 1]);
     expect(sent.to).toBe('ada@example.com');
     expect(sent.subject).toContain('deletion was canceled');
     const intent = await notificationIntentForSubject(schema, sent.subject, userId);

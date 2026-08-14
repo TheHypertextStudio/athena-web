@@ -13,6 +13,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DeliveryModule from '../../src/routes/inbound-mail-delivery';
 import { getDb, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -235,7 +236,7 @@ describe('deliverInboundMail: field-level fallbacks on the stored row', () => {
       .where(eq(schema.athenaInboundMessage.ownerUserId, userId));
     expect(row?.receivedAt).toBeInstanceOf(Date);
     expect(Number.isNaN(row?.receivedAt.getTime())).toBe(false);
-    expect(row!.receivedAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(assertDefined(row).receivedAt.getTime()).toBeGreaterThanOrEqual(before);
   });
 
   it('is a duplicate on a redelivered providerMessageId, and reports the earlier message id', async () => {

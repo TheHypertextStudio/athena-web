@@ -13,6 +13,7 @@ import type {
 import type * as ReconcileGraph from '../../src/routes/integration-reconcile-graph';
 import { ConflictError } from '../../src/error';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * Direct unit tests for `integration-reconcile-graph.ts`'s exported single-entity appliers
@@ -582,7 +583,7 @@ describe('applyWorkItem — state resolution fallbacks', () => {
           organizationId: orgId,
           teamId,
           title: 'Existing',
-          state: defaultWorkflowStates[0]!.key,
+          state: assertDefined(defaultWorkflowStates[0]).key,
           source: 'linked',
           sourceIntegrationId: integrationId,
           externalId: 'item-1',
@@ -614,7 +615,7 @@ describe('applyWorkItem — triage folding and implicit lifecycle stamps', () =>
     const created = one(
       await db.select().from(schema.task).where(eq(schema.task.sourceIntegrationId, integrationId)),
     );
-    const backlogKey = defaultWorkflowStates.find((s) => s.type === 'backlog')!.key;
+    const backlogKey = assertDefined(defaultWorkflowStates.find((s) => s.type === 'backlog')).key;
     expect(created.state).toBe(backlogKey);
   });
 

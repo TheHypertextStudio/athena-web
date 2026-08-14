@@ -15,6 +15,7 @@ import type * as AgentRuntimeModule from '@docket/agent-runtime';
 import type { driveSession as DriveSession } from '../../src/agent/loop';
 import type { assertAgentSessionsEntitled as Assert } from '../../src/billing/entitlement';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
+import { assertDefined } from '@docket/test-utils';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -57,26 +58,31 @@ async function seedOrg(
     .returning({ id: schema.user.id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: org!.id, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: assertDefined(org).id,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
-  const agent = await ensureDefaultAgent(org!.id, human!.id);
+  const agent = await ensureDefaultAgent(assertDefined(org).id, assertDefined(human).id);
   const [session] = await db
     .insert(schema.agentSession)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       agentId: agent.id,
       trigger: 'delegation',
       status: 'pending',
-      initiatorId: human!.id,
+      initiatorId: assertDefined(human).id,
     })
     .returning({ id: schema.agentSession.id });
   await db.insert(schema.sessionActivity).values({
-    sessionId: session!.id,
-    organizationId: org!.id,
+    sessionId: assertDefined(session).id,
+    organizationId: assertDefined(org).id,
     type: 'response',
     body: { text: 'Plan my day.' },
   });
-  return { orgId: org!.id, sessionId: session!.id };
+  return { orgId: assertDefined(org).id, sessionId: assertDefined(session).id };
 }
 
 const TEXT_ONLY: readonly AgentRuntimeModule.ScriptedTurn[] = [
@@ -117,7 +123,7 @@ describe('assertAgentSessionsEntitled', () => {
     await db
       .update(billingExemption)
       .set({ revokedAt: new Date() })
-      .where(eq(billingExemption.id, grant!.id));
+      .where(eq(billingExemption.id, assertDefined(grant).id));
     await expect(assertAgentSessionsEntitled(lapsed.orgId)).rejects.toMatchObject({
       status: 402,
       code: 'agent_plan_required',

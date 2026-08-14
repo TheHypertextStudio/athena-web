@@ -5,6 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type milestonesRouter from '../../src/routes/milestones';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -27,7 +28,7 @@ async function seedProject(orgId: string, teamId: string, createdBy: string): Pr
     .insert(schema.project)
     .values({ organizationId: orgId, name: 'Proj', teamId, createdBy })
     .returning({ id: schema.project.id });
-  return proj!.id;
+  return assertDefined(proj).id;
 }
 
 /** Create a milestone row directly in the db (bypassing the router) and return its id. */
@@ -36,7 +37,7 @@ async function seedMilestone(orgId: string, projectId: string, createdBy: string
     .insert(schema.milestone)
     .values({ organizationId: orgId, projectId, name: 'M', createdBy })
     .returning({ id: schema.milestone.id });
-  return m!.id;
+  return assertDefined(m).id;
 }
 
 describe('milestones detail: tenant isolation', () => {
@@ -118,7 +119,7 @@ describe('milestones detail: delete nulls referencing tasks', () => {
         milestoneId,
       })
       .returning({ id: schema.task.id });
-    const taskId = t!.id;
+    const taskId = assertDefined(t).id;
 
     const deleted = await writer.request(`/${milestoneId}`, { method: 'DELETE' });
     expect(deleted.status).toBe(200);

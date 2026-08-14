@@ -24,6 +24,7 @@ import {
 } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 import { seedConsentedClient, seedSkipConsentClient } from '../support/oauth-grant';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -66,7 +67,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [r] = await db
     .insert(schema.role)
@@ -77,21 +78,21 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       capabilities: [...capabilities],
     })
     .returning({ id: schema.role.id });
-  const roleId = r!.id;
+  const roleId = assertDefined(r).id;
 
   const email = `${slug}@e.com`;
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email })
     .returning({ id: schema.user.id });
-  const userId = u!.id;
+  const userId = assertDefined(u).id;
   await db.insert(schema.hub).values({ userId });
 
   const [human] = await db
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, roleId })
     .returning({ id: schema.actor.id });
-  const actorId = human!.id;
+  const actorId = assertDefined(human).id;
 
   if (capabilities.length > 0) {
     await db.insert(schema.grant).values({
@@ -113,13 +114,13 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       key: `C${Math.random().toString(36).slice(2, 6)}`,
     })
     .returning({ id: schema.team.id });
-  const teamId = t!.id;
+  const teamId = assertDefined(t).id;
 
   const [tk] = await db
     .insert(schema.task)
     .values({ organizationId: orgId, title: 'Ship', teamId, state: 'todo', createdBy: actorId })
     .returning({ id: schema.task.id });
-  return { userId, orgId, teamId, taskId: tk!.id, email };
+  return { userId, orgId, teamId, taskId: assertDefined(tk).id, email };
 }
 
 const harnesses: { close(): Promise<void> }[] = [];
@@ -153,7 +154,7 @@ async function connect(
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
 });
 
 function payload(res: CallToolResult): Record<string, unknown> {

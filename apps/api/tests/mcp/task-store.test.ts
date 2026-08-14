@@ -22,6 +22,7 @@ import {
   waitForTaskInputResponse,
 } from '../../src/mcp/task-store';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 
@@ -360,12 +361,12 @@ describe('taskStoreForContext', () => {
         .insert(schema.organization)
         .values({ name: slug, slug, lifecycleState: 'active' })
         .returning({ id: schema.organization.id });
-      const orgId = org!.id;
+      const orgId = assertDefined(org).id;
       const [team] = await schema.db
         .insert(schema.team)
         .values({ organizationId: orgId, name: 'General', key: 'GEN' })
         .returning({ id: schema.team.id });
-      const teamId = team!.id;
+      const teamId = assertDefined(team).id;
 
       // Finished or non-executing Docket work: none of this is a task-store row, by
       // construction (mcp_task rows are only ever created by task-store.ts::createTask, called

@@ -12,6 +12,7 @@ import {
   one,
   seedUserWithHub,
 } from '../../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -207,10 +208,10 @@ describe('the morning agenda review — propose, defer, confirm', () => {
       await directive.request(`/day-start/decide?date=${DAY}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ key: first!.key, decision: 'keep' }),
+        body: JSON.stringify({ key: assertDefined(first).key, decision: 'keep' }),
       })
     ).json()) as DayStartOut;
-    expect(kept.proposals.find((p) => p.key === first!.key)?.decision).toBe('kept');
+    expect(kept.proposals.find((p) => p.key === assertDefined(first).key)?.decision).toBe('kept');
     expect(kept.confirm.outstanding).toBe(opening.confirm.outstanding - 1);
     expect(kept.confirm.available).toBe(false);
 
@@ -219,19 +220,19 @@ describe('the morning agenda review — propose, defer, confirm', () => {
     const deferRes = await directive.request(`/day-start/decide?date=${DAY}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ key: second!.key, decision: 'defer' }),
+      body: JSON.stringify({ key: assertDefined(second).key, decision: 'defer' }),
     });
     expect(deferRes.status).toBe(200);
     const [movedRow] = await db
       .select({ startsAt: schema.calendarItem.startsAt })
       .from(schema.calendarItem)
-      .where(eq(schema.calendarItem.id, second!.calendarItemId));
+      .where(eq(schema.calendarItem.id, assertDefined(second).calendarItemId));
     expect(movedRow?.startsAt?.toISOString().slice(0, 10)).toBe('2026-10-07');
 
     // The deferred block is gone from today, and the decision was persisted rather than held in
     // whichever page happened to make it.
     const afterDefer = (await deferRes.json()) as DayStartOut;
-    expect(afterDefer.proposals.map((p) => p.key)).not.toContain(second!.key);
+    expect(afterDefer.proposals.map((p) => p.key)).not.toContain(assertDefined(second).key);
     const [directiveRow] = await db
       .select({ decisions: schema.dayDirective.morningDecisions })
       .from(schema.dayDirective)
@@ -239,7 +240,7 @@ describe('the morning agenda review — propose, defer, confirm', () => {
     expect(directiveRow?.decisions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          key: second!.key,
+          key: assertDefined(second).key,
           decision: 'deferred',
           deferredTo: '2026-10-07',
         }),
@@ -272,7 +273,7 @@ describe('the morning agenda review — propose, defer, confirm', () => {
     const opening = (await (
       await directive.request(`/day-start?date=${DAY}`)
     ).json()) as DayStartOut;
-    const key = opening.proposals[0]!.key;
+    const key = assertDefined(opening.proposals[0]).key;
     for (let i = 0; i < 3; i += 1) {
       await directive.request(`/day-start/decide?date=${DAY}`, {
         method: 'POST',

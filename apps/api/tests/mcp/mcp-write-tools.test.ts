@@ -12,6 +12,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -38,7 +39,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [role] = await db
     .insert(schema.role)
@@ -55,7 +56,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .insert(schema.user)
     .values({ name: 'Ada', email })
     .returning({ id: schema.user.id });
-  const userId = user!.id;
+  const userId = assertDefined(user).id;
 
   const [human] = await db
     .insert(schema.actor)
@@ -64,7 +65,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       kind: 'human',
       displayName: 'Ada',
       userId,
-      roleId: role!.id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
 
@@ -72,7 +73,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     await db.insert(schema.grant).values({
       organizationId: orgId,
       subjectKind: 'role',
-      subjectId: role!.id,
+      subjectId: assertDefined(role).id,
       resourceKind: 'organization',
       resourceId: orgId,
       capabilities: [...capabilities],
@@ -92,8 +93,8 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
   return {
     userId,
     orgId,
-    teamId: team!.id,
-    actorId: human!.id,
+    teamId: assertDefined(team).id,
+    actorId: assertDefined(human).id,
     ctx: {
       principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
@@ -122,7 +123,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   resetAuthMocks();
 });
 
@@ -338,7 +339,7 @@ describe('change-set provenance', () => {
         createdBy: s.actorId,
       })
       .returning({ id: schema.task.id });
-    expect(await originOf('task', other!.id)).toBeNull();
+    expect(await originOf('task', assertDefined(other).id)).toBeNull();
   });
 
   it('leaves provenance_source alone — authorship is a different axis', async () => {

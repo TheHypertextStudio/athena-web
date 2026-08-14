@@ -8,6 +8,7 @@ import { onError } from '../../src/error';
 import { fakeSession, getDb } from '../support/routes-harness';
 import { capabilityGuard } from '../../src/permissions/capability-guard';
 import { orgContextMiddleware } from '../../src/permissions/org-context-middleware';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -42,13 +43,13 @@ describe('orgContextMiddleware', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
-    const orgId = org!.id;
+    const orgId = assertDefined(org).id;
 
     const [user] = await db
       .insert(schema.user)
       .values({ name: 'Ada', email: `${slug}@e.com` })
       .returning({ id: schema.user.id });
-    const userId = user!.id;
+    const userId = assertDefined(user).id;
 
     const [r] = await db
       .insert(schema.role)
@@ -60,7 +61,7 @@ describe('orgContextMiddleware', () => {
         capabilities: ['view', 'contribute'],
       })
       .returning({ id: schema.role.id });
-    const roleId = r!.id;
+    const roleId = assertDefined(r).id;
 
     const [a] = await db
       .insert(schema.actor)
@@ -76,7 +77,7 @@ describe('orgContextMiddleware', () => {
       capabilities: string[];
     };
     expect(ctx.orgId).toBe(orgId);
-    expect(ctx.actorId).toBe(a!.id);
+    expect(ctx.actorId).toBe(assertDefined(a).id);
     expect(ctx.roleId).toBe(roleId);
     expect(ctx.capabilities).toEqual(['view', 'contribute']);
   });
@@ -87,12 +88,12 @@ describe('orgContextMiddleware', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
-    const orgId = org!.id;
+    const orgId = assertDefined(org).id;
     const [user] = await db
       .insert(schema.user)
       .values({ name: 'Bo', email: `${slug}@e.com` })
       .returning({ id: schema.user.id });
-    const userId = user!.id;
+    const userId = assertDefined(user).id;
     await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Bo', userId });
@@ -124,7 +125,7 @@ describe('orgContextMiddleware', () => {
     const [roleB] = await db
       .insert(schema.role)
       .values({
-        organizationId: orgB!.id,
+        organizationId: assertDefined(orgB).id,
         key: 'owner',
         name: 'Owner',
         isSystem: true,
@@ -136,22 +137,22 @@ describe('orgContextMiddleware', () => {
       .insert(schema.user)
       .values({ name: 'Eve', email: `${slugA}@e.com` })
       .returning({ id: schema.user.id });
-    const userId = user!.id;
+    const userId = assertDefined(user).id;
 
     // The org-A actor carries org B's roleId (the cross-org confusion vector).
     await db.insert(schema.actor).values({
-      organizationId: orgA!.id,
+      organizationId: assertDefined(orgA).id,
       kind: 'human',
       displayName: 'Eve',
       userId,
-      roleId: roleB!.id,
+      roleId: assertDefined(roleB).id,
     });
 
-    const res = await ctxApp(fakeSession(userId)).request(`/${orgA!.id}/probe`);
+    const res = await ctxApp(fakeSession(userId)).request(`/${assertDefined(orgA).id}/probe`);
     expect(res.status).toBe(200);
     const ctx = (await res.json()) as { roleId: string | null; capabilities: string[] };
     // The actor's roleId field is still surfaced, but the join confers NO capabilities.
-    expect(ctx.roleId).toBe(roleB!.id);
+    expect(ctx.roleId).toBe(assertDefined(roleB).id);
     expect(ctx.capabilities).toEqual([]);
   });
 
@@ -161,7 +162,9 @@ describe('orgContextMiddleware', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
-    const res = await ctxApp(fakeSession('user_not_a_member')).request(`/${org!.id}/probe`);
+    const res = await ctxApp(fakeSession('user_not_a_member')).request(
+      `/${assertDefined(org).id}/probe`,
+    );
     expect(res.status).toBe(404);
   });
 

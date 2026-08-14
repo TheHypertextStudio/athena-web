@@ -21,6 +21,7 @@ import type {
   runWidgetTool as RunWidgetTool,
 } from '../../src/mcp/apps/host-routes';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -46,7 +47,7 @@ async function seedConnection(url: string): Promise<{ userId: string; connection
   const [row] = await db
     .insert(schema.personalMcpConnection)
     .values({
-      ownerUserId: user!.id,
+      ownerUserId: assertDefined(user).id,
       url,
       name: 'Acme Release Tracker',
       alias: slug.replace(/-/g, ''),
@@ -55,7 +56,7 @@ async function seedConnection(url: string): Promise<{ userId: string; connection
       toolCount: 2,
     })
     .returning({ id: schema.personalMcpConnection.id });
-  return { userId: user!.id, connectionId: row!.id };
+  return { userId: assertDefined(user).id, connectionId: assertDefined(row).id };
 }
 
 describe('rendering a widget-bearing tool', () => {

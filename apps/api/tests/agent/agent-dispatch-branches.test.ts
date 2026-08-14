@@ -19,6 +19,7 @@ import type {
   recordCurrentStep as RecordCurrentStep,
 } from '../../src/routes/agent-dispatch';
 import { getDb, seedBaseOrg, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -82,7 +83,7 @@ describe('dispatchAthenaWork with no team to land in', () => {
       ownerUserId,
       prompt: 'Plan the thing',
       organizationId: orgId,
-      initiatorActorId: actor!.id,
+      initiatorActorId: assertDefined(actor).id,
     });
     expect(dispatched.taskId).toBeNull();
     expect(dispatched.parent).toBeNull();
@@ -110,22 +111,24 @@ describe('parentColumns files work under every referenceable container kind', ()
       ownerUserId,
       prompt: 'Get ready for the Zephyrfest roadmap review',
       organizationId: orgId,
-      initiatorActorId: (
-        await db
-          .select({ id: schema.actor.id })
-          .from(schema.actor)
-          .where(eq(schema.actor.organizationId, orgId))
-          .limit(1)
-      )[0]!.id,
+      initiatorActorId: assertDefined(
+        (
+          await db
+            .select({ id: schema.actor.id })
+            .from(schema.actor)
+            .where(eq(schema.actor.organizationId, orgId))
+            .limit(1)
+        )[0],
+      ).id,
     });
 
     expect(dispatched.parent?.parent?.kind).toBe('program');
-    expect(dispatched.parent?.parent?.id).toBe(program!.id);
+    expect(dispatched.parent?.parent?.id).toBe(assertDefined(program).id);
     const rows = await db
       .select({ programId: schema.task.programId, projectId: schema.task.projectId })
       .from(schema.task)
-      .where(eq(schema.task.id, dispatched.taskId!));
-    expect(rows[0]?.programId).toBe(program!.id);
+      .where(eq(schema.task.id, assertDefined(dispatched.taskId)));
+    expect(rows[0]?.programId).toBe(assertDefined(program).id);
     expect(rows[0]?.projectId).toBeNull();
     // A team must still exist for the task to land somewhere assignable.
     expect(teamId).toEqual(expect.any(String));
@@ -142,29 +145,35 @@ describe('parentColumns files work under every referenceable container kind', ()
       .returning({ id: schema.project.id });
     const [milestone] = await db
       .insert(schema.milestone)
-      .values({ organizationId: orgId, projectId: project!.id, name: 'Zephyrfest Launch Party' })
+      .values({
+        organizationId: orgId,
+        projectId: assertDefined(project).id,
+        name: 'Zephyrfest Launch Party',
+      })
       .returning({ id: schema.milestone.id });
 
     const dispatched = await dispatchAthenaWork({
       ownerUserId,
       prompt: 'Finish planning the Zephyrfest launch party',
       organizationId: orgId,
-      initiatorActorId: (
-        await db
-          .select({ id: schema.actor.id })
-          .from(schema.actor)
-          .where(eq(schema.actor.organizationId, orgId))
-          .limit(1)
-      )[0]!.id,
+      initiatorActorId: assertDefined(
+        (
+          await db
+            .select({ id: schema.actor.id })
+            .from(schema.actor)
+            .where(eq(schema.actor.organizationId, orgId))
+            .limit(1)
+        )[0],
+      ).id,
     });
 
     expect(dispatched.parent?.parent?.kind).toBe('milestone');
-    expect(dispatched.parent?.parent?.id).toBe(milestone!.id);
+    expect(dispatched.parent?.parent?.id).toBe(assertDefined(milestone).id);
     const rows = await db
       .select({ milestoneId: schema.task.milestoneId, projectId: schema.task.projectId })
       .from(schema.task)
-      .where(eq(schema.task.id, dispatched.taskId!));
-    expect(rows[0]?.milestoneId).toBe(milestone!.id);
+      .where(eq(schema.task.id, assertDefined(dispatched.taskId)));
+    expect(rows[0]?.milestoneId).toBe(assertDefined(milestone).id);
     expect(rows[0]?.projectId).toBeNull();
   });
 });

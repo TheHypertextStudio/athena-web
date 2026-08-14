@@ -24,6 +24,7 @@ import {
 } from '../support/routes-harness';
 import type hubRouter from '../../src/routes/hub';
 import type streamRouter from '../../src/routes/stream';
+import { assertDefined } from '@docket/test-utils';
 
 type StreamPage = z.infer<typeof StreamPageOut>;
 
@@ -47,7 +48,7 @@ async function seedUser(): Promise<string> {
     .insert(schema.user)
     .values({ name: 'U', email: `stream-${String(seq)}@e.com` })
     .returning({ id: schema.user.id });
-  return u!.id;
+  return assertDefined(u).id;
 }
 
 async function joinOrg(userId: string, orgId: string): Promise<string> {
@@ -55,7 +56,7 @@ async function joinOrg(userId: string, orgId: string): Promise<string> {
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'U', userId })
     .returning({ id: schema.actor.id });
-  return membership!.id;
+  return assertDefined(membership).id;
 }
 
 interface EventOpts {
@@ -80,7 +81,7 @@ async function seedEvent(orgId: string, opts: EventOpts): Promise<string> {
       dedupeKey: `k-${String(seq)}`,
     })
     .returning({ id: schema.event.id });
-  return o!.id;
+  return assertDefined(o).id;
 }
 
 async function recip(eventId: string, userId: string, orgId: string, at: Date): Promise<void> {
@@ -159,7 +160,7 @@ describe('GET /v1/hub/stream (membership-wide timeline)', () => {
 
     const body = await page(await appWithSession(hub, fakeSession(userId)).request('/stream'));
     expect(body.items).toHaveLength(1);
-    expect(body.items[0]!.actorIsViewer).toBe(true);
+    expect(assertDefined(body.items[0]).actorIsViewer).toBe(true);
   });
 
   it('applies the system quick-filter', async () => {
@@ -167,7 +168,7 @@ describe('GET /v1/hub/stream (membership-wide timeline)', () => {
     const res = await appWithSession(hub, fakeSession(userId)).request('/stream?system=linear');
     const body = await page(res);
     expect(body.items).toHaveLength(1);
-    expect(body.items[0]!.kind).toBe('mention');
+    expect(assertDefined(body.items[0]).kind).toBe('mention');
   });
 
   it('applies an attribute filter (kind in […]) from the base64 filter param', async () => {
@@ -184,7 +185,9 @@ describe('GET /v1/hub/stream (membership-wide timeline)', () => {
     const first = await page(await app.request('/stream?limit=2'));
     expect(first.items.map((i) => i.kind)).toEqual(['comment', 'status_change']);
     expect(first.nextCursor).toBeDefined();
-    const second = await page(await app.request(`/stream?limit=2&cursor=${first.nextCursor!}`));
+    const second = await page(
+      await app.request(`/stream?limit=2&cursor=${assertDefined(first.nextCursor)}`),
+    );
     expect(second.items.map((i) => i.kind)).toEqual(['mention']);
     expect(second.nextCursor).toBeUndefined();
   });
@@ -258,7 +261,7 @@ describe('GET /v1/orgs/:orgId/stream (workspace firehose)', () => {
       .returning({ id: schema.savedView.id });
 
     const app = appWithActor(stream, orgId, ['view']);
-    const body = await page(await app.request(`/?viewId=${view!.id}`));
+    const body = await page(await app.request(`/?viewId=${assertDefined(view).id}`));
     // Before this was wired, `?viewId` validated and was then dropped — the caller got a 200 and
     // the whole unfiltered firehose, which reads as "the filter matched everything".
     expect(body.items.map((i) => i.title)).toEqual(['A']);
@@ -281,7 +284,9 @@ describe('GET /v1/orgs/:orgId/stream (workspace firehose)', () => {
       JSON.stringify([{ field: 'kind', op: 'eq', value: 'created' }]),
     ).toString('base64url');
     const app = appWithActor(stream, orgId, ['view']);
-    const body = await page(await app.request(`/?viewId=${view!.id}&filter=${inline}`));
+    const body = await page(
+      await app.request(`/?viewId=${assertDefined(view).id}&filter=${inline}`),
+    );
     // The two compose with AND, as the route documents.
     expect(body.items.map((i) => i.title)).toEqual(['B']);
   });
@@ -295,7 +300,7 @@ describe('GET /v1/orgs/:orgId/stream (workspace firehose)', () => {
       .returning({ id: schema.savedView.id });
 
     const app = appWithActor(stream, mine.orgId, ['view']);
-    const res = await app.request(`/?viewId=${view!.id}`);
+    const res = await app.request(`/?viewId=${assertDefined(view).id}`);
     expect(res.status).toBe(404);
   });
 });

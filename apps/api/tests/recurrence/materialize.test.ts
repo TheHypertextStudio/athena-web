@@ -56,6 +56,7 @@ import {
 import { materializeOccurrence } from '../../src/lib/recurrence/materialize';
 import { advanceCompletedProcessTask } from '../../src/lib/recurrence/advance';
 import { loadGeneratedWorkRecurrence } from '../../src/lib/recurrence/series';
+import { assertDefined } from '@docket/test-utils';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
@@ -141,42 +142,46 @@ async function calendarSeries(
   revisionId: string,
   startDate = '2026-09-01',
 ): Promise<{ seriesId: string; seriesRevisionId: string }> {
-  const series = (
-    await db
-      .insert(recurrenceSeries)
-      .values({
-        organizationId,
-        definitionId,
-        name: 'Book Club Season',
-        createdBy: actorId,
-      })
-      .returning()
-  )[0]!;
-  const revision = (
-    await db
-      .insert(recurrenceSeriesRevision)
-      .values({
-        organizationId,
-        seriesId: series.id,
-        processRevisionId: revisionId,
-        number: 1,
-        effectiveFrom: startDate,
-        triggerKind: 'calendar',
-        scheduleKind: 'monthly',
-        interval: 2,
-        startDate,
-        timezone: 'America/Los_Angeles',
-        endKind: 'never',
-        monthlyPatternKind: 'day_of_month',
-        monthDay: 1,
-        overflow: 'skip',
-        missedPolicy: 'resolve',
-        horizonDays: 28,
-        minimumOccurrences: 2,
-        createdBy: actorId,
-      })
-      .returning()
-  )[0]!;
+  const series = assertDefined(
+    (
+      await db
+        .insert(recurrenceSeries)
+        .values({
+          organizationId,
+          definitionId,
+          name: 'Book Club Season',
+          createdBy: actorId,
+        })
+        .returning()
+    )[0],
+  );
+  const revision = assertDefined(
+    (
+      await db
+        .insert(recurrenceSeriesRevision)
+        .values({
+          organizationId,
+          seriesId: series.id,
+          processRevisionId: revisionId,
+          number: 1,
+          effectiveFrom: startDate,
+          triggerKind: 'calendar',
+          scheduleKind: 'monthly',
+          interval: 2,
+          startDate,
+          timezone: 'America/Los_Angeles',
+          endKind: 'never',
+          monthlyPatternKind: 'day_of_month',
+          monthDay: 1,
+          overflow: 'skip',
+          missedPolicy: 'resolve',
+          horizonDays: 28,
+          minimumOccurrences: 2,
+          createdBy: actorId,
+        })
+        .returning()
+    )[0],
+  );
   return { seriesId: series.id, seriesRevisionId: revision.id };
 }
 
@@ -186,25 +191,29 @@ describe('process materialization', () => {
     const migrated = drizzle(client, { schema: fullSchema });
     await migrate(migrated, { migrationsFolder: MIGRATIONS });
     db = migrated;
-    organizationId = (
-      await db
-        .insert(organization)
-        .values({ name: 'Repeating work tests', slug: `repeat-api-${Date.now()}` })
-        .returning()
-    )[0]!.id;
+    organizationId = assertDefined(
+      (
+        await db
+          .insert(organization)
+          .values({ name: 'Repeating work tests', slug: `repeat-api-${Date.now()}` })
+          .returning()
+      )[0],
+    ).id;
     teamId = TeamId.parse(
       await db
         .insert(team)
         .values({ organizationId, name: 'Community Programs', key: 'COMMUNITY' })
         .returning()
-        .then((rows) => rows[0]!.id),
+        .then((rows) => assertDefined(rows[0]).id),
     );
-    actorId = (
-      await db
-        .insert(actor)
-        .values({ organizationId, kind: 'agent', displayName: 'Test coordinator' })
-        .returning()
-    )[0]!.id;
+    actorId = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({ organizationId, kind: 'agent', displayName: 'Test coordinator' })
+          .returning()
+      )[0],
+    ).id;
     const labels = await db
       .insert(label)
       .values([
@@ -212,8 +221,8 @@ describe('process materialization', () => {
         { organizationId, name: 'Reporting', color: 'green' },
       ])
       .returning();
-    promotionLabelId = LabelId.parse(labels[0]!.id);
-    reportingLabelId = LabelId.parse(labels[1]!.id);
+    promotionLabelId = LabelId.parse(assertDefined(labels[0]).id);
+    reportingLabelId = LabelId.parse(assertDefined(labels[1]).id);
   });
 
   afterAll(async () => {
@@ -223,7 +232,7 @@ describe('process materialization', () => {
   it('rejects cycles across dependencies and completion timing before writing', () => {
     const definition = bookClubDefinition();
     definition.tasks[0] = {
-      ...definition.tasks[0]!,
+      ...assertDefined(definition.tasks[0]),
       timing: { kind: 'after_step_completion', stepKey: 'report', offsetDays: 0 },
     };
     expect(() => {
@@ -307,14 +316,14 @@ describe('process materialization', () => {
       .returning();
     const qualified = bookClubDefinition();
     qualified.project = {
-      ...qualified.project!,
+      ...assertDefined(qualified.project),
       description: 'A complete reusable season for one book.',
       leadId: ActorId.parse(actorId),
-      programId: ProgramId.parse(owningProgram!.id),
+      programId: ProgramId.parse(assertDefined(owningProgram).id),
       health: 'on_track',
     };
     qualified.tasks[0] = {
-      ...qualified.tasks[0]!,
+      ...assertDefined(qualified.tasks[0]),
       description: 'Publish the announcement with the registration link.',
       state: 'todo',
       assigneeId: ActorId.parse(actorId),
@@ -331,7 +340,7 @@ describe('process materialization', () => {
     expect(fullDetail.revision.project).toMatchObject({
       description: 'A complete reusable season for one book.',
       leadId: actorId,
-      programId: owningProgram!.id,
+      programId: assertDefined(owningProgram).id,
       health: 'on_track',
     });
     expect(fullDetail.revision.tasks[0]).toMatchObject({
@@ -361,7 +370,7 @@ describe('process materialization', () => {
       .insert(milestone)
       .values({
         organizationId,
-        projectId: sourceProject!.id,
+        projectId: assertDefined(sourceProject).id,
         name: 'Workshop day',
         targetDate: new Date('2026-09-18T00:00:00.000Z'),
       })
@@ -371,8 +380,8 @@ describe('process materialization', () => {
       .values([
         {
           organizationId,
-          projectId: sourceProject!.id,
-          milestoneId: sourceMilestone!.id,
+          projectId: assertDefined(sourceProject).id,
+          milestoneId: assertDefined(sourceMilestone).id,
           teamId,
           title: 'Publish the event',
           state: 'backlog',
@@ -381,7 +390,7 @@ describe('process materialization', () => {
         },
         {
           organizationId,
-          projectId: sourceProject!.id,
+          projectId: assertDefined(sourceProject).id,
           teamId,
           title: 'Send attendee follow-ups',
           state: 'done',
@@ -392,15 +401,15 @@ describe('process materialization', () => {
       .returning();
     await db.insert(taskDependency).values({
       organizationId,
-      blockingTaskId: sourceTasks[0]!.id,
-      blockedTaskId: sourceTasks[1]!.id,
+      blockingTaskId: assertDefined(sourceTasks[0]).id,
+      blockedTaskId: assertDefined(sourceTasks[1]).id,
     });
 
     const created = await createProcessDefinitionFromProject(db, {
       organizationId,
       actorId,
       input: {
-        projectId: ProjectId.parse(sourceProject!.id),
+        projectId: ProjectId.parse(assertDefined(sourceProject).id),
         creationMode: 'all_at_once',
       },
     });
@@ -424,7 +433,7 @@ describe('process materialization', () => {
     await db.insert(task).values({
       organizationId,
       teamId,
-      projectId: sourceProject!.id,
+      projectId: assertDefined(sourceProject).id,
       title: 'Host meetup',
       state: 'backlog',
     });
@@ -434,7 +443,7 @@ describe('process materialization', () => {
       actorId,
       now: new Date('2026-10-15T18:00:00.000Z'),
       input: {
-        projectId: ProjectId.parse(sourceProject!.id),
+        projectId: ProjectId.parse(assertDefined(sourceProject).id),
         name: 'Transit meetup process',
         creationMode: 'all_at_once',
       },
@@ -485,7 +494,7 @@ describe('process materialization', () => {
         organizationId,
         actorId,
         input: {
-          projectId: ProjectId.parse(emptyProject!.id),
+          projectId: ProjectId.parse(assertDefined(emptyProject).id),
           creationMode: 'all_at_once',
         },
       }),
@@ -494,13 +503,16 @@ describe('process materialization', () => {
 
   it('rejects invalid states and team-scoped labels before publishing generated work', async () => {
     const invalidState = bookClubDefinition();
-    invalidState.tasks[0] = { ...invalidState.tasks[0]!, state: 'not-a-workflow-state' };
+    invalidState.tasks[0] = {
+      ...assertDefined(invalidState.tasks[0]),
+      state: 'not-a-workflow-state',
+    };
     await expect(
       createPublishedProcessDefinition(db, { organizationId, actorId, definition: invalidState }),
     ).rejects.toThrow(/state.*not available/i);
 
     const terminalState = bookClubDefinition();
-    terminalState.tasks[0] = { ...terminalState.tasks[0]!, state: 'done' };
+    terminalState.tasks[0] = { ...assertDefined(terminalState.tasks[0]), state: 'done' };
     await expect(
       createPublishedProcessDefinition(db, { organizationId, actorId, definition: terminalState }),
     ).rejects.toThrow(/non-terminal/i);
@@ -511,12 +523,17 @@ describe('process materialization', () => {
       .returning();
     const [otherTeamLabel] = await db
       .insert(label)
-      .values({ organizationId, teamId: otherTeam!.id, name: 'Other team only', color: 'gray' })
+      .values({
+        organizationId,
+        teamId: assertDefined(otherTeam).id,
+        name: 'Other team only',
+        color: 'gray',
+      })
       .returning();
     const invalidTaskLabel = bookClubDefinition();
     invalidTaskLabel.tasks[0] = {
-      ...invalidTaskLabel.tasks[0]!,
-      labelIds: [LabelId.parse(otherTeamLabel!.id)],
+      ...assertDefined(invalidTaskLabel.tasks[0]),
+      labelIds: [LabelId.parse(assertDefined(otherTeamLabel).id)],
     };
     await expect(
       createPublishedProcessDefinition(db, {
@@ -528,8 +545,8 @@ describe('process materialization', () => {
 
     const invalidProjectLabel = bookClubDefinition();
     invalidProjectLabel.project = {
-      ...invalidProjectLabel.project!,
-      labelIds: [LabelId.parse(otherTeamLabel!.id)],
+      ...assertDefined(invalidProjectLabel.project),
+      labelIds: [LabelId.parse(assertDefined(otherTeamLabel).id)],
     };
     await expect(
       createPublishedProcessDefinition(db, {
@@ -610,11 +627,11 @@ describe('process materialization', () => {
     const [createdProject] = await db
       .select()
       .from(project)
-      .where(eq(project.id, first.projectIdsByKey['season']!));
+      .where(eq(project.id, assertDefined(first.projectIdsByKey['season'])));
     const [createdMilestone] = await db
       .select()
       .from(milestone)
-      .where(eq(milestone.id, first.milestoneIdsByKey['event']!));
+      .where(eq(milestone.id, assertDefined(first.milestoneIdsByKey['event'])));
     const createdTasks = await db
       .select()
       .from(task)
@@ -649,7 +666,7 @@ describe('process materialization', () => {
       await loadGeneratedWorkRecurrence(db, {
         kind: 'task',
         organizationId,
-        taskId: report!.id,
+        taskId: assertDefined(report).id,
       }),
     ).toMatchObject({
       kind: 'task',
@@ -660,7 +677,7 @@ describe('process materialization', () => {
       await loadGeneratedWorkRecurrence(db, {
         kind: 'project',
         organizationId,
-        projectId: createdProject!.id,
+        projectId: assertDefined(createdProject).id,
       }),
     ).toMatchObject({
       kind: 'project',
@@ -669,14 +686,30 @@ describe('process materialization', () => {
     });
 
     expect(
-      await db.select().from(projectLabel).where(eq(projectLabel.projectId, createdProject!.id)),
+      await db
+        .select()
+        .from(projectLabel)
+        .where(eq(projectLabel.projectId, assertDefined(createdProject).id)),
     ).toHaveLength(1);
-    expect(await db.select().from(taskLabel).where(eq(taskLabel.taskId, report!.id))).toEqual([
-      expect.objectContaining({ taskId: report!.id, labelId: reportingLabelId }),
+    expect(
+      await db
+        .select()
+        .from(taskLabel)
+        .where(eq(taskLabel.taskId, assertDefined(report).id)),
+    ).toEqual([
+      expect.objectContaining({ taskId: assertDefined(report).id, labelId: reportingLabelId }),
     ]);
     expect(
-      await db.select().from(taskDependency).where(eq(taskDependency.blockingTaskId, story!.id)),
-    ).toEqual([expect.objectContaining({ blockingTaskId: story!.id, blockedTaskId: report!.id })]);
+      await db
+        .select()
+        .from(taskDependency)
+        .where(eq(taskDependency.blockingTaskId, assertDefined(story).id)),
+    ).toEqual([
+      expect.objectContaining({
+        blockingTaskId: assertDefined(story).id,
+        blockedTaskId: assertDefined(report).id,
+      }),
+    ]);
     expect(
       await db
         .select()
@@ -686,37 +719,45 @@ describe('process materialization', () => {
   });
 
   it('preserves ordinary task references and explicit dates in a recurring task', async () => {
-    const fixedProject = (
-      await db
-        .insert(project)
-        .values({ organizationId, name: 'Marathon training', teamId })
-        .returning()
-    )[0]!;
-    const fixedMilestone = (
-      await db
-        .insert(milestone)
-        .values({ organizationId, projectId: fixedProject.id, name: 'Race day' })
-        .returning()
-    )[0]!;
-    const fixedCycle = (
-      await db
-        .insert(cycle)
-        .values({
-          organizationId,
-          teamId,
-          number: 1,
-          name: 'Training block',
-          startsAt: new Date('2026-09-01T00:00:00.000Z'),
-          endsAt: new Date('2026-10-01T00:00:00.000Z'),
-        })
-        .returning()
-    )[0]!;
-    const fixedParent = (
-      await db
-        .insert(task)
-        .values({ organizationId, teamId, title: 'Marathon plan', state: 'backlog' })
-        .returning()
-    )[0]!;
+    const fixedProject = assertDefined(
+      (
+        await db
+          .insert(project)
+          .values({ organizationId, name: 'Marathon training', teamId })
+          .returning()
+      )[0],
+    );
+    const fixedMilestone = assertDefined(
+      (
+        await db
+          .insert(milestone)
+          .values({ organizationId, projectId: fixedProject.id, name: 'Race day' })
+          .returning()
+      )[0],
+    );
+    const fixedCycle = assertDefined(
+      (
+        await db
+          .insert(cycle)
+          .values({
+            organizationId,
+            teamId,
+            number: 1,
+            name: 'Training block',
+            startsAt: new Date('2026-09-01T00:00:00.000Z'),
+            endsAt: new Date('2026-10-01T00:00:00.000Z'),
+          })
+          .returning()
+      )[0],
+    );
+    const fixedParent = assertDefined(
+      (
+        await db
+          .insert(task)
+          .values({ organizationId, teamId, title: 'Marathon plan', state: 'backlog' })
+          .returning()
+      )[0],
+    );
     const definition: ProcessDefinitionCreate = {
       name: 'Run six miles',
       creationMode: 'all_at_once',
@@ -764,7 +805,7 @@ describe('process materialization', () => {
     const [created] = await db
       .select()
       .from(task)
-      .where(eq(task.id, materialized.taskIdsByKey['task']!));
+      .where(eq(task.id, assertDefined(materialized.taskIdsByKey['task'])));
 
     expect(created).toMatchObject({
       projectId: fixedProject.id,
@@ -775,9 +816,12 @@ describe('process materialization', () => {
     });
     expect(created?.startDate?.toISOString()).toBe('2026-09-11T00:00:00.000Z');
     expect(created?.dueDate?.toISOString()).toBe('2026-09-12T00:00:00.000Z');
-    expect(await db.select().from(taskLabel).where(eq(taskLabel.taskId, created!.id))).toEqual([
-      expect.objectContaining({ labelId: promotionLabelId }),
-    ]);
+    expect(
+      await db
+        .select()
+        .from(taskLabel)
+        .where(eq(taskLabel.taskId, assertDefined(created).id)),
+    ).toEqual([expect.objectContaining({ labelId: promotionLabelId })]);
   });
 
   it('releases when-ready steps only after every prerequisite task completes', async () => {
@@ -822,7 +866,7 @@ describe('process materialization', () => {
     });
     expect(Object.keys(initial.taskIdsByKey)).toEqual(['interest-email']);
 
-    const rootTaskId = initial.taskIdsByKey['interest-email']!;
+    const rootTaskId = assertDefined(initial.taskIdsByKey['interest-email']);
     await db
       .update(task)
       .set({ state: 'done', completedAt: new Date('2026-09-08T20:00:00.000Z') })
@@ -845,7 +889,7 @@ describe('process materialization', () => {
     const [interview] = await db
       .select()
       .from(task)
-      .where(eq(task.id, advanced.createdTaskIdsByKey['interview']!));
+      .where(eq(task.id, assertDefined(advanced.createdTaskIdsByKey['interview'])));
     expect(interview?.dueDate?.toISOString()).toBe('2026-09-10T00:00:00.000Z');
     expect(
       await db
@@ -909,7 +953,7 @@ describe('process materialization', () => {
       ...series,
       scheduledFor: '2026-11-01',
     });
-    const rootTaskId = initial.taskIdsByKey['interest-email']!;
+    const rootTaskId = assertDefined(initial.taskIdsByKey['interest-email']);
     await db
       .update(task)
       .set({ state: 'done', completedAt: new Date('2026-11-05T20:00:00.000Z') })
@@ -929,15 +973,15 @@ describe('process materialization', () => {
     const [datedProject] = await db
       .select()
       .from(project)
-      .where(eq(project.id, initial.projectIdsByKey['onboarding']!));
+      .where(eq(project.id, assertDefined(initial.projectIdsByKey['onboarding'])));
     const [datedMilestone] = await db
       .select()
       .from(milestone)
-      .where(eq(milestone.id, initial.milestoneIdsByKey['orientation']!));
+      .where(eq(milestone.id, assertDefined(initial.milestoneIdsByKey['orientation'])));
     const [datedFollowUp] = await db
       .select()
       .from(task)
-      .where(eq(task.id, initial.taskIdsByKey['follow-up']!));
+      .where(eq(task.id, assertDefined(initial.taskIdsByKey['follow-up'])));
     expect(datedProject?.startDate?.toISOString()).toBe('2026-11-07T00:00:00.000Z');
     expect(datedMilestone?.targetDate?.toISOString()).toBe('2026-11-08T00:00:00.000Z');
     expect(datedFollowUp?.dueDate?.toISOString()).toBe('2026-11-09T00:00:00.000Z');
@@ -952,7 +996,7 @@ describe('process materialization', () => {
       await advanceCompletedProcessTask(db, {
         organizationId,
         actorId,
-        completedTaskId: ordinaryTask!.id,
+        completedTaskId: assertDefined(ordinaryTask).id,
         completedOn: '2026-11-01',
       }),
     ).toEqual({
@@ -994,7 +1038,7 @@ describe('process materialization', () => {
       await advanceCompletedProcessTask(db, {
         organizationId,
         actorId,
-        completedTaskId: generated.taskIdsByKey['check-in']!,
+        completedTaskId: assertDefined(generated.taskIdsByKey['check-in']),
         completedOn: '2026-11-02',
       }),
     ).toMatchObject({ instanceCompleted: false, nextOccurrenceId: null });
@@ -1031,11 +1075,11 @@ describe('process materialization', () => {
     const [originalTask] = await db
       .select()
       .from(task)
-      .where(eq(task.id, first.taskIdsByKey['report']!));
+      .where(eq(task.id, assertDefined(first.taskIdsByKey['report'])));
     const [revisedTask] = await db
       .select()
       .from(task)
-      .where(eq(task.id, second.taskIdsByKey['report']!));
+      .where(eq(task.id, assertDefined(second.taskIdsByKey['report'])));
     expect(originalTask?.title).toBe('Original report');
     expect(revisedTask?.title).toBe('Revised report');
     expect(next.revisionNumber).toBe(2);
@@ -1063,33 +1107,37 @@ describe('process materialization', () => {
       actorId,
       definition,
     });
-    const series = (
-      await db
-        .insert(recurrenceSeries)
-        .values({
-          organizationId,
-          definitionId: authored.definitionId,
-          name: definition.name,
-          createdBy: actorId,
-        })
-        .returning()
-    )[0]!;
-    const seriesRevision = (
-      await db
-        .insert(recurrenceSeriesRevision)
-        .values({
-          organizationId,
-          seriesId: series.id,
-          processRevisionId: authored.revisionId,
-          number: 1,
-          effectiveFrom: '2026-09-01',
-          triggerKind: 'after_completion',
-          interval: 1,
-          intervalUnit: 'month',
-          createdBy: actorId,
-        })
-        .returning()
-    )[0]!;
+    const series = assertDefined(
+      (
+        await db
+          .insert(recurrenceSeries)
+          .values({
+            organizationId,
+            definitionId: authored.definitionId,
+            name: definition.name,
+            createdBy: actorId,
+          })
+          .returning()
+      )[0],
+    );
+    const seriesRevision = assertDefined(
+      (
+        await db
+          .insert(recurrenceSeriesRevision)
+          .values({
+            organizationId,
+            seriesId: series.id,
+            processRevisionId: authored.revisionId,
+            number: 1,
+            effectiveFrom: '2026-09-01',
+            triggerKind: 'after_completion',
+            interval: 1,
+            intervalUnit: 'month',
+            createdBy: actorId,
+          })
+          .returning()
+      )[0],
+    );
     const first = await materializeOccurrence(db, {
       organizationId,
       actorId,
@@ -1097,7 +1145,7 @@ describe('process materialization', () => {
       seriesRevisionId: seriesRevision.id,
       scheduledFor: '2026-09-01',
     });
-    const taskId = first.taskIdsByKey['check-in']!;
+    const taskId = assertDefined(first.taskIdsByKey['check-in']);
     await db
       .update(task)
       .set({ state: 'done', completedAt: new Date('2026-09-30T23:30:00.000Z') })

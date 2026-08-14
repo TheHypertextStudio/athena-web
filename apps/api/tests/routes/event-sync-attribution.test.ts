@@ -11,6 +11,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as DrainModule from '../../src/routes/event-sync';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -36,9 +37,14 @@ async function seedUserActor(
     .returning({ id: schema.user.id });
   const [a] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: name, userId: u!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: name,
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
-  return { userId: u!.id, actorId: a!.id };
+  return { userId: assertDefined(u).id, actorId: assertDefined(a).id };
 }
 
 describe('sweepInboundEvents — mention attribution', () => {
@@ -71,7 +77,7 @@ describe('sweepInboundEvents — mention attribution', () => {
     // A Linear mention naming the linked user (the mock observer honors `participants`).
     await db.insert(schema.inboundEvent).values({
       organizationId: orgId,
-      integrationId: intg!.id,
+      integrationId: assertDefined(intg).id,
       provider: 'linear',
       externalEventId: 'ev_linear_mention',
       eventType: 'mock',
@@ -98,12 +104,12 @@ describe('sweepInboundEvents — mention attribution', () => {
       .from(schema.eventRecipient)
       .where(
         and(
-          eq(schema.eventRecipient.eventId, ev!.id),
+          eq(schema.eventRecipient.eventId, assertDefined(ev).id),
           eq(schema.eventRecipient.userId, mentioned.userId),
         ),
       );
     expect(mentionedRecip).toHaveLength(1);
-    expect(mentionedRecip[0]!.reason).toBe('mention');
+    expect(assertDefined(mentionedRecip[0]).reason).toBe('mention');
   });
 
   it('does not create a recipient for an unlinked mentioned user', async () => {
@@ -125,7 +131,7 @@ describe('sweepInboundEvents — mention attribution', () => {
 
     await db.insert(schema.inboundEvent).values({
       organizationId: orgId,
-      integrationId: intg!.id,
+      integrationId: assertDefined(intg).id,
       provider: 'linear',
       externalEventId: 'ev_linear_unlinked',
       eventType: 'mock',
@@ -148,7 +154,7 @@ describe('sweepInboundEvents — mention attribution', () => {
     const recips = await db
       .select({ userId: schema.eventRecipient.userId })
       .from(schema.eventRecipient)
-      .where(eq(schema.eventRecipient.eventId, ev!.id));
+      .where(eq(schema.eventRecipient.eventId, assertDefined(ev).id));
     expect(recips.map((r) => r.userId)).toEqual([owner.userId]);
   });
 });

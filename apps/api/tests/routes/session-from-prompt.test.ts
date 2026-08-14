@@ -31,6 +31,7 @@ import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import { getMigratedDb } from '../support/db';
 import { fakeSession } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -96,7 +97,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   await db.insert(team).values({ organizationId: orgId, name: 'Core', key: 'CORE' });
   const [owner] = await db
     .insert(user)
@@ -108,10 +109,10 @@ async function seedOrg(): Promise<Seed> {
       organizationId: orgId,
       kind: 'human',
       displayName: 'Ada',
-      userId: owner!.id,
+      userId: assertDefined(owner).id,
     })
     .returning({ id: actor.id });
-  return { userId: owner!.id, orgId, humanActorId: human!.id };
+  return { userId: assertDefined(owner).id, orgId, humanActorId: assertDefined(human).id };
 }
 
 describe('ensureDefaultAgent', () => {
@@ -251,18 +252,22 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
       .returning({ id: actor.id });
     const [ag] = await db
       .insert(agent)
-      .values({ organizationId: s.orgId, actorId: agentActor!.id, createdBy: s.humanActorId })
+      .values({
+        organizationId: s.orgId,
+        actorId: assertDefined(agentActor).id,
+        createdBy: s.humanActorId,
+      })
       .returning({ id: agent.id });
 
     const app = appFor(s.orgId, ['contribute'], s.humanActorId);
     const res = await app.request('/', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ prompt: 'do the thing', agentId: ag!.id }),
+      body: JSON.stringify({ prompt: 'do the thing', agentId: assertDefined(ag).id }),
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { agentId: string };
-    expect(body.agentId).toBe(ag!.id);
+    expect(body.agentId).toBe(assertDefined(ag).id);
     // No default agent was created — the explicit one was used.
     const named = await db
       .select()

@@ -25,6 +25,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -49,7 +50,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [role] = await db
     .insert(schema.role)
@@ -66,14 +67,14 @@ async function seedOrg(): Promise<Seed> {
       organizationId: orgId,
       kind: 'human',
       displayName: 'Ada',
-      userId: user!.id,
-      roleId: role!.id,
+      userId: assertDefined(user).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
   await db.insert(schema.grant).values({
     organizationId: orgId,
     subjectKind: 'role',
-    subjectId: role!.id,
+    subjectId: assertDefined(role).id,
     resourceKind: 'organization',
     resourceId: orgId,
     capabilities: ['contribute'],
@@ -90,10 +91,15 @@ async function seedOrg(): Promise<Seed> {
 
   return {
     orgId,
-    teamId: team!.id,
-    actorId: human!.id,
+    teamId: assertDefined(team).id,
+    actorId: assertDefined(human).id,
     ctx: {
-      principal: { kind: 'user', userId: user!.id, userName: 'Ada', userEmail: email },
+      principal: {
+        kind: 'user',
+        userId: assertDefined(user).id,
+        userName: 'Ada',
+        userEmail: email,
+      },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     },
   };
@@ -120,7 +126,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   resetAuthMocks();
 });
 
@@ -176,7 +182,7 @@ async function seedSubjects(s: Seed): Promise<void> {
   await db.insert(schema.project).values({
     organizationId: s.orgId,
     name: 'Decoy Project',
-    programId: decoyProgram!.id,
+    programId: assertDefined(decoyProgram).id,
     createdBy: s.actorId,
   });
   await db
@@ -209,7 +215,7 @@ async function seedSubjects(s: Seed): Promise<void> {
     title: 'Subject task',
     teamId: s.teamId,
     state: 'backlog',
-    projectId: subjectProject!.id,
+    projectId: assertDefined(subjectProject).id,
     createdBy: s.actorId,
   });
   await db
@@ -313,8 +319,8 @@ describe('the two that shipped unapplied', () => {
       .values({ organizationId: s.orgId, name: 'Unlinked', createdBy: s.actorId });
     await db.insert(schema.initiativeProgram).values({
       organizationId: s.orgId,
-      initiativeId: init!.id,
-      programId: linked!.id,
+      initiativeId: assertDefined(init).id,
+      programId: assertDefined(linked).id,
     });
 
     const out = await list(client, { orgId: s.orgId, entity: 'program', initiative: 'Q3' });
@@ -338,7 +344,11 @@ describe('the two that shipped unapplied', () => {
       .values({ organizationId: s.orgId, name: 'No label', createdBy: s.actorId });
     await db
       .insert(schema.projectLabel)
-      .values({ organizationId: s.orgId, projectId: proj!.id, labelId: tag!.id });
+      .values({
+        organizationId: s.orgId,
+        projectId: assertDefined(proj).id,
+        labelId: assertDefined(tag).id,
+      });
 
     const [init] = await db
       .insert(schema.initiative)
@@ -349,7 +359,11 @@ describe('the two that shipped unapplied', () => {
       .values({ organizationId: s.orgId, name: 'No label', createdBy: s.actorId });
     await db
       .insert(schema.initiativeLabel)
-      .values({ organizationId: s.orgId, initiativeId: init!.id, labelId: tag!.id });
+      .values({
+        organizationId: s.orgId,
+        initiativeId: assertDefined(init).id,
+        labelId: assertDefined(tag).id,
+      });
 
     const projects = await list(client, { orgId: s.orgId, entity: 'project', label: 'Tagged' });
     expect(projects.items.map((i) => i.title)).toEqual(['Has label']);
@@ -364,7 +378,7 @@ describe('the two that shipped unapplied', () => {
     const [check] = await db
       .select({ id: schema.project.id })
       .from(schema.project)
-      .where(eq(schema.project.id, proj!.id));
-    expect(check?.id).toBe(proj!.id);
+      .where(eq(schema.project.id, assertDefined(proj).id));
+    expect(check?.id).toBe(assertDefined(proj).id);
   });
 });

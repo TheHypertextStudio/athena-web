@@ -20,6 +20,7 @@ import type {
 import type { approveAndResume as ApproveAndResume } from '../../src/agent/loop';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import type { replyToElicitation as ReplyToElicitation } from '../../src/routes/agent-session-approval';
+import { assertDefined } from '@docket/test-utils';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -68,22 +69,27 @@ async function seedSession(policy?: 'suggest' | 'act_with_approval' | 'autonomou
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
     .returning({ id: schema.user.id });
-  await db.insert(schema.hub).values({ userId: u!.id });
+  await db.insert(schema.hub).values({ userId: assertDefined(u).id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
   const [team] = await db
     .insert(schema.team)
     .values({ organizationId: orgId, name: 'Core', key: 'CORE' })
     .returning({ id: schema.team.id });
 
-  const agent = await ensureDefaultAgent(orgId, human!.id);
+  const agent = await ensureDefaultAgent(orgId, assertDefined(human).id);
   if (policy && policy !== 'act_with_approval') {
     await db
       .update(schema.agent)
@@ -103,24 +109,24 @@ async function seedSession(policy?: 'suggest' | 'act_with_approval' | 'autonomou
       agentId: agent.id,
       trigger: 'delegation',
       status: 'pending',
-      initiatorId: human!.id,
+      initiatorId: assertDefined(human).id,
     })
     .returning({ id: schema.agentSession.id });
   await db.insert(schema.sessionActivity).values({
-    sessionId: session!.id,
+    sessionId: assertDefined(session).id,
     organizationId: orgId,
     type: 'response',
     body: { text: 'Import my backlog.' },
   });
 
   return {
-    userId: u!.id,
+    userId: assertDefined(u).id,
     orgId,
-    teamId: team!.id,
-    humanActorId: human!.id,
+    teamId: assertDefined(team).id,
+    humanActorId: assertDefined(human).id,
     agentId: agent.id,
-    agentActorId: agentRow!.actorId,
-    sessionId: session!.id,
+    agentActorId: assertDefined(agentRow).actorId,
+    sessionId: assertDefined(session).id,
   };
 }
 
@@ -226,7 +232,7 @@ describe('driveSession — act_with_approval (the default dial)', () => {
       seed.orgId,
       seed.humanActorId,
       seed.sessionId,
-      action!.id,
+      assertDefined(action).id,
       { decision: 'approve' },
       deps,
     );
@@ -243,7 +249,7 @@ describe('driveSession — act_with_approval (the default dial)', () => {
 
     // The action row settled applied and carries the execution result.
     const after = await activities(seed.sessionId);
-    const applied = after.find((a) => a.id === action!.id);
+    const applied = after.find((a) => a.id === assertDefined(action).id);
     expect(applied?.approvalStatus).toBe('applied');
     expect(applied?.body.action?.result?.isError).toBe(false);
 
@@ -267,7 +273,7 @@ describe('driveSession — act_with_approval (the default dial)', () => {
       seed.orgId,
       seed.humanActorId,
       seed.sessionId,
-      action!.id,
+      assertDefined(action).id,
       { decision: 'reject' },
       deps,
     );
@@ -428,7 +434,12 @@ describe('driveSession — elicitation (ask_user)', () => {
         createdAt: new Date(index),
       })),
     );
-    await replyToElicitation(seed.orgId, seed.sessionId, elicitation!.id, 'The loft, please.');
+    await replyToElicitation(
+      seed.orgId,
+      seed.sessionId,
+      assertDefined(elicitation).id,
+      'The loft, please.',
+    );
     const settled = await resumeSessionExecution(seed.orgId, seed.sessionId, deps);
     expect(settled.status).toBe('completed');
 
@@ -477,7 +488,7 @@ describe('driveSession — bounds and failure surfaces', () => {
       ...turn,
       message: {
         ...turn.message,
-        content: [{ ...turn.message.content[0]!, id: `toolu_loop_${i}` }],
+        content: [{ ...assertDefined(turn.message.content[0]), id: `toolu_loop_${i}` }],
       },
     }));
     const settled = await driveSession(seed.orgId, seed.sessionId, scripted(script));

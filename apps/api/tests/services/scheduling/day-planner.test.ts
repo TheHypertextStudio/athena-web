@@ -17,6 +17,7 @@ import {
 } from '../../../src/services/scheduling/day-planner';
 import type { Interval } from '../../../src/services/scheduling/intervals';
 import { instantAt } from '../../../src/services/scheduling/zoned-time';
+import { assertDefined } from '@docket/test-utils';
 
 const TZ = 'America/Los_Angeles';
 /** A Wednesday, so the default weekday windows apply. */
@@ -111,7 +112,9 @@ describe('planDay — dependency order is never violated', () => {
     const blocker = result.items.find((i) => i.taskId === 'BLOCKER');
     const blocked = result.items.find((i) => i.taskId === 'BLOCKED');
     expect(blocker?.end).not.toBeNull();
-    expect(blocked!.start!).toBeGreaterThanOrEqual(blocker!.end!);
+    expect(assertDefined(assertDefined(blocked).start)).toBeGreaterThanOrEqual(
+      assertDefined(assertDefined(blocker).end),
+    );
   });
 
   it('ignores an edge whose blocker is not a candidate for the day', () => {
@@ -164,7 +167,9 @@ describe('planDay — estimates are consumed, not guessed', () => {
     const item = result.items[0];
     expect(item?.minutes).toBe(90);
     expect(item?.durationSource).toBe('requested');
-    expect((item!.end! - item!.start!) / 60_000).toBe(90);
+    expect(
+      (assertDefined(assertDefined(item).end) - assertDefined(assertDefined(item).start)) / 60_000,
+    ).toBe(90);
   });
 
   it('falls back to the documented default when the task carries no estimate', () => {
@@ -217,7 +222,9 @@ describe('planDay — availability is real, and protected time is unreachable', 
       .filter((i) => i.start !== null)
       .sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
     for (let i = 1; i < placed.length; i += 1) {
-      expect(placed[i]!.start!).toBeGreaterThanOrEqual(placed[i - 1]!.end!);
+      expect(assertDefined(assertDefined(placed[i]).start)).toBeGreaterThanOrEqual(
+        assertDefined(assertDefined(placed[i - 1]).end),
+      );
     }
   });
 
@@ -233,7 +240,10 @@ describe('planDay — availability is real, and protected time is unreachable', 
     );
     const item = result.items[0];
     expect(item?.start).not.toBeNull();
-    expect(item!.start! < weekBlock.end && weekBlock.start < item!.end!).toBe(false);
+    expect(
+      assertDefined(assertDefined(item).start) < weekBlock.end &&
+        weekBlock.start < assertDefined(assertDefined(item).end),
+    ).toBe(false);
   });
 
   it('stuffs the windows front to back rather than leaving the morning empty', () => {
@@ -293,7 +303,7 @@ function generateCase(seed: number): { candidates: DayCandidate[]; edges: Depend
   const candidates: DayCandidate[] = Array.from({ length: count }, (_, i) =>
     candidate({
       taskId: `T${String(i).padStart(2, '0')}`,
-      priority: PRIORITIES[Math.floor(rand() * PRIORITIES.length)]!,
+      priority: assertDefined(PRIORITIES[Math.floor(rand() * PRIORITIES.length)]),
       estimateMinutes: rand() < 0.5 ? null : 15 + Math.floor(rand() * 180),
       dueDate: rand() < 0.5 ? null : at(Math.floor(rand() * 1440)),
     }),
@@ -357,7 +367,9 @@ describe('planDay — determinism', () => {
         .items.filter((i) => i.start !== null)
         .sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
       for (let i = 1; i < placed.length; i += 1) {
-        expect(placed[i]!.start!).toBeGreaterThanOrEqual(placed[i - 1]!.end!);
+        expect(assertDefined(assertDefined(placed[i]).start)).toBeGreaterThanOrEqual(
+          assertDefined(assertDefined(placed[i - 1]).end),
+        );
       }
     }
   });

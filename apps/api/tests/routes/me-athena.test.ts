@@ -10,6 +10,7 @@ import type { getContainer as GetContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import type meAthenaRouter from '../../src/routes/me-athena';
 import { fakeSession, getDb, one } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -487,7 +488,7 @@ describe('personal Athena routes', () => {
       .returning({ id: schema.agentSession.id });
     await db.insert(schema.sessionActivity).values(
       projects.map((project, index) => ({
-        sessionId: contextualSessions[index]!.id,
+        sessionId: assertDefined(contextualSessions[index]).id,
         organizationId: null,
         type: 'response' as const,
         body: {
@@ -1040,7 +1041,7 @@ describe('personal Athena routes', () => {
     await db
       .update(schema.actor)
       .set({ status: 'suspended' })
-      .where(eq(schema.actor.id, seed.owner.actorIds[seed.orgB]!));
+      .where(eq(schema.actor.id, assertDefined(seed.owner.actorIds[seed.orgB])));
 
     const missingTarget = await app.request(
       `/sessions/${sessionId}/activity/${activityId}/proposal`,
@@ -1110,7 +1111,7 @@ describe('personal Athena routes', () => {
       await db
         .update(schema.actor)
         .set({ status: 'suspended' })
-        .where(eq(schema.actor.id, seed.owner.actorIds[seed.orgB]!));
+        .where(eq(schema.actor.id, assertDefined(seed.owner.actorIds[seed.orgB])));
 
       const response = await app.request(
         `/sessions/${sessionId}/proposals/${groupId}/${decision}`,
@@ -1173,10 +1174,10 @@ describe('personal Athena routes', () => {
       await db
         .update(schema.actor)
         .set({ status: 'suspended' })
-        .where(eq(schema.actor.id, seed.owner.actorIds[seed.orgB]!));
+        .where(eq(schema.actor.id, assertDefined(seed.owner.actorIds[seed.orgB])));
 
       const response = await app.request(
-        `/sessions/${sessionId}/activity/${activityIds[0]!}/${decision}`,
+        `/sessions/${sessionId}/activity/${assertDefined(activityIds[0])}/${decision}`,
         {
           method: 'POST',
           headers: JSON_HEADERS,
@@ -1548,7 +1549,7 @@ describe('personal Athena routes', () => {
       createdAt: new Date(base.getTime() + 105_000),
     });
     const stream = await app.request(`/sessions/${sessionId}/stream`, {
-      headers: { 'last-event-id': detail.activities.at(-1)!.id },
+      headers: { 'last-event-id': assertDefined(detail.activities.at(-1)).id },
     });
     const streamBody = await stream.text();
     expect(streamBody).toContain(`id: ${liveId}`);
@@ -1682,7 +1683,7 @@ describe('personal Athena routes', () => {
       signal: controller.signal,
     });
     expect(response.status).toBe(200);
-    const reader = response.body!.getReader();
+    const reader = assertDefined(response.body).getReader();
     await reader.read();
 
     void reader.cancel();

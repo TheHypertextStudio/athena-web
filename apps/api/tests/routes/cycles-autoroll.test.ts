@@ -17,6 +17,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -65,7 +66,7 @@ async function makeTeam(orgId: string, cadenceWeeks: number): Promise<string> {
       cycleCadenceWeeks: cadenceWeeks,
     })
     .returning({ id: schema.team.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Count the cycles stored for a team. */
@@ -96,20 +97,21 @@ describe('cycle auto-roll (GET /current)', () => {
     const currentFlags = body.cycles.filter((c) => c.isCurrent === true);
     expect(currentFlags).toHaveLength(1);
     expect(body.current).not.toBeNull();
-    expect(body.current!.id).toBe(currentFlags[0]!.id);
-    expect(body.current!.isCurrent).toBe(true);
+    expect(assertDefined(body.current).id).toBe(assertDefined(currentFlags[0]).id);
+    expect(assertDefined(body.current).isCurrent).toBe(true);
 
     // "Now" really falls inside the current window.
     const now = Date.now();
-    expect(now).toBeGreaterThanOrEqual(new Date(body.current!.startsAt).getTime());
-    expect(now).toBeLessThanOrEqual(new Date(body.current!.endsAt).getTime());
+    expect(now).toBeGreaterThanOrEqual(new Date(assertDefined(body.current).startsAt).getTime());
+    expect(now).toBeLessThanOrEqual(new Date(assertDefined(body.current).endsAt).getTime());
 
     // The window's cycles are gap-free weekly tiles ordered by number.
     const sorted = [...body.cycles].sort((a, b) => a.number - b.number);
     for (let i = 1; i < sorted.length; i += 1) {
-      expect(sorted[i]!.number - sorted[i - 1]!.number).toBe(1);
+      expect(assertDefined(sorted[i]).number - assertDefined(sorted[i - 1]).number).toBe(1);
       expect(
-        new Date(sorted[i]!.startsAt).getTime() - new Date(sorted[i - 1]!.startsAt).getTime(),
+        new Date(assertDefined(sorted[i]).startsAt).getTime() -
+          new Date(assertDefined(sorted[i - 1]).startsAt).getTime(),
       ).toBe(WEEK_MS);
     }
   });
@@ -129,7 +131,7 @@ describe('cycle auto-roll (GET /current)', () => {
     expect(await countCycles(orgId, teamId)).toBe(countAfterFirst);
     expect(second.cycles.map((c) => c.id).sort()).toEqual(first.cycles.map((c) => c.id).sort());
     // The same window resolves the same current cycle each time.
-    expect(second.current!.id).toBe(first.current!.id);
+    expect(assertDefined(second.current).id).toBe(assertDefined(first.current).id);
   });
 
   it('steps the window by the team cadence (a 2-week team tiles 14 days apart)', async () => {
@@ -143,15 +145,17 @@ describe('cycle auto-roll (GET /current)', () => {
     const sorted = [...body.cycles].sort((a, b) => a.number - b.number);
     for (let i = 1; i < sorted.length; i += 1) {
       expect(
-        new Date(sorted[i]!.startsAt).getTime() - new Date(sorted[i - 1]!.startsAt).getTime(),
+        new Date(assertDefined(sorted[i]).startsAt).getTime() -
+          new Date(assertDefined(sorted[i - 1]).startsAt).getTime(),
       ).toBe(2 * WEEK_MS);
     }
     // Each 2-week window spans 14 days minus one ms, and exactly one is current.
     const cur = body.cycles.find((c) => c.isCurrent);
     expect(cur).toBeDefined();
-    expect(new Date(cur!.endsAt).getTime() - new Date(cur!.startsAt).getTime()).toBe(
-      2 * WEEK_MS - 1,
-    );
+    expect(
+      new Date(assertDefined(cur).endsAt).getTime() -
+        new Date(assertDefined(cur).startsAt).getTime(),
+    ).toBe(2 * WEEK_MS - 1);
   });
 
   it('leaves manual cycles untouched and includes them in the window read', async () => {
@@ -175,16 +179,16 @@ describe('cycle auto-roll (GET /current)', () => {
     const body = await json<WindowDto>(await writer.request(`/current?teamId=${teamId}`));
 
     // The manual cycle is still present and is NOT the current one (its dates are old).
-    const manualOut = body.cycles.find((c) => c.id === manual!.id);
+    const manualOut = body.cycles.find((c) => c.id === assertDefined(manual).id);
     expect(manualOut).toBeDefined();
-    expect(manualOut!.isCurrent).toBe(false);
-    expect(body.current!.id).not.toBe(manual!.id);
+    expect(assertDefined(manualOut).isCurrent).toBe(false);
+    expect(assertDefined(body.current).id).not.toBe(assertDefined(manual).id);
 
     // Its stored fields are unchanged.
     const [row] = await db
       .select({ name: schema.cycle.name, status: schema.cycle.status, number: schema.cycle.number })
       .from(schema.cycle)
-      .where(eq(schema.cycle.id, manual!.id));
+      .where(eq(schema.cycle.id, assertDefined(manual).id));
     expect(row).toEqual({ name: 'Manual', status: 'completed', number: 5 });
   });
 
@@ -223,9 +227,11 @@ describe('cycle auto-roll (GET /current)', () => {
     const body = await json<WindowDto>(await writer.request(`/current?teamId=${teamId}`));
 
     // Both manual cycles flag as current, but `current` resolves to the earlier start.
-    const flagged = body.cycles.filter((c) => c.id === earlier[0]!.id || c.id === later[0]!.id);
+    const flagged = body.cycles.filter(
+      (c) => c.id === assertDefined(earlier[0]).id || c.id === assertDefined(later[0]).id,
+    );
     expect(flagged.every((c) => c.isCurrent === true)).toBe(true);
-    expect(body.current!.id).toBe(earlier[0]!.id);
+    expect(assertDefined(body.current).id).toBe(assertDefined(earlier[0]).id);
   });
 
   it('404s for a team that is not in the org', async () => {
@@ -254,7 +260,7 @@ async function makeIntegration(orgId: string, status: 'connected' | 'error' | 'd
     .insert(schema.integration)
     .values({ organizationId: orgId, provider: 'linear', pattern: 'connector', status })
     .returning({ id: schema.integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Seed one `linked` (mirrored) cycle for a team, sourced from the given integration. */
@@ -350,8 +356,8 @@ describe('cycle auto-roll sweeps stale native status', () => {
     const [row] = await db
       .select({ status: schema.cycle.status })
       .from(schema.cycle)
-      .where(eq(schema.cycle.id, stale!.id));
-    expect(row!.status).toBe('completed');
+      .where(eq(schema.cycle.id, assertDefined(stale).id));
+    expect(assertDefined(row).status).toBe('completed');
   });
 
   it('never touches a linked (provider-mirrored) cycle, even when its window has ended', async () => {
@@ -370,8 +376,8 @@ describe('cycle auto-roll sweeps stale native status', () => {
     const [row] = await db
       .select({ status: schema.cycle.status })
       .from(schema.cycle)
-      .where(eq(schema.cycle.id, linked!.id));
-    expect(row!.status).toBe('active');
+      .where(eq(schema.cycle.id, assertDefined(linked).id));
+    expect(assertDefined(row).status).toBe('active');
   });
 });
 
@@ -387,7 +393,7 @@ describe('cycle list surfaces isCurrent', () => {
     const current = list.items.filter((c) => c.isCurrent === true);
     expect(current).toHaveLength(1);
     const now = Date.now();
-    expect(now).toBeGreaterThanOrEqual(new Date(current[0]!.startsAt).getTime());
-    expect(now).toBeLessThanOrEqual(new Date(current[0]!.endsAt).getTime());
+    expect(now).toBeGreaterThanOrEqual(new Date(assertDefined(current[0]).startsAt).getTime());
+    expect(now).toBeLessThanOrEqual(new Date(assertDefined(current[0]).endsAt).getTime());
   });
 });

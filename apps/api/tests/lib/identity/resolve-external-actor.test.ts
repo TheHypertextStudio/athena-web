@@ -4,6 +4,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as ResolveModule from '../../../src/lib/identity/resolve-external-actor';
 import { addMember, getDb, seedBaseOrg } from '../../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -30,7 +31,7 @@ async function seedIntegration(orgId: string, actorId: string): Promise<string> 
       createdBy: actorId,
     })
     .returning({ id: schema.integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Seed an active human org member whose Better Auth user has EXACTLY `email`. */
@@ -44,7 +45,7 @@ async function seedMemberWithEmail(
     .insert(schema.user)
     .values({ name: `Member-${String(seq)}`, email })
     .returning({ id: schema.user.id });
-  const userId = u!.id;
+  const userId = assertDefined(u).id;
   const actorId = await addMember(db, schema, orgId, userId, 'member', status);
   return { actorId, userId };
 }

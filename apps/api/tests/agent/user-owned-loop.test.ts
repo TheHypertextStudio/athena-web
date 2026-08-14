@@ -18,6 +18,7 @@ import type {
 } from '../../src/agent/loop';
 import type * as ToolboxModule from '../../src/agent/toolbox';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -64,7 +65,7 @@ async function seedAthenaSession(
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       key: `owner-${slug}`,
       name: 'Owner',
       capabilities: ['view', 'contribute'],
@@ -75,25 +76,25 @@ async function seedAthenaSession(
     .values({ name: 'Ada', email: `${slug}-owner@example.com` })
     .returning({ id: schema.user.id });
   await db.insert(schema.hub).values({
-    userId: owner!.id,
+    userId: assertDefined(owner).id,
     preferences: { athena: { approvalMode } },
   });
   const [ownerActor] = await db
     .insert(schema.actor)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       kind: 'human',
       displayName: 'Ada',
-      userId: owner!.id,
-      roleId: role!.id,
+      userId: assertDefined(owner).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
   await db.insert(schema.grant).values({
-    organizationId: org!.id,
+    organizationId: assertDefined(org).id,
     subjectKind: 'role',
-    subjectId: role!.id,
+    subjectId: assertDefined(role).id,
     resourceKind: 'organization',
-    resourceId: org!.id,
+    resourceId: assertDefined(org).id,
     capabilities: ['view', 'contribute'],
     effect: 'allow',
   });
@@ -104,41 +105,41 @@ async function seedAthenaSession(
   const [initiatorActor] = await db
     .insert(schema.actor)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       kind: 'human',
       displayName: 'Grace',
-      userId: initiator!.id,
+      userId: assertDefined(initiator).id,
     })
     .returning({ id: schema.actor.id });
   const [team] = await db
     .insert(schema.team)
-    .values({ organizationId: org!.id, name: 'Core', key: `U${slug.slice(-4)}` })
+    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `U${slug.slice(-4)}` })
     .returning({ id: schema.team.id });
   const [session] = await db
     .insert(schema.agentSession)
     .values({
       executorKind: 'athena',
-      ownerUserId: owner!.id,
-      contextOrganizationId: org!.id,
+      ownerUserId: assertDefined(owner).id,
+      contextOrganizationId: assertDefined(org).id,
       trigger: 'delegation',
       status: 'pending',
-      initiatorId: initiatorActor!.id,
+      initiatorId: assertDefined(initiatorActor).id,
     })
     .returning({ id: schema.agentSession.id });
   await db.insert(schema.sessionActivity).values({
-    sessionId: session!.id,
+    sessionId: assertDefined(session).id,
     organizationId: null,
     type: 'response',
     body: { text: 'Create the task.' },
   });
   return {
-    ownerUserId: owner!.id,
-    ownerActorId: ownerActor!.id,
-    initiatorActorId: initiatorActor!.id,
-    roleId: role!.id,
-    orgId: org!.id,
-    teamId: team!.id,
-    sessionId: session!.id,
+    ownerUserId: assertDefined(owner).id,
+    ownerActorId: assertDefined(ownerActor).id,
+    initiatorActorId: assertDefined(initiatorActor).id,
+    roleId: assertDefined(role).id,
+    orgId: assertDefined(org).id,
+    teamId: assertDefined(team).id,
+    sessionId: assertDefined(session).id,
   };
 }
 
@@ -284,7 +285,7 @@ describe('user-owned Athena loop', () => {
       seed.orgId,
       seed.ownerActorId,
       seed.sessionId,
-      action!.id,
+      assertDefined(action).id,
       { decision: 'approve' },
       deps,
     );
@@ -295,7 +296,7 @@ describe('user-owned Athena loop', () => {
     const [applied] = await db
       .select()
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(applied?.approvalStatus).toBe('applied');
     expect(applied?.body.action?.result?.isError).toBe(true);
   });
@@ -319,7 +320,7 @@ describe('user-owned Athena loop', () => {
         seed.orgId,
         seed.ownerActorId,
         seed.sessionId,
-        action!.id,
+        assertDefined(action).id,
         { decision: 'approve' },
         deps,
       ),
@@ -327,7 +328,7 @@ describe('user-owned Athena loop', () => {
         seed.orgId,
         seed.ownerActorId,
         seed.sessionId,
-        action!.id,
+        assertDefined(action).id,
         { decision: 'approve' },
         deps,
       ),
@@ -369,7 +370,7 @@ describe('user-owned Athena loop', () => {
         seed.orgId,
         seed.ownerActorId,
         seed.sessionId,
-        action!.id,
+        assertDefined(action).id,
         { decision: 'approve' },
         deps,
       ),
@@ -377,7 +378,7 @@ describe('user-owned Athena loop', () => {
         seed.orgId,
         seed.ownerActorId,
         seed.sessionId,
-        action!.id,
+        assertDefined(action).id,
         { decision: 'reject' },
         deps,
       ),
@@ -388,7 +389,7 @@ describe('user-owned Athena loop', () => {
     const [decided] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(['applied', 'rejected']).toContain(decided?.status);
     const audits = await db
       .select()
@@ -445,7 +446,7 @@ describe('user-owned Athena loop', () => {
         seed.orgId,
         seed.ownerActorId,
         seed.sessionId,
-        action!.id,
+        assertDefined(action).id,
         { decision: 'approve' },
         deps,
       ),
@@ -454,7 +455,7 @@ describe('user-owned Athena loop', () => {
     const [approved] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(approved?.status).toBe('approved');
     const [parked] = await db
       .select({ status: schema.agentSession.status })
@@ -491,7 +492,7 @@ describe('user-owned Athena loop', () => {
       seed.orgId,
       seed.ownerActorId,
       seed.sessionId,
-      action!.id,
+      assertDefined(action).id,
       { decision: 'approve' },
       retryDeps,
     );
@@ -500,7 +501,7 @@ describe('user-owned Athena loop', () => {
       seed.orgId,
       seed.ownerActorId,
       seed.sessionId,
-      action!.id,
+      assertDefined(action).id,
       { decision: 'approve' },
       deps,
     );
@@ -566,7 +567,7 @@ describe('user-owned Athena loop', () => {
         seed.orgId,
         seed.ownerActorId,
         seed.sessionId,
-        action!.proposalGroupId!,
+        assertDefined(assertDefined(action).proposalGroupId),
         'approve',
         undefined,
         deps,
@@ -598,7 +599,7 @@ describe('user-owned Athena loop', () => {
       seed.orgId,
       seed.ownerActorId,
       seed.sessionId,
-      action!.proposalGroupId!,
+      assertDefined(assertDefined(action).proposalGroupId),
       'approve',
       undefined,
       retryDeps,
@@ -608,7 +609,7 @@ describe('user-owned Athena loop', () => {
       seed.orgId,
       seed.ownerActorId,
       seed.sessionId,
-      action!.proposalGroupId!,
+      assertDefined(assertDefined(action).proposalGroupId),
       'approve',
       undefined,
       deps,
@@ -648,7 +649,7 @@ describe('user-owned Athena loop', () => {
     await db
       .update(schema.sessionActivity)
       .set({ approvalStatus: 'executing' })
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     await db
       .update(schema.agentSession)
       .set({ status: 'running' })
@@ -668,7 +669,7 @@ describe('user-owned Athena loop', () => {
     const [stillClaimed] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(stillClaimed?.status).toBe('executing');
   });
 
@@ -708,7 +709,7 @@ describe('user-owned Athena loop', () => {
         seed.orgId,
         seed.sessionId,
         {
-          runId: run!.id,
+          runId: assertDefined(run).id,
           sessionId: seed.sessionId,
           generation: 1,
           leaseToken,
@@ -721,7 +722,7 @@ describe('user-owned Athena loop', () => {
     const [persisted] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(persisted?.status).toBe('approved');
   });
 
@@ -781,7 +782,7 @@ describe('user-owned Athena loop', () => {
           seed.orgId,
           seed.sessionId,
           {
-            runId: run!.id,
+            runId: assertDefined(run).id,
             sessionId: seed.sessionId,
             generation: 1,
             leaseToken,
@@ -797,7 +798,7 @@ describe('user-owned Athena loop', () => {
     const [claimed] = await db
       .select()
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(claimed?.approvalStatus).toBe('executing');
     expect(claimed?.body.action?.result).toBeUndefined();
   });
@@ -993,7 +994,7 @@ describe('user-owned Athena loop', () => {
       })
       .returning({ id: schema.agentSession.id });
     await db.insert(schema.sessionActivity).values({
-      sessionId: second!.id,
+      sessionId: assertDefined(second).id,
       organizationId: null,
       type: 'response',
       body: { text: 'Create another task.' },
@@ -1006,7 +1007,7 @@ describe('user-owned Athena loop', () => {
       (session) => ({ kind: 'fulfilled' as const, session }),
       (error: unknown) => ({ kind: 'rejected' as const, error }),
     );
-    const secondRun = driveSession(seed.orgId, second!.id, deps).then(
+    const secondRun = driveSession(seed.orgId, assertDefined(second).id, deps).then(
       (session) => ({ kind: 'fulfilled' as const, session }),
       (error: unknown) => ({ kind: 'rejected' as const, error }),
     );
@@ -1017,7 +1018,10 @@ describe('user-owned Athena loop', () => {
       .select({ status: schema.agentSession.status })
       .from(schema.agentSession)
       .where(
-        or(eq(schema.agentSession.id, seed.sessionId), eq(schema.agentSession.id, second!.id)),
+        or(
+          eq(schema.agentSession.id, seed.sessionId),
+          eq(schema.agentSession.id, assertDefined(second).id),
+        ),
       );
     release.resolve(undefined);
     const outcomes = await Promise.all([firstRun, secondRun]);
@@ -1096,7 +1100,7 @@ describe('user-owned Athena loop', () => {
       .where(eq(schema.agentSessionRun.sessionId, seed.sessionId));
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({
-      id: abandoned!.id,
+      id: assertDefined(abandoned).id,
       generation: 1,
       attempt: 2,
       status: 'completed',
@@ -1209,7 +1213,7 @@ describe('user-owned Athena loop', () => {
       .where(eq(schema.agentSession.id, seed.sessionId));
     const { claimQueuedRunGeneration, enqueueRunGeneration } =
       await import('../../src/agent/run-generation');
-    const queued = await enqueueRunGeneration(session!);
+    const queued = await enqueueRunGeneration(assertDefined(session));
     const claimed = await claimQueuedRunGeneration(queued.message);
     const runtimeWithContinuation = new runtime.MockAgentTurnRuntime({
       script: [

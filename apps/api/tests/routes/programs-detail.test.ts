@@ -5,6 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type programsRouter from '../../src/routes/programs';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -30,7 +31,7 @@ async function seedProgram(orgId: string, createdBy: string): Promise<string> {
     .insert(schema.program)
     .values({ organizationId: orgId, name: 'Platform', createdBy })
     .returning({ id: schema.program.id });
-  return p!.id;
+  return assertDefined(p).id;
 }
 
 /** Insert a project under a program and return its id. */
@@ -45,7 +46,7 @@ async function seedProject(
     .insert(schema.project)
     .values({ organizationId: orgId, name, teamId, programId, createdBy })
     .returning({ id: schema.project.id });
-  return proj!.id;
+  return assertDefined(proj).id;
 }
 
 /** The window every seeded cycle covers, shared so the expected `displayName` is derivable. */
@@ -71,7 +72,7 @@ async function seedCycle(
       endsAt: new Date(CYCLE_ENDS_AT),
     })
     .returning({ id: schema.cycle.id });
-  return cy!.id;
+  return assertDefined(cy).id;
 }
 
 /** Insert a task with the given program/project/cycle wiring; returns its id. */
@@ -97,7 +98,7 @@ async function seedTask(args: {
       archivedAt: args.archived ? new Date() : null,
     })
     .returning({ id: schema.task.id });
-  return t!.id;
+  return assertDefined(t).id;
 }
 
 /** Insert a status update on a subject; returns its id. */
@@ -121,7 +122,7 @@ async function seedUpdate(args: {
       createdBy: args.authorId,
     })
     .returning({ id: schema.update.id });
-  return u!.id;
+  return assertDefined(u).id;
 }
 
 describe('programs detail (GET /:id with roll-up)', () => {
@@ -225,18 +226,18 @@ describe('programs work view (GET /:id/work)', () => {
 
     const realGroup = body.groups.find((g) => g.cycle.id === cycle1);
     expect(realGroup).toBeDefined();
-    expect(realGroup!.cycle.number).toBe(1);
+    expect(assertDefined(realGroup).cycle.number).toBe(1);
     // cycle1 has two segments: project A and the "no project" segment.
-    expect(realGroup!.segments).toHaveLength(2);
-    const noProjectSeg = realGroup!.segments.find((s) => s.project.id === null);
-    expect(noProjectSeg!.tasks).toHaveLength(1);
-    const projASeg = realGroup!.segments.find((s) => s.project.id === projA);
-    expect(projASeg!.project.name).toBe('A');
-    expect(projASeg!.tasks).toHaveLength(2);
+    expect(assertDefined(realGroup).segments).toHaveLength(2);
+    const noProjectSeg = assertDefined(realGroup).segments.find((s) => s.project.id === null);
+    expect(assertDefined(noProjectSeg).tasks).toHaveLength(1);
+    const projASeg = assertDefined(realGroup).segments.find((s) => s.project.id === projA);
+    expect(assertDefined(projASeg).project.name).toBe('A');
+    expect(assertDefined(projASeg).tasks).toHaveLength(2);
 
     const nullCycleGroup = body.groups.find((g) => g.cycle.id === null);
-    expect(nullCycleGroup!.segments).toHaveLength(1);
-    expect(nullCycleGroup!.segments[0]!.tasks).toHaveLength(1);
+    expect(assertDefined(nullCycleGroup).segments).toHaveLength(1);
+    expect(assertDefined(assertDefined(nullCycleGroup).segments[0]).tasks).toHaveLength(1);
 
     // The archived task never appears.
     const allTaskCount = body.groups
@@ -256,13 +257,15 @@ describe('programs work view (GET /:id/work)', () => {
     const group = body.groups.find((g) => g.cycle.id === namelessCycle);
     expect(group).toBeDefined();
     // `name` stays null — it is the author's own field and nothing has set it.
-    expect(group!.cycle.name).toBeNull();
+    expect(assertDefined(group).cycle.name).toBeNull();
     // …but the board still has something to head the group with. Without `displayName` the web
     // work board falls back to the bare vocabulary noun, so two unnamed cadences would render an
     // identical heading; the number is never an answer because it reads as "Cycle 1000137".
-    expect(group!.cycle.displayName).toBe(defaultCycleName(CYCLE_STARTS_AT, CYCLE_ENDS_AT));
-    expect(group!.cycle.displayName).toBe('Jan 1 – Jan 14');
-    expect(group!.cycle.number).toBe(1_000_137);
+    expect(assertDefined(group).cycle.displayName).toBe(
+      defaultCycleName(CYCLE_STARTS_AT, CYCLE_ENDS_AT),
+    );
+    expect(assertDefined(group).cycle.displayName).toBe('Jan 1 – Jan 14');
+    expect(assertDefined(group).cycle.number).toBe(1_000_137);
   });
 
   it('filters by cycleId and projectId', async () => {
@@ -295,7 +298,7 @@ describe('programs work view (GET /:id/work)', () => {
       .flatMap((g) => g.segments)
       .reduce((n, s) => n + s.tasks.length, 0);
     expect(projTaskCount).toBe(1);
-    expect(byProject.groups[0]!.segments[0]!.project.id).toBe(projB);
+    expect(assertDefined(assertDefined(byProject.groups[0]).segments[0]).project.id).toBe(projB);
   });
 
   it('returns no groups for a program with no work', async () => {
@@ -378,7 +381,7 @@ describe('programs updates (GET /:id/updates)', () => {
     expect(body.items.every((u) => u.subjectType === 'program' && u.subjectId === programId)).toBe(
       true,
     );
-    expect(body.items[0]!.health).toBe('at_risk');
+    expect(assertDefined(body.items[0]).health).toBe('at_risk');
   });
 
   it('returns an empty page for a program with no updates', async () => {

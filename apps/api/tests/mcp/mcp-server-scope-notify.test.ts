@@ -17,6 +17,7 @@ import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import { resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 import { seedConsentedClient } from '../support/oauth-grant';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -45,7 +46,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const [role] = await db
     .insert(schema.role)
     .values({ organizationId: orgId, key: 'seeded', name: 'Seeded', capabilities: ['contribute'] })
@@ -55,19 +56,19 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.user)
     .values({ name: 'Ada', email })
     .returning({ id: schema.user.id });
-  const userId = user!.id;
+  const userId = assertDefined(user).id;
   await db.insert(schema.hub).values({ userId });
   await db.insert(schema.actor).values({
     organizationId: orgId,
     kind: 'human',
     displayName: 'Ada',
     userId,
-    roleId: role!.id,
+    roleId: assertDefined(role).id,
   });
   await db.insert(schema.grant).values({
     organizationId: orgId,
     subjectKind: 'role',
-    subjectId: role!.id,
+    subjectId: assertDefined(role).id,
     resourceKind: 'organization',
     resourceId: orgId,
     capabilities: ['contribute'],
@@ -118,13 +119,13 @@ describe('scope step-up notifies a live session about the tool it lost', () => {
       method: 'GET',
       headers: {
         accept: 'text/event-stream',
-        'mcp-session-id': sessionId!,
+        'mcp-session-id': assertDefined(sessionId),
         authorization: 'Bearer ro',
       },
       signal: controller.signal,
     });
     expect(stream.status).toBe(200);
-    const reader = stream.body!.getReader();
+    const reader = assertDefined(stream.body).getReader();
     const decoder = new TextDecoder();
     let buffered = '';
     const nextFrame = async (): Promise<unknown> => {
@@ -145,7 +146,7 @@ describe('scope step-up notifies a live session about the tool it lost', () => {
     // 3. The refused call, on the same session + token.
     const res = await app().request('/mcp', {
       method: 'POST',
-      headers: { ...bearerHeaders, 'mcp-session-id': sessionId! },
+      headers: { ...bearerHeaders, 'mcp-session-id': assertDefined(sessionId) },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 2,

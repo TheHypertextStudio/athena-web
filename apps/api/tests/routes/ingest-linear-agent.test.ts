@@ -10,6 +10,7 @@ import type * as IntegrationsModule from '@docket/integrations';
 import type * as ContainerModule from '../../src/container';
 import type ingestLinearAgentRouter from '../../src/routes/ingest-linear-agent';
 import type { sealCredential as SealCredential } from '../../src/lib/credentials';
+import { assertDefined } from '@docket/test-utils';
 
 const { buildLinearAgentClient } = vi.hoisted(() => ({
   buildLinearAgentClient: vi.fn(),
@@ -81,12 +82,12 @@ async function seedOrgWithLinearAgent(
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const [human] = await db
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada' })
     .returning({ id: schema.actor.id });
-  const humanActorId = human!.id;
+  const humanActorId = assertDefined(human).id;
   const workspaceId = `ws_${Math.random().toString(36).slice(2, 8)}`;
   const [intg] = await db
     .insert(schema.integration)
@@ -100,7 +101,7 @@ async function seedOrgWithLinearAgent(
       createdBy: humanActorId,
     })
     .returning({ id: schema.integration.id });
-  const integrationId = intg!.id;
+  const integrationId = assertDefined(intg).id;
   if (opts.withCredential !== false) {
     await db.insert(schema.integrationCredential).values({
       organizationId: orgId,
@@ -117,7 +118,7 @@ async function seedLinkedLinearActor(orgId: string, externalId: string): Promise
     .insert(schema.user)
     .values({ name: 'Linear User', email: `${externalId}@example.test` })
     .returning({ id: schema.user.id });
-  const userId = u!.id;
+  const userId = assertDefined(u).id;
   await db.insert(schema.hub).values({ userId });
   await db.insert(schema.account).values({ userId, providerId: 'linear', accountId: externalId });
   const [a] = await db
@@ -130,7 +131,7 @@ async function seedLinkedLinearActor(orgId: string, externalId: string): Promise
       status: 'active',
     })
     .returning({ id: schema.actor.id });
-  return a!.id;
+  return assertDefined(a).id;
 }
 
 describe('POST /internal/ingest/linear-agent', () => {
@@ -221,7 +222,7 @@ describe('POST /internal/ingest/linear-agent', () => {
         sessionId?: string;
       };
       expect(json).toEqual({ received: true, processed: true, sessionId: expect.any(String) });
-      const sessionId = json.sessionId!;
+      const sessionId = assertDefined(json.sessionId);
 
       const [session] = await db
         .select()
@@ -288,7 +289,7 @@ describe('POST /internal/ingest/linear-agent', () => {
       });
       expect(res.status).toBe(200);
       const json = (await res.json()) as { sessionId?: string };
-      const sessionId = json.sessionId!;
+      const sessionId = assertDefined(json.sessionId);
 
       const [session] = await db
         .select()
@@ -334,7 +335,7 @@ describe('POST /internal/ingest/linear-agent', () => {
       const [session] = await db
         .select()
         .from(schema.agentSession)
-        .where(eq(schema.agentSession.id, json.sessionId!));
+        .where(eq(schema.agentSession.id, assertDefined(json.sessionId)));
       expect(session?.status).toBe('awaiting_input');
     });
 
@@ -367,10 +368,10 @@ describe('POST /internal/ingest/linear-agent', () => {
         .values({
           organizationId: seeded.orgId,
           title: 'Fix the thing',
-          teamId: team!.id,
+          teamId: assertDefined(team).id,
           state: 'backlog',
           source: 'linked',
-          sourceIntegrationId: regularConnector!.id,
+          sourceIntegrationId: assertDefined(regularConnector).id,
           externalId: 'issue_42',
         })
         .returning({ id: schema.task.id });
@@ -393,13 +394,13 @@ describe('POST /internal/ingest/linear-agent', () => {
       const [session] = await db
         .select()
         .from(schema.agentSession)
-        .where(eq(schema.agentSession.id, json.sessionId!));
-      expect(session?.taskId).toBe(mirroredTask!.id);
+        .where(eq(schema.agentSession.id, assertDefined(json.sessionId)));
+      expect(session?.taskId).toBe(assertDefined(mirroredTask).id);
 
       const [link] = await db
         .select()
         .from(schema.agentSessionExternalLink)
-        .where(eq(schema.agentSessionExternalLink.sessionId, json.sessionId!));
+        .where(eq(schema.agentSessionExternalLink.sessionId, assertDefined(json.sessionId)));
       expect(link?.externalIssueId).toBe('issue_42');
     });
 
@@ -467,13 +468,13 @@ describe('POST /internal/ingest/linear-agent', () => {
         })
         .returning({ id: schema.agentSession.id });
       await db.insert(schema.agentSessionExternalLink).values({
-        sessionId: session!.id,
+        sessionId: assertDefined(session).id,
         organizationId: orgId,
         provider: 'linear',
         externalSessionId: linearSessionId,
         externalWorkspaceId: workspaceId,
       });
-      return session!.id;
+      return assertDefined(session).id;
     }
 
     async function ensureAgent(orgId: string): Promise<string> {
@@ -483,9 +484,9 @@ describe('POST /internal/ingest/linear-agent', () => {
         .returning({ id: schema.actor.id });
       const [row] = await db
         .insert(schema.agent)
-        .values({ organizationId: orgId, actorId: a!.id })
+        .values({ organizationId: orgId, actorId: assertDefined(a).id })
         .returning({ id: schema.agent.id });
-      return row!.id;
+      return assertDefined(row).id;
     }
 
     it('records the reply and queues a resume when identity is already resolved', async () => {

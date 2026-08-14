@@ -6,6 +6,7 @@ import type { ExternalUser } from '@docket/integrations';
 
 import type * as IntegrationIdentityModule from '../../src/routes/integration-identity';
 import { addMember, appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -41,7 +42,7 @@ async function seedIntegration(orgId: string, actorId: string): Promise<string> 
       createdBy: actorId,
     })
     .returning({ id: schema.integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Seed a human org member whose Better Auth user has EXACTLY `email` (for match tests). */
@@ -54,7 +55,7 @@ async function seedMemberWithEmail(
     .insert(schema.user)
     .values({ name, email })
     .returning({ id: schema.user.id });
-  const userId = u!.id;
+  const userId = assertDefined(u).id;
   const actorId = await addMember(db, schema, orgId, userId, 'member');
   return { actorId, userId };
 }
@@ -85,7 +86,7 @@ async function loadRow(integrationId: string) {
     .select()
     .from(schema.externalActor)
     .where(eq(schema.externalActor.integrationId, integrationId));
-  return rows[0]!;
+  return assertDefined(rows[0]);
 }
 
 describe('syncExternalActors', () => {
@@ -227,7 +228,7 @@ describe('syncExternalActors', () => {
       .insert(schema.user)
       .values({ name: 'Suspended', email: 'suspended@example.com' })
       .returning({ id: schema.user.id });
-    await addMember(db, schema, orgId, u!.id, 'member', 'suspended');
+    await addMember(db, schema, orgId, assertDefined(u).id, 'member', 'suspended');
 
     const map = await syncExternalActors(orgId, id, [
       extUser({ externalId: 'ext-susp-1', displayName: 'Susp', email: 'suspended@example.com' }),
@@ -337,11 +338,11 @@ describe('external-actor endpoints', () => {
     const out = await body<{ items: ExternalActorRes[] }>(res);
     expect(out.items).toHaveLength(2);
 
-    const matched = out.items.find((r) => r.externalId === 'ext-get-1')!;
+    const matched = assertDefined(out.items.find((r) => r.externalId === 'ext-get-1'));
     expect(matched.actorId).toBe(matchedActorId);
     expect(matched.matchedBy).toBe('email');
 
-    const unmatched = out.items.find((r) => r.externalId === 'ext-get-2')!;
+    const unmatched = assertDefined(out.items.find((r) => r.externalId === 'ext-get-2'));
     expect(unmatched.actorId).toBeNull();
     expect(unmatched.matchedBy).toBeNull();
   });

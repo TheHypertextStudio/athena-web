@@ -23,6 +23,7 @@ const env: {
 vi.mock('../../src/env', () => ({ env }));
 
 import type * as SlackApp from '../../src/lib/slack-app';
+import { assertDefined } from '@docket/test-utils';
 
 let mod!: typeof SlackApp;
 
@@ -119,7 +120,7 @@ describe('buildSlackAuthorizeUrl', () => {
     env.SLACK_CLIENT_SECRET = 'slack-client-secret-456';
     const url = mod.buildSlackAuthorizeUrl('signed-state');
     expect(url).not.toBeNull();
-    const parsed = new URL(url!);
+    const parsed = new URL(assertDefined(url));
     expect(parsed.origin + parsed.pathname).toBe('https://slack.com/oauth/v2/authorize');
     expect(parsed.searchParams.get('client_id')).toBe('slack-client-id-123');
     expect(parsed.searchParams.get('user_scope')).toBe(mod.SLACK_USER_SCOPES.join(','));

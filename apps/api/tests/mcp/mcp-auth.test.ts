@@ -7,6 +7,7 @@ import type * as AuthModule from '../../src/mcp/auth';
 import type * as ResultModule from '../../src/mcp/result';
 import { getSession, resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -111,16 +112,26 @@ describe('resolveActor', () => {
       .returning({ id: schema.user.id });
     const [a] = await db
       .insert(schema.actor)
-      .values({ organizationId: org!.id, kind: 'human', displayName: 'A', userId: u!.id })
+      .values({
+        organizationId: assertDefined(org).id,
+        kind: 'human',
+        displayName: 'A',
+        userId: assertDefined(u).id,
+      })
       .returning({ id: schema.actor.id });
     const actor = await authMod.resolveActor(
       {
-        principal: { kind: 'user', userId: u!.id, userName: 'A', userEmail: 'a@e.com' },
+        principal: {
+          kind: 'user',
+          userId: assertDefined(u).id,
+          userName: 'A',
+          userEmail: 'a@e.com',
+        },
         scopes: ['work:read'],
       },
-      org!.id,
+      assertDefined(org).id,
     );
-    expect(actor).toEqual({ orgId: org!.id, actorId: a!.id });
+    expect(actor).toEqual({ orgId: assertDefined(org).id, actorId: assertDefined(a).id });
   });
 
   it('404s when the caller is not a member', async () => {
@@ -135,7 +146,7 @@ describe('resolveActor', () => {
           principal: { kind: 'user', userId: 'ghost', userName: null, userEmail: 'g@e.com' },
           scopes: ['work:read'],
         },
-        org!.id,
+        assertDefined(org).id,
       ),
     ).rejects.toMatchObject({ status: 404 });
   });

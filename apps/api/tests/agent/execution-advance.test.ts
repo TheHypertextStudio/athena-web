@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { advanceCloudflareGeneration } from '../../src/agent/execution-advance';
 import type { RunGenerationMessage } from '../../src/agent/run-generation';
 import { ConflictError } from '../../src/error';
+import { assertDefined } from '@docket/test-utils';
 
 const message: RunGenerationMessage = {
   sessionId: '01SESSION',
@@ -42,7 +43,9 @@ describe('Cloudflare generation advance', () => {
         loadWaiting: vi.fn(),
       }),
     ).resolves.toEqual({ state: 'continue', next: next.message });
-    expect(drive.mock.invocationCallOrder[0]).toBeLessThan(enqueue.mock.invocationCallOrder[0]!);
+    expect(drive.mock.invocationCallOrder[0]).toBeLessThan(
+      assertDefined(enqueue.mock.invocationCallOrder[0]),
+    );
   });
 
   it('durably waits without creating another generation', async () => {

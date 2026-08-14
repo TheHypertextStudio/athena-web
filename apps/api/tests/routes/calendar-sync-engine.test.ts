@@ -24,6 +24,7 @@ import {
   type ProviderItemSnapshot,
 } from '../../src/routes/calendar-sync-engine';
 import { createDefaultCalendarSyncModules } from '../../src/routes/calendar-sync-modules';
+import { assertDefined } from '@docket/test-utils';
 
 const NOW = new Date('2026-07-02T12:00:00.000Z');
 
@@ -1037,8 +1038,8 @@ describe('calendar sync engine — provider neutrality (fake adapter)', () => {
           ),
         ),
     );
-    expect(connection.lastSyncedAt!.getTime()).toBeGreaterThanOrEqual(before);
-    expect(connection.lastSyncedAt!.getTime()).toBeLessThanOrEqual(after);
+    expect(assertDefined(connection.lastSyncedAt).getTime()).toBeGreaterThanOrEqual(before);
+    expect(assertDefined(connection.lastSyncedAt).getTime()).toBeLessThanOrEqual(after);
   });
 
   it('records a fallback error and a plain (non-reauth) status when a resolveCredentials failure is not a CalendarReauthRequiredError', async () => {

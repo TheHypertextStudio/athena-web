@@ -5,6 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as IntegrationSyncModule from '../../src/routes/integration-sync';
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -37,7 +38,7 @@ async function seedIntegration(orgId: string, actorId: string, provider: string)
       createdBy: actorId,
     })
     .returning({ id: schema.integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 interface DirectoryRes {
@@ -111,7 +112,7 @@ describe('integrations directory', () => {
       'notion',
     ]);
 
-    const github = dir.providers.find((p) => p.provider === 'github')!;
+    const github = assertDefined(dir.providers.find((p) => p.provider === 'github'));
     expect(github.name).toBe('GitHub');
     expect(github.pattern).toBe('connector');
     expect(github.roles).toContain('code');
@@ -120,17 +121,17 @@ describe('integrations directory', () => {
     expect(github.syncable).toBe(true);
 
     // The three onboarding connect sources are all present with sensible directory entries.
-    const gtasks = dir.providers.find((p) => p.provider === 'gtasks')!;
+    const gtasks = assertDefined(dir.providers.find((p) => p.provider === 'gtasks'));
     expect(gtasks.name).toBe('Google Tasks');
     expect(gtasks.pattern).toBe('connector');
     expect(gtasks.roles).toContain('work');
     expect(gtasks.category).toBe('project-management');
 
-    const calendar = dir.providers.find((p) => p.provider === 'calendar')!;
+    const calendar = assertDefined(dir.providers.find((p) => p.provider === 'calendar'));
     expect(calendar.name).toBe('Google Calendar');
     expect(calendar.roles).toContain('time');
 
-    const linear = dir.providers.find((p) => p.provider === 'linear')!;
+    const linear = assertDefined(dir.providers.find((p) => p.provider === 'linear'));
     expect(linear.name).toBe('Linear');
     expect(linear.roles).toContain('work');
     // Slice 2: Linear graduated from the one-time `migration` (Import) pattern to a live
@@ -172,8 +173,8 @@ describe('integrations sync', () => {
     // The run is persisted and listable (view capability suffices).
     const runs = await body<{ items: SyncRunRes[] }>(await v.request(`/${id}/runs`));
     expect(runs.items).toHaveLength(1);
-    expect(runs.items[0]!.id).toBe(run.id);
-    expect(runs.items[0]!.status).toBe('succeeded');
+    expect(assertDefined(runs.items[0]).id).toBe(run.id);
+    expect(assertDefined(runs.items[0]).status).toBe('succeeded');
   });
 
   it('is idempotent: a second sync processes nothing already materialized', async () => {
@@ -261,7 +262,7 @@ describe('integrations sync', () => {
         provider: 'github',
         pattern: 'connector',
         roles: ['work'],
-        config: { teamId: target!.id },
+        config: { teamId: assertDefined(target).id },
         createdBy: humanActorId,
       })
       .returning({ id: schema.integration.id });
@@ -281,13 +282,13 @@ describe('integrations sync', () => {
     const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
 
     const v = await body<SyncRunRes>(
-      await w.request(`/${valid!.id}/sync`, { method: 'POST', headers: J }),
+      await w.request(`/${assertDefined(valid).id}/sync`, { method: 'POST', headers: J }),
     );
     expect(v.status).toBe('succeeded');
     expect(v.processed).toBe(1);
 
     const iv = await body<SyncRunRes>(
-      await w.request(`/${invalid!.id}/sync`, { method: 'POST', headers: J }),
+      await w.request(`/${assertDefined(invalid).id}/sync`, { method: 'POST', headers: J }),
     );
     expect(iv.status).toBe('succeeded');
     expect(iv.processed).toBe(1);
@@ -310,13 +311,13 @@ describe('integrations sync', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
-    const orgId = org!.id;
+    const orgId = assertDefined(org).id;
     const [human] = await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'A' })
       .returning({ id: schema.actor.id });
-    const id = await seedIntegration(orgId, human!.id, 'github');
-    const w = appWithActor(integrations, orgId, ['manage'], human!.id);
+    const id = await seedIntegration(orgId, assertDefined(human).id, 'github');
+    const w = appWithActor(integrations, orgId, ['manage'], assertDefined(human).id);
 
     const res = await w.request(`/${id}/sync`, { method: 'POST', headers: J });
     expect(res.status).toBe(200);
@@ -339,17 +340,22 @@ describe('integrations sync', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
-    const orgId = org!.id;
+    const orgId = assertDefined(org).id;
     const [u] = await db
       .insert(schema.user)
       .values({ name: 'A', email: `notify-owner-${Date.now().toString()}@example.com` })
       .returning({ id: schema.user.id });
     const [human] = await db
       .insert(schema.actor)
-      .values({ organizationId: orgId, kind: 'human', displayName: 'A', userId: u!.id })
+      .values({
+        organizationId: orgId,
+        kind: 'human',
+        displayName: 'A',
+        userId: assertDefined(u).id,
+      })
       .returning({ id: schema.actor.id });
-    const id = await seedIntegration(orgId, human!.id, 'github');
-    const w = appWithActor(integrations, orgId, ['manage'], human!.id);
+    const id = await seedIntegration(orgId, assertDefined(human).id, 'github');
+    const w = appWithActor(integrations, orgId, ['manage'], assertDefined(human).id);
 
     const first = await w.request(`/${id}/sync`, { method: 'POST', headers: J });
     expect((await body<{ status: string }>(first)).status).toBe('failed');
@@ -360,7 +366,10 @@ describe('integrations sync', () => {
       .select()
       .from(schema.notification)
       .where(
-        and(eq(schema.notification.userId, u!.id), eq(schema.notification.organizationId, orgId)),
+        and(
+          eq(schema.notification.userId, assertDefined(u).id),
+          eq(schema.notification.organizationId, orgId),
+        ),
       );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.type).toBe('connector_sync_failed');
@@ -758,9 +767,11 @@ describe('background connector sweep', () => {
     await sweepConnectorSync(new Date());
 
     const w = appWithActor(integrations, orgId, ['view'], humanActorId);
-    const runs = await body<{ items: SyncRunRes[] }>(await w.request(`/${row!.id}/runs`));
+    const runs = await body<{ items: SyncRunRes[] }>(
+      await w.request(`/${assertDefined(row).id}/runs`),
+    );
     expect(runs.items).toHaveLength(0);
-    const got = await body<IntegrationStateRes>(await w.request(`/${row!.id}`));
+    const got = await body<IntegrationStateRes>(await w.request(`/${assertDefined(row).id}`));
     expect(got.lastSyncedAt).toBeNull();
   });
 
@@ -827,7 +838,7 @@ async function seedWritableGtasks(orgId: string, actorId: string): Promise<strin
       createdBy: actorId,
     })
     .returning({ id: schema.integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 describe('two-way Google Tasks sync', () => {
@@ -843,18 +854,20 @@ describe('two-way Google Tasks sync', () => {
     expect(first.processed).toBe(3);
 
     const loadTask = async () =>
-      (
-        await db
-          .select()
-          .from(schema.task)
-          .where(
-            and(
-              eq(schema.task.sourceIntegrationId, id),
-              eq(schema.task.externalId, 'gtasks-task-001'),
-            ),
-          )
-          .limit(1)
-      )[0]!;
+      assertDefined(
+        (
+          await db
+            .select()
+            .from(schema.task)
+            .where(
+              and(
+                eq(schema.task.sourceIntegrationId, id),
+                eq(schema.task.externalId, 'gtasks-task-001'),
+              ),
+            )
+            .limit(1)
+        )[0],
+      );
 
     // Edit the task locally → updatedAt bumps past the anchor, marking it dirty.
     const original = await loadTask();
@@ -863,7 +876,9 @@ describe('two-way Google Tasks sync', () => {
       .set({ title: 'Edited locally' })
       .where(eq(schema.task.id, original.id));
     const dirty = await loadTask();
-    expect(dirty.updatedAt.getTime()).toBeGreaterThan(dirty.externalUpdatedAt!.getTime());
+    expect(dirty.updatedAt.getTime()).toBeGreaterThan(
+      assertDefined(dirty.externalUpdatedAt).getTime(),
+    );
 
     // Second sync pushes exactly that task and re-stamps it clean (anchor advanced, lastPushedAt set).
     const second = await body<SyncRunRes>(
@@ -873,11 +888,11 @@ describe('two-way Google Tasks sync', () => {
 
     const pushed = await loadTask();
     expect(pushed.lastPushedAt).not.toBeNull();
-    expect(pushed.externalUpdatedAt!.getTime()).toBeGreaterThan(
-      original.externalUpdatedAt!.getTime(),
+    expect(assertDefined(pushed.externalUpdatedAt).getTime()).toBeGreaterThan(
+      assertDefined(original.externalUpdatedAt).getTime(),
     );
     // Echo guard: clean again, so a subsequent sync neither re-pushes nor re-pulls it.
-    expect(pushed.updatedAt.getTime()).toBe(pushed.externalUpdatedAt!.getTime());
+    expect(pushed.updatedAt.getTime()).toBe(assertDefined(pushed.externalUpdatedAt).getTime());
     expect(pushed.title).toBe('Edited locally');
 
     const third = await body<SyncRunRes>(
@@ -985,7 +1000,7 @@ describe('Slice 2: Linear on the Connections surface (directory pattern flip)', 
         createdBy: humanActorId,
       })
       .returning({ id: schema.integration.id, pattern: schema.integration.pattern });
-    expect(legacy!.pattern).toBe('migration');
+    expect(assertDefined(legacy).pattern).toBe('migration');
 
     // Re-run the exact backfill statement from
     // packages/db/drizzle/0022_flip_linear_connector_pattern.sql directly against this row
@@ -999,8 +1014,8 @@ describe('Slice 2: Linear on the Connections surface (directory pattern flip)', 
     const [after] = await db
       .select({ pattern: schema.integration.pattern })
       .from(schema.integration)
-      .where(eq(schema.integration.id, legacy!.id));
-    expect(after!.pattern).toBe('connector');
+      .where(eq(schema.integration.id, assertDefined(legacy).id));
+    expect(assertDefined(after).pattern).toBe('connector');
   });
 
   it('directory-driven create: pattern connector, syncMode mirror (DB default), writeBack false; verify → connected', async () => {
@@ -1053,7 +1068,7 @@ describe('PATCH config.teamMappings validation', () => {
         config: {
           teamMappings: [
             { externalTeamId: 'ext-1', teamId },
-            { externalTeamId: 'ext-2', teamId: teamB!.id },
+            { externalTeamId: 'ext-2', teamId: assertDefined(teamB).id },
           ],
         },
       }),
@@ -1114,7 +1129,7 @@ describe('PATCH config.teamMappings validation', () => {
         config: {
           teamMappings: [
             { externalTeamId: 'dup', teamId },
-            { externalTeamId: 'dup', teamId: teamB!.id },
+            { externalTeamId: 'dup', teamId: assertDefined(teamB).id },
           ],
         },
       }),

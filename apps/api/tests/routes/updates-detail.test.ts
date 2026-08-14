@@ -15,6 +15,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type updatesRouter from '../../src/routes/updates';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -41,7 +42,7 @@ async function seedProject(orgId: string, teamId: string, authorId: string): Pro
     .insert(schema.project)
     .values({ organizationId: orgId, name: 'P', teamId, createdBy: authorId })
     .returning({ id: schema.project.id });
-  return proj!.id;
+  return assertDefined(proj).id;
 }
 
 /** Post an update via the router; asserts 200 and returns the created update id. */
@@ -142,7 +143,7 @@ describe('updates list-by-subject (GET /)', () => {
     expect(ids).not.toContain(elsewhere);
     // Newest-first: the feed is sorted by createdAt descending (ties keep both present).
     const times = list.items.map((u) => Date.parse(u.createdAt));
-    expect(times[0]!).toBeGreaterThanOrEqual(times[1]!);
+    expect(assertDefined(times[0])).toBeGreaterThanOrEqual(assertDefined(times[1]));
   });
 
   it('422s on a missing/invalid subjectType query', async () => {
@@ -178,7 +179,7 @@ describe('updates post -> latest health propagates to the subject', () => {
       .insert(schema.program)
       .values({ organizationId: orgId, name: 'PG', createdBy: humanActorId })
       .returning({ id: schema.program.id });
-    const programId = prog!.id;
+    const programId = assertDefined(prog).id;
     await postUpdate(w, {
       subjectType: 'program',
       subjectId: programId,
@@ -197,7 +198,7 @@ describe('updates post -> latest health propagates to the subject', () => {
       .insert(schema.initiative)
       .values({ organizationId: orgId, name: 'I', createdBy: humanActorId })
       .returning({ id: schema.initiative.id });
-    const initiativeId = init!.id;
+    const initiativeId = assertDefined(init).id;
     await postUpdate(w, {
       subjectType: 'initiative',
       subjectId: initiativeId,
@@ -288,7 +289,7 @@ describe('updates delete (DELETE /:id)', () => {
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: name })
       .returning({ id: schema.actor.id });
-    return row!.id;
+    return assertDefined(row).id;
   }
 
   it('lets the author delete their update and recomputes the subject health to the prior post', async () => {

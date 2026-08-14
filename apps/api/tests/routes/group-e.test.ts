@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -253,11 +254,15 @@ describe('integrations import: configured-team path + null-branch coverage via a
       .returning({ id: schema.integration.id });
 
     const w = appWithActor(r['integrations'], orgId, ['contribute'], humanActorId);
-    const res = await w.request(`/${intg!.id}/import`, { method: 'POST', headers: J, body: '{}' });
+    const res = await w.request(`/${assertDefined(intg).id}/import`, {
+      method: 'POST',
+      headers: J,
+      body: '{}',
+    });
     expect(res.status).toBe(200);
     const out = await body<{ items: { provenance: { externalUrl: string | null } }[] }>(res);
     expect(out.items).toHaveLength(1);
-    expect(out.items[0]!.provenance.externalUrl).toBeNull();
+    expect(assertDefined(out.items[0]).provenance.externalUrl).toBeNull();
     spy.mockRestore();
   });
 
@@ -282,12 +287,16 @@ describe('integrations import: configured-team path + null-branch coverage via a
         roles: ['work'],
         // A connection carrying an externalWorkspaceId → covers that spread's truthy side.
         connection: { externalWorkspaceId: 'ws-123' },
-        config: { teamId: statelessTeam!.id },
+        config: { teamId: assertDefined(statelessTeam).id },
         createdBy: humanActorId,
       })
       .returning({ id: schema.integration.id });
     const w = appWithActor(r['integrations'], orgId, ['contribute'], humanActorId);
-    const res = await w.request(`/${intg!.id}/import`, { method: 'POST', headers: J, body: '{}' });
+    const res = await w.request(`/${assertDefined(intg).id}/import`, {
+      method: 'POST',
+      headers: J,
+      body: '{}',
+    });
     expect(res.status).toBe(200);
   });
 
@@ -307,7 +316,11 @@ describe('integrations import: configured-team path + null-branch coverage via a
       .returning({ id: schema.integration.id });
     const w = appWithActor(r['integrations'], orgId, ['contribute'], humanActorId);
     // gmail fixture item has no externalUrl → covers that null side too.
-    const res = await w.request(`/${intg!.id}/import`, { method: 'POST', headers: J, body: '{}' });
+    const res = await w.request(`/${assertDefined(intg).id}/import`, {
+      method: 'POST',
+      headers: J,
+      body: '{}',
+    });
     expect(res.status).toBe(200);
   });
 });

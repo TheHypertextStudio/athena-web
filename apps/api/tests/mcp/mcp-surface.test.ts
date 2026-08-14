@@ -17,6 +17,7 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type { registerPrompts as RegisterPrompts } from '../../src/mcp/prompts';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -56,7 +57,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [r] = await db
     .insert(schema.role)
@@ -67,21 +68,21 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       capabilities: [...capabilities],
     })
     .returning({ id: schema.role.id });
-  const roleId = r!.id;
+  const roleId = assertDefined(r).id;
 
   const email = `${slug}@e.com`;
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email })
     .returning({ id: schema.user.id });
-  const userId = u!.id;
+  const userId = assertDefined(u).id;
   await db.insert(schema.hub).values({ userId });
 
   const [human] = await db
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, roleId })
     .returning({ id: schema.actor.id });
-  const actorId = human!.id;
+  const actorId = assertDefined(human).id;
 
   if (capabilities.length > 0) {
     await db.insert(schema.grant).values({
@@ -103,42 +104,42 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       key: `C${Math.random().toString(36).slice(2, 6)}`,
     })
     .returning({ id: schema.team.id });
-  const teamId = t!.id;
+  const teamId = assertDefined(t).id;
 
   const [tk] = await db
     .insert(schema.task)
     .values({ organizationId: orgId, title: 'Ship', teamId, state: 'todo', createdBy: actorId })
     .returning({ id: schema.task.id });
-  const taskId = tk!.id;
+  const taskId = assertDefined(tk).id;
   const [tk2] = await db
     .insert(schema.task)
     .values({ organizationId: orgId, title: 'Ship 2', teamId, state: 'todo', createdBy: actorId })
     .returning({ id: schema.task.id });
-  const task2Id = tk2!.id;
+  const task2Id = assertDefined(tk2).id;
 
   const [proj] = await db
     .insert(schema.project)
     .values({ organizationId: orgId, name: 'Proj', teamId, createdBy: actorId })
     .returning({ id: schema.project.id });
-  const projectId = proj!.id;
+  const projectId = assertDefined(proj).id;
 
   const [prog] = await db
     .insert(schema.program)
     .values({ organizationId: orgId, name: 'Prog', createdBy: actorId })
     .returning({ id: schema.program.id });
-  const programId = prog!.id;
+  const programId = assertDefined(prog).id;
 
   const [init] = await db
     .insert(schema.initiative)
     .values({ organizationId: orgId, name: 'Init', createdBy: actorId })
     .returning({ id: schema.initiative.id });
-  const initiativeId = init!.id;
+  const initiativeId = assertDefined(init).id;
 
   const [agentActor] = await db
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'agent', displayName: 'Athena' })
     .returning({ id: schema.actor.id });
-  const agentActorId = agentActor!.id;
+  const agentActorId = assertDefined(agentActor).id;
   const [ag] = await db
     .insert(schema.agent)
     .values({
@@ -148,7 +149,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       connection: { protocol: 'mcp', endpoint: 'https://agent.example/mcp' },
     })
     .returning({ id: schema.agent.id });
-  const agentId = ag!.id;
+  const agentId = assertDefined(ag).id;
 
   const [intg] = await db
     .insert(schema.integration)
@@ -160,7 +161,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       createdBy: actorId,
     })
     .returning({ id: schema.integration.id });
-  const integrationId = intg!.id;
+  const integrationId = assertDefined(intg).id;
 
   const [cy] = await db
     .insert(schema.cycle)
@@ -173,7 +174,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       endsAt: new Date('2026-01-14'),
     })
     .returning({ id: schema.cycle.id });
-  const cycleId = cy!.id;
+  const cycleId = assertDefined(cy).id;
 
   const ctx: McpContext = {
     principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
@@ -262,7 +263,7 @@ async function connectWithTasks(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
 });
 
 /** Parse the JSON text payload of a tool result. */
@@ -600,7 +601,7 @@ describe('manage_session respond / cancel', () => {
     const [elicit] = await db
       .insert(schema.sessionActivity)
       .values({
-        sessionId: sess!.id,
+        sessionId: assertDefined(sess).id,
         organizationId: s.orgId,
         type: 'elicitation',
         body: { text: 'q?' },
@@ -609,7 +610,7 @@ describe('manage_session respond / cancel', () => {
     const [thought] = await db
       .insert(schema.sessionActivity)
       .values({
-        sessionId: sess!.id,
+        sessionId: assertDefined(sess).id,
         organizationId: s.orgId,
         type: 'thought',
         body: { text: 't' },
@@ -621,9 +622,9 @@ describe('manage_session respond / cancel', () => {
       name: 'manage_session',
       arguments: {
         orgId: s.orgId,
-        sessionId: sess!.id,
+        sessionId: assertDefined(sess).id,
         action: 'respond',
-        activityId: elicit!.id,
+        activityId: assertDefined(elicit).id,
         body: 'an answer',
       },
     })) as CallToolResult;
@@ -633,9 +634,9 @@ describe('manage_session respond / cancel', () => {
       name: 'manage_session',
       arguments: {
         orgId: s.orgId,
-        sessionId: sess!.id,
+        sessionId: assertDefined(sess).id,
         action: 'respond',
-        activityId: thought!.id,
+        activityId: assertDefined(thought).id,
         body: 'x',
       },
     })) as CallToolResult;
@@ -647,7 +648,7 @@ describe('manage_session respond / cancel', () => {
         orgId: s.orgId,
         sessionId: MISSING,
         action: 'respond',
-        activityId: elicit!.id,
+        activityId: assertDefined(elicit).id,
         body: 'x',
       },
     })) as CallToolResult;
@@ -657,7 +658,7 @@ describe('manage_session respond / cancel', () => {
       name: 'manage_session',
       arguments: {
         orgId: s.orgId,
-        sessionId: sess!.id,
+        sessionId: assertDefined(sess).id,
         action: 'respond',
         activityId: MISSING,
         body: 'x',
@@ -682,14 +683,14 @@ describe('manage_session respond / cancel', () => {
     const client = await connect(s.ctx);
     const ok = (await client.callTool({
       name: 'manage_session',
-      arguments: { orgId: s.orgId, sessionId: sess!.id, action: 'cancel' },
+      arguments: { orgId: s.orgId, sessionId: assertDefined(sess).id, action: 'cancel' },
     })) as CallToolResult;
     expect(payload(ok)['status']).toBe('canceled');
 
     // Already terminal → 409.
     const again = (await client.callTool({
       name: 'manage_session',
-      arguments: { orgId: s.orgId, sessionId: sess!.id, action: 'cancel' },
+      arguments: { orgId: s.orgId, sessionId: assertDefined(sess).id, action: 'cancel' },
     })) as CallToolResult;
     expect(again.isError).toBe(true);
 
@@ -742,7 +743,7 @@ describe('list_work / find tools', () => {
     await db.insert(schema.taskDependency).values({
       organizationId: s.orgId,
       blockingTaskId: s.taskId,
-      blockedTaskId: mine!.id,
+      blockedTaskId: assertDefined(mine).id,
     });
     const client = await connect(s.ctx);
 
@@ -751,14 +752,14 @@ describe('list_work / find tools', () => {
       arguments: { orgId: s.orgId, entity: 'task', assignee: 'Ada' },
     })) as CallToolResult;
     const assigned = payload(byAssignee)['items'] as { id: string }[];
-    expect(assigned.map((item) => item.id)).toEqual([mine!.id]);
+    expect(assigned.map((item) => item.id)).toEqual([assertDefined(mine).id]);
 
     const blocked = (await client.callTool({
       name: 'list_work',
       arguments: { orgId: s.orgId, entity: 'task', blocked: true },
     })) as CallToolResult;
     expect((payload(blocked)['items'] as { id: string }[]).map((item) => item.id)).toEqual([
-      mine!.id,
+      assertDefined(mine).id,
     ]);
 
     const blocking = (await client.callTool({
@@ -863,8 +864,8 @@ describe('list_work / find tools', () => {
         },
       ])
       .returning({ id: schema.task.id });
-    const grantedId = privateTasks[0]!.id;
-    const secretId = privateTasks[1]!.id;
+    const grantedId = assertDefined(privateTasks[0]).id;
+    const secretId = assertDefined(privateTasks[1]).id;
 
     // Only the first one is explicitly shared with this caller.
     await db.insert(schema.grant).values({
@@ -1078,7 +1079,7 @@ describe('hydrated resources', () => {
       })
       .returning({ id: schema.agentSession.id });
     await db.insert(schema.sessionActivity).values({
-      sessionId: sess!.id,
+      sessionId: assertDefined(sess).id,
       organizationId: s.orgId,
       type: 'thought',
       body: { text: 'thinking' },
@@ -1096,11 +1097,11 @@ describe('hydrated resources', () => {
       ['initiative', s.initiativeId],
       ['cycle', s.cycleId],
       ['team', s.teamId],
-      ['update', upd!.id],
-      ['comment', cmt!.id],
-      ['session', sess!.id],
+      ['update', assertDefined(upd).id],
+      ['comment', assertDefined(cmt).id],
+      ['session', assertDefined(sess).id],
       ['agent', s.agentId],
-      ['view', view!.id],
+      ['view', assertDefined(view).id],
       ['org', s.orgId],
     ];
     for (const [type, id] of cases) {
@@ -1119,11 +1120,11 @@ describe('hydrated resources', () => {
       ['initiative', 'get_initiatives', s.initiativeId],
       ['cycle', 'get_cycles', s.cycleId],
       ['team', 'get_teams', s.teamId],
-      ['update', 'get_updates', upd!.id],
-      ['comment', 'get_comments', cmt!.id],
-      ['session', 'get_sessions', sess!.id],
+      ['update', 'get_updates', assertDefined(upd).id],
+      ['comment', 'get_comments', assertDefined(cmt).id],
+      ['session', 'get_sessions', assertDefined(sess).id],
       ['agent', 'get_agents', s.agentId],
-      ['view', 'get_views', view!.id],
+      ['view', 'get_views', assertDefined(view).id],
       ['org', 'get_organizations', s.orgId],
     ];
     for (const [, tool, id] of semanticTools) {
@@ -1157,12 +1158,14 @@ describe('hydrated resources', () => {
 
     // Entity cards lead with people and work the reader can recognise. Never make a widget turn an
     // opaque actor or task id into its own fallback copy just because the resource omitted context.
-    const updateRes = await client.readResource({ uri: `docket://${s.orgId}/update/${upd!.id}` });
+    const updateRes = await client.readResource({
+      uri: `docket://${s.orgId}/update/${assertDefined(upd).id}`,
+    });
     expect(readJson(updateRes.contents)['author']).toEqual(
       expect.objectContaining({ id: s.actorId, displayName: 'Ada' }),
     );
     const sessionRes = await client.readResource({
-      uri: `docket://${s.orgId}/session/${sess!.id}`,
+      uri: `docket://${s.orgId}/session/${assertDefined(sess).id}`,
     });
     expect(readJson(sessionRes.contents)).toMatchObject({
       agent: { id: s.agentId, displayName: 'Athena' },
@@ -1184,12 +1187,16 @@ describe('hydrated resources', () => {
       .returning({ id: schema.actor.id });
     const [bareAgent] = await db
       .insert(schema.agent)
-      .values({ organizationId: s.orgId, actorId: bareAgentActor!.id, createdBy: s.actorId })
+      .values({
+        organizationId: s.orgId,
+        actorId: assertDefined(bareAgentActor).id,
+        createdBy: s.actorId,
+      })
       .returning({ id: schema.agent.id });
     const client = await connect(s.ctx);
 
     const agentRes = await client.readResource({
-      uri: `docket://${s.orgId}/agent/${bareAgent!.id}`,
+      uri: `docket://${s.orgId}/agent/${assertDefined(bareAgent).id}`,
     });
     expect(readJson(agentRes.contents)['connection']).toBeNull();
 
@@ -1249,7 +1256,9 @@ describe('hub resources', () => {
 
     const inbox = readJson((await client.readResource({ uri: 'docket://hub/inbox' })).contents);
     expect(
-      (inbox['approvals'] as { sessionId: string }[]).some((a) => a.sessionId === sess!.id),
+      (inbox['approvals'] as { sessionId: string }[]).some(
+        (a) => a.sessionId === assertDefined(sess).id,
+      ),
     ).toBe(true);
 
     const portfolio = readJson(
@@ -1332,7 +1341,7 @@ describe('prompts', () => {
     expect(names).toEqual(expect.arrayContaining(['docket_system', 'task_brief', 'standup']));
 
     const system = await client.getPrompt({ name: 'docket_system' });
-    const sysText = (system.messages[0]!.content as { text: string }).text;
+    const sysText = (assertDefined(system.messages[0]).content as { text: string }).text;
     expect(sysText).toContain('Docket');
     expect(sysText).toContain('Ada'); // personalized with the caller's name
 
@@ -1340,18 +1349,20 @@ describe('prompts', () => {
       name: 'task_brief',
       arguments: { org: s.orgId, task_id: s.taskId, goal: 'finish it' },
     });
-    expect((brief.messages[0]!.content as { text: string }).text).toContain(s.taskId);
+    expect((assertDefined(brief.messages[0]).content as { text: string }).text).toContain(s.taskId);
 
     const briefNoGoal = await client.getPrompt({
       name: 'task_brief',
       arguments: { org: s.orgId, task_id: s.taskId },
     });
-    expect((briefNoGoal.messages[0]!.content as { text: string }).text).toContain(
+    expect((assertDefined(briefNoGoal.messages[0]).content as { text: string }).text).toContain(
       'next workflow state',
     );
 
     const standup = await client.getPrompt({ name: 'standup', arguments: { org: s.orgId } });
-    expect((standup.messages[0]!.content as { text: string }).text).toContain(s.orgId);
+    expect((assertDefined(standup.messages[0]).content as { text: string }).text).toContain(
+      s.orgId,
+    );
   });
 
   it('omits the caller name in the system prompt when unset', async () => {
@@ -1368,7 +1379,7 @@ describe('prompts', () => {
     };
     const client = await connect(ctx);
     const system = await client.getPrompt({ name: 'docket_system' });
-    const sysText = (system.messages[0]!.content as { text: string }).text;
+    const sysText = (assertDefined(system.messages[0]).content as { text: string }).text;
     expect(sysText).toContain('Docket');
     expect(sysText).not.toContain('on behalf of');
   });

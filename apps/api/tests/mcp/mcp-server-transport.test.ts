@@ -72,6 +72,7 @@ import type * as DbModule from '@docket/db';
 
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -126,7 +127,7 @@ describe('negotiatedProtocolVersion', () => {
     const [row] = await db
       .select({ protocolVersion: schema.mcpSession.protocolVersion })
       .from(schema.mcpSession)
-      .where(eq(schema.mcpSession.id, sessionId!));
+      .where(eq(schema.mcpSession.id, assertDefined(sessionId)));
     expect(row?.protocolVersion).toBeNull();
   });
 
@@ -154,7 +155,7 @@ describe('negotiatedProtocolVersion', () => {
     const [row] = await db
       .select({ protocolVersion: schema.mcpSession.protocolVersion })
       .from(schema.mcpSession)
-      .where(eq(schema.mcpSession.id, sessionId!));
+      .where(eq(schema.mcpSession.id, assertDefined(sessionId)));
     expect(row?.protocolVersion).toBe('2025-11-25');
   });
 
@@ -173,7 +174,7 @@ describe('negotiatedProtocolVersion', () => {
     const [row] = await db
       .select({ protocolVersion: schema.mcpSession.protocolVersion })
       .from(schema.mcpSession)
-      .where(eq(schema.mcpSession.id, sessionId!));
+      .where(eq(schema.mcpSession.id, assertDefined(sessionId)));
     expect(row?.protocolVersion).toBeNull();
   });
 });
@@ -398,7 +399,7 @@ describe('responseWithCleanup — a POST response cancelled before it completes'
     // path exercised elsewhere in this file. The underlying tool call is left running in the
     // background (nothing awaits it); the next test's `beforeEach` reassigns `activeSignal`
     // before it could interfere either way.
-    await res.body!.getReader().cancel('caller went away');
+    await assertDefined(res.body).getReader().cancel('caller went away');
   });
 });
 
@@ -414,7 +415,7 @@ describe('the notification stream heartbeat and abort-only teardown', () => {
         clientInfo: { name: 'heartbeat', version: '0.0.0' },
       },
     });
-    const sessionId = init.sessionId!;
+    const sessionId = assertDefined(init.sessionId);
 
     vi.useFakeTimers();
     try {
@@ -425,7 +426,7 @@ describe('the notification stream heartbeat and abort-only teardown', () => {
         signal: controller.signal,
       });
       expect(res.status).toBe(200);
-      const reader = res.body!.getReader();
+      const reader = assertDefined(res.body).getReader();
       const decoder = new TextDecoder();
 
       const readPromise = reader.read();
@@ -452,7 +453,7 @@ describe('the notification stream heartbeat and abort-only teardown', () => {
         clientInfo: { name: 'abort-only', version: '0.0.0' },
       },
     });
-    const sessionId = init.sessionId!;
+    const sessionId = assertDefined(init.sessionId);
 
     const controller = new AbortController();
     const first = await mcpApp().request('/mcp', {

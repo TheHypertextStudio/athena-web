@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { AuthSession } from '../../src/context';
 import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 /** The migrated db module + the lazily-imported me-sessions router (both memoized). */
 async function setup() {
@@ -21,7 +22,7 @@ beforeAll(async () => {
  * test whenever it seeds a real row backing the "current" session.
  */
 function currentSession(userId: string): NonNullable<AuthSession> {
-  const base = fakeSession(userId)!;
+  const base = assertDefined(fakeSession(userId));
   return {
     ...base,
     session: { ...base.session, token: `tok-${Math.random().toString(36).slice(2)}` },
@@ -45,7 +46,7 @@ async function seedSessionRow(
       userAgent: overrides.userAgent ?? 'Mozilla/5.0 (Macintosh) Chrome/120.0 Safari/537.36',
     })
     .returning({ id: schema.session.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 describe('GET /me/sessions', () => {
@@ -159,7 +160,7 @@ describe('POST /me/sessions/revoke-others', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: { current: boolean }[] };
     expect(body.items).toHaveLength(1);
-    expect(body.items[0]!.current).toBe(true);
+    expect(assertDefined(body.items[0]).current).toBe(true);
 
     const remaining = await db
       .select()

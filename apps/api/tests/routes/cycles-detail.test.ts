@@ -14,6 +14,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -52,7 +53,7 @@ async function makeCycle(
       createdBy: actorId,
     })
     .returning({ id: schema.cycle.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert a task row directly (full control over cycle/estimate/completedAt/createdAt). */
@@ -86,7 +87,7 @@ async function makeTask(
       createdBy: actorId,
     })
     .returning({ id: schema.task.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 describe('cycle detail (GET /:id)', () => {
@@ -270,13 +271,13 @@ describe('cycle committed tasks (GET /:id/tasks)', () => {
 
     const inProj = await makeTask(orgId, teamId, humanActorId, {
       cycleId,
-      projectId: proj!.id,
+      projectId: assertDefined(proj).id,
     });
     // A second task in the SAME project — exercises the "append to existing bucket"
     // path of the grouping accumulator (not just first-insert).
     const inProj2 = await makeTask(orgId, teamId, humanActorId, {
       cycleId,
-      projectId: proj!.id,
+      projectId: assertDefined(proj).id,
     });
     const noProj = await makeTask(orgId, teamId, humanActorId, { cycleId, projectId: null });
 
@@ -289,7 +290,7 @@ describe('cycle committed tasks (GET /:id/tasks)', () => {
     }>(res);
     expect(body.groupBy).toBe('project');
 
-    const projGroup = body.groups.find((g) => g.projectId === proj!.id);
+    const projGroup = body.groups.find((g) => g.projectId === assertDefined(proj).id);
     const nullGroup = body.groups.find((g) => g.projectId === null);
     expect(projGroup?.tasks.map((t) => t.id).sort()).toEqual([inProj, inProj2].sort());
     expect(nullGroup?.tasks.map((t) => t.id)).toEqual([noProj]);
@@ -304,7 +305,7 @@ describe('cycle committed tasks (GET /:id/tasks)', () => {
     const cycleId = await makeCycle(orgId, teamId, humanActorId);
     const inProg = await makeTask(orgId, teamId, humanActorId, {
       cycleId,
-      programId: program!.id,
+      programId: assertDefined(program).id,
     });
 
     const writer = appWithActor(cycles, orgId, ['view'], humanActorId);
@@ -315,9 +316,9 @@ describe('cycle committed tasks (GET /:id/tasks)', () => {
       groups: { programId: string | null; tasks: { id: string }[] }[];
     }>(res);
     expect(body.groupBy).toBe('program');
-    expect(body.groups.find((g) => g.programId === program!.id)?.tasks.map((t) => t.id)).toEqual([
-      inProg,
-    ]);
+    expect(
+      body.groups.find((g) => g.programId === assertDefined(program).id)?.tasks.map((t) => t.id),
+    ).toEqual([inProg]);
   });
 
   it('returns an empty group list for a cycle with no committed tasks', async () => {
@@ -404,9 +405,9 @@ describe('cycle burn-up (GET /:id/burnup)', () => {
 
     // Two mid-cycle additions, ordered by join time (the 03:00 task before the 09:00 one).
     expect(body.scopeChanges).toHaveLength(2);
-    expect(body.scopeChanges[0]!.taskId).toBe(earlierScope);
-    expect(body.scopeChanges[0]!.estimate).toBe(1);
-    expect(body.scopeChanges[1]!.estimate).toBe(2);
+    expect(assertDefined(body.scopeChanges[0]).taskId).toBe(earlierScope);
+    expect(assertDefined(body.scopeChanges[0]).estimate).toBe(1);
+    expect(assertDefined(body.scopeChanges[1]).estimate).toBe(2);
     expect(body.stats.scopeChange).toBe(2);
   });
 
@@ -432,7 +433,7 @@ describe('cycle close (POST /:id/close)', () => {
       .select({ cycleId: schema.task.cycleId })
       .from(schema.task)
       .where(eq(schema.task.id, id));
-    return row!.cycleId;
+    return assertDefined(row).cycleId;
   }
 
   it('applies keep/move/triage decisions then marks the cycle completed', async () => {
@@ -482,7 +483,7 @@ describe('cycle close (POST /:id/close)', () => {
       .select({ status: schema.cycle.status })
       .from(schema.cycle)
       .where(eq(schema.cycle.id, cycleId));
-    expect(cy!.status).toBe('completed');
+    expect(assertDefined(cy).status).toBe('completed');
   });
 
   it('closes with an empty (defaulted) carryover list', async () => {
@@ -519,7 +520,7 @@ describe('cycle close (POST /:id/close)', () => {
       .select({ status: schema.cycle.status })
       .from(schema.cycle)
       .where(eq(schema.cycle.id, cycleId));
-    expect(cy!.status).not.toBe('completed');
+    expect(assertDefined(cy).status).not.toBe('completed');
   });
 
   it('422s when a move targets a cycle on a different team', async () => {
@@ -529,7 +530,7 @@ describe('cycle close (POST /:id/close)', () => {
       .values({ organizationId: orgId, name: 'Other', key: `K${Date.now() % 100000}` })
       .returning({ id: schema.team.id });
     const cycleId = await makeCycle(orgId, teamId, humanActorId);
-    const foreignCycle = await makeCycle(orgId, otherTeam!.id, humanActorId);
+    const foreignCycle = await makeCycle(orgId, assertDefined(otherTeam).id, humanActorId);
     const open = await makeTask(orgId, teamId, humanActorId, { cycleId });
 
     const writer = appWithActor(cycles, orgId, ['contribute'], humanActorId);

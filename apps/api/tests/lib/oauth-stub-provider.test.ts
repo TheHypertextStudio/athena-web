@@ -9,6 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import oauthStubProvider from '../../src/lib/oauth-stub-provider';
+import { assertDefined } from '@docket/test-utils';
 
 const CLIENT_ID = 'docket-test-oauth-client';
 const CLIENT_SECRET = 'docket-test-oauth-client-secret';
@@ -54,13 +55,13 @@ describe('oauth stub provider', () => {
       state: 'xyz',
     });
     expect(authorizeRes.status).toBe(302);
-    const location = new URL(authorizeRes.headers.get('location')!);
+    const location = new URL(assertDefined(authorizeRes.headers.get('location')));
     expect(location.searchParams.get('state')).toBe('xyz');
     expect(code).toBeTruthy();
 
     const tokenRes = await tokenRequest({
       grant_type: 'authorization_code',
-      code: code!,
+      code: assertDefined(code),
       redirect_uri: REDIRECT_URI,
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
@@ -92,7 +93,7 @@ describe('oauth stub provider', () => {
     const firstToken = await json<{ access_token: string }>(
       await tokenRequest({
         grant_type: 'authorization_code',
-        code: first.code!,
+        code: assertDefined(first.code),
         redirect_uri: REDIRECT_URI,
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
@@ -101,7 +102,7 @@ describe('oauth stub provider', () => {
     const secondToken = await json<{ access_token: string }>(
       await tokenRequest({
         grant_type: 'authorization_code',
-        code: second.code!,
+        code: assertDefined(second.code),
         redirect_uri: REDIRECT_URI,
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
@@ -153,7 +154,7 @@ describe('oauth stub provider', () => {
     });
     const res = await tokenRequest({
       grant_type: 'refresh_token',
-      code: code!,
+      code: assertDefined(code),
       redirect_uri: REDIRECT_URI,
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
@@ -183,7 +184,7 @@ describe('oauth stub provider', () => {
       (
         await tokenRequest({
           grant_type: 'authorization_code',
-          code: codes[0]!.code!,
+          code: assertDefined(assertDefined(codes[0]).code),
           redirect_uri: 'https://attacker.example/callback',
           client_id: CLIENT_ID,
           client_secret: CLIENT_SECRET,
@@ -194,7 +195,7 @@ describe('oauth stub provider', () => {
       (
         await tokenRequest({
           grant_type: 'authorization_code',
-          code: codes[1]!.code!,
+          code: assertDefined(assertDefined(codes[1]).code),
           redirect_uri: REDIRECT_URI,
           client_id: 'wrong-client',
           client_secret: CLIENT_SECRET,
@@ -205,7 +206,7 @@ describe('oauth stub provider', () => {
       (
         await tokenRequest({
           grant_type: 'authorization_code',
-          code: codes[2]!.code!,
+          code: assertDefined(assertDefined(codes[2]).code),
           redirect_uri: REDIRECT_URI,
           client_id: CLIENT_ID,
           client_secret: 'wrong-secret',
@@ -222,7 +223,7 @@ describe('oauth stub provider', () => {
     });
     const fields = {
       grant_type: 'authorization_code',
-      code: code!,
+      code: assertDefined(code),
       redirect_uri: REDIRECT_URI,
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
@@ -243,7 +244,7 @@ describe('oauth stub provider', () => {
 
     const res = await tokenRequest({
       grant_type: 'authorization_code',
-      code: code!,
+      code: assertDefined(code),
       redirect_uri: REDIRECT_URI,
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
@@ -262,7 +263,7 @@ describe('oauth stub provider', () => {
     const token = await json<{ access_token: string }>(
       await tokenRequest({
         grant_type: 'authorization_code',
-        code: code!,
+        code: assertDefined(code),
         redirect_uri: REDIRECT_URI,
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,

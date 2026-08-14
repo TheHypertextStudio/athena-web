@@ -22,6 +22,7 @@ import type inboundMailRouter from '../../src/routes/inbound-mail';
 import type athenaMailRouter from '../../src/routes/athena-mail';
 import type { ensureMailbox as EnsureMailbox } from '../../src/routes/athena-mail-store';
 import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -62,23 +63,27 @@ async function seedOwner(): Promise<Fixture> {
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@example.com` })
     .returning({ id: schema.user.id });
-  await db.insert(schema.hub).values({ userId: owner!.id, preferences: {} });
+  await db.insert(schema.hub).values({ userId: assertDefined(owner).id, preferences: {} });
   const [org] = await db
     .insert(schema.organization)
     .values({ name: `Workspace ${slug}`, slug })
     .returning({ id: schema.organization.id });
   await db.insert(schema.actor).values({
-    organizationId: org!.id,
+    organizationId: assertDefined(org).id,
     kind: 'human',
     displayName: 'Ada',
-    userId: owner!.id,
+    userId: assertDefined(owner).id,
   });
-  const mailbox = await ensureMailbox(owner!.id);
+  const mailbox = await ensureMailbox(assertDefined(owner).id);
   await db
     .update(schema.athenaMailbox)
-    .set({ organizationId: org!.id })
+    .set({ organizationId: assertDefined(org).id })
     .where(eq(schema.athenaMailbox.id, mailbox.id));
-  return { ownerUserId: owner!.id, organizationId: org!.id, address: `${mailbox.key}@${HOST}` };
+  return {
+    ownerUserId: assertDefined(owner).id,
+    organizationId: assertDefined(org).id,
+    address: `${mailbox.key}@${HOST}`,
+  };
 }
 
 /** POST one fixture message at the public webhook and return the HTTP response. */
@@ -234,7 +239,7 @@ describe('the universal inbox stream', () => {
     const recipients = await db
       .select()
       .from(schema.eventRecipient)
-      .where(eq(schema.eventRecipient.eventId, row!.id));
+      .where(eq(schema.eventRecipient.eventId, assertDefined(row).id));
     expect(recipients.map((r) => r.userId)).toContain(fixture.ownerUserId);
 
     // And the stored message points back at its stream entry, so the two are navigable.
@@ -335,11 +340,11 @@ describe('delivery into Athena', () => {
     const activities = await db
       .select()
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.sessionId, message!.sessionId!));
+      .where(eq(schema.sessionActivity.sessionId, assertDefined(assertDefined(message).sessionId)));
     const text = activities
       .map((row) => (row.body as { text?: string } | null)?.text ?? '')
       .join('\n');
-    expect(text).toContain(message!.id);
+    expect(text).toContain(assertDefined(message).id);
   });
 });
 
@@ -387,7 +392,7 @@ describe('separation from mail Docket syncs', () => {
     const before = await db.select().from(schema.athenaInboundMessage);
     await db.insert(schema.emailSuggestion).values({
       organizationId: fixture.organizationId,
-      integrationId: integration!.id,
+      integrationId: assertDefined(integration).id,
       externalThreadId: `thread_${Math.random().toString(36).slice(2, 8)}`,
       title: 'Synced from a connected mailbox',
     });
@@ -437,7 +442,7 @@ describe('the owner-facing inbox API', () => {
       .where(eq(schema.athenaInboundMessage.ownerUserId, theirs.ownerUserId));
 
     const app = appWithSession(athenaMail, fakeSession(mine.ownerUserId));
-    expect((await app.request(`/${message!.id}`)).status).toBe(404);
+    expect((await app.request(`/${assertDefined(message).id}`)).status).toBe(404);
   });
 });
 
@@ -453,12 +458,12 @@ describe('attaching a received message to work', () => {
       .insert(schema.task)
       .values({
         organizationId: fixture.organizationId,
-        teamId: team!.id,
+        teamId: assertDefined(team).id,
         title,
         state: 'backlog',
       })
       .returning({ id: schema.task.id });
-    return row!.id;
+    return assertDefined(row).id;
   }
 
   it('attaches to a task and to a project through the generic attachment table', async () => {
@@ -477,9 +482,9 @@ describe('attaching a received message to work', () => {
     const app = appWithSession(athenaMail, fakeSession(fixture.ownerUserId));
     for (const [subjectType, subjectId] of [
       ['task', taskId],
-      ['project', project!.id],
+      ['project', assertDefined(project).id],
     ] as const) {
-      const response = await app.request(`/${message!.id}/attachments`, {
+      const response = await app.request(`/${assertDefined(message).id}/attachments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -498,7 +503,7 @@ describe('attaching a received message to work', () => {
       .where(
         and(
           eq(schema.attachment.kind, 'athena_email'),
-          eq(schema.attachment.externalId, message!.id),
+          eq(schema.attachment.externalId, assertDefined(message).id),
         ),
       );
     expect(attachments).toHaveLength(2);
@@ -506,7 +511,9 @@ describe('attaching a received message to work', () => {
     expect(attachments[0]?.title).toBe('Signed contract');
 
     // The message reports both, with the entities' own titles.
-    const listed = (await (await app.request(`/${message!.id}/attachments`)).json()) as {
+    const listed = (await (
+      await app.request(`/${assertDefined(message).id}/attachments`)
+    ).json()) as {
       items: { subjectTitle: string }[];
     };
     expect(listed.items.map((item) => item.subjectTitle).sort()).toEqual([
@@ -543,10 +550,22 @@ describe('attaching a received message to work', () => {
     });
     const headers = { 'content-type': 'application/json' };
     expect(
-      (await app.request(`/${message!.id}/attachments`, { method: 'POST', headers, body })).status,
+      (
+        await app.request(`/${assertDefined(message).id}/attachments`, {
+          method: 'POST',
+          headers,
+          body,
+        })
+      ).status,
     ).toBe(200);
     expect(
-      (await app.request(`/${message!.id}/attachments`, { method: 'POST', headers, body })).status,
+      (
+        await app.request(`/${assertDefined(message).id}/attachments`, {
+          method: 'POST',
+          headers,
+          body,
+        })
+      ).status,
     ).toBe(409);
   });
 
@@ -561,7 +580,7 @@ describe('attaching a received message to work', () => {
     const foreignTask = await seedTask(theirs, 'Not yours');
 
     const app = appWithSession(athenaMail, fakeSession(mine.ownerUserId));
-    const response = await app.request(`/${message!.id}/attachments`, {
+    const response = await app.request(`/${assertDefined(message).id}/attachments`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -583,7 +602,7 @@ describe('attaching a received message to work', () => {
     const taskId = await seedTask(fixture, 'Detach me');
     const app = appWithSession(athenaMail, fakeSession(fixture.ownerUserId));
     const created = (await (
-      await app.request(`/${message!.id}/attachments`, {
+      await app.request(`/${assertDefined(message).id}/attachments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -594,16 +613,19 @@ describe('attaching a received message to work', () => {
       })
     ).json()) as { attachmentId: string };
 
-    const removed = await app.request(`/${message!.id}/attachments/${created.attachmentId}`, {
-      method: 'DELETE',
-    });
+    const removed = await app.request(
+      `/${assertDefined(message).id}/attachments/${created.attachmentId}`,
+      {
+        method: 'DELETE',
+      },
+    );
     expect(removed.status).toBe(200);
     expect(await removed.json()).toEqual({ id: created.attachmentId, removed: true });
 
     const still = await db
       .select()
       .from(schema.athenaInboundMessage)
-      .where(eq(schema.athenaInboundMessage.id, message!.id));
+      .where(eq(schema.athenaInboundMessage.id, assertDefined(message).id));
     expect(still).toHaveLength(1);
   });
 });

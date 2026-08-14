@@ -17,6 +17,7 @@ import type {
 } from '../../src/routes/me-athena-conversation';
 import type { resolveCanonicalConversation as ResolveCanonicalConversation } from '../../src/routes/agent-dispatch';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -105,8 +106,8 @@ async function seedConversation(): Promise<Seeded> {
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@example.com` })
     .returning({ id: schema.user.id });
-  await db.insert(schema.hub).values({ userId: owner!.id, preferences: {} });
-  const conversation = await resolveCanonicalConversation(owner!.id);
+  await db.insert(schema.hub).values({ userId: assertDefined(owner).id, preferences: {} });
+  const conversation = await resolveCanonicalConversation(assertDefined(owner).id);
 
   const activityIds: string[] = [];
   for (const [author, text, at] of SCRIPT) {
@@ -120,9 +121,9 @@ async function seedConversation(): Promise<Seeded> {
         createdAt: new Date(at),
       })
       .returning({ id: schema.sessionActivity.id });
-    activityIds.push(row!.id);
+    activityIds.push(assertDefined(row).id);
   }
-  return { ownerUserId: owner!.id, sessionId: conversation.id, activityIds };
+  return { ownerUserId: assertDefined(owner).id, sessionId: conversation.id, activityIds };
 }
 
 describe('automatic topic segmentation', () => {
@@ -206,8 +207,8 @@ describe('automatic topic segmentation', () => {
       .insert(schema.user)
       .values({ name: 'Empty', email: `${slug}@example.com` })
       .returning({ id: schema.user.id });
-    const conversation = await resolveCanonicalConversation(owner!.id);
-    const result = await athenaConversationSegments(owner!.id, conversation.id);
+    const conversation = await resolveCanonicalConversation(assertDefined(owner).id);
+    const result = await athenaConversationSegments(assertDefined(owner).id, conversation.id);
     expect(result.items).toEqual([]);
   });
 });
@@ -274,7 +275,10 @@ describe('keyword search over conversation history', () => {
       .insert(schema.user)
       .values({ name: 'Nobody', email: `${slug}@example.com` })
       .returning({ id: schema.user.id });
-    const result = await athenaConversationSearch(owner!.id, { q: 'anything', limit: 50 });
+    const result = await athenaConversationSearch(assertDefined(owner).id, {
+      q: 'anything',
+      limit: 50,
+    });
     expect(result).toEqual({ items: [], total: 0, semantic: false, terms: [] });
   });
 });

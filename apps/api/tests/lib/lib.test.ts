@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { onError, ValidationError } from '../../src/error';
 import { ok } from '../../src/lib/ok';
 import { zJson, zParam, zQuery } from '../../src/lib/validate';
+import { assertDefined } from '@docket/test-utils';
 
 const Schema = z.object({ name: z.string() });
 
@@ -95,7 +96,7 @@ describe('validate', () => {
   it('ValidationError aggregates issues by path with the `_` root key', () => {
     const result = z.object({ a: z.string() }).safeParse(123);
     expect(result.success).toBe(false);
-    const err = new ValidationError(result.error!);
+    const err = new ValidationError(assertDefined(result.error));
     expect(err.status).toBe(422);
     expect(err.code).toBe('validation_error');
     // A top-level (root) issue lands under the `_` key.

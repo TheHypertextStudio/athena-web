@@ -11,6 +11,7 @@ import type * as DbModule from '@docket/db';
 
 import type projectsRouter from '../../src/routes/projects';
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -33,7 +34,7 @@ async function createProject(
     .insert(schema.project)
     .values({ organizationId, teamId, createdBy, name })
     .returning({ id: schema.project.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Add `blocking → blocked` by calling the blocked Project's relative dependency route. */

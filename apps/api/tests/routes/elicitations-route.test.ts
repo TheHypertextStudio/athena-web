@@ -14,6 +14,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type elicitationsDefault from '../../src/routes/elicitations';
 import type { raiseElicitation as RaiseElicitation } from '../../src/services/elicitation-service';
 import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -51,26 +52,35 @@ async function seed(): Promise<Fixture> {
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@example.com` })
     .returning({ id: schema.user.id });
-  await db.insert(schema.hub).values({ userId: owner!.id, preferences: {} });
+  await db.insert(schema.hub).values({ userId: assertDefined(owner).id, preferences: {} });
   await db
     .insert(schema.actor)
-    .values({ organizationId: org!.id, kind: 'human', displayName: 'Ada', userId: owner!.id });
+    .values({
+      organizationId: assertDefined(org).id,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(owner).id,
+    });
   await db
     .insert(schema.team)
-    .values({ organizationId: org!.id, name: 'Core', key: `E${slug.slice(-4)}` });
+    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `E${slug.slice(-4)}` });
   const [session] = await db
     .insert(schema.agentSession)
     .values({
       executorKind: 'athena',
-      ownerUserId: owner!.id,
-      contextOrganizationId: org!.id,
+      ownerUserId: assertDefined(owner).id,
+      contextOrganizationId: assertDefined(org).id,
       kind: 'chat',
       trigger: 'delegation',
       status: 'awaiting_input',
       workLinkage: 'conversation',
     })
     .returning({ id: schema.agentSession.id });
-  return { ownerUserId: owner!.id, orgId: org!.id, sessionId: session!.id };
+  return {
+    ownerUserId: assertDefined(owner).id,
+    orgId: assertDefined(org).id,
+    sessionId: assertDefined(session).id,
+  };
 }
 
 const CONFIRM_SPEC = {

@@ -13,6 +13,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type projectRollupRouter from '../../src/routes/project-rollup';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -38,7 +39,7 @@ async function makeProject(orgId: string, teamId: string, actorId: string): Prom
     .insert(schema.project)
     .values({ organizationId: orgId, name: 'P', teamId, createdBy: actorId })
     .returning({ id: schema.project.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert a milestone under a project; returns its id. */
@@ -47,7 +48,7 @@ async function makeMilestone(orgId: string, projectId: string, actorId: string):
     .insert(schema.milestone)
     .values({ organizationId: orgId, projectId, name: 'M', createdBy: actorId })
     .returning({ id: schema.milestone.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert a task directly (control over project + milestone); returns its id. */
@@ -69,7 +70,7 @@ async function makeTask(
       createdBy: actorId,
     })
     .returning({ id: schema.task.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert an initiative and link it to a project; returns the initiative id. */
@@ -84,8 +85,8 @@ async function makeLinkedInitiative(
     .returning({ id: schema.initiative.id });
   await db
     .insert(schema.initiativeProject)
-    .values({ initiativeId: init!.id, projectId, organizationId: orgId });
-  return init!.id;
+    .values({ initiativeId: assertDefined(init).id, projectId, organizationId: orgId });
+  return assertDefined(init).id;
 }
 
 /** Seed an agent + a session on `taskId` + one activity on that session; returns the ids. */
@@ -100,13 +101,17 @@ async function seedSessionActivity(
     .returning({ id: schema.actor.id });
   const [ag] = await db
     .insert(schema.agent)
-    .values({ organizationId: orgId, actorId: agentActor!.id, createdBy: humanActorId })
+    .values({
+      organizationId: orgId,
+      actorId: assertDefined(agentActor).id,
+      createdBy: humanActorId,
+    })
     .returning({ id: schema.agent.id });
   const [session] = await db
     .insert(schema.agentSession)
     .values({
       organizationId: orgId,
-      agentId: ag!.id,
+      agentId: assertDefined(ag).id,
       taskId,
       trigger: 'assignment',
       status: 'running',
@@ -116,13 +121,13 @@ async function seedSessionActivity(
   const [activity] = await db
     .insert(schema.sessionActivity)
     .values({
-      sessionId: session!.id,
+      sessionId: assertDefined(session).id,
       organizationId: orgId,
       type: 'response',
       body: { text: 'hi' },
     })
     .returning({ id: schema.sessionActivity.id });
-  return { agentId: ag!.id, activityId: activity!.id };
+  return { agentId: assertDefined(ag).id, activityId: assertDefined(activity).id };
 }
 
 interface RollupBody {
@@ -178,8 +183,8 @@ describe('project roll-up (GET /:id/rollup)', () => {
     const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
     const body = await json<RollupBody>(await reader.request(`/${projectId}/rollup`));
     expect(body.recentActivity).toHaveLength(1);
-    expect(body.recentActivity[0]!.id).toBe(activityId);
-    expect(body.recentActivity[0]!.agentId).toBe(agentId);
+    expect(assertDefined(body.recentActivity[0]).id).toBe(activityId);
+    expect(assertDefined(body.recentActivity[0]).agentId).toBe(agentId);
   });
 
   it('returns an empty initiative list when the project belongs to none', async () => {
@@ -192,7 +197,7 @@ describe('project roll-up (GET /:id/rollup)', () => {
     expect(body.initiativeIds).toEqual([]);
     expect(body.labels).toEqual([]);
     expect(body.taskMilestones).toHaveLength(1);
-    expect(body.taskMilestones[0]!.milestoneId).toBeNull();
+    expect(assertDefined(body.taskMilestones[0]).milestoneId).toBeNull();
   });
 
   it('returns attached Project labels as objects', async () => {
@@ -205,13 +210,17 @@ describe('project roll-up (GET /:id/rollup)', () => {
     await db.insert(schema.projectLabel).values({
       organizationId: orgId,
       projectId,
-      labelId: projectLabel!.id,
+      labelId: assertDefined(projectLabel).id,
     });
 
     const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
     const body = await json<RollupBody>(await reader.request(`/${projectId}/rollup`));
     expect(body.labels).toEqual([
-      expect.objectContaining({ id: projectLabel!.id, name: 'Legislative', color: '#6750a4' }),
+      expect.objectContaining({
+        id: assertDefined(projectLabel).id,
+        name: 'Legislative',
+        color: '#6750a4',
+      }),
     ]);
   });
 

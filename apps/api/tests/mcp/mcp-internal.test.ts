@@ -22,6 +22,7 @@ import type {
 } from '../../src/mcp/internal-session';
 import type { buildServer as BuildServer } from '../../src/mcp/server';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
+import { assertDefined } from '@docket/test-utils';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -67,7 +68,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [u] = await db
     .insert(schema.user)
@@ -75,7 +76,12 @@ async function seedOrg(): Promise<Seed> {
     .returning({ id: schema.user.id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
 
   const [t] = await db
@@ -83,7 +89,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ organizationId: orgId, name: 'Core', key: 'CORE' })
     .returning({ id: schema.team.id });
 
-  const agent = await ensureDefaultAgent(orgId, human!.id);
+  const agent = await ensureDefaultAgent(orgId, assertDefined(human).id);
   const [agentRow] = await db
     .select({ actorId: schema.agent.actorId })
     .from(schema.agent)
@@ -92,10 +98,10 @@ async function seedOrg(): Promise<Seed> {
 
   return {
     orgId,
-    teamId: t!.id,
-    humanActorId: human!.id,
+    teamId: assertDefined(t).id,
+    humanActorId: assertDefined(human).id,
     agentId: agent.id,
-    agentActorId: agentRow!.actorId,
+    agentActorId: assertDefined(agentRow).actorId,
   };
 }
 
@@ -205,10 +211,10 @@ describe('in-process MCP as the agent principal', () => {
       .returning({ id: schema.actor.id });
     const [bare] = await db
       .insert(schema.agent)
-      .values({ organizationId: seed.orgId, actorId: bareActor!.id })
+      .values({ organizationId: seed.orgId, actorId: assertDefined(bareActor).id })
       .returning({ id: schema.agent.id });
 
-    const ctx = await internalAgentContext(seed.orgId, bare!.id);
+    const ctx = await internalAgentContext(seed.orgId, assertDefined(bare).id);
     const client = await connect(ctx);
     const res = (await client.callTool({
       name: 'capture',

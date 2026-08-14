@@ -12,6 +12,7 @@ import {
   seedOrg,
   seedUserWithHub,
 } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 const NOW = '2026-02-01T00:00:00.000Z';
 
@@ -82,7 +83,7 @@ describe('collectAccountExport', () => {
       }),
     );
     expect(Object.keys(files).sort()).toEqual(['README.md', 'manifest.json', 'personal.json']);
-    expect(strFromU8(files['README.md']!)).toContain('the data you selected');
+    expect(strFromU8(assertDefined(files['README.md']))).toContain('the data you selected');
   });
 
   it('omits a workspace when the membership is suspended before the worker collects it', async () => {

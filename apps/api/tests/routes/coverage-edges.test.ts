@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -134,12 +135,17 @@ describe('daily-plan: null timeboxes on create + a minimal patch', () => {
       .returning({ id: schema.user.id });
     const [h] = await db
       .insert(schema.hub)
-      .values({ userId: user!.id })
+      .values({ userId: assertDefined(user).id })
       .returning({ id: schema.hub.id });
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     await db
       .insert(schema.actor)
-      .values({ organizationId: orgId, kind: 'human', displayName: 'D', userId: user!.id });
+      .values({
+        organizationId: orgId,
+        kind: 'human',
+        displayName: 'D',
+        userId: assertDefined(user).id,
+      });
     const [t] = await db
       .insert(schema.task)
       .values({ organizationId: orgId, title: 'T', teamId, state: 'todo', createdBy: humanActorId })
@@ -147,7 +153,7 @@ describe('daily-plan: null timeboxes on create + a minimal patch', () => {
 
     // appWithActor also injects a session; daily-plan reads the session for the user.
     const { appWithSession, fakeSession } = await import('../support/routes-harness');
-    const app = appWithSession(r['daily-plan'], fakeSession(user!.id));
+    const app = appWithSession(r['daily-plan'], fakeSession(assertDefined(user).id));
     void h;
 
     // Create with explicit null timeboxes (covers the inner `? : null` null sides).
@@ -156,7 +162,7 @@ describe('daily-plan: null timeboxes on create + a minimal patch', () => {
       headers: J,
       body: JSON.stringify({
         refOrganizationId: orgId,
-        refTaskId: t!.id,
+        refTaskId: assertDefined(t).id,
         date: '2026-07-01',
         timeboxStartsAt: null,
         timeboxEndsAt: null,

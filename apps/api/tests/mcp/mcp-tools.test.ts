@@ -15,6 +15,7 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import { getSession, resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -51,7 +52,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [r] = await db
     .insert(schema.role)
@@ -62,20 +63,20 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       capabilities: [...capabilities],
     })
     .returning({ id: schema.role.id });
-  const roleId = r!.id;
+  const roleId = assertDefined(r).id;
 
   const email = `${slug}@e.com`;
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email })
     .returning({ id: schema.user.id });
-  const userId = u!.id;
+  const userId = assertDefined(u).id;
 
   const [human] = await db
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, roleId })
     .returning({ id: schema.actor.id });
-  const actorId = human!.id;
+  const actorId = assertDefined(human).id;
 
   if (capabilities.length > 0) {
     await db.insert(schema.grant).values({
@@ -97,31 +98,31 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       key: `C${Math.random().toString(36).slice(2, 6)}`,
     })
     .returning({ id: schema.team.id });
-  const teamId = t!.id;
+  const teamId = assertDefined(t).id;
 
   const [tk] = await db
     .insert(schema.task)
     .values({ organizationId: orgId, title: 'Ship', teamId, state: 'todo', createdBy: actorId })
     .returning({ id: schema.task.id });
-  const taskId = tk!.id;
+  const taskId = assertDefined(tk).id;
 
   const [proj] = await db
     .insert(schema.project)
     .values({ organizationId: orgId, name: 'Proj', teamId, createdBy: actorId })
     .returning({ id: schema.project.id });
-  const projectId = proj!.id;
+  const projectId = assertDefined(proj).id;
 
   const [prog] = await db
     .insert(schema.program)
     .values({ organizationId: orgId, name: 'Prog', createdBy: actorId })
     .returning({ id: schema.program.id });
-  const programId = prog!.id;
+  const programId = assertDefined(prog).id;
 
   const [init] = await db
     .insert(schema.initiative)
     .values({ organizationId: orgId, name: 'Init', createdBy: actorId })
     .returning({ id: schema.initiative.id });
-  const initiativeId = init!.id;
+  const initiativeId = assertDefined(init).id;
 
   const [agentActor] = await db
     .insert(schema.actor)
@@ -129,9 +130,9 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .returning({ id: schema.actor.id });
   const [ag] = await db
     .insert(schema.agent)
-    .values({ organizationId: orgId, actorId: agentActor!.id, createdBy: actorId })
+    .values({ organizationId: orgId, actorId: assertDefined(agentActor).id, createdBy: actorId })
     .returning({ id: schema.agent.id });
-  const agentId = ag!.id;
+  const agentId = assertDefined(ag).id;
 
   const [intg] = await db
     .insert(schema.integration)
@@ -143,7 +144,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       createdBy: actorId,
     })
     .returning({ id: schema.integration.id });
-  const integrationId = intg!.id;
+  const integrationId = assertDefined(intg).id;
 
   const ctx: McpContext = {
     principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
@@ -187,7 +188,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   resetAuthMocks();
 });
 
@@ -221,7 +222,7 @@ describe('descriptor resolution', () => {
     })) as CallToolResult;
     expect(res.isError).toBeFalsy();
     const created = payload(res) as { placed: { id: string }[] };
-    const id = created.placed[0]!.id;
+    const id = assertDefined(created.placed[0]).id;
 
     const [row] = await db
       .select({
@@ -271,9 +272,14 @@ describe('descriptor resolution', () => {
     const [row] = await db
       .select({ projectId: schema.task.projectId })
       .from(schema.task)
-      .where(eq(schema.task.id, (payload(res) as { placed: { id: string }[] }).placed[0]!.id));
+      .where(
+        eq(
+          schema.task.id,
+          assertDefined((payload(res) as { placed: { id: string }[] }).placed[0]).id,
+        ),
+      );
     expect(row?.projectId).toBe(s.projectId);
-    expect(row?.projectId).not.toBe(longer!.id);
+    expect(row?.projectId).not.toBe(assertDefined(longer).id);
   });
 
   it('refuses to guess when no candidate is an exact match', async () => {
@@ -416,7 +422,7 @@ describe('link_external tool', () => {
       arguments: {
         orgId: s.orgId,
         integrationId: s.integrationId,
-        teamId: t!.id,
+        teamId: assertDefined(t).id,
         title: 'Bare',
         externalId: 'bare#1',
       },
@@ -475,13 +481,13 @@ describe('manage_session approve / reject', () => {
       })
       .returning({ id: schema.agentSession.id });
     await db.insert(schema.sessionActivity).values({
-      sessionId: sess!.id,
+      sessionId: assertDefined(sess).id,
       organizationId: s.orgId,
       type: 'action',
       body: { action: { kind: 'update_task', summary: 'x' } },
       approvalStatus: 'proposed',
     });
-    return sess!.id;
+    return assertDefined(sess).id;
   }
 
   it('approve resolves to running', async () => {
@@ -531,7 +537,7 @@ describe('manage_session approve / reject', () => {
       .returning({ id: schema.agentSession.id });
     const notAwaiting = (await client.callTool({
       name: 'manage_session',
-      arguments: { orgId: s.orgId, sessionId: pending!.id, action: 'approve' },
+      arguments: { orgId: s.orgId, sessionId: assertDefined(pending).id, action: 'approve' },
     })) as CallToolResult;
     expect(notAwaiting.isError).toBe(true);
 
@@ -549,7 +555,7 @@ describe('manage_session approve / reject', () => {
       .returning({ id: schema.agentSession.id });
     const noAction = (await client.callTool({
       name: 'manage_session',
-      arguments: { orgId: s.orgId, sessionId: bare!.id, action: 'approve' },
+      arguments: { orgId: s.orgId, sessionId: assertDefined(bare).id, action: 'approve' },
     })) as CallToolResult;
     expect(noAction.isError).toBe(true);
   });
@@ -653,7 +659,8 @@ describe('mcpHandler success path (authenticated)', () => {
     // Streamable HTTP frames the reply as SSE when the client accepts it; the JSON-RPC payload
     // is the last `data:` line.
     const dataLines = body.split('\n').filter((line) => line.startsWith('data:'));
-    const raw = dataLines.length > 0 ? dataLines[dataLines.length - 1]!.slice(5) : body;
+    const raw =
+      dataLines.length > 0 ? assertDefined(dataLines[dataLines.length - 1]).slice(5) : body;
     const payload = JSON.parse(raw) as {
       result: { capabilities: Record<string, Record<string, unknown> | undefined> };
     };

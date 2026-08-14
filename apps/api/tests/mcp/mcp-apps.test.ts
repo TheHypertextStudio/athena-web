@@ -19,6 +19,7 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -48,13 +49,13 @@ async function seedCtx(): Promise<McpContext> {
     .values({ name: 'Ada', email })
     .returning({ id: schema.user.id });
   await db.insert(schema.actor).values({
-    organizationId: org!.id,
+    organizationId: assertDefined(org).id,
     kind: 'human',
     displayName: 'Ada',
-    userId: user!.id,
+    userId: assertDefined(user).id,
   });
   return {
-    principal: { kind: 'user', userId: user!.id, userName: 'Ada', userEmail: email },
+    principal: { kind: 'user', userId: assertDefined(user).id, userName: 'Ada', userEmail: email },
     scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
   };
 }
@@ -81,7 +82,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   resetAuthMocks();
 });
 

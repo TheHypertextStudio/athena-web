@@ -4,6 +4,7 @@ import type * as DbModule from '@docket/db';
 
 import type entityDisplayRouter from '../../src/routes/entity-display';
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -25,7 +26,7 @@ describe('entity display routes', () => {
     expect(initiative).toBeDefined();
     const app = appWithActor(entityDisplay, orgId, ['contribute'], humanActorId);
 
-    const updated = await app.request(`/initiative/${initiative!.id}`, {
+    const updated = await app.request(`/initiative/${assertDefined(initiative).id}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ iconKey: 'bus', colorKey: 'primary', customColor: '#3b82f6' }),
@@ -33,14 +34,16 @@ describe('entity display routes', () => {
     expect(updated.status).toBe(200);
     expect(await updated.json()).toMatchObject({
       subjectType: 'initiative',
-      subjectId: initiative!.id,
+      subjectId: assertDefined(initiative).id,
       iconKey: 'bus',
       colorKey: 'primary',
       customColor: '#3b82f6',
       customized: true,
     });
 
-    const reset = await app.request(`/initiative/${initiative!.id}`, { method: 'DELETE' });
+    const reset = await app.request(`/initiative/${assertDefined(initiative).id}`, {
+      method: 'DELETE',
+    });
     expect(reset.status).toBe(200);
     expect(await reset.json()).toMatchObject({
       iconKey: 'target',
@@ -60,7 +63,7 @@ describe('entity display routes', () => {
     expect(project).toBeDefined();
 
     const ownerApp = appWithActor(entityDisplay, owner.orgId, ['contribute'], owner.humanActorId);
-    const updated = await ownerApp.request(`/project/${project!.id}`, {
+    const updated = await ownerApp.request(`/project/${assertDefined(project).id}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ iconKey: 'sparkles', colorKey: 'success', customColor: null }),
@@ -68,7 +71,7 @@ describe('entity display routes', () => {
     expect(updated.status).toBe(200);
 
     const attacker = appWithActor(entityDisplay, other.orgId, ['contribute'], other.humanActorId);
-    const hidden = await attacker.request(`/project/${project!.id}`, {
+    const hidden = await attacker.request(`/project/${assertDefined(project).id}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ iconKey: 'flag', colorKey: 'danger', customColor: null }),
@@ -83,7 +86,7 @@ describe('entity display routes', () => {
       .values({ organizationId: orgId, name: 'Read only', createdBy: humanActorId })
       .returning();
     const viewer = appWithActor(entityDisplay, orgId, ['view'], humanActorId);
-    const response = await viewer.request(`/initiative/${initiative!.id}`, {
+    const response = await viewer.request(`/initiative/${assertDefined(initiative).id}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ iconKey: 'flag', colorKey: 'primary' }),

@@ -27,6 +27,7 @@ import type membersRouter from '../../src/routes/members';
 import type tasksRouter from '../../src/routes/tasks';
 import type projectsRouter from '../../src/routes/projects';
 import type initiativesRouter from '../../src/routes/initiatives';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -65,7 +66,7 @@ async function seedOrg(opts: { personal?: boolean } = {}): Promise<SeededOrg> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active', isPersonal: opts.personal ?? false })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const [ownerRole] = await db
     .insert(schema.role)
     .values({
@@ -96,15 +97,15 @@ async function seedOrg(opts: { personal?: boolean } = {}): Promise<SeededOrg> {
       organizationId: orgId,
       kind: 'human',
       displayName: 'Mara Owner',
-      roleId: ownerRole!.id,
+      roleId: assertDefined(ownerRole).id,
     })
     .returning({ id: schema.actor.id });
   return {
     orgId,
-    teamId: team!.id,
-    ownerActorId: owner!.id,
-    ownerRoleId: ownerRole!.id,
-    memberRoleId: memberRole!.id,
+    teamId: assertDefined(team).id,
+    ownerActorId: assertDefined(owner).id,
+    ownerRoleId: assertDefined(ownerRole).id,
+    memberRoleId: assertDefined(memberRole).id,
   };
 }
 
@@ -124,11 +125,11 @@ async function seedAccountHolder(
       organizationId: orgId,
       kind: 'human',
       displayName,
-      userId: user!.id,
+      userId: assertDefined(user).id,
       roleId,
     })
     .returning({ id: schema.actor.id });
-  return { actorId: row!.id, userId: user!.id };
+  return { actorId: assertDefined(row).id, userId: assertDefined(user).id };
 }
 
 describe('people — an actor with no Docket account', () => {
@@ -171,12 +172,12 @@ describe('people — an actor with no Docket account', () => {
       .from(schema.actor)
       .where(eq(schema.actor.id, person.actorId));
     expect(stored).toBeDefined();
-    expect(stored!.userId).toBeNull();
-    expect(stored!.kind).toBe('human');
-    expect(stored!.displayName).toBe('Priya Volunteer');
-    expect(stored!.avatar).toBe('https://example.test/priya.png');
-    expect(stored!.roleId).toBe(seeded.memberRoleId);
-    expect(stored!.status).toBe('active');
+    expect(assertDefined(stored).userId).toBeNull();
+    expect(assertDefined(stored).kind).toBe('human');
+    expect(assertDefined(stored).displayName).toBe('Priya Volunteer');
+    expect(assertDefined(stored).avatar).toBe('https://example.test/priya.png');
+    expect(assertDefined(stored).roleId).toBe(seeded.memberRoleId);
+    expect(assertDefined(stored).status).toBe('active');
 
     // And through the read path a client actually uses.
     const reread = await w.request(`/${person.actorId}/profile`);
@@ -323,7 +324,7 @@ describe('people — an actor with no Docket account', () => {
       .values({ organizationId: seeded.orgId, kind: 'human', displayName: 'Roleless Rae' })
       .returning({ id: schema.actor.id });
 
-    const res = await w.request(`/${roleless!.id}/profile`);
+    const res = await w.request(`/${assertDefined(roleless).id}/profile`);
     expect(res.status).toBe(200);
     const profile = await body<{ roleId: string | null; roleName: string | null }>(res);
     expect(profile.roleId).toBeNull();
@@ -389,11 +390,16 @@ describe('people — an actor with no Docket account', () => {
         organizationId: seeded.orgId,
         kind: 'team',
         displayName: 'General',
-        teamId: general!.id,
+        teamId: assertDefined(general).id,
       })
       .returning({ id: schema.actor.id });
 
-    for (const id of [agent!.id, teamActor!.id, other.ownerActorId, '01ARZ3NDEKTSV4RRFFQ69G5FAV']) {
+    for (const id of [
+      assertDefined(agent).id,
+      assertDefined(teamActor).id,
+      other.ownerActorId,
+      '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    ]) {
       expect((await w.request(`/${id}/profile`)).status).toBe(404);
     }
   });

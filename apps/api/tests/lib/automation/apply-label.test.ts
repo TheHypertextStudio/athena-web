@@ -14,6 +14,7 @@ import type * as DbModule from '@docket/db';
 
 import type { buildAutomationRegistry as BuildAutomationRegistry } from '../../../src/lib/automation/handlers';
 import { getDb, seedBaseOrg } from '../../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -62,9 +63,9 @@ describe('task.applyLabel', () => {
     const mk = async (name: string): Promise<string> => {
       const [row] = await db
         .insert(schema.label)
-        .values({ organizationId: orgId, name, color: 'blue', groupId: group!.id })
+        .values({ organizationId: orgId, name, color: 'blue', groupId: assertDefined(group).id })
         .returning();
-      return row!.id;
+      return assertDefined(row).id;
     };
     const feature = await mk('feature');
     const bug = await mk('bug');
@@ -73,7 +74,7 @@ describe('task.applyLabel', () => {
       .insert(schema.task)
       .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
       .returning();
-    const taskId = row!.id;
+    const taskId = assertDefined(row).id;
 
     await applyLabel(orgId, taskId, feature);
     await applyLabel(orgId, taskId, bug);
@@ -89,7 +90,7 @@ describe('task.applyLabel', () => {
         .insert(schema.label)
         .values({ organizationId: orgId, name, color: 'blue' })
         .returning();
-      return row!.id;
+      return assertDefined(row).id;
     };
     const a = await mk('urgent');
     const b = await mk('customer');
@@ -98,7 +99,7 @@ describe('task.applyLabel', () => {
       .insert(schema.task)
       .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
       .returning();
-    const taskId = row!.id;
+    const taskId = assertDefined(row).id;
 
     await applyLabel(orgId, taskId, a);
     await applyLabel(orgId, taskId, b);
@@ -116,9 +117,9 @@ describe('task.applyLabel', () => {
       .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
       .returning();
 
-    await applyLabel(orgId, row!.id, labelRow!.id);
-    await applyLabel(orgId, row!.id, labelRow!.id);
-    expect(await labelsOn(row!.id)).toEqual([labelRow!.id]);
+    await applyLabel(orgId, assertDefined(row).id, assertDefined(labelRow).id);
+    await applyLabel(orgId, assertDefined(row).id, assertDefined(labelRow).id);
+    expect(await labelsOn(assertDefined(row).id)).toEqual([assertDefined(labelRow).id]);
   });
 
   it('no-ops on a label from another org rather than writing across tenants', async () => {
@@ -133,8 +134,8 @@ describe('task.applyLabel', () => {
       .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
       .returning();
 
-    await applyLabel(orgId, row!.id, foreign!.id);
-    expect(await labelsOn(row!.id)).toEqual([]);
+    await applyLabel(orgId, assertDefined(row).id, assertDefined(foreign).id);
+    expect(await labelsOn(assertDefined(row).id)).toEqual([]);
   });
 });
 
@@ -152,7 +153,12 @@ describe('task.applyLabel — a label narrowed to another team', () => {
 
     const [stranded] = await db
       .insert(schema.label)
-      .values({ organizationId: orgId, name: 'stranded', color: 'blue', teamId: otherTeam!.id })
+      .values({
+        organizationId: orgId,
+        name: 'stranded',
+        color: 'blue',
+        teamId: assertDefined(otherTeam).id,
+      })
       .returning();
     const [fresh] = await db
       .insert(schema.label)
@@ -166,10 +172,18 @@ describe('task.applyLabel — a label narrowed to another team', () => {
     // The attachment predates the narrowing, exactly as the settings action leaves it.
     await db
       .insert(schema.taskLabel)
-      .values({ taskId: row!.id, labelId: stranded!.id, organizationId: orgId });
+      .values({
+        taskId: assertDefined(row).id,
+        labelId: assertDefined(stranded).id,
+        organizationId: orgId,
+      });
 
-    await expect(applyLabel(orgId, row!.id, fresh!.id)).resolves.toBeUndefined();
+    await expect(
+      applyLabel(orgId, assertDefined(row).id, assertDefined(fresh).id),
+    ).resolves.toBeUndefined();
     // The stranded label survives — the rule adds, it does not tidy up after scoping.
-    expect(await labelsOn(row!.id)).toEqual([stranded!.id, fresh!.id].sort());
+    expect(await labelsOn(assertDefined(row).id)).toEqual(
+      [assertDefined(stranded).id, assertDefined(fresh).id].sort(),
+    );
   });
 });

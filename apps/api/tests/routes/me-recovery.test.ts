@@ -9,6 +9,7 @@ import {
   getDb,
   seedUserWithHub,
 } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 /** The migrated db module + the lazily-imported me-recovery router (both memoized). */
 async function setup() {
@@ -52,7 +53,7 @@ describe('POST /me/recovery-codes', () => {
     expect(body.codes.length).toBeGreaterThan(0);
 
     expect(outbox.length).toBe(before + 1);
-    const sent = outbox[outbox.length - 1]!;
+    const sent = assertDefined(outbox[outbox.length - 1]);
     expect(sent.to).toBe('ivy@example.com');
     expect(sent.subject).toContain('regenerated');
 
@@ -73,13 +74,13 @@ describe('POST /me/recovery-codes', () => {
     const recipients = await db
       .select()
       .from(schema.notificationRecipient)
-      .where(eq(schema.notificationRecipient.notificationId, intent!.id));
+      .where(eq(schema.notificationRecipient.notificationId, assertDefined(intent).id));
     expect(recipients).toMatchObject([{ userId, reason: 'explicit', suppressions: [] }]);
 
     const deliveries = await db
       .select()
       .from(schema.notificationDelivery)
-      .where(eq(schema.notificationDelivery.notificationId, intent!.id));
+      .where(eq(schema.notificationDelivery.notificationId, assertDefined(intent).id));
     expect(deliveries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ channel: 'web', status: 'sent' }),
@@ -90,7 +91,7 @@ describe('POST /me/recovery-codes', () => {
     const inboxRows = await db
       .select()
       .from(schema.notification)
-      .where(eq(schema.notification.intentId, intent!.id));
+      .where(eq(schema.notification.intentId, assertDefined(intent).id));
     expect(inboxRows).toMatchObject([
       {
         userId,

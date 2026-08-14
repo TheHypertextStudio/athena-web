@@ -19,6 +19,7 @@ import type {
 } from '../../src/routes/notion-mirror-entities';
 import type { IntegrationRow } from '../../src/routes/integration-provider';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -56,7 +57,7 @@ describe('applyPulledValues — task', () => {
       .insert(schema.task)
       .values({ organizationId: orgId, teamId, title: 'Old title', state: 'backlog' })
       .returning({ id: schema.task.id });
-    const taskId = row!.id;
+    const taskId = assertDefined(row).id;
 
     const applied = await applyPulledValues(orgId, humanActorId, 'task', taskId, {
       title: text('New title, from Notion'),
@@ -75,8 +76,8 @@ describe('applyPulledValues — task', () => {
       estimateMinutes: 90,
       priority: 'high',
     });
-    expect(updated!.dueDate?.toISOString().slice(0, 10)).toBe('2026-09-01');
-    expect(updated!.startDate?.toISOString().slice(0, 10)).toBe('2026-08-15');
+    expect(assertDefined(updated).dueDate?.toISOString().slice(0, 10)).toBe('2026-09-01');
+    expect(assertDefined(updated).startDate?.toISOString().slice(0, 10)).toBe('2026-08-15');
   });
 
   it('substitutes "Untitled" for an emptied title rather than violating the not-blank column', async () => {
@@ -86,10 +87,15 @@ describe('applyPulledValues — task', () => {
       .values({ organizationId: orgId, teamId, title: 'Had a title', state: 'backlog' })
       .returning({ id: schema.task.id });
 
-    await applyPulledValues(orgId, humanActorId, 'task', row!.id, { title: text(null) });
+    await applyPulledValues(orgId, humanActorId, 'task', assertDefined(row).id, {
+      title: text(null),
+    });
 
-    const [updated] = await db.select().from(schema.task).where(eq(schema.task.id, row!.id));
-    expect(updated!.title).toBe('Untitled');
+    const [updated] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(row).id));
+    expect(assertDefined(updated).title).toBe('Untitled');
   });
 
   it('ignores an unrecognized priority option rather than writing an invalid enum value', async () => {
@@ -107,10 +113,15 @@ describe('applyPulledValues — task', () => {
 
     // A Notion workspace can rename or invent select options freely; "Someday" is not one of
     // Docket's five priority values.
-    await applyPulledValues(orgId, humanActorId, 'task', row!.id, { priority: option('Someday') });
+    await applyPulledValues(orgId, humanActorId, 'task', assertDefined(row).id, {
+      priority: option('Someday'),
+    });
 
-    const [updated] = await db.select().from(schema.task).where(eq(schema.task.id, row!.id));
-    expect(updated!.priority).toBe('medium');
+    const [updated] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(row).id));
+    expect(assertDefined(updated).priority).toBe('medium');
   });
 
   it('leaves state, assignee, and every other unpulled field untouched', async () => {
@@ -128,13 +139,16 @@ describe('applyPulledValues — task', () => {
 
     // A field this reader has no opinion on when Notion did not report one (assignee is
     // name-based and ambiguous to reverse; state was simply not in this pull) must survive.
-    await applyPulledValues(orgId, humanActorId, 'task', row!.id, {
+    await applyPulledValues(orgId, humanActorId, 'task', assertDefined(row).id, {
       description: text('unrelated edit'),
     });
 
-    const [updated] = await db.select().from(schema.task).where(eq(schema.task.id, row!.id));
-    expect(updated!.state).toBe('in_progress');
-    expect(updated!.assigneeId).toBe(humanActorId);
+    const [updated] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(row).id));
+    expect(assertDefined(updated).state).toBe('in_progress');
+    expect(assertDefined(updated).assigneeId).toBe(humanActorId);
   });
 
   it('returns false and touches nothing for an archived task', async () => {
@@ -150,13 +164,16 @@ describe('applyPulledValues — task', () => {
       })
       .returning({ id: schema.task.id });
 
-    const applied = await applyPulledValues(orgId, humanActorId, 'task', row!.id, {
+    const applied = await applyPulledValues(orgId, humanActorId, 'task', assertDefined(row).id, {
       title: text('Revived?'),
     });
     expect(applied).toBe(false);
 
-    const [unchanged] = await db.select().from(schema.task).where(eq(schema.task.id, row!.id));
-    expect(unchanged!.title).toBe('Archived');
+    const [unchanged] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(row).id));
+    expect(assertDefined(unchanged).title).toBe('Archived');
   });
 
   it('is a no-op when the values object carries nothing this entity applies', async () => {
@@ -167,14 +184,17 @@ describe('applyPulledValues — task', () => {
       .returning({ id: schema.task.id });
 
     // Only assignee/docketUrl reported — neither is applied by this function.
-    const applied = await applyPulledValues(orgId, humanActorId, 'task', row!.id, {
+    const applied = await applyPulledValues(orgId, humanActorId, 'task', assertDefined(row).id, {
       assignee: text('Someone'),
       docketUrl: { kind: 'url', value: '/orgs/x/tasks/y' },
     });
     expect(applied).toBe(true);
 
-    const [unchanged] = await db.select().from(schema.task).where(eq(schema.task.id, row!.id));
-    expect(unchanged!.title).toBe('Unaffected');
+    const [unchanged] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(row).id));
+    expect(assertDefined(unchanged).title).toBe('Unaffected');
   });
 
   it('transitions to a recognized state via the shared setTaskState path', async () => {
@@ -186,14 +206,17 @@ describe('applyPulledValues — task', () => {
       .values({ organizationId: orgId, teamId, title: 'To be started', state: 'backlog' })
       .returning({ id: schema.task.id });
 
-    const applied = await applyPulledValues(orgId, humanActorId, 'task', row!.id, {
+    const applied = await applyPulledValues(orgId, humanActorId, 'task', assertDefined(row).id, {
       title: text('To be started'),
       state: option('backlog'),
     });
     expect(applied).toBe(true);
 
-    const [updated] = await db.select().from(schema.task).where(eq(schema.task.id, row!.id));
-    expect(updated!.state).toBe('backlog');
+    const [updated] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(row).id));
+    expect(assertDefined(updated).state).toBe('backlog');
   });
 
   it('ignores an unrecognized state name rather than throwing the whole pull', async () => {
@@ -204,13 +227,16 @@ describe('applyPulledValues — task', () => {
       .returning({ id: schema.task.id });
 
     // A team's workflow does not contain an arbitrary Notion-authored name.
-    const applied = await applyPulledValues(orgId, humanActorId, 'task', row!.id, {
+    const applied = await applyPulledValues(orgId, humanActorId, 'task', assertDefined(row).id, {
       state: option('Definitely Not A Real State'),
     });
     expect(applied).toBe(true);
 
-    const [updated] = await db.select().from(schema.task).where(eq(schema.task.id, row!.id));
-    expect(updated!.state).toBe('backlog');
+    const [updated] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(row).id));
+    expect(assertDefined(updated).state).toBe('backlog');
   });
 });
 
@@ -221,7 +247,7 @@ describe('applyPulledValues — project', () => {
       .insert(schema.project)
       .values({ organizationId: orgId, name: 'Old name' })
       .returning({ id: schema.project.id });
-    const projectId = row!.id;
+    const projectId = assertDefined(row).id;
 
     const applied = await applyPulledValues(orgId, humanActorId, 'project', projectId, {
       name: text('Renamed in Notion'),
@@ -243,7 +269,7 @@ describe('applyPulledValues — project', () => {
       status: 'active',
       health: 'at_risk',
     });
-    expect(updated!.targetDate?.toISOString().slice(0, 10)).toBe('2026-12-01');
+    expect(assertDefined(updated).targetDate?.toISOString().slice(0, 10)).toBe('2026-12-01');
   });
 
   it('ignores an unrecognized status/health option', async () => {
@@ -253,14 +279,17 @@ describe('applyPulledValues — project', () => {
       .values({ organizationId: orgId, name: 'Keep my status', status: 'active' })
       .returning({ id: schema.project.id });
 
-    await applyPulledValues(orgId, humanActorId, 'project', row!.id, {
+    await applyPulledValues(orgId, humanActorId, 'project', assertDefined(row).id, {
       status: option('Not a real status'),
       health: option('Not a real health'),
     });
 
-    const [updated] = await db.select().from(schema.project).where(eq(schema.project.id, row!.id));
-    expect(updated!.status).toBe('active');
-    expect(updated!.health).toBeNull();
+    const [updated] = await db
+      .select()
+      .from(schema.project)
+      .where(eq(schema.project.id, assertDefined(row).id));
+    expect(assertDefined(updated).status).toBe('active');
+    expect(assertDefined(updated).health).toBeNull();
   });
 });
 
@@ -288,7 +317,10 @@ describe('adoptEntity — task', () => {
     });
     expect(entityId).toBeDefined();
 
-    const [created] = await db.select().from(schema.task).where(eq(schema.task.id, entityId!));
+    const [created] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(entityId)));
     expect(created).toMatchObject({
       organizationId: orgId,
       teamId,
@@ -299,9 +331,9 @@ describe('adoptEntity — task', () => {
       source: 'native',
       createdBy: humanActorId,
     });
-    expect(created!.dueDate?.toISOString().slice(0, 10)).toBe('2026-09-10');
+    expect(assertDefined(created).dueDate?.toISOString().slice(0, 10)).toBe('2026-09-10');
     // The team's own open-type state, not anything read from Notion — see adoptTask's doc comment.
-    expect(created!.state).toBeTruthy();
+    expect(assertDefined(created).state).toBeTruthy();
   });
 
   it('honors config.teamId over the earliest-created team', async () => {
@@ -310,14 +342,19 @@ describe('adoptEntity — task', () => {
       .insert(schema.team)
       .values({ organizationId: orgId, name: 'Design', key: 'DSN' })
       .returning({ id: schema.team.id });
-    const integrationRow = await seedNotionIntegration(orgId, { teamId: namedTeam!.id });
+    const integrationRow = await seedNotionIntegration(orgId, {
+      teamId: assertDefined(namedTeam).id,
+    });
 
     const entityId = await adoptEntity(orgId, humanActorId, integrationRow, 'task', {
       title: text('Configured landing team'),
     });
 
-    const [created] = await db.select().from(schema.task).where(eq(schema.task.id, entityId!));
-    expect(created!.teamId).toBe(namedTeam!.id);
+    const [created] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(entityId)));
+    expect(assertDefined(created).teamId).toBe(assertDefined(namedTeam).id);
   });
 
   it('falls back to "Untitled" for a titleless adopted task', async () => {
@@ -326,8 +363,11 @@ describe('adoptEntity — task', () => {
 
     const entityId = await adoptEntity(orgId, humanActorId, integrationRow, 'task', {});
 
-    const [created] = await db.select().from(schema.task).where(eq(schema.task.id, entityId!));
-    expect(created!.title).toBe('Untitled');
+    const [created] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(entityId)));
+    expect(assertDefined(created).title).toBe('Untitled');
   });
 
   it('ignores an unrecognized priority option and keeps the column default', async () => {
@@ -339,8 +379,11 @@ describe('adoptEntity — task', () => {
       priority: option('Someday'),
     });
 
-    const [created] = await db.select().from(schema.task).where(eq(schema.task.id, entityId!));
-    expect(created!.priority).toBe('none');
+    const [created] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(entityId)));
+    expect(assertDefined(created).priority).toBe('none');
   });
 });
 
@@ -361,7 +404,7 @@ describe('adoptEntity — project', () => {
     const [created] = await db
       .select()
       .from(schema.project)
-      .where(eq(schema.project.id, entityId!));
+      .where(eq(schema.project.id, assertDefined(entityId)));
     expect(created).toMatchObject({
       organizationId: orgId,
       teamId,

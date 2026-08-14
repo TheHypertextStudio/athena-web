@@ -25,6 +25,7 @@ import {
   toMirrorDatabaseOut,
 } from '../../src/routes/notion-mirror-design';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -144,9 +145,9 @@ describe('Notion mirror designs', () => {
         .set({
           propertyMap: {
             ...seeded.propertyMap,
-            title: { ...seeded.propertyMap['title']!, propertyId: 'prop_title' },
+            title: { ...assertDefined(seeded.propertyMap['title']), propertyId: 'prop_title' },
             assignee: {
-              ...seeded.propertyMap['assignee']!,
+              ...assertDefined(seeded.propertyMap['assignee']),
               representation: 'notion_person',
               propertyId: 'prop_assignee',
             },
@@ -230,7 +231,10 @@ describe('Notion mirror designs', () => {
     expect(explicitlyChanged.propertyMap['project']?.relationDataSourceId).toBe('ds_projects');
 
     const withoutPreviousChoices = await applyDesignPatch(
-      { ...explicitlyChanged, propertyMap: { title: explicitlyChanged.propertyMap['title']! } },
+      {
+        ...explicitlyChanged,
+        propertyMap: { title: assertDefined(explicitlyChanged.propertyMap['title']) },
+      },
       {
         columns: [
           { field: 'title', title: 'Work' },

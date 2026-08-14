@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -32,7 +33,7 @@ async function seedLinearIntegration(orgId: string, actorId: string, ws: string)
       createdBy: actorId,
     })
     .returning({ id: schema.integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 describe('POST /internal/ingest/linear', () => {
@@ -58,11 +59,11 @@ describe('POST /internal/ingest/linear', () => {
       .from(schema.inboundEvent)
       .where(eq(schema.inboundEvent.externalEventId, `ev_1:${orgId}`));
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.organizationId).toBe(orgId);
-    expect(rows[0]!.integrationId).toBe(intgId);
-    expect(rows[0]!.provider).toBe('linear');
-    expect(rows[0]!.signatureVerified).toBe(true);
-    expect(rows[0]!.status).toBe('received');
+    expect(assertDefined(rows[0]).organizationId).toBe(orgId);
+    expect(assertDefined(rows[0]).integrationId).toBe(intgId);
+    expect(assertDefined(rows[0]).provider).toBe('linear');
+    expect(assertDefined(rows[0]).signatureVerified).toBe(true);
+    expect(assertDefined(rows[0]).status).toBe('received');
   });
 
   it('is idempotent against retries (dedup on provider + external event id)', async () => {
@@ -146,8 +147,8 @@ describe('POST /internal/ingest/linear', () => {
       .from(schema.inboundEvent)
       .where(eq(schema.inboundEvent.externalEventId, 'ev_unrouted'));
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.organizationId).toBeNull();
-    expect(rows[0]!.integrationId).toBeNull();
+    expect(assertDefined(rows[0]).organizationId).toBeNull();
+    expect(assertDefined(rows[0]).integrationId).toBeNull();
   });
 
   it('400s an unparseable body', async () => {
@@ -176,7 +177,7 @@ describe('POST /internal/ingest/github', () => {
         createdBy: humanActorId,
       })
       .returning({ id: schema.integration.id });
-    const intgId = row!.id;
+    const intgId = assertDefined(row).id;
 
     const res = await ingest.request('/github', {
       method: 'POST',
@@ -196,8 +197,8 @@ describe('POST /internal/ingest/github', () => {
       .from(schema.inboundEvent)
       .where(eq(schema.inboundEvent.externalEventId, 'gh_ev_1'));
     expect(events).toHaveLength(1);
-    expect(events[0]!.organizationId).toBe(orgId);
-    expect(events[0]!.integrationId).toBe(intgId);
-    expect(events[0]!.provider).toBe('github');
+    expect(assertDefined(events[0]).organizationId).toBe(orgId);
+    expect(assertDefined(events[0]).integrationId).toBe(intgId);
+    expect(assertDefined(events[0]).provider).toBe('github');
   });
 });

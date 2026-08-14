@@ -31,6 +31,7 @@ import { createTaskToolHandler } from '../../src/mcp/task-tools';
 import { taskStoreForContext } from '../../src/mcp/task-store';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 
@@ -137,7 +138,7 @@ async function connect(ctx: McpContext, withSession = true): Promise<Harness> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
 });
 
 const DetailedTaskResult = z

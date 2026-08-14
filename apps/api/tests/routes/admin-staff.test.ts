@@ -14,6 +14,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -44,7 +45,7 @@ async function makeUser(name = 'User'): Promise<string> {
     .insert(schema.user)
     .values({ name: `${name} ${u}`, email: `${name.toLowerCase()}-${u}@example.com` })
     .returning({ id: schema.user.id });
-  return rows[0]!.id;
+  return assertDefined(rows[0]).id;
 }
 
 /** Insert a staff_user keyed to a fresh user; returns { userId, staffUserId }. */
@@ -56,7 +57,7 @@ async function makeStaff(
     .insert(schema.staffUser)
     .values({ userId, role })
     .returning({ id: schema.staffUser.id });
-  return { userId, staffUserId: rows[0]!.id };
+  return { userId, staffUserId: assertDefined(rows[0]).id };
 }
 
 /** Insert an org; returns its id. */
@@ -68,7 +69,7 @@ async function makeOrg(
     .insert(schema.organization)
     .values({ name: `Org ${u}`, slug: `org-${u}`, lifecycleState: 'active', ...extra })
     .returning({ id: schema.organization.id });
-  return rows[0]!.id;
+  return assertDefined(rows[0]).id;
 }
 
 /** Seed an agent session in a given status; returns the session id. */
@@ -86,13 +87,17 @@ async function makeAgentSession(
     .returning({ id: schema.actor.id });
   const [ag] = await db
     .insert(schema.agent)
-    .values({ organizationId: orgId, actorId: agentActor!.id, createdBy: human!.id })
+    .values({
+      organizationId: orgId,
+      actorId: assertDefined(agentActor).id,
+      createdBy: assertDefined(human).id,
+    })
     .returning({ id: schema.agent.id });
   const [s] = await db
     .insert(schema.agentSession)
-    .values({ organizationId: orgId, agentId: ag!.id, trigger: 'assignment', status })
+    .values({ organizationId: orgId, agentId: assertDefined(ag).id, trigger: 'assignment', status })
     .returning({ id: schema.agentSession.id });
-  return s!.id;
+  return assertDefined(s).id;
 }
 
 /** Count audit events of a given type for a subject id. */

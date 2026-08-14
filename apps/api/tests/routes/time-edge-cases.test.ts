@@ -22,6 +22,7 @@ import {
   seedOrg,
   seedUserWithHub,
 } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 const J = { 'Content-Type': 'application/json' };
 
@@ -132,14 +133,20 @@ describe('Time Ledger command edge cases', () => {
       .where(eq(schema.timeContext.timeRecordId, record.id));
     expect(contextRow).toBeDefined();
 
-    const removed = await app.request(`/records/${record.id}/contexts/${contextRow!.id}`, {
-      method: 'DELETE',
-    });
+    const removed = await app.request(
+      `/records/${record.id}/contexts/${assertDefined(contextRow).id}`,
+      {
+        method: 'DELETE',
+      },
+    );
     expect(removed.status).toBe(200);
 
-    const missing = await app.request(`/records/${record.id}/contexts/${contextRow!.id}`, {
-      method: 'DELETE',
-    });
+    const missing = await app.request(
+      `/records/${record.id}/contexts/${assertDefined(contextRow).id}`,
+      {
+        method: 'DELETE',
+      },
+    );
     expect(missing.status).toBe(404);
   });
 

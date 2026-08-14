@@ -8,6 +8,7 @@ import { EMPTY_ACTUALS } from '../../../src/services/scheduling/duration-model';
 import type { PlanWeekInput, PlannedBlock } from '../../../src/services/scheduling/week-planner';
 import { planWeek, shapesPresent } from '../../../src/services/scheduling/week-planner';
 import { addDays, instantAt, localDateString } from '../../../src/services/scheduling/zoned-time';
+import { assertDefined } from '@docket/test-utils';
 
 const TZ = 'America/Los_Angeles';
 /** A Monday. */
@@ -400,7 +401,7 @@ describe('planWeek — duration comes from measured time, not guesses', () => {
     );
     const writing = result.blocks.find((b) => b.shape === 'deep_writing');
     expect(writing).toBeDefined();
-    expect(minutesOf(writing!)).toBe(100);
+    expect(minutesOf(assertDefined(writing))).toBe(100);
     expect(writing?.durationSource).toBe('measured');
   });
 
@@ -424,7 +425,7 @@ describe('planWeek — duration comes from measured time, not guesses', () => {
       }),
     );
     const writing = result.blocks.find((b) => b.shape === 'deep_writing');
-    expect(minutesOf(writing!)).toBe(workShapeProfile('deep_writing').maxMinutes);
+    expect(minutesOf(assertDefined(writing))).toBe(workShapeProfile('deep_writing').maxMinutes);
   });
 
   it('falls back to the requested length, then to the shape default', () => {
@@ -437,7 +438,7 @@ describe('planWeek — duration comes from measured time, not guesses', () => {
         backfillShapes: [],
       }),
     ).blocks.find((b) => b.shape === 'deep_writing');
-    expect(minutesOf(requested!)).toBe(75);
+    expect(minutesOf(assertDefined(requested))).toBe(75);
     expect(requested?.durationSource).toBe('requested');
 
     const defaulted = planWeek(
@@ -447,7 +448,9 @@ describe('planWeek — duration comes from measured time, not guesses', () => {
         backfillShapes: [],
       }),
     ).blocks.find((b) => b.shape === 'deep_writing');
-    expect(minutesOf(defaulted!)).toBe(workShapeProfile('deep_writing').defaultMinutes);
+    expect(minutesOf(assertDefined(defaulted))).toBe(
+      workShapeProfile('deep_writing').defaultMinutes,
+    );
     expect(defaulted?.durationSource).toBe('shape_default');
   });
 });

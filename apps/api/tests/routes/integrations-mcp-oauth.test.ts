@@ -14,6 +14,7 @@ import type {
 } from '../../src/lib/credentials';
 import type { signConnectState as SignConnectState } from '../../src/lib/oauth-state';
 import { getSession, resetAuthMocks } from '../support/auth-mock';
+import { assertDefined } from '@docket/test-utils';
 
 const { completeMcpOAuthAuthorization } = vi.hoisted(() => ({
   completeMcpOAuthAuthorization: vi.fn(),
@@ -68,7 +69,7 @@ async function seedPendingPersonalOAuth(): Promise<{ ownerUserId: string; connec
   const [connection] = await db
     .insert(schema.personalMcpConnection)
     .values({
-      ownerUserId: user!.id,
+      ownerUserId: assertDefined(user).id,
       name: 'Sunsama',
       alias: `sun${suffix}`,
       url: 'https://mcp.sunsama.com/mcp',
@@ -77,11 +78,11 @@ async function seedPendingPersonalOAuth(): Promise<{ ownerUserId: string; connec
     })
     .returning({ id: schema.personalMcpConnection.id });
   await db.insert(schema.personalMcpCredential).values({
-    connectionId: connection!.id,
-    ownerUserId: user!.id,
+    connectionId: assertDefined(connection).id,
+    ownerUserId: assertDefined(user).id,
     ciphertext: sealCredential(JSON.stringify({ kind: 'mcp_oauth_pending', codeVerifier: 'pkce' })),
   });
-  return { ownerUserId: user!.id, connectionId: connection!.id };
+  return { ownerUserId: assertDefined(user).id, connectionId: assertDefined(connection).id };
 }
 
 async function seedPendingOAuth(): Promise<{ orgId: string; integrationId: string }> {
@@ -93,7 +94,7 @@ async function seedPendingOAuth(): Promise<{ orgId: string; integrationId: strin
   const [row] = await db
     .insert(schema.integration)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       provider: 'mcp',
       pattern: 'connector',
       roles: ['work'],
@@ -108,11 +109,11 @@ async function seedPendingOAuth(): Promise<{ orgId: string; integrationId: strin
     })
     .returning({ id: schema.integration.id });
   await db.insert(schema.integrationCredential).values({
-    organizationId: org!.id,
-    integrationId: row!.id,
+    organizationId: assertDefined(org).id,
+    integrationId: assertDefined(row).id,
     ciphertext: sealCredential(JSON.stringify({ kind: 'mcp_oauth_pending', codeVerifier: 'pkce' })),
   });
-  return { orgId: org!.id, integrationId: row!.id };
+  return { orgId: assertDefined(org).id, integrationId: assertDefined(row).id };
 }
 
 describe('remote MCP OAuth callback', () => {
@@ -156,8 +157,10 @@ describe('remote MCP OAuth callback', () => {
     expect(stored?.lastError).toBeNull();
     expect(response.headers.get('location')).toContain('/settings/athena?mcp=connected');
     expect(stored?.status).toBe('connected');
-    expect((stored!.config as { oauthScope?: string }).oauthScope).toBe('tools:read tools:write');
-    expect(unsealCredential(stored!.ciphertext)).toContain('mcp_oauth');
+    expect((assertDefined(stored).config as { oauthScope?: string }).oauthScope).toBe(
+      'tools:read tools:write',
+    );
+    expect(unsealCredential(assertDefined(stored).ciphertext)).toContain('mcp_oauth');
     expect(completeMcpOAuthAuthorization).toHaveBeenCalledWith(
       expect.objectContaining({ authorizationCode: 'approval-code' }),
     );

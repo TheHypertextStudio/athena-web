@@ -29,6 +29,7 @@ import {
   materializeRecurrenceSeriesWindow,
   sweepRecurrenceMaterialization,
 } from '../../src/lib/recurrence/sweep';
+import { assertDefined } from '@docket/test-utils';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
@@ -41,16 +42,20 @@ beforeAll(async () => {
   client = new PGlite('memory://');
   db = drizzle(client, { schema: fullSchema });
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
-  organizationId = (
-    await db
-      .insert(organization)
-      .values({ name: 'Recurrence sweep', slug: `recurrence-sweep-${Date.now()}` })
-      .returning()
-  )[0]!.id;
-  teamId = TeamId.parse(
+  organizationId = assertDefined(
     (
-      await db.insert(team).values({ organizationId, name: 'Operations', key: 'OPS' }).returning()
-    )[0]!.id,
+      await db
+        .insert(organization)
+        .values({ name: 'Recurrence sweep', slug: `recurrence-sweep-${Date.now()}` })
+        .returning()
+    )[0],
+  ).id;
+  teamId = TeamId.parse(
+    assertDefined(
+      (
+        await db.insert(team).values({ organizationId, name: 'Operations', key: 'OPS' }).returning()
+      )[0],
+    ).id,
   );
 });
 
@@ -277,7 +282,7 @@ describe('rolling recurrence sweep', () => {
         .where(
           and(
             eq(processOccurrence.seriesId, series.id),
-            eq(processOccurrence.seriesRevisionId, latest!.id),
+            eq(processOccurrence.seriesRevisionId, assertDefined(latest).id),
             eq(processOccurrence.status, 'materialized'),
           ),
         ),
@@ -400,24 +405,24 @@ describe('rolling recurrence sweep', () => {
       },
     });
 
-    expect(retiredTaskIds).toEqual([original!.taskId]);
+    expect(retiredTaskIds).toEqual([assertDefined(original).taskId]);
     expect(
       await db
         .select({ archivedAt: task.archivedAt })
         .from(task)
-        .where(eq(task.id, original!.taskId)),
+        .where(eq(task.id, assertDefined(original).taskId)),
     ).toEqual([{ archivedAt: expect.any(Date) }]);
     expect(
       await db
         .select({ status: processInstance.status })
         .from(processInstance)
-        .where(eq(processInstance.id, original!.instanceId)),
+        .where(eq(processInstance.id, assertDefined(original).instanceId)),
     ).toEqual([{ status: 'canceled' }]);
     expect(
       await db
         .select({ status: processOccurrence.status })
         .from(processOccurrence)
-        .where(eq(processOccurrence.id, original!.occurrenceId)),
+        .where(eq(processOccurrence.id, assertDefined(original).occurrenceId)),
     ).toEqual([{ status: 'canceled' }]);
     expect(
       await db

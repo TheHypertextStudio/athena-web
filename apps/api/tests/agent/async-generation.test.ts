@@ -16,6 +16,7 @@ import {
 } from '../../src/agent/run-generation';
 import { transitionLifecycle } from '../../src/routes/agent-session-helpers';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let dbModule: Awaited<ReturnType<typeof getMigratedDb>>;
 
@@ -38,12 +39,12 @@ async function seedPendingAthena(): Promise<{ ownerUserId: string; sessionId: st
     .insert(agentSession)
     .values({
       executorKind: 'athena',
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       trigger: 'delegation',
       status: 'pending',
     })
     .returning({ id: agentSession.id });
-  return { ownerUserId: owner!.id, sessionId: session!.id };
+  return { ownerUserId: assertDefined(owner).id, sessionId: assertDefined(session).id };
 }
 
 describe('queued Athena generations', () => {
@@ -54,8 +55,8 @@ describe('queued Athena generations', () => {
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
 
-    const first = await enqueueRunGeneration(session!);
-    const duplicateAdmission = await enqueueRunGeneration(session!);
+    const first = await enqueueRunGeneration(assertDefined(session));
+    const duplicateAdmission = await enqueueRunGeneration(assertDefined(session));
 
     expect(first.message).toEqual({
       sessionId: seed.sessionId,
@@ -79,7 +80,7 @@ describe('queued Athena generations', () => {
     const fetch = vi.fn(async () => Response.json({ accepted: true }, { status: 202 }));
 
     const admission = await admitAthenaGeneration(
-      session!,
+      assertDefined(session),
       { runnableStatuses: ['pending'] },
       {
         config: {
@@ -113,13 +114,13 @@ describe('queued Athena generations', () => {
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
-    const queued = await enqueueRunGeneration(pending!);
+    const queued = await enqueueRunGeneration(assertDefined(pending));
     const [running] = await dbModule.db
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
 
-    const paused = await transitionLifecycle(running!, 'pause');
+    const paused = await transitionLifecycle(assertDefined(running), 'pause');
 
     expect(paused.status).toBe('awaiting_input');
     const [run] = await dbModule.db
@@ -138,13 +139,13 @@ describe('queued Athena generations', () => {
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
-    const queued = await enqueueRunGeneration(pending!);
+    const queued = await enqueueRunGeneration(assertDefined(pending));
     const [running] = await dbModule.db
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
 
-    const canceled = await transitionLifecycle(running!, 'cancel');
+    const canceled = await transitionLifecycle(assertDefined(running), 'cancel');
 
     expect(canceled.status).toBe('canceled');
     const [run] = await dbModule.db
@@ -163,7 +164,7 @@ describe('queued Athena generations', () => {
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
-    const queued = await enqueueRunGeneration(session!);
+    const queued = await enqueueRunGeneration(assertDefined(session));
 
     const claimed = await claimQueuedRunGeneration(queued.message);
 
@@ -184,7 +185,7 @@ describe('queued Athena generations', () => {
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
-    const queued = await enqueueRunGeneration(session!);
+    const queued = await enqueueRunGeneration(assertDefined(session));
     const claimedAt = new Date('2026-07-16T18:00:00.000Z');
     const first = await claimQueuedRunGeneration(queued.message, {
       now: claimedAt,
@@ -239,14 +240,14 @@ describe('queued Athena generations', () => {
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
-    const queued = await enqueueRunGeneration(session!);
+    const queued = await enqueueRunGeneration(assertDefined(session));
     const claimedAt = new Date('2026-07-16T19:00:00.000Z');
     const first = await claimQueuedRunGeneration(queued.message, {
       now: claimedAt,
       leaseDurationMs: 1_000,
     });
     const drive = vi.fn(async (_orgId: string, _sessionId: string, _lease: RunGenerationLease) => ({
-      ...session!,
+      ...assertDefined(session),
       status: 'completed' as const,
     }));
 
@@ -279,7 +280,7 @@ describe('queued Athena generations', () => {
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
-    const queued = await enqueueRunGeneration(session!);
+    const queued = await enqueueRunGeneration(assertDefined(session));
     const claimedAt = new Date('2026-07-16T20:00:00.000Z');
     const first = await claimQueuedRunGeneration(queued.message, {
       now: claimedAt,
@@ -328,7 +329,7 @@ describe('queued Athena generations', () => {
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
-    const queued = await enqueueRunGeneration(pending!);
+    const queued = await enqueueRunGeneration(assertDefined(pending));
     const claimed = await claimQueuedRunGeneration(queued.message);
     const [running] = await dbModule.db
       .select()
@@ -348,7 +349,7 @@ describe('queued Athena generations', () => {
       await effectReleased;
     });
     await effectStarted;
-    const lifecycle = transitionLifecycle(running!, 'cancel');
+    const lifecycle = transitionLifecycle(assertDefined(running), 'cancel');
     await Promise.resolve();
     releaseEffect();
 
@@ -378,7 +379,7 @@ describe('queued Athena generations', () => {
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, seed.sessionId));
-    const queued = await enqueueRunGeneration(first!);
+    const queued = await enqueueRunGeneration(assertDefined(first));
     const [second] = await dbModule.db
       .insert(agentSession)
       .values({
@@ -391,7 +392,7 @@ describe('queued Athena generations', () => {
 
     const outcomes = await Promise.allSettled([
       claimQueuedRunGeneration(queued.message),
-      enqueueRunGeneration(second!),
+      enqueueRunGeneration(assertDefined(second)),
     ]);
 
     expect(outcomes.every(({ status }) => status === 'fulfilled')).toBe(true);

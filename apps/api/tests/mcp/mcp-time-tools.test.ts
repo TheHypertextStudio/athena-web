@@ -21,6 +21,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -47,7 +48,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const email = `${slug}@e.com`;
   const [user] = await db
     .insert(schema.user)
@@ -55,7 +56,12 @@ async function seedOrg(): Promise<Seed> {
     .returning({ id: schema.user.id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: user!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(user).id,
+    })
     .returning({ id: schema.actor.id });
   const [team] = await db
     .insert(schema.team)
@@ -65,14 +71,19 @@ async function seedOrg(): Promise<Seed> {
       key: `C${Math.random().toString(36).slice(2, 6)}`,
     })
     .returning({ id: schema.team.id });
-  await db.insert(schema.hub).values({ userId: user!.id });
+  await db.insert(schema.hub).values({ userId: assertDefined(user).id });
   return {
     orgId,
-    teamId: team!.id,
-    userId: user!.id,
-    actorId: human!.id,
+    teamId: assertDefined(team).id,
+    userId: assertDefined(user).id,
+    actorId: assertDefined(human).id,
     ctx: {
-      principal: { kind: 'user', userId: user!.id, userName: 'Ada', userEmail: email },
+      principal: {
+        kind: 'user',
+        userId: assertDefined(user).id,
+        userName: 'Ada',
+        userEmail: email,
+      },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     },
   };
@@ -89,7 +100,7 @@ async function seedTask(s: Seed, title: string): Promise<string> {
       createdBy: s.actorId,
     })
     .returning({ id: schema.task.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 const harnesses: { close(): Promise<void> }[] = [];
@@ -113,7 +124,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   resetAuthMocks();
 });
 
@@ -209,7 +220,7 @@ describe('track', () => {
     const rows = await db
       .select({ title: schema.task.title, organizationId: schema.task.organizationId })
       .from(schema.task)
-      .where(eq(schema.task.id, started.tracking.taskId!));
+      .where(eq(schema.task.id, assertDefined(started.tracking.taskId)));
     expect(rows[0]).toEqual({ title: 'Untangle the deploy', organizationId: s.orgId });
   });
 
@@ -257,7 +268,7 @@ describe('track', () => {
     const taskId = await seedTask(s, 'Nameable work');
     const client = await connect(s.ctx);
     const started = payload(await track(client, { action: 'start', taskId }));
-    const recordId = started.tracking.timeRecordId!;
+    const recordId = assertDefined(started.tracking.timeRecordId);
 
     // Bypass every client and every validator, exactly as the REST case does: blank the record's
     // own label directly in storage so the stop-time guard is the only thing left to catch it.

@@ -6,6 +6,7 @@ import type * as DbModule from '@docket/db';
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type projectsRouter from '../../src/routes/projects';
 import type tasksRouter from '../../src/routes/tasks';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -33,7 +34,7 @@ async function seedProject(orgId: string, teamId: string, createdBy: string): Pr
     .insert(schema.project)
     .values({ organizationId: orgId, name: 'Seeded', teamId, createdBy })
     .returning({ id: schema.project.id });
-  return proj!.id;
+  return assertDefined(proj).id;
 }
 
 /** Insert a task into a project; `estimate`/`completedAt` drive the progress roll-up. */
@@ -56,7 +57,7 @@ async function seedTask(args: {
       completedAt: args.completed ? new Date() : null,
     })
     .returning({ id: schema.task.id });
-  return t!.id;
+  return assertDefined(t).id;
 }
 
 describe('projects detail router', () => {
@@ -105,8 +106,8 @@ describe('projects detail router', () => {
         display: { iconKey: string; colorKey: string; customized: boolean };
       }[];
     }>(response);
-    const blocking = body.items.find((item) => item.id === blockingId)!;
-    const blocked = body.items.find((item) => item.id === blockedId)!;
+    const blocking = assertDefined(body.items.find((item) => item.id === blockingId));
+    const blocked = assertDefined(body.items.find((item) => item.id === blockedId));
     expect(blocking.blocksIds).toEqual([blockedId]);
     expect(blocked.blockedByIds).toEqual([blockingId]);
     expect(blocked).toMatchObject({
@@ -141,8 +142,8 @@ describe('projects detail router', () => {
         summary: 'A concise outcome',
         description: 'a description',
         leadId: humanActorId,
-        programId: prog!.id,
-        teamId: team2!.id,
+        programId: assertDefined(prog).id,
+        teamId: assertDefined(team2).id,
         status: 'active',
         health: 'at_risk',
         startDate: '2026-01-01',
@@ -169,8 +170,8 @@ describe('projects detail router', () => {
     expect(after.health).toBe('at_risk');
     expect(after.startDate).toBe('2026-01-01T00:00:00.000Z');
     expect(after.targetDate).toBe('2026-12-31T00:00:00.000Z');
-    expect(after.programId).toBe(prog!.id);
-    expect(after.teamId).toBe(team2!.id);
+    expect(after.programId).toBe(assertDefined(prog).id);
+    expect(after.teamId).toBe(assertDefined(team2).id);
     expect(after.leadId).toBe(humanActorId);
 
     // Second patch: clear the columns. Nullable references/dates clear via `null`;
@@ -236,7 +237,12 @@ describe('projects detail router', () => {
       .values([
         { organizationId: orgId, name: 'Funding', color: 'amber' },
         { organizationId: orgId, teamId, name: 'Internal', color: 'slate' },
-        { organizationId: orgId, teamId: otherTeam!.id, name: 'Theirs', color: 'teal' },
+        {
+          organizationId: orgId,
+          teamId: assertDefined(otherTeam).id,
+          name: 'Theirs',
+          color: 'teal',
+        },
       ])
       .returning();
 
@@ -247,17 +253,17 @@ describe('projects detail router', () => {
         body: JSON.stringify({ labelIds }),
       });
 
-    const attached = await patchLabels([inserted[0]!.id]);
+    const attached = await patchLabels([assertDefined(inserted[0]).id]);
     expect(attached.status).toBe(200);
     expect(
       await db.select().from(schema.projectLabel).where(eq(schema.projectLabel.projectId, id)),
-    ).toEqual([expect.objectContaining({ labelId: inserted[0]!.id })]);
+    ).toEqual([expect.objectContaining({ labelId: assertDefined(inserted[0]).id })]);
 
     // The project's own team's label is offerable to it.
-    expect((await patchLabels([inserted[1]!.id])).status).toBe(200);
+    expect((await patchLabels([assertDefined(inserted[1]).id])).status).toBe(200);
 
     // Another team's label is not, and 404s rather than being silently dropped.
-    expect((await patchLabels([inserted[2]!.id])).status).toBe(404);
+    expect((await patchLabels([assertDefined(inserted[2]).id])).status).toBe(404);
   });
 
   it('deletes a project (manage), then 404s on re-read', async () => {
@@ -517,7 +523,7 @@ describe('projects create with initiative associations', () => {
       .insert(schema.initiative)
       .values({ organizationId: orgId, name, createdBy })
       .returning({ id: schema.initiative.id });
-    return row!.id;
+    return assertDefined(row).id;
   }
 
   /** Count the initiative_project links for a given project. */

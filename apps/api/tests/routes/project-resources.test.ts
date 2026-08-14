@@ -5,6 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import type projectResourcesRouter from '../../src/routes/project-resources';
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -21,7 +22,7 @@ async function makeProject(orgId: string, actorId: string): Promise<string> {
     .insert(schema.project)
     .values({ organizationId: orgId, name: 'Funding campaign', createdBy: actorId })
     .returning({ id: schema.project.id });
-  return rows[0]!.id;
+  return assertDefined(rows[0]).id;
 }
 
 describe('Project resources', () => {

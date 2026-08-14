@@ -4,6 +4,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as ResolveModule from '../../../src/lib/identity/resolve-external-entity';
 import { getDb, seedBaseOrg } from '../../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -32,7 +33,7 @@ async function seedIntegration(orgId: string, actorId: string): Promise<string> 
       createdBy: actorId,
     })
     .returning({ id: schema.integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert a task mirrored from an integration, the shape association actually matches on. */
@@ -55,7 +56,7 @@ async function seedLinkedTask(
       externalId,
     })
     .returning({ id: schema.task.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 describe('resolveExternalEntities', () => {
@@ -130,7 +131,7 @@ describe('resolveExternalEntities', () => {
     ]);
 
     expect(resolved.get(externalEntityKey('work_item', 'LIN-7'))).toBe(taskId);
-    expect(resolved.get(externalEntityKey('project', 'PRJ-7'))).toBe(projectRow!.id);
+    expect(resolved.get(externalEntityKey('project', 'PRJ-7'))).toBe(assertDefined(projectRow).id);
   });
 
   it('omits an unresolved reference rather than mapping it to an empty value', async () => {

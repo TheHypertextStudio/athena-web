@@ -39,6 +39,7 @@ import { getSession, resetAuthMocks, verifyAccessToken } from '../support/auth-m
 import { getMigratedDb } from '../support/db';
 import { seedConsentedClient } from '../support/oauth-grant';
 import type * as RoutesHarness from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -220,7 +221,7 @@ async function connect(workspace: Workspace, scopes: readonly string[]): Promise
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
 });
 
 /** The text of a tool result's first content block. */

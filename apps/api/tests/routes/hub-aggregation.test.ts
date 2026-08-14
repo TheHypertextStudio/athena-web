@@ -18,6 +18,7 @@ import { eq } from 'drizzle-orm';
 
 import { appWithSession, fakeSession, getDb, seedBaseOrg } from '../support/routes-harness';
 import type hubRouter from '../../src/routes/hub';
+import { assertDefined } from '@docket/test-utils';
 import { materializeOccurrence } from '../../src/lib/recurrence/materialize';
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
 import { createRecurrenceSeries } from '../../src/lib/recurrence/series';
@@ -44,9 +45,9 @@ async function seedUserWithHub(): Promise<{ userId: string; hubId: string }> {
     .returning({ id: schema.user.id });
   const [h] = await db
     .insert(schema.hub)
-    .values({ userId: user!.id })
+    .values({ userId: assertDefined(user).id })
     .returning({ id: schema.hub.id });
-  return { userId: user!.id, hubId: h!.id };
+  return { userId: assertDefined(user).id, hubId: assertDefined(h).id };
 }
 
 /** Make `userId` an active human Actor in `orgId`; returns the actor id. */
@@ -60,7 +61,7 @@ async function joinOrg(
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, status, roleId })
     .returning({ id: schema.actor.id });
-  return a!.id;
+  return assertDefined(a).id;
 }
 
 /** Join through a role that matches the normal Member write capability. */
@@ -74,7 +75,7 @@ async function joinContributingOrg(userId: string, orgId: string): Promise<strin
       capabilities: ['contribute'],
     })
     .returning({ id: schema.role.id });
-  return joinOrg(userId, orgId, 'active', memberRole!.id);
+  return joinOrg(userId, orgId, 'active', assertDefined(memberRole).id);
 }
 
 describe('hub /activity (cross-org audit feed)', () => {
@@ -227,20 +228,20 @@ describe('hub /today (daily operating projection)', () => {
       .returning({ id: schema.project.id });
     await db.insert(schema.initiativeProject).values({
       organizationId: org.orgId,
-      initiativeId: initiative!.id,
-      projectId: project!.id,
+      initiativeId: assertDefined(initiative).id,
+      projectId: assertDefined(project).id,
     });
     await db.insert(schema.update).values({
       organizationId: org.orgId,
       subjectType: 'project',
-      subjectId: project!.id,
+      subjectId: assertDefined(project).id,
       body: 'Final review is underway.',
       health: 'at_risk',
       createdBy: org.humanActorId,
     });
     await db.insert(schema.milestone).values({
       organizationId: org.orgId,
-      projectId: project!.id,
+      projectId: assertDefined(project).id,
       name: 'Launch',
       targetDate: new Date('2026-08-02T00:00:00.000Z'),
       createdBy: org.humanActorId,
@@ -254,7 +255,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Planned',
         teamId: org.teamId,
         state: 'todo',
-        projectId: project!.id,
+        projectId: assertDefined(project).id,
         assigneeId: myActorId,
         estimateMinutes: 45,
         dueDate: new Date(date),
@@ -264,7 +265,7 @@ describe('hub /today (daily operating projection)', () => {
     await db.insert(schema.dailyPlanItem).values({
       hubId,
       refOrganizationId: org.orgId,
-      refTaskId: planned!.id,
+      refTaskId: assertDefined(planned).id,
       date,
       timeboxStartsAt: new Date(`${date}T09:00:00.000Z`),
       timeboxEndsAt: new Date(`${date}T10:00:00.000Z`),
@@ -274,7 +275,7 @@ describe('hub /today (daily operating projection)', () => {
       title: 'Already shipped',
       teamId: org.teamId,
       state: 'done',
-      projectId: project!.id,
+      projectId: assertDefined(project).id,
       completedAt: new Date(),
       createdBy: org.humanActorId,
     });
@@ -286,7 +287,11 @@ describe('hub /today (daily operating projection)', () => {
       .returning({ id: schema.actor.id });
     const [ag] = await db
       .insert(schema.agent)
-      .values({ organizationId: org.orgId, actorId: agentActor!.id, createdBy: org.humanActorId })
+      .values({
+        organizationId: org.orgId,
+        actorId: assertDefined(agentActor).id,
+        createdBy: org.humanActorId,
+      })
       .returning({ id: schema.agent.id });
     const [approvalTask] = await db
       .insert(schema.task)
@@ -300,8 +305,8 @@ describe('hub /today (daily operating projection)', () => {
       .returning({ id: schema.task.id });
     await db.insert(schema.agentSession).values({
       organizationId: org.orgId,
-      agentId: ag!.id,
-      taskId: approvalTask!.id,
+      agentId: assertDefined(ag).id,
+      taskId: assertDefined(approvalTask).id,
       trigger: 'assignment',
       status: 'awaiting_approval',
       initiatorId: org.humanActorId,
@@ -331,8 +336,8 @@ describe('hub /today (daily operating projection)', () => {
       .returning({ id: schema.task.id });
     await db.insert(schema.taskDependency).values({
       organizationId: org.orgId,
-      blockingTaskId: blockingTask!.id,
-      blockedTaskId: blockedTask!.id,
+      blockingTaskId: assertDefined(blockingTask).id,
+      blockedTaskId: assertDefined(blockedTask).id,
     });
 
     // Two notifications, one unread → inbox count = 1.
@@ -367,21 +372,24 @@ describe('hub /today (daily operating projection)', () => {
 
     expect(today.date).toBe(date);
     expect(today.planState).toBe('active');
-    expect(today.plan.map((t) => t.id)).toEqual([planned!.id]);
-    expect(today.focus.now?.id).toBe(planned!.id);
+    expect(today.plan.map((t) => t.id)).toEqual([assertDefined(planned).id]);
+    expect(today.focus.now?.id).toBe(assertDefined(planned).id);
     expect(today.focus.after).toBeNull();
     expect(today.statusCards.map((card) => card.id)).toEqual(
-      expect.arrayContaining([project!.id, initiative!.id]),
+      expect.arrayContaining([assertDefined(project).id, assertDefined(initiative).id]),
     );
     expect(
-      today.statusCards.find((card) => card.id === project!.id)?.latestUpdate?.excerpt,
+      today.statusCards.find((card) => card.id === assertDefined(project).id)?.latestUpdate
+        ?.excerpt,
     ).toContain('Final review');
-    expect(today.suggestions.map((task) => task.id)).toContain(due!.id);
-    expect(today.calendar.some((b) => b.taskId === planned!.id)).toBe(true);
-    expect(today.needsAttention.approvals.map((t) => t.id)).toContain(approvalTask!.id);
-    expect(today.needsAttention.blocked.map((t) => t.id)).toContain(blockedTask!.id);
+    expect(today.suggestions.map((task) => task.id)).toContain(assertDefined(due).id);
+    expect(today.calendar.some((b) => b.taskId === assertDefined(planned).id)).toBe(true);
+    expect(today.needsAttention.approvals.map((t) => t.id)).toContain(
+      assertDefined(approvalTask).id,
+    );
+    expect(today.needsAttention.blocked.map((t) => t.id)).toContain(assertDefined(blockedTask).id);
     expect(today.needsAttention.dueToday.map((t) => t.id)).toEqual(
-      expect.arrayContaining([due!.id, planned!.id]),
+      expect.arrayContaining([assertDefined(due).id, assertDefined(planned).id]),
     );
     expect(today.needsAttention.inbox).toBe(1);
     expect(today.brief.attentionCount).toBeGreaterThan(0);
@@ -411,7 +419,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Visible task',
         teamId: org.teamId,
         state: 'todo',
-        projectId: privateProject!.id,
+        projectId: assertDefined(privateProject).id,
         visibility: 'public',
         createdBy: org.humanActorId,
       })
@@ -431,14 +439,14 @@ describe('hub /today (daily operating projection)', () => {
       {
         hubId,
         refOrganizationId: org.orgId,
-        refTaskId: visibleTask!.id,
+        refTaskId: assertDefined(visibleTask).id,
         date,
         sort: 0,
       },
       {
         hubId,
         refOrganizationId: org.orgId,
-        refTaskId: privateTask!.id,
+        refTaskId: assertDefined(privateTask).id,
         date,
         sort: 1,
       },
@@ -452,10 +460,10 @@ describe('hub /today (daily operating projection)', () => {
       suggestions: { id: string }[];
     }>(await app.request(`/today?date=${date}`));
 
-    expect(today.plan.map((item) => item.id)).toEqual([visibleTask!.id]);
-    expect(today.focus.now?.id).toBe(visibleTask!.id);
-    expect(today.statusCards.map((card) => card.id)).not.toContain(privateProject!.id);
-    expect(today.suggestions.map((item) => item.id)).not.toContain(privateTask!.id);
+    expect(today.plan.map((item) => item.id)).toEqual([assertDefined(visibleTask).id]);
+    expect(today.focus.now?.id).toBe(assertDefined(visibleTask).id);
+    expect(today.statusCards.map((card) => card.id)).not.toContain(assertDefined(privateProject).id);
+    expect(today.suggestions.map((item) => item.id)).not.toContain(assertDefined(privateTask).id);
   });
 
   it('a completed blocker does not mark the dependent task as blocked', async () => {
@@ -487,15 +495,17 @@ describe('hub /today (daily operating projection)', () => {
       .returning({ id: schema.task.id });
     await db.insert(schema.taskDependency).values({
       organizationId: org.orgId,
-      blockingTaskId: blocker!.id,
-      blockedTaskId: dependent!.id,
+      blockingTaskId: assertDefined(blocker).id,
+      blockedTaskId: assertDefined(dependent).id,
     });
 
     const app = appWithSession(hub, fakeSession(userId));
     const today = await body<{ needsAttention: { blocked: { id: string }[] } }>(
       await app.request('/today?date=2026-08-02'),
     );
-    expect(today.needsAttention.blocked.map((t) => t.id)).not.toContain(dependent!.id);
+    expect(today.needsAttention.blocked.map((t) => t.id)).not.toContain(
+      assertDefined(dependent).id,
+    );
   });
 
   it('rejects a malformed date (422)', async () => {
@@ -571,7 +581,7 @@ describe('hub /today (daily operating projection)', () => {
     await db.insert(schema.dailyPlanItem).values({
       hubId,
       refOrganizationId: org.orgId,
-      refTaskId: work!.id,
+      refTaskId: assertDefined(work).id,
       date,
       status: 'planned',
     });
@@ -607,24 +617,24 @@ describe('hub /today (daily operating projection)', () => {
       .values({
         hubId,
         refOrganizationId: org.orgId,
-        refTaskId: work!.id,
+        refTaskId: assertDefined(work).id,
         date: '2026-08-05',
       })
       .returning({ id: schema.dailyPlanItem.id });
 
     const app = appWithSession(hub, fakeSession(userId));
-    const response = await app.request(`/today/items/${planItem!.id}/complete`, { method: 'POST' });
+    const response = await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' });
     expect(response.status).toBe(200);
 
-    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, work!.id));
+    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, assertDefined(work).id));
     const [planAfter] = await db
       .select()
       .from(schema.dailyPlanItem)
-      .where(eq(schema.dailyPlanItem.id, planItem!.id));
+      .where(eq(schema.dailyPlanItem.id, assertDefined(planItem).id));
     const auditRows = await db
       .select()
       .from(schema.auditEvent)
-      .where(eq(schema.auditEvent.subjectId, work!.id));
+      .where(eq(schema.auditEvent.subjectId, assertDefined(work).id));
     expect(taskAfter?.state).toBe('done');
     expect(taskAfter?.completedAt).toBeInstanceOf(Date);
     expect(planAfter?.status).toBe('done');
@@ -699,7 +709,7 @@ describe('hub /today (daily operating projection)', () => {
       organizationId: org.orgId,
       actorId: org.humanActorId,
       seriesId: series.id,
-      seriesRevisionId: revision!.id,
+      seriesRevisionId: assertDefined(revision).id,
       scheduledFor: '2026-08-05',
     });
     const [planItem] = await db
@@ -707,13 +717,13 @@ describe('hub /today (daily operating projection)', () => {
       .values({
         hubId,
         refOrganizationId: org.orgId,
-        refTaskId: occurrence.taskIdsByKey['first']!,
+        refTaskId: assertDefined(occurrence.taskIdsByKey['first']),
         date: '2026-08-05',
       })
       .returning({ id: schema.dailyPlanItem.id });
 
     const app = appWithSession(hub, fakeSession(userId));
-    const response = await app.request(`/today/items/${planItem!.id}/complete`, { method: 'POST' });
+    const response = await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' });
     expect(response.status).toBe(200);
 
     const instanceTasks = await db
@@ -748,14 +758,14 @@ describe('hub /today (daily operating projection)', () => {
       .values({
         hubId: owner.hubId,
         refOrganizationId: org.orgId,
-        refTaskId: work!.id,
+        refTaskId: assertDefined(work).id,
         date: '2026-08-05',
       })
       .returning({ id: schema.dailyPlanItem.id });
 
     const app = appWithSession(hub, fakeSession(caller.userId));
     expect(
-      (await app.request(`/today/items/${planItem!.id}/complete`, { method: 'POST' })).status,
+      (await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' })).status,
     ).toBe(404);
 
     await db
@@ -764,14 +774,14 @@ describe('hub /today (daily operating projection)', () => {
       .where(eq(schema.team.id, org.teamId));
     const ownerApp = appWithSession(hub, fakeSession(owner.userId));
     expect(
-      (await ownerApp.request(`/today/items/${planItem!.id}/complete`, { method: 'POST' })).status,
+      (await ownerApp.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' })).status,
     ).toBe(409);
 
-    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, work!.id));
+    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, assertDefined(work).id));
     const [planAfter] = await db
       .select()
       .from(schema.dailyPlanItem)
-      .where(eq(schema.dailyPlanItem.id, planItem!.id));
+      .where(eq(schema.dailyPlanItem.id, assertDefined(planItem).id));
     expect(taskAfter?.state).toBe('todo');
     expect(planAfter?.status).toBe('planned');
   });
@@ -788,7 +798,7 @@ describe('hub /today (daily operating projection)', () => {
         capabilities: ['view'],
       })
       .returning({ id: schema.role.id });
-    await joinOrg(userId, org.orgId, 'active', viewerRole!.id);
+    await joinOrg(userId, org.orgId, 'active', assertDefined(viewerRole).id);
     const [work] = await db
       .insert(schema.task)
       .values({
@@ -804,21 +814,21 @@ describe('hub /today (daily operating projection)', () => {
       .values({
         hubId,
         refOrganizationId: org.orgId,
-        refTaskId: work!.id,
+        refTaskId: assertDefined(work).id,
         date: '2026-08-07',
       })
       .returning({ id: schema.dailyPlanItem.id });
 
     const app = appWithSession(hub, fakeSession(userId));
     expect(
-      (await app.request(`/today/items/${planItem!.id}/complete`, { method: 'POST' })).status,
+      (await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' })).status,
     ).toBe(403);
 
-    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, work!.id));
+    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, assertDefined(work).id));
     const [planAfter] = await db
       .select()
       .from(schema.dailyPlanItem)
-      .where(eq(schema.dailyPlanItem.id, planItem!.id));
+      .where(eq(schema.dailyPlanItem.id, assertDefined(planItem).id));
     expect(taskAfter?.state).toBe('todo');
     expect(planAfter?.status).toBe('planned');
   });
@@ -846,7 +856,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
         organizationId: org.orgId,
         name: 'Onboarding',
         teamId: org.teamId,
-        programId: prog!.id,
+        programId: assertDefined(prog).id,
         status: 'active',
         startDate: new Date('2026-09-01'),
         targetDate: new Date('2026-10-01'),
@@ -878,7 +888,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
     // A milestone diamond on the in-program project.
     await db.insert(schema.milestone).values({
       organizationId: org.orgId,
-      projectId: inProgram!.id,
+      projectId: assertDefined(inProgram).id,
       name: 'Beta',
       targetDate: new Date('2026-09-20'),
     });
@@ -897,19 +907,23 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
 
     const lane = portfolio.swimlanes.find((s) => s.organization.id === org.orgId);
     expect(lane).toBeDefined();
-    expect(lane!.organization.slug).toBeTruthy();
+    expect(assertDefined(lane).organization.slug).toBeTruthy();
 
-    const programLane = lane!.programs.find((p) => p.program.id === prog!.id);
+    const programLane = assertDefined(lane).programs.find(
+      (p) => p.program.id === assertDefined(prog).id,
+    );
     expect(programLane).toBeDefined();
-    const bar = programLane!.projects.find((p) => p.id === inProgram!.id);
+    const bar = assertDefined(programLane).projects.find(
+      (p) => p.id === assertDefined(inProgram).id,
+    );
     expect(bar).toBeDefined();
-    expect(bar!.milestones.map((m) => m.name)).toContain('Beta');
+    expect(assertDefined(bar).milestones.map((m) => m.name)).toContain('Beta');
 
-    expect(lane!.unassigned.map((p) => p.id)).toContain(unassigned!.id);
+    expect(assertDefined(lane).unassigned.map((p) => p.id)).toContain(assertDefined(unassigned).id);
     // The completed project is not anywhere in the lane.
     const allProjectNames = [
-      ...lane!.unassigned.map((p) => p.name),
-      ...lane!.programs.flatMap((pl) => pl.projects.map((p) => p.name)),
+      ...assertDefined(lane).unassigned.map((p) => p.name),
+      ...assertDefined(lane).programs.flatMap((pl) => pl.projects.map((p) => p.name)),
     ];
     expect(allProjectNames).not.toContain('Old Done');
   });
@@ -1023,10 +1037,18 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
     // Associate ONLY linkedProgram + linkedProject with the initiative.
     await db
       .insert(schema.initiativeProgram)
-      .values({ initiativeId: init!.id, programId: linkedProgram!.id, organizationId: org.orgId });
+      .values({
+        initiativeId: assertDefined(init).id,
+        programId: assertDefined(linkedProgram).id,
+        organizationId: org.orgId,
+      });
     await db
       .insert(schema.initiativeProject)
-      .values({ initiativeId: init!.id, projectId: linkedProject!.id, organizationId: org.orgId });
+      .values({
+        initiativeId: assertDefined(init).id,
+        projectId: assertDefined(linkedProject).id,
+        organizationId: org.orgId,
+      });
 
     const app = appWithSession(hub, fakeSession(userId));
     const filtered = await body<{
@@ -1035,15 +1057,15 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
         programs: { program: { id: string } }[];
         unassigned: { id: string }[];
       }[];
-    }>(await app.request(`/portfolio?initiativeId=${init!.id}`));
+    }>(await app.request(`/portfolio?initiativeId=${assertDefined(init).id}`));
 
-    const lane = filtered.swimlanes.find((s) => s.organization.id === org.orgId)!;
+    const lane = assertDefined(filtered.swimlanes.find((s) => s.organization.id === org.orgId));
     expect(lane).toBeDefined();
     // Only the linked program lane is present.
-    expect(lane.programs.map((p) => p.program.id)).toEqual([linkedProgram!.id]);
+    expect(lane.programs.map((p) => p.program.id)).toEqual([assertDefined(linkedProgram).id]);
     // Only the linked project appears in the unassigned bucket (it has no programId).
-    expect(lane.unassigned.map((p) => p.id)).toEqual([linkedProject!.id]);
-    expect(lane.unassigned.map((p) => p.id)).not.toContain(unlinkedProject!.id);
+    expect(lane.unassigned.map((p) => p.id)).toEqual([assertDefined(linkedProject).id]);
+    expect(lane.unassigned.map((p) => p.id)).not.toContain(assertDefined(unlinkedProject).id);
 
     // Without the chip, BOTH programs and projects show.
     const unfiltered = await body<{
@@ -1053,12 +1075,14 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
         unassigned: { id: string }[];
       }[];
     }>(await app.request('/portfolio'));
-    const fullLane = unfiltered.swimlanes.find((s) => s.organization.id === org.orgId)!;
+    const fullLane = assertDefined(
+      unfiltered.swimlanes.find((s) => s.organization.id === org.orgId),
+    );
     expect(fullLane.programs.map((p) => p.program.id).sort()).toEqual(
-      [linkedProgram!.id, otherProgram!.id].sort(),
+      [assertDefined(linkedProgram).id, assertDefined(otherProgram).id].sort(),
     );
     expect(fullLane.unassigned.map((p) => p.id).sort()).toEqual(
-      [linkedProject!.id, unlinkedProject!.id].sort(),
+      [assertDefined(linkedProject).id, assertDefined(unlinkedProject).id].sort(),
     );
   });
 
@@ -1084,8 +1108,8 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
     const app = appWithSession(hub, fakeSession(userId));
     const portfolio = await body<{
       swimlanes: { organization: { id: string }; programs: unknown[]; unassigned: unknown[] }[];
-    }>(await app.request(`/portfolio?initiativeId=${foreignInit!.id}`));
-    const lane = portfolio.swimlanes.find((s) => s.organization.id === mine.orgId)!;
+    }>(await app.request(`/portfolio?initiativeId=${assertDefined(foreignInit).id}`));
+    const lane = assertDefined(portfolio.swimlanes.find((s) => s.organization.id === mine.orgId));
     // The foreign initiative resolves to no in-scope edges → nothing shows for my org.
     expect(lane.programs).toEqual([]);
     expect(lane.unassigned).toEqual([]);

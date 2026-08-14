@@ -35,6 +35,7 @@ import type { getContainer as GetContainer } from '../../src/container';
 import type { openToolbox as OpenToolbox } from '../../src/agent/toolbox';
 import { enqueueRunGeneration } from '../../src/agent/run-generation';
 import { appWithSession, fakeSession, getDb, one } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
@@ -97,7 +98,7 @@ async function seed(): Promise<Seed> {
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       key: `member-${suffix}`,
       name: 'Member',
       capabilities: ['view', 'contribute'],
@@ -114,66 +115,66 @@ async function seed(): Promise<Seed> {
     .insert(schema.actor)
     .values([
       {
-        organizationId: org!.id,
+        organizationId: assertDefined(org).id,
         kind: 'human',
         displayName: 'Owner',
-        userId: owner!.id,
-        roleId: role!.id,
+        userId: assertDefined(owner).id,
+        roleId: assertDefined(role).id,
       },
       {
-        organizationId: org!.id,
+        organizationId: assertDefined(org).id,
         kind: 'human',
         displayName: 'Other',
-        userId: other!.id,
-        roleId: role!.id,
+        userId: assertDefined(other).id,
+        roleId: assertDefined(role).id,
       },
     ])
     .returning({ id: schema.actor.id });
   await db.insert(schema.grant).values({
-    organizationId: org!.id,
+    organizationId: assertDefined(org).id,
     subjectKind: 'role',
-    subjectId: role!.id,
+    subjectId: assertDefined(role).id,
     resourceKind: 'organization',
-    resourceId: org!.id,
+    resourceId: assertDefined(org).id,
     capabilities: ['view', 'contribute'],
   });
   const [team] = await db
     .insert(schema.team)
-    .values({ organizationId: org!.id, name: 'Core', key: `A${suffix.slice(0, 4)}` })
+    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `A${suffix.slice(0, 4)}` })
     .returning({ id: schema.team.id });
   const [project] = await db
     .insert(schema.project)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       name: 'Launch',
       status: 'active',
-      teamId: team!.id,
-      leadId: ownerActor!.id,
-      createdBy: ownerActor!.id,
+      teamId: assertDefined(team).id,
+      leadId: assertDefined(ownerActor).id,
+      createdBy: assertDefined(ownerActor).id,
     })
     .returning({ id: schema.project.id });
   const [task] = await db
     .insert(schema.task)
     .values({
-      organizationId: org!.id,
-      teamId: team!.id,
-      projectId: project!.id,
+      organizationId: assertDefined(org).id,
+      teamId: assertDefined(team).id,
+      projectId: assertDefined(project).id,
       title: 'Ship it',
       state: 'todo',
-      assigneeId: ownerActor!.id,
-      createdBy: ownerActor!.id,
+      assigneeId: assertDefined(ownerActor).id,
+      createdBy: assertDefined(ownerActor).id,
     })
     .returning({ id: schema.task.id });
   return {
-    userId: owner!.id,
-    otherUserId: other!.id,
-    orgId: org!.id,
-    actorId: ownerActor!.id,
-    otherActorId: otherActor!.id,
-    roleId: role!.id,
-    teamId: team!.id,
-    projectId: project!.id,
-    taskId: task!.id,
+    userId: assertDefined(owner).id,
+    otherUserId: assertDefined(other).id,
+    orgId: assertDefined(org).id,
+    actorId: assertDefined(ownerActor).id,
+    otherActorId: assertDefined(otherActor).id,
+    roleId: assertDefined(role).id,
+    teamId: assertDefined(team).id,
+    projectId: assertDefined(project).id,
+    taskId: assertDefined(task).id,
   };
 }
 
@@ -583,8 +584,8 @@ describe('personal Athena assignments', () => {
 
     const sessionIds = [
       assignment.activeSessionId,
-      afterEvent!.activeSessionId!,
-      afterSchedule!.activeSessionId!,
+      assertDefined(assertDefined(afterEvent).activeSessionId),
+      assertDefined(assertDefined(afterSchedule).activeSessionId),
     ];
     const sessions = await db
       .select({ id: schema.agentSession.id, status: schema.agentSession.status })

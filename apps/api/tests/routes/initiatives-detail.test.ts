@@ -14,6 +14,7 @@ import {
   seedUserWithHub,
 } from '../support/routes-harness';
 import type initiativesRouter from '../../src/routes/initiatives';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -39,7 +40,7 @@ async function seedInitiative(orgId: string, createdBy: string): Promise<string>
     .insert(schema.initiative)
     .values({ organizationId: orgId, name: 'Theme', createdBy })
     .returning({ id: schema.initiative.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Create a project row directly in the db and return its id. */
@@ -66,7 +67,7 @@ async function seedProject(
       targetDate: fields.targetDate ?? null,
     })
     .returning({ id: schema.project.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Create a program row directly in the db and return its id. */
@@ -84,7 +85,7 @@ async function seedProgram(
       health: fields.health ?? null,
     })
     .returning({ id: schema.program.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 interface Detail {
@@ -471,7 +472,7 @@ describe('initiatives context hierarchy', () => {
     const patched = await writer.request(`/${root}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ labelIds: [label!.id] }),
+      body: JSON.stringify({ labelIds: [assertDefined(label).id] }),
     });
     expect(patched.status).toBe(200);
     expect(
@@ -502,7 +503,7 @@ describe('initiatives context hierarchy', () => {
     expect(body.connectedWork).toMatchObject([
       { id: projectId, direct: false, inheritedThroughInitiativeId: child },
     ]);
-    expect(body.labels).toMatchObject([{ id: label!.id }]);
+    expect(body.labels).toMatchObject([{ id: assertDefined(label).id }]);
     expect(body.resources).toMatchObject([{ title: 'Board packet' }]);
     expect(body.rolledUpHealth).toBe('at_risk');
   });
@@ -850,11 +851,11 @@ describe('initiatives timeline roll-up', () => {
     expect(tl.programs).toHaveLength(1);
     expect(tl.programs[0]).toMatchObject({ id: prog, name: 'Ops', health: 'on_track' });
     expect(tl.projects).toHaveLength(2);
-    const datedBar = tl.projects.find((p) => p.id === dated)!;
+    const datedBar = assertDefined(tl.projects.find((p) => p.id === dated));
     expect(datedBar.startDate).toBe('2026-03-01T00:00:00.000Z');
     expect(datedBar.targetDate).toBe('2026-06-30T00:00:00.000Z');
     expect(datedBar.health).toBe('at_risk');
-    const undatedBar = tl.projects.find((p) => p.id === undated)!;
+    const undatedBar = assertDefined(tl.projects.find((p) => p.id === undated));
     expect(undatedBar.startDate).toBeNull();
   });
 
@@ -947,7 +948,7 @@ describe('initiatives ownerId in-org validation', () => {
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: name })
       .returning({ id: schema.actor.id });
-    return row!.id;
+    return assertDefined(row).id;
   }
 
   it('POST accepts an ownerId that is an actor in the caller’s org', async () => {
@@ -1012,7 +1013,7 @@ describe('initiatives ownerId in-org validation', () => {
       .insert(schema.initiative)
       .values({ organizationId: orgId, name: 'Owned', createdBy: humanActorId, ownerId })
       .returning({ id: schema.initiative.id });
-    const id = row!.id;
+    const id = assertDefined(row).id;
 
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
     const res = await writer.request(`/${id}`, {
@@ -1048,7 +1049,7 @@ describe('initiatives overview edge cases', () => {
     const unowned = await seedInitiative(orgId, humanActorId);
     await db
       .update(schema.initiative)
-      .set({ ownerId: owner!.id })
+      .set({ ownerId: assertDefined(owner).id })
       .where(eq(schema.initiative.id, owned));
     const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);
     const body = await json<{ items: { id: string; ownerName: string | null }[] }>(
@@ -1073,17 +1074,23 @@ describe('initiatives overview edge cases', () => {
     await writer.request('/hierarchy-links', {
       method: 'POST',
       headers: HDR,
-      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: zeta!.id }),
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: assertDefined(zeta).id }),
     });
     await writer.request('/hierarchy-links', {
       method: 'POST',
       headers: HDR,
-      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: alpha!.id }),
+      body: JSON.stringify({
+        parentInitiativeId: root,
+        childInitiativeId: assertDefined(alpha).id,
+      }),
     });
     const body = await json<{ items: { id: string; depth: number }[] }>(
       await writer.request('/overview'),
     );
-    expect(body.items.filter((i) => i.depth === 2).map((i) => i.id)).toEqual([alpha!.id, zeta!.id]);
+    expect(body.items.filter((i) => i.depth === 2).map((i) => i.id)).toEqual([
+      assertDefined(alpha).id,
+      assertDefined(zeta).id,
+    ]);
   });
 
   it('ranks attention by health with parent linkage, and a spoofed cross-org update cannot win the excerpt', async () => {
@@ -1127,7 +1134,10 @@ describe('initiatives overview edge cases', () => {
     const linked = await writer.request('/hierarchy-links', {
       method: 'POST',
       headers: HDR,
-      body: JSON.stringify({ parentInitiativeId: root!.id, childInitiativeId: foreignChild!.id }),
+      body: JSON.stringify({
+        parentInitiativeId: assertDefined(root).id,
+        childInitiativeId: assertDefined(foreignChild).id,
+      }),
     });
     expect(linked.status).toBe(200);
 
@@ -1135,7 +1145,7 @@ describe('initiatives overview edge cases', () => {
     await db.insert(schema.update).values({
       organizationId: foreignOrgId,
       subjectType: 'initiative',
-      subjectId: foreignChild!.id,
+      subjectId: assertDefined(foreignChild).id,
       authorId: foreignActorId,
       createdBy: foreignActorId,
       body: 'Older narrative',
@@ -1144,7 +1154,7 @@ describe('initiatives overview edge cases', () => {
     await db.insert(schema.update).values({
       organizationId: foreignOrgId,
       subjectType: 'initiative',
-      subjectId: foreignChild!.id,
+      subjectId: assertDefined(foreignChild).id,
       authorId: foreignActorId,
       createdBy: foreignActorId,
       body: 'Latest narrative',
@@ -1156,7 +1166,7 @@ describe('initiatives overview edge cases', () => {
     await db.insert(schema.update).values({
       organizationId: contextOrgId,
       subjectType: 'initiative',
-      subjectId: foreignChild!.id,
+      subjectId: assertDefined(foreignChild).id,
       authorId: contextActorId,
       createdBy: contextActorId,
       body: 'Spoofed narrative',
@@ -1174,17 +1184,19 @@ describe('initiatives overview edge cases', () => {
       }[];
     }>(await writer.request('/overview'));
 
-    const childItem = overview.items.find((i) => i.id === foreignChild!.id);
+    const childItem = overview.items.find((i) => i.id === assertDefined(foreignChild).id);
     expect(childItem?.lastUpdateAt).toBe('2026-06-01T00:00:00.000Z'); // not the spoofed one
 
-    const rootAttention = overview.attention.find((a) => a.initiativeId === root!.id);
+    const rootAttention = overview.attention.find((a) => a.initiativeId === assertDefined(root).id);
     expect(rootAttention?.severity).toBe('at_risk');
     expect(rootAttention?.parentInitiativeId).toBeNull();
     expect(rootAttention?.excerpt).toBe('Rolling out phase two');
 
-    const childAttention = overview.attention.find((a) => a.initiativeId === foreignChild!.id);
+    const childAttention = overview.attention.find(
+      (a) => a.initiativeId === assertDefined(foreignChild).id,
+    );
     expect(childAttention?.severity).toBe('off_track');
-    expect(childAttention?.parentInitiativeId).toBe(root!.id);
+    expect(childAttention?.parentInitiativeId).toBe(assertDefined(root).id);
     expect(childAttention?.parentInitiativeName).toBe('Root at risk');
     expect(childAttention?.excerpt).toBe('Latest narrative'); // not the spoofed one
   });
@@ -1292,7 +1304,7 @@ describe('initiatives aggregate — connected work dedup and cross-org filtering
       .insert(schema.program)
       .values({ organizationId: orgId, name, createdBy })
       .returning({ id: schema.program.id });
-    return row!.id;
+    return assertDefined(row).id;
   }
 
   it('a direct program link survives a later-seen inherited duplicate, and a duplicate inherited link is dropped', async () => {
@@ -1430,7 +1442,7 @@ describe('initiatives aggregate — connected work dedup and cross-org filtering
         createdBy: outsiderActorId,
       })
       .returning({ id: schema.project.id });
-    const foreignProject = foreignProjectRow!.id;
+    const foreignProject = assertDefined(foreignProjectRow).id;
     // Link both in directly at the join-table level (bypassing the route's own org-membership
     // guard) to prove the aggregate READ path filters them too, independent of write-side checks.
     await db

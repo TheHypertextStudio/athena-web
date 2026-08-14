@@ -24,6 +24,7 @@ import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type captureRouter from '../../src/routes/capture';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -70,20 +71,20 @@ async function seedOrg(): Promise<Seed> {
     .insert(organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [t] = await db
     .insert(team)
     .values({ organizationId: orgId, name: 'Core', key: 'CORE' })
     .returning({ id: team.id });
-  const teamId = t!.id;
+  const teamId = assertDefined(t).id;
 
   const [human] = await db
     .insert(actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada' })
     .returning({ id: actor.id });
 
-  return { orgId, teamId, humanActorId: human!.id };
+  return { orgId, teamId, humanActorId: assertDefined(human).id };
 }
 
 /** Insert a cycle window for the team; returns its id. */
@@ -99,7 +100,7 @@ async function seedCycle(s: Seed, startsAt: Date, endsAt: Date, number = 1): Pro
       createdBy: s.humanActorId,
     })
     .returning({ id: cycle.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 describe('POST /capture', () => {
@@ -219,7 +220,7 @@ describe('POST /capture', () => {
     const now = Date.now();
     await db.insert(cycle).values({
       organizationId: s.orgId,
-      teamId: otherTeam!.id,
+      teamId: assertDefined(otherTeam).id,
       number: 1,
       startsAt: new Date(now - 86_400_000),
       endsAt: new Date(now + 86_400_000),

@@ -14,6 +14,7 @@ import type {
 } from '../../src/agent/proposals';
 import type { ActivityRow } from '../../src/routes/agent-session-helpers';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -44,7 +45,7 @@ async function seedSession(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [actor] = await db
     .insert(schema.actor)
@@ -52,19 +53,19 @@ async function seedSession(): Promise<Seed> {
     .returning({ id: schema.actor.id });
   const [agent] = await db
     .insert(schema.agent)
-    .values({ organizationId: orgId, actorId: actor!.id })
+    .values({ organizationId: orgId, actorId: assertDefined(actor).id })
     .returning({ id: schema.agent.id });
   const [session] = await db
     .insert(schema.agentSession)
     .values({
       organizationId: orgId,
-      agentId: agent!.id,
+      agentId: assertDefined(agent).id,
       trigger: 'delegation',
       status: 'awaiting_approval',
     })
     .returning({ id: schema.agentSession.id });
 
-  return { orgId, sessionId: session!.id };
+  return { orgId, sessionId: assertDefined(session).id };
 }
 
 /** Record one proposed tool call and return the group it was projected into. */
@@ -88,7 +89,7 @@ async function propose(
     },
   });
   const groups = await listProposalGroups(seed.sessionId);
-  return groups[0]!;
+  return assertDefined(groups[0]);
 }
 
 /** The projected ghost of the group's only item. */
@@ -252,7 +253,7 @@ describe('proposal ghosts', () => {
     });
     const [group] = await listProposalGroups(seed.sessionId);
     expect(group?.items[0]?.input).toEqual({});
-    expect(ghostOf(group!)).toBeNull();
+    expect(ghostOf(assertDefined(group))).toBeNull();
   });
 });
 
@@ -355,9 +356,9 @@ describe('editProposalInput', () => {
         body: { text: 'hello', author: 'athena' },
       })
       .returning({ id: schema.sessionActivity.id });
-    await expect(editProposalInput(seed.sessionId, row!.id, { text: 'edited' })).rejects.toThrow(
-      /editable pending proposal/,
-    );
+    await expect(
+      editProposalInput(seed.sessionId, assertDefined(row).id, { text: 'edited' }),
+    ).rejects.toThrow(/editable pending proposal/);
   });
 
   it('edits a proposal with no authorization constraint, keeping its stored workspace', async () => {
@@ -385,7 +386,7 @@ describe('editProposalInput', () => {
       })
       .returning({ id: schema.sessionActivity.id });
 
-    const updated = await editProposalInput(seed.sessionId, row!.id, {
+    const updated = await editProposalInput(seed.sessionId, assertDefined(row).id, {
       orgId: seed.orgId,
       text: 'revised draft',
     });
@@ -421,7 +422,7 @@ describe('editProposalInput', () => {
     await expect(
       editProposalInput(
         seed.sessionId,
-        row!.id,
+        assertDefined(row).id,
         { text: 'no workspace named' },
         { athenaOwnerUserId: 'user_1' },
       ),
@@ -430,16 +431,18 @@ describe('editProposalInput', () => {
 
   it("rejects an Athena owner edit that targets a workspace they don't belong to", async () => {
     const seed = await seedSession();
-    const otherOrgId = (
-      await db
-        .insert(schema.organization)
-        .values({
-          name: `other-${Math.random().toString(36).slice(2, 8)}`,
-          slug: `other-${Math.random().toString(36).slice(2, 8)}`,
-          lifecycleState: 'active',
-        })
-        .returning({ id: schema.organization.id })
-    )[0]!.id;
+    const otherOrgId = assertDefined(
+      (
+        await db
+          .insert(schema.organization)
+          .values({
+            name: `other-${Math.random().toString(36).slice(2, 8)}`,
+            slug: `other-${Math.random().toString(36).slice(2, 8)}`,
+            lifecycleState: 'active',
+          })
+          .returning({ id: schema.organization.id })
+      )[0],
+    ).id;
     const [row] = await db
       .insert(schema.sessionActivity)
       .values({
@@ -466,7 +469,7 @@ describe('editProposalInput', () => {
     await expect(
       editProposalInput(
         seed.sessionId,
-        row!.id,
+        assertDefined(row).id,
         { orgId: otherOrgId, text: 'redirected' },
         { athenaOwnerUserId: 'user_without_membership' },
       ),
@@ -475,22 +478,29 @@ describe('editProposalInput', () => {
 
   it('lets an Athena owner move a proposal to a workspace they belong to', async () => {
     const seed = await seedSession();
-    const destinationOrgId = (
-      await db
-        .insert(schema.organization)
-        .values({
-          name: `dest-${Math.random().toString(36).slice(2, 8)}`,
-          slug: `dest-${Math.random().toString(36).slice(2, 8)}`,
-          lifecycleState: 'active',
-        })
-        .returning({ id: schema.organization.id })
-    )[0]!.id;
-    const userId = (
-      await db
-        .insert(schema.user)
-        .values({ name: 'Owner', email: `owner-${Math.random().toString(36).slice(2, 8)}@x.test` })
-        .returning({ id: schema.user.id })
-    )[0]!.id;
+    const destinationOrgId = assertDefined(
+      (
+        await db
+          .insert(schema.organization)
+          .values({
+            name: `dest-${Math.random().toString(36).slice(2, 8)}`,
+            slug: `dest-${Math.random().toString(36).slice(2, 8)}`,
+            lifecycleState: 'active',
+          })
+          .returning({ id: schema.organization.id })
+      )[0],
+    ).id;
+    const userId = assertDefined(
+      (
+        await db
+          .insert(schema.user)
+          .values({
+            name: 'Owner',
+            email: `owner-${Math.random().toString(36).slice(2, 8)}@x.test`,
+          })
+          .returning({ id: schema.user.id })
+      )[0],
+    ).id;
     await db.insert(schema.actor).values({
       organizationId: destinationOrgId,
       userId,
@@ -523,7 +533,7 @@ describe('editProposalInput', () => {
 
     const updated = await editProposalInput(
       seed.sessionId,
-      row!.id,
+      assertDefined(row).id,
       { orgId: destinationOrgId, text: 'moved' },
       { athenaOwnerUserId: userId },
     );
@@ -532,16 +542,18 @@ describe('editProposalInput', () => {
 
   it('rejects a registered-agent edit that redirects a proposal to a foreign workspace', async () => {
     const seed = await seedSession();
-    const foreignOrgId = (
-      await db
-        .insert(schema.organization)
-        .values({
-          name: `foreign-${Math.random().toString(36).slice(2, 8)}`,
-          slug: `foreign-${Math.random().toString(36).slice(2, 8)}`,
-          lifecycleState: 'active',
-        })
-        .returning({ id: schema.organization.id })
-    )[0]!.id;
+    const foreignOrgId = assertDefined(
+      (
+        await db
+          .insert(schema.organization)
+          .values({
+            name: `foreign-${Math.random().toString(36).slice(2, 8)}`,
+            slug: `foreign-${Math.random().toString(36).slice(2, 8)}`,
+            lifecycleState: 'active',
+          })
+          .returning({ id: schema.organization.id })
+      )[0],
+    ).id;
     const [row] = await db
       .insert(schema.sessionActivity)
       .values({
@@ -568,7 +580,7 @@ describe('editProposalInput', () => {
     await expect(
       editProposalInput(
         seed.sessionId,
-        row!.id,
+        assertDefined(row).id,
         { orgId: foreignOrgId, text: 'redirected' },
         { registeredOrganizationId: seed.orgId },
       ),
@@ -602,7 +614,7 @@ describe('editProposalInput', () => {
 
     const updated = await editProposalInput(
       seed.sessionId,
-      row!.id,
+      assertDefined(row).id,
       { orgId: seed.orgId, text: 'still here' },
       { registeredOrganizationId: seed.orgId },
     );

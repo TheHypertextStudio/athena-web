@@ -21,6 +21,7 @@ import {
   type ExportArchiveMeta,
   type ExportDocument,
 } from '../../src/account/archive';
+import { assertDefined } from '@docket/test-utils';
 
 const META: ExportArchiveMeta = {
   generatedAt: '2026-02-01T00:00:00.000Z',
@@ -301,7 +302,7 @@ describe('buildExportArchive — file inclusion', () => {
         META,
       ),
     );
-    const manifest = JSON.parse(strFromU8(files['manifest.json']!)) as {
+    const manifest = JSON.parse(strFromU8(assertDefined(files['manifest.json']))) as {
       schemaVersion: number;
       generatedAt: string;
       expiresAt: string;

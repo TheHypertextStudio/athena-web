@@ -17,6 +17,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { advanceCloudflareGeneration } from '../../src/agent/execution-advance';
 import { enqueueRunGeneration, type RunGenerationMessage } from '../../src/agent/run-generation';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let dbModule: Awaited<ReturnType<typeof getMigratedDb>>;
 
@@ -39,7 +40,7 @@ async function seedQueuedGeneration(): Promise<{
     .insert(agentSession)
     .values({
       executorKind: 'athena',
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       trigger: 'delegation',
       status: 'pending',
     })
@@ -47,9 +48,9 @@ async function seedQueuedGeneration(): Promise<{
   const [session] = await dbModule.db
     .select()
     .from(agentSession)
-    .where(eq(agentSession.id, created!.id));
-  const { message } = await enqueueRunGeneration(session!);
-  return { ownerUserId: owner!.id, sessionId: session!.id, message };
+    .where(eq(agentSession.id, assertDefined(created).id));
+  const { message } = await enqueueRunGeneration(assertDefined(session));
+  return { ownerUserId: assertDefined(owner).id, sessionId: assertDefined(session).id, message };
 }
 
 describe('recoverPersistedGeneration (real default dependencies)', () => {
@@ -129,7 +130,7 @@ describe('recoverPersistedGeneration (real default dependencies)', () => {
       .select()
       .from(agentSession)
       .where(eq(agentSession.id, sessionId));
-    const second = await enqueueRunGeneration({ ...session!, status: 'running' });
+    const second = await enqueueRunGeneration({ ...assertDefined(session), status: 'running' });
 
     const result = await advanceCloudflareGeneration(message, 'run');
     expect(result).toEqual({ state: 'continue', next: second.message });
@@ -221,7 +222,7 @@ describe('loadWaitingGeneration (real default dependencies)', () => {
       .update(agentSessionRun)
       .set({ status: 'completed' })
       .where(eq(agentSessionRun.workflowInstanceId, message.workflowId));
-    await enqueueRunGeneration({ ...session!, status: 'running' });
+    await enqueueRunGeneration({ ...assertDefined(session), status: 'running' });
 
     // `message` still names generation 1, which is no longer the latest.
     await expect(advanceCloudflareGeneration(message, 'wake')).rejects.toThrow(

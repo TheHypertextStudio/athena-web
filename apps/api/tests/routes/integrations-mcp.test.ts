@@ -18,6 +18,7 @@ import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/def
 import type { sealCredential as Seal, unsealCredential as Unseal } from '../../src/lib/credentials';
 import type { getContainer as GetContainer } from '../../src/container';
 import { fakeSession } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 vi.hoisted(() => {
   process.env['DATABASE_URL'] = 'pglite://memory://';
@@ -82,18 +83,23 @@ async function seedOrg(): Promise<Seed> {
     .returning({ id: schema.user.id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: org!.id, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: assertDefined(org).id,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
   const [team] = await db
     .insert(schema.team)
-    .values({ organizationId: org!.id, name: 'Core', key: 'CORE' })
+    .values({ organizationId: assertDefined(org).id, name: 'Core', key: 'CORE' })
     .returning({ id: schema.team.id });
-  const registeredAgent = await ensureDefaultAgent(org!.id, human!.id);
+  const registeredAgent = await ensureDefaultAgent(assertDefined(org).id, assertDefined(human).id);
   return {
-    userId: u!.id,
-    orgId: org!.id,
-    teamId: team!.id,
-    humanActorId: human!.id,
+    userId: assertDefined(u).id,
+    orgId: assertDefined(org).id,
+    teamId: assertDefined(team).id,
+    humanActorId: assertDefined(human).id,
     agentId: registeredAgent.id,
   };
 }
@@ -181,9 +187,9 @@ describe('remote MCP integrations', () => {
       .from(schema.integrationCredential)
       .where(eq(schema.integrationCredential.integrationId, out.id));
     expect(creds).toHaveLength(1);
-    expect(creds[0]!.ciphertext).not.toContain('super-secret-token');
-    expect(creds[0]!.ciphertext.startsWith('v1:gcm:')).toBe(true);
-    expect(unsealCredential(creds[0]!.ciphertext)).toBe('super-secret-token');
+    expect(assertDefined(creds[0]).ciphertext).not.toContain('super-secret-token');
+    expect(assertDefined(creds[0]).ciphertext.startsWith('v1:gcm:')).toBe(true);
+    expect(unsealCredential(assertDefined(creds[0]).ciphertext)).toBe('super-secret-token');
   });
 
   it('keeps the original bearer-token request shape working for programmatic connectors', async () => {
@@ -282,7 +288,7 @@ describe('remote MCP integrations', () => {
 
     const listed = await app.request('/', { method: 'GET' });
     const items = (await listed.json()) as McpIntegrationOut[];
-    const found = items.find((i) => i.id === row!.id);
+    const found = items.find((i) => i.id === assertDefined(row).id);
     expect(found?.authMode).toBe('none');
   });
 

@@ -9,6 +9,7 @@ import type * as DbModule from '@docket/db';
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type integrationsLinearAgentRouter from '../../src/routes/integrations-linear-agent';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * This file deliberately does NOT set `LINEAR_AGENT_CLIENT_ID`/`_SECRET`/`_WEBHOOK_SECRET` — the
@@ -41,9 +42,14 @@ async function seedOrg(): Promise<{ orgId: string; actorId: string }> {
     .returning({ id: schema.user.id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: org!.id, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: assertDefined(org).id,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
-  return { orgId: org!.id, actorId: human!.id };
+  return { orgId: assertDefined(org).id, actorId: assertDefined(human).id };
 }
 
 describe('GET /install (Linear Agent app not configured)', () => {

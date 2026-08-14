@@ -5,6 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as DrainModule from '../../src/routes/event-sync';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -27,9 +28,14 @@ async function seedUserActor(orgId: string): Promise<{ userId: string; actorId: 
     .returning({ id: schema.user.id });
   const [a] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
-  return { userId: u!.id, actorId: a!.id };
+  return { userId: assertDefined(u).id, actorId: assertDefined(a).id };
 }
 
 /** Seed a connected Linear integration owned by `actorId`. */
@@ -46,7 +52,7 @@ async function seedIntegration(orgId: string, actorId: string): Promise<string> 
       createdBy: actorId,
     })
     .returning({ id: schema.integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert a received inbound event carrying a fixture payload the mock observer normalizes. */
@@ -84,17 +90,17 @@ describe('sweepInboundEvents (the event drain)', () => {
 
     const evs = await db.select().from(schema.event).where(eq(schema.event.organizationId, orgId));
     expect(evs).toHaveLength(1);
-    expect(evs[0]!.kind).toBe('mention');
-    expect(evs[0]!.sourceSystem).toBe('linear');
-    expect(evs[0]!.userId).toBe(userId);
-    expect(evs[0]!.entityKind).toBe('work_item');
-    expect(evs[0]!.sourceEventId).not.toBeNull();
+    expect(assertDefined(evs[0]).kind).toBe('mention');
+    expect(assertDefined(evs[0]).sourceSystem).toBe('linear');
+    expect(assertDefined(evs[0]).userId).toBe(userId);
+    expect(assertDefined(evs[0]).entityKind).toBe('work_item');
+    expect(assertDefined(evs[0]).sourceEventId).not.toBeNull();
 
     const ev = await db
       .select()
       .from(schema.inboundEvent)
       .where(eq(schema.inboundEvent.externalEventId, 'ev_m1'));
-    expect(ev[0]!.status).toBe('processed');
+    expect(assertDefined(ev[0]).status).toBe('processed');
 
     // The mention reaches the integration owner's personal feed (event_recipient), reason 'mention'.
     const recips = await db
@@ -102,7 +108,7 @@ describe('sweepInboundEvents (the event drain)', () => {
       .from(schema.eventRecipient)
       .where(eq(schema.eventRecipient.userId, userId));
     expect(recips).toHaveLength(1);
-    expect(recips[0]!.reason).toBe('mention');
+    expect(assertDefined(recips[0]).reason).toBe('mention');
   });
 
   it('is idempotent: a re-sweep neither reprocesses nor duplicates the event', async () => {
@@ -155,7 +161,7 @@ describe('sweepInboundEvents (the event drain)', () => {
       .select()
       .from(schema.inboundEvent)
       .where(eq(schema.inboundEvent.externalEventId, 'ev_unrouted'));
-    expect(ev[0]!.status).toBe('skipped');
+    expect(assertDefined(ev[0]).status).toBe('skipped');
   });
 
   it('marks an event with an unrecognized provider as skipped (source resolves to null)', async () => {
@@ -175,7 +181,7 @@ describe('sweepInboundEvents (the event drain)', () => {
       .select()
       .from(schema.inboundEvent)
       .where(eq(schema.inboundEvent.externalEventId, 'ev_unknown_provider'));
-    expect(ev[0]!.status).toBe('skipped');
+    expect(assertDefined(ev[0]).status).toBe('skipped');
   });
 
   it('reuses the cached observer and owner across two events for the same integration in one sweep', async () => {
@@ -216,7 +222,7 @@ describe('sweepInboundEvents (the event drain)', () => {
         createdBy: null,
       })
       .returning({ id: schema.integration.id });
-    await seedInboundEvent(orgId, row!.id, 'ev_no_owner', {
+    await seedInboundEvent(orgId, assertDefined(row).id, 'ev_no_owner', {
       kind: 'comment',
       title: 'No owner',
       id: 'no-owner-1',
@@ -226,7 +232,7 @@ describe('sweepInboundEvents (the event drain)', () => {
     expect(result.events).toBe(1);
 
     const [ev] = await db.select().from(schema.event).where(eq(schema.event.organizationId, orgId));
-    expect(ev!.userId).toBeNull();
+    expect(assertDefined(ev).userId).toBeNull();
   });
 
   it('creates the event with a null owner when the inbound row carries no integrationId', async () => {
@@ -241,8 +247,8 @@ describe('sweepInboundEvents (the event drain)', () => {
     expect(result.events).toBe(1);
 
     const [ev] = await db.select().from(schema.event).where(eq(schema.event.organizationId, orgId));
-    expect(ev!.userId).toBeNull();
-    expect(ev!.integrationId).toBeNull();
+    expect(assertDefined(ev).userId).toBeNull();
+    expect(assertDefined(ev).integrationId).toBeNull();
   });
 
   it('leaves entity and entityKind null for a draft fixture with no `id` (no entity)', async () => {
@@ -258,8 +264,8 @@ describe('sweepInboundEvents (the event drain)', () => {
     expect(result.events).toBe(1);
 
     const [ev] = await db.select().from(schema.event).where(eq(schema.event.organizationId, orgId));
-    expect(ev!.entity).toBeNull();
-    expect(ev!.entityKind).toBeNull();
+    expect(assertDefined(ev).entity).toBeNull();
+    expect(assertDefined(ev).entityKind).toBeNull();
   });
 
   it('skips the Linear-Issue reconcile for an integration that is not connected, but still records the activity event', async () => {
@@ -279,7 +285,7 @@ describe('sweepInboundEvents (the event drain)', () => {
       .returning({ id: schema.integration.id });
     await seedInboundEvent(
       orgId,
-      row!.id,
+      assertDefined(row).id,
       'ev_issue_pending',
       { kind: 'status_change', title: 'Issue changed', id: 'iss-pending' },
       'Issue',
@@ -292,14 +298,14 @@ describe('sweepInboundEvents (the event drain)', () => {
     const mirrored = await db
       .select({ id: schema.task.id })
       .from(schema.task)
-      .where(eq(schema.task.sourceIntegrationId, row!.id));
+      .where(eq(schema.task.sourceIntegrationId, assertDefined(row).id));
     expect(mirrored).toHaveLength(0);
 
     const ev = await db
       .select()
       .from(schema.inboundEvent)
       .where(eq(schema.inboundEvent.externalEventId, 'ev_issue_pending'));
-    expect(ev[0]!.status).toBe('processed');
+    expect(assertDefined(ev[0]).status).toBe('processed');
   });
 
   it('is a no-op (never inserts, never crashes) when two events collide on the same dedupeKey in one sweep', async () => {
@@ -370,12 +376,12 @@ describe('sweepInboundEvents (the event drain)', () => {
       .from(schema.eventRecipient)
       .where(
         and(
-          eq(schema.eventRecipient.eventId, ev!.id),
+          eq(schema.eventRecipient.eventId, assertDefined(ev).id),
           eq(schema.eventRecipient.userId, participantUser.userId),
         ),
       );
     expect(recip).toHaveLength(1);
-    expect(recip[0]!.reason).toBe('participant');
+    expect(assertDefined(recip[0]).reason).toBe('participant');
   });
 
   it('leaves entity.title null when the fixture supplies an id but no title', async () => {
@@ -396,8 +402,8 @@ describe('sweepInboundEvents (the event drain)', () => {
       .select({ entity: schema.event.entity })
       .from(schema.event)
       .where(eq(schema.event.organizationId, orgId));
-    expect(ev!.entity).not.toBeNull();
-    expect(ev!.entity?.title).toBeNull();
+    expect(assertDefined(ev).entity).not.toBeNull();
+    expect(assertDefined(ev).entity?.title).toBeNull();
   });
 
   it('marks an inbound event failed (with the real error) when normalizing it throws', async () => {
@@ -421,8 +427,8 @@ describe('sweepInboundEvents (the event drain)', () => {
       .select()
       .from(schema.inboundEvent)
       .where(eq(schema.inboundEvent.externalEventId, 'ev_bad_date'));
-    expect(ev!.status).toBe('failed');
-    expect(ev!.attempts).toBe(1);
-    expect(ev!.lastError).toBeTruthy();
+    expect(assertDefined(ev).status).toBe('failed');
+    expect(assertDefined(ev).attempts).toBe(1);
+    expect(assertDefined(ev).lastError).toBeTruthy();
   });
 });

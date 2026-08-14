@@ -10,6 +10,7 @@ import type * as ContainerModule from '../../src/container';
 import type { relayLinearAgentActivity as RelayLinearAgentActivity } from '../../src/lib/linear-agent-relay';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import type { sealCredential as SealCredential } from '../../src/lib/credentials';
+import { assertDefined } from '@docket/test-utils';
 
 const { buildLinearAgentClient } = vi.hoisted(() => ({
   buildLinearAgentClient: vi.fn(),
@@ -67,17 +68,22 @@ async function seedLinearSession(): Promise<SeededLinearSession> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
     .returning({ id: schema.user.id });
-  await db.insert(schema.hub).values({ userId: u!.id });
+  await db.insert(schema.hub).values({ userId: assertDefined(u).id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
-  const humanActorId = human!.id;
+  const humanActorId = assertDefined(human).id;
   const agent = await ensureDefaultAgent(orgId, humanActorId);
 
   const [session] = await db
@@ -90,7 +96,7 @@ async function seedLinearSession(): Promise<SeededLinearSession> {
       initiatorId: humanActorId,
     })
     .returning({ id: schema.agentSession.id });
-  const sessionId = session!.id;
+  const sessionId = assertDefined(session).id;
 
   const [intg] = await db
     .insert(schema.integration)
@@ -106,7 +112,7 @@ async function seedLinearSession(): Promise<SeededLinearSession> {
     .returning({ id: schema.integration.id });
   await db.insert(schema.integrationCredential).values({
     organizationId: orgId,
-    integrationId: intg!.id,
+    integrationId: assertDefined(intg).id,
     ciphertext: sealCredential(JSON.stringify({ accessToken: 'tok' })),
   });
   await db.insert(schema.agentSessionExternalLink).values({
@@ -138,7 +144,7 @@ async function seedActivity(
       ...overrides,
     })
     .returning({ id: schema.sessionActivity.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Read back the external link row (for watermark assertions). */
@@ -147,7 +153,7 @@ async function externalLink(sessionId: string) {
     .select()
     .from(schema.agentSessionExternalLink)
     .where(eq(schema.agentSessionExternalLink.sessionId, sessionId));
-  return row!;
+  return assertDefined(row);
 }
 
 const T0 = new Date('2026-07-01T12:00:00.000Z');
@@ -165,20 +171,20 @@ describe('relayLinearAgentActivity', () => {
       .returning({ id: schema.organization.id });
     const [human] = await db
       .insert(schema.actor)
-      .values({ organizationId: org!.id, kind: 'human', displayName: 'Ada' })
+      .values({ organizationId: assertDefined(org).id, kind: 'human', displayName: 'Ada' })
       .returning({ id: schema.actor.id });
-    const agent = await ensureDefaultAgent(org!.id, human!.id);
+    const agent = await ensureDefaultAgent(assertDefined(org).id, assertDefined(human).id);
     const [session] = await db
       .insert(schema.agentSession)
       .values({
-        organizationId: org!.id,
+        organizationId: assertDefined(org).id,
         agentId: agent.id,
         trigger: 'delegation',
         status: 'running',
       })
       .returning({ id: schema.agentSession.id });
 
-    await relayLinearAgentActivity(org!.id, session!.id);
+    await relayLinearAgentActivity(assertDefined(org).id, assertDefined(session).id);
     expect(port.activityLog).toHaveLength(0);
   });
 

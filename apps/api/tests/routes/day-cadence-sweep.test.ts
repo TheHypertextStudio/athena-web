@@ -25,6 +25,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { sweepDayCadence as SweepDayCadence } from '../../src/routes/day-cadence-sweep';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -73,17 +74,17 @@ async function seedHub(options: { windows?: ReturnType<typeof deskWindows> } = {
     .returning({ id: schema.user.id });
   const [h] = await db
     .insert(schema.hub)
-    .values({ userId: u!.id })
+    .values({ userId: assertDefined(u).id })
     .returning({ id: schema.hub.id });
   await db.insert(schema.schedulingPreference).values({
-    hubId: h!.id,
+    hubId: assertDefined(h).id,
     timezone: TZ,
     ...(options.windows ? { windows: options.windows } : {}),
   });
   const [layer] = await db
     .insert(schema.calendarLayer)
     .values({
-      userId: u!.id,
+      userId: assertDefined(u).id,
       connectionId: null,
       provider: 'docket',
       sourceKind: 'native_blocks',
@@ -94,7 +95,11 @@ async function seedHub(options: { windows?: ReturnType<typeof deskWindows> } = {
       primary: false,
     })
     .returning({ id: schema.calendarLayer.id });
-  return { userId: u!.id, hubId: h!.id, layerId: layer!.id };
+  return {
+    userId: assertDefined(u).id,
+    hubId: assertDefined(h).id,
+    layerId: assertDefined(layer).id,
+  };
 }
 
 /** One scheduler-placed block. Returns its id so a test can read its times back. */
@@ -123,7 +128,7 @@ async function seedBlock(
       origin: options.origin ?? 'scheduler',
     })
     .returning({ id: schema.calendarItem.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** The planning run that makes the day read `ready` rather than `not_generated`. */
@@ -170,7 +175,7 @@ async function blockTimes(id: string): Promise<{ startsAt: Date | null; endsAt: 
     .select({ startsAt: schema.calendarItem.startsAt, endsAt: schema.calendarItem.endsAt })
     .from(schema.calendarItem)
     .where(eq(schema.calendarItem.id, id));
-  return row!;
+  return assertDefined(row);
 }
 
 describe('sweepDayCadence — a day that has drifted', () => {
@@ -301,7 +306,7 @@ describe('sweepDayCadence — a day that has drifted', () => {
     await db
       .update(schema.dayCheckIn)
       .set({ response: 'behind', respondedAt: at('11:00') })
-      .where(eq(schema.dayCheckIn.id, row!.id));
+      .where(eq(schema.dayCheckIn.id, assertDefined(row).id));
 
     await sweepDayCadence(at('11:05'));
 

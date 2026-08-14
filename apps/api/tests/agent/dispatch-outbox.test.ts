@@ -14,6 +14,7 @@ import {
 import { ApiError, ConflictError } from '../../src/error';
 import { enqueueRunGeneration } from '../../src/agent/run-generation';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let dbModule: Awaited<ReturnType<typeof getMigratedDb>>;
 
@@ -42,12 +43,12 @@ async function seedPendingAthena() {
     .insert(agentSession)
     .values({
       executorKind: 'athena',
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       trigger: 'delegation',
       status: 'pending',
     })
     .returning();
-  return session!;
+  return assertDefined(session);
 }
 
 describe('Athena durable dispatch outbox', () => {
@@ -85,7 +86,7 @@ describe('Athena durable dispatch outbox', () => {
     const [pending] = await dbModule.db
       .select()
       .from(agentSessionDispatch)
-      .where(eq(agentSessionDispatch.runId, run!.id));
+      .where(eq(agentSessionDispatch.runId, assertDefined(run).id));
     expect(pending).toMatchObject({ status: 'pending', attempt: 1 });
     expect(pending?.availableAt.getTime()).toBeGreaterThan(pending?.createdAt.getTime() ?? 0);
 
@@ -95,14 +96,14 @@ describe('Athena durable dispatch outbox', () => {
         {},
         { config, enqueue: enqueueRunGeneration, fetch: failedFetch },
       ),
-    ).resolves.toMatchObject({ mode: 'async', queued: { runId: run!.id } });
+    ).resolves.toMatchObject({ mode: 'async', queued: { runId: assertDefined(run).id } });
     expect(failedFetch).toHaveBeenCalledOnce();
 
     const deliveredFetch = vi
       .fn()
       .mockResolvedValue(Response.json({ accepted: true }, { status: 202 }));
     const result = await sweepAthenaDispatches(
-      { now: pending!.availableAt, batchSize: 10 },
+      { now: assertDefined(pending).availableAt, batchSize: 10 },
       { config, fetch: deliveredFetch },
     );
 
@@ -110,7 +111,7 @@ describe('Athena durable dispatch outbox', () => {
     const [delivered] = await dbModule.db
       .select()
       .from(agentSessionDispatch)
-      .where(eq(agentSessionDispatch.id, pending!.id));
+      .where(eq(agentSessionDispatch.id, assertDefined(pending).id));
     expect(delivered).toMatchObject({ status: 'delivered', attempt: 2 });
     expect(delivered?.deliveredAt).toBeInstanceOf(Date);
   });
@@ -221,9 +222,10 @@ describe('Athena durable dispatch outbox', () => {
       .select({ deliveredAt: agentSessionDispatch.deliveredAt })
       .from(agentSessionDispatch)
       .orderBy(agentSessionDispatch.deliveredAt);
-    expect(delivered.at(-1)!.deliveredAt!.getTime() - delivered[0]!.deliveredAt!.getTime()).toBe(
-      20_000,
-    );
+    expect(
+      assertDefined(assertDefined(delivered.at(-1)).deliveredAt).getTime() -
+        assertDefined(assertDefined(delivered[0]).deliveredAt).getTime(),
+    ).toBe(20_000);
   });
 
   it('moves an exhausted dispatch to failed attention state', async () => {
@@ -269,7 +271,7 @@ describe('Athena durable dispatch outbox', () => {
           status: 'pending',
         })
         .returning();
-      await enqueueRunGeneration(other!);
+      await enqueueRunGeneration(assertDefined(other));
     }
     const [next] = await dbModule.db
       .insert(agentSession)
@@ -280,7 +282,7 @@ describe('Athena durable dispatch outbox', () => {
         status: 'pending',
       })
       .returning();
-    await expect(enqueueRunGeneration(next!)).resolves.toBeDefined();
+    await expect(enqueueRunGeneration(assertDefined(next))).resolves.toBeDefined();
   });
 
   it('recovers a crashed dispatcher’s expired lease, incrementing the attempt it left behind', async () => {

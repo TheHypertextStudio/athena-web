@@ -8,6 +8,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as ReconcileGraph from '../../src/routes/integration-reconcile-graph';
 import { addMember, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -492,7 +493,7 @@ describe('reconcileWorkGraph', () => {
         updatedAt: new Date('2020-01-01T00:00:00.000Z'),
         externalUpdatedAt: new Date('2020-01-01T00:00:00.000Z'),
       })
-      .where(eq(schema.task.id, issue2!.id));
+      .where(eq(schema.task.id, assertDefined(issue2).id));
     const second = await pull();
     await reconcileWorkGraph({
       orgId,
@@ -511,7 +512,7 @@ describe('reconcileWorkGraph', () => {
     await db
       .update(schema.task)
       .set({ title: 'LOCAL EDIT', updatedAt: new Date('2030-01-01T00:00:00.000Z') })
-      .where(eq(schema.task.id, issue3!.id));
+      .where(eq(schema.task.id, assertDefined(issue3).id));
     const third = await pull();
     const res = await reconcileWorkGraph({
       orgId,
@@ -737,7 +738,7 @@ describe('reconcileWorkGraph', () => {
     await db
       .update(schema.task)
       .set({ title: 'LOCAL EDIT', updatedAt: new Date('2030-01-01T00:00:00.000Z') })
-      .where(eq(schema.task.id, child!.id));
+      .where(eq(schema.task.id, assertDefined(child).id));
 
     const base = await pull();
     const snapshot: WorkGraphSnapshot = {
@@ -780,7 +781,7 @@ describe('reconcileWorkGraph', () => {
     await db
       .update(schema.task)
       .set({ title: 'Locally edited', updatedAt: new Date('2030-01-01T00:00:00.000Z') })
-      .where(eq(schema.task.id, issue2!.id));
+      .where(eq(schema.task.id, assertDefined(issue2).id));
 
     const second = await pull();
     const res = await reconcileWorkGraph({

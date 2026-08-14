@@ -17,6 +17,7 @@ import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type dailyPlanRouter from '../../src/routes/daily-plan';
 import type hubRouter from '../../src/routes/hub';
 import type orgsRouter from '../../src/routes/orgs';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -84,9 +85,9 @@ async function seedUserWithHub(): Promise<{ userId: string; hubId: string }> {
     .returning({ id: schema.user.id });
   const [h] = await db
     .insert(schema.hub)
-    .values({ userId: user!.id })
+    .values({ userId: assertDefined(user).id })
     .returning({ id: schema.hub.id });
-  return { userId: user!.id, hubId: h!.id };
+  return { userId: assertDefined(user).id, hubId: assertDefined(h).id };
 }
 
 describe('orgs router', () => {
@@ -177,8 +178,8 @@ describe('orgs router', () => {
       .returning({ id: schema.initiative.id });
     await db.insert(schema.initiativeHierarchyLink).values({
       contextOrganizationId: orgId,
-      parentInitiativeId: root!.id,
-      childInitiativeId: child!.id,
+      parentInitiativeId: assertDefined(root).id,
+      childInitiativeId: assertDefined(child).id,
       createdBy: result.ownerActorId,
     });
 
@@ -439,7 +440,7 @@ describe('notifications router', () => {
     expect(listed.status).toBe(200);
     expect((await body<{ items: unknown[] }>(listed)).items).toHaveLength(1);
 
-    const read = await app.request(`/${n!.id}/read`, { method: 'POST' });
+    const read = await app.request(`/${assertDefined(n).id}/read`, { method: 'POST' });
     expect(read.status).toBe(200);
 
     // Not found (a different user's / missing notification).
@@ -487,7 +488,7 @@ describe('daily-plan router', () => {
         createdBy: humanActorId,
       })
       .returning({ id: schema.task.id });
-    const taskId = t!.id;
+    const taskId = assertDefined(t).id;
 
     const app = appWithSession(dailyPlan, fakeSession(userId));
 
@@ -579,7 +580,11 @@ describe('daily-plan router', () => {
     const made = await app.request('/', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ refOrganizationId: orgId, refTaskId: t!.id, date: '2026-03-01' }),
+      body: JSON.stringify({
+        refOrganizationId: orgId,
+        refTaskId: assertDefined(t).id,
+        date: '2026-03-01',
+      }),
     });
     expect(made.status).toBe(200);
 
@@ -658,7 +663,7 @@ describe('hub router', () => {
       .returning({ id: schema.task.id });
     await db
       .insert(schema.dailyPlanItem)
-      .values({ hubId, refOrganizationId: orgId, refTaskId: planned!.id, date });
+      .values({ hubId, refOrganizationId: orgId, refTaskId: assertDefined(planned).id, date });
 
     const app = appWithSession(hub, fakeSession(userId));
     const today = await body<{
@@ -666,8 +671,8 @@ describe('hub router', () => {
       needsAttention: { dueToday: { id: string }[] };
     }>(await app.request(`/today?date=${date}`));
     const ids = today.plan.map((t) => t.id);
-    expect(ids).toEqual([planned!.id]);
-    expect(today.needsAttention.dueToday.map((task) => task.id)).toContain(due!.id);
+    expect(ids).toEqual([assertDefined(planned).id]);
+    expect(today.needsAttention.dueToday.map((task) => task.id)).toContain(assertDefined(due).id);
   });
 
   it('today: due work alone leaves the day unplanned and appears under attention', async () => {
@@ -705,8 +710,13 @@ describe('hub router', () => {
     const { orgId } = await seedBaseOrg(db, schema);
     await db
       .insert(schema.actor)
-      .values({ organizationId: orgId, kind: 'human', displayName: 'NoHub', userId: user!.id });
-    const app = appWithSession(hub, fakeSession(user!.id));
+      .values({
+        organizationId: orgId,
+        kind: 'human',
+        displayName: 'NoHub',
+        userId: assertDefined(user).id,
+      });
+    const app = appWithSession(hub, fakeSession(assertDefined(user).id));
     const today = await body<{ plan: unknown[] }>(await app.request('/today?date=2026-06-01'));
     expect(today.plan).toHaveLength(0);
   });
@@ -747,14 +757,14 @@ describe('hub router', () => {
       {
         organizationId: orgId,
         sourceTable: 'project',
-        entityId: project!.id,
+        entityId: assertDefined(project).id,
         operation: 'upsert',
         reason: 'manual',
       },
       {
         organizationId: orgId,
         sourceTable: 'task',
-        entityId: task!.id,
+        entityId: assertDefined(task).id,
         operation: 'upsert',
         reason: 'manual',
       },
@@ -787,7 +797,11 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
       .returning({ id: schema.actor.id });
     const [ag] = await db
       .insert(schema.agent)
-      .values({ organizationId: orgId, actorId: agentActor!.id, createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        actorId: assertDefined(agentActor).id,
+        createdBy: humanActorId,
+      })
       .returning({ id: schema.agent.id });
     const [tk] = await db
       .insert(schema.task)
@@ -797,14 +811,14 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
       .insert(schema.agentSession)
       .values({
         organizationId: orgId,
-        agentId: ag!.id,
-        taskId: tk!.id,
+        agentId: assertDefined(ag).id,
+        taskId: assertDefined(tk).id,
         trigger: 'assignment',
         status,
         initiatorId: humanActorId,
       })
       .returning({ id: schema.agentSession.id });
-    return { orgId, sessionId: s!.id };
+    return { orgId, sessionId: assertDefined(s).id };
   }
 
   it('lists (with + without status filter), gets with activities, 404s', async () => {
@@ -851,13 +865,17 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
       .returning({ id: schema.actor.id });
     const [agB] = await db
       .insert(schema.agent)
-      .values({ organizationId: b.orgId, actorId: agentActorB!.id, createdBy: b.humanActorId })
+      .values({
+        organizationId: b.orgId,
+        actorId: assertDefined(agentActorB).id,
+        createdBy: b.humanActorId,
+      })
       .returning({ id: schema.agent.id });
     const [s] = await db
       .insert(schema.agentSession)
       .values({
         organizationId: a.orgId,
-        agentId: agB!.id,
+        agentId: assertDefined(agB).id,
         taskId: null,
         trigger: 'assignment',
         status: 'pending',
@@ -866,7 +884,8 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
       .returning({ id: schema.agentSession.id });
     const w = appWithActor(agentSessions, a.orgId, ['contribute']);
     expect(
-      (await w.request(`/${s!.id}/run`, { method: 'POST', headers: J, body: '{}' })).status,
+      (await w.request(`/${assertDefined(s).id}/run`, { method: 'POST', headers: J, body: '{}' }))
+        .status,
     ).toBe(404);
   });
 
@@ -971,7 +990,11 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
       .returning({ id: schema.actor.id });
     const [ag] = await db
       .insert(schema.agent)
-      .values({ organizationId: orgId, actorId: agentActor!.id, createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        actorId: assertDefined(agentActor).id,
+        createdBy: humanActorId,
+      })
       .returning({ id: schema.agent.id });
     let taskId: string | null = null;
     if (withTask) {
@@ -985,20 +1008,20 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
           createdBy: humanActorId,
         })
         .returning({ id: schema.task.id });
-      taskId = tk!.id;
+      taskId = assertDefined(tk).id;
     }
     const [s] = await db
       .insert(schema.agentSession)
       .values({
         organizationId: orgId,
-        agentId: ag!.id,
+        agentId: assertDefined(ag).id,
         taskId,
         trigger: 'assignment',
         status: 'pending',
         initiatorId: humanActorId,
       })
       .returning({ id: schema.agentSession.id });
-    return { orgId, sessionId: s!.id };
+    return { orgId, sessionId: assertDefined(s).id };
   }
 
   it('run: a task-less session streams the scripted activities and ends awaiting_approval', async () => {
@@ -1058,7 +1081,11 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
       .returning({ id: schema.actor.id });
     const [ag] = await db
       .insert(schema.agent)
-      .values({ organizationId: a.orgId, actorId: agentActor!.id, createdBy: a.humanActorId })
+      .values({
+        organizationId: a.orgId,
+        actorId: assertDefined(agentActor).id,
+        createdBy: a.humanActorId,
+      })
       .returning({ id: schema.agent.id });
     const [otherTask] = await db
       .insert(schema.task)
@@ -1074,15 +1101,19 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
       .insert(schema.agentSession)
       .values({
         organizationId: a.orgId,
-        agentId: ag!.id,
-        taskId: otherTask!.id,
+        agentId: assertDefined(ag).id,
+        taskId: assertDefined(otherTask).id,
         trigger: 'assignment',
         status: 'pending',
         initiatorId: a.humanActorId,
       })
       .returning({ id: schema.agentSession.id });
     const w = appWithActor(agentSessions, a.orgId, ['contribute']);
-    const res = await w.request(`/${s!.id}/run`, { method: 'POST', headers: J, body: '{}' });
+    const res = await w.request(`/${assertDefined(s).id}/run`, {
+      method: 'POST',
+      headers: J,
+      body: '{}',
+    });
     expect(res.status).toBe(200);
   });
 

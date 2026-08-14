@@ -6,6 +6,7 @@ import type { CommentOut } from '@docket/types';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type commentsRouter from '../../src/routes/comments';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -304,7 +305,7 @@ describe('comments router', () => {
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Other' })
       .returning({ id: schema.actor.id });
-    const otherActorId = other!.id;
+    const otherActorId = assertDefined(other).id;
     const intruder = appWithActor(comments, orgId, ['comment'], otherActorId);
 
     expect(
@@ -351,7 +352,7 @@ describe('comments router', () => {
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Mod' })
       .returning({ id: schema.actor.id });
-    const moderator = appWithActor(comments, orgId, ['manage'], mod!.id);
+    const moderator = appWithActor(comments, orgId, ['manage'], assertDefined(mod).id);
 
     const patched = await moderator.request(`/${created.id}`, {
       method: 'PATCH',

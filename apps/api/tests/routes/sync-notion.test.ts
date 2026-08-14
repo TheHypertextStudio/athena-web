@@ -17,6 +17,7 @@ import type {
 } from '../../src/routes/sync-notion';
 import type { TaskSyncConflict } from '../../src/routes/integration-reconcile';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -58,22 +59,29 @@ describe('sync conflict log', () => {
       })
       .returning({ id: schema.task.id });
 
-    await recordSyncConflict(orgId, humanActorId, integration!.id, 'notion', task!.id, CONFLICT);
+    await recordSyncConflict(
+      orgId,
+      humanActorId,
+      assertDefined(integration).id,
+      'notion',
+      assertDefined(task).id,
+      CONFLICT,
+    );
 
     const [row] = await db
       .select()
       .from(schema.auditEvent)
-      .where(eq(schema.auditEvent.subjectId, task!.id));
+      .where(eq(schema.auditEvent.subjectId, assertDefined(task).id));
     expect(row).toMatchObject({
       organizationId: orgId,
       actorId: humanActorId,
       subjectType: 'task',
       type: 'updated',
     });
-    expect(asSyncConflictRecord(row!.metadata)).toMatchObject({
+    expect(asSyncConflictRecord(assertDefined(row).metadata)).toMatchObject({
       kind: 'sync_conflict',
       provider: 'notion',
-      integrationId: integration!.id,
+      integrationId: assertDefined(integration).id,
       resolution: 'docket_wins',
       externalId: 'notion-page-1',
       remoteTitle: 'Ship the launch checklist',
@@ -93,12 +101,19 @@ describe('sync conflict log', () => {
       .values({ organizationId: orgId, title: 'Automated sync', teamId, state: 'backlog' })
       .returning({ id: schema.task.id });
 
-    await recordSyncConflict(orgId, null, integration!.id, 'notion', task!.id, CONFLICT);
+    await recordSyncConflict(
+      orgId,
+      null,
+      assertDefined(integration).id,
+      'notion',
+      assertDefined(task).id,
+      CONFLICT,
+    );
 
     const [row] = await db
       .select()
       .from(schema.auditEvent)
-      .where(eq(schema.auditEvent.subjectId, task!.id));
+      .where(eq(schema.auditEvent.subjectId, assertDefined(task).id));
     expect(row?.actorId).toBeNull();
   });
 
@@ -113,17 +128,24 @@ describe('sync conflict log', () => {
       .values({ organizationId: orgId, title: 'No due date', teamId, state: 'backlog' })
       .returning({ id: schema.task.id });
 
-    await recordSyncConflict(orgId, null, integration!.id, 'notion', task!.id, {
-      ...CONFLICT,
-      remoteDueDate: undefined,
-      remoteCompleted: undefined,
-    });
+    await recordSyncConflict(
+      orgId,
+      null,
+      assertDefined(integration).id,
+      'notion',
+      assertDefined(task).id,
+      {
+        ...CONFLICT,
+        remoteDueDate: undefined,
+        remoteCompleted: undefined,
+      },
+    );
 
     const [row] = await db
       .select()
       .from(schema.auditEvent)
-      .where(eq(schema.auditEvent.subjectId, task!.id));
-    const record = asSyncConflictRecord(row!.metadata);
+      .where(eq(schema.auditEvent.subjectId, assertDefined(task).id));
+    const record = asSyncConflictRecord(assertDefined(row).metadata);
     expect(record?.remoteDueDate).toBeNull();
     expect(record?.remoteCompleted).toBeNull();
   });
@@ -148,26 +170,49 @@ describe('sync conflict log', () => {
       organizationId: orgId,
       actorId: humanActorId,
       subjectType: 'task',
-      subjectId: task!.id,
+      subjectId: assertDefined(task).id,
       type: 'updated',
       metadata: { note: 'plain audit row' },
     });
     // A conflict on a different integration must not leak into this integration's list.
-    await recordSyncConflict(orgId, null, otherIntegration!.id, 'linear', task!.id, CONFLICT);
+    await recordSyncConflict(
+      orgId,
+      null,
+      assertDefined(otherIntegration).id,
+      'linear',
+      assertDefined(task).id,
+      CONFLICT,
+    );
 
-    await recordSyncConflict(orgId, null, integration!.id, 'notion', task!.id, {
-      ...CONFLICT,
-      externalId: 'first',
-    });
+    await recordSyncConflict(
+      orgId,
+      null,
+      assertDefined(integration).id,
+      'notion',
+      assertDefined(task).id,
+      {
+        ...CONFLICT,
+        externalId: 'first',
+      },
+    );
     await new Promise((resolve) => setTimeout(resolve, 5));
-    await recordSyncConflict(orgId, null, integration!.id, 'notion', task!.id, {
-      ...CONFLICT,
-      externalId: 'second',
-    });
+    await recordSyncConflict(
+      orgId,
+      null,
+      assertDefined(integration).id,
+      'notion',
+      assertDefined(task).id,
+      {
+        ...CONFLICT,
+        externalId: 'second',
+      },
+    );
 
-    const conflicts = await listSyncConflicts(orgId, integration!.id);
+    const conflicts = await listSyncConflicts(orgId, assertDefined(integration).id);
     expect(conflicts.map((c) => c.conflict.externalId)).toEqual(['second', 'first']);
-    expect(conflicts.every((c) => c.conflict.integrationId === integration!.id)).toBe(true);
+    expect(conflicts.every((c) => c.conflict.integrationId === assertDefined(integration).id)).toBe(
+      true,
+    );
   });
 
   it('scopes conflicts to the requesting organization', async () => {
@@ -186,9 +231,16 @@ describe('sync conflict log', () => {
         state: 'backlog',
       })
       .returning({ id: schema.task.id });
-    await recordSyncConflict(orgA.orgId, null, integrationA!.id, 'notion', taskA!.id, CONFLICT);
+    await recordSyncConflict(
+      orgA.orgId,
+      null,
+      assertDefined(integrationA).id,
+      'notion',
+      assertDefined(taskA).id,
+      CONFLICT,
+    );
 
-    expect(await listSyncConflicts(orgB.orgId, integrationA!.id)).toEqual([]);
+    expect(await listSyncConflicts(orgB.orgId, assertDefined(integrationA).id)).toEqual([]);
   });
 
   it('rejects metadata that is not a sync-conflict record', () => {

@@ -54,6 +54,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
 import type mcpAppHostRoutes from '../../src/mcp/apps/host-routes';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -112,7 +113,7 @@ async function seedConnection(): Promise<{ userId: string; connectionId: string 
   const [row] = await db
     .insert(schema.personalMcpConnection)
     .values({
-      ownerUserId: user!.id,
+      ownerUserId: assertDefined(user).id,
       url: 'https://mcp.shape-fixture.example/mcp',
       name: 'Shape fixture',
       alias: slug,
@@ -121,7 +122,7 @@ async function seedConnection(): Promise<{ userId: string; connectionId: string 
       toolCount: 1,
     })
     .returning({ id: schema.personalMcpConnection.id });
-  return { userId: user!.id, connectionId: row!.id };
+  return { userId: assertDefined(user).id, connectionId: assertDefined(row).id };
 }
 
 /** Call `render_card` through `/call` and return the parsed body. */

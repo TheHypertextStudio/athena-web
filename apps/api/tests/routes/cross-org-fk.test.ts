@@ -17,6 +17,7 @@ import type * as DbModule from '@docket/db';
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type projectsRouter from '../../src/routes/projects';
 import type tasksRouter from '../../src/routes/tasks';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -44,7 +45,7 @@ async function seedProgram(orgId: string, createdBy: string): Promise<string> {
     .insert(schema.program)
     .values({ organizationId: orgId, name: 'Prog', createdBy })
     .returning({ id: schema.program.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert a project in `orgId`, returning its id. */
@@ -53,7 +54,7 @@ async function seedProject(orgId: string, teamId: string, createdBy: string): Pr
     .insert(schema.project)
     .values({ organizationId: orgId, name: 'Proj', teamId, createdBy })
     .returning({ id: schema.project.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert a milestone under a project in `orgId`, returning its id. */
@@ -62,7 +63,7 @@ async function seedMilestone(orgId: string, projectId: string, createdBy: string
     .insert(schema.milestone)
     .values({ organizationId: orgId, projectId, name: 'MS', createdBy })
     .returning({ id: schema.milestone.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert a cycle for a team in `orgId`, returning its id. */
@@ -83,7 +84,7 @@ async function seedCycle(
       createdBy,
     })
     .returning({ id: schema.cycle.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Create a task via the router and return its id. */
@@ -170,8 +171,8 @@ describe('project PATCH cross-org FK hardening', () => {
       .select({ teamId: schema.project.teamId, leadId: schema.project.leadId })
       .from(schema.project)
       .where(eq(schema.project.id, projectId));
-    expect(row!.teamId).toBe(a.teamId);
-    expect(row!.leadId).toBeNull();
+    expect(assertDefined(row).teamId).toBe(a.teamId);
+    expect(assertDefined(row).leadId).toBeNull();
   });
 
   it('accepts in-org leadId/programId/teamId references', async () => {
@@ -187,7 +188,11 @@ describe('project PATCH cross-org FK hardening', () => {
     const res = await writer.request(`/${projectId}`, {
       method: 'PATCH',
       headers: JSON_HEADERS,
-      body: JSON.stringify({ leadId: a.humanActorId, programId: program, teamId: team2!.id }),
+      body: JSON.stringify({
+        leadId: a.humanActorId,
+        programId: program,
+        teamId: assertDefined(team2).id,
+      }),
     });
     expect(res.status).toBe(200);
     const body = await json<{
@@ -197,7 +202,7 @@ describe('project PATCH cross-org FK hardening', () => {
     }>(res);
     expect(body.leadId).toBe(a.humanActorId);
     expect(body.programId).toBe(program);
-    expect(body.teamId).toBe(team2!.id);
+    expect(body.teamId).toBe(assertDefined(team2).id);
   });
 
   it('allows clearing references to null (no cross-org check on clear)', async () => {
@@ -336,9 +341,9 @@ describe('task create cross-org FK hardening', () => {
       })
       .from(schema.task)
       .where(eq(schema.task.id, sub.id));
-    expect(row!.milestoneId).toBe(milestone);
-    expect(row!.cycleId).toBe(cycle);
-    expect(row!.parentTaskId).toBe(parent);
+    expect(assertDefined(row).milestoneId).toBe(milestone);
+    expect(assertDefined(row).cycleId).toBe(cycle);
+    expect(assertDefined(row).parentTaskId).toBe(parent);
   });
 });
 
@@ -383,10 +388,10 @@ describe('task PATCH cross-org FK hardening', () => {
       })
       .from(schema.task)
       .where(eq(schema.task.id, taskId));
-    expect(row!.assigneeId).toBeNull();
-    expect(row!.projectId).toBeNull();
-    expect(row!.milestoneId).toBeNull();
-    expect(row!.cycleId).toBeNull();
+    expect(assertDefined(row).assigneeId).toBeNull();
+    expect(assertDefined(row).projectId).toBeNull();
+    expect(assertDefined(row).milestoneId).toBeNull();
+    expect(assertDefined(row).cycleId).toBeNull();
   });
 
   it('rejects a milestone whose project is in another org (404)', async () => {
@@ -445,8 +450,8 @@ describe('task PATCH cross-org FK hardening', () => {
       .select({ projectId: schema.task.projectId, milestoneId: schema.task.milestoneId })
       .from(schema.task)
       .where(eq(schema.task.id, taskId));
-    expect(row!.projectId).toBe(projectB);
-    expect(row!.milestoneId).toBe(milestoneInB);
+    expect(assertDefined(row).projectId).toBe(projectB);
+    expect(assertDefined(row).milestoneId).toBe(milestoneInB);
   });
 
   it('accepts in-org references on a task PATCH', async () => {
@@ -480,8 +485,8 @@ describe('task PATCH cross-org FK hardening', () => {
       .select({ milestoneId: schema.task.milestoneId, cycleId: schema.task.cycleId })
       .from(schema.task)
       .where(eq(schema.task.id, taskId));
-    expect(row!.milestoneId).toBe(milestone);
-    expect(row!.cycleId).toBe(cycle);
+    expect(assertDefined(row).milestoneId).toBe(milestone);
+    expect(assertDefined(row).cycleId).toBe(cycle);
   });
 
   it('allows clearing references to null without a cross-org check', async () => {
@@ -588,7 +593,7 @@ describe('subtask create cross-org FK hardening', () => {
       .select({ milestoneId: schema.task.milestoneId, cycleId: schema.task.cycleId })
       .from(schema.task)
       .where(eq(schema.task.id, sub.id));
-    expect(row!.milestoneId).toBe(milestone);
-    expect(row!.cycleId).toBe(cycle);
+    expect(assertDefined(row).milestoneId).toBe(milestone);
+    expect(assertDefined(row).cycleId).toBe(cycle);
   });
 });

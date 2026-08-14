@@ -48,6 +48,7 @@ import type {
   answerElicitation as AnswerElicitation,
   materializeElicitations as MaterializeElicitations,
 } from '../../src/services/elicitation-service';
+import { assertDefined } from '@docket/test-utils';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -119,21 +120,26 @@ async function seedRegisteredAgentSession(
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
     .returning({ id: schema.user.id });
-  await db.insert(schema.hub).values({ userId: u!.id });
+  await db.insert(schema.hub).values({ userId: assertDefined(u).id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
   const [team] = await db
     .insert(schema.team)
     .values({ organizationId: orgId, name: 'Core', key: 'CORE' })
     .returning({ id: schema.team.id });
-  const agent = await ensureDefaultAgent(orgId, human!.id);
+  const agent = await ensureDefaultAgent(orgId, assertDefined(human).id);
 
   const [session] = await db
     .insert(schema.agentSession)
@@ -142,12 +148,12 @@ async function seedRegisteredAgentSession(
       agentId: agent.id,
       trigger: 'delegation',
       status,
-      initiatorId: withInitiator ? human!.id : null,
+      initiatorId: withInitiator ? assertDefined(human).id : null,
     })
     .returning({ id: schema.agentSession.id });
   if (withSeedResponse) {
     await db.insert(schema.sessionActivity).values({
-      sessionId: session!.id,
+      sessionId: assertDefined(session).id,
       organizationId: orgId,
       type: 'response',
       body: { text: 'Import my backlog.' },
@@ -156,10 +162,10 @@ async function seedRegisteredAgentSession(
 
   return {
     orgId,
-    teamId: team!.id,
-    humanActorId: human!.id,
+    teamId: assertDefined(team).id,
+    humanActorId: assertDefined(human).id,
     agentId: agent.id,
-    sessionId: session!.id,
+    sessionId: assertDefined(session).id,
   };
 }
 
@@ -185,7 +191,7 @@ async function seedAthenaSession(
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       key: `owner-${slug}`,
       name: 'Owner',
       capabilities: ['view', 'contribute'],
@@ -196,37 +202,37 @@ async function seedAthenaSession(
     .values({ name: 'Ada', email: `${slug}@example.com` })
     .returning({ id: schema.user.id });
   await db.insert(schema.hub).values({
-    userId: owner!.id,
+    userId: assertDefined(owner).id,
     preferences: options.instructions ? { athena: { instructions: options.instructions } } : {},
   });
   const [ownerActor] = await db
     .insert(schema.actor)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       kind: 'human',
       displayName: 'Ada',
-      userId: owner!.id,
-      roleId: role!.id,
+      userId: assertDefined(owner).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
   await db
     .insert(schema.team)
-    .values({ organizationId: org!.id, name: 'Core', key: `A${slug.slice(-4)}` });
+    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `A${slug.slice(-4)}` });
   const [session] = await db
     .insert(schema.agentSession)
     .values({
       executorKind: 'athena',
-      ownerUserId: owner!.id,
-      contextOrganizationId: org!.id,
+      ownerUserId: assertDefined(owner).id,
+      contextOrganizationId: assertDefined(org).id,
       trigger: 'delegation',
       status: options.status ?? 'pending',
     })
     .returning({ id: schema.agentSession.id });
   return {
-    ownerUserId: owner!.id,
-    ownerActorId: ownerActor!.id,
-    orgId: org!.id,
-    sessionId: session!.id,
+    ownerUserId: assertDefined(owner).id,
+    ownerActorId: assertDefined(ownerActor).id,
+    orgId: assertDefined(org).id,
+    sessionId: assertDefined(session).id,
   };
 }
 
@@ -444,7 +450,7 @@ describe('reconcileToolUse — ask_user edge cases', () => {
       .where(eq(schema.agentElicitation.sessionId, seed.sessionId));
     expect(elicitationRow).toBeTruthy();
     const answer = await answerElicitation({
-      elicitationId: elicitationRow!.id,
+      elicitationId: assertDefined(elicitationRow).id,
       userId: seed.ownerUserId,
       value: 'ops-channel',
     });
@@ -649,7 +655,7 @@ describe('executeApprovedActions — durable race windows', () => {
       .select()
       .from(schema.agentSession)
       .where(eq(schema.agentSession.id, seed.sessionId));
-    const lease = await claimRunGeneration(sessionRow!, {
+    const lease = await claimRunGeneration(assertDefined(sessionRow), {
       runnableStatuses: ['awaiting_approval'],
       resumeSession: false,
     });
@@ -660,7 +666,7 @@ describe('executeApprovedActions — durable race windows', () => {
         await db
           .update(schema.sessionActivity)
           .set({ approvalStatus: 'rejected' })
-          .where(eq(schema.sessionActivity.id, action!.id));
+          .where(eq(schema.sessionActivity.id, assertDefined(action).id));
       },
     });
 
@@ -668,7 +674,7 @@ describe('executeApprovedActions — durable race windows', () => {
     const [after] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(after?.status).toBe('rejected');
   });
 
@@ -699,7 +705,7 @@ describe('executeApprovedActions — durable race windows', () => {
       .select()
       .from(schema.agentSession)
       .where(eq(schema.agentSession.id, seed.sessionId));
-    const lease = await claimRunGeneration(sessionRow!, {
+    const lease = await claimRunGeneration(assertDefined(sessionRow), {
       runnableStatuses: ['awaiting_approval'],
       resumeSession: false,
     });
@@ -712,7 +718,7 @@ describe('executeApprovedActions — durable race windows', () => {
         await db
           .update(schema.sessionActivity)
           .set({ approvalStatus: 'approved' })
-          .where(eq(schema.sessionActivity.id, action!.id));
+          .where(eq(schema.sessionActivity.id, assertDefined(action).id));
       },
     });
 
@@ -720,7 +726,7 @@ describe('executeApprovedActions — durable race windows', () => {
     const [after] = await db
       .select({ status: schema.sessionActivity.approvalStatus, body: schema.sessionActivity.body })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     // The raced finalize update never landed: status is whatever the competing writer set, and no
     // execution result got attached.
     expect(after?.status).toBe('approved');
@@ -788,7 +794,7 @@ describe('approve* composition — executing outside a live transcript', () => {
     const [after] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, stuck!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(stuck).id));
     expect(after?.status).toBe('executing');
   });
 });
@@ -834,7 +840,7 @@ describe('approveLatestAndResume', () => {
     const [after] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, approvedAction!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(approvedAction).id));
     expect(after?.status).toBe('applied');
   });
 
@@ -904,7 +910,7 @@ describe('approveLatestAndResume', () => {
     const [decided] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, proposedAction!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(proposedAction).id));
     expect(decided?.status).toBe('applied');
   });
 });
@@ -954,7 +960,7 @@ describe('deriveBrief — a session linked to a real task', () => {
       .returning({ id: schema.task.id });
     await db
       .update(schema.agentSession)
-      .set({ taskId: taskRow!.id })
+      .set({ taskId: assertDefined(taskRow).id })
       .where(eq(schema.agentSession.id, seed.sessionId));
 
     const script: readonly AgentRuntimeModule.ScriptedTurn[] = [
@@ -987,7 +993,7 @@ describe('deriveBrief — a session linked to a real task', () => {
     // normal user action.
     await db
       .update(schema.agentSession)
-      .set({ taskId: taskInOtherOrg!.id })
+      .set({ taskId: assertDefined(taskInOtherOrg).id })
       .where(eq(schema.agentSession.id, seed.sessionId));
 
     const script: readonly AgentRuntimeModule.ScriptedTurn[] = [
@@ -1185,7 +1191,7 @@ describe('executeApprovedActions — a remote-connection tool call', () => {
       .select()
       .from(schema.agentSession)
       .where(eq(schema.agentSession.id, seed.sessionId));
-    const lease = await claimRunGeneration(sessionRow!, {
+    const lease = await claimRunGeneration(assertDefined(sessionRow), {
       runnableStatuses: ['awaiting_approval'],
       resumeSession: false,
     });
@@ -1196,7 +1202,7 @@ describe('executeApprovedActions — a remote-connection tool call', () => {
     const [after] = await db
       .select({ status: schema.sessionActivity.approvalStatus, body: schema.sessionActivity.body })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(after?.status).toBe('applied');
     // No live "sunsama" connection exists for this owner, so the unnamespaced remote name never
     // resolves on Docket's own server either — it comes back an error result, not a crash.
@@ -1224,7 +1230,7 @@ describe('executeApprovedActions — an action with no executable tool call', ()
       .select()
       .from(schema.agentSession)
       .where(eq(schema.agentSession.id, seed.sessionId));
-    const lease = await claimRunGeneration(sessionRow!, {
+    const lease = await claimRunGeneration(assertDefined(sessionRow), {
       runnableStatuses: ['awaiting_approval'],
       resumeSession: false,
     });
@@ -1235,7 +1241,7 @@ describe('executeApprovedActions — an action with no executable tool call', ()
     const [after] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, action!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
     expect(after?.status).toBe('applied');
     const audit = await db
       .select()
@@ -1277,17 +1283,17 @@ describe('approveGroupAndResume with an explicit activity subset', () => {
       .returning({ id: schema.sessionActivity.id });
 
     await approveGroupAndResume(seed.orgId, seed.humanActorId, seed.sessionId, groupId, 'reject', [
-      drop!.id,
+      assertDefined(drop).id,
     ]);
 
     const [keptAfter] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, keep!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(keep).id));
     const [droppedAfter] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, drop!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(drop).id));
     expect(keptAfter?.status).toBe('proposed');
     expect(droppedAfter?.status).toBe('rejected');
   });
@@ -1323,19 +1329,19 @@ describe('approveGroupAndResume with an explicit activity subset', () => {
     // A retried "approve" naming only the already-approved member: isRetryableGroupApproval finds
     // the whole (filtered) subset already approved and skips decideProposalGroup entirely.
     await approveGroupAndResume(seed.orgId, seed.humanActorId, seed.sessionId, groupId, 'approve', [
-      alreadyApproved!.id,
+      assertDefined(alreadyApproved).id,
     ]);
 
     const [untouched] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, stillProposed!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(stillProposed).id));
     // The sibling outside the named subset was never touched by the retry.
     expect(untouched?.status).toBe('proposed');
     const [decided] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, alreadyApproved!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(alreadyApproved).id));
     expect(decided?.status).toBe('applied');
   });
 });

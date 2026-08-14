@@ -11,6 +11,7 @@ import {
   seedBaseOrg,
   seedUserWithHub,
 } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -64,7 +65,7 @@ async function seedNotification(
       ...(opts.readAt !== undefined ? { readAt: opts.readAt } : {}),
     })
     .returning({ id: schema.notification.id });
-  return n!.id;
+  return assertDefined(n).id;
 }
 
 describe('notifications router — auth', () => {
@@ -126,7 +127,7 @@ describe('notifications router — list + unread filter', () => {
     const byType = await app.request('/?type=approval_request');
     const typed = await body<{ items: { type: string }[] }>(byType);
     expect(typed.items).toHaveLength(1);
-    expect(typed.items[0]!.type).toBe('approval_request');
+    expect(assertDefined(typed.items[0]).type).toBe('approval_request');
 
     // Combined filters AND together.
     const combined = await app.request(`/?organizationId=${orgId}&unreadOnly=true&type=mention`);
@@ -148,7 +149,7 @@ describe('notifications router — list + unread filter', () => {
     const listed = await app.request('/');
     const items = (await body<{ items: { body: { title: string } }[] }>(listed)).items;
     expect(items).toHaveLength(1);
-    expect(items[0]!.body.title).toBe('mine');
+    expect(assertDefined(items[0]).body.title).toBe('mine');
   });
 
   it('includes sibling delivery channels so the inbox can show cross-platform hints', async () => {
@@ -332,7 +333,7 @@ describe('notifications router — read-all', () => {
       .select({ readAt: schema.notification.readAt })
       .from(schema.notification)
       .where(eq(schema.notification.id, theirId));
-    expect(theirs[0]!.readAt).toBeNull();
+    expect(assertDefined(theirs[0]).readAt).toBeNull();
   });
 
   it('rejects an invalid type in the body with 422', async () => {

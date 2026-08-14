@@ -11,6 +11,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -38,7 +39,7 @@ async function seedOrg(withHub = true): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [role] = await db
     .insert(schema.role)
@@ -57,15 +58,15 @@ async function seedOrg(withHub = true): Promise<Seed> {
       organizationId: orgId,
       kind: 'human',
       displayName: 'Ada',
-      userId: user!.id,
-      roleId: role!.id,
+      userId: assertDefined(user).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
 
   await db.insert(schema.grant).values({
     organizationId: orgId,
     subjectKind: 'role',
-    subjectId: role!.id,
+    subjectId: assertDefined(role).id,
     resourceKind: 'organization',
     resourceId: orgId,
     capabilities: ['contribute'],
@@ -82,19 +83,29 @@ async function seedOrg(withHub = true): Promise<Seed> {
     .returning({ id: schema.team.id });
 
   const hubId = withHub
-    ? (
-        await db.insert(schema.hub).values({ userId: user!.id }).returning({ id: schema.hub.id })
-      )[0]!.id
+    ? assertDefined(
+        (
+          await db
+            .insert(schema.hub)
+            .values({ userId: assertDefined(user).id })
+            .returning({ id: schema.hub.id })
+        )[0],
+      ).id
     : '';
 
   return {
     orgId,
-    teamId: team!.id,
-    userId: user!.id,
-    actorId: human!.id,
+    teamId: assertDefined(team).id,
+    userId: assertDefined(user).id,
+    actorId: assertDefined(human).id,
     hubId,
     ctx: {
-      principal: { kind: 'user', userId: user!.id, userName: 'Ada', userEmail: email },
+      principal: {
+        kind: 'user',
+        userId: assertDefined(user).id,
+        userName: 'Ada',
+        userEmail: email,
+      },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     },
   };
@@ -116,7 +127,7 @@ async function seedTask(
       ...over,
     })
     .returning({ id: schema.task.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 const harnesses: { close(): Promise<void> }[] = [];
@@ -140,7 +151,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   resetAuthMocks();
 });
 
@@ -405,8 +416,9 @@ describe('plan_day — autoPlan', () => {
 
     const client = await connect(s.ctx);
     const out = await autoPlan(client, s.orgId);
-    const item = out.items[0]!;
-    const minutes = (Date.parse(item.endsAt!) - Date.parse(item.startsAt!)) / 60_000;
+    const item = assertDefined(out.items[0]);
+    const minutes =
+      (Date.parse(assertDefined(item.endsAt)) - Date.parse(assertDefined(item.startsAt))) / 60_000;
     expect(minutes).toBe(120);
   });
 
@@ -487,7 +499,7 @@ describe('plan_day — autoPlan', () => {
       .values({ organizationId: s.orgId, kind: 'human', displayName: 'Someone else' })
       .returning({ id: schema.actor.id });
     await seedTask(s, 'Theirs', {
-      assigneeId: other!.id,
+      assigneeId: assertDefined(other).id,
       startDate: new Date(`${PLAN_DATE}T10:00:00.000Z`),
       estimateMinutes: 60,
     });
@@ -582,14 +594,18 @@ describe('brief', () => {
       .returning({ id: schema.actor.id });
     const [agent] = await db
       .insert(schema.agent)
-      .values({ organizationId: s.orgId, actorId: agentActor!.id, createdBy: s.actorId })
+      .values({
+        organizationId: s.orgId,
+        actorId: assertDefined(agentActor).id,
+        createdBy: s.actorId,
+      })
       .returning({ id: schema.agent.id });
 
     const client = await connect({
       principal: {
         kind: 'agent',
-        agentId: agent!.id,
-        agentActorId: agentActor!.id,
+        agentId: assertDefined(agent).id,
+        agentActorId: assertDefined(agentActor).id,
         orgId: s.orgId,
         displayName: 'Athena',
       },
@@ -611,7 +627,12 @@ describe('brief', () => {
       .returning({ id: schema.user.id });
 
     const client = await connect({
-      principal: { kind: 'user', userId: user!.id, userName: 'Nobody', userEmail: 'nb@e.com' },
+      principal: {
+        kind: 'user',
+        userId: assertDefined(user).id,
+        userName: 'Nobody',
+        userEmail: 'nb@e.com',
+      },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     });
     const out = payload(
@@ -645,7 +666,7 @@ describe('comment and report_status accept names', () => {
         body: 'Slipping a week.',
       },
     })) as CallToolResult;
-    expect(payload(res)).toMatchObject({ subjectId: project!.id });
+    expect(payload(res)).toMatchObject({ subjectId: assertDefined(project).id });
   });
 
   it('sets the subject’s health as a side effect of saying why', async () => {
@@ -672,7 +693,7 @@ describe('comment and report_status accept names', () => {
       .from(schema.initiative)
       .where(
         and(
-          eq(schema.initiative.id, initiative!.id),
+          eq(schema.initiative.id, assertDefined(initiative).id),
           eq(schema.initiative.organizationId, s.orgId),
         ),
       );

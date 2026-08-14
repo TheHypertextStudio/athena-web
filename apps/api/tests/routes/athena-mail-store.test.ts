@@ -12,6 +12,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as AthenaMailStoreModule from '../../src/routes/athena-mail-store';
 import { getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -198,10 +199,10 @@ describe('listAttachmentTargets', () => {
       subjectId: projectId,
       kind: 'athena_email',
       title: 'Project-only',
-      externalId: message!.id,
+      externalId: assertDefined(message).id,
     });
 
-    const targets = await listAttachmentTargets(message!.id);
+    const targets = await listAttachmentTargets(assertDefined(message).id);
     expect(targets).toHaveLength(1);
     expect(targets[0]).toMatchObject({
       subjectType: 'project',
@@ -238,10 +239,10 @@ describe('listAttachmentTargets', () => {
       subjectId: initiativeId,
       kind: 'athena_email',
       title: 'Initiative-attached',
-      externalId: message!.id,
+      externalId: assertDefined(message).id,
     });
 
-    const targets = await listAttachmentTargets(message!.id);
+    const targets = await listAttachmentTargets(assertDefined(message).id);
     expect(targets).toHaveLength(1);
     expect(targets[0]).toMatchObject({
       subjectType: 'initiative',
@@ -273,13 +274,13 @@ describe('listAttachmentTargets', () => {
     await db.insert(schema.attachment).values({
       organizationId: orgId,
       subjectType: 'task',
-      subjectId: task!.id,
+      subjectId: assertDefined(task).id,
       kind: 'athena_email',
       title: 'Orphaned soon',
-      externalId: message!.id,
+      externalId: assertDefined(message).id,
     });
-    await db.delete(schema.task).where(eq(schema.task.id, task!.id));
+    await db.delete(schema.task).where(eq(schema.task.id, assertDefined(task).id));
 
-    expect(await listAttachmentTargets(message!.id)).toEqual([]);
+    expect(await listAttachmentTargets(assertDefined(message).id)).toEqual([]);
   });
 });

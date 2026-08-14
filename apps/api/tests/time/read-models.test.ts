@@ -27,6 +27,7 @@ import {
   measureIntervals,
   measureRecordInRange,
 } from '../../src/time/read-models';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -270,7 +271,7 @@ describe('getActiveTime', () => {
         .values({ organizationId: orgId, teamId, title: 'Tracked task', state: 'todo' })
         .returning({ id: schema.task.id }),
     ).id;
-    return { userId, hubId: hubRow!.id, taskId };
+    return { userId, hubId: assertDefined(hubRow).id, taskId };
   }
 
   /**
@@ -458,7 +459,7 @@ describe('getTimeSummary', () => {
         .values({ organizationId: orgId, teamId, title: 'Tracked task', state: 'todo' })
         .returning({ id: schema.task.id }),
     );
-    return { orgId, userId, hubId: hubRow!.id, taskId: t.id };
+    return { orgId, userId, hubId: assertDefined(hubRow).id, taskId: t.id };
   }
 
   /** Insert a time record with one interval, returning both ids. */
@@ -561,7 +562,7 @@ describe('listTimeCategories', () => {
       .from(schema.hub)
       .where(eq(schema.hub.userId, userId))
       .limit(1);
-    const hubId = hubRow!.id;
+    const hubId = assertDefined(hubRow).id;
     await db.insert(schema.timeCategory).values([
       { hubId, name: 'Zeta', sort: 0 },
       { hubId, name: 'Alpha', sort: 0 },
@@ -583,7 +584,7 @@ describe('getTimeBreakdown', () => {
       .from(schema.hub)
       .where(eq(schema.hub.userId, userId))
       .limit(1);
-    return { orgId, teamId, humanActorId, userId, hubId: hubRow!.id };
+    return { orgId, teamId, humanActorId, userId, hubId: assertDefined(hubRow).id };
   }
 
   async function seedTask(orgId: string, teamId: string, title = 'Task') {
@@ -706,10 +707,18 @@ describe('getTimeBreakdown', () => {
       .insert(schema.initiative)
       .values({ organizationId: orgId, name: 'Initiative B', createdBy: humanActorId })
       .returning({ id: schema.initiative.id });
-    const [first, second] = [initiativeA!.id, initiativeB!.id].sort();
+    const [first, second] = [assertDefined(initiativeA).id, assertDefined(initiativeB).id].sort();
     await db.insert(schema.initiativeProject).values([
-      { initiativeId: first!, projectId: project!.id, organizationId: orgId },
-      { initiativeId: second!, projectId: project!.id, organizationId: orgId },
+      {
+        initiativeId: assertDefined(first),
+        projectId: assertDefined(project).id,
+        organizationId: orgId,
+      },
+      {
+        initiativeId: assertDefined(second),
+        projectId: assertDefined(project).id,
+        organizationId: orgId,
+      },
     ]);
     const taskId = one(
       await db
@@ -719,7 +728,7 @@ describe('getTimeBreakdown', () => {
           teamId,
           title: 'Project task',
           state: 'todo',
-          projectId: project!.id,
+          projectId: assertDefined(project).id,
         })
         .returning({ id: schema.task.id }),
     ).id;

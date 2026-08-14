@@ -29,6 +29,7 @@ import type { openToolbox as OpenToolbox } from '../../src/agent/toolbox';
 import type { getContainer as GetContainer } from '../../src/container';
 import type { sealCredential as SealCredential } from '../../src/lib/credentials';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -49,7 +50,7 @@ async function seedUser(label: string): Promise<string> {
     .insert(schema.user)
     .values({ name: label, email: `${label}-${Math.random().toString(36).slice(2)}@x.test` })
     .returning({ id: schema.user.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Seed a workspace with one registered agent, returning what `openToolbox` needs. */
@@ -61,13 +62,13 @@ async function seedRegisteredAgent(): Promise<{ organizationId: string; agentId:
     .returning({ id: schema.organization.id });
   const [actor] = await db
     .insert(schema.actor)
-    .values({ organizationId: org!.id, kind: 'agent', displayName: 'Registered' })
+    .values({ organizationId: assertDefined(org).id, kind: 'agent', displayName: 'Registered' })
     .returning({ id: schema.actor.id });
   const [registered] = await db
     .insert(schema.agent)
-    .values({ organizationId: org!.id, actorId: actor!.id })
+    .values({ organizationId: assertDefined(org).id, actorId: assertDefined(actor).id })
     .returning({ id: schema.agent.id });
-  return { organizationId: org!.id, agentId: registered!.id };
+  return { organizationId: assertDefined(org).id, agentId: assertDefined(registered).id };
 }
 
 const STALE_OAUTH = {
@@ -110,7 +111,7 @@ describe('openToolbox — personal (Athena) remote MCP connections', () => {
       })
       .returning({ id: schema.personalMcpConnection.id });
     await db.insert(schema.personalMcpCredential).values({
-      connectionId: conn!.id,
+      connectionId: assertDefined(conn).id,
       ownerUserId: userId,
       // No `expires_in`, so `mcpOAuthTokenNeedsRefresh` short-circuits false: never refreshed.
       ciphertext: sealCredential(
@@ -147,7 +148,7 @@ describe('openToolbox — personal (Athena) remote MCP connections', () => {
       })
       .returning({ id: schema.personalMcpConnection.id });
     await db.insert(schema.personalMcpCredential).values({
-      connectionId: conn!.id,
+      connectionId: assertDefined(conn).id,
       ownerUserId: userId,
       ciphertext: sealCredential(
         JSON.stringify({ kind: 'mcp_oauth_pending', codeVerifier: 'verifier-x' }),
@@ -182,7 +183,7 @@ describe('openToolbox — personal (Athena) remote MCP connections', () => {
       })
       .returning({ id: schema.personalMcpConnection.id });
     await db.insert(schema.personalMcpCredential).values({
-      connectionId: conn!.id,
+      connectionId: assertDefined(conn).id,
       ownerUserId: userId,
       ciphertext: sealCredential(JSON.stringify(STALE_OAUTH)),
     });
@@ -201,9 +202,9 @@ describe('openToolbox — personal (Athena) remote MCP connections', () => {
       const [persisted] = await db
         .select({ ciphertext: schema.personalMcpCredential.ciphertext })
         .from(schema.personalMcpCredential)
-        .where(eq(schema.personalMcpCredential.connectionId, conn!.id));
+        .where(eq(schema.personalMcpCredential.connectionId, assertDefined(conn).id));
       const { unsealCredential } = await import('../../src/lib/credentials');
-      expect(unsealCredential(persisted!.ciphertext)).toContain('refreshed-token');
+      expect(unsealCredential(assertDefined(persisted).ciphertext)).toContain('refreshed-token');
     } finally {
       await toolbox.close();
       openSpy.mockRestore();
@@ -299,7 +300,7 @@ describe('openToolbox — registered-agent remote MCP connections', () => {
       .returning({ id: schema.integration.id });
     await db.insert(schema.integrationCredential).values({
       organizationId,
-      integrationId: integrationRow!.id,
+      integrationId: assertDefined(integrationRow).id,
       ciphertext: sealCredential(JSON.stringify(STALE_OAUTH)),
     });
     const openSpy = vi.spyOn(getContainer().mcpConnector, 'open');
@@ -313,9 +314,9 @@ describe('openToolbox — registered-agent remote MCP connections', () => {
       const [persisted] = await db
         .select({ ciphertext: schema.integrationCredential.ciphertext })
         .from(schema.integrationCredential)
-        .where(eq(schema.integrationCredential.integrationId, integrationRow!.id));
+        .where(eq(schema.integrationCredential.integrationId, assertDefined(integrationRow).id));
       const { unsealCredential } = await import('../../src/lib/credentials');
-      expect(unsealCredential(persisted!.ciphertext)).toContain('refreshed-token');
+      expect(unsealCredential(assertDefined(persisted).ciphertext)).toContain('refreshed-token');
     } finally {
       await toolbox.close();
       openSpy.mockRestore();
@@ -351,7 +352,7 @@ describe('openToolbox — registered-agent remote MCP connections', () => {
     const [row] = await db
       .select()
       .from(schema.integration)
-      .where(eq(schema.integration.id, integrationRow!.id));
+      .where(eq(schema.integration.id, assertDefined(integrationRow).id));
     expect(row).toMatchObject({ status: 'error' });
     expect(row?.lastError).toContain('No MCP server reachable');
   });

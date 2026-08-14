@@ -9,6 +9,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as SlackRelevance from '../../src/consumers/slack-relevance';
 import { getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -110,8 +111,8 @@ describe('recordSlackParticipation', () => {
       payloadFor({ type: 'message', channel: 'C1', user: 'UAAA1', text: 'root', ts: '100.1' }),
     );
     expect(facts).not.toBeNull();
-    await mod.recordSlackParticipation(orgId, facts!);
-    await mod.recordSlackParticipation(orgId, facts!);
+    await mod.recordSlackParticipation(orgId, assertDefined(facts));
+    await mod.recordSlackParticipation(orgId, assertDefined(facts));
     const rows = await db
       .select()
       .from(schema.threadParticipation)
@@ -122,8 +123,8 @@ describe('recordSlackParticipation', () => {
         ),
       );
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.threadTs).toBe('100.1');
-    expect(rows[0]!.externalUserId).toBe('UAAA1');
+    expect(assertDefined(rows[0]).threadTs).toBe('100.1');
+    expect(assertDefined(rows[0]).externalUserId).toBe('UAAA1');
   });
 });
 
@@ -143,7 +144,7 @@ describe('resolveSlackRecipients', () => {
         ts: '1.1',
       }),
     );
-    const recipients = await mod.resolveSlackRecipients(orgId, facts!, connected);
+    const recipients = await mod.resolveSlackRecipients(orgId, assertDefined(facts), connected);
     // The author never self-notifies (even self-mentioned); the unconnected id contributes nothing.
     expect(recipients.get(userB)).toBe('mention');
     expect(recipients.has(userA)).toBe(false);
@@ -164,7 +165,7 @@ describe('resolveSlackRecipients', () => {
         ts: '2.1',
       }),
     );
-    const recipients = await mod.resolveSlackRecipients(orgId, facts!, connected);
+    const recipients = await mod.resolveSlackRecipients(orgId, assertDefined(facts), connected);
     expect(recipients.get(userA)).toBe('mention');
   });
 
@@ -190,13 +191,13 @@ describe('resolveSlackRecipients', () => {
     // Authorizations name UAAA1 → only that user concerns.
     const gated = await mod.resolveSlackRecipients(
       orgId,
-      dm({ authorizations: [{ user_id: 'UAAA1' }] })!,
+      assertDefined(dm({ authorizations: [{ user_id: 'UAAA1' }] })),
       connected,
     );
     expect(gated.get(userA)).toBe('mention');
     expect(gated.has(userB)).toBe(false);
     // No authorizations + two candidates → ambiguous, nobody fans out (DMs must never leak).
-    const ambiguous = await mod.resolveSlackRecipients(orgId, dm({})!, connected);
+    const ambiguous = await mod.resolveSlackRecipients(orgId, assertDefined(dm({})), connected);
     expect(ambiguous.size).toBe(0);
   });
 
@@ -208,7 +209,7 @@ describe('resolveSlackRecipients', () => {
     const root = mod.slackMessageFacts(
       payloadFor({ type: 'message', channel: 'C9', user: 'UAAA1', text: 'root', ts: '50.0' }),
     );
-    await mod.recordSlackParticipation(orgId, root!);
+    await mod.recordSlackParticipation(orgId, assertDefined(root));
     // Later an unconnected user replies in that thread.
     const reply = mod.slackMessageFacts(
       payloadFor({
@@ -221,7 +222,7 @@ describe('resolveSlackRecipients', () => {
         thread_ts: '50.0',
       }),
     );
-    const recipients = await mod.resolveSlackRecipients(orgId, reply!, connected);
+    const recipients = await mod.resolveSlackRecipients(orgId, assertDefined(reply), connected);
     expect(recipients.get(userA)).toBe('participant');
     // A reply in an unrelated thread concerns nobody.
     const other = mod.slackMessageFacts(
@@ -235,6 +236,6 @@ describe('resolveSlackRecipients', () => {
         thread_ts: '49.0',
       }),
     );
-    expect((await mod.resolveSlackRecipients(orgId, other!, connected)).size).toBe(0);
+    expect((await mod.resolveSlackRecipients(orgId, assertDefined(other), connected)).size).toBe(0);
   });
 });

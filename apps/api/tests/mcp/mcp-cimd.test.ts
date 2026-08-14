@@ -8,6 +8,7 @@ import type * as CimdModule from '../../src/mcp/cimd';
 import type * as McpServerModule from '../../src/mcp/server';
 import { authHandler, fakeAsMetadata } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let cimd!: typeof CimdModule;
 let serverMod!: typeof McpServerModule;
@@ -363,7 +364,7 @@ describe('CIMD client metadata validation', () => {
       public: true,
       disabled: false,
     });
-    expect(rows[0]!.metadata).toMatchObject({
+    expect(assertDefined(rows[0]).metadata).toMatchObject({
       cimd: true,
       cimdDocumentUrl: 'https://allowed.example/client.json',
     });

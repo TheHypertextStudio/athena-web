@@ -5,6 +5,7 @@ import {
   flushDeferredWork,
   pendingDeferredCount,
 } from '../../src/lib/after-response';
+import { assertDefined } from '@docket/test-utils';
 
 /** A promise plus the handles to settle it, so a test controls when deferred work finishes. */
 function deferred<T = void>() {
@@ -68,7 +69,7 @@ describe('deferAfterResponse', () => {
     // Deferred work is invisible to the request that scheduled it, so the log is the only place
     // a failure can surface. Swallowing it is how a missing search row becomes unexplainable.
     expect(logged).toHaveLength(1);
-    const entry = JSON.parse(logged[0]!) as Record<string, unknown>;
+    const entry = JSON.parse(assertDefined(logged[0])) as Record<string, unknown>;
     expect(entry['event']).toBe('deferred_work_failed');
     expect(entry['label']).toBe('search-upsert');
     expect(entry['message']).toBe('index write failed');
@@ -81,7 +82,7 @@ describe('deferAfterResponse', () => {
 
     await flushDeferredWork();
 
-    expect(JSON.parse(logged[0]!)).toMatchObject({
+    expect(JSON.parse(assertDefined(logged[0]))).toMatchObject({
       event: 'deferred_work_failed',
       label: 'emit-event',
     });

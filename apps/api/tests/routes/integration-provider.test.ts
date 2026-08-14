@@ -5,6 +5,7 @@ import type { ConnectorProvider } from '@docket/integrations';
 
 import type * as ProviderModule from '../../src/routes/integration-provider';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 // The production token-resolution path (Actor → Better Auth `user` → access token + refresh)
 // is gated behind `APP_MODE` and bypassed by the mock sentinel in `local`/`test`, so it was
@@ -35,12 +36,12 @@ async function seedLinkedActor(orgId: string): Promise<{ actorId: string; userId
     .insert(schema.user)
     .values({ name: 'Ada', email })
     .returning({ id: schema.user.id });
-  const userId = u!.id;
+  const userId = assertDefined(u).id;
   const [a] = await db
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId })
     .returning({ id: schema.actor.id });
-  return { actorId: a!.id, userId };
+  return { actorId: assertDefined(a).id, userId };
 }
 
 /** Link one provider grant to a test user. */
@@ -59,7 +60,7 @@ async function seedUnlinkedActor(orgId: string): Promise<string> {
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'NoLink' })
     .returning({ id: schema.actor.id });
-  return a!.id;
+  return assertDefined(a).id;
 }
 
 describe('resolveLiveConnectorToken', () => {

@@ -15,6 +15,7 @@ import type processDefinitionsRouter from '../../src/routes/process-definitions'
 import type recurrenceSeriesRouter from '../../src/routes/recurrence-series';
 import type { recurringTaskRoutes as RecurringTaskRouter } from '../../src/routes/recurrence-series';
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -303,7 +304,7 @@ describe('recurrence series routes', () => {
     await db
       .update(schema.task)
       .set({ state: 'done', completedAt: new Date('2098-09-07T20:00:00.000Z') })
-      .where(eq(schema.task.id, protectedTaskId!));
+      .where(eq(schema.task.id, assertDefined(protectedTaskId)));
     expect(
       (
         await app.request(`/${created.id}/edits`, {
@@ -607,12 +608,14 @@ describe('recurrence series routes', () => {
 describe('recurring task route', () => {
   it('creates the rolling task window and preserves the ordinary task draft', async () => {
     const org = await seedBaseOrg(db, schema);
-    const project = (
-      await db
-        .insert(schema.project)
-        .values({ organizationId: org.orgId, teamId: org.teamId, name: 'Marathon training' })
-        .returning()
-    )[0]!;
+    const project = assertDefined(
+      (
+        await db
+          .insert(schema.project)
+          .values({ organizationId: org.orgId, teamId: org.teamId, name: 'Marathon training' })
+          .returning()
+      )[0],
+    );
     const app = appWithActor(recurringTasks, org.orgId, ['contribute'], org.humanActorId);
     const response = await app.request('/', {
       method: 'POST',

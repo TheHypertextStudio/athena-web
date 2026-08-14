@@ -5,6 +5,7 @@ import type * as DbModule from '@docket/db';
 import type { McpIntegrationOut } from '@docket/types';
 
 import { appWithActor, getDb, seedOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let router: unknown;
@@ -108,19 +109,21 @@ describe('remote MCP connector editing', () => {
   it('rejects a PATCH alias that collides with a sibling connector in the same workspace', async () => {
     const orgId = await seedOrg(schema.db, schema);
     const seedRow = async (alias: string) =>
-      (
-        await schema.db
-          .insert(schema.integration)
-          .values({
-            organizationId: orgId,
-            provider: 'mcp',
-            pattern: 'connector',
-            roles: ['work'],
-            status: 'connected',
-            config: { url: 'https://example.com/mcp', label: 'X', alias, authMode: 'none' },
-          })
-          .returning({ id: schema.integration.id })
-      )[0]!.id;
+      assertDefined(
+        (
+          await schema.db
+            .insert(schema.integration)
+            .values({
+              organizationId: orgId,
+              provider: 'mcp',
+              pattern: 'connector',
+              roles: ['work'],
+              status: 'connected',
+              config: { url: 'https://example.com/mcp', label: 'X', alias, authMode: 'none' },
+            })
+            .returning({ id: schema.integration.id })
+        )[0],
+      ).id;
     const takenId = await seedRow('taken_alias');
     const movingId = await seedRow('movable_alias');
     const app = appWithActor(router, orgId, ['manage']);

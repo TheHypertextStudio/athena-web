@@ -22,6 +22,7 @@ import type integrationsRouter from '../../src/routes/integrations';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 import { fakeSession } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -85,19 +86,19 @@ async function seedOrg(): Promise<Seed> {
     .insert(organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [t] = await db
     .insert(team)
     .values({ organizationId: orgId, name: 'Core', key: 'CORE' })
     .returning({ id: team.id });
-  const teamId = t!.id;
+  const teamId = assertDefined(t).id;
 
   const [human] = await db
     .insert(actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada' })
     .returning({ id: actor.id });
-  const humanActorId = human!.id;
+  const humanActorId = assertDefined(human).id;
 
   const [agentActor] = await db
     .insert(actor)
@@ -106,9 +107,13 @@ async function seedOrg(): Promise<Seed> {
 
   const [ag] = await db
     .insert(agent)
-    .values({ organizationId: orgId, actorId: agentActor!.id, createdBy: humanActorId })
+    .values({
+      organizationId: orgId,
+      actorId: assertDefined(agentActor).id,
+      createdBy: humanActorId,
+    })
     .returning({ id: agent.id });
-  const agentId = ag!.id;
+  const agentId = assertDefined(ag).id;
 
   const [tk] = await db
     .insert(task)
@@ -120,7 +125,7 @@ async function seedOrg(): Promise<Seed> {
       createdBy: humanActorId,
     })
     .returning({ id: task.id });
-  const taskId = tk!.id;
+  const taskId = assertDefined(tk).id;
 
   return { orgId, teamId, humanActorId, agentId, taskId };
 }
@@ -138,7 +143,7 @@ async function seedSession(s: Seed): Promise<string> {
       initiatorId: s.humanActorId,
     })
     .returning({ id: agentSession.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert a connector integration for the seeded fixture. */
@@ -154,7 +159,7 @@ async function seedIntegration(s: Seed, teamId?: string): Promise<string> {
       createdBy: s.humanActorId,
     })
     .returning({ id: integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
@@ -309,7 +314,7 @@ describe('POST /:id/import (connector import via the Connector port)', () => {
     };
     // The github fixture yields exactly one issue.
     expect(body.items).toHaveLength(1);
-    const created = body.items[0]!;
+    const created = assertDefined(body.items[0]);
     expect(created.title).toBe('Fix flaky checkout test');
     expect(created.teamId).toBe(s.teamId);
     expect(created.provenance.source).toBe('linked');

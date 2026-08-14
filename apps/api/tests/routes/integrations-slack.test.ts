@@ -12,6 +12,7 @@ import { getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harn
 
 import { unsealCredential } from '../../src/lib/credentials';
 import type * as SlackApp from '../../src/lib/slack-app';
+import { assertDefined } from '@docket/test-utils';
 
 vi.hoisted(() => {
   process.env['CREDENTIALS_ENCRYPTION_KEY'] = Buffer.from('0'.repeat(32)).toString('base64');
@@ -133,7 +134,7 @@ describe('GET /internal/integrations/slack/callback', () => {
           ),
         ),
     );
-    expect(unsealCredential(acct.accessToken!)).toBe('mock');
+    expect(unsealCredential(assertDefined(acct.accessToken))).toBe('mock');
     expect(acct.scope).toContain('im:history');
   });
 

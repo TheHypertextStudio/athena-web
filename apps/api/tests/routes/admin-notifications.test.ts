@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -169,9 +170,9 @@ async function makeStaff(
     .returning({ id: schema.user.id });
   const [staff] = await db
     .insert(schema.staffUser)
-    .values({ userId: user!.id, role })
+    .values({ userId: assertDefined(user).id, role })
     .returning({ id: schema.staffUser.id });
-  return { userId: user!.id, staffUserId: staff!.id };
+  return { userId: assertDefined(user).id, staffUserId: assertDefined(staff).id };
 }
 
 async function seedIntent(
@@ -196,7 +197,7 @@ async function seedIntent(
       ...overrides,
     })
     .returning({ id: schema.notificationIntent.id });
-  return intent!;
+  return assertDefined(intent);
 }
 
 async function auditCount(type: string, subjectId: string): Promise<number> {

@@ -18,6 +18,7 @@ import {
   voiceLocalMode,
   VoiceProviderUnavailableError,
 } from '../../src/routes/voice-provider';
+import { assertDefined } from '@docket/test-utils';
 
 const INPUT = {
   instructions: 'You are Athena.',
@@ -116,9 +117,9 @@ describe('OpenAiRealtimeProvider', () => {
       expiresAt: new Date(1_800_000_000 * 1000).toISOString(),
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchImpl.mock.calls[0]!;
+    const [url, init] = assertDefined(fetchImpl.mock.calls[0]);
     expect(url).toBe('https://api.openai.com/v1/realtime/client_secrets');
-    expect(init!.headers).toMatchObject({ authorization: 'Bearer sk-test' });
+    expect(assertDefined(init).headers).toMatchObject({ authorization: 'Bearer sk-test' });
   });
 
   it('falls back to a computed expiry when the provider omits expires_at', async () => {

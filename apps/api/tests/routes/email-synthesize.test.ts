@@ -6,6 +6,7 @@ import type * as DbModule from '@docket/db';
 
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 import { persistSuggestions, type CandidateThread } from '../../src/lib/email-to-task/synthesize';
+import { assertDefined } from '@docket/test-utils';
 
 const synthesizer = new MockTaskSynthesizer();
 
@@ -89,7 +90,7 @@ describe('persistSuggestions', () => {
     await persistSuggestions({
       organizationId: orgId,
       integrationId,
-      threads: [THREADS[0]!],
+      threads: [assertDefined(THREADS[0])],
       threshold: 50,
       actorId: humanActorId,
       synthesizer,
@@ -100,7 +101,7 @@ describe('persistSuggestions', () => {
       integrationId,
       threads: [
         {
-          ...THREADS[0]!,
+          ...assertDefined(THREADS[0]),
           threadId: 'outlook-conversation-9',
           externalUrl: 'https://outlook.mock.docket.local/mail/9',
         },
@@ -185,7 +186,7 @@ describe('persistSuggestions', () => {
     await persistSuggestions({
       organizationId: orgId,
       integrationId,
-      threads: [THREADS[0]!],
+      threads: [assertDefined(THREADS[0])],
       threshold: 50,
       actorId: humanActorId,
       synthesizer: {

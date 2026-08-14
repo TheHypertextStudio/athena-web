@@ -38,6 +38,7 @@ import {
   type MirrorContext,
 } from '../../src/routes/notion-mirror-reconcile';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * A pass that knows nothing: nobody matched, and no entity projected yet.
@@ -188,7 +189,7 @@ describe('Notion mirror reconciliation', () => {
         propertyMap: {
           ...findDesign(designs, 'task').propertyMap,
           project: {
-            ...findDesign(designs, 'task').propertyMap['project']!,
+            ...assertDefined(findDesign(designs, 'task').propertyMap['project']),
             relationDataSourceId: 'explicit-project-source',
           },
           retiredRelation: {
@@ -645,7 +646,7 @@ describe('Notion mirror reconciliation', () => {
         propertyMap: {
           ...taskDesign.propertyMap,
           assignee: {
-            ...taskDesign.propertyMap['assignee']!,
+            ...assertDefined(taskDesign.propertyMap['assignee']),
             representation: 'docket_people_table',
           },
         },
@@ -679,7 +680,7 @@ describe('Notion mirror reconciliation', () => {
         propertyMap: {
           ...taskDesign.propertyMap,
           assignee: {
-            ...taskDesign.propertyMap['assignee']!,
+            ...assertDefined(taskDesign.propertyMap['assignee']),
             representation: 'docket_people_table',
           },
         },
@@ -724,11 +725,11 @@ describe('Notion mirror reconciliation', () => {
       ctx,
       refreshedTask,
       10,
-      withPersonPage(ctx.actorId, personRow!.externalPageId),
+      withPersonPage(ctx.actorId, assertDefined(personRow).externalPageId),
     );
 
     const written = mirror.writes.find((op) => op.kind === 'create');
-    expect(JSON.stringify(written?.properties)).toContain(personRow!.externalPageId);
+    expect(JSON.stringify(written?.properties)).toContain(assertDefined(personRow).externalPageId);
   });
 
   it('leaves a relation out entirely when the People row does not exist yet', async () => {
@@ -744,7 +745,7 @@ describe('Notion mirror reconciliation', () => {
         propertyMap: {
           ...taskDesign.propertyMap,
           assignee: {
-            ...taskDesign.propertyMap['assignee']!,
+            ...assertDefined(taskDesign.propertyMap['assignee']),
             representation: 'docket_people_table',
             propertyId: 'prop-assignee',
           },
@@ -821,12 +822,15 @@ describe('Notion mirror reconciliation', () => {
     await projectEntity(ctx, refreshedTask, 10, {
       notionUserByActor: new Map(),
       pages: new Map([
-        ['project', { pageByEntityId: new Map([[projectRow.id, projectPage!]]), settled: true }],
+        [
+          'project',
+          { pageByEntityId: new Map([[projectRow.id, assertDefined(projectPage)]]), settled: true },
+        ],
       ]),
     });
 
     const created = mirror.writes.find((op) => op.kind === 'create');
-    expect(JSON.stringify(created?.properties)).toContain(projectPage!);
+    expect(JSON.stringify(created?.properties)).toContain(assertDefined(projectPage));
   });
 
   it('reports a reference to a disabled database as final, so the pass can still complete', async () => {
@@ -853,7 +857,10 @@ describe('Notion mirror reconciliation', () => {
         externalDataSourceId: 'ds-task',
         propertyMap: {
           ...taskDesign.propertyMap,
-          project: { ...taskDesign.propertyMap['project']!, propertyId: 'prop-project' },
+          project: {
+            ...assertDefined(taskDesign.propertyMap['project']),
+            propertyId: 'prop-project',
+          },
         },
       })
       .where(eq(schema.notionMirrorDatabase.id, taskDesign.id));

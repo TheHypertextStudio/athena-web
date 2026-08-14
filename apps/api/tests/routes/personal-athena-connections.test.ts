@@ -37,6 +37,7 @@ import type {
   unsealCredential as UnsealCredential,
 } from '../../src/lib/credentials';
 import { appWithSession, fakeSession, getDb, one } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
@@ -183,14 +184,14 @@ describe('personal Athena MCP connections', () => {
       .returning({ id: schema.organization.id });
     const [agentActor] = await db
       .insert(schema.actor)
-      .values({ organizationId: org!.id, kind: 'agent', displayName: 'Registered' })
+      .values({ organizationId: assertDefined(org).id, kind: 'agent', displayName: 'Registered' })
       .returning({ id: schema.actor.id });
     const [registered] = await db
       .insert(schema.agent)
-      .values({ organizationId: org!.id, actorId: agentActor!.id })
+      .values({ organizationId: assertDefined(org).id, actorId: assertDefined(agentActor).id })
       .returning({ id: schema.agent.id });
     await db.insert(schema.integration).values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       provider: 'mcp',
       pattern: 'connector',
       roles: ['work'],
@@ -207,8 +208,8 @@ describe('personal Athena MCP connections', () => {
     const athena = await openToolbox({ kind: 'athena', ownerUserId });
     const agent = await openToolbox({
       kind: 'registered_agent',
-      organizationId: org!.id,
-      agentId: registered!.id,
+      organizationId: assertDefined(org).id,
+      agentId: assertDefined(registered).id,
     });
     try {
       expect(athena.tools.some((tool) => tool.name.startsWith('workspace_source__'))).toBe(false);

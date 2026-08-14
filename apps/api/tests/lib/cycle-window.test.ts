@@ -12,6 +12,7 @@ import {
   WINDOW_FUTURE,
   WINDOW_PAST,
 } from '../../src/lib/cycle-window';
+import { assertDefined } from '@docket/test-utils';
 
 const DAY_MS = 86_400_000;
 const WEEK_MS = 7 * DAY_MS;
@@ -47,7 +48,9 @@ describe('rollingWindow', () => {
     const slots = rollingWindow(new Date('2026-06-08T12:00:00.000Z'), 1);
     expect(slots).toHaveLength(WINDOW_PAST + 1 + WINDOW_FUTURE);
     for (let i = 1; i < slots.length; i += 1) {
-      expect(slots[i]!.startsAt.getTime()).toBeGreaterThan(slots[i - 1]!.startsAt.getTime());
+      expect(assertDefined(slots[i]).startsAt.getTime()).toBeGreaterThan(
+        assertDefined(slots[i - 1]).startsAt.getTime(),
+      );
     }
   });
 
@@ -65,8 +68,8 @@ describe('rollingWindow', () => {
   it('steps weekly windows 7 days apart, end one ms before the next start (non-overlapping)', () => {
     const slots = rollingWindow(new Date('2026-06-08T12:00:00.000Z'), 1);
     for (let i = 1; i < slots.length; i += 1) {
-      const prev = slots[i - 1]!;
-      const cur = slots[i]!;
+      const prev = assertDefined(slots[i - 1]);
+      const cur = assertDefined(slots[i]);
       expect(cur.startsAt.getTime() - prev.startsAt.getTime()).toBe(WEEK_MS);
       // Tiling: the previous window ends exactly one ms before this one opens.
       expect(cur.startsAt.getTime() - prev.endsAt.getTime()).toBe(1);
@@ -76,10 +79,13 @@ describe('rollingWindow', () => {
   it('steps by the configured cadence (2-week windows are 14 days apart)', () => {
     const slots = rollingWindow(new Date('2026-06-08T12:00:00.000Z'), 2);
     for (let i = 1; i < slots.length; i += 1) {
-      expect(slots[i]!.startsAt.getTime() - slots[i - 1]!.startsAt.getTime()).toBe(2 * WEEK_MS);
+      expect(
+        assertDefined(slots[i]).startsAt.getTime() - assertDefined(slots[i - 1]).startsAt.getTime(),
+      ).toBe(2 * WEEK_MS);
     }
     // A 2-week window spans 14 days minus one ms.
-    const span = slots[0]!.endsAt.getTime() - slots[0]!.startsAt.getTime();
+    const span =
+      assertDefined(slots[0]).endsAt.getTime() - assertDefined(slots[0]).startsAt.getTime();
     expect(span).toBe(2 * WEEK_MS - 1);
   });
 
@@ -88,7 +94,7 @@ describe('rollingWindow', () => {
     const slots = rollingWindow(now, 1);
     const matches = slots.filter((s) => isWithinWindow(now, s.startsAt, s.endsAt));
     expect(matches).toHaveLength(1);
-    const cur = matches[0]!;
+    const cur = assertDefined(matches[0]);
     expect(now.getTime()).toBeGreaterThanOrEqual(cur.startsAt.getTime());
     expect(now.getTime()).toBeLessThanOrEqual(cur.endsAt.getTime());
   });
@@ -101,7 +107,7 @@ describe('rollingWindow', () => {
 
     // Numbers are gap-free and ascending within a window.
     for (let i = 1; i < a.length; i += 1) {
-      expect(a[i]!.number - a[i - 1]!.number).toBe(1);
+      expect(assertDefined(a[i]).number - assertDefined(a[i - 1]).number).toBe(1);
     }
 
     // The window that both reference instants share (a's current is b's prior) keeps its
@@ -109,7 +115,7 @@ describe('rollingWindow', () => {
     const aCur = currentSlot(a, new Date('2026-06-08T00:00:00.000Z'));
     const bMatch = b.find((s) => s.startsAt.getTime() === aCur.startsAt.getTime());
     expect(bMatch).toBeDefined();
-    expect(bMatch!.number).toBe(aCur.number);
+    expect(assertDefined(bMatch).number).toBe(aCur.number);
   });
 
   it('produces positive cycle numbers for present-day windows', () => {

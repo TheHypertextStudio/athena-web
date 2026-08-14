@@ -21,6 +21,7 @@ import {
 
 // Touch the context type module so its (type-only) source counts as imported/covered.
 import '../../src/context';
+import { assertDefined } from '@docket/test-utils';
 
 /** Build a tiny app whose single route throws the given error, mapped by onError. */
 function appThrowing(err: Error) {
@@ -92,7 +93,7 @@ describe('ApiError subclasses', () => {
 
   it('ValidationError → 422 validation_error with fieldErrors', () => {
     const r = z.object({ a: z.string() }).safeParse({ a: 1 });
-    const e = new ValidationError(r.error!);
+    const e = new ValidationError(assertDefined(r.error));
     expect(e.status).toBe(422);
     expect(e.code).toBe('validation_error');
     expect(e.fieldErrors?.['a']).toBeDefined();
@@ -122,7 +123,7 @@ describe('onError mapping', () => {
   it('maps a ValidationError to field paths without exposing validator prose', async () => {
     const privateDiagnostic = 'DATABASE_URL is missing';
     const r = z.object({ a: z.string(privateDiagnostic) }).safeParse({ a: 1 });
-    const res = await appThrowing(new ValidationError(r.error!)).request('/');
+    const res = await appThrowing(new ValidationError(assertDefined(r.error))).request('/');
     expect(res.status).toBe(422);
     const body = (await res.json()) as { fieldErrors: Record<string, FieldIssue[]> };
     expect(body.fieldErrors['a']).toEqual([{ code: 'invalid_type', expected: 'string' }]);
@@ -131,7 +132,7 @@ describe('onError mapping', () => {
 
   it('never echoes the rejected input, which may itself be a secret', async () => {
     const r = z.object({ password: z.string().min(8) }).safeParse({ password: 'hunter2' });
-    const res = await appThrowing(new ValidationError(r.error!)).request('/');
+    const res = await appThrowing(new ValidationError(assertDefined(r.error))).request('/');
     const body = (await res.json()) as { fieldErrors: Record<string, FieldIssue[]> };
     expect(body.fieldErrors['password']).toEqual([
       { code: 'too_small', minimum: 8, inclusive: true },
@@ -141,7 +142,7 @@ describe('onError mapping', () => {
 
   it('carries the legal values so a caller can correct itself', async () => {
     const r = z.object({ state: z.enum(['backlog', 'done']) }).safeParse({ state: 'in progress' });
-    const res = await appThrowing(new ValidationError(r.error!)).request('/');
+    const res = await appThrowing(new ValidationError(assertDefined(r.error))).request('/');
     const body = (await res.json()) as { fieldErrors: Record<string, FieldIssue[]> };
     expect(body.fieldErrors['state']?.[0]?.options).toEqual(['backlog', 'done']);
   });

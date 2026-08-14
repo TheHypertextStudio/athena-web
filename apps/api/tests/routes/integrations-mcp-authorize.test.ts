@@ -18,6 +18,7 @@ import type integrationsMcpRouter from '../../src/routes/integrations-mcp';
 import { env } from '../../src/env';
 import { verifyConnectState } from '../../src/lib/oauth-state';
 import { appWithActor, fakeSession } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 const { beginMcpOAuthAuthorization } = vi.hoisted(() => ({
   beginMcpOAuthAuthorization: vi.fn(),
@@ -72,7 +73,7 @@ async function seedOrg(): Promise<string> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  return org!.id;
+  return assertDefined(org).id;
 }
 
 /** Seed an org-scoped MCP integration with the given `authMode`, returning its id. */
@@ -97,7 +98,7 @@ async function seedMcpIntegration(
       syncCadenceMinutes: null,
     })
     .returning({ id: schema.integration.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 describe('POST /:id/authorize — starting a remote MCP OAuth approval', () => {
@@ -141,7 +142,7 @@ describe('POST /:id/authorize — starting a remote MCP OAuth approval', () => {
       authorizationUrl: 'https://auth.sunsama.example/authorize?x=1',
     });
     expect(beginMcpOAuthAuthorization).toHaveBeenCalledTimes(1);
-    const call = beginMcpOAuthAuthorization.mock.calls[0]![0] as { state: string };
+    const call = assertDefined(beginMcpOAuthAuthorization.mock.calls[0])[0] as { state: string };
     const decoded = verifyConnectState(call.state);
     expect(decoded).toMatchObject({ integrationId: id, orgId });
     expect(decoded).not.toHaveProperty('authUserId');
@@ -171,7 +172,7 @@ describe('POST /:id/authorize — starting a remote MCP OAuth approval', () => {
     const res = await app.request(`/${id}/authorize`, { method: 'POST', headers: J });
 
     expect(res.status).toBe(200);
-    const call = beginMcpOAuthAuthorization.mock.calls[0]![0] as { state: string };
+    const call = assertDefined(beginMcpOAuthAuthorization.mock.calls[0])[0] as { state: string };
     const decoded = verifyConnectState(call.state);
     expect(decoded).toMatchObject({ integrationId: id, orgId, authUserId: 'user_browser_1' });
   });
@@ -188,7 +189,9 @@ describe('POST /:id/authorize — starting a remote MCP OAuth approval', () => {
     const res = await app.request(`/${id}/authorize`, { method: 'POST', headers: J });
 
     expect(res.status).toBe(200);
-    const call = beginMcpOAuthAuthorization.mock.calls[0]![0] as { clientMetadataUrl?: string };
+    const call = assertDefined(beginMcpOAuthAuthorization.mock.calls[0])[0] as {
+      clientMetadataUrl?: string;
+    };
     expect(call.clientMetadataUrl).toBe(`${env.API_URL}/.well-known/mcp-client.json`);
   });
 
@@ -205,7 +208,9 @@ describe('POST /:id/authorize — starting a remote MCP OAuth approval', () => {
       const app = appWithActor(integrationsMcp, orgId, ['manage']);
       const res = await app.request(`/${id}/authorize`, { method: 'POST', headers: J });
       expect(res.status).toBe(200);
-      const call = beginMcpOAuthAuthorization.mock.calls[0]![0] as { clientMetadataUrl?: string };
+      const call = assertDefined(beginMcpOAuthAuthorization.mock.calls[0])[0] as {
+        clientMetadataUrl?: string;
+      };
       expect(call.clientMetadataUrl).toBeUndefined();
     } finally {
       mutableEnv.API_URL = original;

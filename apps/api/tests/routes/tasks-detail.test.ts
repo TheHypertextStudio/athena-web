@@ -12,6 +12,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type tasksRouter from '../../src/routes/tasks';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -410,7 +411,12 @@ describe('tasks patch (PATCH /:id)', () => {
       .returning({ id: schema.program.id });
     const [ms] = await db
       .insert(schema.milestone)
-      .values({ organizationId: orgId, projectId: proj!.id, name: 'M', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        projectId: assertDefined(proj).id,
+        name: 'M',
+        createdBy: humanActorId,
+      })
       .returning({ id: schema.milestone.id });
     const [cy] = await db
       .insert(schema.cycle)
@@ -425,10 +431,10 @@ describe('tasks patch (PATCH /:id)', () => {
       .returning({ id: schema.cycle.id });
 
     const id = await createTask(writer, teamId, {
-      projectId: proj!.id,
-      programId: program!.id,
-      milestoneId: ms!.id,
-      cycleId: cy!.id,
+      projectId: assertDefined(proj).id,
+      programId: assertDefined(program).id,
+      milestoneId: assertDefined(ms).id,
+      cycleId: assertDefined(cy).id,
     });
 
     const res = await writer.request(`/${id}`, {
@@ -452,8 +458,8 @@ describe('tasks patch (PATCH /:id)', () => {
       .select({ milestoneId: schema.task.milestoneId, cycleId: schema.task.cycleId })
       .from(schema.task)
       .where(eq(schema.task.id, id));
-    expect(row!.milestoneId).toBeNull();
-    expect(row!.cycleId).toBeNull();
+    expect(assertDefined(row).milestoneId).toBeNull();
+    expect(assertDefined(row).cycleId).toBeNull();
   });
 
   it('patches with an empty body as a no-op (200, row unchanged)', async () => {
@@ -696,7 +702,7 @@ describe('tasks subtasks (GET + POST /:id/subtasks)', () => {
       .insert(schema.project)
       .values({ organizationId: orgId, name: 'P', teamId, createdBy: humanActorId })
       .returning({ id: schema.project.id });
-    const projectId = proj!.id;
+    const projectId = assertDefined(proj).id;
 
     const parentId = await createTask(writer, teamId, { projectId });
 
@@ -781,7 +787,7 @@ describe('task labels', () => {
       .insert(schema.label)
       .values({ organizationId: orgId, name, color: 'blue', groupId: groupId ?? null })
       .returning();
-    return row!.id;
+    return assertDefined(row).id;
   }
 
   it('writes labels on create and returns them — the join was never written before', async () => {
@@ -796,13 +802,13 @@ describe('task labels', () => {
 
     const rows = await db.select().from(schema.taskLabel).where(eq(schema.taskLabel.taskId, id));
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.labelId).toBe(bugId);
+    expect(assertDefined(rows[0]).labelId).toBe(bugId);
 
     const detail = await json<{ labels: { id: string; name: string }[] }>(
       await writer.request(`/${id}`),
     );
     expect(detail.labels).toHaveLength(1);
-    expect(detail.labels[0]!.name).toBe('bug');
+    expect(assertDefined(detail.labels[0]).name).toBe('bug');
   });
 
   it('replaces the whole set on patch, and clears it with an empty array', async () => {
@@ -851,8 +857,8 @@ describe('task labels', () => {
       .insert(schema.labelGroup)
       .values({ organizationId: orgId, name: 'Type', exclusive: true })
       .returning();
-    const feature = await seedLabel(orgId, 'feature', group!.id);
-    const bug = await seedLabel(orgId, 'bug', group!.id);
+    const feature = await seedLabel(orgId, 'feature', assertDefined(group).id);
+    const bug = await seedLabel(orgId, 'bug', assertDefined(group).id);
 
     // Both members sent at once: exclusivity is enforced server-side, not just in the picker.
     const id = await createTask(writer, teamId, { labels: [feature, bug] });
@@ -867,8 +873,8 @@ describe('task labels', () => {
       .insert(schema.labelGroup)
       .values({ organizationId: orgId, name: 'Area', exclusive: false })
       .returning();
-    const fe = await seedLabel(orgId, 'frontend', group!.id);
-    const be = await seedLabel(orgId, 'backend', group!.id);
+    const fe = await seedLabel(orgId, 'frontend', assertDefined(group).id);
+    const be = await seedLabel(orgId, 'backend', assertDefined(group).id);
 
     const id = await createTask(writer, teamId, { labels: [fe, be] });
     const detail = await json<{ labels: { id: string }[] }>(await writer.request(`/${id}`));

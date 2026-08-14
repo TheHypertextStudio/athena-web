@@ -9,6 +9,7 @@ import type * as IntegrationsModule from '@docket/integrations';
 import type * as ContainerModule from '../../src/container';
 import type { buildLinearAgentPortForIntegration as BuildLinearAgentPortForIntegration } from '../../src/lib/linear-agent-credential';
 import type { sealCredential as SealCredential } from '../../src/lib/credentials';
+import { assertDefined } from '@docket/test-utils';
 
 const { buildLinearAgentClient } = vi.hoisted(() => ({
   buildLinearAgentClient: vi.fn(),
@@ -73,7 +74,7 @@ async function seedLinearAgentIntegration(
   const [row] = await db
     .insert(schema.integration)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       provider: 'linear_agent',
       pattern: 'agent',
       roles: [],
@@ -81,11 +82,11 @@ async function seedLinearAgentIntegration(
     })
     .returning({ id: schema.integration.id });
   await db.insert(schema.integrationCredential).values({
-    organizationId: org!.id,
-    integrationId: row!.id,
+    organizationId: assertDefined(org).id,
+    integrationId: assertDefined(row).id,
     ciphertext: sealCredential(JSON.stringify(credential)),
   });
-  return { orgId: org!.id, integrationId: row!.id };
+  return { orgId: assertDefined(org).id, integrationId: assertDefined(row).id };
 }
 
 describe('buildLinearAgentPortForIntegration', () => {
@@ -146,7 +147,7 @@ describe('buildLinearAgentPortForIntegration', () => {
       .select({ ciphertext: schema.integrationCredential.ciphertext })
       .from(schema.integrationCredential)
       .where(eq(schema.integrationCredential.integrationId, seeded.integrationId));
-    const stored = JSON.parse(unsealCredential(credentialRow!.ciphertext));
+    const stored = JSON.parse(unsealCredential(assertDefined(credentialRow).ciphertext));
     expect(stored.accessToken).toBe('fresh-token-2');
     expect(stored.refreshToken).toBe('refresh-token-2');
   });

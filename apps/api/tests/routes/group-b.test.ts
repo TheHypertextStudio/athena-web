@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -149,9 +150,9 @@ describe('labels router', () => {
       .values({ organizationId: orgId, teamId, name: 'P', createdBy: humanActorId })
       .returning();
     await db.insert(schema.projectLabel).values([
-      { projectId: proj!.id, labelId: sourceId, organizationId: orgId },
+      { projectId: assertDefined(proj).id, labelId: sourceId, organizationId: orgId },
       // Already carries the survivor too — the merge must collapse, not violate the PK.
-      { projectId: proj!.id, labelId: targetId, organizationId: orgId },
+      { projectId: assertDefined(proj).id, labelId: targetId, organizationId: orgId },
     ]);
 
     const merged = await w.request(`/${sourceId}/merge`, {
@@ -166,9 +167,9 @@ describe('labels router', () => {
     const attachments = await db
       .select()
       .from(schema.projectLabel)
-      .where(eq(schema.projectLabel.projectId, proj!.id));
+      .where(eq(schema.projectLabel.projectId, assertDefined(proj).id));
     expect(attachments).toHaveLength(1);
-    expect(attachments[0]!.labelId).toBe(targetId);
+    expect(assertDefined(attachments[0]).labelId).toBe(targetId);
   });
 
   it('refuses to merge a label into itself', async () => {
@@ -210,7 +211,7 @@ describe('labels router', () => {
       .returning();
     await db
       .insert(schema.projectLabel)
-      .values({ projectId: proj!.id, labelId: usedId, organizationId: orgId });
+      .values({ projectId: assertDefined(proj).id, labelId: usedId, organizationId: orgId });
 
     const plain = await body<{ items: { usageCount?: number }[] }>(await w.request('/'));
     expect(plain.items.every((i) => i.usageCount === undefined)).toBe(true);
@@ -241,7 +242,7 @@ describe('labels router', () => {
     );
     expect(listed.items).toHaveLength(1);
     // Exclusive is the default: a group whose members all coexist is just clustering.
-    expect(listed.items[0]!.exclusive).toBe(true);
+    expect(assertDefined(listed.items[0]).exclusive).toBe(true);
 
     const labelId = (
       await body<{ id: string }>(
@@ -434,7 +435,7 @@ describe('roles router', () => {
         capabilities: ['manage'],
       })
       .returning({ id: schema.role.id });
-    expect((await w.request(`/${sys!.id}`, { method: 'DELETE' })).status).toBe(409);
+    expect((await w.request(`/${assertDefined(sys).id}`, { method: 'DELETE' })).status).toBe(409);
 
     const v = appWithActor(r['roles'], orgId, ['view']);
     expect((await v.request('/', { method: 'POST', headers: J, body: '{}' })).status).toBe(403);
@@ -485,7 +486,7 @@ describe('agents router', () => {
     const created2 = await w.request('/', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ actorId: agentActor!.id }),
+      body: JSON.stringify({ actorId: assertDefined(agentActor).id }),
     });
     expect(created2.status).toBe(200);
 
@@ -495,7 +496,7 @@ describe('agents router', () => {
         await w.request('/', {
           method: 'POST',
           headers: J,
-          body: JSON.stringify({ actorId: agentActor!.id }),
+          body: JSON.stringify({ actorId: assertDefined(agentActor).id }),
         })
       ).status,
     ).toBe(409);
@@ -601,7 +602,7 @@ describe('tasks router', () => {
     const created = await w.request('/', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ title: 'No states', teamId: t!.id }),
+      body: JSON.stringify({ title: 'No states', teamId: assertDefined(t).id }),
     });
     expect(created.status).toBe(200);
     expect((await body<{ state: string }>(created)).state).toBe('backlog');
@@ -655,7 +656,7 @@ describe('updates router', () => {
       .insert(schema.project)
       .values({ organizationId: orgId, name: 'P', teamId, createdBy: humanActorId })
       .returning({ id: schema.project.id });
-    const subjectId = proj!.id;
+    const subjectId = assertDefined(proj).id;
 
     const empty = await w.request(`/?subjectType=project&subjectId=${subjectId}`);
     expect((await body<{ items: unknown[] }>(empty)).items).toHaveLength(0);
@@ -793,7 +794,13 @@ describe('integrations router (CRUD; import covered elsewhere)', () => {
       })
       .returning({ id: schema.integration.id });
     expect(
-      (await w.request(`/${bad!.id}/import`, { method: 'POST', headers: J, body: '{}' })).status,
+      (
+        await w.request(`/${assertDefined(bad).id}/import`, {
+          method: 'POST',
+          headers: J,
+          body: '{}',
+        })
+      ).status,
     ).toBe(409);
 
     // Import not found.
@@ -804,7 +811,13 @@ describe('integrations router (CRUD; import covered elsewhere)', () => {
     // 403 for a view-only member.
     const v = appWithActor(r['integrations'], orgId, ['view']);
     expect(
-      (await v.request(`/${bad!.id}/import`, { method: 'POST', headers: J, body: '{}' })).status,
+      (
+        await v.request(`/${assertDefined(bad).id}/import`, {
+          method: 'POST',
+          headers: J,
+          body: '{}',
+        })
+      ).status,
     ).toBe(403);
   });
 
@@ -815,7 +828,7 @@ describe('integrations router (CRUD; import covered elsewhere)', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
-    const orgId = org!.id;
+    const orgId = assertDefined(org).id;
     const [human] = await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'A' })
@@ -827,12 +840,18 @@ describe('integrations router (CRUD; import covered elsewhere)', () => {
         provider: 'github',
         pattern: 'connector',
         roles: ['work'],
-        createdBy: human!.id,
+        createdBy: assertDefined(human).id,
       })
       .returning({ id: schema.integration.id });
-    const w = appWithActor(r['integrations'], orgId, ['contribute'], human!.id);
+    const w = appWithActor(r['integrations'], orgId, ['contribute'], assertDefined(human).id);
     expect(
-      (await w.request(`/${intg!.id}/import`, { method: 'POST', headers: J, body: '{}' })).status,
+      (
+        await w.request(`/${assertDefined(intg).id}/import`, {
+          method: 'POST',
+          headers: J,
+          body: '{}',
+        })
+      ).status,
     ).toBe(409);
   });
 });
@@ -857,9 +876,9 @@ describe('project + initiative labels obey group exclusivity', () => {
     const mk = async (name: string): Promise<string> => {
       const [row] = await db
         .insert(schema.label)
-        .values({ organizationId: orgId, name, color: 'blue', groupId: group!.id })
+        .values({ organizationId: orgId, name, color: 'blue', groupId: assertDefined(group).id })
         .returning();
-      return row!.id;
+      return assertDefined(row).id;
     };
     return { featureId: await mk('feature'), bugId: await mk('bug') };
   }

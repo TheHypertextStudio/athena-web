@@ -16,6 +16,7 @@ import type * as DbModule from '@docket/db';
 import type meAthenaRouter from '../../src/routes/me-athena';
 import type { reportAgentMilestone as ReportAgentMilestone } from '../../src/routes/agent-bus';
 import { appWithSession, fakeSession, getDb, one } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -63,7 +64,7 @@ async function openAgentStream(userId: string, lastEventId?: string) {
     signal: controller.signal,
   });
   expect(res.status).toBe(200);
-  const reader = res.body!.getReader();
+  const reader = assertDefined(res.body).getReader();
   const decoder = new TextDecoder();
   let buffered = '';
 
@@ -112,17 +113,17 @@ describe('merged agent-updates stream', () => {
       .insert(schema.user)
       .values({ name: 'Stream Owner', email: `agents-stream-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const sessionId = await seedSession(owner!.id);
+    const sessionId = await seedSession(assertDefined(owner).id);
 
     const published = await reportAgentMilestone({
       sessionId,
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       kind: 'agent_started',
       milestone: 'Booting up',
     });
     expect(published).not.toBeNull();
 
-    const { nextFrame } = await openAgentStream(owner!.id);
+    const { nextFrame } = await openAgentStream(assertDefined(owner).id);
     const frame = await nextFrame();
 
     expect(frame.event).toBe('agent_started');
@@ -139,14 +140,14 @@ describe('merged agent-updates stream', () => {
       .insert(schema.user)
       .values({ name: 'Live Owner', email: `agents-stream-live-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const sessionId = await seedSession(owner!.id);
-    const { nextFrame } = await openAgentStream(owner!.id);
+    const sessionId = await seedSession(assertDefined(owner).id);
+    const { nextFrame } = await openAgentStream(assertDefined(owner).id);
     // Let the handler's own subscribe() call actually attach before publishing.
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     await reportAgentMilestone({
       sessionId,
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       kind: 'agent_progress',
       milestone: 'Halfway there',
       progress: 50,
@@ -166,21 +167,21 @@ describe('merged agent-updates stream', () => {
         { name: 'Isolated Other', email: `agents-iso-other-${suffix}@example.com` },
       ])
       .returning({ id: schema.user.id });
-    const ownerSessionId = await seedSession(owner!.id);
-    const otherSessionId = await seedSession(other!.id);
+    const ownerSessionId = await seedSession(assertDefined(owner).id);
+    const otherSessionId = await seedSession(assertDefined(other).id);
 
-    const { nextFrame } = await openAgentStream(owner!.id);
+    const { nextFrame } = await openAgentStream(assertDefined(owner).id);
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     await reportAgentMilestone({
       sessionId: otherSessionId,
-      ownerUserId: other!.id,
+      ownerUserId: assertDefined(other).id,
       kind: 'agent_started',
       milestone: 'Not yours',
     });
     await reportAgentMilestone({
       sessionId: ownerSessionId,
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       kind: 'agent_started',
       milestone: 'Yours',
     });
@@ -195,26 +196,29 @@ describe('merged agent-updates stream', () => {
       .insert(schema.user)
       .values({ name: 'Resume Owner', email: `agents-resume-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const sessionId = await seedSession(owner!.id);
+    const sessionId = await seedSession(assertDefined(owner).id);
 
     const first = await reportAgentMilestone({
       sessionId,
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       kind: 'agent_started',
       milestone: 'First',
     });
     const second = await reportAgentMilestone({
       sessionId,
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       kind: 'agent_progress',
       milestone: 'Second',
     });
     expect(first).not.toBeNull();
 
-    const { nextFrame } = await openAgentStream(owner!.id, String(first!.sequence));
+    const { nextFrame } = await openAgentStream(
+      assertDefined(owner).id,
+      String(assertDefined(first).sequence),
+    );
     const frame = await nextFrame();
     expect(JSON.parse(frame.data)).toMatchObject({
-      sequence: second!.sequence,
+      sequence: assertDefined(second).sequence,
       milestone: 'Second',
     });
   });
@@ -225,8 +229,8 @@ describe('merged agent-updates stream', () => {
       .insert(schema.user)
       .values({ name: 'Cleanup Owner', email: `agents-cleanup-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const sessionId = await seedSession(owner!.id);
-    const { close } = await openAgentStream(owner!.id);
+    const sessionId = await seedSession(assertDefined(owner).id);
+    const { close } = await openAgentStream(assertDefined(owner).id);
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     close();
@@ -237,11 +241,11 @@ describe('merged agent-updates stream', () => {
     // rather than anything left over from the closed one's queue.
     await reportAgentMilestone({
       sessionId,
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       kind: 'agent_completed',
       milestone: 'After close',
     });
-    const { nextFrame } = await openAgentStream(owner!.id);
+    const { nextFrame } = await openAgentStream(assertDefined(owner).id);
     const frame = await nextFrame();
     expect(JSON.parse(frame.data)).toMatchObject({ milestone: 'After close' });
   });
@@ -261,10 +265,10 @@ describe('merged agent-updates stream', () => {
       return real - testStart > 200 ? real + 20_000 : real;
     });
 
-    const app = appWithSession(meAthena, fakeSession(owner!.id));
+    const app = appWithSession(meAthena, fakeSession(assertDefined(owner).id));
     const res = await app.request('/agents/stream', { headers: { accept: 'text/event-stream' } });
     expect(res.status).toBe(200);
-    const reader = res.body!.getReader();
+    const reader = assertDefined(res.body).getReader();
     const decoder = new TextDecoder();
     let text = '';
     for (let i = 0; i < 5 && !text.includes(': heartbeat'); i += 1) {

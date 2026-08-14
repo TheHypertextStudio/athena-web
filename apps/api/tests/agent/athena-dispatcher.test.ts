@@ -27,6 +27,7 @@ import type {
   reportAgentMilestone as ReportAgentMilestone,
 } from '../../src/routes/agent-bus';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -80,7 +81,7 @@ async function seedWorkspace(): Promise<Workspace> {
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       key: `owner-${slug}`,
       name: 'Owner',
       capabilities: ['view', 'contribute'],
@@ -90,48 +91,48 @@ async function seedWorkspace(): Promise<Workspace> {
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@example.com` })
     .returning({ id: schema.user.id });
-  await db.insert(schema.hub).values({ userId: owner!.id, preferences: {} });
+  await db.insert(schema.hub).values({ userId: assertDefined(owner).id, preferences: {} });
   const [ownerActor] = await db
     .insert(schema.actor)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       kind: 'human',
       displayName: 'Ada',
-      userId: owner!.id,
-      roleId: role!.id,
+      userId: assertDefined(owner).id,
+      roleId: assertDefined(role).id,
     })
     .returning({ id: schema.actor.id });
   const [team] = await db
     .insert(schema.team)
-    .values({ organizationId: org!.id, name: 'Core', key: `D${slug.slice(-4)}` })
+    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `D${slug.slice(-4)}` })
     .returning({ id: schema.team.id });
   const [newsletter] = await db
     .insert(schema.project)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       name: 'Weekly newsletter relaunch',
       description: 'Rebuild the newsletter template, cadence and Substack import.',
       status: 'active',
-      createdBy: ownerActor!.id,
+      createdBy: assertDefined(ownerActor).id,
     })
     .returning({ id: schema.project.id });
   const [migration] = await db
     .insert(schema.project)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       name: 'Postgres upgrade',
       description: 'Move the primary database to Postgres 17 with zero downtime.',
       status: 'active',
-      createdBy: ownerActor!.id,
+      createdBy: assertDefined(ownerActor).id,
     })
     .returning({ id: schema.project.id });
   return {
-    ownerUserId: owner!.id,
-    ownerActorId: ownerActor!.id,
-    orgId: org!.id,
-    teamId: team!.id,
-    projectNewsletterId: newsletter!.id,
-    projectMigrationId: migration!.id,
+    ownerUserId: assertDefined(owner).id,
+    ownerActorId: assertDefined(ownerActor).id,
+    orgId: assertDefined(org).id,
+    teamId: assertDefined(team).id,
+    projectNewsletterId: assertDefined(newsletter).id,
+    projectMigrationId: assertDefined(migration).id,
   };
 }
 
@@ -175,7 +176,7 @@ describe('one active Athena session', () => {
           workLinkage: 'conversation',
         })
         .returning({ id: schema.agentSession.id });
-      rows.push(created!.id);
+      rows.push(assertDefined(created).id);
     }
 
     const canonical = await resolveCanonicalConversation(workspace.ownerUserId);
@@ -266,7 +267,7 @@ describe('work linkage', () => {
     const rows = await db
       .select({ projectId: schema.task.projectId, title: schema.task.title })
       .from(schema.task)
-      .where(eq(schema.task.id, dispatched.taskId!));
+      .where(eq(schema.task.id, assertDefined(dispatched.taskId)));
     expect(rows[0]?.projectId).toBe(workspace.projectNewsletterId);
     expect(rows[0]?.title).toBe('Import the old Substack archive into the newsletter');
   });
@@ -283,7 +284,7 @@ describe('work linkage', () => {
     const rows = await db
       .select({ projectId: schema.task.projectId })
       .from(schema.task)
-      .where(eq(schema.task.id, dispatched.taskId!));
+      .where(eq(schema.task.id, assertDefined(dispatched.taskId)));
     expect(rows[0]?.projectId).toBeNull();
   });
 
@@ -646,10 +647,10 @@ describe('dispatched work keeps its ordering guarantees', () => {
       prompt: 'Keep going on the tracked thing',
       organizationId: workspace.orgId,
       initiatorActorId: workspace.ownerActorId,
-      taskId: existing!.id,
+      taskId: assertDefined(existing).id,
     });
     const after = await db.select({ id: schema.task.id }).from(schema.task);
-    expect(dispatched.taskId).toBe(existing!.id);
+    expect(dispatched.taskId).toBe(assertDefined(existing).id);
     expect(after.length).toBe(before.length);
   });
 

@@ -14,6 +14,7 @@ import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { getContainer as GetContainer } from '../../src/container';
 import { fakeSession } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -58,9 +59,18 @@ async function seedOrg(): Promise<{ userId: string; orgId: string; humanActorId:
     .returning({ id: schema.user.id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: org!.id, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: assertDefined(org).id,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
-  return { userId: u!.id, orgId: org!.id, humanActorId: human!.id };
+  return {
+    userId: assertDefined(u).id,
+    orgId: assertDefined(org).id,
+    humanActorId: assertDefined(human).id,
+  };
 }
 
 function appFor(orgId: string, actorId: string) {

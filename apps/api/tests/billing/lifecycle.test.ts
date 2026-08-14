@@ -13,6 +13,7 @@ import {
   sweepLifecycle,
 } from '../../src/billing/lifecycle';
 import { createBillingLifecycleDb } from './test-db';
+import { assertDefined } from '@docket/test-utils';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -30,7 +31,7 @@ async function makeOrg(
     .insert(organization)
     .values({ name: slug, slug, lifecycleState: state, ...extra })
     .returning({ id: organization.id });
-  return rows[0]!.id;
+  return assertDefined(rows[0]).id;
 }
 
 /** Read an org's full lifecycle columns. */
@@ -44,7 +45,7 @@ async function readOrg(id: string) {
     .from(organization)
     .where(eq(organization.id, id))
     .limit(1);
-  return rows[0]!;
+  return assertDefined(rows[0]);
 }
 
 beforeAll(async () => {
@@ -186,9 +187,9 @@ describe('applyBillingEvent (BillingEvent → lifecycle)', () => {
       successUrl: 'https://x/ok',
       cancelUrl: 'https://x/no',
     });
-    const checkout = gateway.events.find(
-      (e) => e.type === 'checkout.completed' && e.referenceId === id,
-    )!;
+    const checkout = assertDefined(
+      gateway.events.find((e) => e.type === 'checkout.completed' && e.referenceId === id),
+    );
 
     const effect = await applyBillingEvent(db, checkout, NOW);
     expect(effect).toBe('active');
@@ -208,7 +209,7 @@ describe('applyBillingEvent (BillingEvent → lifecycle)', () => {
     while (evt && evt.subscription?.status !== 'past_due') evt = gateway.advance(id);
     expect(evt?.subscription?.status).toBe('past_due');
 
-    const effect = await applyBillingEvent(db, evt!, NOW);
+    const effect = await applyBillingEvent(db, assertDefined(evt), NOW);
     expect(effect).toBe('past_due');
     expect((await readOrg(id)).lifecycleState).toBe('past_due');
   });
@@ -223,9 +224,9 @@ describe('applyBillingEvent (BillingEvent → lifecycle)', () => {
       cancelUrl: 'b',
     });
     await gateway.cancelSubscription(id);
-    const canceled = gateway.events.find(
-      (e) => e.type === 'subscription.canceled' && e.referenceId === id,
-    )!;
+    const canceled = assertDefined(
+      gateway.events.find((e) => e.type === 'subscription.canceled' && e.referenceId === id),
+    );
 
     const effect = await applyBillingEvent(db, canceled, NOW);
     expect(effect).toBe('export_window');
@@ -246,9 +247,9 @@ describe('applyBillingEvent (BillingEvent → lifecycle)', () => {
       cancelUrl: 'b',
     });
     await gateway.cancelSubscription(id);
-    const canceled = gateway.events.find(
-      (e) => e.type === 'subscription.canceled' && e.referenceId === id,
-    )!;
+    const canceled = assertDefined(
+      gateway.events.find((e) => e.type === 'subscription.canceled' && e.referenceId === id),
+    );
     await applyBillingEvent(db, canceled, NOW);
     const first = await readOrg(id);
     await applyBillingEvent(db, canceled, NOW);

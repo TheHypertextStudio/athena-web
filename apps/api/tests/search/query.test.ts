@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
 
 import { searchWorkspace } from '../../src/search/query';
+import { assertDefined } from '@docket/test-utils';
 
 function entityRoute(organizationId: string, entityKind: string, entityId: string) {
   return {
@@ -742,7 +743,7 @@ describe('search query service', () => {
     });
 
     expect(result.items[0]?.id).toBe(`task:${orgId}:rank_exact`);
-    expect(result.items[0]!.score).toBeGreaterThan(210);
+    expect(assertDefined(result.items[0]).score).toBeGreaterThan(210);
   });
 
   it('boosts canonical activity rows when the caller is an event recipient', async () => {

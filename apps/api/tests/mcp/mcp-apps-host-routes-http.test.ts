@@ -23,6 +23,7 @@ import type * as DbModule from '@docket/db';
 import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
 import { sealCredential } from '../../src/lib/credentials';
 import type mcpAppHostRoutes from '../../src/mcp/apps/host-routes';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -54,7 +55,7 @@ async function seedConnection(
   const [row] = await db
     .insert(schema.personalMcpConnection)
     .values({
-      ownerUserId: user!.id,
+      ownerUserId: assertDefined(user).id,
       url,
       name: 'Fixture server',
       alias: slug.replace(/-/g, ''),
@@ -63,15 +64,15 @@ async function seedConnection(
       toolCount: 1,
     })
     .returning({ id: schema.personalMcpConnection.id });
-  const connectionId = row!.id;
+  const connectionId = assertDefined(row).id;
   if (credential) {
     await db.insert(schema.personalMcpCredential).values({
       connectionId,
-      ownerUserId: user!.id,
+      ownerUserId: assertDefined(user).id,
       ciphertext: sealCredential(credential),
     });
   }
-  return { userId: user!.id, connectionId };
+  return { userId: assertDefined(user).id, connectionId };
 }
 
 describe('requestOwner — the shared authentication guard', () => {

@@ -25,6 +25,7 @@ import type {
   startRunGenerationHeartbeat as StartRunGenerationHeartbeat,
 } from '../../src/agent/run-generation';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let dbModule: Awaited<ReturnType<typeof getMigratedDb>>;
 let enqueueRunGeneration: typeof EnqueueRunGeneration;
@@ -61,12 +62,12 @@ async function seedPendingAthena(): Promise<{ ownerUserId: string; sessionId: st
     .insert(agentSession)
     .values({
       executorKind: 'athena',
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       trigger: 'delegation',
       status: 'pending',
     })
     .returning({ id: agentSession.id });
-  return { ownerUserId: owner!.id, sessionId: session!.id };
+  return { ownerUserId: assertDefined(owner).id, sessionId: assertDefined(session).id };
 }
 
 /** Seed an org + registered-agent session so tests can exercise the non-Athena executor shape. */
@@ -85,29 +86,38 @@ async function seedRegisteredAgentSession(): Promise<{
     .insert(user)
     .values({ name: 'Owner', email: `ra-${suffix}@example.com` })
     .returning({ id: user.id });
-  await dbModule.db.insert(dbmod.hub).values({ userId: u!.id });
+  await dbModule.db.insert(dbmod.hub).values({ userId: assertDefined(u).id });
   const [actor] = await dbModule.db
     .insert(dbmod.actor)
-    .values({ organizationId: org!.id, kind: 'human', displayName: 'Owner', userId: u!.id })
+    .values({
+      organizationId: assertDefined(org).id,
+      kind: 'human',
+      displayName: 'Owner',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: dbmod.actor.id });
   const ensured = await (
     await import('../../src/lib/default-agent')
-  ).ensureDefaultAgent(org!.id, actor!.id);
+  ).ensureDefaultAgent(assertDefined(org).id, assertDefined(actor).id);
   const [session] = await dbModule.db
     .insert(agentSession)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       agentId: ensured.id,
       trigger: 'delegation',
       status: 'pending',
     })
     .returning({ id: agentSession.id });
-  return { sessionId: session!.id, organizationId: org!.id, agentId: ensured.id };
+  return {
+    sessionId: assertDefined(session).id,
+    organizationId: assertDefined(org).id,
+    agentId: ensured.id,
+  };
 }
 
 async function loadSession(sessionId: string): Promise<typeof agentSession.$inferSelect> {
   const [row] = await dbModule.db.select().from(agentSession).where(eq(agentSession.id, sessionId));
-  return row!;
+  return assertDefined(row);
 }
 
 async function loadRun(sessionId: string): Promise<typeof agentSessionRun.$inferSelect> {
@@ -115,7 +125,7 @@ async function loadRun(sessionId: string): Promise<typeof agentSessionRun.$infer
     .select()
     .from(agentSessionRun)
     .where(eq(agentSessionRun.sessionId, sessionId));
-  return row!;
+  return assertDefined(row);
 }
 
 describe('enqueueRunGeneration admission checks', () => {

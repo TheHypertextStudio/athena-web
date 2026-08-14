@@ -30,6 +30,7 @@ import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import { getMigratedDb } from '../support/db';
 import { fakeSession } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -96,31 +97,31 @@ async function seedOrg(): Promise<Seed> {
     .insert(organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [t] = await db
     .insert(team)
     .values({ organizationId: orgId, name: 'Core', key: 'CORE' })
     .returning({ id: team.id });
-  const teamId = t!.id;
+  const teamId = assertDefined(t).id;
 
   const [human] = await db
     .insert(actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada' })
     .returning({ id: actor.id });
-  const humanActorId = human!.id;
+  const humanActorId = assertDefined(human).id;
 
   const [agentActor] = await db
     .insert(actor)
     .values({ organizationId: orgId, kind: 'agent', displayName: 'Athena' })
     .returning({ id: actor.id });
-  const agentActorId = agentActor!.id;
+  const agentActorId = assertDefined(agentActor).id;
 
   const [ag] = await db
     .insert(agent)
     .values({ organizationId: orgId, actorId: agentActorId, createdBy: humanActorId })
     .returning({ id: agent.id });
-  const agentId = ag!.id;
+  const agentId = assertDefined(ag).id;
 
   const [tk] = await db
     .insert(task)
@@ -132,7 +133,7 @@ async function seedOrg(): Promise<Seed> {
       createdBy: humanActorId,
     })
     .returning({ id: task.id });
-  const taskId = tk!.id;
+  const taskId = assertDefined(tk).id;
 
   return { orgId, teamId, humanActorId, agentId, agentActorId, taskId };
 }
@@ -153,7 +154,7 @@ async function seedSession(
       initiatorId: s.humanActorId,
     })
     .returning({ id: agentSession.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert one activity row and return its id. */
@@ -176,7 +177,7 @@ async function seedActivity(
       ...(values.approvalStatus ? { approvalStatus: values.approvalStatus } : {}),
     })
     .returning({ id: sessionActivity.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 describe('GET /:id/activity', () => {

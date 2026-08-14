@@ -24,6 +24,7 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -73,7 +74,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .insert(organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
 
   const [r] = await db
     .insert(role)
@@ -84,17 +85,17 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       capabilities: [...capabilities],
     })
     .returning({ id: role.id });
-  const roleId = r!.id;
+  const roleId = assertDefined(r).id;
 
   const email = `${slug}@example.com`;
   const [u] = await db.insert(user).values({ name: 'Ada', email }).returning({ id: user.id });
-  const userId = u!.id;
+  const userId = assertDefined(u).id;
 
   const [human] = await db
     .insert(actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, roleId })
     .returning({ id: actor.id });
-  const actorId = human!.id;
+  const actorId = assertDefined(human).id;
 
   // The org-level grant on the role is what canActor collects + ranks.
   if (capabilities.length > 0) {
@@ -113,7 +114,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .insert(team)
     .values({ organizationId: orgId, name: 'Core', key: 'CORE' })
     .returning({ id: team.id });
-  const teamId = t!.id;
+  const teamId = assertDefined(t).id;
 
   const [tk] = await db
     .insert(task)
@@ -125,7 +126,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       createdBy: actorId,
     })
     .returning({ id: task.id });
-  const taskId = tk!.id;
+  const taskId = assertDefined(tk).id;
 
   const ctx: McpContext = {
     principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
@@ -234,7 +235,7 @@ describe('docket:// entity resource', () => {
     });
 
     expect(result.contents).toHaveLength(1);
-    const content = result.contents[0]!;
+    const content = assertDefined(result.contents[0]);
     expect(content.mimeType).toBe('application/json');
     expect('text' in content).toBe(true);
     const entity = JSON.parse((content as { text: string }).text) as { id: string; title: string };

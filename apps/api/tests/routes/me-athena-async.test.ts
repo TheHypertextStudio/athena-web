@@ -25,6 +25,7 @@ import type { AppEnv } from '../../src/context';
 import { enqueueRunGeneration } from '../../src/agent/run-generation';
 import { onError } from '../../src/error';
 import { fakeSession, getDb } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema: typeof DbModule;
 let meAthena: typeof meAthenaRoute;
@@ -82,12 +83,12 @@ async function seedApprovalWorkspace(ownerUserId: string): Promise<{ readonly or
     .values({ name: `Approve-${suffix}`, slug: `approve-${suffix}`, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   await schema.db.insert(schema.actor).values({
-    organizationId: org!.id,
+    organizationId: assertDefined(org).id,
     kind: 'human',
     displayName: 'Owner',
     userId: ownerUserId,
   });
-  return { orgId: org!.id };
+  return { orgId: assertDefined(org).id };
 }
 
 /** Seed the caller's Personal workspace required by a context-free Athena creation. */
@@ -103,7 +104,7 @@ async function seedPersonalWorkspace(ownerUserId: string): Promise<void> {
     })
     .returning({ id: schema.organization.id });
   await schema.db.insert(schema.actor).values({
-    organizationId: org!.id,
+    organizationId: assertDefined(org).id,
     kind: 'human',
     displayName: 'Owner',
     userId: ownerUserId,
@@ -130,14 +131,14 @@ async function seedOwnedSession(
     })
     .returning({ id: schema.agentSession.id });
   await schema.db.insert(schema.agentSessionRun).values({
-    sessionId: session!.id,
+    sessionId: assertDefined(session).id,
     ownerUserId,
     generation: 1,
-    workflowInstanceId: `${session!.id}:1`,
+    workflowInstanceId: `${assertDefined(session).id}:1`,
     status: 'waiting',
     attempt: 1,
   });
-  return session!.id;
+  return assertDefined(session).id;
 }
 
 /** Append one still-pending proposed action to a session. */
@@ -158,7 +159,7 @@ async function seedProposedAction(
       body: { action: { kind: 'capture', summary } },
     })
     .returning({ id: schema.sessionActivity.id });
-  return activity!.id;
+  return assertDefined(activity).id;
 }
 
 describe('personal Athena asynchronous acknowledgement', () => {
@@ -168,12 +169,12 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Async Owner', email: `async-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    await seedPersonalWorkspace(owner!.id);
+    await seedPersonalWorkspace(assertDefined(owner).id);
     runnerMocks.admit.mockImplementation(async (session, options) => ({
       mode: 'async',
       queued: await enqueueRunGeneration(session, options),
     }));
-    const app = appFor(owner!.id);
+    const app = appFor(assertDefined(owner).id);
 
     const response = await app.request('/sessions', {
       method: 'POST',
@@ -183,7 +184,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
 
     expect(response.status).toBe(202);
     expect(runnerMocks.admit).toHaveBeenCalledWith(
-      expect.objectContaining({ executorKind: 'athena', ownerUserId: owner!.id }),
+      expect.objectContaining({ executorKind: 'athena', ownerUserId: assertDefined(owner).id }),
       { runnableStatuses: ['pending'] },
     );
     await expect(response.json()).resolves.toMatchObject({
@@ -193,7 +194,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
     const [queued] = await schema.db
       .select({ status: schema.agentSessionRun.status })
       .from(schema.agentSessionRun)
-      .where(eq(schema.agentSessionRun.ownerUserId, owner!.id));
+      .where(eq(schema.agentSessionRun.ownerUserId, assertDefined(owner).id));
     expect(queued?.status).toBe('queued');
   });
 
@@ -203,12 +204,12 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Lifecycle Owner', email: `lifecycle-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    await seedPersonalWorkspace(owner!.id);
+    await seedPersonalWorkspace(assertDefined(owner).id);
     runnerMocks.admit.mockImplementation(async (session, options) => ({
       mode: 'async',
       queued: await enqueueRunGeneration(session, options),
     }));
-    const app = appFor(owner!.id);
+    const app = appFor(assertDefined(owner).id);
     const create = async (prompt: string) => {
       const response = await app.request('/sessions', {
         method: 'POST',
@@ -249,23 +250,23 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.agentSession)
       .values({
         executorKind: 'athena',
-        ownerUserId: owner!.id,
+        ownerUserId: assertDefined(owner).id,
         trigger: 'delegation',
         status: 'awaiting_input',
       })
       .returning({ id: schema.agentSession.id });
     await schema.db.insert(schema.agentSessionRun).values({
-      sessionId: session!.id,
-      ownerUserId: owner!.id,
+      sessionId: assertDefined(session).id,
+      ownerUserId: assertDefined(owner).id,
       generation: 1,
-      workflowInstanceId: `${session!.id}:1`,
+      workflowInstanceId: `${assertDefined(session).id}:1`,
       status: 'waiting',
       attempt: 1,
     });
     const [elicitation] = await schema.db
       .insert(schema.sessionActivity)
       .values({
-        sessionId: session!.id,
+        sessionId: assertDefined(session).id,
         organizationId: null,
         type: 'elicitation',
         body: { text: 'Which item?', toolUseId: 'toolu_crash_window' },
@@ -273,8 +274,8 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .returning({ id: schema.sessionActivity.id });
     failImmediateWakeDelivery();
 
-    const response = await appFor(owner!.id).request(
-      `/sessions/${session!.id}/activity/${elicitation!.id}/reply`,
+    const response = await appFor(assertDefined(owner).id).request(
+      `/sessions/${assertDefined(session).id}/activity/${assertDefined(elicitation).id}/reply`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -286,7 +287,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
     const replies = await schema.db
       .select()
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.sessionId, session!.id));
+      .where(eq(schema.sessionActivity.sessionId, assertDefined(session).id));
     expect(replies.some(({ body }) => body.text === 'This item')).toBe(true);
     const [intent] = await schema.db
       .select()
@@ -295,7 +296,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
         schema.agentSessionRun,
         eq(schema.agentSessionRun.id, schema.agentSessionDispatch.runId),
       )
-      .where(eq(schema.agentSessionRun.sessionId, session!.id));
+      .where(eq(schema.agentSessionRun.sessionId, assertDefined(session).id));
     expect(intent?.agent_session_dispatch).toMatchObject({
       action: 'wake',
       status: 'pending',
@@ -313,23 +314,23 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.agentSession)
       .values({
         executorKind: 'athena',
-        ownerUserId: owner!.id,
+        ownerUserId: assertDefined(owner).id,
         kind: 'chat',
         trigger: 'delegation',
         status: 'awaiting_input',
       })
       .returning({ id: schema.agentSession.id });
     await schema.db.insert(schema.agentSessionRun).values({
-      sessionId: session!.id,
-      ownerUserId: owner!.id,
+      sessionId: assertDefined(session).id,
+      ownerUserId: assertDefined(owner).id,
       generation: 1,
-      workflowInstanceId: `${session!.id}:1`,
+      workflowInstanceId: `${assertDefined(session).id}:1`,
       status: 'waiting',
       attempt: 1,
     });
     failImmediateWakeDelivery();
 
-    const response = await appFor(owner!.id).request('/chat/messages', {
+    const response = await appFor(assertDefined(owner).id).request('/chat/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ body: 'Continue with this answer' }),
@@ -339,11 +340,11 @@ describe('personal Athena asynchronous acknowledgement', () => {
     const [activity] = await schema.db
       .select()
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.sessionId, session!.id));
+      .where(eq(schema.sessionActivity.sessionId, assertDefined(session).id));
     const [transcript] = await schema.db
       .select()
       .from(schema.agentSessionTranscript)
-      .where(eq(schema.agentSessionTranscript.sessionId, session!.id));
+      .where(eq(schema.agentSessionTranscript.sessionId, assertDefined(session).id));
     const [intent] = await schema.db
       .select()
       .from(schema.agentSessionDispatch)
@@ -351,7 +352,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
         schema.agentSessionRun,
         eq(schema.agentSessionRun.id, schema.agentSessionDispatch.runId),
       )
-      .where(eq(schema.agentSessionRun.sessionId, session!.id));
+      .where(eq(schema.agentSessionRun.sessionId, assertDefined(session).id));
     expect(activity?.body.text).toBe('Continue with this answer');
     expect(transcript?.messages.at(-1)).toMatchObject({ role: 'user' });
     expect(intent?.agent_session_dispatch).toMatchObject({
@@ -371,24 +372,27 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.agentSession)
       .values({
         executorKind: 'athena',
-        ownerUserId: owner!.id,
+        ownerUserId: assertDefined(owner).id,
         trigger: 'delegation',
         status: 'awaiting_input',
       })
       .returning({ id: schema.agentSession.id });
     await schema.db.insert(schema.agentSessionRun).values({
-      sessionId: session!.id,
-      ownerUserId: owner!.id,
+      sessionId: assertDefined(session).id,
+      ownerUserId: assertDefined(owner).id,
       generation: 1,
-      workflowInstanceId: `${session!.id}:1`,
+      workflowInstanceId: `${assertDefined(session).id}:1`,
       status: 'waiting',
       attempt: 1,
     });
     failImmediateWakeDelivery();
 
-    const response = await appFor(owner!.id).request(`/sessions/${session!.id}/resume`, {
-      method: 'POST',
-    });
+    const response = await appFor(assertDefined(owner).id).request(
+      `/sessions/${assertDefined(session).id}/resume`,
+      {
+        method: 'POST',
+      },
+    );
 
     expect(response.status).toBe(202);
     const [intent] = await schema.db
@@ -398,7 +402,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
         schema.agentSessionRun,
         eq(schema.agentSessionRun.id, schema.agentSessionDispatch.runId),
       )
-      .where(eq(schema.agentSessionRun.sessionId, session!.id));
+      .where(eq(schema.agentSessionRun.sessionId, assertDefined(session).id));
     expect(intent?.agent_session_dispatch).toMatchObject({
       action: 'wake',
       status: 'pending',
@@ -416,30 +420,33 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.agentSession)
       .values({
         executorKind: 'athena',
-        ownerUserId: owner!.id,
+        ownerUserId: assertDefined(owner).id,
         trigger: 'delegation',
         status: 'awaiting_input',
       })
       .returning({ id: schema.agentSession.id });
     await schema.db.insert(schema.agentSessionRun).values({
-      sessionId: session!.id,
-      ownerUserId: owner!.id,
+      sessionId: assertDefined(session).id,
+      ownerUserId: assertDefined(owner).id,
       generation: 1,
-      workflowInstanceId: `${session!.id}:1`,
+      workflowInstanceId: `${assertDefined(session).id}:1`,
       status: 'waiting',
       attempt: 1,
     });
     failImmediateWakeDelivery();
 
-    const response = await appFor(owner!.id).request(`/sessions/${session!.id}/cancel`, {
-      method: 'POST',
-    });
+    const response = await appFor(assertDefined(owner).id).request(
+      `/sessions/${assertDefined(session).id}/cancel`,
+      {
+        method: 'POST',
+      },
+    );
 
     expect(response.status).toBe(202);
     const [current] = await schema.db
       .select({ status: schema.agentSession.status })
       .from(schema.agentSession)
-      .where(eq(schema.agentSession.id, session!.id));
+      .where(eq(schema.agentSession.id, assertDefined(session).id));
     const [intent] = await schema.db
       .select()
       .from(schema.agentSessionDispatch)
@@ -447,7 +454,7 @@ describe('personal Athena asynchronous acknowledgement', () => {
         schema.agentSessionRun,
         eq(schema.agentSessionRun.id, schema.agentSessionDispatch.runId),
       )
-      .where(eq(schema.agentSessionRun.sessionId, session!.id));
+      .where(eq(schema.agentSessionRun.sessionId, assertDefined(session).id));
     expect(current?.status).toBe('canceled');
     expect(intent?.agent_session_dispatch).toMatchObject({
       action: 'wake',
@@ -462,11 +469,11 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Approve Owner', email: `approve-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const ws = await seedApprovalWorkspace(owner!.id);
-    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    const ws = await seedApprovalWorkspace(assertDefined(owner).id);
+    const sessionId = await seedOwnedSession(assertDefined(owner).id, 'awaiting_approval');
     const activityId = await seedProposedAction(sessionId, ws.orgId, 'Async approve target');
 
-    const response = await appFor(owner!.id).request(
+    const response = await appFor(assertDefined(owner).id).request(
       `/sessions/${sessionId}/activity/${activityId}/approve`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
     );
@@ -485,11 +492,11 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Reject Owner', email: `reject-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const ws = await seedApprovalWorkspace(owner!.id);
-    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    const ws = await seedApprovalWorkspace(assertDefined(owner).id);
+    const sessionId = await seedOwnedSession(assertDefined(owner).id, 'awaiting_approval');
     const activityId = await seedProposedAction(sessionId, ws.orgId, 'Async reject target');
 
-    const response = await appFor(owner!.id).request(
+    const response = await appFor(assertDefined(owner).id).request(
       `/sessions/${sessionId}/activity/${activityId}/reject`,
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
     );
@@ -507,13 +514,13 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Group Approve Owner', email: `group-approve-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const ws = await seedApprovalWorkspace(owner!.id);
-    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    const ws = await seedApprovalWorkspace(assertDefined(owner).id);
+    const sessionId = await seedOwnedSession(assertDefined(owner).id, 'awaiting_approval');
     const groupId = 'group_async_approve';
     const first = await seedProposedAction(sessionId, ws.orgId, 'First in group', groupId);
     const second = await seedProposedAction(sessionId, ws.orgId, 'Second in group', groupId);
 
-    const response = await appFor(owner!.id).request(
+    const response = await appFor(assertDefined(owner).id).request(
       `/sessions/${sessionId}/proposals/${groupId}/approve`,
       {
         method: 'POST',
@@ -544,12 +551,12 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Group Reject Owner', email: `group-reject-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const ws = await seedApprovalWorkspace(owner!.id);
-    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    const ws = await seedApprovalWorkspace(assertDefined(owner).id);
+    const sessionId = await seedOwnedSession(assertDefined(owner).id, 'awaiting_approval');
     const groupId = 'group_async_reject';
     await seedProposedAction(sessionId, ws.orgId, 'Only in group', groupId);
 
-    const response = await appFor(owner!.id).request(
+    const response = await appFor(assertDefined(owner).id).request(
       `/sessions/${sessionId}/proposals/${groupId}/reject`,
       {
         method: 'POST',
@@ -568,15 +575,18 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Shortcut Approve Owner', email: `shortcut-approve-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const ws = await seedApprovalWorkspace(owner!.id);
-    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    const ws = await seedApprovalWorkspace(assertDefined(owner).id);
+    const sessionId = await seedOwnedSession(assertDefined(owner).id, 'awaiting_approval');
     await seedProposedAction(sessionId, ws.orgId, 'Latest action');
 
-    const response = await appFor(owner!.id).request(`/sessions/${sessionId}/approve`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    });
+    const response = await appFor(assertDefined(owner).id).request(
+      `/sessions/${sessionId}/approve`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      },
+    );
 
     expect(response.status).toBe(202);
     expect(runnerMocks.wake).toHaveBeenCalledWith(sessionId);
@@ -588,15 +598,18 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Shortcut Reject Owner', email: `shortcut-reject-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const ws = await seedApprovalWorkspace(owner!.id);
-    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    const ws = await seedApprovalWorkspace(assertDefined(owner).id);
+    const sessionId = await seedOwnedSession(assertDefined(owner).id, 'awaiting_approval');
     await seedProposedAction(sessionId, ws.orgId, 'Latest action to reject');
 
-    const response = await appFor(owner!.id).request(`/sessions/${sessionId}/reject`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    });
+    const response = await appFor(assertDefined(owner).id).request(
+      `/sessions/${sessionId}/reject`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      },
+    );
 
     expect(response.status).toBe(202);
     expect(runnerMocks.wake).toHaveBeenCalledWith(sessionId);
@@ -608,10 +621,10 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Steer Owner', email: `steer-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const sessionId = await seedOwnedSession(owner!.id, 'running');
+    const sessionId = await seedOwnedSession(assertDefined(owner).id, 'running');
     await schema.db.insert(schema.agentSessionTranscript).values({
       sessionId,
-      ownerUserId: owner!.id,
+      ownerUserId: assertDefined(owner).id,
       messages: [],
     });
     runnerMocks.admit.mockResolvedValue({
@@ -619,11 +632,14 @@ describe('personal Athena asynchronous acknowledgement', () => {
       queued: { runId: 'run_x', generation: 1 },
     });
 
-    const response = await appFor(owner!.id).request(`/sessions/${sessionId}/messages`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ body: 'Keep steering this while it runs' }),
-    });
+    const response = await appFor(assertDefined(owner).id).request(
+      `/sessions/${sessionId}/messages`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ body: 'Keep steering this while it runs' }),
+      },
+    );
 
     expect(response.status).toBe(202);
     expect(runnerMocks.admit).toHaveBeenCalledWith(
@@ -642,13 +658,13 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Run Owner', email: `run-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    const sessionId = await seedOwnedSession(owner!.id, 'running');
+    const sessionId = await seedOwnedSession(assertDefined(owner).id, 'running');
     runnerMocks.admit.mockResolvedValue({
       mode: 'async',
       queued: { runId: 'run_y', generation: 1 },
     });
 
-    const response = await appFor(owner!.id).request(`/sessions/${sessionId}/run`, {
+    const response = await appFor(assertDefined(owner).id).request(`/sessions/${sessionId}/run`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{}',

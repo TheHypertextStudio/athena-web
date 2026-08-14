@@ -10,6 +10,7 @@ import type * as IntegrationsModule from '@docket/integrations';
 import type integrationsLinearAgentOauthRouter from '../../src/routes/integrations-linear-agent-oauth';
 import type { unsealCredential as UnsealCredential } from '../../src/lib/credentials';
 import type { signLinearAgentInstallState as SignInstallState } from '../../src/lib/linear-agent-connect';
+import { assertDefined } from '@docket/test-utils';
 
 const { exchangeLinearAgentCode } = vi.hoisted(() => ({
   exchangeLinearAgentCode: vi.fn(),
@@ -67,14 +68,14 @@ async function seedPendingLinearAgent(): Promise<{ orgId: string; integrationId:
   const [row] = await db
     .insert(schema.integration)
     .values({
-      organizationId: org!.id,
+      organizationId: assertDefined(org).id,
       provider: 'linear_agent',
       pattern: 'agent',
       roles: [],
       status: 'pending',
     })
     .returning({ id: schema.integration.id });
-  return { orgId: org!.id, integrationId: row!.id };
+  return { orgId: assertDefined(org).id, integrationId: assertDefined(row).id };
 }
 
 describe('Linear Agent install callback', () => {
@@ -122,7 +123,7 @@ describe('Linear Agent install callback', () => {
       );
     expect(stored?.status).toBe('connected');
     expect(stored?.lastError).toBeNull();
-    expect(JSON.parse(unsealCredential(stored!.ciphertext))).toEqual({
+    expect(JSON.parse(unsealCredential(assertDefined(stored).ciphertext))).toEqual({
       ...tokens,
       obtainedAt: expect.any(String),
     });

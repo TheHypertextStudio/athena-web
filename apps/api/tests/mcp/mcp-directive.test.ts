@@ -28,6 +28,7 @@ import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { sweepDirectivePosture as SweepDirectivePosture } from '../../src/routes/directive-sweep';
 import { getSession, resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -72,9 +73,9 @@ async function seedHubUser(): Promise<Seed> {
     .returning({ id: schema.user.id });
   const [h] = await db
     .insert(schema.hub)
-    .values({ userId: u!.id })
+    .values({ userId: assertDefined(u).id })
     .returning({ id: schema.hub.id });
-  return { userId: u!.id, hubId: h!.id, email };
+  return { userId: assertDefined(u).id, hubId: assertDefined(h).id, email };
 }
 
 /** Seed the native-blocks calendar layer a block needs to hang off. */
@@ -93,7 +94,7 @@ async function seedLayer(userId: string): Promise<string> {
       primary: false,
     })
     .returning({ id: schema.calendarLayer.id });
-  return layer!.id;
+  return assertDefined(layer).id;
 }
 
 /** Seed one scheduler-placed block on the calendar. */
@@ -173,7 +174,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   await resetNotifications();
   resetAuthMocks();
 });
@@ -432,7 +433,7 @@ async function openSession(seed: Seed): Promise<string> {
   });
   const sessionId = res.headers.get('Mcp-Session-Id');
   expect(sessionId).toEqual(expect.any(String));
-  return sessionId!;
+  return assertDefined(sessionId);
 }
 
 /** Subscribe `seed`'s session to the directive resource, draining the reply. */
@@ -471,7 +472,7 @@ async function openStream(
     signal: controller.signal,
   });
   expect(res.status).toBe(200);
-  const reader = res.body!.getReader();
+  const reader = assertDefined(res.body).getReader();
   const decoder = new TextDecoder();
   let buffered = '';
 

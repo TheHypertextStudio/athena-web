@@ -7,6 +7,7 @@ import type cyclesRouter from '../../src/routes/cycles';
 import type initiativesRouter from '../../src/routes/initiatives';
 import type milestonesRouter from '../../src/routes/milestones';
 import type programsRouter from '../../src/routes/programs';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -375,7 +376,7 @@ describe('milestones router', () => {
       .insert(schema.project)
       .values({ organizationId: orgId, name: 'Proj', teamId, createdBy: humanActorId })
       .returning({ id: schema.project.id });
-    const projectId = proj!.id;
+    const projectId = assertDefined(proj).id;
 
     // Empty list (no filter branch).
     expect((await json<{ items: unknown[] }>(await writer.request('/'))).items).toHaveLength(0);
@@ -425,7 +426,7 @@ describe('milestones router', () => {
     const created = await writer.request('/', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId: proj!.id, name: 'M-nodate' }),
+      body: JSON.stringify({ projectId: assertDefined(proj).id, name: 'M-nodate' }),
     });
     expect(created.status).toBe(200);
     expect((await json<{ targetDate: string | null }>(created)).targetDate).toBeNull();

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { applyBillingEvent } from '../../src/billing/lifecycle';
 import { createBillingLifecycleDb } from './test-db';
+import { assertDefined } from '@docket/test-utils';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 let db!: Database;
@@ -20,7 +21,7 @@ async function makeOrg(
     .insert(organization)
     .values({ name: slug, slug, lifecycleState: state })
     .returning({ id: organization.id });
-  return rows[0]!.id;
+  return assertDefined(rows[0]).id;
 }
 
 /** Read an org's lifecycle state. */
@@ -30,7 +31,7 @@ async function stateOf(id: string): Promise<string> {
     .from(organization)
     .where(eq(organization.id, id))
     .limit(1);
-  return rows[0]!.s;
+  return assertDefined(rows[0]).s;
 }
 
 /** Build a subscription-less billing event of the given type for an org. */

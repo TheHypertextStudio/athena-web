@@ -5,6 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, fakeSession, getDb } from '../support/routes-harness';
 import type membersRouter from '../../src/routes/members';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -34,7 +35,7 @@ async function seedOrgWithOwner(opts: { personal?: boolean } = {}) {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active', isPersonal: opts.personal ?? false })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const [ownerRole] = await db
     .insert(schema.role)
     .values({
@@ -57,13 +58,18 @@ async function seedOrgWithOwner(opts: { personal?: boolean } = {}) {
     .returning({ id: schema.role.id });
   const [owner] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', roleId: ownerRole!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Owner',
+      roleId: assertDefined(ownerRole).id,
+    })
     .returning({ id: schema.actor.id });
   return {
     orgId,
-    ownerRoleId: ownerRole!.id,
-    memberRoleId: memberRole!.id,
-    ownerActorId: owner!.id,
+    ownerRoleId: assertDefined(ownerRole).id,
+    memberRoleId: assertDefined(memberRole).id,
+    ownerActorId: assertDefined(owner).id,
   };
 }
 
@@ -74,7 +80,7 @@ async function seedUser(name = 'New'): Promise<{ id: string; email: string }> {
     .insert(schema.user)
     .values({ name, email })
     .returning({ id: schema.user.id, email: schema.user.email });
-  return { id: user!.id, email: user!.email };
+  return { id: assertDefined(user).id, email: assertDefined(user).email };
 }
 
 /** Insert an invitation row; returns the row id + token. */
@@ -97,7 +103,7 @@ async function makeInvite(
       expiresAt: opts.expiresAt ?? new Date(Date.now() + 86_400_000),
     })
     .returning({ id: schema.invitation.id });
-  return { id: row!.id, token };
+  return { id: assertDefined(row).id, token };
 }
 
 describe('members router — invitation flow', () => {
@@ -209,7 +215,7 @@ describe('members router — invitation flow', () => {
       .select({ status: schema.invitation.status })
       .from(schema.invitation)
       .where(eq(schema.invitation.id, invId));
-    expect(invRows[0]!.status).toBe('accepted');
+    expect(assertDefined(invRows[0]).status).toBe('accepted');
   });
 
   it('POST /invitations/:token/accept rejects unauthenticated, missing, non-pending, expired, and duplicate accepts', async () => {
@@ -271,7 +277,7 @@ describe('members router — invitation flow', () => {
       .select({ status: schema.invitation.status })
       .from(schema.invitation)
       .where(eq(schema.invitation.id, id));
-    expect(rows[0]!.status).toBe('revoked');
+    expect(assertDefined(rows[0]).status).toBe('revoked');
 
     // 404: already revoked (no longer pending).
     expect((await w.request(`/invitations/${id}`, { method: 'DELETE' })).status).toBe(404);
@@ -294,7 +300,7 @@ describe('members router — invitation flow', () => {
       .select({ status: schema.invitation.status })
       .from(schema.invitation)
       .where(eq(schema.invitation.id, id));
-    expect(rows[0]!.status).toBe('pending');
+    expect(assertDefined(rows[0]).status).toBe('pending');
   });
 });
 
@@ -305,7 +311,7 @@ describe('members router — member removal', () => {
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Bob', roleId: memberRoleId })
       .returning({ id: schema.actor.id });
-    const memberId = member!.id;
+    const memberId = assertDefined(member).id;
 
     const w = appWithActor(members, orgId, ['manage'], ownerActorId);
     const res = await w.request(`/${memberId}`, { method: 'DELETE' });
@@ -340,9 +346,16 @@ describe('members router — member removal', () => {
       .returning({ id: schema.team.id });
     const [teamActor] = await db
       .insert(schema.actor)
-      .values({ organizationId: orgId, kind: 'team', displayName: 'Squad', teamId: squad!.id })
+      .values({
+        organizationId: orgId,
+        kind: 'team',
+        displayName: 'Squad',
+        teamId: assertDefined(squad).id,
+      })
       .returning({ id: schema.actor.id });
-    expect((await w.request(`/${teamActor!.id}`, { method: 'DELETE' })).status).toBe(404);
+    expect((await w.request(`/${assertDefined(teamActor).id}`, { method: 'DELETE' })).status).toBe(
+      404,
+    );
 
     // 404: a member of another org (tenant isolation).
     const other = await seedOrgWithOwner();
@@ -355,7 +368,9 @@ describe('members router — member removal', () => {
         roleId: other.memberRoleId,
       })
       .returning({ id: schema.actor.id });
-    expect((await w.request(`/${foreign!.id}`, { method: 'DELETE' })).status).toBe(404);
+    expect((await w.request(`/${assertDefined(foreign).id}`, { method: 'DELETE' })).status).toBe(
+      404,
+    );
   });
 
   it('DELETE /:actorId removes a member in an org that has no owner role (guard is skipped)', async () => {
@@ -366,14 +381,14 @@ describe('members router — member removal', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
-    const orgId = org!.id;
+    const orgId = assertDefined(org).id;
     const [member] = await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Solo' })
       .returning({ id: schema.actor.id });
 
-    const w = appWithActor(members, orgId, ['manage'], member!.id);
-    const res = await w.request(`/${member!.id}`, { method: 'DELETE' });
+    const w = appWithActor(members, orgId, ['manage'], assertDefined(member).id);
+    const res = await w.request(`/${assertDefined(member).id}`, { method: 'DELETE' });
     expect(res.status).toBe(200);
     expect((await body<{ removed: boolean }>(res)).removed).toBe(true);
   });
@@ -399,6 +414,6 @@ describe('members router — member removal', () => {
       .select({ id: schema.actor.id })
       .from(schema.actor)
       .where(and(eq(schema.actor.organizationId, orgId), eq(schema.actor.roleId, ownerRoleId)));
-    expect(remaining.map((r) => r.id)).toContain(secondOwner!.id);
+    expect(remaining.map((r) => r.id)).toContain(assertDefined(secondOwner).id);
   });
 });

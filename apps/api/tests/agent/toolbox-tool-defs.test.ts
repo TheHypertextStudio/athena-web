@@ -40,6 +40,7 @@ import type * as DbModule from '@docket/db';
 
 import type { openToolbox as OpenToolbox } from '../../src/agent/toolbox';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -56,7 +57,7 @@ async function seedUser(): Promise<string> {
     .insert(schema.user)
     .values({ name: 'Fixture', email: `fixture-${Math.random().toString(36).slice(2)}@x.test` })
     .returning({ id: schema.user.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 describe('openToolbox — local tool-definition mapping', () => {

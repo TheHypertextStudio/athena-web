@@ -11,6 +11,7 @@ import type cronRouter from '../../src/routes/cron';
 import type webhooksRouter from '../../src/routes/webhooks';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { assertDefined } from '@docket/test-utils';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -55,7 +56,7 @@ async function makeOrg(
       ...(deleteAfterAt ? { deleteAfterAt } : {}),
     })
     .returning({ id: organization.id });
-  return rows[0]!.id;
+  return assertDefined(rows[0]).id;
 }
 
 /** Read an org's lifecycle state. */
@@ -65,7 +66,7 @@ async function stateOf(id: string): Promise<string> {
     .from(organization)
     .where(eq(organization.id, id))
     .limit(1);
-  return rows[0]!.s;
+  return assertDefined(rows[0]).s;
 }
 
 describe('POST /billing/webhook', () => {

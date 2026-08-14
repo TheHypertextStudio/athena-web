@@ -5,6 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as ProviderModule from '../../src/routes/integration-provider';
 import { appWithSession, fakeSession, getDb, seedBaseOrg } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -31,7 +32,7 @@ async function seedUser(email: string, name: string): Promise<string> {
     .insert(schema.user)
     .values({ name, email })
     .returning({ id: schema.user.id });
-  return u!.id;
+  return assertDefined(u).id;
 }
 
 async function seedGoogleAccount(userId: string, accountId: string, token: string): Promise<void> {
@@ -71,8 +72,8 @@ describe('linkedIdentities', () => {
       name: 'Ada G',
       connectionCount: 0,
     });
-    expect(ids[0]!.scopes).toContain('https://www.googleapis.com/auth/tasks');
-    expect(ids[0]!.reauthorizationRequired).toBe(true);
+    expect(assertDefined(ids[0]).scopes).toContain('https://www.googleapis.com/auth/tasks');
+    expect(assertDefined(ids[0]).reauthorizationRequired).toBe(true);
   });
 
   it('lists every supported provider; GitHub/Linear carry null claims (no id token)', async () => {
@@ -85,7 +86,7 @@ describe('linkedIdentities', () => {
     expect(ids.map((i) => i.provider).sort()).toEqual(['github', 'google', 'linear']);
     const gh = ids.find((i) => i.provider === 'github');
     expect(gh).toMatchObject({ accountId: 'gh-42', email: null, name: null, picture: null });
-    expect(gh!.scopes).toEqual(['read:user', 'repo']);
+    expect(assertDefined(gh).scopes).toEqual(['read:user', 'repo']);
   });
 
   it('returns an empty list when nothing is linked — no synthetic/fabricated identity', async () => {
@@ -132,7 +133,7 @@ describe('DELETE /me/identities/:provider/:accountId', () => {
       provider: 'linear',
       pattern: 'connector',
       externalAccountId: 'lin-used',
-      createdBy: owner!.id,
+      createdBy: assertDefined(owner).id,
     });
 
     const identities = await linkedIdentities(userId);
@@ -154,7 +155,7 @@ describe('DELETE /me/identities/:provider/:accountId', () => {
     await seedAccount(userId, 'linear', 'lin-stale', 'read');
     await seedAccount(userId, 'github', 'gh-stale', 'read:user');
     const session = fakeSession(userId);
-    session!.session.createdAt = new Date(Date.now() - 10 * 60 * 1000);
+    assertDefined(session).session.createdAt = new Date(Date.now() - 10 * 60 * 1000);
     const app = appWithSession(meIdentities, session);
 
     const res = await app.request('/linear/lin-stale', { method: 'DELETE' });
@@ -172,7 +173,7 @@ describe('resolveIdentityLabel', () => {
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Lia', userId })
       .returning({ id: schema.actor.id });
-    const actorId = actorRow!.id;
+    const actorId = assertDefined(actorRow).id;
 
     expect(await resolveIdentityLabel(actorId, 'gtasks', 'sub-lbl-1')).toBe('lia@gmail.com');
     // An unknown sub or a null binding yields no label (the caller falls back).

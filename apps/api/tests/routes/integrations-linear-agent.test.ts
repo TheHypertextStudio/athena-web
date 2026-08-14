@@ -10,6 +10,7 @@ import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type integrationsLinearAgentRouter from '../../src/routes/integrations-linear-agent';
 import type { verifyLinearAgentInstallState as VerifyState } from '../../src/lib/linear-agent-connect';
+import { assertDefined } from '@docket/test-utils';
 
 // Re-declared alongside the shared baseline (see tests/support/env.ts) because this file needs
 // the Linear Agent app "configured" — the unconfigured (409) case lives in
@@ -61,9 +62,14 @@ async function seedOrg(): Promise<Seed> {
     .returning({ id: schema.user.id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: org!.id, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: assertDefined(org).id,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(u).id,
+    })
     .returning({ id: schema.actor.id });
-  return { orgId: org!.id, actorId: human!.id };
+  return { orgId: assertDefined(org).id, actorId: assertDefined(human).id };
 }
 
 function appFor(seed: Seed, capabilities: readonly string[] = ['view', 'contribute', 'manage']) {
@@ -97,7 +103,7 @@ describe('GET /install (Linear Agent platform)', () => {
     );
 
     const state = parsed.searchParams.get('state');
-    const decoded = verifyLinearAgentInstallState(state!);
+    const decoded = verifyLinearAgentInstallState(assertDefined(state));
     expect(decoded?.orgId).toBe(seed.orgId);
 
     const [row] = await db
@@ -122,18 +128,18 @@ describe('GET /install (Linear Agent platform)', () => {
     const first = await app.request('/install');
     const { url: firstUrl } = (await first.json()) as { url: string };
     const firstIntegrationId = verifyLinearAgentInstallState(
-      new URL(firstUrl).searchParams.get('state')!,
+      assertDefined(new URL(firstUrl).searchParams.get('state')),
     )?.integrationId;
 
     await db
       .update(schema.integration)
       .set({ status: 'error', lastError: 'token expired', lastErrorAt: new Date() })
-      .where(eq(schema.integration.id, firstIntegrationId!));
+      .where(eq(schema.integration.id, assertDefined(firstIntegrationId)));
 
     const second = await app.request('/install');
     const { url: secondUrl } = (await second.json()) as { url: string };
     const secondIntegrationId = verifyLinearAgentInstallState(
-      new URL(secondUrl).searchParams.get('state')!,
+      assertDefined(new URL(secondUrl).searchParams.get('state')),
     )?.integrationId;
 
     expect(secondIntegrationId).toBe(firstIntegrationId);

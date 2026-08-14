@@ -12,6 +12,7 @@ import { onError } from '../../src/error';
 import type integrationsMcpRouter from '../../src/routes/integrations-mcp';
 import type personalAthenaRouter from '../../src/routes/personal-athena';
 import type { unsealCredential as Unseal } from '../../src/lib/credentials';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * The stored-credential half of GEN-07.
@@ -85,9 +86,18 @@ async function seedWorkspace(): Promise<Seed> {
     .returning({ id: schema.user.id });
   const [actor] = await db
     .insert(schema.actor)
-    .values({ organizationId: org!.id, kind: 'human', displayName: 'Ada', userId: user!.id })
+    .values({
+      organizationId: assertDefined(org).id,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(user).id,
+    })
     .returning({ id: schema.actor.id });
-  return { actorId: actor!.id, orgId: org!.id, userId: user!.id };
+  return {
+    actorId: assertDefined(actor).id,
+    orgId: assertDefined(org).id,
+    userId: assertDefined(user).id,
+  };
 }
 
 /** Mount a router behind an actor context with full capabilities. */
@@ -172,9 +182,9 @@ describe('stored credential masking', () => {
       .from(schema.integrationCredential)
       .where(eq(schema.integrationCredential.organizationId, seed.orgId));
     expect(stored).toHaveLength(1);
-    expect(stored[0]!.ciphertext).not.toContain(PROBE_SECRET);
-    expect(stored[0]!.ciphertext.startsWith('v1:gcm:')).toBe(true);
-    expect(unsealCredential(stored[0]!.ciphertext)).toBe(PROBE_SECRET);
+    expect(assertDefined(stored[0]).ciphertext).not.toContain(PROBE_SECRET);
+    expect(assertDefined(stored[0]).ciphertext.startsWith('v1:gcm:')).toBe(true);
+    expect(unsealCredential(assertDefined(stored[0]).ciphertext)).toBe(PROBE_SECRET);
   });
 
   it('never returns a personal Athena connection credential in any response body', async () => {
@@ -206,8 +216,8 @@ describe('stored credential masking', () => {
       .from(schema.personalMcpCredential)
       .where(eq(schema.personalMcpCredential.ownerUserId, seed.userId));
     expect(stored).toHaveLength(1);
-    expect(stored[0]!.ciphertext).not.toContain(PROBE_SECRET);
-    expect(unsealCredential(stored[0]!.ciphertext)).toBe(PROBE_SECRET);
+    expect(assertDefined(stored[0]).ciphertext).not.toContain(PROBE_SECRET);
+    expect(unsealCredential(assertDefined(stored[0]).ciphertext)).toBe(PROBE_SECRET);
   });
 
   it('writes no credential material to stdout or stderr while storing one', async () => {

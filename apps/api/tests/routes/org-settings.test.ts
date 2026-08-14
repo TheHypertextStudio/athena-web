@@ -11,6 +11,7 @@ import {
   seedOrg,
   seedUserWithHub,
 } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let orgsRouter: unknown;
 
@@ -38,7 +39,7 @@ describe('workspace general settings', () => {
     await schema.db
       .update(schema.role)
       .set({ capabilities: ['manage'] })
-      .where(eq(schema.role.id, actorRows[0]!.roleId!));
+      .where(eq(schema.role.id, assertDefined(assertDefined(actorRows[0]).roleId)));
     const app = appWithSession(orgsRouter, fakeSession(userId));
 
     const updatedResponse = await app.request(`/${orgId}`, {
@@ -81,7 +82,7 @@ describe('workspace general settings', () => {
     await schema.db
       .update(schema.role)
       .set({ capabilities: ['manage'] })
-      .where(eq(schema.role.id, actorRows[0]!.roleId!));
+      .where(eq(schema.role.id, assertDefined(assertDefined(actorRows[0]).roleId)));
     const app = appWithSession(orgsRouter, fakeSession(userId));
 
     const empty = await app.request(`/${orgId}`, {

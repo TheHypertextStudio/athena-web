@@ -18,6 +18,7 @@ import type initiativesRouter from '../../src/routes/initiatives';
 import type programsRouter from '../../src/routes/programs';
 import type projectsRouter from '../../src/routes/projects';
 import type tasksRouter from '../../src/routes/tasks';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -93,10 +94,10 @@ describe('list pagination (keyset cursor)', () => {
           createdBy: humanActorId,
         })
         .returning({ id: schema.cycle.id });
-      ids.push(row!.id);
+      ids.push(assertDefined(row).id);
     }
     // Newest-first: most-recent start (index 2) leads.
-    const newestFirst = [ids[2]!, ids[1]!, ids[0]!];
+    const newestFirst = [assertDefined(ids[2]), assertDefined(ids[1]), assertDefined(ids[0])];
     await assertPagesCover(appWithActor(cycles, orgId, ['view'], humanActorId), 2, newestFirst);
   });
 
@@ -113,9 +114,9 @@ describe('list pagination (keyset cursor)', () => {
           createdAt: new Date(Date.UTC(2026, i, 1)),
         })
         .returning({ id: schema.program.id });
-      ids.push(row!.id);
+      ids.push(assertDefined(row).id);
     }
-    const newestFirst = [ids[2]!, ids[1]!, ids[0]!];
+    const newestFirst = [assertDefined(ids[2]), assertDefined(ids[1]), assertDefined(ids[0])];
     await assertPagesCover(appWithActor(programs, orgId, ['view'], humanActorId), 2, newestFirst);
   });
 
@@ -132,9 +133,9 @@ describe('list pagination (keyset cursor)', () => {
           createdAt: new Date(Date.UTC(2026, i, 1)),
         })
         .returning({ id: schema.initiative.id });
-      ids.push(row!.id);
+      ids.push(assertDefined(row).id);
     }
-    const newestFirst = [ids[2]!, ids[1]!, ids[0]!];
+    const newestFirst = [assertDefined(ids[2]), assertDefined(ids[1]), assertDefined(ids[0])];
     await assertPagesCover(
       appWithActor(initiatives, orgId, ['view'], humanActorId),
       2,
@@ -156,9 +157,9 @@ describe('list pagination (keyset cursor)', () => {
           createdAt: new Date(Date.UTC(2026, i, 1)),
         })
         .returning({ id: schema.project.id });
-      ids.push(row!.id);
+      ids.push(assertDefined(row).id);
     }
-    const newestFirst = [ids[2]!, ids[1]!, ids[0]!];
+    const newestFirst = [assertDefined(ids[2]), assertDefined(ids[1]), assertDefined(ids[0])];
     await assertPagesCover(appWithActor(projects, orgId, ['view'], humanActorId), 2, newestFirst);
   });
 
@@ -177,9 +178,9 @@ describe('list pagination (keyset cursor)', () => {
           createdAt: new Date(Date.UTC(2026, i, 1)),
         })
         .returning({ id: schema.task.id });
-      ids.push(row!.id);
+      ids.push(assertDefined(row).id);
     }
-    const newestFirst = [ids[2]!, ids[1]!, ids[0]!];
+    const newestFirst = [assertDefined(ids[2]), assertDefined(ids[1]), assertDefined(ids[0])];
     await assertPagesCover(appWithActor(tasks, orgId, ['view'], humanActorId), 2, newestFirst);
   });
 });

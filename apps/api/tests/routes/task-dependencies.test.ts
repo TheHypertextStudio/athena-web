@@ -13,6 +13,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type tasksRouter from '../../src/routes/tasks';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -123,7 +124,7 @@ describe('task dependencies create + read', () => {
       .insert(schema.project)
       .values({ organizationId: orgId, name: 'P', teamId, createdBy: humanActorId })
       .returning({ id: schema.project.id });
-    const projectId = proj!.id;
+    const projectId = assertDefined(proj).id;
 
     const blocker = await app.request('/', {
       method: 'POST',

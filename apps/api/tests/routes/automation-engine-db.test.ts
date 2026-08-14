@@ -7,6 +7,7 @@ import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 import { buildAutomationRegistry, type MailApplier } from '../../src/lib/automation/handlers';
 import { defaultMailApplier, runAutomationsForEvent } from '../../src/lib/automation/runtime';
 import { loadEnabledRules, seedDefaultAutomationRules } from '../../src/lib/automation/rules-store';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -292,7 +293,12 @@ describe('generic action handlers (M5)', () => {
     const actorRow = one(
       await db
         .insert(schema.actor)
-        .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Ada',
+          userId: assertDefined(u).id,
+        })
         .returning({ id: schema.actor.id }),
     );
     const t = await seedTask(orgId, teamId, actorRow.id);
@@ -316,7 +322,7 @@ describe('generic action handlers (M5)', () => {
     const notifications = await db
       .select()
       .from(schema.notification)
-      .where(eq(schema.notification.userId, u!.id));
+      .where(eq(schema.notification.userId, assertDefined(u).id));
     expect(notifications).toHaveLength(0); // rule 2 was suppressed by the depth-1 cap
   });
 
@@ -394,7 +400,12 @@ describe('generic action handlers (M5)', () => {
     const actorRow = one(
       await db
         .insert(schema.actor)
-        .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Ada',
+          userId: assertDefined(u).id,
+        })
         .returning({ id: schema.actor.id }),
     );
     const t = await seedTask(orgId, teamId, actorRow.id);
@@ -415,7 +426,7 @@ describe('generic action handlers (M5)', () => {
     const rows = await db
       .select()
       .from(schema.notification)
-      .where(eq(schema.notification.userId, u!.id));
+      .where(eq(schema.notification.userId, assertDefined(u).id));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.type).toBe('automation');
     expect(rows[0]?.body).toMatchObject({ title: 'A watched task completed' });
@@ -473,7 +484,7 @@ describe('generic action handlers (M5)', () => {
     const att = await db
       .select()
       .from(schema.attachment)
-      .where(eq(schema.attachment.subjectId, updated.createdTaskId!));
+      .where(eq(schema.attachment.subjectId, assertDefined(updated.createdTaskId)));
     expect(att).toHaveLength(1);
     expect(att[0]?.kind).toBe('email');
     expect(att[0]?.url).toBe('https://mail.mock.docket.local/#all/auto-accept-thread');
@@ -491,7 +502,12 @@ describe('generic action handlers (M5)', () => {
     const actorRow = one(
       await db
         .insert(schema.actor)
-        .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Ada',
+          userId: assertDefined(u).id,
+        })
         .returning({ id: schema.actor.id }),
     );
     const integ = one(
@@ -550,7 +566,7 @@ describe('generic action handlers (M5)', () => {
     const rows = await db
       .select()
       .from(schema.notification)
-      .where(eq(schema.notification.userId, u!.id));
+      .where(eq(schema.notification.userId, assertDefined(u).id));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.body).toMatchObject({ title: 'A suggestion arrived' });
   });
@@ -947,7 +963,12 @@ describe('notification.send: targeting, and the no-inbox/no-target no-ops', () =
     const assigneeActor = one(
       await db
         .insert(schema.actor)
-        .values({ organizationId: orgId, kind: 'human', displayName: 'Assignee', userId: u!.id })
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Assignee',
+          userId: assertDefined(u).id,
+        })
         .returning({ id: schema.actor.id }),
     );
     const assigned = one(
@@ -983,12 +1004,15 @@ describe('notification.send: targeting, and the no-inbox/no-target no-ops', () =
     const rows = await db
       .select()
       .from(schema.notification)
-      .where(eq(schema.notification.userId, u!.id));
+      .where(eq(schema.notification.userId, assertDefined(u).id));
     expect(rows).toHaveLength(1);
 
     await fire(orgId, { subjectType: 'task', subjectId: unassigned.id });
     expect(
-      await db.select().from(schema.notification).where(eq(schema.notification.userId, u!.id)),
+      await db
+        .select()
+        .from(schema.notification)
+        .where(eq(schema.notification.userId, assertDefined(u).id)),
     ).toHaveLength(1); // unchanged — no assignee to notify
   });
 });

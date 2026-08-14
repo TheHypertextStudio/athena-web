@@ -1,6 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 
-import { CalendarItemId, type CalendarItemOut, CalendarLayerId } from '@docket/types';
+import {
+  CalendarItemId,
+  type CalendarItemOut,
+  CalendarLayerId,
+  WorkPlaceId,
+  type WorkPlaceOut,
+} from '@docket/types';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,6 +32,17 @@ function pickDay(field: string, iso: string): void {
   fireEvent.click(within(grid).getByRole('button', { name: iso }));
 }
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
+const STUDIO_ID = WorkPlaceId.parse('01BX5ZZKBKACTAV9WEVGEMMWS1');
+const STUDIO: WorkPlaceOut = {
+  id: STUDIO_ID,
+  name: 'Ceramics studio',
+  geofence: null,
+  providerMappings: [],
+  sort: 0,
+  archivedAt: null,
+  createdAt: '2026-07-01T00:00:00.000Z',
+  updatedAt: '2026-07-01T00:00:00.000Z',
+};
 
 /** Calendar item fixture focused on core-field range editing. */
 function calendarItem(overrides: Partial<CalendarItemOut> = {}): CalendarItemOut {
@@ -43,6 +60,7 @@ function calendarItem(overrides: Partial<CalendarItemOut> = {}): CalendarItemOut
     title: 'Design review',
     description: null,
     location: null,
+    workPlaceId: null,
     htmlLink: null,
     startsAt: '2026-07-01T16:00:00.000Z',
     endsAt: '2026-07-01T17:00:00.000Z',
@@ -174,6 +192,19 @@ describe('CoreFieldsForm range validation', () => {
     expect(startTrigger).toHaveAttribute('aria-describedby', error.id);
     expect(endTrigger).toHaveAttribute('aria-describedby', error.id);
     expect(mutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('CoreFieldsForm saved-place binding', () => {
+  it('persists an arbitrary regular place independently of display location text', () => {
+    render(<CoreFieldsForm displayTimezone="UTC" item={calendarItem()} workPlaces={[STUDIO]} />);
+
+    fireEvent.change(screen.getByLabelText('Saved place'), {
+      target: { value: STUDIO_ID },
+    });
+
+    expect(mutate).toHaveBeenCalledWith({ workPlaceId: STUDIO_ID });
+    expect(screen.getByLabelText('Location')).toHaveValue('');
   });
 });
 

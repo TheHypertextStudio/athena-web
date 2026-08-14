@@ -110,6 +110,7 @@ function makeItem(overrides: Partial<CalendarItemOut> = {}): CalendarItemOut {
     title: 'Design review',
     description: null,
     location: null,
+    workPlaceId: null,
     htmlLink: null,
     startsAt: '2026-07-01T16:00:00.000Z',
     endsAt: '2026-07-01T17:00:00.000Z',

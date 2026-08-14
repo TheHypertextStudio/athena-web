@@ -45,6 +45,7 @@ function item(overrides: Partial<CalendarItemOut> & { id: string }): CalendarIte
     title: 'Design review',
     description: null,
     location: null,
+    workPlaceId: null,
     htmlLink: null,
     startsAt: '2026-08-02T15:00:00.000Z',
     endsAt: '2026-08-02T16:00:00.000Z',

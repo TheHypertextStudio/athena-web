@@ -12,6 +12,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle, Skeleton } from '@do
 import { type JSX, useEffect, useState } from 'react';
 
 import { useApiListQuery, useApiQuery } from '@/lib/query';
+import { workLocationPlacesDef } from '@/components/work-location/work-location-data';
 
 import { calendarItemDef, calendarLayersDef } from './calendar-data';
 import { CalendarDrawerClose } from './calendar-drawer-close';
@@ -121,6 +122,7 @@ function CalendarItemDrawerContent({
   const [activeItemId, setActiveItemId] = useState(initialItemId);
   const itemQuery = useApiQuery(calendarItemDef(activeItemId));
   const layersQuery = useApiListQuery(calendarLayersDef());
+  const placesQuery = useApiListQuery(workLocationPlacesDef());
   const item = itemQuery.data;
   const layers = layersQuery.data?.items ?? [];
   const layer = item ? layers.find((value) => value.id === item.layerId) : undefined;
@@ -164,6 +166,7 @@ function CalendarItemDrawerContent({
       layer={layer}
       layers={layers}
       duplicates={duplicatesByItemId?.get(item.id)}
+      workPlaces={placesQuery.data?.items ?? []}
       onClose={onClose}
       onDirtyChange={onDirtyChange}
       onOpenTask={onOpenTask}

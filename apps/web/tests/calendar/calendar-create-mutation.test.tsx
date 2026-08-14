@@ -52,6 +52,7 @@ function createdItem(): CalendarItemOut {
     title: input.title,
     description: null,
     location: null,
+    workPlaceId: null,
     htmlLink: null,
     startsAt: input.startsAt,
     endsAt: input.endsAt,

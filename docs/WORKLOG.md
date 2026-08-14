@@ -7,6 +7,27 @@
 
 ## Active Tasks
 
+### [WORK-LOCATION-002] Make work-location settings feel like a place list
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-14
+- **Priority**: P1
+- **Description**: Replace the first-pass work-location settings control panel with a compact,
+  progressive-disclosure surface. Adding a place starts with a name and optional private address
+  or map point; radius and coordinate mechanics disappear from the UI. Saved places, schedules,
+  current-location actions, device detection, and account sync become dense rows with one clear
+  primary action and contextual icon/overflow utilities.
+- **Subtasks**:
+  - [x] Verify the current implementation and record the approved interaction design.
+  - [ ] Persist an optional private address without changing provider projection identity.
+  - [ ] Build the name-first add/edit place dialog and lazy map picker.
+  - [ ] Move schedule and occurrence editing behind dialogs and compact the remaining settings.
+  - [ ] Run focused/full validation and the Docket craft review at desktop/mobile in both themes.
+- **Blockers**: None.
+- **Notes**: The fixed 250 metre matching rule remains an implementation policy, not user
+  configuration. Map rendering uses MapLibre with OpenFreeMap only after explicit disclosure;
+  address text is not sent to a third-party geocoder.
+
 ### [STATUS-001] A workspace defines its own statuses for every kind of work
 
 - **Status**: IN_PROGRESS

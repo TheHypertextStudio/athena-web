@@ -5,6 +5,7 @@ import type * as DocketMail from '@docket/mail';
 import type { Mailer, OutboundMessage } from '@docket/mail';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertDefined } from '@docket/test-utils';
 
 const SECRET = 'test-secret-at-least-32-characters-long';
 
@@ -263,8 +264,8 @@ describe('auth config', () => {
 
     const users = await db.select().from(user).where(eq(user.email, 'grace@example.com'));
     expect(users).toHaveLength(1);
-    expect(users[0]!.id).toBe(resolved.id);
-    expect(users[0]!.emailVerified).toBe(true);
+    expect(assertDefined(users[0]).id).toBe(resolved.id);
+    expect(assertDefined(users[0]).emailVerified).toBe(true);
 
     const hubs = await db.select().from(hub).where(eq(hub.userId, resolved.id));
     expect(hubs).toHaveLength(1);
@@ -303,34 +304,41 @@ describe('auth config', () => {
     const [ownerActor] = await db
       .insert(actor)
       .values({
-        organizationId: org!.id,
-        userId: owner!.id,
+        organizationId: assertDefined(org).id,
+        userId: assertDefined(owner).id,
         kind: 'human',
         displayName: 'Owner',
       })
       .returning();
     const [linkedAccount] = await db
       .insert(account)
-      .values({ userId: owner!.id, providerId: 'google', accountId: `google-${suffix}` })
+      .values({
+        userId: assertDefined(owner).id,
+        providerId: 'google',
+        accountId: `google-${suffix}`,
+      })
       .returning();
     const [connected] = await db
       .insert(integration)
       .values({
-        organizationId: org!.id,
-        createdBy: ownerActor!.id,
+        organizationId: assertDefined(org).id,
+        createdBy: assertDefined(ownerActor).id,
         provider: 'gtasks',
         pattern: 'connector',
         roles: ['work'],
-        externalAccountId: linkedAccount!.accountId,
+        externalAccountId: assertDefined(linkedAccount).accountId,
         status: 'connected',
         syncMode: 'mirror',
       })
       .returning();
 
-    await db.delete(account).where(eq(account.id, linkedAccount!.id));
-    await auth.options.databaseHooks?.account?.delete?.after?.(linkedAccount!, null);
+    await db.delete(account).where(eq(account.id, assertDefined(linkedAccount).id));
+    await auth.options.databaseHooks?.account?.delete?.after?.(assertDefined(linkedAccount), null);
 
-    const [updated] = await db.select().from(integration).where(eq(integration.id, connected!.id));
+    const [updated] = await db
+      .select()
+      .from(integration)
+      .where(eq(integration.id, assertDefined(connected).id));
     expect(updated?.status).toBe('error');
     expect(updated?.lastError).toContain('linked account was removed');
   });
@@ -347,12 +355,16 @@ describe('auth config', () => {
       .returning();
     const [linkedAccount] = await db
       .insert(account)
-      .values({ userId: owner!.id, providerId: 'apple', accountId: `apple-${suffix}` })
+      .values({
+        userId: assertDefined(owner).id,
+        providerId: 'apple',
+        accountId: `apple-${suffix}`,
+      })
       .returning();
 
     const before = await db.select().from(integration);
-    await db.delete(account).where(eq(account.id, linkedAccount!.id));
-    await auth.options.databaseHooks?.account?.delete?.after?.(linkedAccount!, null);
+    await db.delete(account).where(eq(account.id, assertDefined(linkedAccount).id));
+    await auth.options.databaseHooks?.account?.delete?.after?.(assertDefined(linkedAccount), null);
 
     // `apple` funds no connector, so the hook returns before touching any integration row.
     const after = await db.select().from(integration);
@@ -372,12 +384,16 @@ describe('auth config', () => {
       .returning();
     const [linkedAccount] = await db
       .insert(account)
-      .values({ userId: owner!.id, providerId: 'google', accountId: `google-${suffix}` })
+      .values({
+        userId: assertDefined(owner).id,
+        providerId: 'google',
+        accountId: `google-${suffix}`,
+      })
       .returning();
 
     const before = await db.select().from(integration);
-    await db.delete(account).where(eq(account.id, linkedAccount!.id));
-    await auth.options.databaseHooks?.account?.delete?.after?.(linkedAccount!, null);
+    await db.delete(account).where(eq(account.id, assertDefined(linkedAccount).id));
+    await auth.options.databaseHooks?.account?.delete?.after?.(assertDefined(linkedAccount), null);
 
     const after = await db.select().from(integration);
     expect(after).toEqual(before);
@@ -450,7 +466,7 @@ describe('auth config', () => {
 
     const email = 'prod-google-link@example.com';
     const [u] = await db.insert(user).values({ name: 'Not Allowlisted', email }).returning();
-    const codes = await generateRecoveryCodes(u!.id);
+    const codes = await generateRecoveryCodes(assertDefined(u).id);
     const armed = await post('/two-factor/recovery-challenge', { email });
     const challengeCookie = armed.headers
       .getSetCookie()
@@ -480,7 +496,7 @@ describe('auth config', () => {
 
     const email = 'prod-google-link-public@example.com';
     const [u] = await db.insert(user).values({ name: 'Public Launch', email }).returning();
-    const codes = await generateRecoveryCodes(u!.id);
+    const codes = await generateRecoveryCodes(assertDefined(u).id);
     const armed = await post('/two-factor/recovery-challenge', { email });
     const challengeCookie = armed.headers
       .getSetCookie()
@@ -519,9 +535,11 @@ describe('auth config', () => {
     const [u] = await db.insert(user).values({ name: 'Rec', email: 'rec@example.com' }).returning();
     const codes = ['aaaaa-bbbbb', 'ccccc-ddddd', 'eeeee-fffff'];
     const encrypted = await symmetricEncrypt({ key: SECRET, data: JSON.stringify(codes) });
-    await db.insert(twoFactor).values({ secret: 'x', backupCodes: encrypted, userId: u!.id });
+    await db
+      .insert(twoFactor)
+      .values({ secret: 'x', backupCodes: encrypted, userId: assertDefined(u).id });
 
-    const status = await getRecoveryCodeStatus(u!.id);
+    const status = await getRecoveryCodeStatus(assertDefined(u).id);
     expect(status?.remaining).toBe(3);
     // `backup_codes_generated_at` defaults to now() on insert → a parseable ISO instant.
     expect(Number.isNaN(Date.parse(status?.generatedAt ?? ''))).toBe(false);
@@ -538,8 +556,12 @@ describe('auth config', () => {
     });
     await db
       .insert(twoFactor)
-      .values({ secret: 'x', backupCodes: corruptEncrypted, userId: corruptUser!.id });
-    expect((await getRecoveryCodeStatus(corruptUser!.id))?.remaining).toBe(0);
+      .values({
+        secret: 'x',
+        backupCodes: corruptEncrypted,
+        userId: assertDefined(corruptUser).id,
+      });
+    expect((await getRecoveryCodeStatus(assertDefined(corruptUser).id))?.remaining).toBe(0);
   });
 
   it('recovery: generateRecoveryCodes → recoveryChallenge → verifyBackupCode, session-less, end-to-end', async () => {
@@ -553,7 +575,7 @@ describe('auth config', () => {
 
     const email = 'locked-out@example.com';
     const [u] = await db.insert(user).values({ name: 'Locked', email }).returning();
-    const codes = await generateRecoveryCodes(u!.id);
+    const codes = await generateRecoveryCodes(assertDefined(u).id);
 
     const post = (path: string, body: unknown, cookie?: string): Promise<Response> =>
       auth.handler(
@@ -657,12 +679,12 @@ describe('auth config', () => {
 
     const email = 'multi-session-recovery@example.com';
     const [u] = await db.insert(user).values({ name: 'Ada', email }).returning();
-    const codes = await generateRecoveryCodes(u!.id);
+    const codes = await generateRecoveryCodes(assertDefined(u).id);
 
     // A session from the device/browser that's now lost — this is exactly what recovery should
     // revoke, since the account holder has no way to reach it themselves anymore.
     const ctx = await auth.$context;
-    const lostDeviceSession = await ctx.internalAdapter.createSession(u!.id);
+    const lostDeviceSession = await ctx.internalAdapter.createSession(assertDefined(u).id);
 
     const post = (path: string, body: unknown, cookie?: string): Promise<Response> =>
       auth.handler(
@@ -699,7 +721,7 @@ describe('auth config', () => {
     const remaining = await db
       .select({ id: sessionTable.id })
       .from(sessionTable)
-      .where(eq(sessionTable.userId, u!.id));
+      .where(eq(sessionTable.userId, assertDefined(u).id));
     expect(remaining).toHaveLength(1);
 
     expect(dispatchedMail).toHaveLength(1);
@@ -774,8 +796,8 @@ describe('auth config', () => {
     const requested = await post('/sign-up/request-code', { name: 'Newbie', email });
     expect(requested.status).toBe(200);
     expect(sentEmails).toHaveLength(1);
-    expect(sentEmails[0]!.to).toBe(email);
-    const code = /\b(\d{6})\b/.exec(sentEmails[0]!.text ?? '')?.[1];
+    expect(assertDefined(sentEmails[0]).to).toBe(email);
+    const code = /\b(\d{6})\b/.exec(assertDefined(sentEmails[0]).text ?? '')?.[1];
     expect(code).toBeDefined();
 
     // A wrong code is rejected (use a definitely-different 6-digit value).
@@ -794,8 +816,8 @@ describe('auth config', () => {
     const resolved = await resolvePasskeyUser(adapter, intent);
     const users = await db.select().from(user).where(eq(user.email, email));
     expect(users).toHaveLength(1);
-    expect(users[0]!.id).toBe(resolved.id);
-    expect(users[0]!.emailVerified).toBe(true);
+    expect(assertDefined(users[0]).id).toBe(resolved.id);
+    expect(assertDefined(users[0]).emailVerified).toBe(true);
 
     // The intent is single-use: a replay is rejected (no second account).
     await expect(resolvePasskeyUser(adapter, intent)).rejects.toThrow('invalid or expired');
@@ -812,7 +834,7 @@ describe('auth config', () => {
       .values({ name: 'Victim', email, emailVerified: true })
       .returning();
     await db.insert(passkey).values({
-      userId: victim!.id,
+      userId: assertDefined(victim).id,
       publicKey: 'pk',
       credentialID: 'cred-e2e',
       counter: 0,
@@ -823,7 +845,7 @@ describe('auth config', () => {
     // The attacker completes the challenge (as if they controlled the inbox) and gets a real intent.
     await post('/sign-up/request-code', { name: 'Mallory', email });
     const code = /\b(\d{6})\b/.exec(sentEmails.at(-1)?.text ?? '')?.[1];
-    const verified = await post('/sign-up/verify-code', { email, code: code! });
+    const verified = await post('/sign-up/verify-code', { email, code: assertDefined(code) });
     const { intent } = (await verified.json()) as { intent: string };
 
     // Registration still refuses to bind the new passkey to the victim's existing account. Prove
@@ -841,7 +863,7 @@ describe('auth config', () => {
 
     // The victim still has exactly their original single passkey — nothing grafted.
     const creds = await db.select().from(passkey);
-    expect(creds.filter((c) => c.userId === victim!.id)).toHaveLength(1);
+    expect(creds.filter((c) => c.userId === assertDefined(victim).id)).toHaveLength(1);
   });
 
   it('sign-up challenge: verify-code refuses a code that was never requested or that expired', async () => {
@@ -920,29 +942,29 @@ describe('auth config', () => {
 
     const [u] = await db.insert(user).values({ name: 'Gen', email: 'gen@example.com' }).returning();
 
-    const first = await generateRecoveryCodes(u!.id);
+    const first = await generateRecoveryCodes(assertDefined(u).id);
     expect(first).toHaveLength(10);
     expect(first.every((c) => /^[a-zA-Z0-9]{5}-[a-zA-Z0-9]{5}$/.test(c))).toBe(true);
     const [urow] = await db
       .select({ tfe: user.twoFactorEnabled })
       .from(user)
-      .where(eq(user.id, u!.id));
-    expect(urow!.tfe).toBe(true);
-    expect((await getRecoveryCodeStatus(u!.id))?.remaining).toBe(10);
+      .where(eq(user.id, assertDefined(u).id));
+    expect(assertDefined(urow).tfe).toBe(true);
+    expect((await getRecoveryCodeStatus(assertDefined(u).id))?.remaining).toBe(10);
 
     // Backdate, then regenerate → fresh set, one row, generatedAt jumps to now.
     await db
       .update(twoFactor)
       .set({ backupCodesGeneratedAt: new Date('2020-01-01T00:00:00.000Z') })
-      .where(eq(twoFactor.userId, u!.id));
-    const second = await generateRecoveryCodes(u!.id);
+      .where(eq(twoFactor.userId, assertDefined(u).id));
+    const second = await generateRecoveryCodes(assertDefined(u).id);
     expect(second).not.toEqual(first);
     const rows = await db
       .select({ id: twoFactor.id })
       .from(twoFactor)
-      .where(eq(twoFactor.userId, u!.id));
+      .where(eq(twoFactor.userId, assertDefined(u).id));
     expect(rows).toHaveLength(1);
-    const status = await getRecoveryCodeStatus(u!.id);
+    const status = await getRecoveryCodeStatus(assertDefined(u).id);
     expect(status?.remaining).toBe(10);
     expect(Date.parse(status?.generatedAt ?? '')).toBeGreaterThan(
       Date.parse('2020-01-01T00:00:00.000Z'),
@@ -1011,12 +1033,12 @@ describe('passkey lockout guard (hooks.before on /passkey/delete-passkey)', () =
     const { db, passkey, user } = await import('@docket/db');
 
     const [u] = await db.insert(user).values({ name: 'Guarded', email }).returning();
-    const codes = await generateRecoveryCodes(u!.id);
+    const codes = await generateRecoveryCodes(assertDefined(u).id);
     const [pk] = await db
       .insert(passkey)
       .values({
         publicKey: 'test-public-key',
-        userId: u!.id,
+        userId: assertDefined(u).id,
         credentialID: `cred-${Math.random().toString(36).slice(2)}`,
         counter: 0,
         deviceType: 'singleDevice',
@@ -1051,7 +1073,7 @@ describe('passkey lockout guard (hooks.before on /passkey/delete-passkey)', () =
       .map((c) => c.split(';')[0])
       .join('; ');
 
-    return { userId: u!.id, passkeyId: pk!.id, sessionCookie, post };
+    return { userId: assertDefined(u).id, passkeyId: assertDefined(pk).id, sessionCookie, post };
   }
 
   it('blocks removing the last passkey when the account has no other recovery path', async () => {

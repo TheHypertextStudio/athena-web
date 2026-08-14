@@ -17,6 +17,7 @@ import { resolve } from 'node:path';
 import type { Mailer, OutboundMessage } from '@docket/mail';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { assertDefined } from '@docket/test-utils';
 
 // The API env contract rejects a missing turn budget at process validation, and the auth module
 // pulls in the fully configured instance. Declare the same test-only budget the sibling builder
@@ -52,7 +53,7 @@ async function signIn(email: string): Promise<{ userId: string; cookie: string }
   const { db, user } = await import('@docket/db');
 
   const [created] = await db.insert(user).values({ name: 'Cached', email }).returning();
-  const codes = await generateRecoveryCodes(created!.id);
+  const codes = await generateRecoveryCodes(assertDefined(created).id);
 
   const post = (path: string, body: unknown, cookie?: string): Promise<Response> =>
     auth.handler(
@@ -79,7 +80,7 @@ async function signIn(email: string): Promise<{ userId: string; cookie: string }
   );
 
   return {
-    userId: created!.id,
+    userId: assertDefined(created).id,
     cookie: verified.headers
       .getSetCookie()
       .map((entry) => entry.split(';')[0])

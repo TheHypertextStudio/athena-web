@@ -3,6 +3,7 @@ import { generateKeyPairSync, verify } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { generateAppleClientSecret } from '../../src/apple-secret';
+import { assertDefined } from '@docket/test-utils';
 
 /** A throwaway EC P-256 keypair (the curve Apple's ES256 client secret is signed on). */
 function ecKeypair() {
@@ -32,9 +33,9 @@ describe('generateAppleClientSecret', () => {
     const [headerB64, payloadB64, signatureB64] = jwt.split('.');
     expect(signatureB64).toBeTruthy();
 
-    expect(decodeSegment(headerB64!)).toEqual({ alg: 'ES256', kid: input.keyId });
+    expect(decodeSegment(assertDefined(headerB64))).toEqual({ alg: 'ES256', kid: input.keyId });
 
-    const payload = decodeSegment(payloadB64!);
+    const payload = decodeSegment(assertDefined(payloadB64));
     expect(payload['iss']).toBe(input.teamId);
     expect(payload['sub']).toBe(input.clientId);
     expect(payload['aud']).toBe('https://appleid.apple.com');
@@ -54,7 +55,7 @@ describe('generateAppleClientSecret', () => {
       'sha256',
       Buffer.from(`${headerB64}.${payloadB64}`),
       { key: publicKey, dsaEncoding: 'ieee-p1363' },
-      Buffer.from(signatureB64!, 'base64url'),
+      Buffer.from(assertDefined(signatureB64), 'base64url'),
     );
     expect(ok).toBe(true);
   });

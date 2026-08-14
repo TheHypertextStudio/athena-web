@@ -6,7 +6,7 @@
  * agent previously had no way to answer except by listing tasks that happen to be marked complete —
  * which misses everything that happened in mail, in meetings, and in tools Docket does not own.
  *
- * Delegates entirely to {@link buildHighlightsDayPayload}, the same builder the HTTP route reads, so
+ * Delegates entirely to {@link readActivityDay}, the same entry point the HTTP route uses, so
  * the assistant and the app can never drift into two answers to the same question. Hub-scoped and
  * deliberately cross-organization: a day does not respect org boundaries.
  *
@@ -16,7 +16,7 @@
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
-import { buildHighlightsDayPayload } from '../services/highlights/read';
+import { readActivityDay } from '../services/highlights/read';
 
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
@@ -69,9 +69,7 @@ export function registerRetrospectTools(server: McpRegistrar, ctx: McpContext): 
         // rather than forbidden, because from the agent's side the thing genuinely does not exist —
         // the same choice `brief` makes.
         if (ctx.principal.kind === 'agent') throw new NotFoundError('Hub not found');
-        return jsonResult(
-          await buildHighlightsDayPayload(ctx.principal.userId, input.date, new Date()),
-        );
+        return jsonResult(await readActivityDay(ctx.principal.userId, input.date, new Date()));
       }),
   );
 }

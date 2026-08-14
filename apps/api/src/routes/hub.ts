@@ -42,7 +42,7 @@ import { SearchHttpQuery } from '../search/http';
 import { searchWorkspace } from '../search/query';
 
 import { curateHighlight } from '../services/highlights/curate';
-import { buildHighlightsDayPayload } from '../services/highlights/read';
+import { readActivityDay } from '../services/highlights/read';
 
 import { callerActorIds, callerOrgIds, toAuditEventOut, toNotificationOut } from './hub-helpers';
 import { toStreamEventOut } from './stream-helpers';
@@ -347,11 +347,7 @@ Read-only. Building the day is a separate operation, so a response can legitimat
       const { date } = c.req.valid('query');
       // A future day is refused by the builder rather than here, so the agent tool that reads the
       // same payload cannot answer a question the route would have declined.
-      return ok(
-        c,
-        HighlightsDayOut,
-        await buildHighlightsDayPayload(session.user.id, date, new Date()),
-      );
+      return ok(c, HighlightsDayOut, await readActivityDay(session.user.id, date, new Date()));
     },
   )
   .patch(

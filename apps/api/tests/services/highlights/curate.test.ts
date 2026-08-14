@@ -1,11 +1,15 @@
 import { asc, eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
 import { getDb, one, seedBaseOrg } from '../../support/routes-harness';
 import { curateHighlight } from '../../../src/services/highlights/curate';
-import { buildHighlightsDayPayload } from '../../../src/services/highlights/read';
+import {
+  buildHighlightsDayPayload,
+  dayNeedsRefresh,
+  readActivityDay,
+} from '../../../src/services/highlights/read';
 import { reconcileDay } from '../../../src/services/highlights/reconcile';
 
 let schema!: typeof DbModule;
@@ -232,6 +236,75 @@ describe('buildHighlightsDayPayload', () => {
 
     expect(payload.highlights).toHaveLength(1);
     expect(payload.highlights[0]?.kept).toBe(false);
+  });
+
+  it('decides to rebuild only a day that would gain from it', async () => {
+    // Pure, so each case is stated rather than arranged. A day nobody built must always be rebuilt —
+    // that is the whole gap. Today is rebuilt once a source has gone stale, since the day is still
+    // accumulating. A finished past day is left alone: it cannot gain activity, so rebuilding it
+    // spends a model call reproducing what is already stored.
+    const withSources = (state: 'ok' | 'stale', status: 'pending' | 'ready' | 'empty') => ({
+      status,
+      sources: [{ system: 'github' as const, state, lastReadAt: null, eventCount: 0 }],
+    });
+
+    expect(dayNeedsRefresh(withSources('ok', 'pending'), false)).toBe(true);
+    expect(dayNeedsRefresh(withSources('ok', 'pending'), true)).toBe(true);
+    expect(dayNeedsRefresh(withSources('stale', 'ready'), true)).toBe(true);
+    expect(dayNeedsRefresh(withSources('stale', 'ready'), false)).toBe(false);
+    expect(dayNeedsRefresh(withSources('ok', 'ready'), true)).toBe(false);
+    expect(dayNeedsRefresh(withSources('ok', 'empty'), true)).toBe(false);
+  });
+
+  it('builds the day behind the read, so it is there the next time', async () => {
+    // The gap this closes. `reconcileDay`'s only production caller was the digest sweep, which selects
+    // Hubs with `digest.enabled = 'true'` — so for anyone who had not turned digest email on, no day
+    // was ever built, the poll kept writing events nothing grouped, and every surface reported
+    // `pending` forever.
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId);
+
+    // The first read is honest about the day as it stands: nobody has built it yet.
+    const first = await readActivityDay(userId, DAY, NOW);
+    expect(first.status).toBe('pending');
+    expect(first.highlights).toHaveLength(0);
+
+    // The refresh it triggered is not awaited, so the read stays fast; letting the microtask queue
+    // drain is what stands in for the moment between one request and the next.
+    await vi.waitFor(async () => {
+      const [day] = await db
+        .select({ status: schema.activityDay.status })
+        .from(schema.activityDay)
+        .where(eq(schema.activityDay.userId, userId));
+      expect(day?.status).toBe('ready');
+    });
+
+    const second = await readActivityDay(userId, DAY, NOW);
+    expect(second.status).toBe('ready');
+    expect(second.highlights.length).toBeGreaterThan(0);
+  });
+
+  it('does not rebuild a finished past day', async () => {
+    // A day that is already built cannot gain activity, so triggering a rebuild would spend a model
+    // call reproducing what is stored. Only `pending`, and a stale source on today, are worth it.
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId);
+    await reconcileDay(userId, DAY, NOW);
+
+    const [before] = await db
+      .select({ reconciledAt: schema.activityDay.reconciledAt })
+      .from(schema.activityDay)
+      .where(eq(schema.activityDay.userId, userId));
+
+    // Read it as a past day, from a `now` on the following day.
+    await readActivityDay(userId, DAY, new Date('2026-08-13T18:00:00.000Z'));
+    await Promise.resolve();
+
+    const [after] = await db
+      .select({ reconciledAt: schema.activityDay.reconciledAt })
+      .from(schema.activityDay)
+      .where(eq(schema.activityDay.userId, userId));
+    expect(after?.reconciledAt?.toISOString()).toBe(before?.reconciledAt?.toISOString());
   });
 
   it('reports a day nobody has built as pending, not as empty', async () => {

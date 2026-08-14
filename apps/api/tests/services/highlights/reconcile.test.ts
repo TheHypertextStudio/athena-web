@@ -160,6 +160,48 @@ describe('reconcileDay', () => {
     expect(runs).toHaveLength(0);
   });
 
+  it('takes back a narration claim that was stranded by a crash', async () => {
+    // Narration claims rows by flipping them to `generating`, which stops two passes paying for the
+    // same sentences. Without a reclaim window that claim is permanent: a process killed between the
+    // claim and the write leaves its rows `generating`, no later pass touches them, and the client
+    // polls a day that will never finish. Simulated by stranding the row directly, which is exactly
+    // the state a crash leaves behind.
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId);
+    const first = await reconcileDay(userId, DAY, NOW);
+
+    const stranded = new Date(NOW.getTime() - 30 * 60 * 1000);
+    await db
+      .update(schema.activityHighlight)
+      .set({ narrationState: 'generating', narration: null, narrationClaimedAt: stranded })
+      .where(eq(schema.activityHighlight.activityDayId, first.activityDayId));
+
+    const result = await reconcileDay(userId, DAY, NOW);
+
+    expect(result.narrated).toBeGreaterThan(0);
+    const rows = await db
+      .select({ state: schema.activityHighlight.narrationState })
+      .from(schema.activityHighlight)
+      .where(eq(schema.activityHighlight.activityDayId, first.activityDayId));
+    expect(rows.every((row) => row.state === 'ready')).toBe(true);
+  });
+
+  it('leaves a claim alone while it is still fresh', async () => {
+    // The other half: a reclaim window that is too eager is just the duplicate-work bug it exists to
+    // prevent. A claim taken moments ago belongs to a pass that is still running.
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId);
+    const first = await reconcileDay(userId, DAY, NOW);
+    await db
+      .update(schema.activityHighlight)
+      .set({ narrationState: 'generating', narrationClaimedAt: NOW })
+      .where(eq(schema.activityHighlight.activityDayId, first.activityDayId));
+
+    const result = await reconcileDay(userId, DAY, NOW);
+
+    expect(result.narrated).toBe(0);
+  });
+
   it('collapses a day of work on one subject into a single story', async () => {
     // The product premise: six commits on one pull request is one line, not six.
     const { orgId, userId } = await seedPerson();

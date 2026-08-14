@@ -125,10 +125,48 @@ export function localDayFor(instant: Date, tz: string): LocalDay {
  * @returns the day's starting instant, or `null` when the date is unparseable.
  */
 export function localDayStartOf(localDate: string, tz: string): Date | null {
+  const parts = parseLocalDate(localDate);
+  return parts === null ? null : localDayStartUtc(parts, tz);
+}
+
+/** Parse an ISO calendar date into midnight {@link ZonedParts}, or null when it is not one. */
+function parseLocalDate(localDate: string): ZonedParts | null {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDate);
   if (!match) return null;
   const [, y, mo, d] = match;
-  return localDayStartUtc({ y: Number(y), mo: Number(mo), d: Number(d), h: 0, mi: 0 }, tz);
+  return { y: Number(y), mo: Number(mo), d: Number(d), h: 0, mi: 0 };
+}
+
+/**
+ * The instant the day *after* `localDate` begins in `tz` — that day's exclusive end.
+ *
+ * @remarks
+ * Not `start + 24h`. A local day is 23 or 25 hours long on the two DST transition days a year, so a
+ * fixed duration ends an hour early on one and an hour late on the other: the short day silently omits
+ * an hour of work, and the long one pulls in the first hour of the next day and files it under the
+ * wrong date. Advancing the calendar date and re-solving midnight gets the real boundary, whatever
+ * the zone did in between.
+ *
+ * @param localDate - An ISO calendar date (`YYYY-MM-DD`).
+ * @param tz - An IANA timezone.
+ * @returns the next local midnight, or `null` when the date is unparseable.
+ */
+export function nextLocalDayStart(localDate: string, tz: string): Date | null {
+  const parts = parseLocalDate(localDate);
+  if (parts === null) return null;
+  // Calendar arithmetic in UTC, which is only being used to roll the date over month and year ends;
+  // the instant it produces is discarded and only its Y/M/D reach `localDayStartUtc`.
+  const next = new Date(Date.UTC(parts.y, parts.mo - 1, parts.d + 1));
+  return localDayStartUtc(
+    {
+      y: next.getUTCFullYear(),
+      mo: next.getUTCMonth() + 1,
+      d: next.getUTCDate(),
+      h: 0,
+      mi: 0,
+    },
+    tz,
+  );
 }
 
 /**

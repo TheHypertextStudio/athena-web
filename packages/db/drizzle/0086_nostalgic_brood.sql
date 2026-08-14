@@ -1,0 +1,1 @@
+ALTER TABLE "activity_highlight" ADD COLUMN "narration_claimed_at" timestamp;

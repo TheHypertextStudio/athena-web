@@ -7,6 +7,10 @@
  * mechanisms for "make the day fresh" would drift into three answers to "what did I do", and the
  * whole feature rests on there being one.
  *
+ * The sweep awaits it; the two reads reach it through {@link refreshDayInBackground}, which fires it
+ * without making the reader wait. That indirection is what lets a read cause the day to be built
+ * without a GET taking a lease or binding its latency to how fast Gmail answers.
+ *
  * It runs in four phases, deliberately ordered cheapest-and-most-reliable first:
  *
  * 1. **Pull.** Ask every connected source for the window. Idempotent by `dedupeKey`.
@@ -29,11 +33,16 @@ import type { ActorRef, DigestStats, EntityRef } from '@docket/db';
 import type { NarrationEpisode } from '@docket/agent-runtime';
 import type { CanonicalEntityKind, EventDetail, EventKind, SourceSystemKind } from '@docket/types';
 import { groupSubjectDayEpisodes } from '@docket/types';
-import { and, asc, eq, gte, lt } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull, lt, or } from 'drizzle-orm';
 
 import { getContainer } from '../../container';
 import { ConflictError } from '../../error';
-import { isFutureLocalDate, localDayFor, localDayStartOf } from '../../lib/activity/local-day';
+import {
+  isFutureLocalDate,
+  localDayFor,
+  localDayStartOf,
+  nextLocalDayStart,
+} from '../../lib/activity/local-day';
 import { pullActivityForUser } from '../../lib/activity/sweep';
 
 /**
@@ -45,6 +54,21 @@ import { pullActivityForUser } from '../../lib/activity/sweep';
  * rather than silently truncated in one.
  */
 export const MAX_NARRATED_EPISODES = 40;
+
+/** Nominal day length, used only as the fallback when a date cannot be parsed at all. */
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How long a highlight may sit in `generating` before another pass may take it back.
+ *
+ * @remarks
+ * Narration claims rows by flipping them to `generating`, which is what stops two concurrent passes
+ * paying for the same sentences. Without a reclaim window that claim is permanent: a process killed
+ * between the claim and the write leaves its rows `generating` forever, no later pass ever picks them
+ * up, and the client polls a day that will never finish. Ten minutes is comfortably longer than a
+ * narration call and short enough that a crash costs one cron tick, not a day.
+ */
+const NARRATION_RECLAIM_MS = 10 * 60 * 1000;
 
 /** One day's worth of event columns, wide enough to group by subject. */
 interface DayEventRow {
@@ -275,8 +299,14 @@ export async function reconcileDay(
     throw new ConflictError('That day has not happened yet.', 'validation_error');
   }
   const dayStart = localDayStartOf(date, timezone) ?? today.startsAt;
+  // The next local midnight, not `start + 24h`: a local day is 23 or 25 hours long on the two DST
+  // transition days a year, so a fixed duration drops an hour of work on the short one and files the
+  // next day's first hour under this date on the long one.
+  const nextMidnight = nextLocalDayStart(date, timezone);
   // A past day is read whole; today stops at `now`, because a day still happening has no end yet.
-  const dayEnd = new Date(Math.min(dayStart.getTime() + 24 * 60 * 60 * 1000, now.getTime()));
+  const dayEnd = new Date(
+    Math.min((nextMidnight ?? new Date(dayStart.getTime() + DAY_MS)).getTime(), now.getTime()),
+  );
 
   const activityDayId = await ensureDayRow(userId, date, timezone);
 
@@ -305,14 +335,29 @@ export async function reconcileDay(
   const episodeCount = await persistEpisodes(activityDayId, rows, date);
 
   // Claim the un-narrated episodes atomically, so two concurrent reconciles split the work instead
-  // of both paying for the same sentences.
+  // of both paying for the same sentences. A row already `generating` is claimable again once its
+  // claim has gone stale, which is what keeps a crash mid-narration from stranding it: `updatedAt` is
+  // stamped by the claim itself, so it is exactly when the claim was taken. Deliberately not
+  // `updatedAt`: the episode upsert above touches every row on every reconcile, so `updatedAt` would
+  // be refreshed moments before this runs and no claim would ever look stale.
+  const reclaimBefore = new Date(now.getTime() - NARRATION_RECLAIM_MS);
   const claimed = await db
     .update(activityHighlight)
-    .set({ narrationState: 'generating' })
+    .set({ narrationState: 'generating', narrationClaimedAt: now })
     .where(
       and(
         eq(activityHighlight.activityDayId, activityDayId),
-        eq(activityHighlight.narrationState, 'pending'),
+        or(
+          eq(activityHighlight.narrationState, 'pending'),
+          and(
+            eq(activityHighlight.narrationState, 'generating'),
+            // A claim with no timestamp predates this column, so it is by definition old enough.
+            or(
+              isNull(activityHighlight.narrationClaimedAt),
+              lt(activityHighlight.narrationClaimedAt, reclaimBefore),
+            ),
+          ),
+        ),
       ),
     )
     .returning({
@@ -404,4 +449,54 @@ export async function reconcileDay(
     narrationFailed,
     empty: false,
   };
+}
+
+/**
+ * Days currently being reconciled by this process, keyed `userId:localDate`.
+ *
+ * @remarks
+ * In-process only, and deliberately so: it is not a lock, and correctness does not depend on it —
+ * `ensureDayRow` upserts and the narration claim is atomic, so two workers racing is already safe.
+ * What this prevents is waste. The client polls every four seconds while narration is in flight, and
+ * without it each poll would start another reconcile of the same day.
+ */
+const refreshing = new Set<string>();
+
+/**
+ * Bring a day up to date behind a read, without making the reader wait for it.
+ *
+ * @remarks
+ * Reads report state and cause no work — that separation is what stops a GET taking a lease, writing
+ * rows, and binding its latency to how fast Gmail answers. But something has to build the day, and
+ * until this existed the only production caller of {@link reconcileDay} was the digest sweep, which
+ * selects Hubs with `digest.enabled = 'true'`. For everyone else the poll kept writing events that
+ * nothing ever grouped, and every surface reported `pending` forever.
+ *
+ * Firing it from the read makes the cost proportional to use rather than to user count: a day is
+ * built because somebody looked, not because a cron narrated it for an account nobody opened. The
+ * caller is told nothing about it and awaits nothing; the response describes the day as it stands,
+ * and the client already re-reads while `generating`.
+ *
+ * Failures are logged and swallowed. A refresh that could not run is a stale day, which the payload
+ * can already say honestly — it is not a reason to fail the read that triggered it.
+ *
+ * @param userId - The Hub owner whose day to refresh.
+ * @param localDate - The local calendar day (`YYYY-MM-DD`).
+ * @param now - The reference time.
+ */
+export function refreshDayInBackground(userId: string, localDate: string, now: Date): void {
+  const key = `${userId}:${localDate}`;
+  if (refreshing.has(key)) return;
+  refreshing.add(key);
+  void reconcileDay(userId, localDate, now)
+    .catch((err: unknown) => {
+      console.warn(
+        JSON.stringify({
+          event: 'activity_background_refresh_failed',
+          localDate,
+          message: err instanceof Error ? err.message : 'unknown',
+        }),
+      );
+    })
+    .finally(() => refreshing.delete(key));
 }

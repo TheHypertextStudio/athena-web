@@ -392,6 +392,15 @@ export const activityHighlight = pgTable(
     /** The append-only events this narrates. See the remarks on the missing FK. */
     eventIds: text('event_ids').array().notNull(),
     narrationState: activityNarrationState('narration_state').notNull().default('pending'),
+    /**
+     * When narration last claimed this row, so a stranded claim can be taken back.
+     *
+     * @remarks
+     * Its own column rather than reusing `updatedAt`: the episode upsert touches every row on every
+     * reconcile, so `updatedAt` says when the *facts* were last written, not when narration took the
+     * row. Using it to age a claim would mean no claim ever looked stale.
+     */
+    narrationClaimedAt: timestamp('narration_claimed_at'),
     /** The generated sentence; null until narration succeeds. Never edited in place. */
     narration: text('narration'),
     /** The person's rewrite. Null means "use `narration`". */

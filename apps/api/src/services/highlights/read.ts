@@ -2,14 +2,19 @@
  * `@docket/api` — reading one person's narrated day.
  *
  * @remarks
- * {@link buildHighlightsDayPayload} is the single read both the HTTP route and the agent tool go
+ * {@link readActivityDay} is the single entry point both the HTTP route and the agent tool go
  * through, so the app and the assistant can never drift into two answers to "what did I do".
  *
- * It **reports state and never causes work**. Making a day current is {@link reconcileDay}'s job, and
- * keeping the two apart is what stops a read from taking a lease, writing rows, or binding its own
- * latency to how fast Gmail answers today. What the payload gives a caller instead is enough to say
- * something true about freshness: the day's status, whether narration is still in flight, and how
- * each source fared.
+ * {@link buildHighlightsDayPayload} underneath it **reports state and computes nothing else**: making
+ * a day current is `reconcileDay`'s job, and keeping the two apart is what stops a read taking a
+ * lease, writing rows inline, or binding its own latency to how fast Gmail answers today. What the
+ * payload gives a caller instead is enough to say something true about freshness: the day's status,
+ * whether narration is still in flight, and how each source fared.
+ *
+ * `readActivityDay` then *triggers* a rebuild for a day that needs one, without awaiting it. The
+ * response still describes the day as it stands rather than as it will shortly be, which is both the
+ * honest answer and the fast one. Without that trigger the only thing that ever built a day was the
+ * digest sweep, so the whole surface stayed empty for anyone who had not turned digest email on.
  *
  * That last part is the connector-reliability invariant on this surface. Source health is reported as
  * a closed state the app writes its own copy for — never a provider message. A workspace policy test
@@ -17,6 +22,7 @@
  * motivates the enum: a diagnostic is written for an operator, and rendering it to the person whose
  * day is incomplete tells them nothing they can act on.
  */
+import { refreshDayInBackground } from './reconcile';
 import {
   activityDay,
   activityHighlight,
@@ -308,4 +314,57 @@ export async function buildHighlightsDayPayload(
     })),
     sources,
   };
+}
+
+/**
+ * Whether a day is worth rebuilding behind the read that just returned it.
+ *
+ * @remarks
+ * `pending` means nobody has ever built it, which is the case that matters: without a rebuild that
+ * day stays empty forever. Today is also refreshed once a source has gone stale, since the day is
+ * still accumulating and the last pull predates part of it. A finished day that has been reconciled
+ * is left alone — it cannot gain activity, so rebuilding it would spend a model call to reproduce
+ * what is already stored.
+ *
+ * @param payload - The day as it currently reads.
+ * @param isToday - Whether the day is the caller's current local day.
+ * @returns whether to trigger a background refresh.
+ */
+export function dayNeedsRefresh(
+  payload: Pick<z.input<typeof HighlightsDayOut>, 'status' | 'sources'>,
+  isToday: boolean,
+): boolean {
+  if (payload.status === 'pending') return true;
+  if (!isToday) return false;
+  return payload.sources.some((source) => source.state === 'stale');
+}
+
+/**
+ * Read one person's narrated day, and quietly bring it up to date for next time.
+ *
+ * @remarks
+ * The single entry point for both the HTTP route and the agent tool. Keeping the read and the refresh
+ * paired *here* rather than at each call site is what stops the app and the assistant drifting into
+ * two answers to "what did I do" — one of them triggering a build and the other not.
+ *
+ * The refresh is not awaited, so the response still describes the day as it stands rather than as it
+ * will shortly be. That is the honest answer and the fast one: a caller is never made to wait on
+ * Gmail, and `status`/`generating` already tell them the day is still settling.
+ *
+ * @param userId - The Hub owner whose day this is.
+ * @param localDate - The local calendar day (`YYYY-MM-DD`), or omitted for the caller's today.
+ * @param now - The reference time.
+ * @returns the day as currently stored.
+ */
+export async function readActivityDay(
+  userId: string,
+  localDate: string | undefined,
+  now: Date,
+): Promise<z.input<typeof HighlightsDayOut>> {
+  const payload = await buildHighlightsDayPayload(userId, localDate, now);
+  const isToday = payload.date === localDayFor(now, payload.timezone).localDate;
+  if (dayNeedsRefresh(payload, isToday)) {
+    refreshDayInBackground(userId, payload.date, now);
+  }
+  return payload;
 }

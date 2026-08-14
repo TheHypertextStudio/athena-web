@@ -4,6 +4,7 @@ import {
   localDateOf,
   localDayFor,
   localDayStartOf,
+  nextLocalDayStart,
   zonedParts,
 } from '../../../src/lib/activity/local-day';
 
@@ -89,5 +90,51 @@ describe('localDayFor', () => {
 describe('localDateOf', () => {
   it('zero-pads month and day so dates compare and sort as strings', () => {
     expect(localDateOf({ y: 2026, mo: 4, d: 5, h: 0, mi: 0 })).toBe('2026-04-05');
+  });
+});
+
+describe('nextLocalDayStart', () => {
+  it('is 23 or 25 hours after the start on a DST-transition day', () => {
+    // The reason this exists rather than `start + 24h`. A fixed duration ends the short day an hour
+    // late — pulling the next day's first hour into this date — and ends the long day an hour early,
+    // silently dropping an hour of work from it.
+    const cases: readonly { tz: string; date: string; hours: number }[] = [
+      // Clocks go forward: a 23-hour day.
+      { tz: 'America/New_York', date: '2026-03-08', hours: 23 },
+      { tz: 'Europe/London', date: '2026-03-29', hours: 23 },
+      // Clocks go back: a 25-hour day.
+      { tz: 'America/New_York', date: '2026-11-01', hours: 25 },
+      { tz: 'Europe/London', date: '2026-10-25', hours: 25 },
+      // An ordinary day, and a zone that never transitions at all.
+      { tz: 'America/New_York', date: '2026-08-12', hours: 24 },
+      { tz: 'Asia/Kolkata', date: '2026-03-29', hours: 24 },
+    ];
+    for (const { tz, date, hours } of cases) {
+      const start = localDayStartOf(date, tz);
+      const end = nextLocalDayStart(date, tz);
+      expect(end, `${tz} ${date}`).not.toBeNull();
+      const spanHours = (end!.getTime() - start!.getTime()) / 3_600_000;
+      expect(spanHours, `${tz} ${date}`).toBe(hours);
+    }
+  });
+
+  it('is exactly the next day\u2019s own midnight, and rolls over month and year ends', () => {
+    // Stated as an identity rather than as arithmetic: whatever the zone did in between, the end of
+    // one day is the start of the next, so no activity can fall between them or be counted twice.
+    const pairs: readonly (readonly [string, string])[] = [
+      ['2026-08-12', '2026-08-13'],
+      ['2026-01-31', '2026-02-01'],
+      ['2026-02-28', '2026-03-01'],
+      ['2026-12-31', '2027-01-01'],
+    ];
+    for (const [date, next] of pairs) {
+      expect(nextLocalDayStart(date, 'Pacific/Auckland')?.toISOString()).toBe(
+        localDayStartOf(next, 'Pacific/Auckland')?.toISOString(),
+      );
+    }
+  });
+
+  it('refuses anything that is not an ISO calendar date', () => {
+    expect(nextLocalDayStart('not-a-date', 'UTC')).toBeNull();
   });
 });

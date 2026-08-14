@@ -95,6 +95,7 @@ function TimelineArrangement({
     setTimebox,
     timeboxFailed,
     clearTimeboxFailure,
+    workPlaces,
   } = useAgenda();
   const now = useNow().toISOString();
   const [draftSelection, setDraftSelection] = useState<{
@@ -388,6 +389,7 @@ function TimelineArrangement({
         onDraftChange={updateDraftProjection}
         onDirtyChange={setDraftDirty}
         agendaMobileHost={mobileCreateHost}
+        workPlaces={workPlaces}
         onSelectionConsumed={() => {
           allDayDraftAnchorRef.current = null;
           setDraftSelection(null);

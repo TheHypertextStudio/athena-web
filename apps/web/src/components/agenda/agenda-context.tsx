@@ -1,7 +1,7 @@
 'use client';
 
 /** Agenda read, navigation, and mutation context. */
-import type { AgendaOut, DailyPlanItemOut } from '@docket/types';
+import type { AgendaOut, DailyPlanItemOut, WorkPlaceOut } from '@docket/types';
 import {
   createContext,
   type JSX,
@@ -17,6 +17,7 @@ import {
 import { readStoredInteger, writeStoredValue } from '@docket/ui/lib/browser-storage';
 
 import { calendarItemsDef } from '@/components/calendar/calendar-data';
+import { workLocationPlacesDef } from '@/components/work-location/work-location-data';
 import {
   resolveScheduleTimezone,
   scheduleDateRange,
@@ -95,6 +96,7 @@ interface AgendaContextValue extends AgendaPlanMutations {
   isToday: boolean;
   entries: AgendaEntry[];
   dayContext: AgendaDayContext[];
+  workPlaces: WorkPlaceOut[];
   loading: boolean;
   error: string | null;
   retrying: boolean;
@@ -188,6 +190,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
   const calendarQuery = useApiListQuery(
     calendarItemsDef(calendarRange.startISO, calendarRange.endISO),
   );
+  const workPlacesQuery = useApiListQuery(workLocationPlacesDef());
   const planQuery = useApiListQuery(planDef(date));
   const planByTask = useMemo(() => {
     const items = planQuery.isPlaceholderData ? [] : (planQuery.data?.items ?? []);
@@ -263,6 +266,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       isToday,
       entries: agendaDay.entries,
       dayContext: agendaDay.dayContext,
+      workPlaces: workPlacesQuery.data?.items ?? [],
       loading:
         query.isPending ||
         query.isPlaceholderData ||
@@ -295,6 +299,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       today,
       isToday,
       agendaDay,
+      workPlacesQuery.data,
       query.isPending,
       query.isPlaceholderData,
       query.isError,

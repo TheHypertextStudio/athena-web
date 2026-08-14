@@ -12,6 +12,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const agendaState = vi.hoisted(() => ({
+  date: '2026-08-14',
+  displayTimezone: 'UTC',
   dayContext: [],
   loading: false,
   error: null as string | null,
@@ -30,6 +32,10 @@ vi.mock('../../src/components/agenda/agenda-header', () => ({
 
 vi.mock('../../src/components/agenda/agenda-canvas', () => ({
   default: () => <div>Agenda canvas</div>,
+}));
+
+vi.mock('../../src/components/work-location/work-location-strip', () => ({
+  WorkLocationStrip: () => null,
 }));
 
 import Agenda from '../../src/components/agenda/agenda';

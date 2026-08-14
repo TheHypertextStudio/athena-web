@@ -172,6 +172,7 @@ function calendarItem(
     createdAt: '2026-07-13T15:00:00Z',
     updatedAt: '2026-07-13T15:00:00Z',
     ...overrides,
+    workPlaceId: overrides.workPlaceId ?? null,
   };
 }
 

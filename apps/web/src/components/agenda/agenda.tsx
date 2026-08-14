@@ -14,8 +14,11 @@ import { type JSX, type ReactNode } from 'react';
 
 import { Button } from '@docket/ui/primitives';
 
+import { scheduleDateRange } from '@/components/scheduling';
+import { WorkLocationStrip } from '@/components/work-location/work-location-strip';
+import { useNow } from '@/lib/use-now';
+
 import AgendaCanvas from './agenda-canvas';
-import AgendaDayContextStrip from './agenda-day-context-strip';
 import AgendaHeader from './agenda-header';
 import { AgendaProvider, useAgenda } from './agenda-context';
 
@@ -45,8 +48,19 @@ export default function Agenda({ initialDate }: AgendaProps): JSX.Element {
 
 /** Place semantic day context between navigation and the schedule. */
 function AgendaDayContextHost(): JSX.Element | null {
-  const { dayContext } = useAgenda();
-  return <AgendaDayContextStrip items={dayContext} />;
+  const { date, dayContext, displayTimezone } = useAgenda();
+  const range = scheduleDateRange(date, 1, displayTimezone);
+  const at = useNow().toISOString();
+  return (
+    <WorkLocationStrip
+      start={range.startISO}
+      end={range.endISO}
+      at={at}
+      timezone={displayTimezone}
+      legacyItems={dayContext}
+      className="px-3 pb-2"
+    />
+  );
 }
 
 /** The loading or degraded disclosure, above the canvas rather than inside its scrollport. */

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { HttpClient } from '../../src/http';
 import { RealBlob, type BlobDeleteFn, type BlobUploadFn } from '../../src/vercel';
+import { assertDefined } from '@docket/test-utils';
 
 /** A recorded `@vercel/blob` `put` call: its pathname, body, and options. */
 interface RecordedUpload {
@@ -67,7 +68,7 @@ describe('RealBlob.put', () => {
       key: 'exports/a.txt',
       url: 'https://store.example.com/exports/a.txt',
     });
-    const call = calls[0]!;
+    const call = assertDefined(calls[0]);
     expect(call.pathname).toBe('exports/a.txt');
     expect(call.body).toBe(data);
     expect(call.options).toEqual({
@@ -82,21 +83,21 @@ describe('RealBlob.put', () => {
     const { upload, calls } = fakeUpload({ url: 'https://store.example.com/a.txt' });
     const blob = new RealBlob({ baseUrl: 'https://store.example.com', token: 'tok' }, { upload });
     await blob.put('/a.txt', new Uint8Array([1]));
-    expect(calls[0]!.pathname).toBe('a.txt');
+    expect(assertDefined(calls[0]).pathname).toBe('a.txt');
   });
 
   it('forwards an explicit content type to the SDK', async () => {
     const { upload, calls } = fakeUpload({ url: 'https://store.example.com/a.json' });
     const blob = new RealBlob({ baseUrl: 'https://store.example.com', token: 'tok' }, { upload });
     await blob.put('a.json', new Uint8Array([1]), 'application/json');
-    expect(calls[0]!.options).toMatchObject({ contentType: 'application/json' });
+    expect(assertDefined(calls[0]).options).toMatchObject({ contentType: 'application/json' });
   });
 
   it('omits contentType when none is given', async () => {
     const { upload, calls } = fakeUpload({ url: 'https://store.example.com/a.bin' });
     const blob = new RealBlob({ baseUrl: 'https://store.example.com', token: 'tok' }, { upload });
     await blob.put('a.bin', new Uint8Array([1]));
-    expect(calls[0]!.options).not.toHaveProperty('contentType');
+    expect(assertDefined(calls[0]).options).not.toHaveProperty('contentType');
   });
 
   it('falls back to the constructed url when the SDK returns no url', async () => {
@@ -126,7 +127,7 @@ describe('RealBlob.get', () => {
     const blob = new RealBlob({ baseUrl: 'https://store.example.com', token: 'tok' }, { http });
     const got = await blob.get('a.bin');
     expect(got && Array.from(got)).toEqual([1, 2, 3]);
-    const call = calls[0]!;
+    const call = assertDefined(calls[0]);
     expect(call.url).toBe('https://store.example.com/a.bin');
     expect((call.init?.headers as Record<string, string>)['Authorization']).toBe('Bearer tok');
   });

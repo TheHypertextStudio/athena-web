@@ -66,6 +66,8 @@ export interface StoredCommitment {
   /** Null falls back to the shape profile's default. */
   minutesPerSession: number | null;
   location: string | null;
+  /** Canonical saved-place binding; absent on legacy JSON rows. */
+  workPlaceId?: string | null;
   attendees: string[];
   active: boolean;
 }

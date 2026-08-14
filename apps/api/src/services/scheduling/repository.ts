@@ -33,6 +33,7 @@ import {
   schedulingPreference,
   timeInterval,
   timeRecord,
+  workPlace,
 } from '@docket/db';
 import type {
   AvailabilityWindow,
@@ -42,6 +43,8 @@ import type {
 } from '@docket/types';
 import { WORK_SHAPES, workShapeProfile } from '@docket/types';
 import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
+
+import { NotFoundError } from '../../error';
 
 import type { BusyItem } from './availability';
 import { defaultAvailabilityWindows } from './availability';
@@ -147,6 +150,7 @@ export async function loadSchedulingPreferences(
         sessionsPerWeek: c.sessionsPerWeek,
         minutesPerSession: c.minutesPerSession,
         location: c.location,
+        workPlaceId: (c.workPlaceId ?? null) as SchedulingCommitment['workPlaceId'],
         attendees: c.attendees,
         active: c.active,
       },
@@ -197,6 +201,38 @@ export async function saveSchedulingPreferences(
           return { ...c, id };
         });
 
+  const requestedPlaceIds = [
+    ...new Set(
+      commitments.flatMap((commitment) =>
+        commitment.workPlaceId === null ? [] : [commitment.workPlaceId],
+      ),
+    ),
+  ];
+  const placeRows =
+    requestedPlaceIds.length === 0
+      ? []
+      : await db
+          .select({ id: workPlace.id, name: workPlace.name })
+          .from(workPlace)
+          .where(
+            and(
+              eq(workPlace.hubId, hubId),
+              inArray(workPlace.id, requestedPlaceIds),
+              isNull(workPlace.archivedAt),
+            ),
+          );
+  const placeNames = new Map(placeRows.map((place) => [place.id, place.name]));
+  if (placeNames.size !== requestedPlaceIds.length) {
+    throw new NotFoundError('Work place not found');
+  }
+  const normalizedCommitments = commitments.map((commitment) => ({
+    ...commitment,
+    location:
+      commitment.workPlaceId === null
+        ? commitment.location
+        : (placeNames.get(commitment.workPlaceId) ?? commitment.location),
+  }));
+
   const values = {
     hubId,
     timezone: update.timezone ?? current.timezone,
@@ -207,7 +243,7 @@ export async function saveSchedulingPreferences(
       kind: w.kind,
       label: w.label,
     })),
-    commitments: commitments.map((c) => ({
+    commitments: normalizedCommitments.map((c) => ({
       id: c.id,
       shape: c.shape,
       title: c.title,
@@ -216,6 +252,7 @@ export async function saveSchedulingPreferences(
       sessionsPerWeek: c.sessionsPerWeek,
       minutesPerSession: c.minutesPerSession,
       location: c.location,
+      workPlaceId: c.workPlaceId ?? null,
       attendees: [...c.attendees],
       active: c.active,
     })),
@@ -502,6 +539,7 @@ export async function persistPlannedBlocks(
         connectionId: null,
         title: block.title,
         location: block.location,
+        workPlaceId: block.workPlaceId,
         startsAt: new Date(block.start),
         endsAt: new Date(block.end),
         attendees: block.attendees.map((email) => ({
@@ -913,6 +951,7 @@ export interface CalendarWeekBlock {
   readonly date: string;
   readonly organizationId: string | null;
   readonly location: string | null;
+  readonly workPlaceId: string | null;
   readonly attendees: readonly string[];
   readonly origin: string;
   readonly anchorCalendarItemId: string | null;
@@ -984,6 +1023,7 @@ export async function loadWeekBlocks(
         date: localDateString(row.startsAt, timezone),
         organizationId: row.organizationId,
         location: row.location,
+        workPlaceId: row.workPlaceId,
         attendees: row.attendees.map((a) => a.email ?? a.displayName ?? '').filter((a) => a !== ''),
         origin: row.origin,
         anchorCalendarItemId: anchorByTarget.get(row.id) ?? null,

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { CalendarLayerId, type CalendarItemPermission } from '@docket/types';
+import { CalendarLayerId, WorkPlaceId, type CalendarItemPermission } from '@docket/types';
 import type { z } from 'zod';
 
 import {
@@ -37,6 +37,19 @@ beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
 });
+
+/** Seed one active saved place owned by the user's personal Hub. */
+async function seedWorkPlace(userId: string, name: string): Promise<string> {
+  const ownerHub = one(
+    await db.select({ id: schema.hub.id }).from(schema.hub).where(eq(schema.hub.userId, userId)),
+  );
+  return one(
+    await db
+      .insert(schema.workPlace)
+      .values({ hubId: ownerHub.id, name })
+      .returning({ id: schema.workPlace.id }),
+  ).id;
+}
 
 /** Seed a `provider_calendar` layer + connection for a user, returning both ids. */
 async function seedProviderLayer(
@@ -179,6 +192,38 @@ describe('createNativeBlock — explicit layerId', () => {
 });
 
 describe('createCalendarItem', () => {
+  it('binds arbitrary saved places to native items and hides places owned by another Hub', async () => {
+    const userId = await seedUserWithHub(db, schema, 'CanonicalPlaceOwner');
+    const otherUserId = await seedUserWithHub(db, schema, 'CanonicalPlaceOther');
+    const placeId = await seedWorkPlace(userId, 'Library');
+    const otherPlaceId = await seedWorkPlace(otherUserId, 'Studio');
+
+    const created = await createCalendarItem(db, {
+      userId,
+      input: {
+        intent: 'timebox',
+        title: 'Research',
+        workPlaceId: WorkPlaceId.parse(placeId),
+        startsAt: '2026-07-01T10:00:00.000Z',
+        endsAt: '2026-07-01T11:00:00.000Z',
+      },
+    });
+    expect(created.workPlaceId).toBe(placeId);
+
+    await expect(
+      createCalendarItem(db, {
+        userId,
+        input: {
+          intent: 'timebox',
+          title: 'Not mine',
+          workPlaceId: WorkPlaceId.parse(otherPlaceId),
+          startsAt: '2026-07-01T12:00:00.000Z',
+          endsAt: '2026-07-01T13:00:00.000Z',
+        },
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
   it('404s when an explicit layerId does not resolve for the caller', async () => {
     const userId = await seedUserWithHub(db, schema, 'BadLayerId');
     await expect(
@@ -668,6 +713,55 @@ describe('applyNativeBlockPatch — description/location/timezone content', () =
 });
 
 describe('updateCalendarItem — provider_event content patch, no foreground push', () => {
+  it('updates a local saved-place binding without creating a provider-event write', async () => {
+    const userId = await seedUserWithHub(db, schema, 'ProviderCanonicalPlace');
+    const placeId = await seedWorkPlace(userId, 'North campus');
+    const { layerId, connectionId } = await seedProviderLayer(userId);
+    const itemId = await seedProviderEventItemDirect(userId, layerId, connectionId);
+
+    const updated = await updateCalendarItem(db, {
+      userId,
+      itemId,
+      patch: { workPlaceId: WorkPlaceId.parse(placeId) },
+    });
+    const writes = await db
+      .select({ id: schema.calendarItemWrite.id })
+      .from(schema.calendarItemWrite)
+      .where(eq(schema.calendarItemWrite.calendarItemId, itemId));
+
+    expect(updated.workPlaceId).toBe(placeId);
+    expect(updated.syncState).toBe('clean');
+    expect(writes).toEqual([]);
+
+    const cleared = await updateCalendarItem(db, {
+      userId,
+      itemId,
+      patch: { workPlaceId: null },
+    });
+    expect(cleared.workPlaceId).toBeNull();
+  });
+
+  it('allows a canonical saved-place binding even when provider core fields are read-only', async () => {
+    const userId = await seedUserWithHub(db, schema, 'ReadOnlyProviderCanonicalPlace');
+    const placeId = await seedWorkPlace(userId, 'Client campus');
+    const { layerId, connectionId } = await seedProviderLayer(userId, { editableCore: false });
+    const itemId = await seedProviderEventItemDirect(userId, layerId, connectionId, {
+      permissions: {
+        canEditCore: false,
+        canDelete: false,
+        readOnlyReason: 'layer_access_role',
+      },
+    });
+
+    const updated = await updateCalendarItem(db, {
+      userId,
+      itemId,
+      patch: { workPlaceId: WorkPlaceId.parse(placeId) },
+    });
+    expect(updated.workPlaceId).toBe(placeId);
+    expect(updated.syncState).toBe('clean');
+  });
+
   it('sets non-empty description/location and skips the push when syncModules is omitted', async () => {
     const userId = await seedUserWithHub(db, schema, 'ProviderPatchNoSync');
     const { layerId, connectionId } = await seedProviderLayer(userId);

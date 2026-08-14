@@ -32,6 +32,7 @@ function commitment(
     sessionsPerWeek: 1,
     minutesPerSession: null,
     location: null,
+    workPlaceId: null,
     attendees: [],
     active: true,
     ...over,

@@ -53,6 +53,7 @@ export interface PlannedBlock {
   readonly end: number;
   readonly organizationId: string | null;
   readonly location: string | null;
+  readonly workPlaceId: string | null;
   readonly attendees: readonly string[];
   readonly commitmentId: string | null;
   /** The planned block this one is anchored to, when both come from this run. */
@@ -119,7 +120,11 @@ const MEETING_SHAPES: ReadonlySet<WorkShape> = new Set<WorkShape>([
 function unmetRequirement(commitment: SchedulingCommitment): UnplacedDemandOut['reason'] | null {
   const profile = workShapeProfile(commitment.shape);
   for (const requirement of profile.requires) {
-    if (requirement === 'location' && (commitment.location ?? '').trim() === '') {
+    if (
+      requirement === 'location' &&
+      commitment.workPlaceId === null &&
+      (commitment.location ?? '').trim() === ''
+    ) {
       return 'missing_location';
     }
     if (requirement === 'attendees' && commitment.attendees.length === 0) {
@@ -263,6 +268,7 @@ export function planWeek(input: PlanWeekInput): PlanWeekResult {
         end: span.end,
         organizationId: anchor.organizationId,
         location: null,
+        workPlaceId: null,
         attendees: [],
         commitmentId: null,
         anchorKey: anchor.key,
@@ -445,6 +451,7 @@ function toBlock(demand: Demand, span: Span, ordinal: number): PlannedBlock {
     end: span.end,
     organizationId: demand.commitment.organizationId,
     location: demand.commitment.location,
+    workPlaceId: demand.commitment.workPlaceId,
     attendees: demand.commitment.attendees,
     commitmentId: demand.commitment.id,
     anchorKey: null,
@@ -517,6 +524,7 @@ function backfill(input: {
       end: span.end,
       organizationId: null,
       location: null,
+      workPlaceId: null,
       attendees: [],
       commitmentId: null,
       anchorKey: null,

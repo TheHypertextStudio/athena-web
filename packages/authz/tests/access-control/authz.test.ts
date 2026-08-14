@@ -23,6 +23,7 @@ import {
   noSelfEscalation,
   SelfEscalationError,
 } from '../../src/write-guards';
+import { assertDefined } from '@docket/test-utils';
 
 let db!: Database;
 let orgId!: string;
@@ -253,7 +254,7 @@ beforeAll(async () => {
   db = d;
 
   const orgRows = await db.insert(organization).values({ name: 'Acme', slug: 'acme' }).returning();
-  orgId = orgRows[0]!.id;
+  orgId = assertDefined(orgRows[0]).id;
 
   const roles = await db
     .insert(role)
@@ -284,99 +285,130 @@ beforeAll(async () => {
       },
     ])
     .returning();
-  ownerRoleId = roles.find((r) => r.key === 'owner')!.id;
-  memberRoleId = roles.find((r) => r.key === 'member')!.id;
-  guestRoleId = roles.find((r) => r.key === 'guest')!.id;
+  ownerRoleId = assertDefined(roles.find((r) => r.key === 'owner')).id;
+  memberRoleId = assertDefined(roles.find((r) => r.key === 'member')).id;
+  guestRoleId = assertDefined(roles.find((r) => r.key === 'guest')).id;
 
-  ownerActorId = (
-    await db
-      .insert(actor)
-      .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', roleId: ownerRoleId })
-      .returning()
-  )[0]!.id;
-  memberActorId = (
-    await db
-      .insert(actor)
-      .values({ organizationId: orgId, kind: 'human', displayName: 'Member', roleId: memberRoleId })
-      .returning()
-  )[0]!.id;
-  guestActorId = (
-    await db
-      .insert(actor)
-      .values({ organizationId: orgId, kind: 'human', displayName: 'Guest', roleId: guestRoleId })
-      .returning()
-  )[0]!.id;
-  suspendedActorId = (
-    await db
-      .insert(actor)
-      .values({
-        organizationId: orgId,
-        kind: 'human',
-        displayName: 'Suspended',
-        roleId: memberRoleId,
-        status: 'suspended',
-      })
-      .returning()
-  )[0]!.id;
+  ownerActorId = assertDefined(
+    (
+      await db
+        .insert(actor)
+        .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', roleId: ownerRoleId })
+        .returning()
+    )[0],
+  ).id;
+  memberActorId = assertDefined(
+    (
+      await db
+        .insert(actor)
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Member',
+          roleId: memberRoleId,
+        })
+        .returning()
+    )[0],
+  ).id;
+  guestActorId = assertDefined(
+    (
+      await db
+        .insert(actor)
+        .values({ organizationId: orgId, kind: 'human', displayName: 'Guest', roleId: guestRoleId })
+        .returning()
+    )[0],
+  ).id;
+  suspendedActorId = assertDefined(
+    (
+      await db
+        .insert(actor)
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Suspended',
+          roleId: memberRoleId,
+          status: 'suspended',
+        })
+        .returning()
+    )[0],
+  ).id;
 
-  teamId = (
-    await db.insert(team).values({ organizationId: orgId, name: 'Core', key: 'CORE' }).returning()
-  )[0]!.id;
-  isolatedTeamId = (
-    await db.insert(team).values({ organizationId: orgId, name: 'Iso', key: 'ISO' }).returning()
-  )[0]!.id;
-  programId = (
-    await db.insert(program).values({ organizationId: orgId, name: 'Ops' }).returning()
-  )[0]!.id;
-  projectId = (
-    await db
-      .insert(project)
-      .values({ organizationId: orgId, name: 'Proj', teamId, programId })
-      .returning()
-  )[0]!.id;
-  projectUnderTeamOnlyId = (
-    await db
-      .insert(project)
-      .values({ organizationId: orgId, name: 'TeamOnlyProj', teamId })
-      .returning()
-  )[0]!.id;
-  projectUnderProgramOnlyId = (
-    await db
-      .insert(project)
-      .values({ organizationId: orgId, name: 'ProgramOnlyProj', programId })
-      .returning()
-  )[0]!.id;
-  projectExpiredId = (
-    await db
-      .insert(project)
-      .values({ organizationId: orgId, name: 'ExpiredProj', teamId: isolatedTeamId })
-      .returning()
-  )[0]!.id;
-  projectFutureId = (
-    await db
-      .insert(project)
-      .values({ organizationId: orgId, name: 'FutureProj', teamId: isolatedTeamId })
-      .returning()
-  )[0]!.id;
-  taskFullId = (
-    await db
-      .insert(task)
-      .values({
-        organizationId: orgId,
-        title: 'Full task',
-        teamId,
-        state: 'todo',
-        projectId,
-        programId,
-      })
-      .returning()
-  )[0]!.id;
-  taskBareId = (
-    await db
-      .insert(task)
-      .values({ organizationId: orgId, title: 'Bare task', teamId, state: 'todo' })
-      .returning()
-  )[0]!.id;
+  teamId = assertDefined(
+    (
+      await db.insert(team).values({ organizationId: orgId, name: 'Core', key: 'CORE' }).returning()
+    )[0],
+  ).id;
+  isolatedTeamId = assertDefined(
+    (
+      await db.insert(team).values({ organizationId: orgId, name: 'Iso', key: 'ISO' }).returning()
+    )[0],
+  ).id;
+  programId = assertDefined(
+    (await db.insert(program).values({ organizationId: orgId, name: 'Ops' }).returning())[0],
+  ).id;
+  projectId = assertDefined(
+    (
+      await db
+        .insert(project)
+        .values({ organizationId: orgId, name: 'Proj', teamId, programId })
+        .returning()
+    )[0],
+  ).id;
+  projectUnderTeamOnlyId = assertDefined(
+    (
+      await db
+        .insert(project)
+        .values({ organizationId: orgId, name: 'TeamOnlyProj', teamId })
+        .returning()
+    )[0],
+  ).id;
+  projectUnderProgramOnlyId = assertDefined(
+    (
+      await db
+        .insert(project)
+        .values({ organizationId: orgId, name: 'ProgramOnlyProj', programId })
+        .returning()
+    )[0],
+  ).id;
+  projectExpiredId = assertDefined(
+    (
+      await db
+        .insert(project)
+        .values({ organizationId: orgId, name: 'ExpiredProj', teamId: isolatedTeamId })
+        .returning()
+    )[0],
+  ).id;
+  projectFutureId = assertDefined(
+    (
+      await db
+        .insert(project)
+        .values({ organizationId: orgId, name: 'FutureProj', teamId: isolatedTeamId })
+        .returning()
+    )[0],
+  ).id;
+  taskFullId = assertDefined(
+    (
+      await db
+        .insert(task)
+        .values({
+          organizationId: orgId,
+          title: 'Full task',
+          teamId,
+          state: 'todo',
+          projectId,
+          programId,
+        })
+        .returning()
+    )[0],
+  ).id;
+  taskBareId = assertDefined(
+    (
+      await db
+        .insert(task)
+        .values({ organizationId: orgId, title: 'Bare task', teamId, state: 'todo' })
+        .returning()
+    )[0],
+  ).id;
 
   await db.insert(grant).values([
     {
@@ -562,18 +594,27 @@ describe('canActor', () => {
 
   it('ignores a deny-effect grant (DENY deferred)', async () => {
     // A deny on the org for a fresh actor must be a no-op: it never reduces the allow set.
-    const lonerRoleId = (
-      await db
-        .insert(role)
-        .values({ organizationId: orgId, key: 'loner', name: 'Loner', capabilities: ['view'] })
-        .returning()
-    )[0]!.id;
-    const lonerId = (
-      await db
-        .insert(actor)
-        .values({ organizationId: orgId, kind: 'human', displayName: 'Loner', roleId: lonerRoleId })
-        .returning()
-    )[0]!.id;
+    const lonerRoleId = assertDefined(
+      (
+        await db
+          .insert(role)
+          .values({ organizationId: orgId, key: 'loner', name: 'Loner', capabilities: ['view'] })
+          .returning()
+      )[0],
+    ).id;
+    const lonerId = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({
+            organizationId: orgId,
+            kind: 'human',
+            displayName: 'Loner',
+            roleId: lonerRoleId,
+          })
+          .returning()
+      )[0],
+    ).id;
     await db.insert(grant).values([
       {
         organizationId: orgId,
@@ -603,12 +644,19 @@ describe('canActor', () => {
   it('skips a grant whose resourceId is in the chain but whose kind differs', async () => {
     // A grant where resourceId == orgId but resourceKind != 'organization' passes the
     // id-only SQL filter yet fails the kind+id chain re-check (line 82 skip branch).
-    const odd = (
-      await db
-        .insert(actor)
-        .values({ organizationId: orgId, kind: 'human', displayName: 'Odd', roleId: memberRoleId })
-        .returning()
-    )[0]!.id;
+    const odd = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({
+            organizationId: orgId,
+            kind: 'human',
+            displayName: 'Odd',
+            roleId: memberRoleId,
+          })
+          .returning()
+      )[0],
+    ).id;
     await db.insert(grant).values({
       organizationId: orgId,
       subjectKind: 'actor',
@@ -719,26 +767,30 @@ describe('effectiveVisibility', () => {
 
 describe('lastOwnerGuard', () => {
   it('is a no-op when the org has no owner role', async () => {
-    const ownerlessOrg = (
-      await db.insert(organization).values({ name: 'Ownerless', slug: 'ownerless' }).returning()
-    )[0]!.id;
+    const ownerlessOrg = assertDefined(
+      (
+        await db.insert(organization).values({ name: 'Ownerless', slug: 'ownerless' }).returning()
+      )[0],
+    ).id;
     await expect(
       lastOwnerGuard(db, ownerlessOrg, '00000000000000000000000000'),
     ).resolves.toBeUndefined();
   });
 
   it('allows downgrading when another active owner remains', async () => {
-    const secondOwnerId = (
-      await db
-        .insert(actor)
-        .values({
-          organizationId: orgId,
-          kind: 'human',
-          displayName: 'Owner2',
-          roleId: ownerRoleId,
-        })
-        .returning()
-    )[0]!.id;
+    const secondOwnerId = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({
+            organizationId: orgId,
+            kind: 'human',
+            displayName: 'Owner2',
+            roleId: ownerRoleId,
+          })
+          .returning()
+      )[0],
+    ).id;
     // Removing the original owner is fine: secondOwnerId still holds the role.
     await expect(lastOwnerGuard(db, orgId, ownerActorId)).resolves.toBeUndefined();
     // And removing the second is fine too: the original remains.
@@ -746,32 +798,36 @@ describe('lastOwnerGuard', () => {
   });
 
   it('throws when removing/downgrading the sole active owner', async () => {
-    const soloOrg = (
-      await db.insert(organization).values({ name: 'Solo', slug: 'solo' }).returning()
-    )[0]!.id;
-    const soloOwnerRoleId = (
-      await db
-        .insert(role)
-        .values({
-          organizationId: soloOrg,
-          key: 'owner',
-          name: 'Owner',
-          isSystem: true,
-          capabilities: ['manage'],
-        })
-        .returning()
-    )[0]!.id;
-    const soloOwnerId = (
-      await db
-        .insert(actor)
-        .values({
-          organizationId: soloOrg,
-          kind: 'human',
-          displayName: 'Solo Owner',
-          roleId: soloOwnerRoleId,
-        })
-        .returning()
-    )[0]!.id;
+    const soloOrg = assertDefined(
+      (await db.insert(organization).values({ name: 'Solo', slug: 'solo' }).returning())[0],
+    ).id;
+    const soloOwnerRoleId = assertDefined(
+      (
+        await db
+          .insert(role)
+          .values({
+            organizationId: soloOrg,
+            key: 'owner',
+            name: 'Owner',
+            isSystem: true,
+            capabilities: ['manage'],
+          })
+          .returning()
+      )[0],
+    ).id;
+    const soloOwnerId = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({
+            organizationId: soloOrg,
+            kind: 'human',
+            displayName: 'Solo Owner',
+            roleId: soloOwnerRoleId,
+          })
+          .returning()
+      )[0],
+    ).id;
     await expect(lastOwnerGuard(db, soloOrg, soloOwnerId)).rejects.toBeInstanceOf(LastOwnerError);
   });
 

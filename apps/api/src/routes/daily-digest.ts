@@ -18,6 +18,8 @@ import { activityDay, activityHighlight, dailyDigest, db, hub, user } from '@doc
 import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { localDateOf, zonedParts } from '../lib/activity/local-day';
+import { joinLabels, sourceLabel, type SourceSystemKind } from '@docket/types';
+import { buildHighlightsDayPayload } from '../services/highlights/read';
 import { reconcileDay } from '../services/highlights/reconcile';
 import { dispatchSystemUserNotification } from '../services/notifications/system';
 
@@ -98,6 +100,8 @@ export function assembleHighlightsMarkdown(input: {
   readonly dateLabel: string;
   readonly recipientName?: string | null;
   readonly highlights: readonly { readonly sentence: string }[];
+  /** Sources that could not be read for this day, so the email can say the list is partial. */
+  readonly unreadSources?: readonly SourceSystemKind[];
 }): string {
   const greeting = input.recipientName
     ? `Hi ${input.recipientName} — here's what you did on ${input.dateLabel}:`
@@ -106,7 +110,17 @@ export function assembleHighlightsMarkdown(input: {
     input.highlights.length > 0
       ? input.highlights.map((highlight) => `- ${highlight.sentence}`).join('\n')
       : '_No tracked activity today._';
-  return `# Your day\n\n${greeting}\n\n${body}`;
+  // The connector-reliability invariant on this surface. An email is read once and believed, so a day
+  // assembled from sources that could not all be reached must say so — otherwise a GitHub outage and
+  // a day with no pull requests produce the same message, and the reader has no way to tell that what
+  // they are being told they did is incomplete. App-owned copy naming the source, never a provider's
+  // diagnostic.
+  const unread = input.unreadSources ?? [];
+  const caveat =
+    unread.length > 0
+      ? `\n\n_${joinLabels(unread.map(sourceLabel))} could not be read for this day, so anything from ${unread.length > 1 ? 'those' : 'there'} is missing._`
+      : '';
+  return `# Your day\n\n${greeting}\n\n${body}${caveat}`;
 }
 
 /** Generate, send, and persist one user's digest for their local day. Returns the outcome. */
@@ -133,7 +147,33 @@ async function generateForUser(
       target: [dailyDigest.userId, dailyDigest.digestDate, dailyDigest.cadence],
     })
     .returning({ id: dailyDigest.id });
-  if (!claimed) return 'skipped';
+
+  // A row already exists. Usually that means this day was handled and there is nothing to do — but a
+  // `failed` row means an earlier tick could not deliver it, and without a way back that day's email
+  // is lost permanently to one transient error. The events and highlights are intact, and narration
+  // retries on its own, so taking the row back and trying again is almost always the right answer.
+  //
+  // The status predicate is the concurrency control: two ticks racing means one `UPDATE` matches and
+  // the other returns nothing, exactly as the insert's conflict clause behaves. Retries are naturally
+  // bounded — the sweep only runs a day after its local send time, and tomorrow is a different
+  // `digestDate`.
+  const claim =
+    claimed ??
+    (
+      await db
+        .update(dailyDigest)
+        .set({ status: 'generating', lastError: null })
+        .where(
+          and(
+            eq(dailyDigest.userId, candidate.userId),
+            eq(dailyDigest.digestDate, localDate),
+            eq(dailyDigest.cadence, 'eod'),
+            eq(dailyDigest.status, 'failed'),
+          ),
+        )
+        .returning({ id: dailyDigest.id })
+    )[0];
+  if (!claim) return 'skipped';
 
   try {
     // Make the day current, then deliver it. The digest does not narrate: `reconcileDay` owns that,
@@ -156,7 +196,7 @@ async function generateForUser(
       await db
         .update(dailyDigest)
         .set({ status: 'skipped_empty', eventCount: 0, generatedAt: now })
-        .where(eq(dailyDigest.id, claimed.id));
+        .where(eq(dailyDigest.id, claim.id));
       return 'empty';
     }
 
@@ -190,7 +230,7 @@ async function generateForUser(
           eventCount: day.eventCount,
           generatedAt: now,
         })
-        .where(eq(dailyDigest.id, claimed.id));
+        .where(eq(dailyDigest.id, claim.id));
       return 'empty';
     }
 
@@ -214,13 +254,21 @@ async function generateForUser(
           eventCount: day.eventCount,
           lastError: 'the day has no narrated highlights to deliver',
         })
-        .where(eq(dailyDigest.id, claimed.id));
+        .where(eq(dailyDigest.id, claim.id));
       return 'failed';
     }
+    // Read through the same builder the app and the agent use, so the email's account of which
+    // sources were reachable is the account the panel gives — not a second opinion assembled here.
+    const { sources } = await buildHighlightsDayPayload(candidate.userId, localDate, now);
+    const unreadSources = sources
+      .filter((source) => source.state === 'failed' || source.state === 'disconnected')
+      .map((source) => source.system);
+
     const markdown = assembleHighlightsMarkdown({
       dateLabel,
       recipientName: candidate.name,
       highlights,
+      unreadSources,
     });
     const html = markdownToHtml(markdown);
 
@@ -254,14 +302,14 @@ async function generateForUser(
         generatedAt: now,
         sentAt: now,
       })
-      .where(eq(dailyDigest.id, claimed.id));
+      .where(eq(dailyDigest.id, claim.id));
     return 'sent';
   } catch (err) {
     const message = err instanceof Error ? err.message : 'digest generation error';
     await db
       .update(dailyDigest)
       .set({ status: 'failed', lastError: message })
-      .where(eq(dailyDigest.id, claimed.id));
+      .where(eq(dailyDigest.id, claim.id));
     return 'failed';
   }
 }

@@ -165,7 +165,10 @@ export default function TodayPage(): JSX.Element {
 
           {/* Last, and only from mid-afternoon: this is the one backward-looking thing on a
               forward-looking page, so it must not open the day on the past. */}
-          <DayRecapEntry date={date} />
+          {/* No date: which day it is now is the server's to say, from the Hub timezone. The browser's
+              clock disagrees whenever somebody travels, and asking for its today from a zone behind
+              it asks for a day that has not happened. */}
+          <DayRecapEntry />
         </>
       )}
     </div>

@@ -97,6 +97,10 @@ export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
   const search = useAppSearchParams();
   const now = props.now ?? new Date();
   const date = asDate(search.get('date')) ?? todayString(now);
+  // Only a day the person actually chose. The highlights panel treats an absent date as "today", and
+  // lets the server resolve it from the Hub timezone rather than trusting this browser's clock —
+  // which disagrees whenever they travel, and can ask for a day that has not happened.
+  const explicitDate = asDate(search.get('date')) ?? undefined;
   const weekStartDate = asDate(search.get('week')) ?? weekStartOf(new Date(`${date}T12:00:00Z`));
   const [lens, setLens] = useState<Lens>(asLens(search.get('lens')) ?? props.initialLens ?? 'week');
 
@@ -216,7 +220,7 @@ export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
               review={review.data}
               // Above the three steps: reconciling what was left over and answering what moved are
               // both far easier once the day itself is on screen.
-              leadingPanel={<DayHighlights date={date} mode="review" headingLevel={3} />}
+              leadingPanel={<DayHighlights date={explicitDate} mode="review" headingLevel={3} />}
               busy={dispose.isPending || answer.isPending || confirm.isPending}
               onDispose={(input) => {
                 dispose.mutate(input);

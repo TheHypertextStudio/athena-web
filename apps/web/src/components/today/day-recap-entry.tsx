@@ -23,7 +23,8 @@ import { useDayHighlights } from '@/components/activity/use-day-highlights';
 /** Props for {@link DayRecapEntry}. */
 export interface DayRecapEntryProps {
   /** The local day (`YYYY-MM-DD`). */
-  readonly date: string;
+  /** An explicitly chosen day, or omitted for the caller's today as the server resolves it. */
+  readonly date?: string;
   /** Local hour from which the entry may appear, 0–23. */
   readonly revealAfterHour?: number;
   /** Fixed clock, so the reveal rule is testable. */
@@ -57,8 +58,11 @@ export function DayRecapEntry({
 
   return (
     <EntityListRow
+      // `day.date` is what the server says this day is, not what the browser guessed. Linking to a
+      // different date than the one just summarised would open a different day than this row
+      // describes.
       render={(props) => (
-        <Link {...props} href={`/plan?lens=evening&date=${date}`}>
+        <Link {...props} href={`/plan?lens=evening&date=${day.date}`}>
           {props.children}
         </Link>
       )}

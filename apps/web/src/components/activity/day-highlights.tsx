@@ -28,7 +28,8 @@ import { useCurateHighlight, useDayHighlights } from './use-day-highlights';
 /** Props for {@link DayHighlights}. */
 export interface DayHighlightsProps {
   /** The local day to show (`YYYY-MM-DD`). */
-  readonly date: string;
+  /** An explicitly chosen day, or omitted for the caller's today as the server resolves it. */
+  readonly date?: string;
   /**
    * Whether the sentences can be curated.
    *

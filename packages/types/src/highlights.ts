@@ -182,3 +182,57 @@ export type StreamEventLinkBody = z.infer<typeof StreamEventLinkBody>;
 export const PERSONAL_ACTIVITY_SOURCES = ['gmail', 'google_calendar'] as const;
 /** Personal-activity source value. */
 export type PersonalActivitySource = (typeof PERSONAL_ACTIVITY_SOURCES)[number];
+
+/**
+ * Human labels for the sources a day can draw on.
+ *
+ * @remarks
+ * Application-owned, never a provider's own error or display string. Shared rather than duplicated
+ * because the panel and the digest email both name sources to the same person: two lists would drift
+ * and tell them "GitHub" in one place and "github" in the other about the same missing day.
+ */
+const SOURCE_LABEL: Partial<Record<SourceSystemKind, string>> = {
+  github: 'GitHub',
+  gmail: 'Gmail',
+  google_calendar: 'Calendar',
+  linear: 'Linear',
+  docket: 'Docket',
+  slack: 'Slack',
+  discord: 'Discord',
+  google_drive: 'Drive',
+  outlook: 'Outlook',
+};
+
+/**
+ * The display label for a source.
+ *
+ * @param system - The canonical source system.
+ * @returns a human label.
+ *
+ * @example
+ * ```typescript
+ * sourceLabel('google_calendar'); // 'Calendar'
+ * ```
+ */
+export function sourceLabel(system: SourceSystemKind): string {
+  return SOURCE_LABEL[system] ?? system.replaceAll('_', ' ');
+}
+
+/**
+ * Join labels into a readable English list.
+ *
+ * @param labels - The labels to join.
+ * @returns `""`, `"Gmail"`, or `"Gmail, GitHub and Calendar"`.
+ *
+ * @example
+ * ```typescript
+ * joinLabels(['Gmail', 'GitHub']); // 'Gmail and GitHub'
+ * ```
+ */
+export function joinLabels(labels: readonly string[]): string {
+  // Written with `join` rather than index access so there is no unreachable `?? ''` to defend: an
+  // index into a possibly-empty array is optional to TypeScript even where the length check has
+  // already ruled it out, and a branch that cannot be taken is a branch that cannot be tested.
+  if (labels.length <= 1) return labels.join('');
+  return `${labels.slice(0, -1).join(', ')} and ${labels.slice(-1).join('')}`;
+}

@@ -7,32 +7,11 @@
  * in it and a day whose sources could not be read look identical on screen unless something insists
  * they are different, and this is that something.
  */
-import type { HighlightSourceStatus, HighlightsDayOut, SourceSystemKind } from '@docket/types';
+import type { HighlightOut, HighlightSourceStatus, HighlightsDayOut } from '@docket/types';
 
-/** Human labels for the sources a day can draw on. Application-owned, never a provider's own name. */
-const SOURCE_LABEL: Partial<Record<SourceSystemKind, string>> = {
-  github: 'GitHub',
-  gmail: 'Gmail',
-  google_calendar: 'Calendar',
-  linear: 'Linear',
-  docket: 'Docket',
-};
-
-/**
- * The display label for a source.
- *
- * @param system - The canonical source system.
- * @returns a human label.
- */
-export function sourceLabel(system: SourceSystemKind): string {
-  return SOURCE_LABEL[system] ?? system.replaceAll('_', ' ');
-}
-
-/** Join labels into a readable list ("Gmail, GitHub and Calendar"). */
-export function joinLabels(labels: readonly string[]): string {
-  if (labels.length <= 1) return labels[0] ?? '';
-  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1] ?? ''}`;
-}
+// Re-exported rather than redefined: the digest email names the same sources to the same person, so
+// one list is the only way "GitHub" cannot become "github" between the panel and the inbox.
+export { joinLabels, sourceLabel } from '@docket/types';
 
 /** What the panel needs to know about a day in order to describe it truthfully. */
 export interface DaySummary {
@@ -83,9 +62,15 @@ export function summarizeDay(day: HighlightsDayOut | undefined): DaySummary {
   if (!day) return { ...base, shape: 'loading' };
   if (highlights.length > 0) return { ...base, shape: 'listed' };
   if (!anyConnected) return { ...base, shape: 'not_connected' };
-  // Nothing to show *and* something could not be read: the day is unfinished, not empty.
-  if (troubledSources.length > 0 || day.status === 'pending')
-    return { ...base, shape: 'incomplete' };
+  // Only a day that has finished being built may be called quiet. `ready` and `empty` are the two
+  // settled answers; `pending`, `reconciling` and `failed` all mean the day is still unfinished, and
+  // saying "nothing came in today" about one of those is exactly the conflation the status enum
+  // exists to prevent. Written as an allowlist of settled states so a status added later reads as
+  // unfinished rather than silently joining the quiet case.
+  const settled = day.status === 'ready' || day.status === 'empty';
+  // Nothing to show, and either a source could not be read or the day is not finished: unfinished,
+  // not empty.
+  if (troubledSources.length > 0 || !settled) return { ...base, shape: 'incomplete' };
   return { ...base, shape: 'quiet' };
 }
 
@@ -111,4 +96,43 @@ export function entryTimeLabel(input: {
   // A range, never a duration — the length of a working session is a different question, and the
   // Time Ledger is what answers it.
   return from === to ? from : `${from}–${to}`;
+}
+
+/** How a narration should be presented: its text, and whether it can be edited or is still coming. */
+export interface NarrationView {
+  /** The sentence to show; empty when there is none to show yet. */
+  readonly text: string;
+  /** Whether the person may write or rewrite this line now. */
+  readonly editable: boolean;
+  /** Whether a sentence is still being written for it. */
+  readonly pending: boolean;
+}
+
+/**
+ * Decide what one entry's narration should say and offer.
+ *
+ * @remarks
+ * Lives here rather than in the row because it is a decision about meaning, not markup, and because
+ * the rule it encodes is easy to get wrong in a way no rendering test would notice.
+ *
+ * @param highlight - The entry.
+ * @returns what to render for its narration.
+ *
+ * @example
+ * ```typescript
+ * narrationView(entry).editable; // false while a sentence is still being written
+ * ```
+ */
+export function narrationView(highlight: HighlightOut): NarrationView {
+  const { state, text } = highlight.narration;
+  if (state === 'ready' && text !== null) return { text, editable: true, pending: false };
+  if (state === 'failed') {
+    // Never an invented first-person sentence — but never blank when the person has written one
+    // either. Narration failing does not un-write their rewrite, and `text` already prefers it over
+    // the generated line, so discarding it here made a saved edit look thrown away on the next
+    // render. The genuinely empty case is nobody having written anything, which gets the plain
+    // write-it-yourself affordance.
+    return { text: text ?? '', editable: true, pending: false };
+  }
+  return { text: '', editable: false, pending: true };
 }

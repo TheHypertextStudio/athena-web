@@ -24,7 +24,7 @@ import { entityGlyph } from '@/components/activity/entity-glyph';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { ProviderBadge } from '@/components/stream/provider-badge';
 
-import { entryTimeLabel } from './highlight-view';
+import { entryTimeLabel, narrationView } from './highlight-view';
 
 /** What a person may do to one entry. Absent means the entry is a record to read, not to curate. */
 export interface DayHighlightActions {
@@ -45,21 +45,6 @@ export interface DayHighlightRowProps {
 }
 
 /** The sentence to show, and whether it can be edited yet. */
-function narrationState(highlight: HighlightOut): {
-  readonly text: string;
-  readonly editable: boolean;
-  readonly pending: boolean;
-} {
-  const { state, text } = highlight.narration;
-  if (state === 'ready' && text !== null) return { text, editable: true, pending: false };
-  if (state === 'failed') {
-    // Never blank, and never an invented first-person sentence: say plainly that the description is
-    // missing and let it be written by hand.
-    return { text: '', editable: true, pending: false };
-  }
-  return { text: '', editable: false, pending: true };
-}
-
 /**
  * One entry: what it was about, when, where it came from, and what it says.
  *
@@ -73,7 +58,7 @@ export function DayHighlightRow({
 }: DayHighlightRowProps): JSX.Element {
   const Glyph = entityGlyph(highlight.entityKind);
   const subject = highlight.subjectTitle ?? 'Something happened';
-  const { text, editable, pending } = narrationState(highlight);
+  const { text, editable, pending } = narrationView(highlight);
   const href = highlight.events.find((event) => event.permalink !== null)?.permalink ?? null;
   const dropped = !highlight.kept;
 

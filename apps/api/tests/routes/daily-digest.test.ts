@@ -11,6 +11,7 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let sweepDailyDigests!: typeof DigestModule.sweepDailyDigests;
 let markdownToHtml!: typeof DigestModule.markdownToHtml;
+let assembleHighlightsMarkdown!: typeof DigestModule.assembleHighlightsMarkdown;
 let outbox!: CaptureMailer['outbox'];
 
 /** A fixed reference time: 20:00 UTC, past an 18:00 send time. */
@@ -23,6 +24,7 @@ beforeAll(async () => {
   db = schema.db;
   const mod = await import('../../src/routes/daily-digest');
   sweepDailyDigests = mod.sweepDailyDigests;
+  assembleHighlightsMarkdown = mod.assembleHighlightsMarkdown;
   markdownToHtml = mod.markdownToHtml;
   // The container's mailer is the in-memory CaptureMailer under APP_MODE=test.
   const { getContainer } = await import('../../src/container');
@@ -303,10 +305,12 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .mockRejectedValueOnce('a plain string rejection');
 
     try {
-      const result = await sweepDailyDigests(NOW);
-      expect(result.sent).toBe(0);
-      expect(result.failed).toBe(1);
+      await sweepDailyDigests(NOW);
 
+      // Asserted on this user's row rather than on the sweep's tally. The tally counts every user in
+      // the database, and a failed digest is now retried by a later tick — so an earlier test's
+      // failure being delivered on retry legitimately moves the global numbers without saying
+      // anything about this day.
       const [digest] = await db
         .select()
         .from(schema.dailyDigest)
@@ -330,6 +334,45 @@ describe('sweepDailyDigests (the hero feature)', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it('tries again on a later tick after a delivery failure', async () => {
+    // A `failed` digest used to be terminal: the row existed, so every later tick's insert conflicted
+    // and returned "skipped", and one transient mail or model error meant that day's email was never
+    // sent at all — while the events and highlights sat there intact.
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
+    await seedEvent(orgId, userId, 'Work worth reporting');
+
+    const { getContainer } = await import('../../src/container');
+    const failing = vi
+      .spyOn(getContainer().mailer, 'send')
+      .mockRejectedValueOnce(new Error('mail provider unavailable'));
+    await sweepDailyDigests(NOW);
+    failing.mockRestore();
+
+    const [afterFailure] = await db
+      .select()
+      .from(schema.dailyDigest)
+      .where(eq(schema.dailyDigest.userId, userId));
+    expect(afterFailure!.status).toBe('failed');
+
+    // The same day, a later tick. Nothing about the day changed — only that the transient failure is
+    // over.
+    await sweepDailyDigests(NOW);
+
+    const [afterRetry] = await db
+      .select()
+      .from(schema.dailyDigest)
+      .where(eq(schema.dailyDigest.userId, userId));
+    expect(afterRetry!.status).toBe('sent');
+    expect(afterRetry!.sentAt).not.toBeNull();
+    // Still one row: the retry takes the existing claim back rather than creating a second digest.
+    const all = await db
+      .select()
+      .from(schema.dailyDigest)
+      .where(eq(schema.dailyDigest.userId, userId));
+    expect(all).toHaveLength(1);
   });
 
   it('stays silent for a day the person curated away', async () => {
@@ -360,6 +403,44 @@ describe('sweepDailyDigests (the hero feature)', () => {
 });
 
 describe('markdownToHtml', () => {
+  it('says the day is partial when a source could not be read', () => {
+    // The connector-reliability invariant on the email. An email is read once and believed, so a day
+    // assembled from sources that could not all be reached has to say so — otherwise an outage and a
+    // day with nothing in it produce the same message and the reader cannot tell which they got.
+    const one = assembleHighlightsMarkdown({
+      dateLabel: 'Wednesday, August 12, 2026',
+      highlights: [{ sentence: 'I shipped the beta.' }],
+      unreadSources: ['github'],
+    });
+    expect(one).toContain('I shipped the beta.');
+    expect(one).toContain('GitHub');
+    // App-owned copy naming the source, never a provider's own diagnostic.
+    expect(one).not.toContain('github');
+
+    const several = assembleHighlightsMarkdown({
+      dateLabel: 'Wednesday, August 12, 2026',
+      highlights: [{ sentence: 'I shipped the beta.' }],
+      unreadSources: ['github', 'google_calendar'],
+    });
+    expect(several).toContain('GitHub and Calendar');
+  });
+
+  it('adds no caveat to a day whose sources were all reachable', () => {
+    // The counterpart: a complete day must read as complete, or the notice means nothing.
+    const complete = assembleHighlightsMarkdown({
+      dateLabel: 'Wednesday, August 12, 2026',
+      highlights: [{ sentence: 'I shipped the beta.' }],
+      unreadSources: [],
+    });
+    expect(complete).not.toContain('could not be read');
+    expect(
+      assembleHighlightsMarkdown({
+        dateLabel: 'Wednesday, August 12, 2026',
+        highlights: [{ sentence: 'I shipped the beta.' }],
+      }),
+    ).not.toContain('could not be read');
+  });
+
   it('closes a bullet list mid-document when a heading follows it, not only at the end', () => {
     const html = markdownToHtml('- first\n- second\n# A heading\nA paragraph.');
     expect(html).toBe(

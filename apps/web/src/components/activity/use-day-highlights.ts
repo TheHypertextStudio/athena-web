@@ -14,6 +14,12 @@
  * Polling escalates only while narration is in flight and then stops, expressed as a functional
  * `refetchInterval` rather than by conditionally swapping to a live query, which would be a
  * conditional hook call.
+ *
+ * `date` is optional throughout, and omitting it means "today" — resolved by the server from the
+ * person's Hub timezone rather than computed here from the browser clock. Those two disagree
+ * whenever somebody travels or their Hub zone is set to somewhere they are not, and asking for the
+ * browser's today from a zone behind it is asking for a day that has not happened yet, which the API
+ * correctly refuses. The client has no business deciding which day it is.
  */
 import type { HighlightPatch, HighlightsDayOut } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
@@ -39,12 +45,14 @@ const NARRATION_POLL_MS = 4_000;
  * Exported so a hover prefetch and the panel itself share one definition rather than two that can
  * disagree about staleness.
  *
- * @param date - The local day (`YYYY-MM-DD`).
+ * @param date - An explicitly chosen local day (`YYYY-MM-DD`), or omitted for the caller's today.
  */
-export function dayHighlightsDef(date: string) {
+export function dayHighlightsDef(date?: string) {
   return apiQueryOptions<HighlightsDayOut>(
-    queryKeys.dayHighlights(date),
-    () => api.v1.hub.highlights.$get({ query: { date } }),
+    // One key for "today" whichever surface asked, so arriving at the review from the day's entry
+    // renders from cache instead of re-fetching the same day under a different name.
+    queryKeys.dayHighlights(date ?? 'today'),
+    () => api.v1.hub.highlights.$get({ query: date === undefined ? {} : { date } }),
     'Could not load what happened today.',
     {
       staleTime: STALE.standard,
@@ -57,9 +65,9 @@ export function dayHighlightsDef(date: string) {
 /**
  * Read one narrated day.
  *
- * @param date - The local day (`YYYY-MM-DD`).
+ * @param date - An explicitly chosen local day (`YYYY-MM-DD`), or omitted for the caller's today.
  */
-export function useDayHighlights(date: string) {
+export function useDayHighlights(date?: string) {
   // A list read, so a refetch keeps the previous day on screen instead of flashing a skeleton.
   return useApiListQuery(dayHighlightsDef(date));
 }
@@ -67,11 +75,11 @@ export function useDayHighlights(date: string) {
 /**
  * Change what one entry of a day says.
  *
- * @param date - The local day whose cache to patch.
+ * @param date - The explicitly chosen day whose cache to patch, or omitted for the caller's today.
  */
-export function useCurateHighlight(date: string) {
+export function useCurateHighlight(date?: string) {
   const queryClient = useQueryClient();
-  const key = queryKeys.dayHighlights(date);
+  const key = queryKeys.dayHighlights(date ?? 'today');
   return useApiMutation<unknown, { id: string } & HighlightPatch>({
     mutationFn: (variables) =>
       unwrap(

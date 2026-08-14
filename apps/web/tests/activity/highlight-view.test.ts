@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   entryTimeLabel,
   joinLabels,
+  narrationView,
   sourceLabel,
   summarizeDay,
 } from '@/components/activity/highlight-view';
@@ -73,6 +74,27 @@ describe('summarizeDay', () => {
     expect(summarizeDay(day({ status: 'pending', sources: [source('github', 'ok')] })).shape).toBe(
       'incomplete',
     );
+  });
+
+  it('treats a day still being built as unfinished, whichever way it is unfinished', () => {
+    // `pending` was handled and the rest were not, so a day mid-reconcile fell through to "quiet" and
+    // told somebody nothing came in today while it was still being gathered. Only a settled day may
+    // be called quiet, and settled means `ready` or `empty` — nothing else.
+    for (const status of ['pending', 'reconciling', 'failed'] as const) {
+      expect(summarizeDay(day({ status, sources: [source('github', 'ok')] })).shape, status).toBe(
+        'incomplete',
+      );
+    }
+  });
+
+  it('calls a settled day with nothing in it quiet', () => {
+    // The counterpart: `incomplete` must not swallow the genuine case, or a person who really did
+    // nothing tracked is told forever that their day is still loading.
+    for (const status of ['ready', 'empty'] as const) {
+      expect(summarizeDay(day({ status, sources: [source('github', 'ok')] })).shape, status).toBe(
+        'quiet',
+      );
+    }
   });
 
   it('says nothing is connected when nothing is', () => {
@@ -151,5 +173,52 @@ describe('entryTimeLabel', () => {
       timezone: 'America/Chicago',
     });
     expect(utc).not.toBe(chicago);
+  });
+});
+
+describe('narrationView', () => {
+  /** One entry with a given narration state and text. */
+  function withNarration(
+    state: HighlightsDayOut['highlights'][number]['narration']['state'],
+    text: string | null,
+    edited = false,
+  ): HighlightsDayOut['highlights'][number] {
+    return { ...highlight('a'), narration: { state, text, edited } };
+  }
+
+  it('shows a person their own sentence even when narration failed', () => {
+    // The bug this pins. `text` already prefers the rewrite over the generated line, and the failed
+    // branch discarded it — so somebody who wrote their own description of a line Docket could not
+    // narrate watched it vanish on the next render. The row still saved it; only the display threw
+    // it away, which is the worst version: it looks like data loss and is not.
+    const view = narrationView(withNarration('failed', 'I did this bit myself.', true));
+    expect(view.text).toBe('I did this bit myself.');
+    expect(view.editable).toBe(true);
+    expect(view.pending).toBe(false);
+  });
+
+  it('offers an empty line to write when narration failed and nobody has written one', () => {
+    // Never blank *and* never an invented first-person sentence. Empty plus editable is the honest
+    // pair: there is nothing to show, and the person can say what happened.
+    const view = narrationView(withNarration('failed', null));
+    expect(view.text).toBe('');
+    expect(view.editable).toBe(true);
+    expect(view.pending).toBe(false);
+  });
+
+  it('shows a finished sentence and lets it be rewritten', () => {
+    const view = narrationView(withNarration('ready', 'I shipped it.'));
+    expect(view).toMatchObject({ text: 'I shipped it.', editable: true, pending: false });
+  });
+
+  it('waits, rather than showing an empty editable line, while one is still being written', () => {
+    // Editable-while-pending would let somebody start typing into a field about to be overwritten.
+    for (const state of ['pending', 'generating'] as const) {
+      expect(narrationView(withNarration(state, null)), state).toMatchObject({
+        text: '',
+        editable: false,
+        pending: true,
+      });
+    }
   });
 });

@@ -48,8 +48,10 @@ export const baseConfig = tseslint.config(
     },
   },
   {
-    // Tests legitimately use non-null assertions on known-seeded data and exercise
-    // `any`-typed fixture/driver values; keep the strict rules everywhere else.
+    // Tests exercise `any`-typed fixture/driver values; keep the strict rules
+    // everywhere else. Non-null assertions are NOT exempted here — use
+    // `assertDefined` from `@docket/test-utils` instead, which throws a
+    // descriptive error instead of letting `undefined` flow through silently.
     files: [
       '**/*.test.ts',
       '**/*.test.tsx',
@@ -59,7 +61,6 @@ export const baseConfig = tseslint.config(
       '**/e2e/helpers/**/*.ts',
     ],
     rules: {
-      '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',

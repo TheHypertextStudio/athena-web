@@ -357,6 +357,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../../packages/test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -922,12 +925,6 @@ importers:
 
   packages/test-utils:
     dependencies:
-      '@docket/db':
-        specifier: workspace:*
-        version: link:../db
-      '@docket/types':
-        specifier: workspace:*
-        version: link:../types
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

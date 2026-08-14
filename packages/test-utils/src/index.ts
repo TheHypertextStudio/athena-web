@@ -3,7 +3,6 @@
  *
  * @remarks
  * Per-worker tenant helpers and CI session-seed helpers are authored alongside
- * the Phase 2-4 tickets. Placeholder at the Phase 0 skeleton stage so the
- * dependency graph is declarable.
+ * the Phase 2-4 tickets.
  */
-export {};
+export { assertDefined } from './assert';

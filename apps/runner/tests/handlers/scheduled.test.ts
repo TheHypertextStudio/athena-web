@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import worker from '../../src/index';
 import { DEFAULT_DISPATCH_SWEEP_TIMEOUT_MS, runDispatchSweep } from '../../src/scheduled';
+import { assertDefined } from '@docket/test-utils';
 
 const env = {
   CLOUDFLARE_TO_DOCKET_HMAC_SECRET: 'cloudflare-to-docket-secret',
@@ -40,7 +41,7 @@ describe('scheduled durable dispatch recovery', () => {
   it('aborts a stalled scheduled sweep at the outbound deadline', async () => {
     let signal: AbortSignal | undefined;
     const fetchMock = vi.fn((_url: URL, init: RequestInit) => {
-      signal = init.signal!;
+      signal = assertDefined(init.signal);
       return new Promise<Response>((_resolve, reject) => {
         init.signal?.addEventListener(
           'abort',

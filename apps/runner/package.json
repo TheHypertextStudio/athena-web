@@ -25,6 +25,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.18.5",
     "@docket/eslint-config": "workspace:*",
+    "@docket/test-utils": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "typescript": "catalog:",
     "vite": "catalog:",

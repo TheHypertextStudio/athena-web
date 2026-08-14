@@ -15,6 +15,7 @@ import {
   REPO_ROOT,
   type PolicyFinding,
 } from '../../scripts/ci-gate-policy';
+import { assertDefined } from '@docket/test-utils';
 
 /**
  * Builds a synthetic workflow around a `deploy-production` job so a rule can be
@@ -295,11 +296,11 @@ describe('SCR-20 — no gating step may be soft-failed', () => {
         '      - run: echo diagnostics',
       ].join('\n'),
     );
-    const [gate, codecov, diagnostics] = workflow.jobs[0]!.steps;
+    const [gate, codecov, diagnostics] = assertDefined(workflow.jobs[0]).steps;
 
-    expect(isReportingStep(gate!)).toBe(false);
-    expect(isReportingStep(codecov!)).toBe(true);
-    expect(isReportingStep(diagnostics!)).toBe(true);
+    expect(isReportingStep(assertDefined(gate))).toBe(false);
+    expect(isReportingStep(assertDefined(codecov))).toBe(true);
+    expect(isReportingStep(assertDefined(diagnostics))).toBe(true);
   });
 
   it('ignores soft-failure in a job that runs no checks at all', () => {

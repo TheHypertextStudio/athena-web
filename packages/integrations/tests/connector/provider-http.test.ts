@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ProviderHttp } from '../../src/provider-http';
 import type { HttpClient } from '../../src/http';
+import { assertDefined } from '@docket/test-utils';
 
 describe('ProviderHttp — Retry-After parsing on 429', () => {
   it('leaves retryAfterSeconds undefined when the header is absent', async () => {
@@ -73,11 +74,11 @@ describe('ProviderHttp — PATCH', () => {
     );
     const result = await client.patchJson('/lists/l1/tasks/t1', { title: 'Renamed' });
     expect(result).toEqual({ ok: true });
-    expect(calls[0]!.init?.method).toBe('PATCH');
-    expect((calls[0]!.init?.headers as Record<string, string>)['Authorization']).toBe(
+    expect(assertDefined(calls[0]).init?.method).toBe('PATCH');
+    expect((assertDefined(calls[0]).init?.headers as Record<string, string>)['Authorization']).toBe(
       'Bearer g_tok',
     );
-    expect(JSON.parse(calls[0]!.init?.body as string)).toEqual({ title: 'Renamed' });
+    expect(JSON.parse(assertDefined(calls[0]).init?.body as string)).toEqual({ title: 'Renamed' });
   });
 });
 
@@ -95,9 +96,9 @@ describe('ProviderHttp — DELETE', () => {
       http,
     );
     await expect(client.deleteVoid('/lists/l1/tasks/t1')).resolves.toBeUndefined();
-    expect(calls[0]!.init?.method).toBe('DELETE');
-    expect(calls[0]!.init?.body).toBeUndefined();
-    expect((calls[0]!.init?.headers as Record<string, string>)['Authorization']).toBe(
+    expect(assertDefined(calls[0]).init?.method).toBe('DELETE');
+    expect(assertDefined(calls[0]).init?.body).toBeUndefined();
+    expect((assertDefined(calls[0]).init?.headers as Record<string, string>)['Authorization']).toBe(
       'Bearer g_tok',
     );
   });
@@ -112,6 +113,8 @@ describe('ProviderHttp — POST auth modes', () => {
     };
     const client = new ProviderHttp('notion', 'https://api.notion.com/v1', 'secret_raw', http);
     await client.postJson('/pages', { title: 'X' }, 'raw');
-    expect((calls[0]!.init?.headers as Record<string, string>)['Authorization']).toBe('secret_raw');
+    expect((assertDefined(calls[0]).init?.headers as Record<string, string>)['Authorization']).toBe(
+      'secret_raw',
+    );
   });
 });

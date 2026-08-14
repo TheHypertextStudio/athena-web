@@ -12,6 +12,7 @@ import {
   pushConfigFromEnv,
 } from '../../src/push';
 import type { HttpClient } from '../../src/http';
+import { assertDefined } from '@docket/test-utils';
 
 describe('CapturePushSender', () => {
   it('starts with an empty outbox and no last message', () => {
@@ -81,10 +82,12 @@ describe('RealPushSender', () => {
     const result = await sender.send({ token: 'device_tok', title: 'Hello' });
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.url).toBe(config.endpoint);
-    expect(calls[0]!.init?.method).toBe('POST');
-    expect((calls[0]!.init?.headers as Record<string, string>)['Authorization']).toBe('Bearer k_1');
-    expect(JSON.parse(calls[0]!.init?.body as string)).toEqual({
+    expect(assertDefined(calls[0]).url).toBe(config.endpoint);
+    expect(assertDefined(calls[0]).init?.method).toBe('POST');
+    expect((assertDefined(calls[0]).init?.headers as Record<string, string>)['Authorization']).toBe(
+      'Bearer k_1',
+    );
+    expect(JSON.parse(assertDefined(calls[0]).init?.body as string)).toEqual({
       appId: 'app_1',
       token: 'device_tok',
       title: 'Hello',

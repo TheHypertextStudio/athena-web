@@ -11,6 +11,7 @@ import {
   validateSunsamaRouting,
   verifySunsamaRouting,
 } from '../../src/sunsama-mapping';
+import { assertDefined } from '@docket/test-utils';
 
 /** Every fixture task, normalized. */
 const TASKS: SunsamaTask[] = SUNSAMA_FIXTURE_TASKS.map((raw) => {
@@ -100,7 +101,7 @@ describe('workspace routing', () => {
       routes: [{ streamName: 'Weekly newsletter', workspace: 'The Willie Diaries' }],
     };
     const task: SunsamaTask = {
-      ...TASKS[0]!,
+      ...assertDefined(TASKS[0]),
       streamIds: ['unknown-id'],
       streamNames: ['weekly NEWSLETTER'],
     };
@@ -112,7 +113,7 @@ describe('workspace routing', () => {
 
   it('falls back to the declared workspace when neither a stream id nor a stream name matches', () => {
     const task: SunsamaTask = {
-      ...TASKS[0]!,
+      ...assertDefined(TASKS[0]),
       streamIds: ['completely-unknown-id'],
       streamNames: ['Not A Real Stream Name'],
     };
@@ -188,7 +189,7 @@ describe('mapSunsamaTask', () => {
 
   it('never produces a blank child title — a child row faces the same not-blank CHECK', () => {
     const blankChild: SunsamaTask = {
-      ...TASKS[0]!,
+      ...assertDefined(TASKS[0]),
       subtasks: [{ id: 'sub-blank', title: '   ', completed: false }],
     };
     expect(mapSunsamaTask(blankChild, ROUTING).children).toEqual([
@@ -218,13 +219,13 @@ describe('mapSunsamaTask', () => {
   });
 
   it('carries the Sunsama id and modification time as the sync anchors', () => {
-    const mapped = mapSunsamaTask(TASKS[0]!, ROUTING);
+    const mapped = mapSunsamaTask(assertDefined(TASKS[0]), ROUTING);
     expect(mapped.externalId).toBe('su-001');
     expect(mapped.externalUpdatedAt).toBe('2026-07-30T09:12:00.000Z');
   });
 
   it('never produces a blank title (Docket’s task title is NOT NULL and not-blank)', () => {
-    const blank: SunsamaTask = { ...TASKS[0]!, title: '   ' };
+    const blank: SunsamaTask = { ...assertDefined(TASKS[0]), title: '   ' };
     expect(mapSunsamaTask(blank, ROUTING).title).toBe('Untitled task');
   });
 });

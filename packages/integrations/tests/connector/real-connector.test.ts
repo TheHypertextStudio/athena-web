@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { RealConnector } from '../../src/real-connector';
 import { ConnectorError, type ConnectorErrorKind } from '../../src/connector-error';
 import type { HttpClient } from '../../src/http';
+import { assertDefined } from '@docket/test-utils';
 
 /** Assert a thunk rejects with a {@link ConnectorError} of the expected kind. */
 async function expectConnectorError(
@@ -71,7 +72,7 @@ describe('RealConnector — GitHub (REST)', () => {
       status: 'connected',
       account: 'octocat',
     });
-    const call = calls[0]!;
+    const call = assertDefined(calls[0]);
     expect(call.url).toBe('https://api.github.com/user');
     expect(call.init?.method).toBe('GET');
     expect(header(call, 'Authorization')).toBe('Bearer tok');
@@ -124,7 +125,7 @@ describe('RealConnector — GitHub (REST)', () => {
     ]);
     const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
     const items = await connector.importWork({ connectionId: 'c1', provider: 'github' });
-    expect(calls[0]!.url).toBe(
+    expect(assertDefined(calls[0]).url).toBe(
       'https://api.github.com/issues?filter=all&state=open&per_page=100&page=1',
     );
     expect(items).toHaveLength(1);
@@ -181,7 +182,7 @@ describe('RealConnector — GitHub (REST)', () => {
     ]);
     const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
     const status = await connector.mirrorStatus({ connectionId: 'c1', provider: 'github' });
-    expect(calls[0]!.url).toBe(
+    expect(assertDefined(calls[0]).url).toBe(
       'https://api.github.com/issues?filter=all&state=all&per_page=100&page=1',
     );
     expect(status).toEqual({ connectionId: 'c1', status: 'idle', itemCount: 1 });
@@ -242,7 +243,7 @@ describe('RealConnector — GitHub (REST)', () => {
       http,
     );
     await connector.connect({ provider: 'github', referenceId: 'o' });
-    expect(calls[0]!.url).toBe('https://ghe.local/api/v3/user');
+    expect(assertDefined(calls[0]).url).toBe('https://ghe.local/api/v3/user');
   });
 
   it('paginates past 100 issues when page=1 is full', async () => {
@@ -265,8 +266,8 @@ describe('RealConnector — GitHub (REST)', () => {
     const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
     const items = await connector.importWork({ connectionId: 'c1', provider: 'github' });
     expect(items).toHaveLength(142);
-    expect(calls[0]!.url).toContain('page=1');
-    expect(calls[1]!.url).toContain('page=2');
+    expect(assertDefined(calls[0]).url).toContain('page=1');
+    expect(assertDefined(calls[1]).url).toContain('page=2');
     expect(calls).toHaveLength(2);
   });
 
@@ -309,7 +310,7 @@ describe('RealConnector — GitHub (REST)', () => {
       expect(items).toHaveLength(10_000);
       expect(calls).toHaveLength(100);
       expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0]![0]).toContain('import_truncated');
+      expect(assertDefined(warn.mock.calls[0])[0]).toContain('import_truncated');
     } finally {
       warn.mockRestore();
     }
@@ -331,7 +332,7 @@ describe('RealConnector — Linear (GraphQL)', () => {
       status: 'connected',
       account: 'Ada',
     });
-    const call = calls[0]!;
+    const call = assertDefined(calls[0]);
     expect(call.url).toBe('https://api.linear.app/graphql');
     expect(call.init?.method).toBe('POST');
     expect(header(call, 'Authorization')).toBe('Bearer lin_tok');
@@ -403,7 +404,7 @@ describe('RealConnector — Linear (GraphQL)', () => {
     ]);
     const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
     const items = await connector.importWork({ connectionId: 'c1', provider: 'linear' });
-    expect(JSON.parse(bodyText(calls[0]!)).query).toContain('issues');
+    expect(JSON.parse(bodyText(assertDefined(calls[0]))).query).toContain('issues');
     expect(items[0]).toEqual({
       id: 'uuid-1',
       kind: 'issue',
@@ -413,7 +414,7 @@ describe('RealConnector — Linear (GraphQL)', () => {
         provider: 'linear',
         externalId: 'uuid-1',
         externalUrl: 'https://linear.app/docket/issue/DOC-7',
-        importedAt: items[0]!.provenance.importedAt,
+        importedAt: assertDefined(items[0]).provenance.importedAt,
       },
     });
     expect(items[1]).not.toHaveProperty('body');
@@ -492,7 +493,7 @@ describe('RealConnector — Linear (GraphQL)', () => {
     expect(items[0]?.title).toBe('Page 1');
     expect(items[1]?.title).toBe('Page 2');
     // Second call must pass the cursor as a GraphQL variable (never interpolated into the query).
-    const secondBody = JSON.parse(bodyText(calls[1]!));
+    const secondBody = JSON.parse(bodyText(assertDefined(calls[1])));
     expect(secondBody.variables.after).toBe('cursor1');
     expect(secondBody.query).not.toContain('cursor1');
   });
@@ -590,7 +591,7 @@ describe('RealConnector — asWritable capability seam', () => {
       op: { kind: 'create', listId: 'list1', title: 'New', completed: false },
     });
     expect(result).toEqual({ externalId: 'gt1', externalUpdatedAt: '2026-01-01T00:00:00Z' });
-    expect(calls[0]!.url).toContain('/lists/list1/tasks');
+    expect(assertDefined(calls[0]).url).toContain('/lists/list1/tasks');
   });
 });
 
@@ -659,10 +660,12 @@ describe('RealConnector — Google (Gmail / Calendar / Tasks REST)', () => {
     const connector = new RealConnector({ provider: 'gmail', accessToken: 'tok' }, http);
     const conn = await connector.connect({ provider: 'gmail', referenceId: 'o' });
     expect(conn.account).toBe('me@gmail.com');
-    expect(calls[0]!.url).toBe('https://gmail.googleapis.com/gmail/v1/users/me/profile');
+    expect(assertDefined(calls[0]).url).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+    );
 
     const items = await connector.importWork({ connectionId: 'c1', provider: 'gmail' });
-    expect(calls[1]!.url).toBe(
+    expect(assertDefined(calls[1]).url).toBe(
       'https://gmail.googleapis.com/gmail/v1/users/me/threads?maxResults=100',
     );
     expect(items[0]).toMatchObject({
@@ -698,10 +701,12 @@ describe('RealConnector — Google (Gmail / Calendar / Tasks REST)', () => {
     const connector = new RealConnector({ provider: 'calendar', accessToken: 'tok' }, http);
     const conn = await connector.connect({ provider: 'calendar', referenceId: 'o' });
     expect(conn.account).toBe('me@x.dev');
-    expect(calls[0]!.url).toBe('https://www.googleapis.com/calendar/v3/calendars/primary');
+    expect(assertDefined(calls[0]).url).toBe(
+      'https://www.googleapis.com/calendar/v3/calendars/primary',
+    );
 
     const items = await connector.importWork({ connectionId: 'c1', provider: 'calendar' });
-    expect(calls[1]!.url).toBe(
+    expect(assertDefined(calls[1]).url).toBe(
       'https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=100',
     );
     expect(items[0]).toMatchObject({
@@ -764,16 +769,16 @@ describe('RealConnector — Google (Gmail / Calendar / Tasks REST)', () => {
       provider: 'gtasks',
       status: 'connected',
     });
-    expect(calls[0]!.url).toBe(
+    expect(assertDefined(calls[0]).url).toBe(
       'https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=1',
     );
-    expect(header(calls[0]!, 'Authorization')).toBe('Bearer g_tok');
+    expect(header(assertDefined(calls[0]), 'Authorization')).toBe('Bearer g_tok');
 
     const items = await connector.importWork({ connectionId: 'c1', provider: 'gtasks' });
-    expect(calls[1]!.url).toBe(
+    expect(assertDefined(calls[1]).url).toBe(
       'https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=100',
     );
-    expect(calls[2]!.url).toBe(
+    expect(assertDefined(calls[2]).url).toBe(
       'https://tasks.googleapis.com/tasks/v1/lists/list1/tasks?showCompleted=true&showHidden=true&showDeleted=true&maxResults=100',
     );
     expect(items[0]).toEqual({
@@ -787,7 +792,7 @@ describe('RealConnector — Google (Gmail / Calendar / Tasks REST)', () => {
         provider: 'gtasks',
         externalId: 'gt1',
         externalUrl: 'https://tasks.google.com/task/gt1',
-        importedAt: items[0]!.provenance.importedAt,
+        importedAt: assertDefined(items[0]).provenance.importedAt,
         externalUpdatedAt: '2026-01-02T00:00:00.000Z',
         externalEtag: 'etag-gt1',
         externalListId: 'list1',
@@ -823,7 +828,7 @@ describe('RealConnector — Google (Gmail / Calendar / Tasks REST)', () => {
     });
     // Only the 'work' list's tasks were pulled (no call for 'personal').
     expect(calls).toHaveLength(2);
-    expect(calls[1]!.url).toContain('/lists/work/tasks');
+    expect(assertDefined(calls[1]).url).toContain('/lists/work/tasks');
     expect(items.map((i) => i.id)).toEqual(['w1']);
   });
 

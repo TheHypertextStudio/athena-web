@@ -24,6 +24,7 @@ import {
   verifyLinearAgentWebhookSignature,
   type StoredLinearAgentTokens,
 } from '../../src/linear-agent';
+import { assertDefined } from '@docket/test-utils';
 
 describe('buildLinearAgentAuthorizeUrl', () => {
   it('builds an actor=app authorize URL with the default mentionable+assignable scope', () => {
@@ -88,12 +89,12 @@ describe('exchangeLinearAgentCode / refreshLinearAgentToken', () => {
       scope: 'app:mentionable,app:assignable',
       refreshToken: 'lin_agent_refresh',
     });
-    expect(calls[0]!.url).toBe('https://api.linear.app/oauth/token');
-    expect(calls[0]!.init?.method).toBe('POST');
-    expect((calls[0]!.init?.headers as Record<string, string>)['Content-Type']).toBe(
+    expect(assertDefined(calls[0]).url).toBe('https://api.linear.app/oauth/token');
+    expect(assertDefined(calls[0]).init?.method).toBe('POST');
+    expect((assertDefined(calls[0]).init?.headers as Record<string, string>)['Content-Type']).toBe(
       'application/x-www-form-urlencoded',
     );
-    const body = new URLSearchParams(calls[0]!.init?.body as string);
+    const body = new URLSearchParams(assertDefined(calls[0]).init?.body as string);
     expect(body.get('grant_type')).toBe('authorization_code');
     expect(body.get('client_id')).toBe('client_1');
     expect(body.get('client_secret')).toBe('secret_1');
@@ -123,7 +124,7 @@ describe('exchangeLinearAgentCode / refreshLinearAgentToken', () => {
       http,
     });
     expect(tokens.accessToken).toBe('new_tok');
-    const body = new URLSearchParams(calls[0]!.init?.body as string);
+    const body = new URLSearchParams(assertDefined(calls[0]).init?.body as string);
     expect(body.get('grant_type')).toBe('refresh_token');
     expect(body.get('refresh_token')).toBe('old_refresh');
     expect(body.has('code')).toBe(false);
@@ -401,8 +402,8 @@ describe('LinearAgentClient.query', () => {
     const client = new LinearAgentClient('agent_tok', http);
     const data = await client.query<{ ok: boolean }>('query { x }');
     expect(data).toEqual({ ok: true });
-    expect(calls[0]!.url).toBe('https://api.linear.app/graphql');
-    expect((calls[0]!.init?.headers as Record<string, string>)['Authorization']).toBe(
+    expect(assertDefined(calls[0]).url).toBe('https://api.linear.app/graphql');
+    expect((assertDefined(calls[0]).init?.headers as Record<string, string>)['Authorization']).toBe(
       'Bearer agent_tok',
     );
   });
@@ -463,8 +464,9 @@ describe('agentActivityCreate', () => {
       body: 'Looking into it…',
     });
     expect(result).toEqual({ id: 'act_1' });
-    const variables = (calls[0]!.body as { variables: { input: Record<string, unknown> } })
-      .variables.input;
+    const variables = (
+      assertDefined(calls[0]).body as { variables: { input: Record<string, unknown> } }
+    ).variables.input;
     expect(variables).toMatchObject({
       agentSessionId: 'sess_1',
       content: { type: 'thought', body: 'Looking into it…' },
@@ -490,8 +492,9 @@ describe('agentActivityCreate', () => {
       body: 'tick',
       ephemeral: true,
     });
-    const variables = (calls[0]!.body as { variables: { input: Record<string, unknown> } })
-      .variables.input;
+    const variables = (
+      assertDefined(calls[0]).body as { variables: { input: Record<string, unknown> } }
+    ).variables.input;
     expect(variables).toMatchObject({ ephemeral: true });
   });
 
@@ -535,7 +538,7 @@ describe('agentSessionUpdate', () => {
         externalUrls: [{ label: 'Open in Docket', url: 'https://docket.app/t/1' }],
       }),
     ).resolves.toBeUndefined();
-    const body = calls[0]!.body as { variables: Record<string, unknown> };
+    const body = assertDefined(calls[0]).body as { variables: Record<string, unknown> };
     expect(body.variables).toEqual({
       id: 'sess_1',
       input: { externalUrls: [{ label: 'Open in Docket', url: 'https://docket.app/t/1' }] },

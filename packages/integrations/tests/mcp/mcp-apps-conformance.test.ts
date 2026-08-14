@@ -37,6 +37,7 @@ import {
   renderConformanceMatrix,
   VENDOR_DIR,
 } from './mcp-apps-conformance';
+import { assertDefined } from '@docket/test-utils';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const MATRIX_PATH = join(REPO_ROOT, 'docs/engineering/specs/mcp-apps-conformance.md');
@@ -113,7 +114,7 @@ describe('conformance matrix', () => {
       ];
       const found = candidates.find((path) => existsSync(path));
       expect(found, `${key} cites a test file that does not exist: ${String(file)}`).toBeDefined();
-      const source = readFileSync(found!, 'utf8');
+      const source = readFileSync(assertDefined(found), 'utf8');
       expect(source, `${key} cites a test that does not exist: ${String(testName)}`).toContain(
         `'${String(testName)}'`,
       );

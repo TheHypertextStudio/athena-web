@@ -4,6 +4,7 @@ import { CONNECTOR_PROVIDER_IDS } from '@docket/types';
 
 import { MockConnector } from '../src/mock-connector';
 import { RESOURCE_SEARCH_CAPABLE_PROVIDERS } from '../src/resource-search';
+import { assertDefined } from '@docket/test-utils';
 
 describe('the resource-search capability', () => {
   it.each([...CONNECTOR_PROVIDER_IDS])(
@@ -18,20 +19,32 @@ describe('the resource-search capability', () => {
   it('filters by title, newest first', async () => {
     const search = new MockConnector({ provider: 'drive' }).asResourceSearch();
     expect(search).toBeDefined();
-    const page = await search!.searchResources({ connectionId: 'c1', query: 'launch', limit: 10 });
+    const page = await assertDefined(search).searchResources({
+      connectionId: 'c1',
+      query: 'launch',
+      limit: 10,
+    });
     expect(page.resources.map((r) => r.title)).toEqual(['Q3 launch plan', 'Launch budget']);
     expect(page.truncated).toBe(false);
   });
 
   it('matches case-insensitively', async () => {
     const search = new MockConnector({ provider: 'drive' }).asResourceSearch();
-    const page = await search!.searchResources({ connectionId: 'c1', query: 'LAUNCH', limit: 10 });
+    const page = await assertDefined(search).searchResources({
+      connectionId: 'c1',
+      query: 'LAUNCH',
+      limit: 10,
+    });
     expect(page.resources).toHaveLength(2);
   });
 
   it('returns recents for an empty query, which is what bare @ asks for', async () => {
     const search = new MockConnector({ provider: 'drive' }).asResourceSearch();
-    const page = await search!.searchResources({ connectionId: 'c1', query: '', limit: 3 });
+    const page = await assertDefined(search).searchResources({
+      connectionId: 'c1',
+      query: '',
+      limit: 3,
+    });
     expect(page.resources).toHaveLength(3);
     // Truncation must be reported, or the client would narrow a cut page and hide real results.
     expect(page.truncated).toBe(true);
@@ -39,15 +52,23 @@ describe('the resource-search capability', () => {
 
   it('resolves one resource by id, and nothing for an unknown one', async () => {
     const search = new MockConnector({ provider: 'drive' }).asResourceSearch();
-    await expect(search!.resolveResource({ externalId: '01HZDRIVE0001' })).resolves.toMatchObject({
+    await expect(
+      assertDefined(search).resolveResource({ externalId: '01HZDRIVE0001' }),
+    ).resolves.toMatchObject({
       title: 'Q3 launch plan',
     });
-    await expect(search!.resolveResource({ externalId: 'nope' })).resolves.toBeUndefined();
+    await expect(
+      assertDefined(search).resolveResource({ externalId: 'nope' }),
+    ).resolves.toBeUndefined();
   });
 
   it("maps every fixture into Docket's own taxonomy rather than a provider MIME type", async () => {
     const search = new MockConnector({ provider: 'drive' }).asResourceSearch();
-    const page = await search!.searchResources({ connectionId: 'c1', query: '', limit: 50 });
+    const page = await assertDefined(search).searchResources({
+      connectionId: 'c1',
+      query: '',
+      limit: 50,
+    });
     for (const resource of page.resources) {
       expect(resource.resourceType).not.toContain('/');
       expect(resource.url.startsWith('https://')).toBe(true);

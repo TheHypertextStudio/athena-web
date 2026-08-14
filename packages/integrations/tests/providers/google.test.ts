@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ConnectorError } from '../../src/connector-error';
 import { GoogleCalendarProviderClient, GoogleTasksProviderClient } from '../../src/google';
 import type { ProviderHttp } from '../../src/provider-http';
+import { assertDefined } from '@docket/test-utils';
 
 /** One HTTP call the fake recorded, for assertions. */
 interface RecordedCall {
@@ -109,7 +110,7 @@ describe('paginateGoogle truncation (via Calendar events)', () => {
       );
       expect(items).toHaveLength(100);
       expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0]![0]).toContain('import_truncated');
+      expect(assertDefined(warn.mock.calls[0])[0]).toContain('import_truncated');
     } finally {
       warn.mockRestore();
     }

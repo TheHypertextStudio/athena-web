@@ -25,6 +25,7 @@ import {
   type JsonRpcMessage,
   type McpAppHostOptions,
 } from '../../src/mcp-apps-host';
+import { assertDefined } from '@docket/test-utils';
 
 const RESOURCE = {
   uri: 'ui://acme/weather',
@@ -45,7 +46,7 @@ function harness(overrides: Partial<McpAppHostOptions> = {}) {
   });
 
   const methods = (): string[] =>
-    posted.filter((m) => typeof m.method === 'string').map((m) => m.method!);
+    posted.filter((m) => typeof m.method === 'string').map((m) => assertDefined(m.method));
   const resultFor = (id: string | number): JsonRpcMessage | undefined =>
     posted.find((m) => m.id === id);
 

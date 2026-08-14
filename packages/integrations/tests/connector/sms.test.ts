@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CaptureSmsSender, RealSmsSender, smsConfigFromEnv } from '../../src/sms';
 import type { HttpClient } from '../../src/http';
+import { assertDefined } from '@docket/test-utils';
 
 describe('CaptureSmsSender', () => {
   it('starts with an empty outbox and no last message', () => {
@@ -77,9 +78,11 @@ describe('RealSmsSender', () => {
     const result = await sender.send({ to: '+15551234567', body: 'Code: 123456' });
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.url).toBe(config.endpoint);
-    expect((calls[0]!.init?.headers as Record<string, string>)['Authorization']).toBe('Bearer k_1');
-    expect(JSON.parse(calls[0]!.init?.body as string)).toEqual({
+    expect(assertDefined(calls[0]).url).toBe(config.endpoint);
+    expect((assertDefined(calls[0]).init?.headers as Record<string, string>)['Authorization']).toBe(
+      'Bearer k_1',
+    );
+    expect(JSON.parse(assertDefined(calls[0]).init?.body as string)).toEqual({
       from: '+15550000000',
       to: '+15551234567',
       body: 'Code: 123456',

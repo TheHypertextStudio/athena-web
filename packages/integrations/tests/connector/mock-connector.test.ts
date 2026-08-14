@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CONNECTOR_ITEMS } from '../../src/fixtures';
 import { MockConnector } from '../../src/mock-connector';
+import { assertDefined } from '@docket/test-utils';
 
 describe('MockConnector.connect', () => {
   it('always succeeds, stamping the account from externalWorkspaceId or a provider default', async () => {
@@ -140,8 +141,8 @@ describe('MockConnector.asWritable / pushTask', () => {
       provider: 'gtasks',
       op: { kind: 'create', listId: 'l1', title: 'B', completed: false },
     });
-    expect(new Date(second!.externalUpdatedAt).getTime()).toBeGreaterThan(
-      new Date(first!.externalUpdatedAt).getTime(),
+    expect(new Date(assertDefined(second).externalUpdatedAt).getTime()).toBeGreaterThan(
+      new Date(assertDefined(first).externalUpdatedAt).getTime(),
     );
   });
 });

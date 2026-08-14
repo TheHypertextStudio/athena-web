@@ -26,6 +26,7 @@ import {
   toLinearPriority,
 } from '../../src/linear';
 import type { ExternalPriority } from '../../src/work-graph';
+import { assertDefined } from '@docket/test-utils';
 
 /** One recorded HTTP call: the URL and the parsed JSON request body. */
 interface RecordedCall {
@@ -100,8 +101,8 @@ describe('LinearProviderClient — resolveAccount', () => {
       externalWorkspaceId: 'org-uuid',
       externalWorkspaceSlug: 'docket',
     });
-    expect(calls[0]!.url).toBe('https://api.linear.app/graphql');
-    expect(calls[0]!.body.query).toContain('organization');
+    expect(assertDefined(calls[0]).url).toBe('https://api.linear.app/graphql');
+    expect(assertDefined(calls[0]).body.query).toContain('organization');
   });
 
   it('falls back to the viewer email and omits workspace ids when absent', async () => {
@@ -134,7 +135,7 @@ describe('LinearProviderClient — listContainers (teams)', () => {
       { id: 't1', title: 'Engineering' },
       { id: 't2', title: 'Design' },
     ]);
-    expect(calls[0]!.body.query).toContain('teams');
+    expect(assertDefined(calls[0]).body.query).toContain('teams');
   });
 });
 
@@ -160,8 +161,8 @@ describe('LinearProviderClient — listTeamStates', () => {
       type: 'unstarted',
       position: 1,
     });
-    expect(calls[0]!.body.variables).toEqual({ id: 't1' });
-    expect(calls[0]!.body.query).not.toContain('t1');
+    expect(assertDefined(calls[0]).body.variables).toEqual({ id: 't1' });
+    expect(assertDefined(calls[0]).body.query).not.toContain('t1');
   });
 
   it('returns an empty list when the team or its states are missing from the response', async () => {
@@ -193,9 +194,9 @@ describe('LinearProviderClient — pagination', () => {
     const snapshot = await client.pullWorkGraph({ externalTeamIds: [] });
     expect(snapshot.users.map((u) => u.externalId)).toEqual(['u1', 'u2']);
     // First page sends no cursor; second page sends it as a variable, not interpolated.
-    expect(calls[0]!.body.variables).not.toHaveProperty('after');
-    expect(calls[1]!.body.variables).toMatchObject({ after: 'CUR1' });
-    expect(calls[1]!.body.query).not.toContain('CUR1');
+    expect(assertDefined(calls[0]).body.variables).not.toHaveProperty('after');
+    expect(assertDefined(calls[1]).body.variables).toMatchObject({ after: 'CUR1' });
+    expect(assertDefined(calls[1]).body.query).not.toContain('CUR1');
   });
 
   it('stops at MAX_IMPORT_PAGES and logs a truncation warning', async () => {
@@ -221,7 +222,7 @@ describe('LinearProviderClient — pagination', () => {
     // Exactly 100 user requests were made (the safety bound), plus 4 other collections.
     expect(calls).toHaveLength(104);
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]![0]).toContain('import_truncated');
+    expect(assertDefined(warn.mock.calls[0])[0]).toContain('import_truncated');
     warn.mockRestore();
   });
 });
@@ -230,8 +231,8 @@ describe('LinearProviderClient — filter composition', () => {
   it('omits the issue filter and cycle team filter on a full unscoped pull', async () => {
     const { client, calls } = fakeHttp(emptyPullResponses());
     await client.pullWorkGraph({ externalTeamIds: [] });
-    const cyclesCall = calls[3]!;
-    const issuesCall = calls[4]!;
+    const cyclesCall = assertDefined(calls[3]);
+    const issuesCall = assertDefined(calls[4]);
     expect(cyclesCall.body.query).not.toContain('filter');
     expect(cyclesCall.body.variables).not.toHaveProperty('teamIds');
     expect(issuesCall.body.variables).not.toHaveProperty('filter');
@@ -240,8 +241,8 @@ describe('LinearProviderClient — filter composition', () => {
   it('scopes cycles by team variable and issues by a team filter when teams are selected', async () => {
     const { client, calls } = fakeHttp(emptyPullResponses());
     await client.pullWorkGraph({ externalTeamIds: ['t1', 't2'] });
-    const cyclesCall = calls[3]!;
-    const issuesCall = calls[4]!;
+    const cyclesCall = assertDefined(calls[3]);
+    const issuesCall = assertDefined(calls[4]);
     expect(cyclesCall.body.query).toContain('filter: { team: { id: { in: $teamIds } } }');
     expect(cyclesCall.body.variables).toMatchObject({ teamIds: ['t1', 't2'] });
     expect(issuesCall.body.variables).toEqual({ filter: { team: { id: { in: ['t1', 't2'] } } } });
@@ -250,7 +251,7 @@ describe('LinearProviderClient — filter composition', () => {
   it('adds an updatedAt cutoff to the issue filter on an incremental pull', async () => {
     const { client, calls } = fakeHttp(emptyPullResponses());
     await client.pullWorkGraph({ externalTeamIds: [], updatedAfter: '2026-06-01T00:00:00.000Z' });
-    const issuesCall = calls[4]!;
+    const issuesCall = assertDefined(calls[4]);
     expect(issuesCall.body.variables).toEqual({
       filter: { updatedAt: { gt: '2026-06-01T00:00:00.000Z' } },
     });
@@ -262,7 +263,7 @@ describe('LinearProviderClient — filter composition', () => {
       externalTeamIds: ['t1'],
       updatedAfter: '2026-06-01T00:00:00.000Z',
     });
-    expect(calls[4]!.body.variables).toEqual({
+    expect(assertDefined(calls[4]).body.variables).toEqual({
       filter: {
         team: { id: { in: ['t1'] } },
         updatedAt: { gt: '2026-06-01T00:00:00.000Z' },
@@ -323,7 +324,7 @@ describe('LinearProviderClient — pushWorkItem', () => {
       },
     });
     expect(result).toEqual({ externalId: 'i1', externalUpdatedAt: 'T2' });
-    expect(calls[0]!.body.variables).toEqual({
+    expect(assertDefined(calls[0]).body.variables).toEqual({
       id: 'i1',
       input: {
         title: 'New title',
@@ -343,7 +344,10 @@ describe('LinearProviderClient — pushWorkItem', () => {
       externalId: 'i1',
       fields: { assigneeExternalId: null, dueDate: null, estimate: null },
     });
-    const input = calls[0]!.body.variables!['input'] as Record<string, unknown>;
+    const input = assertDefined(assertDefined(calls[0]).body.variables)['input'] as Record<
+      string,
+      unknown
+    >;
     expect(input).toEqual({ assigneeId: null, dueDate: null, estimate: null });
     expect(input).not.toHaveProperty('title');
   });
@@ -358,7 +362,7 @@ describe('LinearProviderClient — pushWorkItem', () => {
       fields: { title: 'Fresh', labelExternalIds: ['l1', 'l2'] },
     });
     expect(result).toEqual({ externalId: 'new-1', externalUpdatedAt: 'T1' });
-    expect(calls[0]!.body.variables).toEqual({
+    expect(assertDefined(calls[0]).body.variables).toEqual({
       input: { teamId: 't1', title: 'Fresh', labelIds: ['l1', 'l2'] },
     });
   });

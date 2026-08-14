@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { LINEAR_WORK_GRAPH } from '../../src/fixtures';
 import { MockConnector } from '../../src/mock-connector';
 import type { ExternalPriority, WorkGraphConnector } from '../../src/work-graph';
+import { assertDefined } from '@docket/test-utils';
 
 /** Get a linear-bound mock's work-graph capability, failing loudly if it's somehow absent. */
 function linearWorkGraph(): WorkGraphConnector {
@@ -125,7 +126,7 @@ describe('MockConnector work-graph capability', () => {
   describe('pushWorkItem', () => {
     it('logs ops in call order and returns advancing stamps', async () => {
       const mock = new MockConnector({ provider: 'linear' });
-      const graph = mock.asWorkGraph()!;
+      const graph = assertDefined(mock.asWorkGraph());
 
       const first = await graph.pushWorkItem({
         kind: 'update',
@@ -149,7 +150,7 @@ describe('MockConnector work-graph capability', () => {
 
     it('echoes the externalId back on update, and assigns a fresh deterministic id on create', async () => {
       const mock = new MockConnector({ provider: 'linear' });
-      const graph = mock.asWorkGraph()!;
+      const graph = assertDefined(mock.asWorkGraph());
 
       const updated = await graph.pushWorkItem({
         kind: 'update',

@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { deliverSmsNotification } from '../../../src/dispatch/adapters/sms';
 import { getMigratedDb } from '../../support/db';
 import { seedContactPoint, seedUser } from '../../support/seed';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -44,20 +45,25 @@ async function seedDeliveryChain(userId: string, contactPointId?: string): Promi
     .returning();
   const [recipient] = await db
     .insert(schema.notificationRecipient)
-    .values({ notificationId: intent!.id, userId, organizationId: null, reason: 'explicit' })
+    .values({
+      notificationId: assertDefined(intent).id,
+      userId,
+      organizationId: null,
+      reason: 'explicit',
+    })
     .returning();
   const [delivery] = await db
     .insert(schema.notificationDelivery)
     .values({
-      notificationId: intent!.id,
-      recipientId: recipient!.id,
+      notificationId: assertDefined(intent).id,
+      recipientId: assertDefined(recipient).id,
       channel: 'sms',
       destinationType: 'phone',
       destination: contactPointId ? { type: 'phone', contactPointId } : {},
       status: 'queued',
     })
     .returning();
-  return delivery!.id;
+  return assertDefined(delivery).id;
 }
 
 describe('deliverSmsNotification', () => {

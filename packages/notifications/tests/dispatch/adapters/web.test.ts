@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { deliverWebNotification } from '../../../src/dispatch/adapters/web';
 import { getMigratedDb } from '../../support/db';
 import { seedUser } from '../../support/seed';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -31,20 +32,25 @@ async function seedIntentAndDelivery(
     .returning();
   const [recipient] = await db
     .insert(schema.notificationRecipient)
-    .values({ notificationId: intent!.id, userId, organizationId: null, reason: 'explicit' })
+    .values({
+      notificationId: assertDefined(intent).id,
+      userId,
+      organizationId: null,
+      reason: 'explicit',
+    })
     .returning();
   const [delivery] = await db
     .insert(schema.notificationDelivery)
     .values({
-      notificationId: intent!.id,
-      recipientId: recipient!.id,
+      notificationId: assertDefined(intent).id,
+      recipientId: assertDefined(recipient).id,
       channel: 'web',
       destinationType: 'in_app',
       destination: { type: 'in_app' },
       status: 'sent',
     })
     .returning();
-  return { intentId: intent!.id, deliveryId: delivery!.id };
+  return { intentId: assertDefined(intent).id, deliveryId: assertDefined(delivery).id };
 }
 
 describe('deliverWebNotification', () => {
@@ -80,12 +86,14 @@ describe('deliverWebNotification', () => {
   it('threads an optional deep link url and an organization id into the projection', async () => {
     const userId = await seedUser(db, schema, 'AdapterWebRowWithUrl');
     const { intentId, deliveryId } = await seedIntentAndDelivery(userId);
-    const orgId = (
-      await db
-        .insert(schema.organization)
-        .values({ name: 'Org', slug: `org-web-${Math.random().toString(36).slice(2)}` })
-        .returning({ id: schema.organization.id })
-    )[0]!.id;
+    const orgId = assertDefined(
+      (
+        await db
+          .insert(schema.organization)
+          .values({ name: 'Org', slug: `org-web-${Math.random().toString(36).slice(2)}` })
+          .returning({ id: schema.organization.id })
+      )[0],
+    ).id;
 
     const row = await deliverWebNotification(db, {
       intentId,

@@ -11,6 +11,7 @@ import {
 } from '../../../src/dispatch/adapters/delivery';
 import { getMigratedDb } from '../../support/db';
 import { seedContactPoint, seedUser } from '../../support/seed';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -44,13 +45,18 @@ async function seedDeliveryChain(
     .returning();
   const [recipient] = await db
     .insert(schema.notificationRecipient)
-    .values({ notificationId: intent!.id, userId, organizationId: null, reason: 'explicit' })
+    .values({
+      notificationId: assertDefined(intent).id,
+      userId,
+      organizationId: null,
+      reason: 'explicit',
+    })
     .returning();
   const [delivery] = await db
     .insert(schema.notificationDelivery)
     .values({
-      notificationId: intent!.id,
-      recipientId: recipient!.id,
+      notificationId: assertDefined(intent).id,
+      recipientId: assertDefined(recipient).id,
       channel: 'email',
       destinationType: 'email',
       destination: {},
@@ -58,7 +64,11 @@ async function seedDeliveryChain(
       ...overrides,
     })
     .returning();
-  return { intentId: intent!.id, recipientId: recipient!.id, deliveryId: delivery!.id };
+  return {
+    intentId: assertDefined(intent).id,
+    recipientId: assertDefined(recipient).id,
+    deliveryId: assertDefined(delivery).id,
+  };
 }
 
 describe('requireNotificationDelivery', () => {

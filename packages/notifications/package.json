@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",
+    "@docket/test-utils": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "@electric-sql/pglite": "catalog:",
     "@types/node": "catalog:",

@@ -36,6 +36,7 @@ import {
   vapidPublicKeyFor,
   type VapidKeys,
 } from '../../src/webpush/node';
+import { assertDefined } from '@docket/test-utils';
 
 /** Mint a browser-shaped subscription plus the private key needed to decrypt for it. */
 function makeSubscription(endpoint = 'https://push.example/ep/1'): {
@@ -221,13 +222,12 @@ describe('RFC 8292 VAPID authorization', () => {
 
     const token = /vapid t=([^,]+), k=(.+)/.exec(header);
     expect(token).not.toBeNull();
-    const [, jwt, advertised] = token!;
+    const [, jwt, advertised] = assertDefined(token);
     expect(advertised).toBe(keys.publicKey);
-    const [headerPart, claimsPart, signaturePart] = jwt!.split('.');
-    const claims = JSON.parse(Buffer.from(claimsPart!, 'base64url').toString('utf8')) as Record<
-      string,
-      unknown
-    >;
+    const [headerPart, claimsPart, signaturePart] = assertDefined(jwt).split('.');
+    const claims = JSON.parse(
+      Buffer.from(assertDefined(claimsPart), 'base64url').toString('utf8'),
+    ) as Record<string, unknown>;
     expect(claims['aud']).toBe('https://push.example');
     expect(claims['sub']).toBe('mailto:ops@example.com');
     expect(claims['exp']).toBe(1_000_000 + 12 * 60 * 60);
@@ -246,7 +246,7 @@ describe('RFC 8292 VAPID authorization', () => {
           key: createPublicKey({ key: spki, format: 'der', type: 'spki' }),
           dsaEncoding: 'ieee-p1363',
         },
-        Buffer.from(signaturePart!, 'base64url'),
+        Buffer.from(assertDefined(signaturePart), 'base64url'),
       ),
     ).toBe(true);
   });
@@ -302,7 +302,7 @@ describe('VapidWebPushSender', () => {
 
     expect(sent.status).toBe(201);
     expect(calls).toHaveLength(1);
-    const call = calls[0]!;
+    const call = assertDefined(calls[0]);
     expect(call.url).toBe(subscription.endpoint);
     expect(call.headers['Content-Encoding']).toBe('aes128gcm');
     expect(call.headers['Authorization']).toMatch(/^vapid t=/);

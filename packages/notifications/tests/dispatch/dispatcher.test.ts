@@ -14,6 +14,7 @@ import {
 import { configureNotificationTransports } from '../../src/dispatch/transports';
 import { getMigratedDb } from '../support/db';
 import { addMember, seedContactPoint, seedOrg, seedUser, token } from '../support/seed';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -487,14 +488,14 @@ describe('dispatchPersistedNotificationIntent', () => {
       })
       .returning();
 
-    const first = await dispatchPersistedNotificationIntent(db, intent!);
+    const first = await dispatchPersistedNotificationIntent(db, assertDefined(intent));
     expect(first.recipients).toHaveLength(1);
 
-    const second = await dispatchPersistedNotificationIntent(db, intent!);
+    const second = await dispatchPersistedNotificationIntent(db, assertDefined(intent));
     expect(second.idempotent).toBe(false);
     expect(second.recipients).toHaveLength(1);
     expect(second.deliveries).toHaveLength(1);
-    expect(second.intentId).toBe(intent!.id);
+    expect(second.intentId).toBe(assertDefined(intent).id);
   });
 
   it('applies skip_user_preferences mode, ignoring an explicit channel opt-out', async () => {

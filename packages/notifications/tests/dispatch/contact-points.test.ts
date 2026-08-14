@@ -10,6 +10,7 @@ import {
 } from '../../src/dispatch/contact-points';
 import { getMigratedDb } from '../support/db';
 import { seedUser } from '../support/seed';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -84,7 +85,7 @@ describe('ensureAccountEmailContactPoint', () => {
     const [oldRow] = await db
       .select({ primary: schema.contactPoint.primary })
       .from(schema.contactPoint)
-      .where(eq(schema.contactPoint.id, existing[0]!.id));
+      .where(eq(schema.contactPoint.id, assertDefined(existing[0]).id));
     expect(oldRow?.primary).toBe(false);
   });
 

@@ -41,7 +41,12 @@ import { and, asc, desc, eq, gte, inArray, isNull, lt } from 'drizzle-orm';
 
 import { ConflictError } from '../../error';
 import { toStreamEventOut } from '../../routes/stream-helpers';
-import { isFutureLocalDate, localDayFor, localDayStartOf } from '../../lib/activity/local-day';
+import {
+  isFutureLocalDate,
+  localDayFor,
+  localDayStartOf,
+  nextLocalDayStart,
+} from '../../lib/activity/local-day';
 
 /** The source systems a narrated day can draw on, and therefore must account for. */
 const ACCOUNTABLE_SOURCES: readonly SourceSystemKind[] = [
@@ -249,7 +254,16 @@ export async function buildHighlightsDayPayload(
     throw new ConflictError('That day has not happened yet.', 'validation_error');
   }
   const dayStart = localDayStartOf(date, timezone) ?? today.startsAt;
-  const dayEnd = new Date(Math.min(dayStart.getTime() + 24 * 60 * 60 * 1000, now.getTime()));
+  // The next local midnight, matching `reconcileDay` exactly. A fixed 24 hours is wrong on the two
+  // DST transition days a year, and the read and the reconcile disagreeing about where a day ends
+  // would make the source-health counts describe a different window than the episodes do.
+  const nextMidnight = nextLocalDayStart(date, timezone);
+  const dayEnd = new Date(
+    Math.min(
+      (nextMidnight ?? new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)).getTime(),
+      now.getTime(),
+    ),
+  );
 
   const [[day], sources] = await Promise.all([
     db

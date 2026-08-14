@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import { getDb, one, seedBaseOrg } from '../../support/routes-harness';
-import { reconcileDay } from '../../../src/services/highlights/reconcile';
+import { reconcileDay, refreshDayInBackground } from '../../../src/services/highlights/reconcile';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -158,6 +158,48 @@ describe('reconcileDay', () => {
       .from(schema.syncRun)
       .where(eq(schema.syncRun.integrationId, integrationId));
     expect(runs).toHaveLength(0);
+  });
+
+  it('marks only the lines the model left out, and keeps the rest', async () => {
+    // `reconcileHighlights` guarantees one entry per episode in order, and this is that guarantee at
+    // the persistence layer: a model that answers about some episodes and not others must leave the
+    // answered ones `ready` and the unanswered ones `failed`, never drop a row and never invent a
+    // sentence for one it said nothing about.
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId, { subject: 'ENG-1' });
+    await seedEvent(orgId, userId, { subject: 'ENG-2' });
+
+    const { getContainer } = await import('../../../src/container');
+    const spy = vi
+      .spyOn(getContainer().summarizer, 'narrateDay')
+      .mockImplementation(async (input) => ({
+        // Only the first episode comes back with prose.
+        highlights: input.episodes.slice(0, 1).map((episode) => ({
+          key: episode.key,
+          sentence: 'I did the first thing.',
+        })),
+      }));
+
+    try {
+      const result = await reconcileDay(userId, DAY, NOW);
+
+      expect(result.narrated).toBe(1);
+      expect(result.narrationFailed).toBe(1);
+      const rows = await db
+        .select({
+          state: schema.activityHighlight.narrationState,
+          narration: schema.activityHighlight.narration,
+        })
+        .from(schema.activityHighlight)
+        .where(eq(schema.activityHighlight.activityDayId, result.activityDayId));
+      // Both episodes still have a row: the day's record is complete even where its prose is not.
+      expect(rows).toHaveLength(2);
+      expect(rows.filter((row) => row.state === 'ready')).toHaveLength(1);
+      expect(rows.filter((row) => row.state === 'failed')).toHaveLength(1);
+      expect(rows.find((row) => row.state === 'failed')?.narration).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('takes back a narration claim that was stranded by a crash', async () => {
@@ -344,5 +386,72 @@ describe('reconcileDay', () => {
     const rows = await highlightsFor(result.activityDayId);
     expect(rows).toHaveLength(1);
     expect(rows[0]?.subjectTitle).toBe('Subject ENG-mine');
+  });
+});
+
+describe('refreshDayInBackground', () => {
+  it('does not start a second reconcile for a day already being rebuilt', async () => {
+    // The client re-reads every four seconds while narration is in flight, and each of those reads
+    // asks for a refresh. Without this guard every poll would start another reconcile of the same
+    // day — not incorrect, since the claim is atomic, but a pile of duplicated provider calls.
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId);
+
+    const { getContainer } = await import('../../../src/container');
+    let inFlight: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => (inFlight = resolve));
+    const spy = vi
+      .spyOn(getContainer().summarizer, 'narrateDay')
+      .mockImplementation(async (input) => {
+        await gate;
+        return { highlights: input.episodes.map((e) => ({ key: e.key, sentence: 'I did it.' })) };
+      });
+
+    try {
+      refreshDayInBackground(userId, DAY, NOW);
+      // Three more while the first is still inside `narrateDay`.
+      refreshDayInBackground(userId, DAY, NOW);
+      refreshDayInBackground(userId, DAY, NOW);
+      inFlight?.();
+
+      await vi.waitFor(async () => {
+        const [day] = await db
+          .select({ status: schema.activityDay.status })
+          .from(schema.activityDay)
+          .where(eq(schema.activityDay.userId, userId));
+        expect(day?.status).toBe('ready');
+      });
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('swallows a failure rather than breaking the read that triggered it', async () => {
+    // A refresh is a side errand of a read. If it cannot run, the day is stale — which the payload
+    // already says honestly — and that is not a reason to fail the request that asked for it. An
+    // unhandled rejection here would take down the process instead.
+    const { orgId, userId } = await seedPerson();
+    await seedEvent(orgId, userId);
+
+    const { getContainer } = await import('../../../src/container');
+    const spy = vi
+      .spyOn(getContainer().summarizer, 'narrateDay')
+      .mockRejectedValue(new Error('model unavailable'));
+
+    try {
+      expect(() => {
+        refreshDayInBackground(userId, DAY, NOW);
+      }).not.toThrow();
+      // The day's record still stands; only its prose is missing.
+      await vi.waitFor(async () => {
+        const rows = await db
+          .select({ state: schema.activityHighlight.narrationState })
+          .from(schema.activityHighlight);
+        expect(rows.some((row) => row.state === 'failed')).toBe(true);
+      });
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

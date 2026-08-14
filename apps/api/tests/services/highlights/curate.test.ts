@@ -307,6 +307,65 @@ describe('buildHighlightsDayPayload', () => {
     expect(after?.reconciledAt?.toISOString()).toBe(before?.reconciledAt?.toISOString());
   });
 
+  it('reports the most recent successful pull, not just any of them', async () => {
+    // Freshness is the latest *successful* read. With several runs recorded the newest one is what
+    // the day was read from, and reporting an older one would understate how current the day is —
+    // the mirror of counting a failed run as a read, which would overstate it.
+    const { orgId, userId } = await seedPerson();
+    const { integrationId } = await seedActivityIntegration(orgId, userId, 'github');
+    const older = new Date('2026-08-12T08:00:00.000Z');
+    const newer = new Date('2026-08-12T11:00:00.000Z');
+    await seedActivityRun(orgId, integrationId, 'succeeded', older);
+    await seedActivityRun(orgId, integrationId, 'succeeded', newer);
+
+    const payload = await buildHighlightsDayPayload(userId, DAY, NOW);
+
+    const github = payload.sources.find((source) => source.system === 'github');
+    expect(github?.lastReadAt).toBe(newer.toISOString());
+    expect(github?.state).toBe('ok');
+  });
+
+  it('ends the day at real local midnight, so a DST day is not truncated', async () => {
+    // The read and the reconcile have to agree about where a day ends, or the source-health counts
+    // describe a different window than the episodes do. On a 25-hour day a fixed 24 hours would cut
+    // the last hour out of the read's window while the reconcile kept it.
+    const { orgId } = await seedBaseOrg(db, schema);
+    people += 1;
+    const userId = one(
+      await db
+        .insert(schema.user)
+        .values({ name: `Dst ${String(people)}`, email: `dst-${String(people)}@example.test` })
+        .returning({ id: schema.user.id }),
+    ).id;
+    await db.insert(schema.hub).values({ userId, preferences: { timezone: 'America/New_York' } });
+
+    // 2026-11-01 in New York runs 04:00Z to 05:00Z the next day — 25 hours, because the clocks go
+    // back. A `start + 24h` window ends at 04:00Z, so this event at 04:30Z falls in the hour that
+    // only the correct boundary includes. Placed inside that gap deliberately: anywhere else and the
+    // test passes against both the fixed and the broken version.
+    seq += 1;
+    await db.insert(schema.event).values({
+      organizationId: orgId,
+      userId,
+      sourceSystem: 'github',
+      kind: 'completed',
+      occurredAt: new Date('2026-11-02T04:30:00.000Z'),
+      title: 'Late on a long day',
+      entityAssociation: 'unmatched',
+      dedupeKey: `dst-${String(seq)}`,
+    });
+
+    await reconcileDay(userId, '2026-11-01', new Date('2026-11-02T12:00:00.000Z'));
+    const payload = await buildHighlightsDayPayload(
+      userId,
+      '2026-11-01',
+      new Date('2026-11-02T12:00:00.000Z'),
+    );
+
+    expect(payload.highlights.length).toBeGreaterThan(0);
+    expect(payload.sources.find((source) => source.system === 'github')?.eventCount).toBe(1);
+  });
+
   it('reports a day nobody has built as pending, not as empty', async () => {
     // These are different facts and must not look alike: one means "not looked at yet", the other
     // means "looked at, and there was nothing".

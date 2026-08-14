@@ -21,7 +21,19 @@
 import { actor, calendarConnection, db, hub, integration, organization, syncRun } from '@docket/db';
 import type { ActivitySource } from '@docket/integrations';
 import { ACTIVITY_PROVIDER_IDS } from '@docket/types';
-import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  notExists,
+  sql,
+} from 'drizzle-orm';
 
 import { writeEventDrafts, type DraftWriteTally } from '../../events/write-drafts';
 import { connectorFor } from '../../routes/integration-provider';
@@ -58,7 +70,7 @@ function pullWindow(now: Date, dayStart: Date): { since: string; until: string }
 }
 
 /** Integrations examined in one sweep, so a large tenant cannot starve the tick. */
-const SWEEP_BATCH_LIMIT = 50;
+export const SWEEP_BATCH_LIMIT = 50;
 
 /** What one activity sweep did. */
 export interface ActivitySweepResult {
@@ -115,41 +127,6 @@ async function timezoneFor(userId: string): Promise<string> {
     .where(eq(hub.userId, userId))
     .limit(1);
   return row?.preferences.timezone ?? 'UTC';
-}
-
-/**
- * When each integration last ran an activity pull.
- *
- * @remarks
- * Deliberately *not* `integration.lastSyncedAt`. That column is stamped by `finishSuccess` for
- * every purpose, so a task mirror or a mail ingest advances it too — using it here would let an
- * unrelated sync suppress the activity poll for half an hour, and the resulting gap would look like
- * a quiet day rather than a missed one. The `sync_run` history is the only per-purpose record, and
- * `sync_run_integration_idx` on `(integration_id, started_at)` already serves this.
- */
-export async function lastActivityPullAt(
-  integrationIds: readonly string[],
-): Promise<Map<string, Date>> {
-  if (integrationIds.length === 0) return new Map();
-  const rows = await db
-    .select({ integrationId: syncRun.integrationId, startedAt: syncRun.startedAt })
-    .from(syncRun)
-    .where(
-      and(
-        inArray(syncRun.integrationId, [...integrationIds]),
-        eq(syncRun.purpose, 'activity_pull'),
-      ),
-    )
-    .orderBy(desc(syncRun.startedAt));
-  // Newest first, so the first row seen for an integration is its latest run. Deliberately not a
-  // `max()` aggregate: drivers disagree about whether an aggregated timestamp comes back as a Date
-  // or a string, and a silently-stringified value here would disable the cadence gate rather than
-  // fail — the poll would hammer every provider on every tick and nothing would look wrong.
-  const byId = new Map<string, Date>();
-  for (const row of rows) {
-    if (!byId.has(row.integrationId)) byId.set(row.integrationId, row.startedAt);
-  }
-  return byId;
 }
 
 /** Pull one provider-backed integration under the leased spine. */
@@ -333,6 +310,12 @@ export async function pullActivityForUser(userId: string, now: Date): Promise<Ac
 export async function sweepActivitySources(now: Date): Promise<ActivitySweepResult> {
   let result = EMPTY;
 
+  const dueBefore = new Date(now.getTime() - ACTIVITY_PULL_CADENCE_MINUTES * 60_000);
+
+  // Every filter that decides whether an integration is *due* runs in the query, so `limit` bounds
+  // the work that will actually happen. Filtering after the limit starves: with more integrations
+  // than the cap, each tick fetched the same head, discarded most of it as not-yet-due, and never
+  // reached the ones further down — which are precisely the ones most overdue.
   const candidates = await db
     .select({ row: integration, ownerUserId: actor.userId })
     .from(integration)
@@ -342,19 +325,40 @@ export async function sweepActivitySources(now: Date): Promise<ActivitySweepResu
         isNull(integration.archivedAt),
         inArray(integration.provider, [...ACTIVITY_PROVIDER_IDS]),
         inArray(integration.status, ['connected', 'error']),
+        // An integration whose owning actor has no Better Auth user cannot be attributed to a
+        // person, and an event with no `userId` is invisible to the day it belongs to. Excluded here
+        // rather than skipped in the loop so it cannot occupy a slot either.
+        isNotNull(actor.userId),
+        // The cadence gate: any `activity_pull` run — succeeded or failed — started inside the
+        // window holds the integration off, so a provider that is failing is rate-limited rather
+        // than retried every tick.
+        //
+        // Deliberately `sync_run` and not `integration.lastSyncedAt`. That column is stamped by
+        // `finishSuccess` for every purpose, so a task mirror or a mail ingest advances it too, and
+        // an unrelated sync would suppress the activity poll for half an hour — a gap that reads as
+        // a quiet day rather than a missed one. `sync_run_integration_idx` on
+        // `(integration_id, started_at)` already serves this predicate.
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(syncRun)
+            .where(
+              and(
+                eq(syncRun.integrationId, integration.id),
+                eq(syncRun.purpose, 'activity_pull'),
+                gt(syncRun.startedAt, dueBefore),
+              ),
+            ),
+        ),
       ),
     )
+    // Oldest connection first, so a stable order decides the batch when more are due than fit, and
+    // the same integrations cannot win the race indefinitely.
+    .orderBy(asc(integration.createdAt))
     .limit(SWEEP_BATCH_LIMIT);
 
-  const lastRun = await lastActivityPullAt(candidates.map((c) => c.row.id));
-  const dueBefore = now.getTime() - ACTIVITY_PULL_CADENCE_MINUTES * 60_000;
-
   for (const candidate of candidates) {
-    const last = lastRun.get(candidate.row.id);
-    if (last && last.getTime() > dueBefore) continue;
-    // An integration whose owning actor has no Better Auth user cannot be attributed to a person,
-    // and an event with no `userId` is invisible to the day it belongs to — so skip rather than
-    // write a row nothing will ever read.
+    /* v8 ignore next -- `isNotNull(actor.userId)` above already excluded these */
     if (!candidate.ownerUserId) continue;
     result = merge(result, await pullIntegration(candidate.row, candidate.ownerUserId, now));
   }

@@ -6,6 +6,7 @@ import type * as DbModule from '@docket/db';
 import { getDb, one, seedBaseOrg, seedUserWithHub } from '../../support/routes-harness';
 import {
   ACTIVITY_PULL_CADENCE_MINUTES,
+  SWEEP_BATCH_LIMIT,
   pullActivityForUser,
   sweepActivitySources,
 } from '../../../src/lib/activity/sweep';
@@ -255,6 +256,38 @@ describe('sweepActivitySources', () => {
 
     expect(result.failed).toBe(0);
     expect(await runsFor(integrationId)).toHaveLength(0);
+  });
+
+  it('reaches an overdue source even when the batch is full of ones that are not due', async () => {
+    // The starvation bug. The batch cap was applied to the candidate query and the cadence gate ran
+    // afterwards in JS, so with more integrations than the cap each tick fetched the same head,
+    // discarded most of it as not-yet-due, and never reached the ones further down — which are
+    // exactly the most overdue. The gate belongs in the query, so the limit bounds work that will
+    // actually happen.
+    const { orgId, actorId } = await seedPerson();
+    const now = new Date('2026-08-12T20:00:00.000Z');
+
+    // Fill the batch with integrations pulled moments ago, so none of them is due.
+    const recent = new Date(now.getTime() - 60_000);
+    for (let index = 0; index < SWEEP_BATCH_LIMIT; index++) {
+      const filler = await seedIntegration(orgId, actorId, 'github');
+      await db.insert(schema.syncRun).values({
+        organizationId: orgId,
+        integrationId: filler,
+        purpose: 'activity_pull',
+        status: 'succeeded',
+        trigger: 'scheduled',
+        startedAt: recent,
+        finishedAt: recent,
+      });
+    }
+
+    // One that has never been pulled at all, created last so any ordering puts it behind the rest.
+    const overdue = await seedIntegration(orgId, actorId, 'gmail');
+
+    await sweepActivitySources(now);
+
+    expect(await runsFor(overdue)).toHaveLength(1);
   });
 
   it('leaves an archived or disconnected source alone', async () => {

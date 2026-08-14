@@ -28,6 +28,7 @@ import {
   OrganizationId,
   TaskId,
   ULID_REGEX,
+  WorkPlaceId,
 } from './primitives';
 
 /**
@@ -330,6 +331,9 @@ export const SchedulingCommitment = z
       .nullable()
       .describe("Requested session length; null uses the shape's profile default."),
     location: z.string().max(200).nullable(),
+    workPlaceId: WorkPlaceId.nullable()
+      .default(null)
+      .describe('Canonical saved place for this commitment; independent of display location text.'),
     attendees: z
       .array(z.string().max(200))
       .max(50)
@@ -454,6 +458,9 @@ export const ScheduledBlockOut = z
     organizationId: OrganizationId.nullable(),
     organizationName: z.string().nullable(),
     location: z.string().nullable(),
+    workPlaceId: WorkPlaceId.nullable()
+      .default(null)
+      .describe('Canonical saved place copied from the commitment or source block.'),
     attendees: z.array(z.string()),
     origin: ScheduleOrigin,
     anchorCalendarItemId: CalendarItemId.nullable().describe(

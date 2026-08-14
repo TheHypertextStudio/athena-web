@@ -65,6 +65,7 @@ export * from './activity';
 export * from './search';
 export * from './hub';
 export * from './calendar';
+export * from './work-location';
 export * from './agenda';
 export * from './time';
 export * from './time-share';

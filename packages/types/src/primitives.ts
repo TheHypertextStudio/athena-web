@@ -275,6 +275,22 @@ export const CalendarItemId = id<'CalendarItemId'>().describe(
 export const CalendarItemWriteId = id<'CalendarItemWriteId'>().describe(
   'ULID id of a CalendarItemWrite — one provider-bound outbox write.',
 );
+/** Branded saved work-place id. */
+export const WorkPlaceId = id<'WorkPlaceId'>().describe(
+  'ULID id of a user-owned saved place used in work-location schedules and evidence.',
+);
+/** Branded canonical work-location assertion id. */
+export const WorkLocationAssertionId = id<'WorkLocationAssertionId'>().describe(
+  'ULID id of a user-owned explicit work-location assertion or weekly series.',
+);
+/** Branded short-lived work-location observation id. */
+export const WorkLocationObservationId = id<'WorkLocationObservationId'>().describe(
+  'ULID id of a short-lived current-location observation.',
+);
+/** Branded provider-bound work-location write id. */
+export const WorkLocationWriteId = id<'WorkLocationWriteId'>().describe(
+  'ULID id of a queued provider projection for a canonical work-location assertion.',
+);
 
 /** Branded `ExternalResource` id (one deduped resource outside Docket). */
 export const ExternalResourceId = id<'ExternalResourceId'>().describe(

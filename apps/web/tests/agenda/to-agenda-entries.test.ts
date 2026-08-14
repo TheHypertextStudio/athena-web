@@ -24,14 +24,35 @@ const T3 = '01ARZ3NDEKTSV4RRFFQ69G5FA2';
 function hub(plan: unknown[], calendar: unknown[]): HubTodayOut {
   return HubTodayOut.parse({
     date: '2026-06-29',
+    planState: plan.length > 0 ? 'active' : 'unplanned',
+    brief: { text: 'Your next two moves are ready.', href: null, attentionCount: 0 },
     plan,
+    focus: { now: null, after: null },
+    statusCards: [],
+    suggestions: [],
     calendar,
     needsAttention: { approvals: [], blocked: [], dueToday: [], inbox: 0 },
   });
 }
 
 function task(id: string, title = 'Task'): unknown {
-  return { id, organizationId: ORG, title, state: 'started', priority: 'medium' };
+  return {
+    id,
+    organizationId: ORG,
+    title,
+    state: 'started',
+    priority: 'medium',
+    planItemId: id,
+    planStatus: 'planned',
+    sort: 0,
+    position: 0,
+    estimateMinutes: 30,
+    timeboxStartsAt: null,
+    timeboxEndsAt: null,
+    blocked: false,
+    dependencyImpact: 0,
+    reason: 'Next in your plan',
+  };
 }
 
 function block(taskId: string, startsAt: string, endsAt: string): unknown {

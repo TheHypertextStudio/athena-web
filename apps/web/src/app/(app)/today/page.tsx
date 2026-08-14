@@ -1,29 +1,30 @@
 'use client';
 
 import { Button } from '@docket/ui/primitives';
+import Link from 'next/link';
 import { type JSX, useCallback, useState } from 'react';
 
 import { DayRecapEntry } from '@/components/today/day-recap-entry';
-import { GhostProposals } from '@/components/today/ghost-proposals';
-import { MorningReview } from '@/components/today/morning-review';
-import NeedsYou from '@/components/today/needs-you';
-import TodaysWork from '@/components/today/todays-work';
+import FocusSequence from '@/components/today/focus-sequence';
+import KeepTheMomentum from '@/components/today/keep-the-momentum';
+import PlanTodayCard from '@/components/today/plan-today-card';
 import TodaySession from '@/components/today/today-session';
 import { TodayPrompt } from '@/components/today/today-prompt';
+import WorkInMotion from '@/components/today/work-in-motion';
 import { startViewTransition } from '@/lib/view-transition';
 
 import { useTodayData } from './use-today-data';
+import { useTodayActions } from './use-today-actions';
 
 /**
- * TodayPage — where the day starts, in two states.
+ * TodayPage — the daily operating surface, with Athena as its first interaction.
  *
  * @remarks
- * **At rest** it answers where things stand. The prompt sits first, because the usual reason to
- * open this page is that you arrived with something in your head; then Athena's proposals, then
- * what is waiting on your approval or blocked, then the day's own tasks. That order is not
- * chronological — a proposal or an approval will not move without you, and a plan you wrote
- * yesterday will. Anything holding nothing renders nothing, so a clear day is a short page rather
- * than a column of empty panels.
+ * **At rest** it answers where things stand in a deliberately finite hierarchy: the standing
+ * Athena field, a prominent planning action when the day is untouched, Now and After this for an
+ * accepted plan, grounded Project/Initiative status stories, and feasible extra work only after
+ * the accepted plan is clear. Inline actions cover quick execution; entity links defer detailed
+ * workflows to their canonical pages.
  *
  * **Engaged**, it is the conversation. Starting something with Athena does not navigate: the
  * prompt expands in place and the resting content steps out of the way, so the page you were
@@ -41,7 +42,9 @@ import { useTodayData } from './use-today-data';
  * into panes that each get a third of the width.
  */
 export default function TodayPage(): JSX.Element {
-  const { data, loading, error, refetch, orgName, heading, activeOrgId, date } = useTodayData();
+  const { data, loading, error, refetch, orgName, heading, activeOrgId, date, displayTimezone } =
+    useTodayData();
+  const actions = useTodayActions(date);
   const [session, setSession] = useState<{ draft: string } | null>(null);
 
   const openSession = useCallback((draft: string) => {
@@ -58,7 +61,7 @@ export default function TodayPage(): JSX.Element {
   }, [refetch]);
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-8 px-6 py-8 @2xl:px-10 @2xl:py-10">
+    <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-7 px-5 py-7 @2xl:px-10 @2xl:py-9">
       {/* `Today · Friday, August 7` on one line at the app's real page-title size. The 48px display
           heading this replaces was 2.4× the documented ceiling (`design-system.md:293`: "page
           titles are 20px, not a marketing 24px+"), and it sat over a separate date line and a
@@ -80,6 +83,19 @@ export default function TodayPage(): JSX.Element {
             onStartSession={activeOrgId ? openSession : undefined}
           />
 
+          {data?.brief ? (
+            data.brief.href ? (
+              <Link
+                href={data.brief.href}
+                className="text-on-surface-variant hover:text-primary focus-visible:ring-ring -mt-5 w-fit text-sm underline-offset-4 hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
+              >
+                {data.brief.text}
+              </Link>
+            ) : (
+              <p className="text-on-surface-variant -mt-5 text-sm">{data.brief.text}</p>
+            )
+          ) : null}
+
           {error ? (
             <div
               role="alert"
@@ -92,21 +108,60 @@ export default function TodayPage(): JSX.Element {
             </div>
           ) : null}
 
-          {/* The walk-through sits above the proposals and the day's own work: on a morning that
-              has not been answered for yet, deciding the day is the thing to do first, and
-              everything below it is a reading of a day that has not been agreed. It renders
-              nothing once it is done, so it is not a permanent banner. */}
-          <MorningReview onChanged={refetch} />
+          {actions.error ? (
+            <p role="alert" className="text-error text-body-small -mt-4">
+              {actions.error}
+            </p>
+          ) : null}
 
-          <GhostProposals orgId={activeOrgId} onApplied={refetch} />
+          {loading ? (
+            <div className="flex flex-col gap-3" aria-label="Loading today">
+              <div className="bg-surface-container-high h-36 animate-pulse rounded-2xl" />
+              <div className="bg-surface-container-high h-24 animate-pulse rounded-xl" />
+            </div>
+          ) : null}
 
-          <NeedsYou
-            approvals={data?.needsAttention.approvals ?? []}
-            blocked={data?.needsAttention.blocked ?? []}
-            orgName={orgName}
-          />
+          {data?.planState === 'unplanned' ? (
+            <PlanTodayCard
+              onPlan={() => {
+                openSession('Plan today');
+              }}
+            />
+          ) : null}
 
-          <TodaysWork plan={data?.plan ?? []} orgName={orgName} loading={loading} />
+          {data?.planState === 'active' ? (
+            <FocusSequence
+              focus={data.focus}
+              orgName={orgName}
+              completing={actions.completing}
+              onComplete={actions.complete}
+              onDefer={actions.defer}
+              onPromote={actions.promote}
+              onTimebox={(item, startsAt, endsAt) => {
+                void actions.timebox(item, startsAt, endsAt);
+              }}
+              date={date}
+              displayTimezone={displayTimezone}
+            />
+          ) : null}
+
+          <WorkInMotion cards={data?.statusCards ?? []} orgName={orgName} />
+
+          {data &&
+          (data.planState === 'cleared' ||
+            (data.planState === 'active' && data.focus.now === null)) ? (
+            <KeepTheMomentum
+              suggestions={data.suggestions}
+              orgName={orgName}
+              blockedPlan={data.planState === 'active'}
+              onAdd={actions.add}
+              onStart={actions.start}
+              busy={actions.suggestionBusy}
+              onAskAthena={() => {
+                openSession('What else can I move today?');
+              }}
+            />
+          ) : null}
 
           {/* Last, and only from mid-afternoon: this is the one backward-looking thing on a
               forward-looking page, so it must not open the day on the past. */}

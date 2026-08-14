@@ -16,6 +16,7 @@ import {
   HubPortfolioOut,
   HubPreferences,
   HubSearchOut,
+  HubTodayCompleteOut,
   HubTodayOut,
   ListQuery,
   StreamPageOut,
@@ -36,7 +37,7 @@ import {
   decodeFilter,
   encodeCursor,
 } from '../lib/view-filter-sql';
-import { zJson, zQuery } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { SearchHttpQuery } from '../search/http';
 import { searchWorkspace } from '../search/query';
 
@@ -46,11 +47,13 @@ import { buildHighlightsDayPayload } from '../services/highlights/read';
 import { callerActorIds, callerOrgIds, toAuditEventOut, toNotificationOut } from './hub-helpers';
 import { toStreamEventOut } from './stream-helpers';
 import { buildHubTodayPayload } from './hub-today';
+import { completeTodayItem } from './hub-today-actions';
 import { buildHubPortfolioPayload } from './hub-portfolio';
 
 const todayQuery = z.object({ date: z.iso.date() });
 /** The day to read; omitted means the caller's current local day. */
 const highlightsQuery = z.object({ date: z.iso.date().optional() });
+const todayItemParam = z.object({ planItemId: z.string() });
 const portfolioQuery = z.object({
   from: z.iso.date().optional(),
   to: z.iso.date().optional(),
@@ -100,6 +103,23 @@ const hubRouter = new Hono<AppEnv>()
       return ok(c, HubPreferences, await readHubPreferences(session.user.id));
     },
   )
+  .post(
+    '/today/items/:planItemId/complete',
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Complete one accepted Today item',
+      response: HubTodayCompleteOut,
+      description:
+        "Resolve a caller-owned personal plan row, require the caller's active membership to hold `contribute` in the Task's organization, advance the Task through the owning Team's completed workflow state, and mark the plan row done in one transaction. The client supplies no organization, Task, user, or state id.",
+    }),
+    zParam(todayItemParam),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { planItemId } = c.req.valid('param');
+      return ok(c, HubTodayCompleteOut, await completeTodayItem(session.user.id, planItemId));
+    },
+  )
   .patch(
     '/preferences',
     apiDoc({
@@ -143,9 +163,9 @@ const hubRouter = new Hono<AppEnv>()
       tag: 'Hub',
       summary: 'Get the cross-org today view',
       response: HubTodayOut,
-      description: `Aggregate the signed-in person's "what should I look at right now" across **every organization they belong to**, for a single \`date\` (required query param). Returns a three-pane cockpit: \`plan\` (Tasks the caller pulled into their daily plan plus Tasks due that date), \`calendar\` (daily-plan items that carry a timebox window), and \`needsAttention\` (the trio of pending approvals, blocked Tasks, and Tasks due today, plus the unread \`inbox\` count).
+      description: `Aggregate the signed-in person's "what should I do now" across **every organization they belong to**, for a single \`date\` (required query param). Returns the caller's accepted personal plan, its derived \`unplanned\`/\`active\`/\`cleared\` state, a finite Now/After focus sequence, up to four grounded Project or Initiative status stories, and up to three feasible momentum suggestions. Due work remains in \`needsAttention\`; sharing a date never silently accepts a Task into the personal plan.
 
-Implemented as a **server-side fan-out** — one scoped query per membership where the caller has an active human Actor, merged in application code (never a cross-tenant SQL join). Each returned item carries its own \`organizationId\` (its org chip) and is individually run through that org's permission predicate, so the view is the **union of per-org decisions**, not a privileged bypass. Requires only an authenticated session (the per-resource gate already ran per row); no capability. 401 when unauthenticated; a caller with no memberships gets empty panes. Related: \`/daily-plan\` (the source of \`plan\`/\`calendar\`), \`/notifications/count\` (the \`inbox\` number), \`/hub/inbox\`, \`/hub/portfolio\`.`,
+Candidate queries are tenant-bounded and every Task, Project, and Initiative is filtered through the shared batched resource-access resolver before selection. Ranking is deterministic; Athena supplies the interaction surface, not invented project facts. Requires only an authenticated session because the per-resource gate already ran per row. 401 when unauthenticated. Related: \`/daily-plan\`, \`/schedule/week/day/start\`, \`/notifications/count\`, \`/hub/inbox\`, and the detailed Project/Initiative surfaces.`,
     }),
     zQuery(todayQuery),
     async (c) => {

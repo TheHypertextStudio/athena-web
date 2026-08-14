@@ -5,6 +5,7 @@ import { useContextState } from '@docket/ui/components';
 import { useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { dateKeyForInstant, resolveScheduleTimezone } from '@/components/scheduling';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
@@ -20,14 +21,8 @@ export interface TodayPageData {
   activeOrgId: string | null;
   orgName: (orgId: string) => string;
   heading: string;
-  /**
-   * The local day this page is showing.
-   *
-   * @remarks
-   * Returned rather than recomputed by each section, so nothing on the page can end up reading a
-   * different day than the one it is displaying.
-   */
   date: string;
+  displayTimezone: string;
 }
 
 /**
@@ -38,7 +33,15 @@ export function useTodayData(): TodayPageData {
   const { orgName } = useActiveOrg();
   const { activeOrgId } = useContextState();
 
-  const date = todayISODate();
+  const preferencesQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.hubPreferences(),
+      () => api.v1.hub.preferences.$get(),
+      'Could not load your calendar preferences.',
+    ),
+  );
+  const displayTimezone = resolveScheduleTimezone(preferencesQ.data?.timezone);
+  const date = dateKeyForInstant(new Date().toISOString(), displayTimezone) ?? todayISODate();
   const todayQ = useApiQuery(
     apiQueryOptions(
       queryKeys.today(date),
@@ -54,8 +57,9 @@ export function useTodayData(): TodayPageData {
         weekday: 'long',
         month: 'long',
         day: 'numeric',
+        timeZone: displayTimezone,
       }),
-    [],
+    [displayTimezone],
   );
 
   return {
@@ -69,5 +73,6 @@ export function useTodayData(): TodayPageData {
     orgName,
     heading,
     date,
+    displayTimezone,
   };
 }

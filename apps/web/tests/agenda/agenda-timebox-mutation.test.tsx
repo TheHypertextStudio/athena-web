@@ -102,6 +102,11 @@ describe('Agenda timebox mutation', () => {
       startsAt: NEW_START,
       endsAt: NEW_END,
     });
+    expect(client.getQueryData<HubTodayOut>(queryKeys.today(DAY))?.focus.now).toMatchObject({
+      planItemId: PLAN_ITEM_ID,
+      timeboxStartsAt: NEW_START,
+      timeboxEndsAt: NEW_END,
+    });
 
     act(() => {
       rejectPatch?.(new Error('Hostile provider detail that must never reach the context'));

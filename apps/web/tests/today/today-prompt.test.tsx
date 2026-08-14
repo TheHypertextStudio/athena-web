@@ -22,10 +22,18 @@ vi.mock('../../src/components/mentions/mention-textarea', () => ({
   default: ({
     value,
     onChange,
+    orgId: _orgId,
+    insertMode: _insertMode,
+    autoGrow: _autoGrow,
+    maxRows: _maxRows,
     ...rest
   }: {
     value: string;
     onChange: (next: string) => void;
+    orgId?: string;
+    insertMode?: string;
+    autoGrow?: boolean;
+    maxRows?: number;
   } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
     <textarea
       {...rest}
@@ -44,7 +52,7 @@ vi.mock('../../src/lib/api', () => ({
 const ORG = '01JQ0000000000000000000000';
 
 function typeDraft(text: string): HTMLTextAreaElement {
-  const field = screen.getByLabelText('Capture a task or ask Athena');
+  const field = screen.getByLabelText('Ask Athena about today');
   fireEvent.change(field, { target: { value: text } });
   return field as HTMLTextAreaElement;
 }
@@ -62,21 +70,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('TodayPrompt', () => {
-  it('names the destination on the control, so the consequence is never inferred', async () => {
+  it('starts with Athena as the clearly named destination', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
-    typeDraft('Buy milk');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
-
-    await waitFor(() => {
-      expect(capturePost).toHaveBeenCalledOnce();
-    });
-    expect(openAthena).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Ask Athena about today')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Switch to Add a task/ })).toBeInTheDocument();
   });
 
-  it('routes the same draft to Athena once the mode is switched, and remembers the choice', async () => {
+  it('routes the default draft to Athena and resets an explicit task-capture switch on revisit', async () => {
     const first = render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
-    fireEvent.click(screen.getByRole('button', { name: /Switch to Athena/ }));
     typeDraft('Plan the launch');
 
     fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
@@ -84,7 +86,7 @@ describe('TodayPrompt', () => {
     expect(openAthena).toHaveBeenCalledOnce();
     expect(capturePost).not.toHaveBeenCalled();
 
-    // The mode is a setting, not a per-submit choice: a fresh mount reads it back.
+    fireEvent.click(screen.getByRole('button', { name: /Switch to Add a task/ }));
     first.unmount();
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     await waitFor(() => {
@@ -98,20 +100,19 @@ describe('TodayPrompt', () => {
 
     fireEvent.keyDown(field, { key: 'Enter' });
     await waitFor(() => {
-      expect(capturePost).toHaveBeenCalledOnce();
+      expect(openAthena).toHaveBeenCalledOnce();
     });
 
     typeDraft('Buy bread');
     fireEvent.keyDown(field, { key: 'Enter', metaKey: true });
     await waitFor(() => {
-      expect(capturePost).toHaveBeenCalledTimes(2);
+      expect(openAthena).toHaveBeenCalledTimes(2);
     });
   });
 
   it('asks its host to expand into the session instead of sliding the dock over the page', () => {
     const onStartSession = vi.fn();
     render(<TodayPrompt orgId={ORG} orgLabel="Space" onStartSession={onStartSession} />);
-    fireEvent.click(screen.getByRole('button', { name: /Switch to Athena/ }));
     typeDraft('Plan the launch');
 
     fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
@@ -124,7 +125,6 @@ describe('TodayPrompt', () => {
 
   it('still opens the dock when the host hosts no session of its own', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
-    fireEvent.click(screen.getByRole('button', { name: /Switch to Athena/ }));
     typeDraft('Plan the launch');
 
     fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
@@ -144,12 +144,12 @@ describe('TodayPrompt', () => {
 
   it('keeps the send disabled until there is something to send', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
-    expect(screen.getByRole('button', { name: 'Add task' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeDisabled();
 
     typeDraft('   ');
-    expect(screen.getByRole('button', { name: 'Add task' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeDisabled();
 
     typeDraft('Real work');
-    expect(screen.getByRole('button', { name: 'Add task' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeEnabled();
   });
 });

@@ -13,9 +13,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { ProcessDefinitionId, TeamId, type ProcessDefinitionCreate } from '@docket/types';
+import { eq } from 'drizzle-orm';
 
 import { appWithSession, fakeSession, getDb, seedBaseOrg } from '../support/routes-harness';
 import type hubRouter from '../../src/routes/hub';
+import { materializeOccurrence } from '../../src/lib/recurrence/materialize';
+import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
+import { createRecurrenceSeries } from '../../src/lib/recurrence/series';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -45,12 +50,31 @@ async function seedUserWithHub(): Promise<{ userId: string; hubId: string }> {
 }
 
 /** Make `userId` an active human Actor in `orgId`; returns the actor id. */
-async function joinOrg(userId: string, orgId: string, status: 'active' | 'suspended' = 'active') {
+async function joinOrg(
+  userId: string,
+  orgId: string,
+  status: 'active' | 'suspended' = 'active',
+  roleId: string | null = null,
+) {
   const [a] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, status })
+    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, status, roleId })
     .returning({ id: schema.actor.id });
   return a!.id;
+}
+
+/** Join through a role that matches the normal Member write capability. */
+async function joinContributingOrg(userId: string, orgId: string): Promise<string> {
+  const [memberRole] = await db
+    .insert(schema.role)
+    .values({
+      organizationId: orgId,
+      key: `member-${Math.random().toString(36).slice(2)}`,
+      name: `Member ${Math.random().toString(36).slice(2)}`,
+      capabilities: ['contribute'],
+    })
+    .returning({ id: schema.role.id });
+  return joinOrg(userId, orgId, 'active', memberRole!.id);
 }
 
 describe('hub /activity (cross-org audit feed)', () => {
@@ -157,12 +181,12 @@ describe('hub /activity (cross-org audit feed)', () => {
   });
 });
 
-describe('hub /today (needs-attention cockpit)', () => {
-  it('surfaces approvals, blocked, dueToday, calendar, and the unread inbox count', async () => {
+describe('hub /today (daily operating projection)', () => {
+  it('separates accepted plan work from attention and grounds focus in larger work', async () => {
     const { userId, hubId } = await seedUserWithHub();
     const org = await seedBaseOrg(db, schema);
     const myActorId = await joinOrg(userId, org.orgId);
-    const date = '2026-08-01';
+    const date = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString().slice(0, 10);
 
     // dueToday task.
     const [due] = await db
@@ -172,13 +196,57 @@ describe('hub /today (needs-attention cockpit)', () => {
         title: 'Due today',
         teamId: org.teamId,
         state: 'todo',
+        assigneeId: myActorId,
+        estimateMinutes: 20,
         dueDate: new Date(date),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.task.id });
 
-    // A planned task that is ALSO due on the date (exercises the sameDay branch so it
-    // appears in both `plan` and `needsAttention.dueToday`) and carries a timebox window.
+    const [initiative] = await db
+      .insert(schema.initiative)
+      .values({
+        organizationId: org.orgId,
+        name: 'Reliable launch',
+        status: 'active',
+        health: 'on_track',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.initiative.id });
+    const [project] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: org.orgId,
+        name: 'Ship Today',
+        teamId: org.teamId,
+        status: 'active',
+        health: 'at_risk',
+        targetDate: new Date('2026-08-03T00:00:00.000Z'),
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.project.id });
+    await db.insert(schema.initiativeProject).values({
+      organizationId: org.orgId,
+      initiativeId: initiative!.id,
+      projectId: project!.id,
+    });
+    await db.insert(schema.update).values({
+      organizationId: org.orgId,
+      subjectType: 'project',
+      subjectId: project!.id,
+      body: 'Final review is underway.',
+      health: 'at_risk',
+      createdBy: org.humanActorId,
+    });
+    await db.insert(schema.milestone).values({
+      organizationId: org.orgId,
+      projectId: project!.id,
+      name: 'Launch',
+      targetDate: new Date('2026-08-02T00:00:00.000Z'),
+      createdBy: org.humanActorId,
+    });
+
+    // A planned task that is also due on the date and carries a current timebox.
     const [planned] = await db
       .insert(schema.task)
       .values({
@@ -186,6 +254,9 @@ describe('hub /today (needs-attention cockpit)', () => {
         title: 'Planned',
         teamId: org.teamId,
         state: 'todo',
+        projectId: project!.id,
+        assigneeId: myActorId,
+        estimateMinutes: 45,
         dueDate: new Date(date),
         createdBy: org.humanActorId,
       })
@@ -197,6 +268,15 @@ describe('hub /today (needs-attention cockpit)', () => {
       date,
       timeboxStartsAt: new Date(`${date}T09:00:00.000Z`),
       timeboxEndsAt: new Date(`${date}T10:00:00.000Z`),
+    });
+    await db.insert(schema.task).values({
+      organizationId: org.orgId,
+      title: 'Already shipped',
+      teamId: org.teamId,
+      state: 'done',
+      projectId: project!.id,
+      completedAt: new Date(),
+      createdBy: org.humanActorId,
     });
 
     // An agent session awaiting approval, tied to a task → approvals.
@@ -270,7 +350,12 @@ describe('hub /today (needs-attention cockpit)', () => {
     const app = appWithSession(hub, fakeSession(userId));
     const today = await body<{
       date: string;
-      plan: { id: string }[];
+      planState: string;
+      brief: { text: string; attentionCount: number };
+      plan: { id: string; planItemId: string; reason: string }[];
+      focus: { now: { id: string } | null; after: { id: string } | null };
+      statusCards: { id: string; kind: string; latestUpdate: { excerpt: string } | null }[];
+      suggestions: { id: string }[];
       calendar: { taskId: string; startsAt: string }[];
       needsAttention: {
         approvals: { id: string }[];
@@ -281,7 +366,17 @@ describe('hub /today (needs-attention cockpit)', () => {
     }>(await app.request(`/today?date=${date}`));
 
     expect(today.date).toBe(date);
-    expect(today.plan.map((t) => t.id)).toEqual(expect.arrayContaining([planned!.id, due!.id]));
+    expect(today.planState).toBe('active');
+    expect(today.plan.map((t) => t.id)).toEqual([planned!.id]);
+    expect(today.focus.now?.id).toBe(planned!.id);
+    expect(today.focus.after).toBeNull();
+    expect(today.statusCards.map((card) => card.id)).toEqual(
+      expect.arrayContaining([project!.id, initiative!.id]),
+    );
+    expect(
+      today.statusCards.find((card) => card.id === project!.id)?.latestUpdate?.excerpt,
+    ).toContain('Final review');
+    expect(today.suggestions.map((task) => task.id)).toContain(due!.id);
     expect(today.calendar.some((b) => b.taskId === planned!.id)).toBe(true);
     expect(today.needsAttention.approvals.map((t) => t.id)).toContain(approvalTask!.id);
     expect(today.needsAttention.blocked.map((t) => t.id)).toContain(blockedTask!.id);
@@ -289,6 +384,78 @@ describe('hub /today (needs-attention cockpit)', () => {
       expect.arrayContaining([due!.id, planned!.id]),
     );
     expect(today.needsAttention.inbox).toBe(1);
+    expect(today.brief.attentionCount).toBeGreaterThan(0);
+  });
+
+  it('filters private tasks and larger work with the shared resource resolver', async () => {
+    const { userId, hubId } = await seedUserWithHub();
+    const org = await seedBaseOrg(db, schema);
+    await joinOrg(userId, org.orgId);
+    const date = '2026-08-04';
+
+    const [privateProject] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: org.orgId,
+        name: 'Private project',
+        teamId: org.teamId,
+        status: 'active',
+        visibility: 'private',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.project.id });
+    const [visibleTask] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: org.orgId,
+        title: 'Visible task',
+        teamId: org.teamId,
+        state: 'todo',
+        projectId: privateProject!.id,
+        visibility: 'public',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.task.id });
+    const [privateTask] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: org.orgId,
+        title: 'Private task',
+        teamId: org.teamId,
+        state: 'todo',
+        visibility: 'private',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.task.id });
+    await db.insert(schema.dailyPlanItem).values([
+      {
+        hubId,
+        refOrganizationId: org.orgId,
+        refTaskId: visibleTask!.id,
+        date,
+        sort: 0,
+      },
+      {
+        hubId,
+        refOrganizationId: org.orgId,
+        refTaskId: privateTask!.id,
+        date,
+        sort: 1,
+      },
+    ]);
+
+    const app = appWithSession(hub, fakeSession(userId));
+    const today = await body<{
+      plan: { id: string }[];
+      focus: { now: { id: string } | null };
+      statusCards: { id: string }[];
+      suggestions: { id: string }[];
+    }>(await app.request(`/today?date=${date}`));
+
+    expect(today.plan.map((item) => item.id)).toEqual([visibleTask!.id]);
+    expect(today.focus.now?.id).toBe(visibleTask!.id);
+    expect(today.statusCards.map((card) => card.id)).not.toContain(privateProject!.id);
+    expect(today.suggestions.map((item) => item.id)).not.toContain(privateTask!.id);
   });
 
   it('a completed blocker does not mark the dependent task as blocked', async () => {
@@ -335,6 +502,325 @@ describe('hub /today (needs-attention cockpit)', () => {
     const { userId } = await seedUserWithHub();
     const app = appWithSession(hub, fakeSession(userId));
     expect((await app.request('/today?date=not-a-date')).status).toBe(422);
+  });
+
+  it('normalizes tied plan sort values into one honest Now and After sequence', async () => {
+    const { userId, hubId } = await seedUserWithHub();
+    const org = await seedBaseOrg(db, schema);
+    await joinOrg(userId, org.orgId);
+    const date = '2026-08-06';
+    const work = await db
+      .insert(schema.task)
+      .values([
+        {
+          organizationId: org.orgId,
+          title: 'First accepted task',
+          teamId: org.teamId,
+          state: 'todo',
+          createdBy: org.humanActorId,
+        },
+        {
+          organizationId: org.orgId,
+          title: 'Second accepted task',
+          teamId: org.teamId,
+          state: 'todo',
+          createdBy: org.humanActorId,
+        },
+      ])
+      .returning({ id: schema.task.id });
+    await db.insert(schema.dailyPlanItem).values(
+      work.map((item) => ({
+        hubId,
+        refOrganizationId: org.orgId,
+        refTaskId: item.id,
+        date,
+        sort: 0,
+      })),
+    );
+
+    const app = appWithSession(hub, fakeSession(userId));
+    const today = await body<{
+      plan: { id: string; position: number; reason: string }[];
+      focus: {
+        now: { id: string; reason: string } | null;
+        after: { id: string; reason: string } | null;
+      };
+    }>(await app.request(`/today?date=${date}`));
+
+    expect(today.plan.map((item) => item.position)).toEqual([0, 1]);
+    expect(today.focus.now?.reason).toBe('You chose this first');
+    expect(today.focus.after?.reason).toBe('Next in your plan');
+  });
+
+  it('treats work completed outside Today as cleared instead of offering it as Now', async () => {
+    const { userId, hubId } = await seedUserWithHub();
+    const org = await seedBaseOrg(db, schema);
+    await joinOrg(userId, org.orgId);
+    const date = '2026-08-06';
+    const [work] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: org.orgId,
+        title: 'Already finished elsewhere',
+        teamId: org.teamId,
+        state: 'done',
+        completedAt: new Date(),
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.task.id });
+    await db.insert(schema.dailyPlanItem).values({
+      hubId,
+      refOrganizationId: org.orgId,
+      refTaskId: work!.id,
+      date,
+      status: 'planned',
+    });
+
+    const app = appWithSession(hub, fakeSession(userId));
+    const today = await body<{
+      planState: string;
+      plan: { planStatus: string }[];
+      focus: { now: { id: string } | null; after: { id: string } | null };
+    }>(await app.request(`/today?date=${date}`));
+
+    expect(today.planState).toBe('cleared');
+    expect(today.plan[0]?.planStatus).toBe('done');
+    expect(today.focus).toEqual({ now: null, after: null });
+  });
+
+  it('completes the real task workflow and personal plan row together', async () => {
+    const { userId, hubId } = await seedUserWithHub();
+    const org = await seedBaseOrg(db, schema);
+    await joinContributingOrg(userId, org.orgId);
+    const [work] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: org.orgId,
+        title: 'Finish this',
+        teamId: org.teamId,
+        state: 'todo',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.task.id });
+    const [planItem] = await db
+      .insert(schema.dailyPlanItem)
+      .values({
+        hubId,
+        refOrganizationId: org.orgId,
+        refTaskId: work!.id,
+        date: '2026-08-05',
+      })
+      .returning({ id: schema.dailyPlanItem.id });
+
+    const app = appWithSession(hub, fakeSession(userId));
+    const response = await app.request(`/today/items/${planItem!.id}/complete`, { method: 'POST' });
+    expect(response.status).toBe(200);
+
+    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, work!.id));
+    const [planAfter] = await db
+      .select()
+      .from(schema.dailyPlanItem)
+      .where(eq(schema.dailyPlanItem.id, planItem!.id));
+    const auditRows = await db
+      .select()
+      .from(schema.auditEvent)
+      .where(eq(schema.auditEvent.subjectId, work!.id));
+    expect(taskAfter?.state).toBe('done');
+    expect(taskAfter?.completedAt).toBeInstanceOf(Date);
+    expect(planAfter?.status).toBe('done');
+    expect(auditRows).toEqual([
+      expect.objectContaining({
+        actorId: expect.any(String),
+        subjectType: 'task',
+        type: 'updated',
+        metadata: expect.objectContaining({ field: 'state', from: 'Todo', to: 'Done' }),
+      }),
+    ]);
+  });
+
+  it('advances completion-driven process work when Today completes a generated task', async () => {
+    const { userId, hubId } = await seedUserWithHub();
+    const org = await seedBaseOrg(db, schema);
+    await joinContributingOrg(userId, org.orgId);
+    const definition: ProcessDefinitionCreate = {
+      name: 'Today process advancement',
+      creationMode: 'when_ready',
+      milestones: [],
+      tasks: [
+        {
+          key: 'first',
+          title: 'Complete from Today',
+          teamId: TeamId.parse(org.teamId),
+          priority: 'none',
+          labelIds: [],
+          timing: { kind: 'on_trigger' },
+        },
+        {
+          key: 'follow-up',
+          title: 'Released follow-up',
+          teamId: TeamId.parse(org.teamId),
+          priority: 'none',
+          labelIds: [],
+          timing: { kind: 'after_step_completion', stepKey: 'first', offsetDays: 1 },
+        },
+      ],
+      dependencies: [{ blockingStepKey: 'first', blockedStepKey: 'follow-up' }],
+    };
+    const authored = await createPublishedProcessDefinition(db, {
+      organizationId: org.orgId,
+      actorId: org.humanActorId,
+      definition,
+    });
+    const series = await createRecurrenceSeries(db, {
+      organizationId: org.orgId,
+      actorId: org.humanActorId,
+      series: {
+        processDefinitionId: ProcessDefinitionId.parse(authored.definitionId),
+        name: definition.name,
+        trigger: {
+          kind: 'calendar',
+          schedule: {
+            kind: 'daily',
+            interval: 1,
+            startDate: '2026-08-05',
+            timezone: 'America/Los_Angeles',
+            end: { kind: 'after_count', count: 2 },
+          },
+          missedPolicy: 'skip',
+          materialization: { horizonDays: 2, minimumOccurrences: 1 },
+        },
+      },
+    });
+    const [revision] = await db
+      .select({ id: schema.recurrenceSeriesRevision.id })
+      .from(schema.recurrenceSeriesRevision)
+      .where(eq(schema.recurrenceSeriesRevision.seriesId, series.id));
+    const occurrence = await materializeOccurrence(db, {
+      organizationId: org.orgId,
+      actorId: org.humanActorId,
+      seriesId: series.id,
+      seriesRevisionId: revision!.id,
+      scheduledFor: '2026-08-05',
+    });
+    const [planItem] = await db
+      .insert(schema.dailyPlanItem)
+      .values({
+        hubId,
+        refOrganizationId: org.orgId,
+        refTaskId: occurrence.taskIdsByKey['first']!,
+        date: '2026-08-05',
+      })
+      .returning({ id: schema.dailyPlanItem.id });
+
+    const app = appWithSession(hub, fakeSession(userId));
+    const response = await app.request(`/today/items/${planItem!.id}/complete`, { method: 'POST' });
+    expect(response.status).toBe(200);
+
+    const instanceTasks = await db
+      .select({ title: schema.task.title })
+      .from(schema.processInstanceTask)
+      .innerJoin(schema.task, eq(schema.task.id, schema.processInstanceTask.taskId))
+      .where(eq(schema.processInstanceTask.instanceId, occurrence.instanceId));
+    expect(instanceTasks.map((row) => row.title).sort()).toEqual([
+      'Complete from Today',
+      'Released follow-up',
+    ]);
+  });
+
+  it('cannot complete another user plan row or a task without a completed workflow state', async () => {
+    const owner = await seedUserWithHub();
+    const caller = await seedUserWithHub();
+    const org = await seedBaseOrg(db, schema);
+    await joinContributingOrg(owner.userId, org.orgId);
+    await joinOrg(caller.userId, org.orgId);
+    const [work] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: org.orgId,
+        title: 'Owner task',
+        teamId: org.teamId,
+        state: 'todo',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.task.id });
+    const [planItem] = await db
+      .insert(schema.dailyPlanItem)
+      .values({
+        hubId: owner.hubId,
+        refOrganizationId: org.orgId,
+        refTaskId: work!.id,
+        date: '2026-08-05',
+      })
+      .returning({ id: schema.dailyPlanItem.id });
+
+    const app = appWithSession(hub, fakeSession(caller.userId));
+    expect(
+      (await app.request(`/today/items/${planItem!.id}/complete`, { method: 'POST' })).status,
+    ).toBe(404);
+
+    await db
+      .update(schema.team)
+      .set({ workflowStates: [{ key: 'todo', name: 'Todo', type: 'unstarted', position: 0 }] })
+      .where(eq(schema.team.id, org.teamId));
+    const ownerApp = appWithSession(hub, fakeSession(owner.userId));
+    expect(
+      (await ownerApp.request(`/today/items/${planItem!.id}/complete`, { method: 'POST' })).status,
+    ).toBe(409);
+
+    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, work!.id));
+    const [planAfter] = await db
+      .select()
+      .from(schema.dailyPlanItem)
+      .where(eq(schema.dailyPlanItem.id, planItem!.id));
+    expect(taskAfter?.state).toBe('todo');
+    expect(planAfter?.status).toBe('planned');
+  });
+
+  it('requires contribute capability to complete a visible task from a personal plan', async () => {
+    const { userId, hubId } = await seedUserWithHub();
+    const org = await seedBaseOrg(db, schema);
+    const [viewerRole] = await db
+      .insert(schema.role)
+      .values({
+        organizationId: org.orgId,
+        key: `viewer-${Math.random().toString(36).slice(2)}`,
+        name: 'Viewer',
+        capabilities: ['view'],
+      })
+      .returning({ id: schema.role.id });
+    await joinOrg(userId, org.orgId, 'active', viewerRole!.id);
+    const [work] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: org.orgId,
+        title: 'Visible but not editable',
+        teamId: org.teamId,
+        state: 'todo',
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.task.id });
+    const [planItem] = await db
+      .insert(schema.dailyPlanItem)
+      .values({
+        hubId,
+        refOrganizationId: org.orgId,
+        refTaskId: work!.id,
+        date: '2026-08-07',
+      })
+      .returning({ id: schema.dailyPlanItem.id });
+
+    const app = appWithSession(hub, fakeSession(userId));
+    expect(
+      (await app.request(`/today/items/${planItem!.id}/complete`, { method: 'POST' })).status,
+    ).toBe(403);
+
+    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, work!.id));
+    const [planAfter] = await db
+      .select()
+      .from(schema.dailyPlanItem)
+      .where(eq(schema.dailyPlanItem.id, planItem!.id));
+    expect(taskAfter?.state).toBe('todo');
+    expect(planAfter?.status).toBe('planned');
   });
 });
 

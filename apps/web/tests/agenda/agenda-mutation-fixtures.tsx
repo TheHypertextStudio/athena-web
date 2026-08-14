@@ -78,6 +78,8 @@ export function agendaOut(): AgendaOut {
 export function todayOut(): HubTodayOut {
   return {
     date: DAY,
+    planState: 'active',
+    brief: { text: 'Your next two moves are ready.', href: null, attentionCount: 0 },
     plan: [
       {
         id: TASK_ID,
@@ -85,8 +87,40 @@ export function todayOut(): HubTodayOut {
         title: 'Draft launch memo',
         state: 'started',
         priority: 'medium',
+        planItemId: PLAN_ITEM_ID,
+        planStatus: 'planned',
+        sort: 0,
+        position: 0,
+        estimateMinutes: 60,
+        timeboxStartsAt: OLD_START,
+        timeboxEndsAt: OLD_END,
+        blocked: false,
+        dependencyImpact: 0,
+        reason: 'Scheduled now',
       },
     ],
+    focus: {
+      now: {
+        id: TASK_ID,
+        organizationId: ORG_ID,
+        title: 'Draft launch memo',
+        state: 'started',
+        priority: 'medium',
+        planItemId: PLAN_ITEM_ID,
+        planStatus: 'planned',
+        sort: 0,
+        position: 0,
+        estimateMinutes: 60,
+        timeboxStartsAt: OLD_START,
+        timeboxEndsAt: OLD_END,
+        blocked: false,
+        dependencyImpact: 0,
+        reason: 'Scheduled now',
+      },
+      after: null,
+    },
+    statusCards: [],
+    suggestions: [],
     calendar: [
       {
         taskId: TASK_ID,

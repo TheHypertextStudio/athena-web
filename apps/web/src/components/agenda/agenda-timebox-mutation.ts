@@ -135,6 +135,33 @@ export function useAgendaTimeboxMutation(
         applied.push(
           optimisticPatch<HubTodayOut>(queryClient, queryKeys.today(date), (previous) => ({
             ...previous,
+            plan: previous.plan.map((item) =>
+              item.planItemId === vars.id
+                ? {
+                    ...item,
+                    timeboxStartsAt: vars.startsAt,
+                    timeboxEndsAt: vars.endsAt,
+                  }
+                : item,
+            ),
+            focus: {
+              now:
+                previous.focus.now?.planItemId === vars.id
+                  ? {
+                      ...previous.focus.now,
+                      timeboxStartsAt: vars.startsAt,
+                      timeboxEndsAt: vars.endsAt,
+                    }
+                  : previous.focus.now,
+              after:
+                previous.focus.after?.planItemId === vars.id
+                  ? {
+                      ...previous.focus.after,
+                      timeboxStartsAt: vars.startsAt,
+                      timeboxEndsAt: vars.endsAt,
+                    }
+                  : previous.focus.after,
+            },
             calendar: projectTodayCalendar(previous.calendar, vars),
           })),
         );

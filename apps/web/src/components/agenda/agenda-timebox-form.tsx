@@ -21,6 +21,16 @@ export interface AgendaTimeboxFormProps {
   readonly onDone: () => void;
 }
 
+/** Provider-neutral inputs for the shared wall-clock timebox editor. */
+export interface TimeboxFormProps {
+  readonly startsAt: string | null;
+  readonly endsAt: string | null;
+  readonly date: string;
+  readonly displayTimezone: string;
+  readonly onSetTimebox: (startsAt: string, endsAt: string) => void;
+  readonly onDone: () => void;
+}
+
 /** Return the Hub-zone clock value shown by one exact seed. */
 function clockSeed(instant: string | null, timezone: string, fallback: string): string {
   return instant ? toLocalInputValue(instant, timezone).slice(11) : fallback;
@@ -30,8 +40,29 @@ function clockSeed(instant: string | null, timezone: string, fallback: string): 
 export function AgendaTimeboxForm({ entry, date, onDone }: AgendaTimeboxFormProps): JSX.Element {
   const { displayTimezone, setTimebox } = useAgenda();
   const timeboxedEntry = isTimeboxed(entry) ? entry : null;
-  const startSeed = timeboxedEntry?.startsAt ?? null;
-  const endSeed = timeboxedEntry?.endsAt ?? null;
+  return (
+    <TimeboxForm
+      startsAt={timeboxedEntry?.startsAt ?? null}
+      endsAt={timeboxedEntry?.endsAt ?? null}
+      date={date}
+      displayTimezone={displayTimezone}
+      onSetTimebox={(startsAt, endsAt) => {
+        setTimebox(entry, startsAt, endsAt);
+      }}
+      onDone={onDone}
+    />
+  );
+}
+
+/** Shared start/end editor used by Agenda and compact execution surfaces such as Today. */
+export function TimeboxForm({
+  startsAt: startSeed,
+  endsAt: endSeed,
+  date,
+  displayTimezone,
+  onSetTimebox,
+  onDone,
+}: TimeboxFormProps): JSX.Element {
   const [start, setStart] = useState(() => clockSeed(startSeed, displayTimezone, '09:00'));
   const [end, setEnd] = useState(() => clockSeed(endSeed, displayTimezone, '10:00'));
   const [startEdited, setStartEdited] = useState(false);
@@ -76,7 +107,7 @@ export function AgendaTimeboxForm({ entry, date, onDone }: AgendaTimeboxFormProp
       onSubmit={(event) => {
         event.preventDefault();
         if (!valid || !startsAt || !endsAt) return;
-        setTimebox(entry, startsAt, endsAt);
+        onSetTimebox(startsAt, endsAt);
         onDone();
       }}
     >

@@ -2172,9 +2172,68 @@ describe('hub DTOs', () => {
   });
 
   it('HubTodayOut parses', () => {
+    const planItem = {
+      id: ID,
+      organizationId: ID2,
+      title: 'T',
+      state: 'todo',
+      priority: 'none' as const,
+      planItemId: ID2,
+      planStatus: 'planned' as const,
+      sort: 0,
+      position: 0,
+      estimateMinutes: 30,
+      timeboxStartsAt: null,
+      timeboxEndsAt: null,
+      blocked: false,
+      dependencyImpact: 2,
+      reason: 'Unblocks two tasks',
+    };
     const parsed = HubTodayOut.parse({
       date: '2026-01-01',
-      plan: [{ id: ID, organizationId: ID2, title: 'T', state: 'todo', priority: 'none' }],
+      planState: 'active',
+      brief: { text: 'One commitment needs you.', href: `/tasks/${ID}`, attentionCount: 1 },
+      plan: [planItem],
+      focus: { now: planItem, after: null },
+      statusCards: [
+        {
+          kind: 'project',
+          id: ID,
+          organizationId: ID2,
+          name: 'Ship Today',
+          status: 'active',
+          health: 'at_risk',
+          latestUpdate: {
+            excerpt: 'The final review is underway.',
+            createdAt: '2026-01-01T08:00:00.000Z',
+          },
+          nextMilestone: { id: ID2, name: 'Launch', targetDate: '2026-01-02' },
+          progress: { completed: 3, total: 5 },
+        },
+        {
+          kind: 'initiative',
+          id: ID2,
+          organizationId: ID2,
+          name: 'Operational calm',
+          status: 'active',
+          health: 'on_track',
+          latestUpdate: null,
+          targetDate: null,
+          connectedWork: { onTrack: 2, atRisk: 1, offTrack: 0, total: 3 },
+        },
+      ],
+      suggestions: [
+        {
+          id: ID,
+          organizationId: ID2,
+          title: 'Small follow-up',
+          state: 'todo',
+          priority: 'medium',
+          estimateMinutes: 20,
+          dependencyImpact: 0,
+          reason: 'Fits the time left today',
+        },
+      ],
       calendar: [
         {
           taskId: ID,
@@ -2185,7 +2244,11 @@ describe('hub DTOs', () => {
       ],
       needsAttention: { approvals: [], blocked: [], dueToday: [], inbox: 2 },
     });
+    expect(parsed.planState).toBe('active');
     expect(parsed.plan).toHaveLength(1);
+    expect(parsed.focus.now?.planItemId).toBe(ID2);
+    expect(parsed.statusCards.map((card) => card.kind)).toEqual(['project', 'initiative']);
+    expect(parsed.suggestions[0]?.estimateMinutes).toBe(20);
     expect(parsed.needsAttention.inbox).toBe(2);
   });
 

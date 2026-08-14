@@ -1,11 +1,41 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-12
+> **Last Updated**: 2026-08-13
 
 ---
 
 ## Active Tasks
+
+### [TODAY-001] Today becomes an Athena-guided daily operating surface
+
+- **Status**: REVIEW
+- **Started**: 2026-08-12
+- **Priority**: P0
+- **Description**: Replace the sparse Today page with a finite daily brief: an always-present
+  Athena interaction field, a prominent plan affordance when no accepted plan exists, a clear Now
+  and After this sequence, grounded Project and Initiative status cards, and feasible momentum
+  suggestions once planned work is clear.
+- **Approach**: Extend the typed Hub Today projection so plan state, focus order, visible work
+  status, and momentum candidates are decided once on the server. Add a semantic completion action
+  that advances the Task workflow and its daily-plan row together. Build the interface from shared
+  query, timer, agenda, and Athena conversation primitives; keep detailed planning, task, approval,
+  Project, and Initiative workflows on their primary pages.
+- **Subtasks**:
+  - [x] Approve the interaction model and written product/design specification
+  - [x] Implement and test the Today projection and semantic task actions
+  - [x] Implement and test the Athena-first Today interface
+  - [x] Validate two widths and both themes with the Docket Craft Rubric
+  - [x] Complete independent code review and resolve findings
+  - [ ] Land linearly, deploy, and verify the production surface
+- **Blockers**: None.
+- **Notes**: Design source: `docs/superpowers/specs/2026-08-12-athena-guided-today-design.md`.
+  Implementation plan: `docs/superpowers/plans/2026-08-13-athena-guided-today.md`.
+  Independent review found that the first Today completion path bypassed task audit history and
+  process advancement. Completion now shares the canonical transition seam, with route-level
+  coverage proving both the audit entry and release of completion-driven follow-up work. Review
+  also tightened suggestion feasibility, blocked-plan language, status-card query bounds,
+  timezone/timer reconciliation, duplicate plan-row handling, and deterministic E2E coverage.
 
 ### [NOTION-005] Relation columns in Notion stop being decorative
 

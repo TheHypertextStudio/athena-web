@@ -33,6 +33,75 @@ export interface SetTaskStateInput {
   readonly actorId: string | null;
 }
 
+type TaskStateTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** The committed before/after pair needed by task-state side effects. */
+export interface TaskStateMutation {
+  readonly before: TaskRow;
+  readonly after: TaskRow;
+}
+
+/** Apply a resolved workflow transition through an existing transaction. */
+export async function writeTaskStateTransition(
+  tx: TaskStateTransaction,
+  input: {
+    readonly before: TaskRow;
+    readonly state: string;
+    readonly completedAt: Date | null;
+    readonly canceledAt: Date | null;
+  },
+): Promise<TaskStateMutation | null> {
+  const updated = await tx
+    .update(task)
+    .set({
+      state: input.state,
+      completedAt: input.completedAt,
+      canceledAt: input.canceledAt,
+    })
+    .where(
+      and(
+        eq(task.id, input.before.id),
+        eq(task.organizationId, input.before.organizationId),
+        isNull(task.archivedAt),
+      ),
+    )
+    .returning();
+  const after = updated[0];
+  return after ? { before: input.before, after } : null;
+}
+
+/** Publish the durable history, stream, search, and process consequences after commit. */
+export async function finishTaskStateTransition(
+  input: { readonly actorId: string | null },
+  mutation: TaskStateMutation,
+): Promise<void> {
+  const { before, after } = mutation;
+  await emitEvent({
+    organizationId: after.organizationId,
+    kind: after.completedAt ? 'completed' : 'status_change',
+    actorId: input.actorId,
+    title: after.title,
+    subject: { type: 'task', id: after.id, title: after.title },
+    detail: { schema: 'docket.state_change', fromState: before.state, toState: after.state },
+  });
+  await recordTaskChanges({
+    organizationId: after.organizationId,
+    taskId: after.id,
+    title: after.title,
+    actorId: input.actorId,
+    changes: await resolveTaskChangeLabels(after.organizationId, diffTaskFields(before, after)),
+  });
+  await enqueueSearchUpsert(after.organizationId, 'task', after.id);
+  if (after.completedAt) {
+    await advanceCompletedProcessTask(db, {
+      organizationId: after.organizationId,
+      actorId: input.actorId ?? undefined,
+      completedTaskId: after.id,
+      completedOn: after.completedAt.toISOString().slice(0, 10),
+    });
+  }
+}
+
 /**
  * Move a task to a new workflow state and emit the corresponding event.
  *
@@ -57,53 +126,16 @@ export async function setTaskState(input: SetTaskStateInput): Promise<TaskRow | 
   if (!row) return null;
 
   const transition = await resolveStateTransition(input.organizationId, row.teamId, input.state);
-  const updated = await db
-    .update(task)
-    .set({
+  const mutation = await db.transaction((tx) =>
+    writeTaskStateTransition(tx, {
+      before: row,
       state: transition.state,
       completedAt: transition.completedAt,
       canceledAt: transition.canceledAt,
-    })
-    .where(
-      and(
-        eq(task.id, input.taskId),
-        eq(task.organizationId, input.organizationId),
-        isNull(task.archivedAt),
-      ),
-    )
-    .returning();
-  const next = updated[0];
+    }),
+  );
   /* v8 ignore next -- @preserve defensive: the select above proved the row exists + is active */
-  if (!next) return null;
-
-  await emitEvent({
-    organizationId: input.organizationId,
-    kind: transition.completedAt ? 'completed' : 'status_change',
-    actorId: input.actorId,
-    title: next.title,
-    subject: { type: 'task', id: next.id, title: next.title },
-    detail: { schema: 'docket.state_change', fromState: row.state, toState: next.state },
-  });
-  // Ledger: the status change on the task's own activity log. Recording it here (rather than in
-  // the route) is what makes a board drag and a `task.setStatus` automation run leave the same
-  // entry as an explicit status change. `PATCH /tasks/:id` resolves its state transition inline
-  // and never calls this function, so the two write paths cannot double-record; and a no-op
-  // transition diffs to nothing, so re-setting the current status writes no entry.
-  await recordTaskChanges({
-    organizationId: input.organizationId,
-    taskId: next.id,
-    title: next.title,
-    actorId: input.actorId,
-    changes: await resolveTaskChangeLabels(input.organizationId, diffTaskFields(row, next)),
-  });
-  await enqueueSearchUpsert(input.organizationId, 'task', next.id);
-  if (next.completedAt) {
-    await advanceCompletedProcessTask(db, {
-      organizationId: input.organizationId,
-      actorId: input.actorId ?? undefined,
-      completedTaskId: next.id,
-      completedOn: next.completedAt.toISOString().slice(0, 10),
-    });
-  }
-  return next;
+  if (!mutation) return null;
+  await finishTaskStateTransition({ actorId: input.actorId }, mutation);
+  return mutation.after;
 }

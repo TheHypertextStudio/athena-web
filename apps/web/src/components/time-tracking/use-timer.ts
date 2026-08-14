@@ -236,7 +236,9 @@ export function useTimerState(): TimerState {
  * @returns the {@link TimerControls}.
  */
 export function useTimerControls(recordId: string | null): TimerControls {
-  const invalidateKeys = [queryKeys.timeActive(), ['me', 'time']] as const;
+  // Today chooses Now from the active timer, so every timer transition also refreshes any open
+  // Today date. The prefix deliberately covers the viewer's configured local date.
+  const invalidateKeys = [queryKeys.timeActive(), ['me', 'time'], ['me', 'today']] as const;
   const signalTimerChange = (): void => {
     writeStoredValue(
       FOCUS_TIMER_CHANGE_KEY,

@@ -625,7 +625,7 @@ describe('hub router', () => {
     expect((await body<{ items: unknown[] }>(await app.request('/inbox'))).items).toHaveLength(0);
   });
 
-  it('today: planned + due tasks, with and without a hub', async () => {
+  it('today: accepted plan stays distinct from due work that needs attention', async () => {
     const { userId, hubId } = await seedUserWithHub();
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     await db
@@ -661,13 +661,16 @@ describe('hub router', () => {
       .values({ hubId, refOrganizationId: orgId, refTaskId: planned!.id, date });
 
     const app = appWithSession(hub, fakeSession(userId));
-    const today = await body<{ plan: { id: string }[] }>(await app.request(`/today?date=${date}`));
+    const today = await body<{
+      plan: { id: string }[];
+      needsAttention: { dueToday: { id: string }[] };
+    }>(await app.request(`/today?date=${date}`));
     const ids = today.plan.map((t) => t.id);
-    expect(ids).toContain(due!.id);
-    expect(ids).toContain(planned!.id);
+    expect(ids).toEqual([planned!.id]);
+    expect(today.needsAttention.dueToday.map((task) => task.id)).toContain(due!.id);
   });
 
-  it('today: no planned items falls back to due-only query branch', async () => {
+  it('today: due work alone leaves the day unplanned and appears under attention', async () => {
     const { userId } = await seedUserWithHub();
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     await db
@@ -683,8 +686,14 @@ describe('hub router', () => {
       createdBy: humanActorId,
     });
     const app = appWithSession(hub, fakeSession(userId));
-    const today = await body<{ plan: unknown[] }>(await app.request(`/today?date=${date}`));
-    expect(today.plan.length).toBeGreaterThanOrEqual(1);
+    const today = await body<{
+      planState: string;
+      plan: unknown[];
+      needsAttention: { dueToday: unknown[] };
+    }>(await app.request(`/today?date=${date}`));
+    expect(today.planState).toBe('unplanned');
+    expect(today.plan).toEqual([]);
+    expect(today.needsAttention.dueToday).toHaveLength(1);
   });
 
   it('today: user with org membership but no hub row uses the empty-planned branch', async () => {

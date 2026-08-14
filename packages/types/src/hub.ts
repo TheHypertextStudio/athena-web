@@ -13,9 +13,18 @@
 import { z } from 'zod';
 
 import { AuditEventOut } from './activity';
-import { Priority } from './capability';
+import { Health, Priority } from './capability';
 import { NotificationOut } from './notification';
-import { ActorId, MilestoneId, OrganizationId, ProgramId, ProjectId, TaskId } from './primitives';
+import {
+  ActorId,
+  DailyPlanItemId,
+  InitiativeId,
+  MilestoneId,
+  OrganizationId,
+  ProgramId,
+  ProjectId,
+  TaskId,
+} from './primitives';
 import { SearchDocumentKind, SearchOut } from './search';
 
 /**
@@ -128,10 +137,150 @@ export const HubNeedsAttention = z
 /** Hub needs-attention value. */
 export type HubNeedsAttention = z.infer<typeof HubNeedsAttention>;
 
+/** Whether Today is awaiting planning, actively executing a plan, or clear. */
+export const HubTodayPlanState = z
+  .enum(['unplanned', 'active', 'cleared'])
+  .meta({ id: 'HubTodayPlanState', description: "The caller's planning state for one day." });
+/** Hub Today plan-state value. */
+export type HubTodayPlanState = z.infer<typeof HubTodayPlanState>;
+
+/** An accepted daily-plan task enriched for the finite Today focus sequence. */
+export const HubTodayPlanItem = HubTaskItem.extend({
+  planItemId: DailyPlanItemId.describe('The personal daily-plan row backing this task.'),
+  planStatus: z.enum(['planned', 'done']).describe("The plan row's completion state."),
+  sort: z.number().int().describe("The plan row's persisted ordering value."),
+  position: z.number().int().describe("The plan row's accepted sort position."),
+  estimateMinutes: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .describe('Estimated focused minutes, or null when no useful estimate exists.'),
+  timeboxStartsAt: z.iso
+    .datetime()
+    .nullable()
+    .describe('The accepted timebox start, or null when unscheduled.'),
+  timeboxEndsAt: z.iso
+    .datetime()
+    .nullable()
+    .describe('The accepted timebox end, or null when unscheduled.'),
+  blocked: z.boolean().describe('Whether an incomplete dependency prevents this task from moving.'),
+  dependencyImpact: z
+    .number()
+    .int()
+    .min(0)
+    .describe('Count of incomplete tasks this task directly unblocks.'),
+  reason: z
+    .string()
+    .describe('Application-owned explanation for this item occupying its position.'),
+}).meta({
+  id: 'HubTodayPlanItem',
+  description: 'A task in the accepted personal plan, enriched for Today.',
+});
+/** Hub Today accepted-plan item value. */
+export type HubTodayPlanItem = z.infer<typeof HubTodayPlanItem>;
+
+/** The current actionable plan item and the one immediately following it. */
+export const HubTodayFocus = z
+  .object({
+    now: HubTodayPlanItem.nullable().describe('The single actionable item to work on now.'),
+    after: HubTodayPlanItem.nullable().describe('The next actionable item after Now.'),
+  })
+  .meta({ id: 'HubTodayFocus', description: "Today's finite two-step execution sequence." });
+/** Hub Today focus value. */
+export type HubTodayFocus = z.infer<typeof HubTodayFocus>;
+
+/** Latest durable status-update excerpt shown on a Today work card. */
+export const HubTodayLatestUpdate = z
+  .object({
+    excerpt: z.string().describe('A bounded plain-text excerpt from the durable update.'),
+    createdAt: z.iso.datetime().describe('When the update was recorded.'),
+  })
+  .meta({ id: 'HubTodayLatestUpdate', description: 'A grounded status-update excerpt.' });
+/** Hub Today latest-update value. */
+export type HubTodayLatestUpdate = z.infer<typeof HubTodayLatestUpdate>;
+
+/** Project status composition used by Work in motion. */
+export const HubTodayProjectStatus = z
+  .object({
+    kind: z.literal('project'),
+    id: ProjectId,
+    organizationId: OrganizationId,
+    name: z.string(),
+    status: z.string(),
+    health: Health.nullable(),
+    latestUpdate: HubTodayLatestUpdate.nullable(),
+    nextMilestone: z
+      .object({ id: MilestoneId, name: z.string(), targetDate: z.iso.date() })
+      .nullable(),
+    progress: z.object({
+      completed: z.number().int().min(0),
+      total: z.number().int().min(0),
+    }),
+  })
+  .meta({ id: 'HubTodayProjectStatus', description: 'A grounded Project status card for Today.' });
+/** Hub Today Project-status value. */
+export type HubTodayProjectStatus = z.infer<typeof HubTodayProjectStatus>;
+
+/** Initiative status composition used by Work in motion. */
+export const HubTodayInitiativeStatus = z
+  .object({
+    kind: z.literal('initiative'),
+    id: InitiativeId,
+    organizationId: OrganizationId,
+    name: z.string(),
+    status: z.string(),
+    health: Health.nullable(),
+    latestUpdate: HubTodayLatestUpdate.nullable(),
+    targetDate: z.iso.date().nullable(),
+    connectedWork: z.object({
+      onTrack: z.number().int().min(0),
+      atRisk: z.number().int().min(0),
+      offTrack: z.number().int().min(0),
+      total: z.number().int().min(0),
+    }),
+  })
+  .meta({
+    id: 'HubTodayInitiativeStatus',
+    description: 'A grounded Initiative status card for Today.',
+  });
+/** Hub Today Initiative-status value. */
+export type HubTodayInitiativeStatus = z.infer<typeof HubTodayInitiativeStatus>;
+
+/** A Project or Initiative status story selected for Work in motion. */
+export const HubTodayStatusCard = z.discriminatedUnion('kind', [
+  HubTodayProjectStatus,
+  HubTodayInitiativeStatus,
+]);
+/** Hub Today status-card value. */
+export type HubTodayStatusCard = z.infer<typeof HubTodayStatusCard>;
+
+/** A visible, actionable task that can fit the caller's remaining day. */
+export const HubTodaySuggestion = HubTaskItem.extend({
+  estimateMinutes: z.number().int().positive(),
+  dependencyImpact: z.number().int().min(0),
+  reason: z.string().describe('Application-owned reason the task is a feasible next move.'),
+}).meta({ id: 'HubTodaySuggestion', description: 'A feasible momentum suggestion for Today.' });
+/** Hub Today suggestion value. */
+export type HubTodaySuggestion = z.infer<typeof HubTodaySuggestion>;
+
+/** Result of completing an accepted Today item through the Task's real workflow. */
+export const HubTodayCompleteOut = z
+  .object({
+    task: HubTaskItem,
+    planItemId: DailyPlanItemId,
+    planStatus: z.literal('done'),
+  })
+  .meta({
+    id: 'HubTodayCompleteOut',
+    description: 'The Task and personal plan state after semantic Today completion.',
+  });
+/** Hub Today completion result. */
+export type HubTodayCompleteOut = z.infer<typeof HubTodayCompleteOut>;
+
 /**
- * The Hub `today` surface: the three-pane cockpit for a date — the caller's daily-plan
- * tasks (`plan`), their timeboxed calendar blocks (`calendar`), and the cross-org
- * `needsAttention` trio (approvals, blocked, dueToday, inbox count).
+ * The Hub `today` surface: a finite daily operating projection grounded in accepted plan rows,
+ * visible work status, deterministic attention, and feasible next actions.
  */
 export const HubTodayOut = z
   .object({
@@ -140,12 +289,17 @@ export const HubTodayOut = z
       .describe(
         'The calendar day (ISO `YYYY-MM-DD`) this cockpit covers — echoes the requested `date`.',
       ),
-    /** Tasks the caller pulled into Today via their daily plan, plus tasks due that date. */
-    plan: z
-      .array(HubTaskItem)
-      .describe(
-        "The day's task list: tasks the caller pulled into Today via their daily plan, plus tasks due that date, org-chipped.",
-      ),
+    planState: HubTodayPlanState,
+    brief: z.object({
+      text: z.string().describe("Athena's concise, deterministic reading of the day."),
+      href: z.string().nullable().describe('A relevant in-app destination, or null.'),
+      attentionCount: z.number().int().min(0),
+    }),
+    /** Tasks the caller explicitly accepted into this date's personal plan. */
+    plan: z.array(HubTodayPlanItem),
+    focus: HubTodayFocus,
+    statusCards: z.array(HubTodayStatusCard).max(4),
+    suggestions: z.array(HubTodaySuggestion).max(3),
     /** Daily-plan items with a timebox window, for the calendar pane. */
     calendar: z
       .array(
@@ -163,7 +317,7 @@ export const HubTodayOut = z
       'The cross-org needs-attention trio (approvals, blocked, dueToday) plus the unread inbox count.',
     ),
   })
-  .meta({ id: 'HubTodayOut', description: "The caller's cross-org Today cockpit for a day." });
+  .meta({ id: 'HubTodayOut', description: "The caller's cross-org daily operating projection." });
 /** Hub-today value. */
 export type HubTodayOut = z.infer<typeof HubTodayOut>;
 

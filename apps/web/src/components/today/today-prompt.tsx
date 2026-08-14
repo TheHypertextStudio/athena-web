@@ -7,7 +7,7 @@
  * The single entry point for getting work INTO Docket from the daily surface, wiring the
  * the direct capture path and the one shared personal Athena dock:
  *
- * - **Capture** (`POST /v1/orgs/:orgId/capture`) — the default. Free text becomes a real
+ * - **Capture** (`POST /v1/orgs/:orgId/capture`) — the explicit secondary destination. Free text becomes a real
  *   task in the active workspace (its default team's entry state, attached to the live
  *   cycle when one covers today). `Enter` submits.
  * - **Ask Athena** opens the global personal dock with this workspace and draft attached. The dock
@@ -29,9 +29,8 @@
  */
 import { ChevronDown, ListChecks, Sparkles } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import { readStoredString, writeStoredValue } from '@docket/ui/lib/browser-storage';
 import Link from 'next/link';
-import { type JSX, type KeyboardEvent, useCallback, useEffect, useState } from 'react';
+import { type JSX, type KeyboardEvent, useCallback, useState } from 'react';
 
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
@@ -51,14 +50,11 @@ interface CaptureNotice {
  * Where this box sends what you typed.
  *
  * @remarks
- * A persisted setting, not a per-submit choice. The two peer buttons this replaced made every
- * entry a mode decision before typing was worth anything, on the surface whose premise is that you
- * write plainly and the product works out the rest. You pick a destination once and it stays.
+ * Athena is always the resting destination because this is the day's standing Athena field. Task
+ * capture stays available as an explicit secondary destination for the current visit, but never
+ * replaces Athena when someone returns to Today.
  */
 type CaptureMode = 'task' | 'athena';
-
-/** Where the chosen destination survives a reload. */
-const CAPTURE_MODE_KEY = 'docket.today.capture-mode';
 
 /** Props for {@link TodayPrompt}. */
 export interface TodayPromptProps {
@@ -92,13 +88,7 @@ export function TodayPrompt({
   const [busy, setBusy] = useState<'capture' | null>(null);
   const [notice, setNotice] = useState<CaptureNotice | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Read on mount, never in the initializer: this renders on the server, and an initializer that
-  // returned the stored mode on the client and the default on the server leaves the DOM stuck on
-  // whatever the server emitted. See `@docket/ui/lib/browser-storage`.
-  const [mode, setModeState] = useState<CaptureMode>('task');
-  useEffect(() => {
-    if (readStoredString(CAPTURE_MODE_KEY) === 'athena') setModeState('athena');
-  }, []);
+  const [mode, setModeState] = useState<CaptureMode>('athena');
 
   // No empty-workspace fork. This box used to run a `tasks` probe purely to decide whether to
   // show an onboarding heading, a different placeholder, swapped button emphasis, and a different
@@ -161,7 +151,6 @@ export function TodayPrompt({
 
   const setMode = useCallback((next: CaptureMode): void => {
     setModeState(next);
-    writeStoredValue(CAPTURE_MODE_KEY, next);
   }, []);
 
   const onKeyDown = useCallback(
@@ -203,8 +192,8 @@ export function TodayPrompt({
           rows={1}
           autoGrow
           maxRows={10}
-          placeholder="What needs doing?"
-          aria-label="Capture a task or ask Athena"
+          placeholder={mode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?'}
+          aria-label={mode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
           disabled={orgId === null}
           className="placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent text-base leading-relaxed outline-none disabled:opacity-50 @2xl:text-lg"
         />
@@ -219,6 +208,7 @@ export function TodayPrompt({
             controlSize="sm"
             disabled={!canSubmit}
             onClick={submit}
+            className="min-h-11"
           >
             {mode === 'task' ? <ListChecks /> : <Sparkles />}
             {busy === 'capture' ? 'Adding…' : mode === 'task' ? 'Add task' : 'Ask Athena'}
@@ -228,7 +218,8 @@ export function TodayPrompt({
             iconOnly
             variant="ghost"
             controlSize="sm"
-            aria-label={`Send to ${modeLabel}. Switch to ${nextMode === 'task' ? 'Task' : 'Athena'}.`}
+            aria-label={`Send to ${modeLabel}. Switch to ${nextMode === 'task' ? 'Add a task' : 'Ask Athena'}.`}
+            className="min-h-11 min-w-11"
             onClick={() => {
               setMode(nextMode);
             }}

@@ -182,6 +182,13 @@ export const queryKeys = {
   agenda: (date: string) => ['me', 'agenda', date] as const,
   dailyPlan: (date: string) => ['me', 'daily-plan', date] as const,
   calendarSettings: () => ['me', 'calendar-settings'] as const,
+  workLocation: () => ['me', 'work-location'] as const,
+  workLocationPoint: (at: string) => ['me', 'work-location', 'point', at] as const,
+  workLocationRange: (start: string, end: string) =>
+    ['me', 'work-location', 'range', start, end] as const,
+  workLocationPlaces: () => ['me', 'work-location', 'places'] as const,
+  workLocationAssertions: () => ['me', 'work-location', 'assertions'] as const,
+  workLocationSync: () => ['me', 'work-location', 'sync'] as const,
   hubPreferences: () => ['me', 'hub-preferences'] as const,
   athena: () => ['me', 'athena'] as const,
   athenaPulse: () => ['me', 'athena', 'pulse'] as const,

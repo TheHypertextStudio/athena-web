@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { CalendarItemOut } from '@docket/types';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,6 +45,54 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('useCalendarDateAxis rolling navigation', () => {
+  it('keeps provider working-location rows as strip context instead of ordinary calendar items', async () => {
+    const workingLocation = CalendarItemOut.parse({
+      id: '01BX5ZZKBKACTAV9WEVGEMMVS0',
+      layerId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      connectionId: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
+      kind: 'provider_event',
+      provider: 'google',
+      providerEventType: 'working_location',
+      externalCalendarId: 'primary',
+      externalEventId: 'working-location',
+      recurringEventId: null,
+      recurrenceInstanceKey: null,
+      status: 'confirmed',
+      title: 'Main library',
+      description: null,
+      location: null,
+      workPlaceId: null,
+      htmlLink: null,
+      startsAt: null,
+      endsAt: null,
+      allDayStartDate: '2026-07-13',
+      allDayEndDate: '2026-07-14',
+      timezone: 'UTC',
+      endTimezone: null,
+      organizer: null,
+      attendees: [],
+      permissions: { canEditCore: false, canDelete: false, readOnlyReason: 'kind' },
+      syncState: 'clean',
+      hasConflict: false,
+      updatedExternalAt: null,
+      archivedAt: null,
+      linkedTasks: [],
+      createdAt: '2026-07-13T00:00:00.000Z',
+      updatedAt: '2026-07-13T00:00:00.000Z',
+    });
+    itemsGet.mockResolvedValue(okResponse({ layers: [], items: [workingLocation] }));
+
+    const { result } = renderHook(() => useCalendarDateAxis('2026-07-13', 1, 'UTC'), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => {
+      expect(result.current.itemsPending).toBe(false);
+    });
+
+    expect(result.current.items).toEqual([]);
+    expect(result.current.legacyWorkLocations).toEqual([workingLocation]);
+  });
+
   it('exposes a retry action that refreshes failed calendar reads in place', async () => {
     itemsGet
       .mockRejectedValueOnce(new Error('hostile internal calendar failure'))

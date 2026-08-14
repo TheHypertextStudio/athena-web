@@ -76,16 +76,23 @@ vi.mock('@/components/calendar/calendar-mutations', () => ({
 vi.mock('@/components/calendar/calendar-item-drawer', () => ({ default: () => null }));
 vi.mock('@/components/calendar/create-block-form', () => ({ default: () => null }));
 vi.mock('@/components/agenda/agenda-entry-card', () => ({ default: () => null }));
+vi.mock('@/components/work-location/work-location-strip', () => ({
+  WorkLocationStrip: () => null,
+}));
 
 vi.mock('@/lib/api', () => ({
   api: { v1: { hub: { preferences: { $get: vi.fn(), $patch: vi.fn() } } } },
 }));
 vi.mock('@/lib/query', () => ({
   apiQueryOptions: () => ({}),
-  queryKeys: { hubPreferences: () => ['hub-preferences'] },
+  queryKeys: {
+    hubPreferences: () => ['hub-preferences'],
+    workLocationPlaces: () => ['work-location', 'places'],
+  },
   STALE: { standard: 30_000 },
   unwrap: vi.fn(),
   useApiMutation: () => ({ mutate: vi.fn() }),
+  useApiListQuery: () => ({ data: { items: [], profile: { homePlaceId: null } } }),
   useApiQuery: () => ({ data: preferencesState.data }),
 }));
 
@@ -116,6 +123,7 @@ vi.mock('../../src/app/(app)/calendar/use-calendar-date-axis', () => ({
     endISO: '2026-07-14T00:00:00Z',
     lanes: [],
     items: [],
+    legacyWorkLocations: [],
     itemById: new Map(),
     layers: [],
     itemsPending: false,

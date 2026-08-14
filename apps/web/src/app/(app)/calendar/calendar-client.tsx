@@ -32,6 +32,8 @@ import { shiftISODate } from '@/components/agenda/agenda-context';
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
 import CreateBlockForm from '@/components/calendar/create-block-form';
 import { resolveScheduleTimezone, useScheduleDisplayDate } from '@/components/scheduling';
+import { WorkLocationStrip } from '@/components/work-location/work-location-strip';
+import { workLocationPlacesDef } from '@/components/work-location/work-location-data';
 import { api } from '@/lib/api';
 import {
   apiQueryOptions,
@@ -39,6 +41,7 @@ import {
   STALE,
   unwrap,
   useApiMutation,
+  useApiListQuery,
   useApiQuery,
 } from '@/lib/query';
 import { useNow } from '@/lib/use-now';
@@ -100,6 +103,7 @@ export default function CalendarClient(): JSX.Element {
       { staleTime: STALE.standard },
     ),
   );
+  const workPlacesQuery = useApiListQuery(workLocationPlacesDef());
   const hubPreferences = preferencesQuery.data;
   const preferences = hubPreferences?.calendar;
   const displayTimezone = resolveScheduleTimezone(hubPreferences?.timezone);
@@ -251,8 +255,22 @@ export default function CalendarClient(): JSX.Element {
             onSelectionConsumed={() => {
               setSelection(null);
             }}
+            workPlaces={workPlacesQuery.data?.items ?? []}
           />
         }
+      />
+
+      <WorkLocationStrip
+        start={dateAxis.startISO}
+        end={dateAxis.endISO}
+        at={now}
+        timezone={displayTimezone}
+        legacyItems={dateAxis.legacyWorkLocations.map((item) => ({
+          id: item.id,
+          label: item.title,
+          color: dateAxis.layers.find((layer) => layer.id === item.layerId)?.color ?? null,
+        }))}
+        className="shrink-0"
       />
 
       <CalendarSchedulingSurface

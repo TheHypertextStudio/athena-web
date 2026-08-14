@@ -26,6 +26,8 @@ export interface CalendarDateAxisState {
   readonly lanes: readonly ScheduleLane[];
   /** One item per distinct event — copies arriving from a second account are already folded in. */
   readonly items: readonly CalendarItemOut[];
+  /** Provider work-location rows retained only as fallback context for the shared strip. */
+  readonly legacyWorkLocations: readonly CalendarItemOut[];
   readonly itemById: ReadonlyMap<string, CalendarItemOut>;
   /**
    * Copies of an event that were folded into the rendered one, keyed by the rendered item's id.
@@ -65,12 +67,20 @@ export function useCalendarDateAxis(
   const itemsQuery = useApiListQuery(calendarItemsDef(startISO, endISO));
   const layersQuery = useApiListQuery(calendarLayersDef());
   const rawItems = useMemo(() => itemsQuery.data?.items ?? [], [itemsQuery.data]);
+  const legacyWorkLocations = useMemo(
+    () => rawItems.filter((item) => item.providerEventType === 'working_location'),
+    [rawItems],
+  );
+  const scheduledItems = useMemo(
+    () => rawItems.filter((item) => item.providerEventType !== 'working_location'),
+    [rawItems],
+  );
   const layers = useMemo(() => layersQuery.data?.items ?? [], [layersQuery.data]);
   // Collapse the same event arriving from two linked accounts before anything downstream sees it,
   // so the grid, the counts, and the item map all agree on how many events there actually are.
   const deduplicated = useMemo(
-    () => deduplicateCalendarItems(rawItems, layers),
-    [layers, rawItems],
+    () => deduplicateCalendarItems(scheduledItems, layers),
+    [layers, scheduledItems],
   );
   const items = deduplicated.items;
   const colorByLayer = useMemo(
@@ -101,6 +111,7 @@ export function useCalendarDateAxis(
     endISO,
     lanes,
     items,
+    legacyWorkLocations,
     itemById,
     duplicatesByItemId: deduplicated.duplicatesByItemId,
     layers,

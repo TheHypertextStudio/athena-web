@@ -12,14 +12,16 @@
  */
 import { randomBytes } from 'node:crypto';
 
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import {
   calendarConnection,
   calendarItem,
   calendarItemWrite,
   calendarLayer,
+  hub,
   type Database,
+  workPlace,
 } from '@docket/db';
 import {
   CalendarItemKind,
@@ -124,6 +126,28 @@ async function requireOwnedNativeLayer(
 }
 
 /**
+ * Verify that a saved-place binding belongs to the caller's personal Hub.
+ *
+ * @remarks
+ * Calendar DTOs never carry a Hub id. Looking the place up through the Hub owner both enforces
+ * that boundary and intentionally makes another user's place indistinguishable from a missing one.
+ */
+async function requireOwnedWorkPlace(
+  db: Database,
+  userId: string,
+  workPlaceId: string | null | undefined,
+): Promise<void> {
+  if (workPlaceId === undefined || workPlaceId === null) return;
+  const rows = await db
+    .select({ id: workPlace.id })
+    .from(workPlace)
+    .innerJoin(hub, eq(hub.id, workPlace.hubId))
+    .where(and(eq(workPlace.id, workPlaceId), eq(hub.userId, userId), isNull(workPlace.archivedAt)))
+    .limit(1);
+  if (rows[0] === undefined) throw new NotFoundError('Work place not found');
+}
+
+/**
  * Validate a create body's time bounds beyond the DTO refine: exactly one complete shape
  * (the DTO's "either shape is complete" refine also passes a body carrying BOTH complete
  * shapes, which would violate the row's timed-XOR-all-day invariant) with strict ordering.
@@ -177,6 +201,8 @@ export async function createNativeBlock(
 ): Promise<CalendarItemRow> {
   const { userId, input: body } = input;
 
+  await requireOwnedWorkPlace(db, userId, body.workPlaceId);
+
   const layer =
     body.layerId !== undefined
       ? await requireOwnedNativeLayer(db, userId, body.layerId)
@@ -199,6 +225,7 @@ export async function createNativeBlock(
       syncState: 'clean',
       connectionId: null,
       title: body.title,
+      ...(body.workPlaceId !== undefined ? { workPlaceId: body.workPlaceId } : {}),
       ...(body.description !== undefined ? { description: body.description } : {}),
       ...(body.location !== undefined ? { location: body.location } : {}),
       ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
@@ -249,6 +276,7 @@ export async function createCalendarItem(
   }
 
   validateCreateBounds(body);
+  await requireOwnedWorkPlace(db, userId, body.workPlaceId);
   const intent = body.intent;
   const requestedLayer =
     body.layerId === undefined
@@ -291,6 +319,7 @@ export async function createCalendarItem(
         status: body.status ?? 'confirmed',
         syncState: 'clean',
         title: body.title,
+        ...(body.workPlaceId !== undefined ? { workPlaceId: body.workPlaceId } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.location !== undefined ? { location: body.location } : {}),
         ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
@@ -337,6 +366,7 @@ export async function createCalendarItem(
       syncState: 'push_pending',
       permissions: { canEditCore: true, canDelete: true, readOnlyReason: null },
       title: body.title,
+      ...(body.workPlaceId !== undefined ? { workPlaceId: body.workPlaceId } : {}),
       ...(body.description !== undefined ? { description: body.description } : {}),
       ...(body.location !== undefined ? { location: body.location } : {}),
       ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
@@ -605,6 +635,7 @@ async function applyNativeBlockPatch(
   }
   if (patch.timezone !== undefined) patchValues.timezone = patch.timezone;
   if (patch.endTimezone !== undefined) patchValues.endTimezone = patch.endTimezone;
+  if (patch.workPlaceId !== undefined) patchValues.workPlaceId = patch.workPlaceId;
 
   const updated = await db
     .update(calendarItem)
@@ -670,12 +701,29 @@ export async function updateCalendarItem(
   const loaded = await loadOwnedCalendarItem(db, userId, itemId);
   const kind = CalendarItemKind.parse(loaded.item.kind);
 
+  await requireOwnedWorkPlace(db, userId, patch.workPlaceId);
+
   if (kind === 'native_block' || kind === 'native_event' || kind === 'timebox') {
     return applyNativeBlockPatch(db, loaded.item, patch);
   }
   if (kind === 'task_timebox' || kind === 'availability_block') rejectDerivedKind(kind, 'edits');
 
   // kind === 'provider_event'
+  const timePatch = resolveTimeShapePatch(loaded.item, patch);
+  const providerPatch = toWritePatch(patch, timePatch, loaded.item);
+  const providerFieldsTouched = Object.keys(providerPatch).length > 0;
+  if (!providerFieldsTouched) {
+    const localRows = await db
+      .update(calendarItem)
+      .set({ workPlaceId: patch.workPlaceId })
+      .where(eq(calendarItem.id, itemId))
+      .returning();
+    const local = localRows[0];
+    /* v8 ignore next -- @preserve defensive: existence was verified above */
+    if (local === undefined) throw new NotFoundError('Calendar item not found');
+    return local;
+  }
+
   const permissions = resolveItemPermissions(loaded);
   if (!permissions.canEditCore) throw problemForReadOnlyReason(permissions.readOnlyReason);
 
@@ -683,7 +731,6 @@ export async function updateCalendarItem(
   /* v8 ignore next -- @preserve defensive: canEditCore true for provider_event requires a connection */
   if (connection === null) throw new Error('provider_event item missing its connection');
 
-  const timePatch = resolveTimeShapePatch(loaded.item, patch);
   const patchValues: Partial<typeof calendarItem.$inferInsert> = {
     ...timePatch,
     syncState: 'push_pending',
@@ -697,6 +744,7 @@ export async function updateCalendarItem(
   }
   if (patch.timezone !== undefined) patchValues.timezone = patch.timezone;
   if (patch.endTimezone !== undefined) patchValues.endTimezone = patch.endTimezone;
+  if (patch.workPlaceId !== undefined) patchValues.workPlaceId = patch.workPlaceId;
 
   const updatedRows = await db
     .update(calendarItem)
@@ -715,7 +763,7 @@ export async function updateCalendarItem(
       connectionId: connection.id,
       provider: connection.provider,
       operation: 'update',
-      patch: toWritePatch(patch, timePatch, loaded.item),
+      patch: providerPatch,
       baseExternalEtag: loaded.item.externalEtag,
       baseUpdatedExternalAt: loaded.item.updatedExternalAt,
       status: 'pending',

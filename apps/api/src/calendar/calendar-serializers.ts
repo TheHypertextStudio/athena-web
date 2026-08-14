@@ -94,6 +94,7 @@ export function toCalendarItemOut(
     title: row.title,
     description: row.description,
     location: row.location,
+    workPlaceId: row.workPlaceId,
     htmlLink: row.htmlLink,
     startsAt: row.startsAt?.toISOString() ?? null,
     endsAt: row.endsAt?.toISOString() ?? null,

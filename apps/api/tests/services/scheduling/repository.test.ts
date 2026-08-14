@@ -12,7 +12,9 @@ import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { WorkPlaceId } from '@docket/types';
 
+import { NotFoundError } from '../../../src/error';
 import type { PlannedBlock } from '../../../src/services/scheduling/week-planner';
 import { getDb, one, seedBaseOrg, seedUserWithHub } from '../../support/routes-harness';
 import {
@@ -46,6 +48,7 @@ function plannedBlock(over: Partial<PlannedBlock> & { key: string }): PlannedBlo
     end: Date.parse('2026-11-20T17:00:00Z'),
     organizationId: null,
     location: null,
+    workPlaceId: null,
     attendees: [],
     commitmentId: null,
     anchorKey: null,
@@ -170,6 +173,54 @@ describe('loadSchedulingPreferences', () => {
 });
 
 describe('saveSchedulingPreferences', () => {
+  it('validates saved-place ownership and copies the canonical place label for display', async () => {
+    const owner = await seedHub('PrefsCanonicalPlace');
+    const other = await seedHub('PrefsCanonicalPlaceOther');
+    const place = one(
+      await db
+        .insert(schema.workPlace)
+        .values({ hubId: owner.hubId, name: 'Westside library' })
+        .returning({ id: schema.workPlace.id }),
+    );
+    const otherPlace = one(
+      await db
+        .insert(schema.workPlace)
+        .values({ hubId: other.hubId, name: 'Private studio' })
+        .returning({ id: schema.workPlace.id }),
+    );
+    const commitment = {
+      shape: 'deep_writing' as const,
+      title: 'Research session',
+      organizationId: null,
+      taskId: null,
+      sessionsPerWeek: 1,
+      minutesPerSession: 60,
+      location: 'stale display text',
+      workPlaceId: WorkPlaceId.parse(place.id),
+      attendees: [],
+      active: true,
+    };
+
+    const saved = await saveSchedulingPreferences(db, owner.hubId, { commitments: [commitment] }, [
+      'commitment-place',
+    ]);
+    expect(saved.commitments[0]).toMatchObject({
+      workPlaceId: place.id,
+      location: 'Westside library',
+    });
+
+    await expect(
+      saveSchedulingPreferences(
+        db,
+        owner.hubId,
+        {
+          commitments: [{ ...commitment, workPlaceId: WorkPlaceId.parse(otherPlace.id) }],
+        },
+        ['commitment-other-place'],
+      ),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
   it('mints a synthetic id once the supplied newIds run out', async () => {
     const { hubId } = await seedHub('PrefsIdOverflow');
     const resolved = await saveSchedulingPreferences(
@@ -185,6 +236,7 @@ describe('saveSchedulingPreferences', () => {
             sessionsPerWeek: 1,
             minutesPerSession: null,
             location: null,
+            workPlaceId: null,
             attendees: [],
             active: true,
           },
@@ -196,6 +248,7 @@ describe('saveSchedulingPreferences', () => {
             sessionsPerWeek: 1,
             minutesPerSession: null,
             location: null,
+            workPlaceId: null,
             attendees: [],
             active: true,
           },

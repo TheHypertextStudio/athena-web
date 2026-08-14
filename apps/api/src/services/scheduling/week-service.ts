@@ -206,6 +206,7 @@ function serializeBlock(
     organizationName:
       block.organizationId === null ? null : (orgNames.get(block.organizationId) ?? null),
     location: block.location,
+    workPlaceId: block.workPlaceId,
     attendees: [...block.attendees],
     origin: 'scheduler',
     anchorCalendarItemId: anchorId,

@@ -39,6 +39,7 @@ import meIdentities from './routes/me-identities';
 import { createMeNotificationsRoutes } from './routes/me-notifications';
 import meRecovery from './routes/me-recovery';
 import meSessions from './routes/me-sessions';
+import workLocation from './routes/work-location';
 import lattice from './routes/lattice';
 import personalAthena from './routes/personal-athena';
 import mcpAppHostRoutes from './mcp/apps/host-routes';
@@ -110,6 +111,7 @@ const routes = app
   .route('/hub', hubRouter)
   .route('/me/connected-apps', connectedApps)
   .route('/me/calendar', meCalendar)
+  .route('/me/work-location', workLocation)
   .route('/me/identities', meIdentities)
   .route('/me/notifications', createMeNotificationsRoutes(notificationInbox))
   .route(

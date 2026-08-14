@@ -61,6 +61,53 @@ describe('collectAccountExport', () => {
     expect(doc.personal.notifications).toHaveLength(1);
   });
 
+  it('includes canonical places, designations, schedules, and short-lived evidence', async () => {
+    const { db, schema, collectAccountExport } = await setup();
+    const userId = await seedUserWithHub(db, schema, 'LocationExport');
+    const hubRow = one(await db.select().from(schema.hub).where(eq(schema.hub.userId, userId)));
+    const place = one(
+      await db
+        .insert(schema.workPlace)
+        .values({ hubId: hubRow.id, name: 'Main library' })
+        .returning(),
+    );
+    await db.insert(schema.workLocationProfile).values({
+      hubId: hubRow.id,
+      homePlaceId: place.id,
+    });
+    await db.insert(schema.workLocationAssertion).values({
+      hubId: hubRow.id,
+      placeId: place.id,
+      schedule: {
+        type: 'one_off_all_day',
+        date: '2026-08-14',
+        timezone: 'America/Los_Angeles',
+      },
+    });
+    await db.insert(schema.workLocationObservation).values({
+      hubId: hubRow.id,
+      placeId: place.id,
+      source: 'device',
+      accuracyMeters: 20,
+      observedAt: new Date('2026-08-14T17:00:00.000Z'),
+      expiresAt: new Date('2026-08-14T17:15:00.000Z'),
+    });
+
+    const { document } = await collectAccountExport(db, userId);
+    const personal = document.personal as {
+      workLocation: {
+        places: unknown[];
+        profiles: unknown[];
+        assertions: unknown[];
+        observations: unknown[];
+      };
+    };
+    expect(personal.workLocation.places).toHaveLength(1);
+    expect(personal.workLocation.profiles).toHaveLength(1);
+    expect(personal.workLocation.assertions).toHaveLength(1);
+    expect(personal.workLocation.observations).toHaveLength(1);
+  });
+
   it('omits unselected account and workspace files from a personal-only export', async () => {
     const { db, schema, buildExportArchive, collectAccountExport } = await setup();
     const userId = await seedUserWithHub(db, schema, 'Selective');

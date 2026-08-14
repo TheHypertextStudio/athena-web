@@ -140,6 +140,28 @@ export interface VapidKeys {
 }
 
 /**
+ * A P-256 private scalar as the fixed 32 bytes JWK requires.
+ *
+ * @remarks
+ * A scalar is an integer, and the usual way to write one down — `createECDH().getPrivateKey()`, then
+ * base64url — emits the minimal big-endian encoding, dropping leading zero bytes. About one key in
+ * three hundred is therefore 31 bytes or fewer while being a perfectly valid key. Requiring exactly
+ * 32 rejected those as `not_configured`, so a correctly generated key would fail every push with a
+ * message saying it had never been set up.
+ *
+ * Left-padding restores the canonical form. Anything longer than 32 bytes is not a short encoding of
+ * a P-256 scalar and is still refused.
+ *
+ * @param raw - The decoded scalar bytes.
+ * @returns the 32-byte form, or `null` when it cannot be one.
+ */
+function scalar32(raw: Buffer): Buffer | null {
+  if (raw.length === 32) return raw;
+  if (raw.length > 32 || raw.length === 0) return null;
+  return Buffer.concat([Buffer.alloc(32 - raw.length), raw]);
+}
+
+/**
  * Turn a raw P-256 scalar + point into a key Node can sign with.
  *
  * @remarks
@@ -149,9 +171,9 @@ export interface VapidKeys {
  * wrong in the path that authenticates every notification.
  */
 function privateKeyObject(keys: VapidKeys): ReturnType<typeof createPrivateKey> {
-  const priv = unb64url(keys.privateKey);
+  const priv = scalar32(unb64url(keys.privateKey));
   const pub = unb64url(keys.publicKey);
-  if (priv.length !== 32 || pub.length !== 65 || pub[0] !== 0x04) {
+  if (priv === null || pub.length !== 65 || pub[0] !== 0x04) {
     throw new WebPushSendError('not_configured');
   }
   return createPrivateKey({

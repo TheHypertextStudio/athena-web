@@ -155,6 +155,65 @@ describe('RFC 8291 payload encryption', () => {
 });
 
 describe('RFC 8292 VAPID authorization', () => {
+  it('signs with a key whose scalar happens to start with a zero byte', async () => {
+    // A private key is an integer, and the ordinary way to write one down — `getPrivateKey()` then
+    // base64url — emits the minimal big-endian encoding, so a scalar below 2^248 comes out 31 bytes
+    // or fewer. That is about one key in three hundred, and requiring exactly 32 rejected them as
+    // `not_configured`: a correctly generated key would fail every push with a message saying it had
+    // never been set up. It also made this suite fail roughly that often, which is how it surfaced.
+    //
+    // Fixed rather than generated, because a bug that appears in 0.3% of runs is not something to
+    // rediscover by chance.
+    const scalar = Buffer.from(
+      '00a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f',
+      'hex',
+    );
+    // What `getPrivateKey()` would have handed back: the leading zero dropped.
+    const shortEncoded = scalar.subarray(1).toString('base64url');
+    expect(Buffer.from(shortEncoded, 'base64url')).toHaveLength(31);
+
+    const keys: VapidKeys = {
+      privateKey: shortEncoded,
+      publicKey: vapidPublicKeyFor(shortEncoded),
+      subject: 'mailto:ops@example.com',
+    };
+
+    const header = vapidAuthorization(keys, 'https://push.example', 1_000_000);
+
+    // Signs at all, and signs under the key it advertises — the padding has to reconstruct the same
+    // scalar, not merely some valid one.
+    const token = /vapid t=([^,]+), k=(.+)/.exec(header);
+    expect(token).not.toBeNull();
+    const [, jwt, advertised] = token!;
+    expect(advertised).toBe(keys.publicKey);
+    const [headerPart, claimsPart, signaturePart] = jwt!.split('.');
+    const spki = Buffer.concat([
+      Buffer.from('3059301306072a8648ce3d020106082a8648ce3d030107034200', 'hex'),
+      Buffer.from(keys.publicKey, 'base64url'),
+    ]);
+    const verifier = createVerify('sha256');
+    verifier.update(Buffer.from(`${headerPart}.${claimsPart}`, 'utf8'));
+    expect(
+      verifier.verify(
+        { key: spki, format: 'der', type: 'spki', dsaEncoding: 'ieee-p1363' },
+        Buffer.from(signaturePart!, 'base64url'),
+      ),
+    ).toBe(true);
+  });
+
+  it('still refuses a scalar that cannot be a P-256 key at all', async () => {
+    // The padding must not turn the check into a rubber stamp. Too long is not a short encoding of
+    // anything, and empty is not a key — both stay refused rather than being coerced into one.
+    for (const privateKey of [Buffer.alloc(33, 7).toString('base64url'), '']) {
+      const keys: VapidKeys = {
+        privateKey,
+        publicKey: makeVapidKeys().publicKey,
+        subject: 'mailto:ops@example.com',
+      };
+      expect(() => vapidAuthorization(keys, 'https://push.example', 1_000_000)).toThrow();
+    }
+  });
+
   it('signs an assertion the push service can verify with the advertised public key', () => {
     const keys = makeVapidKeys();
 

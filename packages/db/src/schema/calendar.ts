@@ -43,6 +43,7 @@ import type {
 } from '../types';
 import { account, user } from './auth';
 import { actor, organization } from './identity';
+import { workPlace } from './work-location';
 import { task } from './work';
 
 /** One linked Google account used by the first-party Calendar domain. */
@@ -255,6 +256,8 @@ export const calendarItem = pgTable(
     title: text('title').notNull(),
     description: text('description'),
     location: text('location'),
+    /** Optional canonical saved place; free-form `location` remains display/provider text. */
+    workPlaceId: text('work_place_id').references(() => workPlace.id, { onDelete: 'set null' }),
     htmlLink: text('html_link'),
     startsAt: timestamp('starts_at'),
     endsAt: timestamp('ends_at'),
@@ -312,6 +315,7 @@ export const calendarItem = pgTable(
     index('calendar_item_schedule_run_idx').on(t.scheduleRunId),
     index('calendar_item_user_all_day_idx').on(t.userId, t.allDayStartDate),
     index('calendar_item_layer_idx').on(t.layerId),
+    index('calendar_item_work_place_idx').on(t.workPlaceId),
     index('calendar_item_user_sync_state_idx').on(t.userId, t.syncState),
     uniqueIndex('calendar_item_layer_external_uq').on(t.layerId, t.externalEventId),
   ],

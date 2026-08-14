@@ -121,6 +121,9 @@ importers:
       '@clack/prompts':
         specifier: ^1.6.0
         version: 1.6.0
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:packages/test-utils
       '@eslint/js':
         specifier: 'catalog:'
         version: 10.0.1(eslint@10.4.1(jiti@2.7.0))
@@ -327,6 +330,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../../packages/test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -496,6 +502,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../../packages/test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -621,6 +630,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -652,6 +664,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -677,6 +692,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -696,6 +714,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -755,6 +776,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -814,6 +838,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -858,6 +885,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -892,6 +922,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -954,6 +987,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -1024,6 +1060,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
@@ -1072,6 +1111,9 @@ importers:
       '@docket/eslint-config':
         specifier: workspace:*
         version: link:../../tooling/eslint-config
+      '@docket/test-utils':
+        specifier: workspace:*
+        version: link:../../packages/test-utils
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig

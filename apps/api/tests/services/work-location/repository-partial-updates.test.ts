@@ -185,9 +185,16 @@ describe('retiring a place', () => {
     const created = await seedPlace('Home base');
     await updateWorkLocationProfile(database, hubId, { homePlaceId: created.id });
 
-    await expect(archiveWorkPlace(database, hubId, created.id)).rejects.toBeInstanceOf(
-      ConflictError,
-    );
+    try {
+      await expect(archiveWorkPlace(database, hubId, created.id)).rejects.toBeInstanceOf(
+        ConflictError,
+      );
+    } finally {
+      // The designation lives on the hub every test in this file shares, so it is cleared here
+      // rather than left for a later test to overwrite. Without this, a case added below would
+      // fail on a ConflictError this test caused and name itself as the culprit.
+      await updateWorkLocationProfile(database, hubId, { homePlaceId: null });
+    }
   });
 
   it('retires it once the home designation is moved away', async () => {

@@ -20,7 +20,6 @@
     "dev": "portless run --force",
     "dev:app": "tsx ../../scripts/portless-env.ts tsx watch --include .env.local --import ./src/dev-env.ts src/server.ts",
     "start": "tsx src/server.ts",
-    "pretypecheck": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "find src tests -type f \\( -name '*.ts' -o -name '*.tsx' \\) -print0 | xargs -0 -n 100 eslint",
     "pretest": "tsc -p tsconfig.build.json",

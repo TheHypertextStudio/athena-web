@@ -12,6 +12,14 @@
     "build": {
       "passThroughEnv": ["BLOB_READ_WRITE_TOKEN"]
     },
+    // `tests/core/infra.test.ts` compares the published RPC contract against the router source, and
+    // it reads the contract from `dist/rpc-contract.d.ts`. Ordering that build here rather than in
+    // a `pretypecheck` hook is what keeps it safe: `test` already depends on `build`, so a hook
+    // would have left two unordered tasks emitting the same declarations concurrently. Turbo also
+    // caches the build instead of re-running `tsc` on every typecheck.
+    "typecheck": {
+      "dependsOn": ["build"]
+    },
     "dev": {
       "env": [
         "WEB_URL",

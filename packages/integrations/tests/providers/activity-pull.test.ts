@@ -222,10 +222,8 @@ describe('GitHub activity pull', () => {
     const { drafts } = await client(http).pullActivity({ ...WINDOW, maxDrafts: 50 });
 
     expect(drafts.map((d) => d.kind)).toEqual(['completed']);
-    expect(
-      assertDefined(drafts[0]).detail?.schema === 'github.pull_request' &&
-        assertDefined(drafts[0]).detail.merged,
-    ).toBe(false);
+    const detail = assertDefined(drafts[0]).detail;
+    expect(detail?.schema === 'github.pull_request' && detail.merged).toBe(false);
   });
 
   it('never asks GitHub for more rows per page than it allows', async () => {

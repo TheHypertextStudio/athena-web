@@ -48,7 +48,7 @@ export interface VocabularySkin {
   /** The base preset. */
   readonly preset: VocabularyPreset;
   /** Per-key overrides (key ∈ initiative/program/project/task/cycle/team). */
-  readonly overrides?: Record<string, VocabularyTerm>;
+  readonly overrides?: Record<string, VocabularyTerm> | undefined;
 }
 
 /** The default vocabulary skin for new organizations. */
@@ -60,45 +60,57 @@ export type HubLanding = 'hub' | 'last' | { readonly orgId: string };
 /** Personal Hub preferences. */
 export interface HubPreferences {
   /** Landing surface on open. */
-  readonly landing?: HubLanding;
+  readonly landing?: HubLanding | undefined;
   /** Row density. */
-  readonly density?: 'comfortable' | 'compact';
+  readonly density?: 'comfortable' | 'compact' | undefined;
   /** Theme preference. */
-  readonly theme?: 'system' | 'light' | 'dark';
+  readonly theme?: 'system' | 'light' | 'dark' | undefined;
   /** IANA timezone for the daily plan (also the digest's day boundary + send time). */
-  readonly timezone?: string;
+  readonly timezone?: string | undefined;
   /** Continuous scheduling-canvas preferences and quick-create defaults. */
-  readonly calendar?: {
-    /** Continuous vertical zoom in pixels per hour. */
-    readonly pixelsPerHour?: number;
-    /** Minimum date-lane width in pixels before horizontal scrolling. */
-    readonly minLaneWidth?: number;
-    /** Whether new selected regions default to events or timeboxes. */
-    readonly defaultCreateIntent?: 'event' | 'timebox';
-    /** Preferred native or writable provider layer for event creation. */
-    readonly defaultLayerId?: string | null;
-  };
+  readonly calendar?:
+    | {
+        /** Continuous vertical zoom in pixels per hour. */
+        readonly pixelsPerHour?: number | undefined;
+        /** Minimum date-lane width in pixels before horizontal scrolling. */
+        readonly minLaneWidth?: number | undefined;
+        /** Whether new selected regions default to events or timeboxes. */
+        readonly defaultCreateIntent?: 'event' | 'timebox' | undefined;
+        /** Preferred native or writable provider layer for event creation. */
+        readonly defaultLayerId?: string | null | undefined;
+      }
+    | undefined;
   /** Persistent instructions and approval policy for the user-owned Athena assistant. */
-  readonly athena?: {
-    /** Personal guidance Athena follows across every workspace. */
-    readonly instructions?: string;
-    /** How much autonomy Athena has for state-changing work. */
-    readonly approvalMode?: 'ask_before_acting' | 'routine_autonomy' | 'suggest_only';
-  };
+  readonly athena?:
+    | {
+        /** Personal guidance Athena follows across every workspace. */
+        readonly instructions?: string | undefined;
+        /** How much autonomy Athena has for state-changing work. */
+        readonly approvalMode?:
+          | 'ask_before_acting'
+          | 'routine_autonomy'
+          | 'suggest_only'
+          | undefined;
+      }
+    | undefined;
   /** Daily digest delivery settings (the Sunsama-style end-of-day summary). */
-  readonly digest?: {
-    /** Whether the daily digest is generated and delivered. */
-    readonly enabled?: boolean;
-    /** Local clock time to send, `"HH:MM"` 24-hour (interpreted in `timezone`). */
-    readonly sendAtLocalTime?: string;
-    /** Where to deliver the digest. */
-    readonly channels?: readonly ('email' | 'inApp')[];
-  };
+  readonly digest?:
+    | {
+        /** Whether the daily digest is generated and delivered. */
+        readonly enabled?: boolean | undefined;
+        /** Local clock time to send, `"HH:MM"` 24-hour (interpreted in `timezone`). */
+        readonly sendAtLocalTime?: string | undefined;
+        /** Where to deliver the digest. */
+        readonly channels?: readonly ('email' | 'inApp')[] | undefined;
+      }
+    | undefined;
   /** Proactive-agent settings — whether incoming mentions/assignments auto-draft a plan. */
-  readonly proactive?: {
-    /** When true, a mention/assignment observation spawns an (approval-gated) agent plan. */
-    readonly enabled?: boolean;
-  };
+  readonly proactive?:
+    | {
+        /** When true, a mention/assignment observation spawns an (approval-gated) agent plan. */
+        readonly enabled?: boolean | undefined;
+      }
+    | undefined;
 }
 
 /** The wire protocol an agent's runtime speaks. */
@@ -111,7 +123,7 @@ export interface AgentConnection {
   /** Protocol Docket uses to talk to it. */
   readonly protocol: AgentProtocol;
   /** Reference to the stored credential (never the secret itself). */
-  readonly credentialsRef?: string;
+  readonly credentialsRef?: string | undefined;
 }
 
 /** Who approves an agent's gated actions. */
@@ -119,45 +131,45 @@ export interface ApprovalRouting {
   /** Routing mode: the assigner, a fixed actor, or a role. */
   readonly mode: 'assigner' | 'fixed' | 'role';
   /** Approver actor (when mode = fixed). */
-  readonly approverActorId?: string;
+  readonly approverActorId?: string | undefined;
   /** Approver role (when mode = role). */
-  readonly approverRoleId?: string;
+  readonly approverRoleId?: string | undefined;
 }
 
 /** An external integration's connection metadata. */
 export interface IntegrationConnection {
   /** External account/login label. */
-  readonly account?: string;
+  readonly account?: string | undefined;
   /** Reference to the stored OAuth credential. */
-  readonly credentialsRef?: string;
+  readonly credentialsRef?: string | undefined;
   /** External workspace identifier (for scoping imports + webhook routing, e.g. Linear's org id). */
-  readonly externalWorkspaceId?: string;
+  readonly externalWorkspaceId?: string | undefined;
   /** External workspace slug/url-key (e.g. Linear's `urlKey`), persisted alongside the id. */
-  readonly externalWorkspaceSlug?: string;
+  readonly externalWorkspaceSlug?: string | undefined;
 }
 
 /** Organizer details cached from a Google Calendar event. */
 export interface CalendarEventOrganizer {
   /** Organizer email, when provided by Google. */
-  readonly email?: string | null;
+  readonly email?: string | null | undefined;
   /** Organizer display name, when provided by Google. */
-  readonly displayName?: string | null;
+  readonly displayName?: string | null | undefined;
   /** Whether the organizer is the linked Google account. */
-  readonly self?: boolean;
+  readonly self?: boolean | undefined;
 }
 
 /** Attendee details cached from a Google Calendar event. */
 export interface CalendarEventAttendee {
   /** Attendee email, when provided by Google. */
-  readonly email?: string | null;
+  readonly email?: string | null | undefined;
   /** Attendee display name, when provided by Google. */
-  readonly displayName?: string | null;
+  readonly displayName?: string | null | undefined;
   /** Provider response status, such as accepted/declined/needsAction. */
-  readonly responseStatus?: string | null;
+  readonly responseStatus?: string | null | undefined;
   /** Whether the attendee is optional. */
-  readonly optional?: boolean;
+  readonly optional?: boolean | undefined;
   /** Whether the attendee is the linked Google account. */
-  readonly self?: boolean;
+  readonly self?: boolean | undefined;
 }
 
 /** Notification payload; `title` is required, the rest is type-specific. */
@@ -165,9 +177,9 @@ export interface NotificationBody {
   /** Headline shown in the inbox. */
   readonly title: string;
   /** Optional supporting summary. */
-  readonly summary?: string;
+  readonly summary?: string | undefined;
   /** Optional deep link. */
-  readonly url?: string;
+  readonly url?: string | undefined;
   /** Additional type-specific fields. */
   readonly [key: string]: unknown;
 }
@@ -221,9 +233,9 @@ export type NotificationAudience =
 /** Text/html content persisted on a notification intent. */
 export interface NotificationContent {
   /** Plain text content for email/SMS/push fallbacks. */
-  readonly text?: string;
+  readonly text?: string | undefined;
   /** HTML content for email-capable destinations. */
-  readonly html?: string;
+  readonly html?: string | undefined;
   /** Additional channel-specific rendering metadata. */
   readonly [key: string]: unknown;
 }
@@ -239,16 +251,16 @@ export interface NotificationQuietHours {
   /** Days where the quiet-hours window applies. */
   readonly days: readonly ('mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun')[];
   /** Whether urgent notifications can bypass quiet hours. */
-  readonly allowUrgent?: boolean;
+  readonly allowUrgent?: boolean | undefined;
 }
 
 /** Channel preferences for one notification category. */
 export interface NotificationChannelPreference {
-  readonly web?: boolean;
-  readonly email?: boolean;
-  readonly sms?: boolean;
-  readonly push?: boolean;
-  readonly locked?: boolean;
+  readonly web?: boolean | undefined;
+  readonly email?: boolean | undefined;
+  readonly sms?: boolean | undefined;
+  readonly push?: boolean | undefined;
+  readonly locked?: boolean | undefined;
 }
 
 /** Preference map keyed by notification category. */
@@ -261,17 +273,17 @@ export interface NotificationSuppression {
   /** Suppression reason. */
   readonly reason: NotificationSuppressionReason;
   /** Channel affected by the suppression, when channel-specific. */
-  readonly channel?: NotificationServiceChannel;
+  readonly channel?: NotificationServiceChannel | undefined;
   /** Human-readable operational detail. */
-  readonly detail?: string;
+  readonly detail?: string | undefined;
 }
 
 /** Channel destination metadata. */
 export interface NotificationDestination {
   /** Masked destination shown in operational views. */
-  readonly valueMasked?: string;
+  readonly valueMasked?: string | undefined;
   /** Contact point used for the delivery, when applicable. */
-  readonly contactPointId?: string;
+  readonly contactPointId?: string | undefined;
   /** Additional destination metadata. */
   readonly [key: string]: unknown;
 }
@@ -303,66 +315,76 @@ export type { TurnContentBlock, TurnMessage } from '@docket/types';
 /** A session Activity payload; `action` rows carry the proposed change. */
 export interface SessionActivityBody {
   /** Free text (thought/response/elicitation/error). */
-  readonly text?: string;
+  readonly text?: string | undefined;
   /** The caller-validated focus attached to a user-authored personal Athena message. */
-  readonly context?: {
-    /** Workspace focus; context never grants authority. */
-    readonly workspaceId?: string;
-    /** Optional canonical source object that opened Athena. */
-    readonly source?: {
-      /** Supported ambient entry-point kind. */
-      readonly type:
-        | 'task'
-        | 'project'
-        | 'initiative'
-        | 'program'
-        | 'calendar_item'
-        | 'stream_event';
-      /** Canonical source row id. */
-      readonly id: string;
-    };
-  };
+  readonly context?:
+    | {
+        /** Workspace focus; context never grants authority. */
+        readonly workspaceId?: string | undefined;
+        /** Optional canonical source object that opened Athena. */
+        readonly source?:
+          | {
+              /** Supported ambient entry-point kind. */
+              readonly type:
+                | 'task'
+                | 'project'
+                | 'initiative'
+                | 'program'
+                | 'calendar_item'
+                | 'stream_event';
+              /** Canonical source row id. */
+              readonly id: string;
+            }
+          | undefined;
+      }
+    | undefined;
   /** Application attribution for human-authored response rows. */
-  readonly author?: 'user' | 'athena';
+  readonly author?: 'user' | 'athena' | undefined;
   /** For `action` activities: the proposed change + its approval linkage. */
-  readonly action?: {
-    /** Action kind (e.g. `update_task`). */
-    readonly kind: string;
-    /** Human-readable summary of the proposed change. */
-    readonly summary: string;
-    /** Optional structured diff. */
-    readonly diff?: unknown;
-    /**
-     * The persisted, executable tool call behind a gated action.
-     *
-     * @remarks
-     * What approval executes: the toolbox connection (`docket` or a remote alias),
-     * the raw tool name, its input, and the provider `tool_use` id so the result can
-     * be paired back into the transcript. Absent on legacy narration-only actions.
-     */
-    readonly toolCall?: {
-      /** Toolbox connection key (`docket`, or a remote integration alias). */
-      readonly connection: string;
-      /** The raw (un-namespaced) tool name on that connection. */
-      readonly tool: string;
-      /** The tool input as proposed (editable until approved). */
-      readonly input: unknown;
-      /** The provider `tool_use` block id this call answers. */
-      readonly toolUseId: string;
-    };
-    /** The execution result once applied (also fed back as the `tool_result`). */
-    readonly result?: {
-      /** Serialized result content. */
-      readonly content: string;
-      /** Whether execution failed. */
-      readonly isError: boolean;
-    };
-    /**
-     * How the gate treated this action: a `proposal` executes on approval; a
-     * `suggestion` (suggest-only policy) is recorded and never executes.
-     */
-    readonly mode?: 'proposal' | 'suggestion';
-  };
+  readonly action?:
+    | {
+        /** Action kind (e.g. `update_task`). */
+        readonly kind: string;
+        /** Human-readable summary of the proposed change. */
+        readonly summary: string;
+        /** Optional structured diff. */
+        readonly diff?: unknown;
+        /**
+         * The persisted, executable tool call behind a gated action.
+         *
+         * @remarks
+         * What approval executes: the toolbox connection (`docket` or a remote alias),
+         * the raw tool name, its input, and the provider `tool_use` id so the result can
+         * be paired back into the transcript. Absent on legacy narration-only actions.
+         */
+        readonly toolCall?:
+          | {
+              /** Toolbox connection key (`docket`, or a remote integration alias). */
+              readonly connection: string;
+              /** The raw (un-namespaced) tool name on that connection. */
+              readonly tool: string;
+              /** The tool input as proposed (editable until approved). */
+              readonly input: unknown;
+              /** The provider `tool_use` block id this call answers. */
+              readonly toolUseId: string;
+            }
+          | undefined;
+        /** The execution result once applied (also fed back as the `tool_result`). */
+        readonly result?:
+          | {
+              /** Serialized result content. */
+              readonly content: string;
+              /** Whether execution failed. */
+              readonly isError: boolean;
+            }
+          | undefined;
+        /**
+         * How the gate treated this action: a `proposal` executes on approval; a
+         * `suggestion` (suggest-only policy) is recorded and never executes.
+         */
+        readonly mode?: 'proposal' | 'suggestion' | undefined;
+      }
+    | undefined;
   /** Additional fields. */
   readonly [key: string]: unknown;
 }
@@ -382,7 +404,7 @@ export interface ViewGrouping {
   /** Primary group-by field. */
   readonly by: string;
   /** Optional secondary group-by field. */
-  readonly subBy?: string;
+  readonly subBy?: string | undefined;
 }
 
 /** One sort term in a saved view. */

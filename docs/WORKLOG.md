@@ -5123,6 +5123,39 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [PHONE-VERIFY-001] A texted code stays enterable after the page reloads
+
+- **Completed**: 2026-08-15
+- **Priority**: P1
+- **Summary**: Settings → Athena → "Call Athena" gated its 6-digit code box on local state written
+  by the `POST` that sent the code, so the box existed only in the tab that requested it. Reloading
+  settings — or opening them on the handset the code was texted to — left a row reading "Waiting
+  for the code" and the add form beneath it, with nowhere to type the code in hand. Retyping the
+  number then hit the 60-second resend limiter and reported "Could not send the code.", and the
+  row's own "Send a new code" failed the same way while silently spending one of five sends an
+  hour. The code box, the expiry, the remaining tries, and the resend cooldown now all resolve
+  against the server's own rows: `GET /v1/me/phone-numbers` returns each pending number's
+  outstanding challenge, and the section derives what to show from it. A blocked number stopped
+  claiming to be waiting for a code and no longer offers a resend the server always refuses; the
+  resend button is disabled for the length of its cooldown; a resend that could not be delivered
+  and a delete that failed both say so instead of reporting nothing.
+- **Files Changed**: `domains/athena/src/phone.ts` (new `PhoneChallengeSummary`, hung off
+  `PhoneNumberOut`), `apps/api/src/routes/phone-numbers.ts` (list populates it via the existing
+  `PhoneVerificationService.outstanding`), `apps/web/src/components/athena/voice-phone-numbers.tsx`,
+  and tests in `apps/api/tests/routes/phone-numbers.test.ts` plus the new
+  `apps/web/tests/athena/voice-phone-numbers.test.tsx`.
+- **Validation**: The new component suite passes 12 of 12 and was first run against the unmodified
+  component, where 11 of 12 fail — including the reload case this work exists for. API phone routes
+  pass 14 of 14. Root typecheck passes 26 tasks, root lint 25, Prettier reports every file clean,
+  and `turbo run test` passes 25 of 25 packages. `@docket/env` fails independently of this work on
+  a clean tree (`.env.local` lacks `WORK_LOCATION_PROJECTION_ENABLED`), as do the pre-existing
+  coverage thresholds in `@docket/connections` and `@docket/athena`.
+- **Learnings**: State that gates a recovery path must be owned by whatever survives the recovery.
+  The give-away here was a control whose only trigger was the mutation it was meant to follow up —
+  the code box could be reached from `bind.onSuccess` and nowhere else, which is the same as saying
+  it only existed if nothing went wrong. Deriving it from the server's rows removed a whole class of
+  neighbouring bugs for free: a removed or verified number now collapses the box with no cleanup
+  code, because the box was never a thing being cleaned up.
 ### [DOCS-SITE-001] Docket has public documentation
 
 - **Completed**: 2026-08-15

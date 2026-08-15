@@ -22,14 +22,22 @@
  * A number reads "Waiting for the code" until a code you received comes back. The section states
  * the real limits (how long the code lasts, how many tries remain) rather than letting a person
  * discover them by being locked out.
+ *
+ * Those limits, and the code box itself, are read off the server's own rows rather than remembered
+ * from the request that started the verification. That distinction is the whole design: this
+ * section used to gate the code box on local state set by the `POST` that sent the code, so
+ * reloading the page — or opening settings on the handset the code was texted to — left a row
+ * reading "Waiting for the code" with nowhere to type it, and the only remaining control was a
+ * resend the rate limiter refuses. A code that exists on the server is always enterable here.
  */
 import { DIAL_CODES, DEFAULT_DIAL_CODE } from '@docket/athena/phone';
-import type { PhoneChallengeOut, PhoneNumberOut } from '@docket/athena/phone';
+import type { PhoneChallengeOut, PhoneNumberOut, PhoneNumberStatus } from '@docket/athena/phone';
 import { Check, Phone, PhoneOff, Trash2 } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup, Field, Input, Select, Text } from '@docket/ui/primitives';
-import { type JSX, useMemo, useState } from 'react';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { formatClock } from '@/lib/format-time';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
@@ -39,6 +47,30 @@ const DEFAULT_COUNTRY = 'US';
 /** The section heading and the promise it makes. */
 const SECTION_DESCRIPTION =
   'Add a number and Athena will answer when you call from it, picking up the same conversation you have on the web.';
+
+/** What each lifecycle state is called here. Application-owned copy, one label per state. */
+const STATUS_LABEL: Record<PhoneNumberStatus, string> = {
+  pending: 'Waiting for the code',
+  verified: 'Verified',
+  blocked: 'Not usable',
+};
+
+/**
+ * Which number the code box is pointed at.
+ *
+ * @remarks
+ * `auto` is the default and carries the fix: it resolves against the server's pending rows every
+ * render, so a code that exists is always enterable, including in a session that did not request
+ * it. `number` pins the box to one row — the number just bound, or the one picked out of two
+ * pending. `add` is the deliberate escape to bind a *different* number while one is still pending.
+ */
+type CodeTarget =
+  | { readonly kind: 'auto' }
+  | { readonly kind: 'number'; readonly id: string }
+  | { readonly kind: 'add' };
+
+/** How often the resend cooldown is re-evaluated against the wall clock. */
+const COOLDOWN_TICK_MS = 1000;
 
 /**
  * The caller-owned phone numbers section.
@@ -52,8 +84,8 @@ export function VoicePhoneNumbers(): JSX.Element {
   const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [nationalNumber, setNationalNumber] = useState('');
   const [code, setCode] = useState('');
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [challenge, setChallenge] = useState<PhoneChallengeOut | null>(null);
+  const [target, setTarget] = useState<CodeTarget>({ kind: 'auto' });
+  const [issued, setIssued] = useState<PhoneNumberOut | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const dialCode = useMemo(
@@ -69,6 +101,17 @@ export function VoicePhoneNumbers(): JSX.Element {
     ),
   );
 
+  /** Point the code box at the number a fresh challenge was issued for, and report undelivered SMS. */
+  const acceptChallenge = (result: PhoneChallengeOut): void => {
+    setIssued(result.phoneNumber);
+    setTarget({ kind: 'number', id: result.phoneNumber.id });
+    setNotice(
+      result.deliveryFailed
+        ? 'We couldn’t deliver the code to that number. Check it and try again.'
+        : null,
+    );
+  };
+
   const bind = useApiMutation<PhoneChallengeOut, undefined>({
     mutationFn: () =>
       unwrap(
@@ -80,14 +123,8 @@ export function VoicePhoneNumbers(): JSX.Element {
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
     onSuccess: (result) => {
-      setChallenge(result);
-      setPendingId(result.phoneNumber.id);
+      acceptChallenge(result);
       setNationalNumber('');
-      setNotice(
-        result.deliveryFailed
-          ? 'We couldn’t deliver the code to that number. Check it and try again.'
-          : null,
-      );
     },
     onError: (error) => {
       setNotice(userErrorMessage(error, 'Could not send the code.'));
@@ -102,8 +139,8 @@ export function VoicePhoneNumbers(): JSX.Element {
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
     onSuccess: () => {
-      setPendingId(null);
-      setChallenge(null);
+      setTarget({ kind: 'auto' });
+      setIssued(null);
       setCode('');
       setNotice(null);
     },
@@ -118,10 +155,10 @@ export function VoicePhoneNumbers(): JSX.Element {
         () => api.v1.me['phone-numbers'][':id'].resend.$post({ param: { id } }),
         'Could not send another code.',
       ),
-    onSuccess: (result) => {
-      setChallenge(result);
-      setNotice(null);
-    },
+    // The new code resets this number's expiry, tries, and cooldown — all of which now live on the
+    // listed row, so the list has to be refetched for the section to stop describing the old code.
+    invalidateKeys: [queryKeys.phoneNumbers()],
+    onSuccess: acceptChallenge,
     onError: (error) => {
       setNotice(userErrorMessage(error, 'Could not send another code.'));
     },
@@ -134,9 +171,61 @@ export function VoicePhoneNumbers(): JSX.Element {
         'Could not remove that number.',
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
+    onSuccess: (result) => {
+      // Drop the optimistic row too, or the code box would stay open on a number that is gone.
+      setIssued((prev) => (prev?.id === result.id ? null : prev));
+      setTarget({ kind: 'auto' });
+      setNotice(null);
+    },
+    onError: (error) => {
+      setNotice(userErrorMessage(error, 'Could not remove that number.'));
+    },
   });
 
   const items = numbersQ.data?.items ?? [];
+
+  /**
+   * Every number that can take a code right now: the server's pending rows, plus the number a
+   * challenge was just issued for while the list has yet to refetch it.
+   *
+   * @remarks
+   * The second half is a one-round-trip bridge. `bind` invalidates the list rather than awaiting
+   * it, so between the `POST` resolving and the refetch landing the server does not yet report the
+   * row this person is holding a code for — without the bridge the add form would flash back. It
+   * yields to the server the moment the refetch knows the id, so the list stays the authority.
+   */
+  const verifiable = useMemo(() => {
+    const pending = items.filter((number) => number.status === 'pending');
+    return issued && !items.some((number) => number.id === issued.id)
+      ? [issued, ...pending]
+      : pending;
+  }, [items, issued]);
+
+  const verifying =
+    target.kind === 'add'
+      ? null
+      : target.kind === 'number'
+        ? (verifiable.find((number) => number.id === target.id) ?? null)
+        : (verifiable[0] ?? null);
+
+  const challenge = verifying?.challenge ?? null;
+
+  // Wall-clock time does not re-render React on its own, so the cooldown is ticked for as long as
+  // one is outstanding. Deriving `disabled` from a timestamp read once at render would leave an
+  // idle tab's resend button dead long after the server would have accepted it.
+  const [now, setNow] = useState(() => Date.now());
+  const resendAt = challenge ? new Date(challenge.resendAvailableAt).getTime() : null;
+  const coolingDown = resendAt !== null && resendAt > now;
+
+  useEffect(() => {
+    if (!coolingDown) return undefined;
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, COOLDOWN_TICK_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [coolingDown]);
 
   return (
     <section
@@ -158,6 +247,8 @@ export function VoicePhoneNumbers(): JSX.Element {
             <li
               key={number.id}
               className="bg-surface-container flex items-center gap-3 rounded-md px-3 py-2"
+              data-phone-number-row
+              data-phone-number-id={number.id}
             >
               <span aria-hidden="true" className="text-on-surface-variant">
                 {number.status === 'verified' ? (
@@ -170,24 +261,45 @@ export function VoicePhoneNumbers(): JSX.Element {
                 {number.masked}
               </Text>
               <Badge variant={number.status === 'verified' ? 'secondary' : 'outline'}>
-                {number.status === 'verified' ? 'Verified' : 'Waiting for the code'}
+                {STATUS_LABEL[number.status]}
               </Badge>
               <span className="flex-1" />
               <ControlGroup controlSize="sm">
-                {number.status !== 'verified' ? (
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setPendingId(number.id);
-                      resend.mutate(number.id);
-                    }}
-                  >
-                    Send a new code
-                  </Button>
+                {/* Gated on `pending`, not on "not verified": a blocked number is refused by the
+                    server, so offering it a resend would be an invitation to a guaranteed error. */}
+                {number.status === 'pending' ? (
+                  <>
+                    {number.id === verifying?.id ? null : (
+                      <Button
+                        variant="ghost"
+                        data-phone-action="enter-code"
+                        onClick={() => {
+                          setTarget({ kind: 'number', id: number.id });
+                          setCode('');
+                          setNotice(null);
+                        }}
+                      >
+                        Enter code
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      data-phone-action="resend"
+                      disabled={resend.isPending || (number.id === verifying?.id && coolingDown)}
+                      onClick={() => {
+                        setTarget({ kind: 'number', id: number.id });
+                        setCode('');
+                        resend.mutate(number.id);
+                      }}
+                    >
+                      Send a new code
+                    </Button>
+                  </>
                 ) : null}
                 <Button
                   variant="ghost"
                   iconOnly
+                  data-phone-action="remove"
                   aria-label={`Remove ${number.masked}`}
                   onClick={() => {
                     remove.mutate(number.id);
@@ -201,14 +313,20 @@ export function VoicePhoneNumbers(): JSX.Element {
         </ul>
       ) : null}
 
-      {pendingId ? (
+      {verifying ? (
         <div className="flex flex-col gap-3" data-phone-verify-form>
           <Field
             label="Enter the 6-digit code"
             description={
-              challenge
-                ? `We texted it just now. It expires in 10 minutes, and you have ${String(challenge.attemptsRemaining)} tries.`
-                : 'We texted it just now.'
+              challenge ? (
+                <>
+                  We texted it to {verifying.masked}. It works until{' '}
+                  <time dateTime={challenge.expiresAt}>{formatClock(challenge.expiresAt)}</time>,
+                  and you have {String(challenge.attemptsRemaining)} tries.
+                </>
+              ) : (
+                <>Enter the code we texted to {verifying.masked}, or ask for a new one above.</>
+              )
             }
           >
             <Input
@@ -224,23 +342,27 @@ export function VoicePhoneNumbers(): JSX.Element {
           </Field>
           <ControlGroup>
             <Button
+              data-phone-action="verify"
               disabled={code.length !== 6 || verify.isPending}
               onClick={() => {
-                verify.mutate(pendingId);
+                verify.mutate(verifying.id);
               }}
             >
               <Check aria-hidden="true" />
               Verify
             </Button>
+            {/* Not "Cancel": the pending number survives this, and calling it cancellation is what
+                used to send people back to the add form to retype a number already on file. */}
             <Button
               variant="ghost"
+              data-phone-action="add-different"
               onClick={() => {
-                setPendingId(null);
+                setTarget({ kind: 'add' });
                 setCode('');
                 setNotice(null);
               }}
             >
-              Cancel
+              Add a different number
             </Button>
           </ControlGroup>
         </div>
@@ -277,6 +399,7 @@ export function VoicePhoneNumbers(): JSX.Element {
           </ControlGroup>
           <ControlGroup>
             <Button
+              data-phone-action="bind"
               disabled={nationalNumber.trim().length < 4 || bind.isPending}
               onClick={() => {
                 bind.mutate(undefined);
@@ -285,6 +408,18 @@ export function VoicePhoneNumbers(): JSX.Element {
               <Phone aria-hidden="true" />
               Send me a code
             </Button>
+            {verifiable.length > 0 ? (
+              <Button
+                variant="ghost"
+                data-phone-action="back-to-code"
+                onClick={() => {
+                  setTarget({ kind: 'auto' });
+                  setNotice(null);
+                }}
+              >
+                Enter the code instead
+              </Button>
+            ) : null}
           </ControlGroup>
         </div>
       )}

@@ -340,6 +340,33 @@ export function maskE164(e164: string, dialCode?: string): string {
   return `+${code} ••• ••• ••${tail}`;
 }
 
+/**
+ * The live limits on a number's outstanding one-time code.
+ *
+ * @remarks
+ * Carried on the number itself, not just on the response to the call that issued the code, because
+ * these limits outlive the browser tab that triggered them. A person who requests a code, closes
+ * settings, and comes back to read the SMS still needs to be told when the code dies and how many
+ * tries are left — and a client that only learned them from its own `POST` response cannot say.
+ */
+export const PhoneChallengeSummary = z
+  .object({
+    /** When the outstanding code stops being accepted. */
+    expiresAt: z.string(),
+    /** Wrong-code submissions still allowed before the challenge is destroyed. */
+    attemptsRemaining: z.number().int(),
+    /** When another code may be requested for this number. */
+    resendAvailableAt: z.string(),
+    /** True when the challenge could not be delivered and the number cannot be verified yet. */
+    deliveryFailed: z.boolean(),
+  })
+  .meta({
+    id: 'PhoneChallengeSummary',
+    description: 'The live limits on a phone number’s outstanding one-time code.',
+  });
+/** Phone-challenge-summary value. */
+export type PhoneChallengeSummary = z.infer<typeof PhoneChallengeSummary>;
+
 /** A phone number bound to the caller's account, as the caller sees it. */
 export const PhoneNumberOut = z
   .object({
@@ -355,6 +382,8 @@ export const PhoneNumberOut = z
     callingEnabled: z.boolean(),
     verifiedAt: z.string().nullable(),
     createdAt: z.string(),
+    /** The outstanding code's limits, or null when no code is awaiting entry. */
+    challenge: PhoneChallengeSummary.nullable(),
   })
   .meta({
     id: 'PhoneNumberOut',

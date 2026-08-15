@@ -62,6 +62,13 @@ async function harness(label: string) {
   return { app, userId, sms, clock };
 }
 
+interface ChallengeSummaryWire {
+  readonly expiresAt: string;
+  readonly attemptsRemaining: number;
+  readonly resendAvailableAt: string;
+  readonly deliveryFailed: boolean;
+}
+
 interface PhoneNumberWire {
   readonly id: string;
   readonly masked: string;
@@ -70,11 +77,14 @@ interface PhoneNumberWire {
   readonly status: string;
   readonly callingEnabled: boolean;
   readonly verifiedAt: string | null;
+  readonly challenge: ChallengeSummaryWire | null;
 }
 
 interface ChallengeWire {
   readonly phoneNumber: PhoneNumberWire;
+  readonly expiresAt: string;
   readonly attemptsRemaining: number;
+  readonly resendAvailableAt: string;
   readonly deliveryFailed: boolean;
 }
 
@@ -220,6 +230,41 @@ describe('phone number routes', () => {
     const resent = await app.request(`/${created.phoneNumber.id}/resend`, { method: 'POST' });
     expect(resent.status).toBe(409); // the verification service itself rate-limits an immediate resend
     expect(sms.outbox).toHaveLength(0);
+  });
+
+  it('lists a pending number with the limits needed to finish verifying it elsewhere', async () => {
+    // The surface gates its code box on this field. Without it a person who requests a code and
+    // then reloads settings — or opens them on the handset the code was texted to — has a row
+    // saying "waiting for the code" and nowhere to enter one.
+    const { app } = await harness('PhoneListChallenge');
+    const created = await body<ChallengeWire>(
+      await app.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ country: 'US', dialCode: '1', nationalNumber: '4155550170' }),
+      }),
+    );
+
+    const listed = await body<{ items: PhoneNumberWire[] }>(await app.request('/'));
+    const pending = listed.items.find((item) => item.id === created.phoneNumber.id);
+    expect(pending?.status).toBe('pending');
+    expect(pending?.challenge).toMatchObject({
+      expiresAt: created.expiresAt,
+      attemptsRemaining: created.attemptsRemaining,
+      resendAvailableAt: created.resendAvailableAt,
+      deliveryFailed: false,
+    });
+
+    // Once the code is spent the challenge is gone, so the surface stops offering to enter one.
+    await app.request(`/${created.phoneNumber.id}/verify`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ code: CODE }),
+    });
+    const afterVerify = await body<{ items: PhoneNumberWire[] }>(await app.request('/'));
+    const verified = afterVerify.items.find((item) => item.id === created.phoneNumber.id);
+    expect(verified?.status).toBe('verified');
+    expect(verified?.challenge).toBeNull();
   });
 
   it('refuses to resend for a number that is not awaiting verification', async () => {

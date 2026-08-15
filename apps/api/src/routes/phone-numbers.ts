@@ -22,6 +22,7 @@ import {
   PhoneNumberOut,
   PhoneVerifyBody,
 } from '@docket/athena/phone';
+import type { PhoneChallengeSummary } from '@docket/athena/phone';
 import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
@@ -37,6 +38,7 @@ import {
   attemptsRemaining,
   resendAvailableAt,
   type PhoneNumberRow,
+  type PhoneVerificationRow,
   type PhoneVerificationService,
 } from './phone-verification';
 
@@ -45,8 +47,19 @@ const idParam = z.object({ id: z.string() });
 /** Every dial code the country selector offers, as the server's allowlist. */
 const DIAL_CODE_BY_COUNTRY = new Map(DIAL_CODES.map((d) => [d.iso2, d.dialCode]));
 
-/** Project a stored binding onto the redacted wire shape. */
-function toPhoneNumberOut(row: PhoneNumberRow): z.input<typeof PhoneNumberOut> {
+/**
+ * Project a stored binding onto the redacted wire shape.
+ *
+ * @param row - The stored binding.
+ * @param challenge - The number's outstanding challenge, when one is being reported. Passing it is
+ *   what lets a client reopen a half-finished verification it did not itself start: the limits ride
+ *   on the number rather than only on the response to the request that issued the code.
+ * @returns the redacted number, with its live challenge limits when there are any.
+ */
+function toPhoneNumberOut(
+  row: PhoneNumberRow,
+  challenge: PhoneVerificationRow | null = null,
+): z.input<typeof PhoneNumberOut> {
   return {
     id: row.id,
     masked: maskE164(row.e164, row.dialCode),
@@ -56,6 +69,19 @@ function toPhoneNumberOut(row: PhoneNumberRow): z.input<typeof PhoneNumberOut> {
     callingEnabled: row.callingEnabled,
     verifiedAt: row.verifiedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
+    challenge: challenge ? toChallengeSummary(challenge) : null,
+  };
+}
+
+/** Project an outstanding challenge onto the limits a person is entitled to see. */
+function toChallengeSummary(
+  challenge: PhoneVerificationRow,
+): z.input<typeof PhoneChallengeSummary> {
+  return {
+    expiresAt: challenge.expiresAt.toISOString(),
+    attemptsRemaining: attemptsRemaining(challenge),
+    resendAvailableAt: resendAvailableAt(challenge, challenge.createdAt).toISOString(),
+    deliveryFailed: challenge.deliveryFailed,
   };
 }
 
@@ -78,7 +104,7 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
         summary: 'List bound phone numbers',
         response: PhoneNumberListOut,
         description:
-          'List the phone numbers bound to the account, always redacted. A verified number is the only way an inbound call reaches this account.',
+          'List the phone numbers bound to the account, always redacted. A number still awaiting its code carries that code’s remaining lifetime, tries, and resend time, so a half-finished verification can be resumed from any session.',
       }),
       async (c) => {
         const userId = requireUserId(c);
@@ -87,7 +113,19 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
           .from(phoneNumber)
           .where(eq(phoneNumber.userId, userId))
           .orderBy(desc(phoneNumber.createdAt));
-        return ok(c, PhoneNumberListOut, { items: rows.map(toPhoneNumberOut) });
+
+        // Only a pending row can have an outstanding challenge, and a person holds at most a
+        // handful of numbers — so this is a couple of point lookups, not a fan-out worth batching.
+        const verification = createVerification();
+        const items = await Promise.all(
+          rows.map(async (row) =>
+            toPhoneNumberOut(
+              row,
+              row.status === 'pending' ? await verification.outstanding(row.id) : null,
+            ),
+          ),
+        );
+        return ok(c, PhoneNumberListOut, { items });
       },
     )
     .post(
@@ -240,15 +278,11 @@ async function issue(
         : 'Too many codes have been sent to this number. Try again later.',
     );
   }
+  // The same limits ride on the embedded number too, so a client can treat a just-issued challenge
+  // and one it read back from the list as the same shape rather than special-casing the fresh one.
   return {
-    phoneNumber: toPhoneNumberOut(row),
-    expiresAt: result.challenge.expiresAt.toISOString(),
-    attemptsRemaining: attemptsRemaining(result.challenge),
-    resendAvailableAt: resendAvailableAt(
-      result.challenge,
-      result.challenge.createdAt,
-    ).toISOString(),
-    deliveryFailed: result.challenge.deliveryFailed,
+    phoneNumber: toPhoneNumberOut(row, result.challenge),
+    ...toChallengeSummary(result.challenge),
   };
 }
 

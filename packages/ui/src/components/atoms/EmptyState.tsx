@@ -84,7 +84,7 @@ export interface EmptyStateProps {
    */
   readonly action?: React.ReactNode;
   /** Extra class names merged onto the outer container (e.g. `border-none` when already framed). */
-  readonly className?: string;
+  readonly className?: string | undefined;
 }
 
 /** The disc background + glyph color token for each {@link EmptyStateTone}. */

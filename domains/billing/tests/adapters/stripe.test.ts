@@ -57,6 +57,14 @@ function scriptedHttp(payloads: unknown[]): { http: HttpClient; reqs: RecordedRe
   return { http, reqs };
 }
 
+/** Return a recorded request while preserving an actionable failure when it is missing. */
+function requestAt(reqs: readonly RecordedReq[], index: number): RecordedReq {
+  const request = reqs[index];
+  expect(request).toBeDefined();
+  if (!request) throw new Error(`Expected recorded Stripe request at index ${index}`);
+  return request;
+}
+
 /** A Stripe `list`-envelope wrapping `data`. */
 function list(data: unknown[]): Record<string, unknown> {
   return { object: 'list', url: '/v1/x', has_more: false, data };
@@ -333,7 +341,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       customerEmail: 'a@b.com',
     });
     expect(result).toEqual({ url: 'https://stripe/checkout', sessionId: 'cs_h' });
-    const req = reqs[0]!;
+    const req = requestAt(reqs, 0);
     expect(req.url).toContain('https://api.stripe.com/v1/checkout/sessions');
     expect(req.method).toBe('POST');
     expect(decodeURIComponent(req.body)).toContain('ui_mode=hosted_page');
@@ -355,8 +363,8 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       successUrl: 's',
       cancelUrl: 'c',
     });
-    expect(decodeURIComponent(reqs[0]!.body)).toContain('price_default');
-    expect(decodeURIComponent(reqs[0]!.body)).toContain('trial_period_days]=30');
+    expect(decodeURIComponent(requestAt(reqs, 0).body)).toContain('price_default');
+    expect(decodeURIComponent(requestAt(reqs, 0).body)).toContain('trial_period_days]=30');
   });
 
   it('resolves a lookup key to a price id before creating checkout', async () => {
@@ -371,9 +379,9 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       successUrl: 's',
       cancelUrl: 'c',
     });
-    expect(reqs[0]!.url).toContain('/v1/prices');
-    expect(reqs[0]!.url).toContain('lookup_keys');
-    expect(decodeURIComponent(reqs[1]!.body)).toContain('price_resolved');
+    expect(requestAt(reqs, 0).url).toContain('/v1/prices');
+    expect(requestAt(reqs, 0).url).toContain('lookup_keys');
+    expect(decodeURIComponent(requestAt(reqs, 1).body)).toContain('price_resolved');
   });
 
   it('throws a clear error when a lookup key resolves to no price', async () => {
@@ -399,8 +407,8 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       cancelUrl: 'ignored',
     });
     expect(result).toEqual({ clientSecret: 'cs_secret_123', sessionId: 'cs_e' });
-    expect(decodeURIComponent(reqs[0]!.body)).toContain('ui_mode=embedded_page');
-    expect(decodeURIComponent(reqs[0]!.body)).toContain('return_url=https://app/return');
+    expect(decodeURIComponent(requestAt(reqs, 0).body)).toContain('ui_mode=embedded_page');
+    expect(decodeURIComponent(requestAt(reqs, 0).body)).toContain('return_url=https://app/return');
   });
 
   it('reads and maps a subscription found by reference metadata', async () => {
@@ -424,7 +432,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       status: 'active',
       currentPeriodEnd: new Date(1_700_000_000 * 1000).toISOString(),
     });
-    expect(reqs[0]!.url).toContain('/v1/subscriptions/search');
+    expect(requestAt(reqs, 0).url).toContain('/v1/subscriptions/search');
   });
 
   it('returns null when no subscription matches', async () => {
@@ -442,8 +450,8 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     ]);
     const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
     await gw.cancelSubscription('org_1');
-    expect(reqs[1]!.url).toContain('/v1/subscriptions/sub_cancel');
-    expect(reqs[1]!.method).toBe('DELETE');
+    expect(requestAt(reqs, 1).url).toContain('/v1/subscriptions/sub_cancel');
+    expect(requestAt(reqs, 1).method).toBe('DELETE');
   });
 
   it('cancel is a no-op when there is no subscription', async () => {
@@ -458,7 +466,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     const gw = new RealStripeGateway({ secretKey: 'sk', portalConfigId: 'bpc_1' }, http);
     const result = await gw.createBillingPortalSession('cus_1');
     expect(result).toEqual({ url: 'https://portal' });
-    const req = reqs[0]!;
+    const req = requestAt(reqs, 0);
     expect(req.url).toContain('/v1/billing_portal/sessions');
     expect(decodeURIComponent(req.body)).toContain('customer=cus_1');
     expect(decodeURIComponent(req.body)).toContain('configuration=bpc_1');
@@ -468,6 +476,6 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     const { http, reqs } = scriptedHttp([{ id: 'bps_2', url: 'https://portal' }]);
     const gw = new RealStripeGateway({ secretKey: 'sk', apiBase: 'http://localhost:12111' }, http);
     await gw.createBillingPortalSession('cus_2');
-    expect(reqs[0]!.url).toContain('http://localhost:12111/v1/billing_portal/sessions');
+    expect(requestAt(reqs, 0).url).toContain('http://localhost:12111/v1/billing_portal/sessions');
   });
 });

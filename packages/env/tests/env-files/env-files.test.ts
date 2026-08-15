@@ -205,16 +205,16 @@ const SENSITIVE_VARS = new Set(VAR_REGISTRY.filter((spec) => spec.sensitive).map
 const CLOUD_RUN_SUPPLIED = new Set(['PORT']);
 
 /** The `KEY:` names in the heredoc `deploy.yml` writes and passes as `--env-vars-file`. */
-function cloudRunEnvKeys(): Set<string> {
+function cloudRunEnvNames(): string[] {
   const workflow = working('.github/workflows/deploy.yml');
   const start = workflow.indexOf('docket-api-env.yaml');
   const body = workflow.slice(start).split("<<'EOF'")[1]?.split('\n          EOF')[0] ?? '';
-  const keys = new Set<string>();
+  const names: string[] = [];
   for (const line of body.split('\n')) {
     const match = /^\s*([A-Z_][A-Z0-9_]*)\s*:/.exec(line);
-    if (match?.[1]) keys.add(match[1]);
+    if (match?.[1]) names.push(match[1]);
   }
-  return keys;
+  return names;
 }
 
 /** The `KEY=` names in the `.env.local` skeleton `pnpm bootstrap` writes for a fresh machine. */
@@ -243,8 +243,17 @@ describe('generated deployment manifests', () => {
     expect(requiredApi).not.toContain('NEXT_PUBLIC_API_URL');
   });
 
+  it('names each Cloud Run var exactly once', () => {
+    // A duplicate key is not a harmless repeat: the file is YAML, so one entry silently wins and
+    // the other reads as applied when it is not. Two independent fixes for the same missing var
+    // each added a line, and both survived the merge.
+    const names = cloudRunEnvNames();
+    const duplicated = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
+    expect(duplicated, `deploy.yml sets these twice: ${duplicated.join(', ')}`).toEqual([]);
+  });
+
   it('gives Cloud Run every required var it does not mount as a secret', () => {
-    const present = cloudRunEnvKeys();
+    const present = new Set(cloudRunEnvNames());
     // Guards the guard: a heredoc this parser failed to find would pass every check below.
     expect(present.has('APP_MODE')).toBe(true);
     const missing = requiredApi.filter(

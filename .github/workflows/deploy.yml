@@ -82,7 +82,6 @@ jobs:
           GOOGLE_CALENDAR_WEBHOOK_URL: "${{ vars.API_URL }}/webhooks/calendar/google"
           GOOGLE_OAUTH_PUBLIC: "${{ vars.GOOGLE_OAUTH_PUBLIC }}"
           GOOGLE_OAUTH_TEST_EMAILS: "${{ vars.GOOGLE_OAUTH_TEST_EMAILS }}"
-          WORK_LOCATION_PROJECTION_ENABLED: "false"
           AGENT_MAX_TURNS: "${{ vars.AGENT_MAX_TURNS }}"
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
           BILLING_ENABLED: "false"

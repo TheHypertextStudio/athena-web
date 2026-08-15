@@ -105,7 +105,7 @@ try {
   // Joined because a run's provider lives on the integration.
   const rows = await sql<
     {
-      started_at: Date;
+      started_at: string;
       status: string;
       purpose: string;
       trigger: string;
@@ -117,7 +117,8 @@ try {
       integration_status: string;
     }[]
   >`
-    select r.started_at, r.status, r.purpose, r.trigger, r.processed, r.total, r.error,
+    select to_char(r.started_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as started_at,
+           r.status, r.purpose, r.trigger, r.processed, r.total, r.error,
            i.provider, i.id as integration_id, i.status as integration_status
       from sync_run r
       join integration i on i.id = r.integration_id
@@ -134,7 +135,7 @@ try {
   for (const row of rows) {
     const counts = `${String(row.processed)}/${String(row.total)}`;
     console.log(
-      `${row.started_at.toISOString()}  ${row.provider}  ${row.purpose}  ` +
+      `${row.started_at}  ${row.provider}  ${row.purpose}  ` +
         `${row.status}  ${counts}  (${row.trigger})`,
     );
     console.log(`  integration ${row.integration_id} — currently ${row.integration_status}`);

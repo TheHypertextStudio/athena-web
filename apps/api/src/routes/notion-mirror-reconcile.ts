@@ -18,7 +18,7 @@
  *
  * @see `docs/engineering/specs/notion-sync.md`
  */
-import { db, integration, notionMirrorDatabase, notionMirrorRow } from '@docket/db';
+import { db, integration, notionMirrorDatabase, notionMirrorRow, syncRun } from '@docket/db';
 import type {
   NotionColumnBinding,
   NotionMirrorEntity,
@@ -1124,6 +1124,33 @@ export async function sweepNotionMirror(now: Date): Promise<NotionMirrorSweepRes
       ),
     );
 
+  // When each integration last attempted a mirror pass, from the run history.
+  //
+  // `integration.lastSyncedAt` cannot answer this: it is a roll-up written by whichever purpose ran
+  // last, and a Notion connection runs two. A succeeding `task_sync` advances it every cadence, so
+  // reading it here holds the mirror permanently undue.
+  const lastMirrorAttempt = new Map<string, Date>();
+  if (rows.length > 0) {
+    const attempts = await db
+      .select({ integrationId: syncRun.integrationId, startedAt: syncRun.startedAt })
+      .from(syncRun)
+      .where(
+        and(
+          eq(syncRun.purpose, 'notion_mirror'),
+          inArray(
+            syncRun.integrationId,
+            rows.map((row) => row.id),
+          ),
+        ),
+      );
+    for (const attempt of attempts) {
+      const seen = lastMirrorAttempt.get(attempt.integrationId);
+      if (seen === undefined || attempt.startedAt > seen) {
+        lastMirrorAttempt.set(attempt.integrationId, attempt.startedAt);
+      }
+    }
+  }
+
   let eligible = 0;
   let ran = 0;
   let failed = 0;
@@ -1143,7 +1170,8 @@ export async function sweepNotionMirror(now: Date): Promise<NotionMirrorSweepRes
 
     const cadenceMs = (row.syncCadenceMinutes ?? 0) * 60_000;
     if (cadenceMs <= 0) continue;
-    if (row.lastSyncedAt !== null && now.getTime() - row.lastSyncedAt.getTime() < cadenceMs) {
+    const lastAttempt = lastMirrorAttempt.get(row.id);
+    if (lastAttempt !== undefined && now.getTime() - lastAttempt.getTime() < cadenceMs) {
       continue;
     }
 

@@ -1198,6 +1198,8 @@ describe('Notion mirror reconciliation', () => {
       .where(eq(schema.integration.id, integration.id));
 
     const future = new Date('2030-01-01T01:00:00.000Z');
+    // Its own mirror history is what makes this one undue, inserted below.
+    const recentlyMirroredId = 'int_recently_mirrored';
     await db.insert(schema.integration).values([
       {
         organizationId: ctx.orgId,
@@ -1244,7 +1246,7 @@ describe('Notion mirror reconciliation', () => {
         createdBy: ctx.actorId,
         config: { notionMirror: { containerPageId: 'parent-1' } },
         syncCadenceMinutes: 15,
-        lastSyncedAt: new Date('2030-01-01T00:59:00.000Z'),
+        id: recentlyMirroredId,
       },
       {
         organizationId: ctx.orgId,
@@ -1257,6 +1259,16 @@ describe('Notion mirror reconciliation', () => {
       },
     ]);
 
+    // A mirror pass inside the cadence window is what holds a connection undue.
+    await db.insert(schema.syncRun).values({
+      organizationId: ctx.orgId,
+      integrationId: recentlyMirroredId,
+      status: 'succeeded',
+      trigger: 'scheduled',
+      purpose: 'notion_mirror',
+      startedAt: new Date('2029-12-31T23:59:00.000Z'),
+    });
+
     // `stalled` covers the three that can never run as configured — no owning actor, and the two
     // with no container page (absent and malformed config). They used to be skipped in silence,
     // which made a permanently stuck workspace look exactly like one with nothing due. The
@@ -1267,5 +1279,44 @@ describe('Notion mirror reconciliation', () => {
       failed: 0,
       stalled: 3,
     });
+  });
+
+  it('stays due when another purpose synced the same connection recently', async () => {
+    // `integration.lastSyncedAt` is a roll-up written by whichever purpose ran last, and a Notion
+    // connection runs two. Reading it here let a succeeding `task_sync` hold the mirror undue on
+    // every sweep — which is what happened in production the moment `task_sync` started working.
+    const { integration, ctx } = await seedMirror();
+    const now = new Date('2030-01-01T00:00:00.000Z');
+    await db
+      .update(schema.integration)
+      .set({
+        syncCadenceMinutes: 15,
+        // A task_sync that finished seconds ago.
+        lastSyncedAt: new Date('2029-12-31T23:59:30.000Z'),
+      })
+      .where(eq(schema.integration.id, integration.id));
+    await db.insert(schema.syncRun).values({
+      organizationId: ctx.orgId,
+      integrationId: integration.id,
+      status: 'succeeded',
+      trigger: 'scheduled',
+      purpose: 'task_sync',
+      startedAt: new Date('2029-12-31T23:59:30.000Z'),
+    });
+
+    await sweepNotionMirror(now);
+
+    // Asserted per connection rather than on the sweep's totals: it scans every Notion
+    // integration in the database, including those other tests left behind.
+    const mirrorRuns = await db
+      .select()
+      .from(schema.syncRun)
+      .where(
+        and(
+          eq(schema.syncRun.integrationId, integration.id),
+          eq(schema.syncRun.purpose, 'notion_mirror'),
+        ),
+      );
+    expect(mirrorRuns).toHaveLength(1);
   });
 });

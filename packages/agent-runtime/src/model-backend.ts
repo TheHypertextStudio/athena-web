@@ -84,19 +84,19 @@ export interface LatticeBackendConfig {
 /** The environment values the seam reads. */
 export interface ModelBackendEnv {
   /** `local`/`test` select the deterministic mock backend. */
-  readonly APP_MODE?: 'local' | 'test' | 'production';
+  readonly APP_MODE?: 'local' | 'test' | 'production' | undefined;
   /** Docket's own provider key. */
-  readonly ANTHROPIC_API_KEY?: string;
+  readonly ANTHROPIC_API_KEY?: string | undefined;
   /** Cloudflare model-router base URL. */
-  readonly CLOUDFLARE_AI_GATEWAY_BASE_URL?: string;
+  readonly CLOUDFLARE_AI_GATEWAY_BASE_URL?: string | undefined;
   /** Cloudflare model-router credential. */
-  readonly CLOUDFLARE_AI_GATEWAY_TOKEN?: string;
+  readonly CLOUDFLARE_AI_GATEWAY_TOKEN?: string | undefined;
   /** Model id override applied to whichever tier is selected. */
-  readonly ATHENA_MODEL?: string;
+  readonly ATHENA_MODEL?: string | undefined;
   /** Operator-supplied Lovelace Lattice base URL. */
-  readonly ATHENA_LATTICE_BASE_URL?: string;
+  readonly ATHENA_LATTICE_BASE_URL?: string | undefined;
   /** Operator-supplied Lovelace Lattice credential. */
-  readonly ATHENA_LATTICE_API_KEY?: string;
+  readonly ATHENA_LATTICE_API_KEY?: string | undefined;
 }
 
 /** Optional injection points; tests and the container use these instead of monkey-patching. */

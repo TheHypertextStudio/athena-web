@@ -46,19 +46,19 @@ export interface ConversationSearchHit {
 /** A conversation query. Every field is optional and they compose conjunctively. */
 export interface ConversationSearchQuery {
   /** Free text. Empty or absent means "no term constraint". */
-  readonly text?: string;
+  readonly text?: string | undefined;
   /** Inclusive lower bound. */
-  readonly from?: Date;
+  readonly from?: Date | undefined;
   /** Inclusive upper bound. */
-  readonly to?: Date;
+  readonly to?: Date | undefined;
 }
 
 /** Options for {@link searchConversation}. */
 export interface ConversationSearchOptions {
   /** Cap on returned hits. Omit for all matches. */
-  readonly limit?: number;
+  readonly limit?: number | undefined;
   /** Precomputed query vector, and per-message vectors, for meaning-level ranking. */
-  readonly vectors?: ConversationVectors;
+  readonly vectors?: ConversationVectors | undefined;
 }
 
 /** Vector inputs for meaning-level ranking. */

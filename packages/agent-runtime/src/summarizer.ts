@@ -27,9 +27,9 @@ export interface NarrationEvent {
   /** Display title/headline. */
   readonly title: string;
   /** Optional supporting detail. */
-  readonly summary?: string;
+  readonly summary?: string | undefined;
   /** Who performed it, when known and not the person themselves. */
-  readonly actor?: string;
+  readonly actor?: string | undefined;
 }
 
 /** One episode to narrate: everything that happened to one subject. */
@@ -45,7 +45,7 @@ export interface NarrationEpisode {
   /** Which tool the activity came from. */
   readonly provider: string;
   /** What it was about — an issue title, a meeting name, a thread subject. */
-  readonly subject?: string;
+  readonly subject?: string | undefined;
   /** The episode's span (ISO-8601). */
   readonly startedAt: string;
   readonly endedAt: string;
@@ -58,7 +58,7 @@ export interface NarrateDayInput {
   /** Human-readable label for the day (e.g. `Wednesday, August 12, 2026`). */
   readonly dateLabel: string;
   /** The recipient's display name, when known. */
-  readonly recipientName?: string;
+  readonly recipientName?: string | undefined;
   /** The day's episodes, chronological. */
   readonly episodes: readonly NarrationEpisode[];
 }

@@ -38,7 +38,7 @@ export interface TaskDraft {
   /** An action-oriented title (what the user must do), not the raw subject. */
   readonly title: string;
   /** A short "why this matters" description. */
-  readonly description?: string;
+  readonly description?: string | undefined;
   /** The inferred priority (the shared task {@link Priority}). */
   readonly priority: Priority;
   /**
@@ -46,7 +46,7 @@ export interface TaskDraft {
    * a meeting date, "by Friday" with a resolvable date). Never inferred from vibes; absent
    * means the email named no date.
    */
-  readonly dueDate?: string;
+  readonly dueDate?: string | undefined;
 }
 
 /** The task-synthesizer port: one email thread → one action-oriented task draft. */

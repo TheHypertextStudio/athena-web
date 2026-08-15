@@ -772,6 +772,7 @@ describe('user-owned Athena loop', () => {
     const toolbox = vi.spyOn(toolboxModule, 'openToolbox').mockResolvedValue({
       tools: [],
       annotations: () => undefined,
+      annotationSource: () => 'first_party' as const,
       resolve: (name) => ({ connection: 'docket', rawName: name }),
       callTool: async () => ({ content: 'stale success', isError: false }),
       close: async () => undefined,

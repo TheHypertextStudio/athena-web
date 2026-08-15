@@ -683,7 +683,10 @@ async function driveSessionWithAdmission(
           const decision = decideUserOwnedToolExecution(
             agentRow.approvalPolicy,
             principalPreferences.approvalMode,
-            classifyTool(openedToolbox.annotations(use.name)),
+            classifyTool(
+              openedToolbox.annotations(use.name),
+              openedToolbox.annotationSource(use.name),
+            ),
           );
           const target = openedToolbox.resolve(use.name);
           await tx.insert(sessionActivity).values({

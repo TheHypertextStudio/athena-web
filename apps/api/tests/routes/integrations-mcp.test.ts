@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 
 import { Hono } from 'hono';
 import { migrate } from 'drizzle-orm/pglite/migrator';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -457,7 +457,7 @@ describe('the union toolbox: remote read + local writes in one session', () => {
     });
     expect(created.status).toBe(200);
     const session = (await created.json()) as { id: string; status: string };
-    // The remote read executed without pausing; the creates hold the gate.
+    // Both the remote call and the local creates hold the gate.
     expect(session.status).toBe('awaiting_approval');
 
     const activities = await db
@@ -467,19 +467,44 @@ describe('the union toolbox: remote read + local writes in one session', () => {
     const read = activities.find(
       (a) => a.type === 'action' && a.body.action?.toolCall?.connection === 'sunsama',
     );
-    expect(read?.approvalStatus).toBe('applied');
+    // A remote tool is proposed even when it declares `readOnlyHint: true`, because the server
+    // that serves the tool is also the author of that claim — a hostile one could otherwise mark
+    // an exfiltrating tool read-only and have it run unreviewed under every approval dial. The
+    // cost is real and lands here: a genuine remote read now interrupts. Restoring the old feel
+    // needs a per-connection "trust this server's annotations" opt-in, which is not built yet.
+    expect(read?.approvalStatus).toBe('proposed');
     expect(read?.body.action?.toolCall?.tool).toBe('get_backlog_tasks');
-    expect(read?.body.action?.result?.content).toContain('Book the venue for the offsite');
 
-    const group = activities.find(
-      (a) => a.approvalStatus === 'proposed' && a.proposalGroupId,
-    )?.proposalGroupId;
-    const approved = await sessions.request(`/${session.id}/proposals/${group}/approve`, {
-      method: 'POST',
-      headers: J,
-      body: JSON.stringify({}),
-    });
-    expect(((await approved.json()) as { status: string }).status).toBe('completed');
+    // The remote call now holds the gate too, so the session settles in more than one round:
+    // approving the read lets the loop resume, and the creates it then plans form a fresh group.
+    // Drain until nothing is proposed rather than assuming a single group.
+    let settled = session.status;
+    for (let round = 0; round < 5 && settled === 'awaiting_approval'; round += 1) {
+      const [pending] = await db
+        .select({ groupId: schema.sessionActivity.proposalGroupId })
+        .from(schema.sessionActivity)
+        .where(
+          and(
+            eq(schema.sessionActivity.sessionId, session.id),
+            eq(schema.sessionActivity.approvalStatus, 'proposed'),
+          ),
+        )
+        .limit(1);
+      if (!pending?.groupId) break;
+      const approved = await sessions.request(
+        `/${session.id}/proposals/${pending.groupId}/approve`,
+        { method: 'POST', headers: J, body: JSON.stringify({}) },
+      );
+      settled = ((await approved.json()) as { status: string }).status;
+    }
+    expect(settled).toBe('completed');
+
+    // The remote read only produced its result once a human let it through.
+    const [settledRead] = await db
+      .select({ status: schema.sessionActivity.approvalStatus })
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.id, read!.id));
+    expect(settledRead?.status).toBe('applied');
 
     const tasks = await db
       .select({ title: schema.task.title })

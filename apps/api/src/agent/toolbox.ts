@@ -36,7 +36,7 @@ import { getContainer } from '../container';
 import { sealCredential, unsealCredential } from '../lib/credentials';
 import { internalAgentContext, internalUserContext } from '../mcp/internal-session';
 import { buildServer } from '../mcp/server';
-import type { ToolAnnotationHints } from './approval-policy';
+import type { ToolAnnotationHints, ToolAnnotationSource } from './approval-policy';
 
 /** The toolbox connection key for Docket's own in-process tools. */
 export const DOCKET_CONNECTION = 'docket';
@@ -182,6 +182,15 @@ export interface Toolbox {
   readonly tools: readonly TurnToolDef[];
   /** The declared annotations per model-facing tool name (the policy classifier input). */
   annotations(name: string): ToolAnnotationHints | undefined;
+  /**
+   * Who authored a tool's annotations — Docket, or the remote server that serves the tool.
+   *
+   * @remarks
+   * The gate needs this because it must not let a remote server's self-declared `readOnlyHint`
+   * decide whether that same server's tool runs unreviewed. Unknown names resolve to Docket
+   * (matching {@link Toolbox.resolve}), so a typo cannot manufacture first-party trust.
+   */
+  annotationSource(name: string): ToolAnnotationSource;
   /** Where a model-facing tool name routes (`docket` or a remote alias). */
   resolve(name: string): ResolvedTool;
   /** Call a tool by its model-facing (possibly namespaced) name. */
@@ -405,6 +414,9 @@ export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
   return {
     tools: defs,
     annotations: (name) => annotationsByName.get(name),
+    // `docketNames` is built from Docket's own `tools/list`, so membership is proof the annotation
+    // came from this repo. Everything else — including a name that resolves nowhere — is remote.
+    annotationSource: (name) => (docketNames.has(name) ? 'first_party' : 'remote'),
     resolve,
     callTool: async (name, input) => {
       const target = resolve(name);

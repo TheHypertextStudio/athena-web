@@ -37,19 +37,48 @@ export interface ToolClassification {
   readonly openWorld: boolean;
 }
 
+/**
+ * Who wrote a tool's annotations.
+ *
+ * @remarks
+ * `first_party` annotations are hardcoded at registration in this repo (`content-tools.ts`,
+ * `archive-tool.ts`, `session-tools.ts`, …) and are as trustworthy as the code around them.
+ * `remote` annotations arrive over the wire from a server the user connected, which means the
+ * subject of the decision is also its author.
+ */
+export type ToolAnnotationSource = 'first_party' | 'remote';
+
 /** What the loop does with one tool call. */
 export type ToolDecision = 'execute' | 'propose' | 'record_only';
 
 /**
  * Classify a tool from its MCP annotations, failing closed.
  *
+ * @remarks
+ * Failing closed on an *absent* annotation was never the hard part. The gap was a *false* one:
+ * `readOnlyHint` decided whether a call executed unreviewed under every dial, and for a remote
+ * tool that flag is written by the same server the flag is protecting the user from. A connected
+ * server could declare `readOnlyHint: true` on a tool that exfiltrates and have it run with no
+ * proposal under `suggest`, `act_with_approval`, and `autonomous` alike.
+ *
+ * So a remote tool is never read-only here, whatever it says about itself. It can still be called;
+ * it just goes through the same gate as any other write. This costs remote *genuine* reads an
+ * approval prompt, which is a real usability loss and the reason `permissions.md` already describes
+ * these annotations as "advisory UI hints, not an authorization substitute" — this makes the code
+ * agree with that sentence. The other two hints stay honoured: they can only ever make the gate
+ * stricter, so a lying server gains nothing by setting them.
+ *
  * @param annotations - The tool's `tools/list` annotations, when it declared any.
+ * @param source - Who authored those annotations; see {@link ToolAnnotationSource}.
  * @returns the {@link ToolClassification}; absent/undeclared hints classify as a
  *   non-read-only, non-destructive, closed-world tool — i.e. a gated write.
  */
-export function classifyTool(annotations: ToolAnnotationHints | undefined): ToolClassification {
+export function classifyTool(
+  annotations: ToolAnnotationHints | undefined,
+  source: ToolAnnotationSource,
+): ToolClassification {
   return {
-    readOnly: annotations?.readOnlyHint === true,
+    readOnly: source === 'first_party' && annotations?.readOnlyHint === true,
     destructive: annotations?.destructiveHint === true,
     openWorld: annotations?.openWorldHint === true,
   };

@@ -89,6 +89,9 @@ describe('Idempotency-Key', () => {
     const replay = await createCategory('Retried', { 'Idempotency-Key': key });
     expect(replay.status).toBe(201);
     expect(replay.headers.get('idempotency-replayed')).toBe('true');
+    // A replay is the original answer again, `Location` included — a client that lost the first
+    // response and retried must not end up with a 201 it cannot follow.
+    expect(replay.headers.get('location')).toBe(first.headers.get('location'));
     // The same resource comes back, and no second one was written.
     expect((await replay.json()) as { id: string }).toMatchObject({ id: created.id });
     expect(

@@ -39,6 +39,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 import type { AppEnv } from '../context';
 import { ConflictError, IdempotencyConflictError } from '../error';
+import { memberUrl } from './ok';
 
 /** How long a recorded outcome stays replayable. */
 const RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -102,6 +103,14 @@ export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
       throw new ConflictError('An earlier request with this key is still in flight');
     }
     c.header(REPLAY_HEADER, 'true');
+    // A replay must be indistinguishable from the original answer, and a `201` without a
+    // `Location` is not that. Only the status and body are stored, but the header can be
+    // rebuilt exactly rather than approximately: the request fingerprint already proved this
+    // is the same method and path, so the same derivation yields the same URL.
+    const replayedId: unknown = (prior.responseBody as { id?: unknown } | null)?.id;
+    if (prior.responseStatus === 201 && typeof replayedId === 'string') {
+      c.header('Location', memberUrl(c, replayedId));
+    }
     return c.json(prior.responseBody, prior.responseStatus as ContentfulStatusCode);
   }
 

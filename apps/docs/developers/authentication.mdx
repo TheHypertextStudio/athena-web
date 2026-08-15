@@ -3,44 +3,39 @@ title: "Authentication"
 description: "OAuth 2.1, client registration, the four scopes, and the limit on what any token can do."
 ---
 
-Docket's API is an OAuth 2.1 resource server. The authorization server runs on the same origin,
-mounted at `/api/auth/*`.
+Docket runs an OAuth 2.1 resource server, with the authorization server on the same origin at
+`/api/auth/*`.
 
 ## Discovery
 
-Point a standards-aware client at the resource and it finds everything else on its own.
+Fetch these two and you need nothing else to start.
 
 | Document | Path | Standard |
 | --- | --- | --- |
 | Protected Resource Metadata | `/.well-known/oauth-protected-resource/mcp` | RFC 9728 |
 | Authorization Server Metadata | `/.well-known/oauth-authorization-server` | RFC 8414 |
 
-The AS metadata advertises the authorize, token, and registration endpoints, PKCE `S256`, and
-support for URL-form client IDs.
+The AS metadata advertises the authorize, token, and registration endpoints, `S256` for
+`code_challenge_method`, and URL-form client IDs.
 
 ## Registering a client
 
-Docket accepts two registration methods, and most clients choose one for themselves.
-
 <Tabs>
   <Tab title="Dynamic registration">
-    Classic Dynamic Client Registration (RFC 7591):
+    Classic Dynamic Client Registration, RFC 7591:
 
     ```http
     POST /api/auth/mcp/register
     ```
 
-    Returns a `client_id` you then use in the authorization flow.
+    Returns a `client_id`.
   </Tab>
   <Tab title="Client ID Metadata Document">
-    Your `client_id` is itself an HTTPS URL serving a metadata document (CIMD). You register
+    Serve a metadata document at an HTTPS URL and use that URL as your `client_id`. Register
     nothing ahead of time.
 
-    Docket fetches, DNS-checks, and validates that document server-side during the authorize
-    preflight. The consent screen renders only the already-validated name and logo, so it never
-    displays attacker-controlled content.
-
-    Deployments can restrict which hosts may serve a CIMD.
+    Docket fetches, DNS-checks, and validates it during the authorize preflight, then shows the
+    validated `client_name` and `logo_uri` on the consent screen.
   </Tab>
 </Tabs>
 
@@ -48,11 +43,11 @@ Docket accepts two registration methods, and most clients choose one for themsel
 
 <Steps>
   <Step title="Authorize">
-    The browser opens Docket's sign-in at `/sign-in`, then the consent screen at
-    `/oauth/authorize`, where the person approves the scopes you asked for.
+    Send the browser to `/oauth/authorize` with `client_id`, `scope`, and `code_challenge`. Docket
+    routes anyone unauthenticated through `/sign-in` first.
   </Step>
   <Step title="Exchange the code">
-    PKCE, with the token audience-bound to the resource URL per RFC 8707.
+    PKCE, with `resource` set to the MCP resource URL per RFC 8707.
   </Step>
   <Step title="Call with the token">
     `Authorization: Bearer <token>` on every request.
@@ -66,8 +61,6 @@ Docket accepts two registration methods, and most clients choose one for themsel
 | Access token | 15 minutes |
 | Refresh token | 30 days |
 
-Request `offline_access` if you need a refresh token.
-
 ## Scopes
 
 Four capability scopes, plus `offline_access`.
@@ -80,18 +73,18 @@ Four capability scopes, plus `offline_access`.
 | `connectors:link` | Link external items, such as GitHub and Linear references, onto work. |
 | `offline_access` | Issue a refresh token. |
 
-Ask for the narrowest set that does the job. People decline a consent screen that requests
-`work:write` and `agents:run` for an integration that only reads.
+Ask for the narrowest set that does the job. People decline a read-only integration that asks for
+`work:write` and `agents:run`.
 
 ### Insufficient scope
 
-A read-only token calling a write operation gets a `403` with:
+A `work:read` token calling a write operation gets a `403` with:
 
 ```http
 WWW-Authenticate: Bearer error="insufficient_scope"
 ```
 
-Well-behaved clients treat this as a step-up prompt and re-authorize for the wider scope.
+Re-run the authorization flow for the wider scope, then retry the call.
 
 ## The limit on every token
 
@@ -99,26 +92,11 @@ Well-behaved clients treat this as a step-up prompt and re-authorize for the wid
   **A token can never do more than the human who consented to it.**
 </Warning>
 
-Scopes are the first gate. The person's own roles and grants in each workspace stay binding
-underneath, and Docket checks the two independently. A `work:write` token held by someone with
-`view` on a project cannot write to that project.
-
-Revocation and permission changes take effect on the next call.
-
-## Session-based access
-
-The web app authenticates with a Better Auth session cookie instead of a bearer token. That path
-serves first-party surfaces. Use OAuth for anything you build.
-
-## Revoking
-
-People revoke access themselves in **Settings → Connected apps**. The screen lists every client
-they have consented to and revokes one client at a time, deleting the consent and its access
-tokens.
-
-Build for revocation. It happens, and the correct response is to run the authorization flow again.
+Scopes gate first, then that person's own grants. A `work:write` token held by someone with `view`
+on "Launch v2" cannot write to it. People revoke in **Settings → Connected apps**, which deletes
+the consent and its access tokens. Build for it: run the authorization flow again.
 
 ## What is not available
 
-Docket issues no API keys and no long-lived static credentials. Every caller is a person or acts
-as one.
+No API keys. No long-lived static credentials. The web app's Better Auth session cookie serves
+first-party surfaces only.

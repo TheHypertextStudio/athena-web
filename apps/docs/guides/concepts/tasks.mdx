@@ -1,10 +1,9 @@
 ---
 title: "Tasks"
-description: "The atomic unit of work: the single thing someone actually does."
+description: "One thing you do: call the caterer. Give it a duration, an owner, and somewhere to live."
 ---
 
-A Task is one thing someone does. "Draft the grant report." "Call the caterer." It is the atomic
-unit: everything else in Docket exists to give tasks context, timing, and an owner.
+"Draft the grant report." "Call the caterer." One person, one thing.
 
 ## What a task carries
 
@@ -21,58 +20,47 @@ unit: everything else in Docket exists to give tasks context, timing, and an own
 
 Tasks also carry **subtasks**, **attachments**, threaded **comments**, and **dependencies**.
 
-## Why the time estimate matters
+## Fill in the time estimate
 
-A task's time estimate is what makes [Home](/guides/daily/home-today) honest. A plan built from
-tasks with durations can be compared against the hours you actually have.
+Give every task a duration so your day fits.
+[Home](/guides/daily/home-today) adds them up and sets the total against the hours you have.
 
-That estimate also drives [scheduling](/guides/daily/calendar-and-scheduling), which uses it to
-place work on your calendar, and the [time ledger](/guides/daily/time), which compares your real
-hours against it afterwards.
+The same number drives [scheduling](/guides/daily/calendar-and-scheduling), which places the task
+on your calendar, and the [time ledger](/guides/daily/time), which compares your measured hours
+against it afterwards.
 
 ## Where a task belongs
 
-A Task always belongs to a workspace and a [team](/guides/concepts/teams). Beyond that, it sits in
-one of three places:
+Every Task belongs to a workspace and a [team](/guides/concepts/teams). Beyond that:
 
 <CardGroup cols={3}>
   <Card title="In a Project" icon="folder">
-    Part of a bounded effort with an outcome.
+    Spring Gala. Launch v2. The task closes with it.
   </Card>
   <Card title="In a Program" icon="rotate">
-    Ongoing or recurring work that belongs to a continuous area of operations.
+    Support tickets, bookkeeping, the after-school program.
   </Card>
   <Card title="In Triage" icon="inbox">
-    Unsorted. It arrived and has not been filed yet.
+    Nobody has filed it yet.
   </Card>
 </CardGroup>
 
-**A project is optional on a task.** Work often arrives before its structure is clear: a note you
-captured on a bus, an email that implies something, a favour someone asked for in a hallway.
-Docket records all of it without asking you to create a project first.
+**A project is optional on a task.** Record the note you took on a bus, the email that implies
+something, the favour someone asked for in a hallway. Docket takes all of it without a project.
 
 ## Dependencies
 
-A Task can be **blocked by** or **blocking** any other Task in the same workspace, including one
-in a different project. Docket keeps the graph acyclic and refuses any dependency that would
-create a loop.
-
-Blockers appear inline in your daily plan, next to the work they block.
+Mark a Task **blocked by** or **blocking** any other Task in the same workspace, including one in
+a different project. Docket refuses any dependency that would create a loop. Blockers show up
+inline in your daily plan, next to the work they block.
 
 ## Recurring work
 
-You define work that comes back on a schedule once, as a repeating series. Docket materializes
-the next occurrence on its cadence.
+Define a repeating series once. Docket materializes the next occurrence on its cadence.
 
 ## Assigning to an agent
 
-The assignee field takes an agent exactly where it takes a person. Handing a task to
-[Athena](/guides/athena/what-athena-is) opens a session you can watch, steer, and approve.
+Assign a task to [Athena](/guides/athena/what-athena-is) and watch the session, steer it, approve
+what she proposes.
 
-To keep your own name on the work, set yourself as assignee and the agent as **delegate**. You
-own it, the agent does it, and every action records both names.
-
-<Tip>
-  Capture first, structure later. Use quick capture or ask Athena to note something, let it land
-  in Triage, and file it when the right project is obvious.
-</Tip>
+To keep your own name on the work, assign it to yourself and set the agent as **delegate**.

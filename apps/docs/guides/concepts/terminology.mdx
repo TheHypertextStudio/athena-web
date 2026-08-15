@@ -1,15 +1,11 @@
 ---
 title: "Terminology"
-description: "Why the words in these docs may differ from the words on your screen, and how to translate between them."
+description: "How to translate between the words in these docs and the words on your screen."
 ---
 
 These docs call the six units of work **Initiative**, **Program**, **Project**, **Task**,
-**Cycle**, and **Team**. Your workspace may show different words for the same six things.
-
-Each workspace picks a **terminology preset**, and the preset relabels the work hierarchy to
-language that fits the kind of organization you run. The data model underneath is identical in
-every case: a Cycle called a Season is the same object with the same behaviour and a different
-label.
+**Cycle**, and **Team**. Your workspace runs a **terminology preset** that relabels them. A Cycle
+called a Season behaves exactly like a Cycle.
 
 ## The three presets
 
@@ -27,8 +23,7 @@ label.
     | Team | Team |
   </Tab>
   <Tab title="Nonprofit">
-    Mission-oriented labels. The ongoing program is the leading term, and work is planned in
-    seasons.
+    Mission-oriented labels. You plan work in seasons.
 
     | Concept in these docs | Shown in your workspace |
     | --- | --- |
@@ -40,8 +35,7 @@ label.
     | Team | **Chapter** |
   </Tab>
   <Tab title="Agency">
-    Client-services labels. An ongoing relationship is a retainer, and a body of client work is an
-    engagement.
+    Client-services labels. You bill a retainer and staff a pod.
 
     | Concept in these docs | Shown in your workspace |
     | --- | --- |
@@ -54,34 +48,27 @@ label.
   </Tab>
 </Tabs>
 
-`Project` and `Task` read the same across every sector, so they keep the same word in all three
-presets. If you only ever meet those two, the preset makes no visible difference.
+`Project` and `Task` keep the same word in all three presets.
 
 ## Per-word overrides
 
-A workspace can also override any single word on top of its preset. A nonprofit running the
-Nonprofit preset can rename `Program` to `Service` and leave everything else alone, so the words
-on your screen may not match any preset exactly.
+Override any single word on top of the preset. Rename `Program` to `Service` and leave the rest
+alone, and the words on your screen match no preset exactly.
 
 Set the preset and any overrides in **Settings → General → Terminology**. In a shared workspace
-that is an admin setting, so the whole workspace reads the same words.
+that is an admin setting.
 
-## What terminology does not change
+## The API ignores all of it
 
-Changing the preset changes labels. It leaves everything else where it was:
+The API, the MCP tools, and the [REST reference](/developers/rest-api) always use the default
+words. `project`, `cycle`, and `initiative` are the field names whatever your workspace displays.
+So these docs and the API agree; reading these docs beside the app is what needs the tables above.
 
-- No work is moved, renamed, or re-parented.
-- Every rule in [Core concepts](/guides/concepts/workspaces) still holds. A Cycle called a
-  Sprint is still team-scoped, still a fixed window of time, and still schedules Tasks without
-  containing them.
-- The API, the MCP tools, and the [REST reference](/developers/rest-api) always use the
-  default words. `project`, `cycle`, and `initiative` are the field names regardless of what
-  your workspace displays.
-
-So when you read these docs beside the API, the two agree. When you read these docs beside the
-app, translate through the tables above.
+Changing a preset moves, renames, and re-parents nothing. Every rule in
+[Core concepts](/guides/concepts/workspaces) still holds: a Cycle called a Sprint is still
+team-scoped and still a fixed window of time.
 
 <Note>
-  Terminology is set per workspace, so each of yours can differ. Your personal space keeps its own
-  setting under the same **Settings → General**, and starts on the default words.
+  Set terminology per workspace. Your personal space keeps its own setting under the same
+  **Settings → General**, and starts on the default words.
 </Note>

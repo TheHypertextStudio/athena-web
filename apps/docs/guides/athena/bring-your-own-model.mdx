@@ -1,13 +1,10 @@
 ---
 title: "Bring your own model"
-description: "Run Athena's model work on a computer you own, so the prompt and your workspace context never leave it."
+description: "Run Athena's model work on a computer you own."
 ---
 
-You can point Athena's model work at a machine you own. Her replies are then generated there
-instead of on Docket's model service.
-
-The prompt, the workspace context, and the reply stay on a computer you control, so you can say
-exactly where your data went.
+Run the model that writes Athena's replies on your own laptop. Your prompt and the tasks she reads
+to answer it never leave that machine.
 
 ## What you need
 
@@ -16,46 +13,41 @@ exactly where your data went.
     Lovelace Lattice is the compute network this runs on.
   </Step>
   <Step title="A paired machine">
-    A laptop or desktop running the Lattice daemon, which fronts a local model server such as
-    Ollama or LM Studio.
+    A laptop or desktop running the Lattice daemon in front of Ollama or LM Studio.
   </Step>
   <Step title="Authorize Docket">
-    From **Settings → Athena**, connect your Lovelace account and pick which of your paired
-    machines to use.
+    Connect your Lovelace account in **Settings → Athena** and pick a paired machine.
   </Step>
 </Steps>
 
-From then on, Athena's model work runs there.
-
 ## How it reaches your machine
 
-Your computer **polls outward**. You open no inbound port, run no tunnel, and accept no callback
-from the cloud into your home network.
+Your computer polls outward. You open no inbound port, run no tunnel, and accept no callback from
+the cloud into your home network.
 
-Work travels through Lovelace's hosted gateway. Docket sends the request to the gateway, your
-daemon picks it up on its next poll, runs it locally, and the answer returns the same way.
+Docket sends the request to Lovelace's hosted gateway. Your daemon picks it up on its next poll,
+runs it, and sends the reply back the same way.
 
 <Note>
   **Docket never talks to your device.** It talks to the gateway. Your machine stays unaddressable
-  from the internet, and this setup never needs it to be otherwise.
+  from the internet.
 </Note>
 
-## What changes, and what does not
+## What runs where
 
 | Where it runs | What runs there |
 | --- | --- |
-| Your machine | Generating Athena's replies, which is the model work |
-| Docket | Your work itself: tasks, projects, comments, calendar, the time ledger |
+| Your machine | Writing Athena's replies |
+| Docket | Your tasks, projects, comments, calendar, and the time ledger |
 
-Athena's behaviour is unchanged. Sessions, proposals, approvals, and permissions all work exactly
-as they do otherwise. See [Proposals and approvals](/guides/athena/proposals-and-approvals).
+Sessions, proposals, approvals, and permissions work exactly as they do otherwise. See
+[Proposals and approvals](/guides/athena/proposals-and-approvals).
 
 ## When the machine is off
 
-A closed laptop cannot answer. Docket tells you so plainly and never falls back to a hosted model
-without saying it did, so you always know where a reply came from.
+A closed laptop cannot answer. Docket tells you so and never falls back to a hosted model without
+saying it did.
 
-## Setting it up
+## Switching back
 
-**Settings → Athena** holds the connection, the machine picker, and the model selection. Disconnect
-at any time to return Athena's model work to Docket's own service.
+Disconnect in **Settings → Athena** to move the model work back to Docket's own service.

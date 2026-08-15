@@ -3,59 +3,51 @@ title: "Teams"
 description: "The units that own work, each with its own workflow, cycles, and triage queue."
 ---
 
-A Team is a named group of people inside a workspace. Teams own work: each one carries its own
-workflow states, its own cycle cadence, and its own triage queue.
-
-Larger workspaces usually run several teams. A workspace with one team is completely normal, and a
-personal space rarely needs to think about teams at all.
+Support. Engineering. The Berlin chapter. One team is a completely normal number.
 
 ## What a team owns
 
 <CardGroup cols={3}>
   <Card title="Workflow states" icon="list-check">
-    The stages work moves through in this team's words. Two teams in the same workspace can run
-    different processes. See [Labels and statuses](/guides/concepts/labels-and-statuses).
+    Support runs Triaged → Waiting on customer → Resolved. Engineering names its own set. See
+    [Labels and statuses](/guides/concepts/labels-and-statuses).
   </Card>
   <Card title="Cycles" icon="rotate">
-    Each team runs its own cadence. One team's two-week cycle is independent of another's monthly
-    one. See [Cycles](/guides/concepts/cycles-and-milestones).
+    Each team picks its own length. Support runs a month, Engineering runs two weeks. See
+    [Cycles](/guides/concepts/cycles-and-milestones).
   </Card>
   <Card title="Triage" icon="inbox">
-    Where work arrives before anyone has filed it: captured notes, items from a connected tool,
-    and anything still unsorted.
+    Where work lands before anyone files it.
   </Card>
 </CardGroup>
 
 ## You cannot assign work to a team
 
-Assignment always points at a single **Actor**, meaning one person or one agent. A Team is a
-grouping for organizing work and for permissions.
+You assign to a single **Actor**, one person or one agent. Every task has a short answer to "who
+is doing this".
 
-Assigning to one Actor keeps accountability clear, so every task has a short answer to "who is
-doing this".
-
-If you want work to belong to a team before it belongs to a person, leave it unassigned in that
-team's triage queue. Docket supports that state.
+For work that belongs to the team before it belongs to a person, leave it unassigned in that
+team's triage queue.
 
 ## Teams and tasks
 
-Every Task belongs to a workspace **and** a team. The team gives the task a set of workflow states
-to move through and a triage queue to wait in.
+Every Task belongs to a workspace **and** a team. The team gives it the statuses it moves through
+and the triage queue it waits in.
 
 A task's project is optional. Its team is required.
 
 ## Teams and permissions
 
-A team is a valid target for a [grant](/guides/concepts/workspaces#membership-roles-and-access),
-so you can hand a role `contribute` on one team and `view` on another. The grant cascades down
-into the work that team owns.
+A team is a valid target for a [grant](/guides/concepts/workspaces#membership-roles-and-access).
+Give "Volunteer" `contribute` on the Berlin chapter and `view` on Engineering, and the grant
+cascades down into the work each team owns.
 
 ## Setting them up
 
-Create and manage teams in **Settings → Members & Access**. Each team's workflow states live in
-**Settings → Statuses**, and its cycle cadence in the team's own settings.
+Create and manage teams in **Settings → Members & Access**. Workflow states live in
+**Settings → Statuses**, and cycle cadence in the team's own settings.
 
 <Tip>
-  Create a team for a group of people who share a process. For a bounded piece of work, create a
-  [Project](/guides/concepts/projects) instead.
+  A team is for people who share a process. For a bounded piece of work, create a
+  [Project](/guides/concepts/projects).
 </Tip>

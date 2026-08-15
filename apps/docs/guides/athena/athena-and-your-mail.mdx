@@ -3,77 +3,53 @@ title: "Athena and your mail"
 description: "Her own email address, and turning the mail you already get into work you can act on."
 ---
 
-Mail reaches Athena two different ways, and each works on its own.
+Forward a thread to Athena's own address, or connect Gmail and let her draft the tasks your mail
+implies. Either works without the other.
 
-<CardGroup cols={2}>
-  <Card title="Athena's own address" icon="envelope">
-    She receives email natively, at an address of her own. Nothing to connect, nothing to import.
-    Forward things to her.
-  </Card>
-  <Card title="Your connected mailbox" icon="inbox">
-    Connect Gmail and Athena reads what arrives, deciding what work it implies and proposing
-    tasks for you to accept.
-  </Card>
-</CardGroup>
+## Forward it to her
 
-## Athena's own address
+Athena has an email address. Forward the venue confirmation, the thread you owe a reply to, or the
+budget someone sent you, and she works from it.
 
-Athena has an inbox. Forward anything to it, such as a confirmation, a thread you need to act on,
-or a document someone sent you, and it becomes context she can work from.
+Docket stores the message with a title, its content, the sender, and the date, then attaches it to
+whatever work you point it at.
 
-Docket stores a received message as a **context object**. It carries a title, its content, where
-it came from, and when, which is the shape every other piece of context has. You can attach the
-message to work without bringing email-specific concepts along with it.
+## Turn Gmail into tasks
 
-This works whether or not you connect a mailbox, and it is independent of the mail Docket syncs
-out of a connected account.
+Connect Gmail and Athena drafts a Task from what arrives, with the original email attached. Work
+the task. Open the message when you need to check what the caterer said.
 
-## Mail into tasks
+### Accept it before it is a task
 
-Connect Gmail and Athena reads what arrives, works out what work it implies, and drafts a Task
-with the original email **attached as context**.
+Every drafted task is a [proposal](/guides/athena/proposals-and-approvals). Accept it, edit it, or
+dismiss it. Docket creates no task until you accept one.
 
-**The task is the real object, and the email is an attachment.** You act on the task, and the
-message that caused it stays one click away for when you need to check what was actually said.
-
-### Every drafted task starts as a suggestion
-
-A drafted task is a [proposal](/guides/athena/proposals-and-approvals). It waits for you to
-accept, edit, or dismiss it. Docket creates no task until you accept one.
-
-Each suggestion carries a confidence indicator and a preview of the source thread, so deciding
-usually takes a glance.
+Each suggestion shows a confidence indicator and a preview of the source thread.
 
 ### Dates come from the message
 
-If an email states a date, the drafted task carries it. If the email states no date, the task has
-no due date. Athena declines to infer one, because a confidently wrong deadline does more damage
-than a missing one.
+An email that says "by the 14th" gives the task a due date of the 14th. An email that names no
+date gives the task no due date. Athena declines to infer one.
 
-## Rules and automations
+## Rules
 
-Once suggestions are flowing, you can automate the obvious parts. Rules act on incoming
-suggestions and on tasks, and can:
+Write a rule to act on incoming suggestions and on tasks:
 
 - Set a status, assignee, or priority
 - Apply a label
 - Send a notification
 - Accept a suggestion automatically
 
-Enabling email-to-task seeds a sensible default set of rules immediately, so it is useful before
-you configure anything.
+Turning on email-to-task seeds a default set of rules.
 
-Set this up in **Settings → Connections → Email to task**, and manage rules in
+Turn it on in **Settings → Connections → Email to task**. Edit the rules in
 **Settings → Automations**.
 
 ## Housekeeping
 
-Suggestions you never act on expire after 30 days, and resolved ones clear after 90 days. The
-queue stays short enough to work through.
+Suggestions you never act on expire after 30 days. Resolved ones clear after 90.
 
 ## When mail access breaks
 
-If the connection loses its authorization, Docket flags it as needing re-authorization and
-notifies you. A mail connector never reports success while reading nothing.
-
-Re-authorize from **Settings → Connections**.
+Docket flags the connection as needing re-authorization and notifies you. A mail connector never
+reports success while reading nothing. Re-authorize in **Settings → Connections**.

@@ -1,13 +1,12 @@
 ---
 title: "Projects"
-description: "A bounded effort with an outcome that you finish and close."
+description: "Spring Gala, Launch v2, the donor page rebuild: work you close when it ships."
 ---
 
-A Project is a bounded body of work with an outcome and often a deadline. "Launch v2."
-"Spring Gala." "Rebuild the donor page." You finish it, and then it closes.
+Use a Project for work with a finish line. Spring Gala. Launch v2. Rebuild the donor page. You
+close it when it ships.
 
-Work that continues after each deliverable inside it lands belongs in a
-[Program](/guides/concepts/initiatives-and-programs).
+Put work that never finishes in a [Program](/guides/concepts/initiatives-and-programs).
 
 ## What a project carries
 
@@ -19,21 +18,23 @@ Work that continues after each deliverable inside it lands belongs in a
 | **Health** | `on_track`, `at_risk`, or `off_track`, set by the [updates](/guides/concepts/updates-and-health) posted on the project. |
 | **Contents** | Milestones, Tasks, attachments, and threaded discussion. |
 
-A project also reports **weighted progress**. A reader sees how much of the work is done and how
-the work is going without opening the project.
+Docket weights the project's tasks and reports **progress** as one number.
+
+Set "Launch v2" to **depend on** "Rebuild the donor page" when one has to ship first. Attach links,
+documents, and items from connected tools as **resources**.
 
 ## Milestones
 
-A Milestone is an attribute of a Project. It is a dated checkpoint that groups some of the
-project's tasks toward a deliverable: "Beta to design partners", "Invitations mailed".
+Add a Milestone to a Project to mark a date and gather the tasks due by it. "Beta to design
+partners", 14 March. "Invitations mailed", 2 April.
 
-Add milestones when a project has real internal checkpoints. A project with no milestones is
-completely ordinary. See [Cycles and milestones](/guides/concepts/cycles-and-milestones).
+Milestones live inside one project. Add them when people plan around the checkpoint. See
+[Cycles and milestones](/guides/concepts/cycles-and-milestones).
 
 ## Where a project sits
 
-A Project can sit directly inside the workspace, or inside a Program when it is one bounded push
-within a continuous area of operations.
+Put "Fall term enrolment" inside the "After-School Program". Leave "Website rebuild" at the top of
+the workspace.
 
 ```
 Workspace
@@ -42,35 +43,22 @@ Workspace
   └─ Project "Website rebuild"
 ```
 
-Any number of [Initiatives](/guides/concepts/initiatives-and-programs) can also *theme* a project.
-Theming is an association: an initiative gathers projects under a shared strategic theme without
-containing them, and one project can carry several themes at once.
-
-## Dependencies and resources
-
-A project can **depend on** another project, which records the delivery order when two bounded
-efforts run in sequence.
-
-A project also holds **resources**: links, documents, and references to items in connected tools.
-The material a project runs on sits beside the work.
-
-## Publishing a project
-
-You can publish a project as a **brief**: a read-only public page at a web address you control,
-for people who need to see where something stands without an account.
-
-An admin configures the address under **Settings → Publishing**. A workspace can point a custom
-domain at its briefs.
+Use an [Initiative](/guides/concepts/initiatives-and-programs) to *theme* a project. "Website
+rebuild" can serve "Grow revenue" and "Expand to a second city" at once, and neither one contains
+it.
 
 ## Templates
 
-Save a template when you create the same kind of project repeatedly, such as every client
-engagement or every event. A template is a named, reusable pre-filled draft, scoped to you, a
-Team, or the whole workspace.
-
-Manage templates in **Settings → Templates**.
+Save a template when every client engagement starts the same way, then create the next project from
+it. Scope a template to yourself, a Team, or the whole workspace in **Settings → Templates**.
 
 <Note>
-  Tasks, Projects, Initiatives, and Programs are all templatable. Cycles and Teams are not: a
-  Cycle is a span of time and a Team is a group of people, so neither has a document to seed.
+  Template Tasks, Projects, Initiatives, and Programs. Cycles and Teams have no document to seed. A
+  Cycle is a span of time and a Team is a group of people.
 </Note>
+
+## Publishing a project
+
+Publish a project as a read-only **brief** and a funder with no account can read where the Spring
+Gala stands. An admin sets the address under **Settings → Publishing**, which can be a custom
+domain.

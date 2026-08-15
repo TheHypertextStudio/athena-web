@@ -1,25 +1,22 @@
 ---
 title: "Labels and statuses"
-description: "Your workspace's own words for how far along work is, and for everything else you need to say about it."
+description: "Your own words for how far along work is, and for everything else you need to say."
 ---
 
-Your workspace owns two vocabularies. A **status** answers "how far along is this?" A **label**
-covers everything else you want to say.
+Set a status to show how far along the work is. Add a label to say anything else. Your workspace
+names both.
 
 ## Statuses
 
-A status is a stage work moves through. Your workspace names its own: how many there are, what
-they are called, what each one means, what order they read in, and which one new work starts in.
-
-A grant-making nonprofit can run `Drafting → Submitted → Under review → Awarded`. A studio can run
-`Idea → Booked → Shot → Delivered`. Each workspace describes its real process in its own words.
+Name your own stages. A grant-making nonprofit runs `Drafting → Submitted → Under review →
+Awarded`. A studio runs `Idea → Booked → Shot → Delivered`. Decide how many there are, what order
+they read in, and which one new work starts in.
 
 Set them up in **Settings → Statuses**.
 
 ### The five categories
 
-Every status a workspace invents declares one of five categories. Docket defines these five, and
-your workspace defines everything else.
+Map every status you invent onto one of five categories.
 
 | Category | Means |
 | --- | --- |
@@ -37,34 +34,29 @@ The category drives:
 - how a connector maps a Linear or Jira state onto your status
 - when Docket knows a piece of work has just finished
 
-Two workspaces calling the same stage `Shipped` and `Awarded` are both saying `completed`, so
-their numbers, their icons, and their integrations still line up.
+You call the stage `Shipped`. Another workspace calls it `Awarded`. Both map to `completed`, and
+the numbers, the icons, and the integrations line up.
 
 <Note>
-  Agents rely on the same categories. An agent comparing work across two teams reads the category
-  instead of the label, so it never has to learn your words to know that something is done.
+  Agents read the category, never your label. An agent comparing work across two teams knows
+  something is done without learning your words.
 </Note>
 
 ### Statuses are per team and per kind of work
 
-A team owns the workflow states its Tasks move through, so two teams in the same workspace can run
-genuinely different processes.
+Each Team owns the workflow states its Tasks move through. Two teams in one workspace can run
+different processes.
 
-Projects, Programs, and Initiatives carry their own status sets, because "how far along is this
-project" and "how far along is this task" are different questions. The seeded Program set is
+Projects, Programs, and Initiatives carry their own status sets. The seeded Program set is
 `Proposed · Active · Paused · Completed · Archived`.
 
 ## Labels
 
-A label is free-form workspace vocabulary that you attach to work. `needs-legal`. `Q3`.
-`grant-funded`. `flaky`.
+Attach a label to record what a status does not. `needs-legal`. `Q3`. `grant-funded`. `flaky`.
 
-Labels carry no behaviour. They gate nothing, order nothing, and mean nothing to Docket beyond
-being something you can filter and search on. Statuses carry the rules, and labels hold everything
-you want to record without rules.
+Labels carry no behaviour. They gate nothing and order nothing. Filter and search on them.
 
-Manage them in **Settings → Labels**, described there as "the words this workspace uses that
-Docket does not ship."
+Manage them in **Settings → Labels**.
 
 ## Which one do I reach for?
 
@@ -73,10 +65,10 @@ Docket does not ship."
 | That this is in review | A **status** |
 | That this is blocked on someone outside the company | A **label**, plus a comment naming who |
 | That this belongs to the Q3 push | An [Initiative](/guides/concepts/initiatives-and-programs), or a label if it is lighter than that |
-| That this was cancelled rather than finished | A **status** in the `canceled` category |
+| That this ended without being finished | A **status** in the `canceled` category |
 | That this needs a lawyer to look at it | A **label** |
 
 <Tip>
-  Keep the status set short. Every status is a decision someone has to make each time they touch a
-  piece of work, and a seven-stage workflow usually contains two stages that should be labels.
+  Keep the status set short. Every status is a decision someone makes each time they touch a piece
+  of work, and a seven-stage workflow usually contains two stages that should be labels.
 </Tip>

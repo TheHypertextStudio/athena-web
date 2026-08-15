@@ -3,62 +3,48 @@ title: "Platform status"
 description: "What is stable today, what may still change, and what Docket promises about the API."
 ---
 
-Read this before building anything you intend to keep.
-
-## Where things stand
-
-**Docket is pre-launch.** No external developers build on this platform yet.
+Read this before you build anything you intend to keep. **Docket is pre-launch.** Nobody builds on
+it from outside yet.
 
 | | Status |
 | --- | --- |
 | REST API `/v1` | Available. **Unversioned in practice.** `/v1` is a path, and not yet a compatibility promise. |
 | MCP server | Available. Follows the MCP specification, including its authorization spec. |
 | OAuth 2.1 authorization | Available. Standards-based, and the most stable thing here. |
-| Published SDK | **None.** No client library is published for any language. |
+| Published SDK | **None.** No client library for any language. |
 | Outbound webhooks | **None.** Docket receives webhooks and sends none. |
 | Deprecation policy | **None yet.** |
 
 ## What this means for you
 
 <Warning>
-  Shapes may change without a deprecation window. Field names, response envelopes, and tool
-  signatures are all subject to revision while the product is pre-launch.
+  Docket can rename a field, reshape a response envelope, or change a tool's arguments with no
+  deprecation window.
 </Warning>
 
-Practical advice:
+- **Prefer MCP over REST** where both would work. `capture` keeps its name after the task payload
+  underneath it changes shape.
+- **Never parse an identifier.** ULIDs are opaque.
+- **Branch on the error `code`.** Match `not_found`, never "We could not find that".
+- **Pin nothing to the byte shape of `/v1/openapi.json`.** It moves when the service moves.
 
-- **Prefer MCP over REST** where both would work. MCP tools carry the name of what someone is
-  trying to do, so they hold still while endpoint shapes move with the schema.
-- **Do not parse identifiers.** They are ULIDs. Treat them as opaque.
-- **Branch on the error `code`**, never on a message string. See [Errors](/developers/errors).
-- **Pin nothing to the OpenAPI document's byte shape.** Docket generates it from the running
-  service, and it changes with the service.
+## What is stable
 
-## What is genuinely stable
+Build on these specifications:
 
-These are specifications, so you can build on them safely:
-
-- The OAuth 2.1 flow, PKCE, and the discovery documents (RFC 8414, RFC 9728, RFC 8707).
+- The OAuth 2.1 flow, PKCE, and the discovery documents of RFC 8414, RFC 9728, and RFC 8707.
 - MCP Streamable HTTP transport semantics.
 - RFC 9457 problem documents as the error envelope.
 
-The domain model itself is also settled. Organizations, Teams, Initiatives, Programs, Projects,
-Cycles, Tasks, Updates, and Comments have been stable in concept for a long time, and the
-containment-versus-association distinction is foundational. Field-level detail is where movement
-happens.
+The nouns hold too. Organization, Team, Initiative, Program, Project, Cycle, Task, Update, and
+Comment have meant the same thing for a long time. Field-level detail is where movement happens.
 
 ## No SDK, and what to do instead
 
-Every package in the Docket repository is private, and no npm or PyPI client is published.
-
-For REST, generate a client from the OpenAPI document at `/v1/openapi.json`. It is publicly
-reachable and always reflects the deployed service.
-
-For MCP, use your language's MCP client library. The server implements the specification, so
-talking to it takes nothing Docket-specific.
+Every package in the Docket repository is private. Generate your REST client from
+`/v1/openapi.json`, which anyone can fetch and which reflects the deployed service. For MCP, use
+your language's client library.
 
 ## When the docs and the API disagree
 
-If a documented behaviour and the real behaviour disagree, the real behaviour is the truth and the
-document is the bug. Docket generates the [Scalar reference](/developers/rest-api) from the running
-service, so it settles anything endpoint-level.
+Believe the API. Docket renders [`/v1/docs`](/developers/rest-api) from the running service.

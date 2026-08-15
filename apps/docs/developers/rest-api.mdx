@@ -3,35 +3,31 @@ title: "REST API"
 description: "Conventions, the permission model, and where the complete endpoint reference lives."
 ---
 
-Docket exposes more than 470 documented operations under `/v1`.
+Call more than 470 operations under `/v1`.
 
 <Card title="Open the full API reference" icon="book" href="https://docket-api.hypertext.studio/v1/docs" horizontal>
-  Every endpoint, every field, with a request playground. Generated from the running service.
+  Every endpoint and field, with a request playground.
 </Card>
 
 <Note>
-  **The reference is the source of truth for endpoint detail.** Docket generates it from the
-  deployed API at request time, so it cannot drift from the service. Where the reference and these
-  pages disagree, believe the reference.
+  **`/v1/docs` is the source of truth for endpoint detail.** Where it and these pages disagree,
+  believe it.
 </Note>
 
-The machine-readable document is at
-[`/v1/openapi.json`](https://docket-api.hypertext.studio/v1/openapi.json), publicly reachable and
-suitable for generating a client. No SDK is published. See
-[Platform status](/developers/platform-status).
+Generate a client from
+[`/v1/openapi.json`](https://docket-api.hypertext.studio/v1/openapi.json). Docket publishes no SDK.
+See [Platform status](/developers/platform-status).
 
 ## Authentication
 
-Bearer token on every request:
+Send a bearer token on every request:
 
 ```http
 Authorization: Bearer <token>
 ```
 
-**Every endpoint requires one except `GET /v1/config`**, the public bootstrap config. A global gate
-applies authentication ahead of the handlers, so no route becomes public by accident.
-
-See [Authentication](/developers/authentication) for how to get a token.
+**Only `GET /v1/config` works without one.** See [Authentication](/developers/authentication) to
+get one.
 
 ## Conventions
 
@@ -39,20 +35,19 @@ See [Authentication](/developers/authentication) for how to get a token.
   <Accordion title="Identifiers are ULIDs" defaultOpen>
     26 Crockford base-32 characters, matching `^[0-9A-HJKMNP-TV-Z]{26}$`.
 
-    Each entity type carries its own branded ID, so IDs are **not interchangeable across
-    resources**. A `TaskId` fails where a `ProjectId` belongs. Treat IDs as opaque and never parse
-    them.
+    IDs are branded per entity type: a `TaskId` fails where a `ProjectId` belongs. Never parse
+    one.
   </Accordion>
   <Accordion title="Pagination is keyset, never offset">
-    Pass `cursor` and `limit`; read `nextCursor` from the response. It is `null` on the last page.
+    Pass `cursor` and `limit`. Read `nextCursor`; it is `null` on the last page.
 
     ```http
     GET /v1/orgs/{orgId}/tasks?limit=50&cursor=<opaque>
     ```
   </Accordion>
   <Accordion title="Errors are RFC 9457 problem documents">
-    `application/problem+json`, carrying a stable machine-readable `code`, an HTTP `status`, and
-    per-field `fieldErrors` on validation failures.
+    `application/problem+json`, carrying a `code` such as `dependency_cycle`, an HTTP `status`, and
+    per-field `fieldErrors`.
 
     **Branch on `code`.** See [Errors](/developers/errors).
   </Accordion>
@@ -61,55 +56,43 @@ See [Authentication](/developers/authentication) for how to get a token.
     Idempotency-Key: <your-unique-key>
     ```
 
-    A retried request never duplicates a resource.
+    Retry and you get the same resource back, never a second one.
   </Accordion>
   <Accordion title="Request and response bodies share one schema">
-    Docket validates both against the same schemas the reference renders, so the documented shape
-    is the runtime shape. A response that does not match its schema is a bug.
+    Docket validates both against the schemas `/v1/docs` renders. A response that does not match
+    is a bug.
   </Accordion>
 </AccordionGroup>
 
 ## Permissions
 
-Docket always applies two layers.
+**Membership.** Every `/v1/orgs/{orgId}/*` route needs an active Actor. Non-members get **404**,
+never 403. Probing tells you nothing.
 
-**Membership.** Every `/v1/orgs/{orgId}/*` route requires an active Actor in that workspace.
-Non-members receive **404** in place of 403. Docket hides existence, so you cannot learn that a
-workspace or resource exists unless you may see it.
-
-**Capability.** Mutations require a capability on the ladder:
+**Capability.** Mutations need a capability on the ladder:
 
 ```
 view  <  comment  <  contribute  <  assign  <  manage
 ```
 
-Reassigning work needs `assign`. Commenting needs `comment`. Administrative changes need `manage`.
-Read endpoints apply a visibility and grant predicate inside the query, so every row you receive is
-one you may see, and client-side filtering is unnecessary.
-
-Agents pass the identical checks. An agent is an Actor with explicit grants, and the
-[approval gate](/guides/athena/proposals-and-approvals) applies on top.
+Reassign a task, you need `assign`. Post a comment, `comment`. Rename the workspace, `manage`. Read
+endpoints push the predicate into the query. Skip the client-side filter. Agents pass the
+identical checks, plus the [approval gate](/guides/athena/proposals-and-approvals).
 
 ## Cross-workspace surfaces
 
-Some surfaces span tenants by design: the Hub (`/hub/today`, `/portfolio`, `/search`, `/inbox`,
-`/activity`), notifications, and the personal daily plan.
-
-Docket fans these out as **one permission-scoped query per membership** and merges the results in
-application code. No SQL join crosses tenants. Every item carries its own `organizationId` and runs
-through that workspace's visibility predicate individually, so the result is a union of
-per-workspace permission decisions.
+The Hub (`/hub/today`, `/portfolio`, `/search`, `/inbox`, `/activity`), notifications, and the
+personal daily plan span tenants. Docket fans them out as **one permission-scoped query per
+membership** and merges in application code. No SQL join crosses tenants.
 
 ## Resource groups
-
-The reference is organised by resource. The main entry points:
 
 | Group | Covers |
 | --- | --- |
 | [Orgs](https://docket-api.hypertext.studio/v1/docs#tag/orgs) | Workspaces, the tenant boundary |
 | [Teams](https://docket-api.hypertext.studio/v1/docs#tag/teams) | Teams and their workflow states |
-| [Tasks](https://docket-api.hypertext.studio/v1/docs#tag/tasks) | The atomic unit, its subtasks and dependencies |
-| [Projects](https://docket-api.hypertext.studio/v1/docs#tag/projects) | Bounded efforts and their milestones |
+| [Tasks](https://docket-api.hypertext.studio/v1/docs#tag/tasks) | Subtasks and dependencies |
+| [Projects](https://docket-api.hypertext.studio/v1/docs#tag/projects) | Bounded efforts and milestones |
 | [Programs](https://docket-api.hypertext.studio/v1/docs#tag/programs) | Ongoing areas of operation |
 | [Initiatives](https://docket-api.hypertext.studio/v1/docs#tag/initiatives) | Strategic themes |
 | [Cycles](https://docket-api.hypertext.studio/v1/docs#tag/cycles) | Team time windows |
@@ -117,26 +100,21 @@ The reference is organised by resource. The main entry points:
 | [Comments](https://docket-api.hypertext.studio/v1/docs#tag/comments) | Threaded discussion |
 | [Agents](https://docket-api.hypertext.studio/v1/docs#tag/agents) | Agents and their sessions |
 | [Hub](https://docket-api.hypertext.studio/v1/docs#tag/hub) | Cross-workspace surfaces |
-| [Me](https://docket-api.hypertext.studio/v1/docs#tag/me) | The signed-in person: connections, sessions, preferences |
+| [Me](https://docket-api.hypertext.studio/v1/docs#tag/me) | Connections, sessions, preferences |
 
 ## Live updates
 
-`GET /v1/stream/sse` is a server-sent event stream of `stream-event` frames, with a ping every 25
-seconds. Typed paginated fallbacks exist at `/v1/hub/stream` and `/v1/orgs/{orgId}/stream` for
-clients that cannot hold a connection open.
+Hold `GET /v1/stream/sse` open for `stream-event` frames, pinged every 25 seconds. Cannot hold a
+connection? Poll `/v1/hub/stream` and `/v1/orgs/{orgId}/stream`.
 
 <Warning>
-  Docket sends **no outbound webhooks**. It receives them from connected providers. To react to
-  changes, poll a stream endpoint or subscribe over
-  [MCP](/developers/mcp-tools-and-resources#subscriptions).
+  Docket sends **no outbound webhooks**. To react to changes, poll a stream endpoint or subscribe
+  over [MCP](/developers/mcp-tools-and-resources#subscriptions).
 </Warning>
 
 ## REST or MCP?
 
-The same operations reach agents over the [MCP server](/developers/connect-an-agent-mcp), which
-calls the identical service layer beneath the same permission engine.
-
-| Choose | When |
-| --- | --- |
-| REST | You know exactly which record you want and which fields to set. |
-| MCP | Your caller describes intent. MCP tools accept names anywhere IDs are accepted, and `organize` applies a whole plan in one reconciled call. |
+The [MCP server](/developers/connect-an-agent-mcp) calls the identical service layer beneath the
+same permission engine. Use REST when you know which record you want and which fields to set. Use
+MCP when your caller describes intent: tools take names anywhere IDs go, and `organize` applies a
+whole plan in one call.

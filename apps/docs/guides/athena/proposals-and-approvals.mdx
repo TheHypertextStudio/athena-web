@@ -3,61 +3,36 @@ title: "Proposals and approvals"
 description: "How an agent's work reaches you before it becomes real, and how you say yes."
 ---
 
-An agent never quietly changes things on your behalf. Before it commits anything that matters, it
-pauses and asks.
+Athena shows a proposed task as a faded copy of the task, sitting where the real one would sit,
+with a dashed border and a `proposed` badge. Approve it and it becomes real, in that spot.
 
-## A proposal looks like the object it would create
+Edit the copy before you approve it. Change the date, change the assignee, change the title. What
+you approve is what lands.
 
-Athena's proposals render as **translucent copies of the real object, in the real place**. A
-proposed task appears as a task row with the same shape and the same type, at reduced opacity,
-with a dashed border and a small `proposed` badge.
+## Approve from wherever you are
 
-A proposal stays interactive. You can read it, edit it, and act on it where it sits. Docket never
-renders proposals as skeletons or as greyed-out disabled states.
+The same approval waits in three places, and acting in one clears it everywhere:
 
-Two results follow.
-
-**You can tell proposed work from committed work at a glance.** A proposal reads as pending
-everywhere it appears: in the session, in today's plan, in a conversation.
-
-**Approval keeps the object where it is.** The thing you approve is the thing that appears, in the
-place you approved it. Approving hands you no diff and produces nothing elsewhere.
-
-## Where approvals reach you
-
-The same pending approval appears in three places, and acting in any one resolves it:
-
-- In the **session**, beside the work it belongs to.
-- In your [**Inbox**](/guides/daily/inbox), across every workspace.
-- In [**Home**](/guides/daily/home-today), inline with your plan.
-
-Sign off from wherever you happen to be.
+- The **session**, beside the work it belongs to.
+- Your [**Inbox**](/guides/daily/inbox), across every workspace.
+- [**Home**](/guides/daily/home-today), inline with today's plan.
 
 ## Approve, edit, or reject
 
-<CardGroup cols={3}>
-  <Card title="Approve" icon="check">
-    The proposal becomes the real object, in place.
-  </Card>
-  <Card title="Edit, then approve" icon="pen">
-    Change it first. What you approve is what lands.
-  </Card>
-  <Card title="Reject" icon="xmark">
-    It goes away. The session continues, and it knows why.
-  </Card>
-</CardGroup>
+| Action | What happens |
+| --- | --- |
+| Approve | The proposal becomes the real object, in place. |
+| Edit, then approve | What you approve is what lands. |
+| Reject | It goes away, and the session continues knowing why. |
 
-Batches work the same way. A session proposing eleven changes lets you act on all of them at once
-or on each one.
+Approve eleven proposed changes at once, or take them one at a time.
 
 ## Access and sign-off
 
-Approval behaviour comes from two independent settings.
+**What an agent may touch.** Every agent starts **read-only** and asks for more access at the
+moment it needs it, with the reason in front of you.
 
-**What an agent may touch.** Agents start **read-only** and ask for more access at the moment they
-need it. You widen access with the reason in front of you.
-
-**Whether actions need sign-off.**
+**Whether it needs sign-off.**
 
 | Mode | Behaviour |
 | --- | --- |
@@ -65,25 +40,20 @@ need it. You widen access with the reason in front of you.
 | `apply after approval` | Waits for a yes on each change, then applies it. |
 | `apply directly` | Acts, and records everything for review afterwards. |
 
-Docket keeps the two settings separate so you can hold a highly capable agent at `suggest`, or let
-a narrow read-only agent apply directly within its narrow scope.
+The two settings move independently. Hold a capable agent at `suggest`, or let a read-only agent
+apply directly inside its narrow scope.
 
 ## Who approves
 
-By default, **whoever assigned or delegated the work** approves it. A workspace or a team can
-change that, so an organization can put a named person in charge of signing off on agent work.
+Whoever assigned or delegated the work approves it by default. A workspace or a team can change
+that and name one person to sign off on agent work.
 
 ## Owner and delegate
 
-You can keep your name on a task while an agent does the work: you stay the assignee, and the
-agent becomes the **delegate**. You remain the accountable party, and the agent carries the work
-out.
-
-Every action records both names: the agent that did it, and the person who set it in motion.
+Keep your name on the task and make Athena the **delegate**. You stay the assignee. Every action
+records both names.
 
 ## A suggestion becomes a task only when you accept it
 
-A suggestion has never been a task. It becomes one at the moment you approve it, and until then it
-exists as a proposal. This holds for
-[mail-derived suggestions](/guides/athena/athena-and-your-mail) as well as for anything a session
-proposes.
+Accept a suggestion and Docket creates the task at that moment. Until then it is a proposal. The
+same holds for [suggestions drafted from your mail](/guides/athena/athena-and-your-mail).

@@ -5,36 +5,30 @@ description: "One palette for finding and doing anything, and saved views for th
 
 ## The command palette
 
-`Cmd+K` opens one palette that covers four jobs: search, navigation, actions, and switching
-workspaces.
+Press `Cmd+K` to search, jump somewhere, run a command, or switch workspaces.
 
-Start typing and it searches everything you can see: tasks, projects, programs, initiatives,
-cycles, teams, updates, comments, and people. Each result carries a chip naming its workspace,
-because the palette reaches across your whole Hub.
+Type "gala" and the palette matches tasks, projects, programs, initiatives, cycles, teams,
+updates, comments, and people across every workspace you belong to. Each result names its
+workspace.
 
-The same box runs commands. Create a task, change a status, assign someone, jump to a settings
-page, or switch to another workspace.
+Type a command to create a task, set a status, assign someone, or open a settings page.
 
 <Tip>
-  Selecting rows in a list changes what the palette offers, and it acts on the selection. Select
-  three tasks, open the palette, and the action applies to all three.
+  Select three tasks in a list, press `Cmd+K`, and the action applies to all three.
 </Tip>
 
 ## Mentions
 
-Type `@` in any comment, description, or update to open the same resolver. It reaches Docket
-entities and items in your connected tools, so you can reference a GitHub pull request or a Linear
-issue beside a Docket task in one gesture.
-
-A mention stores a real reference, so it keeps pointing at the right thing when either side
-changes.
+Type `@` in a comment, description, or update to mention a task, a person, or a GitHub pull
+request from a connected tool. Docket stores a real reference. Rename either side and the mention
+follows.
 
 ## Saved views
 
-A view is a filtered, sorted, grouped list you have named and kept. "Everything assigned to me and
-overdue." "This cycle, grouped by status." "Every project without an update in two weeks."
+Save a filter you keep rebuilding and give it a name. "Everything assigned to me and overdue."
+"This cycle, grouped by status." "Every project without an update in two weeks."
 
-A view takes one of three scopes, the same set [templates](/guides/concepts/projects#templates)
+Give the view one of three scopes, the same set [templates](/guides/concepts/projects#templates)
 use:
 
 | Scope | Who sees it |
@@ -43,19 +37,11 @@ use:
 | `team` | One team |
 | `organization` | The whole workspace |
 
-Team and workspace views let a group agree on what "the list" means, so nobody rebuilds the same
-filter every Monday.
-
-## Lists behave the same everywhere
-
-Tasks, projects, and initiatives all render through the same list, with aligned rows and the same
-filtering, sorting, grouping, and selection. Learning it once covers every surface.
-
-Drag and drop works across the app: onto a project in the sidebar to re-file work, onto a day to
-schedule it, onto today's plan to commit to it.
+Scope a view to the team and everyone stops rebuilding the same filter every Monday.
 
 ## Search from an agent
 
-[Athena](/guides/athena/what-athena-is) and any connected agent reach everything the palette
-searches, through the [MCP server](/developers/connect-an-agent-mcp), under your own permissions.
-"Find every project without an update in two weeks" works as a sentence and as a saved view.
+[Athena](/guides/athena/what-athena-is) and any agent you connect through the
+[MCP server](/developers/connect-an-agent-mcp) search everything the palette searches, under your
+permissions. Ask "which projects haven't had an update in two weeks" and save the same question as
+a view.

@@ -18,12 +18,52 @@
  *
  * @example
  * ```bash
- * DATABASE_URL=postgres://... pnpm sync:failure
+ * pnpm sync:failure --prod --provider=notion --failed-only   # reads production's URL itself
  * DATABASE_URL=postgres://... pnpm sync:failure --provider=notion --limit=25
  * DATABASE_URL=postgres://... pnpm sync:failure --purpose=notion_mirror --failed-only
  * ```
  */
+import { execFileSync } from 'node:child_process';
+
 import postgres from 'postgres';
+
+/** Where production's connection string lives, mirroring `deploy.yml`'s migration step. */
+const PROD_SECRET = process.env.DOCKET_DB_SECRET ?? 'docket-database-url-unpooled';
+/** The Google Cloud project holding {@link PROD_SECRET} (`vars.GCP_PROJECT_ID`). */
+const PROD_PROJECT = process.env.DOCKET_GCP_PROJECT ?? 'athena-services';
+
+/**
+ * Read production's connection string from Secret Manager.
+ *
+ * @remarks
+ * The same `gcloud secrets versions access` call the deploy runs before migrating, so `--prod`
+ * needs no connection string pasted anywhere and none is ever written to disk or shell history.
+ *
+ * Requires a live `gcloud` login; the CLI's own reauth prompt cannot run unattended, so an expired
+ * session is reported as the one actionable thing rather than as a connection failure later.
+ */
+function productionUrl(): string {
+  try {
+    return execFileSync(
+      'gcloud',
+      [
+        'secrets',
+        'versions',
+        'access',
+        'latest',
+        `--secret=${PROD_SECRET}`,
+        `--project=${PROD_PROJECT}`,
+      ],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    ).trim();
+  } catch {
+    console.error(
+      `Could not read ${PROD_SECRET} from Google Secret Manager (project ${PROD_PROJECT}).\n` +
+        'If your session has expired, run: gcloud auth login',
+    );
+    process.exit(1);
+  }
+}
 
 /** One `--name=value` argument, or undefined when it was not supplied. */
 function flag(name: string): string | undefined {
@@ -53,6 +93,7 @@ if (purpose !== undefined && !PURPOSES.includes(purpose)) {
   process.exit(1);
 }
 const failedOnly = process.argv.slice(2).includes('--failed-only');
+const prod = process.argv.slice(2).includes('--prod');
 const parsedLimit = Number(flag('limit') ?? '10');
 const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.trunc(parsedLimit) : 10;
 
@@ -71,10 +112,11 @@ function envUrl(name: string): string | undefined {
 
 // The unpooled URL first when one is set, because that is the connection the deploy already uses
 // for schema work against production and so the one most likely to be to hand.
-const url = envUrl('DATABASE_URL_UNPOOLED') ?? envUrl('DATABASE_URL');
+const url = prod ? productionUrl() : (envUrl('DATABASE_URL_UNPOOLED') ?? envUrl('DATABASE_URL'));
 if (!url || !/^postgres(ql)?:\/\//.test(url)) {
   console.error(
-    'Set DATABASE_URL (or DATABASE_URL_UNPOOLED) to a postgres:// connection string.\n' +
+    'Set DATABASE_URL (or DATABASE_URL_UNPOOLED) to a postgres:// connection string,\n' +
+      'or pass --prod to read production’s from Google Secret Manager.\n' +
       "A local pglite:// URL will not work here — this reads a server's recorded sync history.",
   );
   process.exit(1);

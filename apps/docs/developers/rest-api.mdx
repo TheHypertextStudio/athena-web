@@ -51,12 +51,35 @@ get one.
 
     **Branch on `code`.** See [Errors](/developers/errors).
   </Accordion>
-  <Accordion title="Creates accept an Idempotency-Key">
+  <Accordion title="Any POST accepts an Idempotency-Key">
     ```http
     Idempotency-Key: <your-unique-key>
     ```
 
-    Retry and you get the same resource back, never a second one.
+    Docket dedupes per user for 24 hours. A replay returns the recorded response with
+    `Idempotency-Replayed: true`. Send the same key with a different body and you get
+    `422 idempotency_key_reuse`.
+  </Accordion>
+  <Accordion title="Use ETags to make writes conditional">
+    Every `GET` returns a strong `ETag`. Send it back as `If-None-Match` and an unchanged resource
+    answers `304`.
+
+    Send it as `If-Match` on a write and Docket rejects the write with `412` if someone changed the
+    resource since you read it. Re-read and retry. Omit the header and the write is
+    last-writer-wins.
+  </Accordion>
+  <Accordion title="Creates answer 201, queued work answers 202">
+    A create returns `201` with a `Location` naming the new resource. Work that Docket queues
+    rather than finishes returns `202` with the `Location` of a status monitor.
+  </Accordion>
+  <Accordion title="Declare a Content-Type Docket reads">
+    Send `application/json`, or a form encoding where a file belongs. Anything else answers `415`
+    with an `Accept` header naming what would work. An `Accept` header that excludes JSON answers
+    `406`.
+  </Accordion>
+  <Accordion title="Responses are private and revalidated">
+    Docket answers `private, no-cache` and varies on your credentials. Store a response, then
+    revalidate it against its `ETag` before reuse.
   </Accordion>
   <Accordion title="Request and response bodies share one schema">
     Docket validates both against the schemas `/v1/docs` renders. A response that does not match

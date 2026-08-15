@@ -45,6 +45,16 @@ Content-Type: application/problem+json
     | `internal` | 500 | Server error. Safe to retry. |
   </Accordion>
 
+  <Accordion title="Protocol failures">
+    | Code | Status | Means |
+    | --- | --- | --- |
+    | `method_not_allowed` | 405 | Wrong verb for that path. |
+    | `not_acceptable` | 406 | Your `Accept` header excludes JSON. |
+    | `precondition_failed` | 412 | `If-Match` lost. Someone changed the resource. Re-read and retry. |
+    | `payload_too_large` | 413 | Body over the limit. |
+    | `unsupported_media_type` | 415 | Declare `application/json`. The response names what works. |
+  </Accordion>
+
   <Accordion title="Two codes that need special handling">
     **`not_found` also means "you may not see this."** A 404 from `/v1/orgs/{orgId}/tasks` can mean
     the workspace exists and you are not a member. Never treat it as proof of absence.

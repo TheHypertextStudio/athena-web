@@ -37,6 +37,25 @@ async function body<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * The next Monday (`YYYY-MM-DD`, UTC), never today.
+ *
+ * @remarks
+ * `selectMomentum`'s capacity check needs a day with real desk-hours to draw on — the default
+ * availability model (`defaultAvailabilityWindows`) protects Saturday evenings and all of Sunday,
+ * so a target day computed as merely "tomorrow" intermittently landed on a day with zero
+ * suggestable capacity, one day in seven. It also has to stay strictly in the future: capacity
+ * is clipped to spans that have not yet ended relative to the real clock, so a past date always
+ * reads as zero capacity too.
+ */
+function nextMonday(): string {
+  const now = new Date();
+  const daysUntilMonday = (1 - now.getUTCDay() + 7) % 7 || 7;
+  return new Date(now.getTime() + daysUntilMonday * 24 * 60 * 60 * 1_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
 /** Insert a user + its hub; returns ids. */
 async function seedUserWithHub(): Promise<{ userId: string; hubId: string }> {
   const [user] = await db
@@ -187,7 +206,7 @@ describe('hub /today (daily operating projection)', () => {
     const { userId, hubId } = await seedUserWithHub();
     const org = await seedBaseOrg(db, schema);
     const myActorId = await joinOrg(userId, org.orgId);
-    const date = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString().slice(0, 10);
+    const date = nextMonday();
 
     // dueToday task.
     const [due] = await db
@@ -462,7 +481,9 @@ describe('hub /today (daily operating projection)', () => {
 
     expect(today.plan.map((item) => item.id)).toEqual([assertDefined(visibleTask).id]);
     expect(today.focus.now?.id).toBe(assertDefined(visibleTask).id);
-    expect(today.statusCards.map((card) => card.id)).not.toContain(assertDefined(privateProject).id);
+    expect(today.statusCards.map((card) => card.id)).not.toContain(
+      assertDefined(privateProject).id,
+    );
     expect(today.suggestions.map((item) => item.id)).not.toContain(assertDefined(privateTask).id);
   });
 
@@ -623,10 +644,15 @@ describe('hub /today (daily operating projection)', () => {
       .returning({ id: schema.dailyPlanItem.id });
 
     const app = appWithSession(hub, fakeSession(userId));
-    const response = await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' });
+    const response = await app.request(`/today/items/${assertDefined(planItem).id}/complete`, {
+      method: 'POST',
+    });
     expect(response.status).toBe(200);
 
-    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, assertDefined(work).id));
+    const [taskAfter] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(work).id));
     const [planAfter] = await db
       .select()
       .from(schema.dailyPlanItem)
@@ -723,7 +749,9 @@ describe('hub /today (daily operating projection)', () => {
       .returning({ id: schema.dailyPlanItem.id });
 
     const app = appWithSession(hub, fakeSession(userId));
-    const response = await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' });
+    const response = await app.request(`/today/items/${assertDefined(planItem).id}/complete`, {
+      method: 'POST',
+    });
     expect(response.status).toBe(200);
 
     const instanceTasks = await db
@@ -765,7 +793,8 @@ describe('hub /today (daily operating projection)', () => {
 
     const app = appWithSession(hub, fakeSession(caller.userId));
     expect(
-      (await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' })).status,
+      (await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' }))
+        .status,
     ).toBe(404);
 
     await db
@@ -774,10 +803,17 @@ describe('hub /today (daily operating projection)', () => {
       .where(eq(schema.team.id, org.teamId));
     const ownerApp = appWithSession(hub, fakeSession(owner.userId));
     expect(
-      (await ownerApp.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' })).status,
+      (
+        await ownerApp.request(`/today/items/${assertDefined(planItem).id}/complete`, {
+          method: 'POST',
+        })
+      ).status,
     ).toBe(409);
 
-    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, assertDefined(work).id));
+    const [taskAfter] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(work).id));
     const [planAfter] = await db
       .select()
       .from(schema.dailyPlanItem)
@@ -821,10 +857,14 @@ describe('hub /today (daily operating projection)', () => {
 
     const app = appWithSession(hub, fakeSession(userId));
     expect(
-      (await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' })).status,
+      (await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' }))
+        .status,
     ).toBe(403);
 
-    const [taskAfter] = await db.select().from(schema.task).where(eq(schema.task.id, assertDefined(work).id));
+    const [taskAfter] = await db
+      .select()
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(work).id));
     const [planAfter] = await db
       .select()
       .from(schema.dailyPlanItem)
@@ -1035,20 +1075,16 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
       .returning({ id: schema.project.id });
 
     // Associate ONLY linkedProgram + linkedProject with the initiative.
-    await db
-      .insert(schema.initiativeProgram)
-      .values({
-        initiativeId: assertDefined(init).id,
-        programId: assertDefined(linkedProgram).id,
-        organizationId: org.orgId,
-      });
-    await db
-      .insert(schema.initiativeProject)
-      .values({
-        initiativeId: assertDefined(init).id,
-        projectId: assertDefined(linkedProject).id,
-        organizationId: org.orgId,
-      });
+    await db.insert(schema.initiativeProgram).values({
+      initiativeId: assertDefined(init).id,
+      programId: assertDefined(linkedProgram).id,
+      organizationId: org.orgId,
+    });
+    await db.insert(schema.initiativeProject).values({
+      initiativeId: assertDefined(init).id,
+      projectId: assertDefined(linkedProject).id,
+      organizationId: org.orgId,
+    });
 
     const app = appWithSession(hub, fakeSession(userId));
     const filtered = await body<{

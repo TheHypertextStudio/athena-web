@@ -36,6 +36,7 @@ const STUDIO_ID = WorkPlaceId.parse('01BX5ZZKBKACTAV9WEVGEMMWS1');
 const STUDIO: WorkPlaceOut = {
   id: STUDIO_ID,
   name: 'Ceramics studio',
+  address: null,
   geofence: null,
   providerMappings: [],
   sort: 0,

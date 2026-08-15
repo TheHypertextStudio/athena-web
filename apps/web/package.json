@@ -67,6 +67,7 @@
     "hono": "catalog:",
     "idb-keyval": "^6.3.0",
     "lowlight": "^3.3.0",
+    "maplibre-gl": "^6.3.0",
     "marked": "17.0.6",
     "next": "catalog:",
     "react": "catalog:",

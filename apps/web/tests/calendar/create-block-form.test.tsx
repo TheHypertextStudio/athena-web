@@ -32,6 +32,7 @@ const LIBRARY_ID = WorkPlaceId.parse('01BX5ZZKBKACTAV9WEVGEMMWV1');
 const LIBRARY: WorkPlaceOut = {
   id: LIBRARY_ID,
   name: 'Eastside library',
+  address: null,
   geofence: null,
   providerMappings: [],
   sort: 0,

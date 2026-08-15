@@ -332,4 +332,14 @@ describe('PublishingSettings — DNS records', () => {
       expect(clipboardWriteText).toHaveBeenCalledWith('docket-verify=abc123');
     });
   });
+
+  it('offers no copy control for the record type, which is chosen rather than pasted', () => {
+    renderSettings({
+      domains: [domain({ id: 'dom_2', host: 'pending.acme.com', verified: false })],
+    });
+
+    const row = addressRow('pending.acme.com');
+    expect(within(row).queryByRole('button', { name: /copy type/i })).not.toBeInTheDocument();
+    expect(within(row).getByText('TXT')).toBeVisible();
+  });
 });

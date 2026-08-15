@@ -38,7 +38,7 @@ address on a deployment with no shared brief host configured.
 | 2. Typographic craft        | 3     | MD3 tokens only (`body-medium` for addresses, `label-small` for record labels, `title-*` via `SectionHeader`); `font-mono` reserved for the DNS record values, which are identifiers. Two levels of hierarchy per row, no arbitrary sizes.   |
 | 3. Spatial rhythm & density | 3     | One rhythm: `p-4` rows, `gap-3`/`gap-2` inside, and a single `ROW_INDENT` (`pl-7`) that lines every disclosed block up with the host text above it. Visible in the desktop shot as one continuous left edge down each expanded row.          |
 | 4. Hierarchy & information  | 3     | One primary action (`Add domain`) in the subsection header; `Check DNS` is a subordinate outline button; the destructive Remove is a ghost icon that asks before acting. Nothing on the surface competes with the address list.              |
-| 5. Color discipline         | 3     | Neutral except badges, all semantic tokens, zero hardcoded values. Dark shot verified: tinted surfaces still read as hierarchy and the divided list keeps its edges.                                                                         |
+| 5. Color discipline         | 3     | Fully neutral, semantic tokens only. Depth is carried by a three-step surface-container ladder (row `-low` → record block `container` → copy hover `-high`) with no outline anywhere on the surface. Both themes verified.                   |
 | 6. Motion & feedback        | 2     | **No evidence captured.** Static screenshots say nothing about hover, focus, or the copy control's `idle → copied` transition. Unverified is not a pass — see finding 3.                                                                     |
 | 7. States completeness      | 3     | Empty, populated, unverified-with-records, and not-reachable-default all captured; loading renders `Skeleton` rows matching the final layout. No dead read-only rows remain — the read-only slug box and its "go elsewhere" button are gone. |
 | 8. Detail craft             | 3     | DNS records hold aligned label/value columns across both domain rows, with the copy controls forming their own aligned right column. A 51-character domain wraps inside its cell rather than overflowing. 320px overflow check passed.       |
@@ -59,13 +59,7 @@ Gates: A11y ❌ (see finding 1) · Responsive ❌ (see finding 1) · Theme parit
    section inherits. Fixing it inside `publishing-settings.tsx` is impossible; it needs the shell to
    collapse its nav below a breakpoint. Tracked separately.
 
-2. **`Type` copies from a control ~500px wider than the value it copies.** The copy button is
-   `w-full` so the icon can hold the aligned right column, which is correct for `Name` and `Value`
-   where the text nearly fills the row. `TXT` is three characters, so the row reads as an icon
-   marooned from its label. Consider capping the control's width to its content plus the icon while
-   keeping the icons aligned — `apps/web/src/components/publishing/copy-value.tsx:47`.
-
-3. **Interaction states are unproven.** Hover, active, focus-visible, the copy control's `copied`
+2. **Interaction states are unproven.** Hover, active, focus-visible, the copy control's `copied`
    swap, and `prefers-reduced-motion` were all left uncaptured. The implementation uses the shared
    focus-ring utility and the `useCopyFeedback` state machine, but the rubric scores evidence, not
    intent. Needs an interaction pass before dimension 6 can move off 2.
@@ -79,6 +73,14 @@ Gates: A11y ❌ (see finding 1) · Responsive ❌ (see finding 1) · Theme parit
   answers "which of these?", so it now renders only where there is more than one address to choose
   between — reintroducing a two-badges-for-one-fact duplication on the surface built to end exactly
   that would have been an unusually poor joke.
+- **The record type offered a copy control.** A registrar presents `TXT` as a fixed choice, so there
+  was nowhere to paste it, and at three characters wide the control left its icon stranded at the
+  far end of the aligned column. Type is now plain text; only Name and Value — the two fields
+  anyone transcribes — are controls.
+- **The surface reached for outlines where MD3 uses tint.** Both lists were bordered boxes with
+  hairline dividers, and three badges carried the outline variant. Rows are now
+  `surface-container-low` tiles in a spaced stack, each disclosed DNS block sits one tint step above
+  its row, and every badge is filled. No border remains on the surface.
 
 Verdict: **BELOW BAR** — the Responsive and A11y gates fail on the shared settings shell, and
 dimension 6 has no evidence. The surface's own composition is at the bar in every other dimension.

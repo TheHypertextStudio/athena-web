@@ -9,8 +9,9 @@
  * fixed first column, values in the second — rather than as three independently-spaced lines.
  * Alignment is what lets someone read down the pair of columns instead of hunting each label.
  *
- * Every value is copyable; see {@link CopyValue} for why that is a control rather than selectable
- * text.
+ * The two fields anyone actually transcribes — Name and Value — are copy controls; see
+ * {@link CopyValue} for why that is a control rather than selectable text. Type is not one of
+ * them: registrars offer it as a fixed choice, so there is nowhere to paste it.
  */
 import type { WorkspaceDomainOut } from '@docket/types';
 import { Fragment, type JSX } from 'react';
@@ -30,15 +31,20 @@ export interface DnsRecordProps {
  * @returns The rendered record.
  */
 export function DnsRecord({ record }: DnsRecordProps): JSX.Element {
-  const fields = [
-    ['Type', record.type],
-    ['Name', record.name],
-    ['Value', record.value],
-  ] as const;
-
   return (
     <dl className="grid grid-cols-[3.25rem_minmax(0,1fr)] items-center gap-x-3 gap-y-0.5">
-      {fields.map(([label, value]) => (
+      <dt className="text-label-small text-on-surface-variant">Type</dt>
+      {/* Not copyable. A record type is a value you pick from the registrar's own dropdown, never
+          one you paste, so a copy control here would be an affordance for something nobody does —
+          and at three characters wide it left its icon stranded at the far end of the column. */}
+      <dd className="text-body-small text-on-surface min-w-0 py-1 font-mono">{record.type}</dd>
+
+      {(
+        [
+          ['Name', record.name],
+          ['Value', record.value],
+        ] as const
+      ).map(([label, value]) => (
         <Fragment key={label}>
           <dt className="text-label-small text-on-surface-variant">{label}</dt>
           <dd className="min-w-0">

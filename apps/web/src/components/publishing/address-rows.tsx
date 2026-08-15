@@ -117,7 +117,7 @@ export function DefaultAddressRow({
     briefHost === undefined || slug === undefined ? undefined : `https://${briefHost}/${slug}/`;
 
   return (
-    <li className="flex flex-col gap-2 p-4">
+    <li className="bg-surface-container-low flex flex-col gap-2 rounded-xl p-4">
       <div className="flex items-center gap-3">
         <Globe aria-hidden className="text-on-surface-variant size-4 shrink-0" />
 
@@ -158,7 +158,7 @@ export function DefaultAddressRow({
           </span>
         )}
 
-        <Badge variant="outline" className="shrink-0">
+        <Badge variant="secondary" className="shrink-0">
           {url === undefined ? 'Not reachable' : 'Default'}
         </Badge>
         {primary ? <PrimaryBadge /> : null}
@@ -256,7 +256,7 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
   }, [domain.id]);
 
   return (
-    <li className="flex flex-col gap-3 p-4">
+    <li className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
       <div className="flex items-center gap-3">
         <Globe aria-hidden className="text-on-surface-variant size-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate">
@@ -276,7 +276,8 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
           </Text>
         </span>
 
-        <Badge variant={domain.verified ? 'secondary' : 'outline'} className="shrink-0">
+        <Badge variant="secondary" className="shrink-0 gap-1">
+          {domain.verified ? <Check aria-hidden className="size-3" /> : null}
           {domain.verified ? 'Verified' : 'Not verified'}
         </Badge>
         {primary ? <PrimaryBadge /> : null}
@@ -330,7 +331,9 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
           <Text as="p" token="body-small" tone="muted">
             Add this record at your DNS provider, then check it.
           </Text>
-          <DnsRecord record={domain.verificationRecord} />
+          <div className="bg-surface-container rounded-lg px-3 py-2">
+            <DnsRecord record={domain.verificationRecord} />
+          </div>
           {failure ? (
             <Text as="p" token="body-small" tone="muted" role="status">
               {VERIFY_FAILURE_COPY[failure] ?? 'That record could not be confirmed yet.'}
@@ -357,7 +360,9 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
           <Text as="p" token="body-small" tone="muted">
             Point the domain at Docket with this record.
           </Text>
-          <DnsRecord record={domain.routingRecord} />
+          <div className="bg-surface-container rounded-lg px-3 py-2">
+            <DnsRecord record={domain.routingRecord} />
+          </div>
         </div>
       ) : null}
 

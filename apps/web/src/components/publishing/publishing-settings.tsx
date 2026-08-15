@@ -171,7 +171,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
           </Text>
         ) : null}
 
-        <ul className="border-outline-variant divide-outline-variant divide-y rounded-lg border">
+        <ul className="flex flex-col gap-2">
           <DefaultAddressRow
             orgId={orgId}
             slug={orgQ.data?.slug}
@@ -180,8 +180,8 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
             canManage={canManage}
           />
           {domainsQ.isPending ? (
-            <li className="p-4">
-              <Skeleton className="h-6 rounded-md" />
+            <li>
+              <Skeleton className="h-14 rounded-xl" />
             </li>
           ) : (
             domains.map((domain) => (
@@ -204,11 +204,14 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
             Nothing is published yet. Use the globe icon on an initiative, program, or project.
           </Text>
         ) : (
-          <ul className="border-outline-variant divide-outline-variant divide-y rounded-lg border">
+          <ul className="flex flex-col gap-2">
             {livePublications.map((publication) => {
               const url = publication.urls[0];
               return (
-                <li key={publication.id} className="flex items-center gap-3 p-4">
+                <li
+                  key={publication.id}
+                  className="bg-surface-container-low flex items-center gap-3 rounded-xl p-4"
+                >
                   <Globe aria-hidden className="text-on-surface-variant size-4 shrink-0" />
                   <span className="min-w-0 flex-1">
                     {url === undefined ? (

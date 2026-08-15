@@ -421,3 +421,41 @@ describe('authentication challenges', () => {
     expect(challenge).toContain('error="unauthorized"');
   });
 });
+
+describe('HEAD', () => {
+  it('answers a GET route with its headers and no body', async () => {
+    const { app } = await setup();
+    const get = await app.request('/v1/time/categories');
+    const head = await app.request('/v1/time/categories', { method: 'HEAD' });
+
+    expect(head.status).toBe(get.status);
+    // RFC 9110 §9.3.2: identical headers to the GET, and no content. A client using HEAD to
+    // check an `ETag` before deciding whether to fetch depends on both halves.
+    expect(head.headers.get('etag')).toBe(get.headers.get('etag'));
+    expect(head.headers.get('cache-control')).toBe(get.headers.get('cache-control'));
+    expect(await head.text()).toBe('');
+  });
+});
+
+describe('streaming responses', () => {
+  it('declares itself un-buffered and un-rewritable', async () => {
+    const { declareStreaming } = await import('../../src/lib/sse-headers');
+    const { Hono } = await import('hono');
+    const { streamSSE } = await import('hono/streaming');
+    const probe = new Hono().get('/live', (c) =>
+      declareStreaming(
+        streamSSE(c, async (stream) => {
+          await stream.writeSSE({ event: 'ping', data: '1' });
+        }),
+      ),
+    );
+
+    const res = await probe.request('/live');
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    // Hono sets `no-cache`; `no-transform` is what stops an intermediary compressing the stream,
+    // and `X-Accel-Buffering` is what stops nginx holding frames until a buffer fills. Both
+    // failures look identical to the client: a live connection that never delivers anything.
+    expect(res.headers.get('cache-control')).toBe('no-cache, no-transform');
+    expect(res.headers.get('x-accel-buffering')).toBe('no');
+  });
+});

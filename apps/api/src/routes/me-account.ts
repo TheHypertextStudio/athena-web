@@ -501,6 +501,11 @@ export const meAccountExportDownload: Hono<AppEnv> = new Hono<AppEnv>().get(
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${filename}"`,
+        // This route is mounted outside the `/v1` app, so it never reaches the default cache
+        // policy. It needs a stricter one anyway: the body is a complete archive of one
+        // person's account, released only after a passkey re-verification, and `no-store`
+        // keeps it out of every cache rather than merely requiring revalidation.
+        'Cache-Control': 'private, no-store',
       },
     });
   },

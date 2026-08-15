@@ -148,6 +148,30 @@ CORS is part of the contract, not a deployment detail. A response header absent 
 `If-None-Match`, and `Idempotency-Key` become sendable. **Adding a header to the protocol without
 adding it there ships a feature no browser client can use.**
 
+## Streaming responses
+
+An SSE handler wraps its return in `declareStreaming` from `src/lib/sse-headers.ts`. Hono's
+`streamSSE` already sets `text/event-stream`, `no-cache`, and `keep-alive`; two more headers
+decide whether the stream survives the machines between this process and a browser, and both
+fail the same way — the connection looks alive at each end while nothing arrives:
+
+- `X-Accel-Buffering: no`, because nginx and its imitators buffer a proxied response and flush
+  only when the buffer fills. A stream that emits a small frame every few seconds never fills
+  anything.
+- `no-transform`, because an intermediary is otherwise free to compress the body, and a
+  compressor must accumulate input before it can emit — reintroducing exactly the buffering the
+  previous header just turned off.
+
+Wrap the **response**, not the context. `streamSSE` writes its own `Cache-Control` while
+building the response, so anything set beforehand is silently overwritten.
+
+## `HEAD`
+
+`HEAD` is `GET` without the content (RFC 9110 §9.3.2), which means the _same headers_ — a client
+using it to check an `ETag` before deciding whether to fetch gets nothing useful otherwise. The
+`ok` helper treats the two methods identically, so a `HEAD` carries the tag, the cache directive,
+and an empty body.
+
 ## Authentication challenges
 
 RFC 9110 §15.5.2 makes `WWW-Authenticate` mandatory on `401`, and `onError` emits

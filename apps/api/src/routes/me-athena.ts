@@ -47,6 +47,7 @@ import { loadTranscript, saveTranscript } from '../agent/transcript';
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
 import { accepted, ok } from '../lib/ok';
+import { declareStreaming } from '../lib/sse-headers';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 
@@ -711,25 +712,13 @@ async function streamOwnedActivity(c: Context<AppEnv>, session: SessionRow) {
   const lastEventId = c.req.header('last-event-id');
   const resumedCursor = lastEventId ? await activityCursor(session.id, lastEventId) : null;
   const terminal = new Set(['completed', 'failed', 'canceled']);
-  return streamSSE(c, async (stream) => {
-    let cursor = resumedCursor;
-    const replay = cursor
-      ? await sessionActivitiesAfter(session.id, cursor)
-      : (await sessionActivityHistoryPage(session.id, DEFAULT_ACTIVITY_QUERY)).activities;
-    for (const activity of replay) {
-      await stream.writeSSE({
-        id: activity.id,
-        event: activity.type,
-        data: JSON.stringify(toPersonalActivityOut(activity)),
-      });
-      cursor = { createdAt: activity.createdAt, id: activity.id };
-    }
-    if (terminal.has(session.status)) return;
-    let lastHeartbeat = Date.now();
-    for (;;) {
-      if (stream.aborted) return;
-      const fresh = await sessionActivitiesAfter(session.id, cursor);
-      for (const activity of fresh) {
+  return declareStreaming(
+    streamSSE(c, async (stream) => {
+      let cursor = resumedCursor;
+      const replay = cursor
+        ? await sessionActivitiesAfter(session.id, cursor)
+        : (await sessionActivityHistoryPage(session.id, DEFAULT_ACTIVITY_QUERY)).activities;
+      for (const activity of replay) {
         await stream.writeSSE({
           id: activity.id,
           event: activity.type,
@@ -737,19 +726,33 @@ async function streamOwnedActivity(c: Context<AppEnv>, session: SessionRow) {
         });
         cursor = { createdAt: activity.createdAt, id: activity.id };
       }
-      const [state] = await db
-        .select({ status: agentSession.status })
-        .from(agentSession)
-        .where(eq(agentSession.id, session.id))
-        .limit(1);
-      if (!state || terminal.has(state.status)) return;
-      if (Date.now() - lastHeartbeat >= STREAM_HEARTBEAT_MS) {
-        await stream.write(': heartbeat\n\n');
-        lastHeartbeat = Date.now();
+      if (terminal.has(session.status)) return;
+      let lastHeartbeat = Date.now();
+      for (;;) {
+        if (stream.aborted) return;
+        const fresh = await sessionActivitiesAfter(session.id, cursor);
+        for (const activity of fresh) {
+          await stream.writeSSE({
+            id: activity.id,
+            event: activity.type,
+            data: JSON.stringify(toPersonalActivityOut(activity)),
+          });
+          cursor = { createdAt: activity.createdAt, id: activity.id };
+        }
+        const [state] = await db
+          .select({ status: agentSession.status })
+          .from(agentSession)
+          .where(eq(agentSession.id, session.id))
+          .limit(1);
+        if (!state || terminal.has(state.status)) return;
+        if (Date.now() - lastHeartbeat >= STREAM_HEARTBEAT_MS) {
+          await stream.write(': heartbeat\n\n');
+          lastHeartbeat = Date.now();
+        }
+        await stream.sleep(STREAM_POLL_MS);
       }
-      await stream.sleep(STREAM_POLL_MS);
-    }
-  });
+    }),
+  );
 }
 
 /** Personal Athena routes; every handler derives ownership from the request session. */
@@ -853,49 +856,51 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const resumeFrom = Number.parseInt(c.req.header('last-event-id') ?? '', 10);
-      return streamSSE(c, async (stream) => {
-        const queued: AgentUpdate[] = [];
-        const detach = subscribeAgentUpdates(
-          {
-            ownerUserId: owner,
-            ...(Number.isFinite(resumeFrom) ? { since: resumeFrom } : {}),
-          },
-          (update) => queued.push(update),
-        );
-        try {
-          let lastHeartbeat = Date.now();
-          for (;;) {
-            if (stream.aborted) return;
-            while (queued.length > 0) {
-              const update = queued.shift();
-              /* v8 ignore next -- @preserve defensive: length was just checked */
-              if (!update) break;
-              await stream.writeSSE({
-                id: String(update.sequence),
-                event: update.kind,
-                data: JSON.stringify({
-                  sequence: update.sequence,
-                  sessionId: update.sessionId,
-                  parentSessionId: update.parentSessionId,
-                  taskId: update.taskId,
-                  agentName: update.agentName,
-                  milestone: update.milestone,
-                  progress: update.progress,
-                  reasonCode: update.reasonCode,
-                  at: update.at.toISOString(),
-                }),
-              });
+      return declareStreaming(
+        streamSSE(c, async (stream) => {
+          const queued: AgentUpdate[] = [];
+          const detach = subscribeAgentUpdates(
+            {
+              ownerUserId: owner,
+              ...(Number.isFinite(resumeFrom) ? { since: resumeFrom } : {}),
+            },
+            (update) => queued.push(update),
+          );
+          try {
+            let lastHeartbeat = Date.now();
+            for (;;) {
+              if (stream.aborted) return;
+              while (queued.length > 0) {
+                const update = queued.shift();
+                /* v8 ignore next -- @preserve defensive: length was just checked */
+                if (!update) break;
+                await stream.writeSSE({
+                  id: String(update.sequence),
+                  event: update.kind,
+                  data: JSON.stringify({
+                    sequence: update.sequence,
+                    sessionId: update.sessionId,
+                    parentSessionId: update.parentSessionId,
+                    taskId: update.taskId,
+                    agentName: update.agentName,
+                    milestone: update.milestone,
+                    progress: update.progress,
+                    reasonCode: update.reasonCode,
+                    at: update.at.toISOString(),
+                  }),
+                });
+              }
+              if (Date.now() - lastHeartbeat >= STREAM_HEARTBEAT_MS) {
+                await stream.write(': heartbeat\n\n');
+                lastHeartbeat = Date.now();
+              }
+              await stream.sleep(STREAM_POLL_MS);
             }
-            if (Date.now() - lastHeartbeat >= STREAM_HEARTBEAT_MS) {
-              await stream.write(': heartbeat\n\n');
-              lastHeartbeat = Date.now();
-            }
-            await stream.sleep(STREAM_POLL_MS);
+          } finally {
+            detach();
           }
-        } finally {
-          detach();
-        }
-      });
+        }),
+      );
     },
   )
   .post(

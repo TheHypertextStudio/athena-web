@@ -97,8 +97,9 @@ function withStatus(c: Context, status: ContentfulStatusCode): void {
  * Validate and return a `200 OK` JSON body.
  *
  * @remarks
- * On `GET` the response also carries a strong `ETag` derived from the serialized body, and a
- * request whose `If-None-Match` already names that tag gets `304 Not Modified` with no body.
+ * On `GET` and `HEAD` the response also carries a strong `ETag` derived from the serialized
+ * body, and a request whose `If-None-Match` already names that tag gets `304 Not Modified` with
+ * no body.
  * The 304 branch is cast back to the 200 response type on purpose: a 304 carries no
  * representation by definition, so widening the RPC contract with it would force every typed
  * call site to handle a body that can never arrive.
@@ -114,7 +115,9 @@ function withStatus(c: Context, status: ContentfulStatusCode): void {
  */
 export function ok<T extends z.ZodType>(c: Context, schema: T, data: z.input<T>) {
   const body = serialize(c, schema, data);
-  if (c.req.method !== 'GET') return c.json(body);
+  // `HEAD` is `GET` without the content (RFC 9110 §9.3.2), which means the same headers — a
+  // client using it to check an `ETag` before deciding whether to fetch gets nothing otherwise.
+  if (c.req.method !== 'GET' && c.req.method !== 'HEAD') return c.json(body);
 
   const tag = strongTag(JSON.stringify(body));
   c.header('ETag', tag);

@@ -27,6 +27,7 @@ import {
 import type { AppEnv } from '../context';
 import { ConflictError } from '../error';
 import { accepted, created, ok } from '../lib/ok';
+import { declareStreaming } from '../lib/sse-headers';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -367,64 +368,66 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
       // resumes after the last activity a reconnecting client saw (ULIDs sort by id).
       const lastEventId = c.req.header('last-event-id');
       const terminal = new Set(['completed', 'failed', 'canceled']);
-      return streamSSE(c, async (stream) => {
-        let lastSeen = lastEventId ?? '';
-        const replay = activities.filter((activity) => !lastSeen || activity.id > lastSeen);
-        if (replay.length > 0) {
-          if (!(await canContinueSessionDelivery(c, session))) {
-            await stream.close();
-            return;
-          }
-          // A finite replay is one atomic stream write. This prevents an in-memory/test reader
-          // from observing EOF between queued frames when a terminal session is under load.
-          await stream.write(
-            replay
-              .map(
-                (activity) =>
-                  `event: ${activity.type}\ndata: ${JSON.stringify(toActivityOut(activity))}\nid: ${activity.id}\n\n`,
-              )
-              .join(''),
-          );
-          lastSeen = replay.at(-1)?.id ?? lastSeen;
-        }
-        let status = session.status;
-        let sincePing = 0;
-        while (!terminal.has(status) && !stream.aborted) {
-          await new Promise((resolve) => setTimeout(resolve, STREAM_POLL_MS));
-          const fresh = await db
-            .select()
-            .from(sessionActivity)
-            .where(and(eq(sessionActivity.sessionId, id), gt(sessionActivity.id, lastSeen)))
-            .orderBy(asc(sessionActivity.id));
-          for (const activity of fresh) {
+      return declareStreaming(
+        streamSSE(c, async (stream) => {
+          let lastSeen = lastEventId ?? '';
+          const replay = activities.filter((activity) => !lastSeen || activity.id > lastSeen);
+          if (replay.length > 0) {
             if (!(await canContinueSessionDelivery(c, session))) {
               await stream.close();
               return;
             }
-            await stream.writeSSE({
-              id: activity.id,
-              event: activity.type,
-              data: JSON.stringify(toActivityOut(activity)),
-            });
-            lastSeen = activity.id;
+            // A finite replay is one atomic stream write. This prevents an in-memory/test reader
+            // from observing EOF between queued frames when a terminal session is under load.
+            await stream.write(
+              replay
+                .map(
+                  (activity) =>
+                    `event: ${activity.type}\ndata: ${JSON.stringify(toActivityOut(activity))}\nid: ${activity.id}\n\n`,
+                )
+                .join(''),
+            );
+            lastSeen = replay.at(-1)?.id ?? lastSeen;
           }
-          sincePing += STREAM_POLL_MS;
-          if (sincePing >= STREAM_HEARTBEAT_MS) {
-            await stream.writeSSE({ event: 'ping', data: '{}' });
-            sincePing = 0;
+          let status = session.status;
+          let sincePing = 0;
+          while (!terminal.has(status) && !stream.aborted) {
+            await new Promise((resolve) => setTimeout(resolve, STREAM_POLL_MS));
+            const fresh = await db
+              .select()
+              .from(sessionActivity)
+              .where(and(eq(sessionActivity.sessionId, id), gt(sessionActivity.id, lastSeen)))
+              .orderBy(asc(sessionActivity.id));
+            for (const activity of fresh) {
+              if (!(await canContinueSessionDelivery(c, session))) {
+                await stream.close();
+                return;
+              }
+              await stream.writeSSE({
+                id: activity.id,
+                event: activity.type,
+                data: JSON.stringify(toActivityOut(activity)),
+              });
+              lastSeen = activity.id;
+            }
+            sincePing += STREAM_POLL_MS;
+            if (sincePing >= STREAM_HEARTBEAT_MS) {
+              await stream.writeSSE({ event: 'ping', data: '{}' });
+              sincePing = 0;
+            }
+            const rows = await db
+              .select({ status: agentSession.status })
+              .from(agentSession)
+              .where(eq(agentSession.id, id))
+              .limit(1);
+            status = rows[0]?.status ?? 'completed';
           }
-          const rows = await db
-            .select({ status: agentSession.status })
-            .from(agentSession)
-            .where(eq(agentSession.id, id))
-            .limit(1);
-          status = rows[0]?.status ?? 'completed';
-        }
-        // Hono closes again when the callback returns, but awaiting the close here is
-        // important for finite replays: it drains every queued SSE frame before the
-        // in-memory/test response reader observes EOF.
-        await stream.close();
-      });
+          // Hono closes again when the callback returns, but awaiting the close here is
+          // important for finite replays: it drains every queued SSE frame before the
+          // in-memory/test response reader observes EOF.
+          await stream.close();
+        }),
+      );
     },
   )
   .get(

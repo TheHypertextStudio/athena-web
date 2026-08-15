@@ -17,6 +17,7 @@ import { streamSSE } from 'hono/streaming';
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
 import { type StreamEvent, subscribe } from '../lib/event-bus';
+import { declareStreaming } from '../lib/sse-headers';
 
 import { canDeliverQueuedStreamEvent } from './stream-helpers';
 
@@ -29,52 +30,54 @@ const streamSse = new Hono<AppEnv>().get('/sse', (c) => {
   if (!session?.user) throw new AuthError();
   const userId = session.user.id;
 
-  return streamSSE(c, async (stream) => {
-    const signal = c.req.raw.signal;
-    let pending: StreamEvent[] = [];
-    // `notify` wakes the writer loop when an event arrives or the request aborts.
-    let notify: (() => void) | null = null;
-    const wake = (): void => notify?.();
+  return declareStreaming(
+    streamSSE(c, async (stream) => {
+      const signal = c.req.raw.signal;
+      let pending: StreamEvent[] = [];
+      // `notify` wakes the writer loop when an event arrives or the request aborts.
+      let notify: (() => void) | null = null;
+      const wake = (): void => notify?.();
 
-    const unsubscribe = subscribe(userId, (event) => {
-      pending.push(event);
-      wake();
-    });
-    signal.addEventListener('abort', wake);
+      const unsubscribe = subscribe(userId, (event) => {
+        pending.push(event);
+        wake();
+      });
+      signal.addEventListener('abort', wake);
 
-    try {
-      while (!signal.aborted) {
-        if (pending.length > 0) {
-          const batch = pending;
-          pending = [];
-          for (const event of batch) {
-            // Recipient rows are historical routing hints, not a durable access grant. Recheck
-            // the canonical task decision at the actual socket-delivery edge so a queued event
-            // cannot cross a grant revocation that happened after it was published.
-            if (!(await canDeliverQueuedStreamEvent(userId, event.id))) continue;
-            await stream.writeSSE({ event: 'stream-event', data: JSON.stringify(event) });
+      try {
+        while (!signal.aborted) {
+          if (pending.length > 0) {
+            const batch = pending;
+            pending = [];
+            for (const event of batch) {
+              // Recipient rows are historical routing hints, not a durable access grant. Recheck
+              // the canonical task decision at the actual socket-delivery edge so a queued event
+              // cannot cross a grant revocation that happened after it was published.
+              if (!(await canDeliverQueuedStreamEvent(userId, event.id))) continue;
+              await stream.writeSSE({ event: 'stream-event', data: JSON.stringify(event) });
+            }
+            continue;
           }
-          continue;
+          // Wait for the next event or the heartbeat deadline, whichever comes first.
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, HEARTBEAT_MS);
+            notify = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+          });
+          notify = null;
+          // Heartbeat only when nothing arrived; the `while` re-checks `aborted` to exit.
+          if (pending.length === 0) {
+            await stream.writeSSE({ event: 'ping', data: '' });
+          }
         }
-        // Wait for the next event or the heartbeat deadline, whichever comes first.
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, HEARTBEAT_MS);
-          notify = () => {
-            clearTimeout(timer);
-            resolve();
-          };
-        });
-        notify = null;
-        // Heartbeat only when nothing arrived; the `while` re-checks `aborted` to exit.
-        if (pending.length === 0) {
-          await stream.writeSSE({ event: 'ping', data: '' });
-        }
+      } finally {
+        unsubscribe();
+        signal.removeEventListener('abort', wake);
       }
-    } finally {
-      unsubscribe();
-      signal.removeEventListener('abort', wake);
-    }
-  });
+    }),
+  );
 });
 
 export default streamSse;

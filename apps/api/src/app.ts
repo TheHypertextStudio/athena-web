@@ -28,6 +28,7 @@ import { createVoiceRoutes } from './routes/voice-sessions';
 import { getContainer } from './container';
 import type { AppEnv } from './context';
 import { idempotency } from './lib/idempotency';
+import { preconditions } from './lib/preconditions';
 import dailyPlan from './routes/daily-plan';
 import scheduleWeek from './routes/schedule-week';
 import directiveFeed from './routes/schedule-week-directive';
@@ -92,6 +93,14 @@ app.use('*', requireAuth);
 // `Idempotency-Key` header the published reference has always promised. A request without the
 // header is unaffected.
 app.use('*', idempotency);
+
+// Optimistic concurrency for writes. Resolves the target's current `ETag` by asking this same
+// app for it, so the tag a write is checked against is the one a read actually hands out, for
+// every resource, with no per-handler code. Only a request that sends `If-Match` pays for it.
+app.use(
+  '*',
+  preconditions(async (url, init) => app.request(url, init)),
+);
 
 const notificationInbox = new NotificationInboxService(db);
 const notificationIntents = new NotificationIntentService(db);

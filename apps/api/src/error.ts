@@ -347,18 +347,22 @@ export function onError(err: Error, c: Context) {
     );
   }
 
-  c.header('Content-Type', 'application/problem+json');
-  if (apiErr instanceof MethodNotAllowedError) c.header('Allow', apiErr.allow.join(', '));
-  return c.json(
-    {
-      type: problemTypeUrl(apiErr.code),
-      // `title` stays derived from the closed code catalog — never `apiErr.message`, which can
-      // carry config keys, provider payloads, or SQL detail.
-      title: publicProblemTitle(apiErr.code),
-      status: apiErr.status,
-      code: apiErr.code,
-      ...(apiErr.fieldErrors ? { fieldErrors: apiErr.fieldErrors } : {}),
-    },
-    apiErr.status,
-  );
+  const problem = {
+    type: problemTypeUrl(apiErr.code),
+    // `title` stays derived from the closed code catalog — never `apiErr.message`, which can
+    // carry config keys, provider payloads, or SQL detail.
+    title: publicProblemTitle(apiErr.code),
+    status: apiErr.status,
+    code: apiErr.code,
+    ...(apiErr.fieldErrors ? { fieldErrors: apiErr.fieldErrors } : {}),
+  };
+
+  // Built as a raw body rather than through `c.json`, which sets `application/json` itself and
+  // silently overwrote the media type this used to set beforehand. Every error on this API was
+  // therefore served as plain JSON while the reference promised RFC 9457 — the one header that
+  // tells a client the body is a problem document, missing from every problem document.
+  return c.body(JSON.stringify(problem), apiErr.status, {
+    'Content-Type': 'application/problem+json',
+    ...(apiErr instanceof MethodNotAllowedError ? { Allow: apiErr.allow.join(', ') } : {}),
+  });
 }

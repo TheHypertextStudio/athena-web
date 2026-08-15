@@ -49,13 +49,13 @@ export interface EntityTableProps<T> {
    * The flat rows to render. Provide *either* `rows` (a flat table) *or* `groups`
    * (a grouped table). When both are given, `groups` wins.
    */
-  rows?: readonly T[];
+  rows?: readonly T[] | undefined;
   /** Grouped rows: full-width group boundary rows with their data rows beneath. */
-  groups?: readonly EntityTableGroup<T>[];
+  groups?: readonly EntityTableGroup<T>[] | undefined;
   /** Stable React key for a row. */
   getRowKey: (row: T) => string;
   /** Per-row link target. When provided, each data row renders as an `<a href>`. */
-  rowHref?: (row: T) => string | undefined;
+  rowHref?: ((row: T) => string | undefined) | undefined;
   /**
    * Render the row's link via a custom element (typically a router `Link`).
    *
@@ -64,9 +64,9 @@ export interface EntityTableProps<T> {
    * A dropped {@link EntityTableProps.rowDrag} prop silently un-draggables the row with no type
    * error.
    */
-  renderRowLink?: (props: EntityTableRowLinkProps) => React.ReactNode;
+  renderRowLink?: ((props: EntityTableRowLinkProps) => React.ReactNode) | undefined;
   /** Activate (open) a row on click / Enter. */
-  onRowClick?: (row: T) => void;
+  onRowClick?: ((row: T) => void) | undefined;
   /**
    * Handle a property-edit hotkey (`L`, and future `S`/`A`/`P`/`D`) on the active data row.
    *
@@ -76,30 +76,30 @@ export interface EntityTableProps<T> {
    * button, anchor, and custom `renderRowLink` — already carries), for positioning a popover
    * against it. Return `true` to consume the keystroke.
    */
-  onRowPropertyKey?: (key: string, row: T, anchor: HTMLElement | null) => boolean;
+  onRowPropertyKey?: ((key: string, row: T, anchor: HTMLElement | null) => boolean) | undefined;
   /** Warm a row's destination cache on hover/focus (prefetch-on-intent). Optional; no-op if unset. */
-  onRowPrefetch?: (row: T) => void;
+  onRowPrefetch?: ((row: T) => void) | undefined;
   /**
    * Make each data row a drag source, draggable from anywhere in its bounds. Return `undefined` for
    * rows that must not be dragged (a read-only projection, a cross-workspace reference).
    */
-  rowDrag?: (row: T) => DragSource | undefined;
+  rowDrag?: ((row: T) => DragSource | undefined) | undefined;
   /** The currently selected row keys (controlled). */
-  selected?: ReadonlySet<string>;
+  selected?: ReadonlySet<string> | undefined;
   /** Toggle a row's selection (controlled). */
-  onSelect?: (row: T, next: boolean) => void;
+  onSelect?: ((row: T, next: boolean) => void) | undefined;
   /** Controlled collapsed group ids. */
-  collapsed?: ReadonlySet<string>;
+  collapsed?: ReadonlySet<string> | undefined;
   /** Toggle a group's collapse state (controlled mode). */
-  onToggleGroup?: (groupId: string) => void;
+  onToggleGroup?: ((groupId: string) => void) | undefined;
   /** Initial collapsed group ids (uncontrolled mode). */
-  defaultCollapsed?: Iterable<string>;
+  defaultCollapsed?: Iterable<string> | undefined;
   /** Hide the light header row. */
-  hideHeader?: boolean;
+  hideHeader?: boolean | undefined;
   /** Accessible label for the grid. */
-  'aria-label'?: string;
+  'aria-label'?: string | undefined;
   /** Extra classes merged onto the table's outer (scroll) container. */
-  className?: string;
+  className?: string | undefined;
 }
 
 /** A flattened render row: a group-header boundary, or a data row carrying its source item. */

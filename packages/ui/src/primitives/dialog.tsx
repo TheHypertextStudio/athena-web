@@ -132,11 +132,11 @@ export function DialogContent({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   /** Render the built-in top-right close button (default `true`). */
-  showClose?: boolean;
+  showClose?: boolean | undefined;
   /** Optional in-shell portal host; its rectangle can exclude persistent sibling rails. */
-  portalContainer?: HTMLElement | null;
+  portalContainer?: HTMLElement | null | undefined;
   /** Additional backdrop geometry/treatment for hosted dialog presentations. */
-  overlayClassName?: string;
+  overlayClassName?: string | undefined;
 }): React.JSX.Element {
   // The element focused when the panel opened — the dialog's opener — so focus can return to it
   // on close even when there is no Radix `DialogTrigger` to restore it for us.

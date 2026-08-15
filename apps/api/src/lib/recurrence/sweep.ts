@@ -95,7 +95,7 @@ async function applyMissedDate(
     readonly processRevisionId: string;
     readonly scheduledFor: string;
     readonly missedPolicy: 'skip' | 'carry' | 'resolve';
-    readonly actorId?: string;
+    readonly actorId?: string | undefined;
     readonly existingByDate: Map<string, (typeof processOccurrence.$inferSelect)[]>;
     readonly now: Date;
   },
@@ -162,9 +162,9 @@ export async function materializeRecurrenceSeriesWindow(
   input: {
     readonly organizationId: string;
     readonly seriesId: string;
-    readonly actorId?: string;
+    readonly actorId?: string | undefined;
     readonly asOf: string;
-    readonly now?: Date;
+    readonly now?: Date | undefined;
   },
 ): Promise<RecurrenceSeriesSweepResult> {
   const now = input.now ?? new Date();

@@ -18,13 +18,13 @@ interface NamedWorkRow extends OrgScopedRow {
   // The entity's own authored plain-text blurb — distinct from `description`, which is the full
   // Markdown body. Preferred for the search document's `summary` (and thus any preview that reads
   // it, like a mention hovercard) so a preview never has to render raw Markdown source.
-  summary?: string | null;
-  description?: string | null;
-  ownerId?: string | null;
-  leadId?: string | null;
-  status?: string | null;
-  health?: string | null;
-  visibility?: string | null;
+  summary?: string | null | undefined;
+  description?: string | null | undefined;
+  ownerId?: string | null | undefined;
+  leadId?: string | null | undefined;
+  status?: string | null | undefined;
+  health?: string | null | undefined;
+  visibility?: string | null | undefined;
 }
 
 /**
@@ -47,16 +47,16 @@ function displaySummary(
 
 interface TaskRow extends OrgScopedRow {
   title: string;
-  description?: string | null;
+  description?: string | null | undefined;
   state: string;
-  priority?: string | null;
-  assigneeId?: string | null;
-  delegateId?: string | null;
+  priority?: string | null | undefined;
+  assigneeId?: string | null | undefined;
+  delegateId?: string | null | undefined;
   teamId: string;
-  projectId?: string | null;
-  programId?: string | null;
-  labelIds?: readonly string[];
-  visibility?: string | null;
+  projectId?: string | null | undefined;
+  programId?: string | null | undefined;
+  labelIds?: readonly string[] | undefined;
+  visibility?: string | null | undefined;
 }
 
 function workDocument(
@@ -64,10 +64,10 @@ function workDocument(
   kind: SearchDocumentKind,
   title: string,
   options: {
-    summary?: string | null;
-    body?: string | null;
-    facet?: Record<string, unknown>;
-    visibility?: string | null;
+    summary?: string | null | undefined;
+    body?: string | null | undefined;
+    facet?: Record<string, unknown> | undefined;
+    visibility?: string | null | undefined;
   } = {},
 ): SearchDocumentDraft {
   const facet = options.facet ?? {};
@@ -154,9 +154,9 @@ export const milestoneSearchProjector = preloadedProjector<
   OrgScopedRow & {
     projectId: string;
     name: string;
-    description?: string | null;
-    targetDate?: Date | null;
-    sort?: number;
+    description?: string | null | undefined;
+    targetDate?: Date | null | undefined;
+    sort?: number | undefined;
   }
 >('milestone', (row) => ({
   ...workDocument(row, 'milestone', row.name, {
@@ -185,7 +185,7 @@ export const cycleSearchProjector = preloadedProjector<
   OrgScopedRow & {
     teamId: string;
     number: number;
-    name?: string | null;
+    name?: string | null | undefined;
     startsAt: Date;
     endsAt: Date;
     status: string;
@@ -208,7 +208,12 @@ export const cycleSearchProjector = preloadedProjector<
 
 /** Projector for organization label search documents. */
 export const labelSearchProjector = preloadedProjector<
-  OrgScopedRow & { name: string; color: string; group?: string | null; teamId?: string | null }
+  OrgScopedRow & {
+    name: string;
+    color: string;
+    group?: string | null | undefined;
+    teamId?: string | null | undefined;
+  }
 >('label', (row) => ({
   ...workDocument(row, 'label', row.name, {
     summary: row.group ?? null,
@@ -223,11 +228,11 @@ export const savedViewSearchProjector = preloadedProjector<
   OrgScopedRow & {
     name: string;
     scope: string;
-    ownerActorId?: string | null;
-    teamId?: string | null;
-    filters?: unknown[];
+    ownerActorId?: string | null | undefined;
+    teamId?: string | null | undefined;
+    filters?: unknown[] | undefined;
     grouping?: unknown;
-    sort?: unknown[];
+    sort?: unknown[] | undefined;
   }
 >('saved_view', (row) => ({
   ...workDocument(row, 'saved_view', row.name, {

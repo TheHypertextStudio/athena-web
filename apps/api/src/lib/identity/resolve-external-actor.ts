@@ -34,7 +34,7 @@ export interface ResolveExternalActorInput {
   /** The actor's native id in that source. */
   readonly externalId: string;
   /** The actor's email at the source, when the caller has one (fuels the ad-hoc fallback). */
-  readonly email?: string;
+  readonly email?: string | undefined;
 }
 
 /**

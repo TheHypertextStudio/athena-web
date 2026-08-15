@@ -18,10 +18,10 @@ function contentDocument(
   subjectKind: string,
   subjectId: string,
   options: {
-    summary?: string | null;
-    body?: string | null;
-    facet?: Record<string, unknown>;
-    externalUrl?: string | null;
+    summary?: string | null | undefined;
+    body?: string | null | undefined;
+    facet?: Record<string, unknown> | undefined;
+    externalUrl?: string | null | undefined;
   } = {},
 ): SearchDocumentDraft {
   return {
@@ -52,12 +52,12 @@ function contentDocument(
 /** Projector for comments attached to searchable Docket subjects. */
 export const commentSearchProjector = preloadedProjector<
   OrgScopedRow & {
-    authorId?: string | null;
+    authorId?: string | null | undefined;
     subjectType: string;
     subjectId: string;
     body: string;
-    parentCommentId?: string | null;
-    editedAt?: Date | null;
+    parentCommentId?: string | null | undefined;
+    editedAt?: Date | null | undefined;
   }
 >('comment', (row) => ({
   ...contentDocument(
@@ -86,10 +86,10 @@ export const commentSearchProjector = preloadedProjector<
 /** Projector for status updates attached to searchable Docket subjects. */
 export const updateSearchProjector = preloadedProjector<
   OrgScopedRow & {
-    authorId?: string | null;
+    authorId?: string | null | undefined;
     subjectType: string;
     subjectId: string;
-    health?: string | null;
+    health?: string | null | undefined;
     body: string;
   }
 >('update', (row) => ({
@@ -117,10 +117,10 @@ export const attachmentSearchProjector = preloadedProjector<
     subjectId: string;
     kind: string;
     title: string;
-    url?: string | null;
-    sourceIntegrationId?: string | null;
-    externalId?: string | null;
-    metadata?: Record<string, unknown> | null;
+    url?: string | null | undefined;
+    sourceIntegrationId?: string | null | undefined;
+    externalId?: string | null | undefined;
+    metadata?: Record<string, unknown> | null | undefined;
   }
 >('attachment', (row) => ({
   ...contentDocument(row, 'attachment', row.title, row.subjectType, row.subjectId, {

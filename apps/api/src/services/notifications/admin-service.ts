@@ -258,7 +258,10 @@ function compareSuppressions(a: SuppressionEstimate, b: SuppressionEstimate): nu
   return a.reason.localeCompare(b.reason);
 }
 
-function bodyText(body: { readonly text?: string; readonly html?: string }): string {
+function bodyText(body: {
+  readonly text?: string | undefined;
+  readonly html?: string | undefined;
+}): string {
   const text = body.text?.trim();
   if (text !== undefined && text.length > 0) return text;
   return (

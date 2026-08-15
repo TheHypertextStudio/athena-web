@@ -1,5 +1,10 @@
 /** Caller-owned Athena API mounted at `/v1/me/athena`. */
-import { agentSession, db, sessionActivity } from '@docket/db';
+import {
+  agentSession,
+  db,
+  sessionActivity,
+  type SessionActivityBody as DbSessionActivityBody,
+} from '@docket/db';
 import {
   AthenaFreshChatBody,
   AthenaMessageBody,
@@ -310,7 +315,7 @@ async function pulseCounts(ownerUserId: string): Promise<
 
 interface ActivityHistoryPage {
   readonly activities: readonly (typeof sessionActivity.$inferSelect)[];
-  readonly nextCursor?: string;
+  readonly nextCursor?: string | undefined;
 }
 
 /** Load one newest-first keyset page, returned oldest-first for direct timeline rendering. */
@@ -419,7 +424,7 @@ async function personalDetail(
 
 interface SessionLanePage {
   readonly sessions: readonly SessionRow[];
-  readonly nextCursor?: string;
+  readonly nextCursor?: string | undefined;
 }
 
 /** Load one independently bounded queue lane in stable newest-first order. */
@@ -639,11 +644,14 @@ async function appendMessage(
       sessionId: session.id,
       organizationId: null,
       type: 'response',
+      // Drizzle's generic `.values()` inference doesn't structurally match this object literal
+      // to the column's `$type<SessionActivityBody>()` on its own; the cast asserts the same
+      // shape the type declares.
       body: {
         text: body.body,
         author: 'user',
         ...(context ? { context } : {}),
-      },
+      } as DbSessionActivityBody,
     });
     const messages = await loadTranscript(tx, session.id);
     await saveTranscript(
@@ -979,7 +987,7 @@ const meAthena = new Hono<AppEnv>()
             text: body.prompt,
             author: 'user',
             ...(invocation.context ? { context: invocation.context } : {}),
-          },
+          } as DbSessionActivityBody,
         })
         .returning({ createdAt: sessionActivity.createdAt });
       // `dispatchAthenaWork` is never called with a `taskId` from this route (only its

@@ -37,9 +37,9 @@ interface SearchWorkspaceInput {
   activeOrgId?: string | null;
   params: {
     /** Absent or blank selects browse mode: the same corpus, ordered by recency. */
-    q?: string;
+    q?: string | undefined;
     limit?: number;
-    cursor?: string;
+    cursor?: string | undefined;
     families?: readonly string[];
     kinds?: readonly string[];
     sources?: readonly string[];
@@ -50,10 +50,10 @@ interface SearchWorkspaceInput {
     ids?: readonly string[];
     statuses?: readonly string[];
     healths?: readonly string[];
-    activeOrgId?: string;
+    activeOrgId?: string | undefined;
     surface?: 'page' | 'palette';
-    from?: string;
-    to?: string;
+    from?: string | undefined;
+    to?: string | undefined;
     includeArchived?: boolean;
   };
 }

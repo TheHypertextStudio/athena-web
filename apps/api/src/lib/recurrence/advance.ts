@@ -40,7 +40,7 @@ export interface AdvanceCompletedProcessTaskCommand {
   /** Owning Docket workspace. */
   readonly organizationId: string;
   /** Actor credited with any work released by the transition. */
-  readonly actorId?: string;
+  readonly actorId?: string | undefined;
   /** Concrete generated Task that completed. */
   readonly completedTaskId: string;
   /** Calendar date of actual completion in the process's planning context. */

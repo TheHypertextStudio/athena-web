@@ -99,7 +99,6 @@ describe('eventSearchProjector', () => {
         entity: { kind: 'project', url: '/entity/target-1' },
         entityKind: 'project',
         docketEntityId: 'target-1',
-        participants: undefined,
       }),
     });
     expect(doc?.externalUrl).toBe('/entity/target-1');

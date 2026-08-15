@@ -20,11 +20,11 @@ import type { ApprovalPolicy, AthenaApprovalMode } from '@docket/types';
 /** The MCP tool-annotation hints the classifier reads (a subset of `ToolAnnotations`). */
 export interface ToolAnnotationHints {
   /** Whether the tool declares itself side-effect free. */
-  readonly readOnlyHint?: boolean;
+  readonly readOnlyHint?: boolean | undefined;
   /** Whether the tool declares destructive updates (vs additive). */
-  readonly destructiveHint?: boolean;
+  readonly destructiveHint?: boolean | undefined;
   /** Whether the tool reaches outside Docket (e.g. a remote MCP connection). */
-  readonly openWorldHint?: boolean;
+  readonly openWorldHint?: boolean | undefined;
 }
 
 /** A tool's gate-relevant classification, derived purely from its annotations. */

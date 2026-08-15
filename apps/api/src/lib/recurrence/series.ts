@@ -105,7 +105,7 @@ export interface CreateRecurrenceSeriesCommand {
   /** Owning Docket workspace. */
   readonly organizationId: string;
   /** Actor credited with the series and first trigger revision. */
-  readonly actorId?: string;
+  readonly actorId?: string | undefined;
   /** Validated series body. */
   readonly series: RecurrenceSeriesCreateValue;
 }
@@ -115,13 +115,13 @@ export interface MaterializeSeriesCommand {
   /** Owning Docket workspace. */
   readonly organizationId: string;
   /** Actor credited with generated work. */
-  readonly actorId?: string;
+  readonly actorId?: string | undefined;
   /** Series to execute. */
   readonly seriesId: string;
   /** Civil date to execute. */
   readonly scheduledFor: string;
   /** Optional stable key allowing distinct, retry-safe manual/event occurrences on one date. */
-  readonly occurrenceKey?: string;
+  readonly occurrenceKey?: string | undefined;
 }
 
 /** Convert a clock instant to a stable UTC civil date for non-calendar trigger defaults. */
@@ -350,7 +350,7 @@ async function persistSeriesRevision(
   tx: Transaction,
   input: {
     readonly organizationId: string;
-    readonly actorId?: string;
+    readonly actorId?: string | undefined;
     readonly seriesId: string;
     readonly processRevisionId: string;
     readonly number: number;
@@ -757,13 +757,13 @@ async function appendFutureSeriesRevision(
   database: Database,
   input: {
     readonly organizationId: string;
-    readonly actorId?: string;
+    readonly actorId?: string | undefined;
     readonly seriesId: string;
     readonly effectiveFrom: string;
     /** Civil date used to enforce future-only revision boundaries. */
-    readonly asOf?: string;
+    readonly asOf?: string | undefined;
     readonly trigger: ProcessTriggerValue;
-    readonly onRetired?: (work: RetiredFutureWork) => Promise<void>;
+    readonly onRetired?: ((work: RetiredFutureWork) => Promise<void>) | undefined;
   },
 ): Promise<void> {
   const retired = await database.transaction(async (tx) => {
@@ -928,12 +928,12 @@ export async function editRecurrenceSeries(
   database: Database,
   input: {
     readonly organizationId: string;
-    readonly actorId?: string;
+    readonly actorId?: string | undefined;
     readonly seriesId: string;
     /** Civil date used to enforce future-only revision boundaries. */
-    readonly asOf?: string;
+    readonly asOf?: string | undefined;
     readonly edit: SeriesEditValue;
-    readonly onRetired?: (work: RetiredFutureWork) => Promise<void>;
+    readonly onRetired?: ((work: RetiredFutureWork) => Promise<void>) | undefined;
   },
 ): Promise<z.input<typeof RecurrenceSeriesDetailOut>> {
   const edit = SeriesEdit.parse(input.edit);

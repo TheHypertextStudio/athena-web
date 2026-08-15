@@ -1,4 +1,4 @@
-import type { Database } from '@docket/db';
+import type { Database, NotificationContent as DbNotificationContent } from '@docket/db';
 import { notificationIntent, staffUser } from '@docket/db';
 import {
   canCreateNotification,
@@ -71,7 +71,10 @@ export class NotificationIntentService {
         audience: input.audience,
         channels: [...input.channels],
         subject: input.subject,
-        body: input.body,
+        // Drizzle's generic `.values()` inference doesn't structurally match the zod-inferred
+        // wire shape to the column's `$type<NotificationContent>()` on its own; the cast asserts
+        // the same shape the type declares.
+        body: input.body as DbNotificationContent,
         replyPolicy: input.replyPolicy,
         status: input.scheduledAt ? 'scheduled' : 'draft',
         scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,

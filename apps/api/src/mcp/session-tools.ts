@@ -184,8 +184,8 @@ const SESSION_ACTIONS = ['respond', 'approve', 'reject', 'cancel'] as const;
 /** One session action, already authorized. */
 interface SessionActionInput {
   readonly action: (typeof SESSION_ACTIONS)[number];
-  readonly activityId?: string;
-  readonly body?: string;
+  readonly activityId?: string | undefined;
+  readonly body?: string | undefined;
 }
 
 /**

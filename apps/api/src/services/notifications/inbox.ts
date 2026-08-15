@@ -13,9 +13,9 @@ type NotificationDeliveryRow = typeof notificationDelivery.$inferSelect;
 
 /** Optional narrowing filters for a signed-in user's notification inbox. */
 export interface NotificationInboxFilters {
-  readonly organizationId?: string;
-  readonly type?: NotificationRow['type'];
-  readonly unreadOnly?: boolean;
+  readonly organizationId?: string | undefined;
+  readonly type?: NotificationRow['type'] | undefined;
+  readonly unreadOnly?: boolean | undefined;
 }
 
 /** Database-backed notification inbox service. */

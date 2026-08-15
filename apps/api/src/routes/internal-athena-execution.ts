@@ -35,7 +35,7 @@ const MAX_EXECUTION_REQUEST_BYTES = 4_096;
 
 /** Injectable boundaries for route-level authentication and state-machine tests. */
 export interface InternalAthenaExecutionDependencies {
-  readonly secret?: string;
+  readonly secret?: string | undefined;
   readonly claimNonce: (
     direction: ExecutionRequestDirection,
     nonce: string,

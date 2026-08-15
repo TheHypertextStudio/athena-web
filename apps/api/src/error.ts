@@ -23,7 +23,7 @@ export class ApiError extends Error {
   /** Machine-readable problem code. */
   readonly code: ProblemCode;
   /** Per-field validation issues, when applicable. */
-  readonly fieldErrors?: Record<string, FieldIssue[]>;
+  readonly fieldErrors?: Record<string, FieldIssue[]> | undefined;
 
   constructor(
     status: ContentfulStatusCode,

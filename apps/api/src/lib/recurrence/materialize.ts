@@ -44,7 +44,7 @@ export interface MaterializeOccurrenceCommand {
   /** Owning Docket workspace. */
   readonly organizationId: string;
   /** Actor credited with generated work. */
-  readonly actorId?: string;
+  readonly actorId?: string | undefined;
   /** Recurrence series being executed. */
   readonly seriesId: string;
   /** Immutable schedule/process binding selected for this occurrence. */
@@ -52,9 +52,9 @@ export interface MaterializeOccurrenceCommand {
   /** Expected civil date. */
   readonly scheduledFor: string;
   /** Original date when this is a rescheduled occurrence. */
-  readonly originalScheduledFor?: string;
+  readonly originalScheduledFor?: string | undefined;
   /** Stable provider-side occurrence key for calendar-bound runs. */
-  readonly externalOccurrenceKey?: string;
+  readonly externalOccurrenceKey?: string | undefined;
 }
 
 /** Complete identity map for one materialized process occurrence. */
@@ -86,7 +86,7 @@ export interface MaterializeInstanceStepsCommand {
   /** Owning workspace. */
   readonly organizationId: string;
   /** Actor credited with newly generated entities. */
-  readonly actorId?: string;
+  readonly actorId?: string | undefined;
   /** Existing process instance. */
   readonly instanceId: string;
   /** Immutable process revision. */
@@ -94,7 +94,7 @@ export interface MaterializeInstanceStepsCommand {
   /** Civil date that triggered the occurrence. */
   readonly scheduledFor: string;
   /** Exact completion dates observed during this transition, keyed by source step id. */
-  readonly completionDatesByStepId?: ReadonlyMap<string, string>;
+  readonly completionDatesByStepId?: ReadonlyMap<string, string> | undefined;
 }
 
 /** Convert a validated calendar date to the timestamp convention used by work rows. */

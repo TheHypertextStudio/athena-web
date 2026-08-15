@@ -99,8 +99,8 @@ function splitCsv(value: string | undefined): string[] | undefined {
  * window (their rows share ids per the Task 1 backfill).
  */
 function toVisibilityPatch(body: {
-  selected?: boolean;
-  visibleByDefault?: boolean;
+  selected?: boolean | undefined;
+  visibleByDefault?: boolean | undefined;
 }): Partial<{ selected: boolean; visibleByDefault: boolean }> {
   const patch: Partial<{ selected: boolean; visibleByDefault: boolean }> = {};
   if (body.selected !== undefined) patch.selected = body.selected;

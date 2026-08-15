@@ -51,14 +51,14 @@ export interface ClaimedQueuedRunGeneration {
 
 /** Testable timing inputs for a generation claim. */
 export interface RunGenerationOptions {
-  readonly now?: Date;
-  readonly leaseDurationMs?: number;
+  readonly now?: Date | undefined;
+  readonly leaseDurationMs?: number | undefined;
   /** Keep a partially-approved session parked while executing only the selected actions. */
-  readonly resumeSession?: boolean;
+  readonly resumeSession?: boolean | undefined;
   /** Session states this specific execution entry point may claim atomically. */
-  readonly runnableStatuses?: readonly SessionRow['status'][];
+  readonly runnableStatuses?: readonly SessionRow['status'][] | undefined;
   /** Clear a prior terminal timestamp only after admission succeeds. */
-  readonly clearEndedAt?: boolean;
+  readonly clearEndedAt?: boolean | undefined;
 }
 
 /** Transaction handle supplied after a generation lease has been locked and revalidated. */

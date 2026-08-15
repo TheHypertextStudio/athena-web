@@ -172,12 +172,12 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
     },
     (args: {
       action: (typeof TRACK_ACTIONS)[number];
-      taskId?: string;
-      label?: string;
-      orgId?: string;
-      timeRecordId?: string;
-      start?: string;
-      end?: string;
+      taskId?: string | undefined;
+      label?: string | undefined;
+      orgId?: string | undefined;
+      timeRecordId?: string | undefined;
+      start?: string | undefined;
+      end?: string | undefined;
     }) =>
       runTool(async () => {
         requireScope(

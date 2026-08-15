@@ -83,11 +83,11 @@ export interface RoutableEvent {
   readonly kind: EventKind;
   readonly entity: RoutableEntity | null;
   /** The acting Docket Actor (excluded from its own event's recipients), when internal. */
-  readonly actorId?: string | null;
+  readonly actorId?: string | null | undefined;
   /** Extra Docket Actor ids involved (e.g. @-mentions) → mention/participant recipients. */
-  readonly participantActorIds?: readonly string[];
+  readonly participantActorIds?: readonly string[] | undefined;
   /** External fallback: the integration owner to notify when there are no Docket owners. */
-  readonly ownerUserId?: string | null;
+  readonly ownerUserId?: string | null | undefined;
   /**
    * Pre-resolved external recipients (already Better Auth user ids, each with its reason).
    *
@@ -96,7 +96,7 @@ export interface RoutableEvent {
    * Discord mentions mapped from snowflakes) and richer provider logic (e.g. Slack
    * mention/DM/thread classification). The router still owns strongest-reason-wins merging.
    */
-  readonly externalRecipients?: ReadonlyMap<string, StreamRelevance>;
+  readonly externalRecipients?: ReadonlyMap<string, StreamRelevance> | undefined;
   /**
    * Recipients the producer names outright, exempt from the "never surface your own action
    * to yourself" rule.
@@ -109,7 +109,7 @@ export interface RoutableEvent {
    * supply the audience here, and it survives verbatim. Use it only when the producer knows
    * the audience by construction; ambient relevance stays the router's job.
    */
-  readonly directRecipients?: ReadonlyMap<string, StreamRelevance>;
+  readonly directRecipients?: ReadonlyMap<string, StreamRelevance> | undefined;
 }
 
 /**

@@ -87,8 +87,10 @@ afterEach(async () => {
 });
 
 /** Every registered resource, paged to the end. */
-async function allResources(client: Client): Promise<{ uri: string; mimeType?: string }[]> {
-  const out: { uri: string; mimeType?: string }[] = [];
+async function allResources(
+  client: Client,
+): Promise<{ uri: string; mimeType?: string | undefined }[]> {
+  const out: { uri: string; mimeType?: string | undefined }[] = [];
   let cursor: string | undefined;
   do {
     const page = await client.listResources(cursor ? { cursor } : undefined);
@@ -180,7 +182,7 @@ describe('tool → widget linkage', () => {
     const tools = await allTools(client);
     const uriFor = (name: string): string | undefined => {
       const meta = tools.find((t) => t.name === name)?._meta as
-        | Record<string, { resourceUri?: string }>
+        | Record<string, { resourceUri?: string | undefined }>
         | undefined;
       return meta?.[UI_EXTENSION]?.resourceUri;
     };
@@ -220,7 +222,7 @@ describe('tool → widget linkage', () => {
     );
 
     for (const tool of await allTools(client)) {
-      const meta = tool._meta as Record<string, { resourceUri?: string }> | undefined;
+      const meta = tool._meta as Record<string, { resourceUri?: string | undefined }> | undefined;
       const uri = meta?.[UI_EXTENSION]?.resourceUri;
       if (uri === undefined) continue;
       expect(registered, `${tool.name} names ${uri}`).toContain(uri);
@@ -241,7 +243,7 @@ describe('spec spelling of the tool → widget metadata', () => {
     const client = await connect(await seedCtx());
     const tools = await allTools(client);
     const meta = tools.find((t) => t.name === 'list_work')?._meta as
-      | Record<string, { resourceUri?: string }>
+      | Record<string, { resourceUri?: string | undefined }>
       | undefined;
 
     // The stable specification (2026-01-26) spells the linkage `_meta.ui`. The full extension id

@@ -147,7 +147,7 @@ async function finishSuccess(
   processed: number,
   total: number,
   now: Date,
-  opts?: { readonly stampFullSync?: boolean },
+  opts?: { readonly stampFullSync?: boolean | undefined },
 ): Promise<SyncRunRow> {
   await db
     .update(integration)
@@ -252,7 +252,7 @@ export type LeasedSyncExecutor = (ctx: LeasedSyncContext) => Promise<{
   readonly processed: number;
   readonly total: number;
   /** Forwarded to {@link finishSuccess}'s `stampFullSync` — a work-graph full pull just completed. */
-  readonly stampFullSync?: boolean;
+  readonly stampFullSync?: boolean | undefined;
 }>;
 
 /**

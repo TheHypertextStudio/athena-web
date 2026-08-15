@@ -13,25 +13,25 @@ interface OrganizationRow {
   id: string;
   name: string;
   slug: string;
-  purpose?: string | null;
-  updatedAt?: Date | null;
-  archivedAt?: Date | null;
+  purpose?: string | null | undefined;
+  updatedAt?: Date | null | undefined;
+  archivedAt?: Date | null | undefined;
 }
 
 function peopleDocument(
   row: {
     id: string;
     organizationId: string;
-    updatedAt?: Date | null;
-    createdAt?: Date | null;
-    archivedAt?: Date | null;
+    updatedAt?: Date | null | undefined;
+    createdAt?: Date | null | undefined;
+    archivedAt?: Date | null | undefined;
   },
   kind: SearchDocumentDraft['kind'],
   title: string,
   options: {
-    summary?: string | null;
-    body?: string | null;
-    facet?: Record<string, unknown>;
+    summary?: string | null | undefined;
+    body?: string | null | undefined;
+    facet?: Record<string, unknown> | undefined;
   } = {},
 ): SearchDocumentDraft {
   return {
@@ -75,7 +75,7 @@ export const organizationSearchProjector = preloadedProjector<OrganizationRow>(
 
 /** Projector for organization team search documents. */
 export const teamSearchProjector = preloadedProjector<
-  OrgScopedRow & { name: string; key: string; description?: string | null }
+  OrgScopedRow & { name: string; key: string; description?: string | null | undefined }
 >('team', (row) => ({
   ...peopleDocument(row, 'team', row.name, {
     summary: row.description ?? row.key,
@@ -90,8 +90,8 @@ export const memberSearchProjector = preloadedProjector<
   OrgScopedRow & {
     kind: string;
     displayName: string;
-    userId?: string | null;
-    roleId?: string | null;
+    userId?: string | null | undefined;
+    roleId?: string | null | undefined;
     status: string;
   }
 >('actor', (row) => {
@@ -110,9 +110,9 @@ export const memberSearchProjector = preloadedProjector<
 export const agentSearchProjector = preloadedProjector<
   OrgScopedRow & {
     actorId: string;
-    guidance?: string | null;
-    approvalPolicy?: string | null;
-    accountableOwnerId?: string | null;
+    guidance?: string | null | undefined;
+    approvalPolicy?: string | null | undefined;
+    accountableOwnerId?: string | null | undefined;
   }
 >('agent', (row) => ({
   ...peopleDocument(row, 'agent', `Agent ${row.id}`, {
@@ -132,12 +132,12 @@ export const agentSessionSearchProjector = preloadedProjector<{
   id: string;
   organizationId: string;
   agentId: string;
-  taskId?: string | null;
+  taskId?: string | null | undefined;
   trigger: string;
   status: string;
-  createdAt?: Date | null;
-  startedAt?: Date | null;
-  endedAt?: Date | null;
+  createdAt?: Date | null | undefined;
+  startedAt?: Date | null | undefined;
+  endedAt?: Date | null | undefined;
 }>('agent_session', (row) => ({
   ...peopleDocument(row, 'agent_session', `Agent session ${row.id}`, {
     summary: row.status,

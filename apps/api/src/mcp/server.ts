@@ -312,7 +312,7 @@ async function notificationStream(c: Context, sessionId: string): Promise<Respon
 /** A `tools/call` JSON-RPC request body (the only shape the scope preflight inspects). */
 interface ToolsCallBody {
   readonly method?: unknown;
-  readonly params?: { readonly name?: unknown };
+  readonly params?: { readonly name?: unknown } | undefined;
 }
 
 /** JSON-RPC request IDs are strings or integer numbers. */
@@ -332,7 +332,7 @@ interface ActiveMcpRequest {
 
 interface CancellationNotification {
   readonly requestId: JsonRpcRequestId;
-  readonly reason?: string;
+  readonly reason?: string | undefined;
 }
 
 const activeMcpRequests = new Map<string, ActiveMcpRequest>();
@@ -592,7 +592,7 @@ export async function mcpHandler(c: Context): Promise<Response> {
   }
 
   const server = buildServer(ctx, session ?? mintedSession);
-  const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  const transport = new WebStandardStreamableHTTPServerTransport({});
   await server.connect(transport);
   const activeIds = raw.method === 'POST' ? [...new Set(cancellableRequestIds(body))] : [];
   let cleaned = false;

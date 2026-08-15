@@ -155,8 +155,8 @@ export async function readCalendarItemsInRange(
     userId: string;
     start: Date;
     end: Date;
-    layerIds?: readonly string[];
-    kinds?: readonly CalendarItemKind[];
+    layerIds?: readonly string[] | undefined;
+    kinds?: readonly CalendarItemKind[] | undefined;
   },
 ): Promise<{
   layers: z.input<typeof CalendarLayerOut>[];

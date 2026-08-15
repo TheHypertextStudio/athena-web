@@ -44,14 +44,14 @@ export interface PromptConfig<Args extends z.ZodRawShape> {
 /** A single tool entry as serialized in an MCP `tools/list` response. */
 export interface ToolListValue {
   readonly name: string;
-  readonly title?: string;
-  readonly description?: string;
+  readonly title?: string | undefined;
+  readonly description?: string | undefined;
   readonly inputSchema: Record<string, unknown>;
-  readonly outputSchema?: Record<string, unknown>;
-  readonly annotations?: ToolAnnotations;
-  readonly icons?: readonly Icon[];
-  readonly execution?: ToolExecution;
-  readonly _meta?: Record<string, unknown>;
+  readonly outputSchema?: Record<string, unknown> | undefined;
+  readonly annotations?: ToolAnnotations | undefined;
+  readonly icons?: readonly Icon[] | undefined;
+  readonly execution?: ToolExecution | undefined;
+  readonly _meta?: Record<string, unknown> | undefined;
 }
 
 /** A single resource entry as serialized in an MCP `resources/list` response. */
@@ -68,16 +68,16 @@ export interface ResourceTemplateListValue extends ResourceMetadata {
 
 interface PromptArgument {
   readonly name: string;
-  readonly description?: string;
+  readonly description?: string | undefined;
   readonly required: boolean;
 }
 
 /** A single prompt entry as serialized in an MCP `prompts/list` response. */
 export interface PromptListValue {
   readonly name: string;
-  readonly title?: string;
-  readonly description?: string;
-  readonly arguments?: readonly PromptArgument[];
+  readonly title?: string | undefined;
+  readonly description?: string | undefined;
+  readonly arguments?: readonly PromptArgument[] | undefined;
 }
 
 const PromptJsonSchema = z

@@ -145,9 +145,9 @@ export async function buildAgendaPayload(
   userId: string,
   options: {
     date: string;
-    includeGoogleCalendar?: boolean;
-    connectionIds?: readonly string[];
-    calendarIds?: readonly string[];
+    includeGoogleCalendar?: boolean | undefined;
+    connectionIds?: readonly string[] | undefined;
+    calendarIds?: readonly string[] | undefined;
   },
 ): Promise<z.input<typeof AgendaOut>> {
   const hubRows = await db.select({ id: hub.id }).from(hub).where(eq(hub.userId, userId)).limit(1);
@@ -226,7 +226,10 @@ async function buildGoogleCalendarAgendaEntries(
   userId: string,
   start: Date,
   end: Date,
-  options: { connectionIds?: readonly string[]; calendarIds?: readonly string[] },
+  options: {
+    connectionIds?: readonly string[] | undefined;
+    calendarIds?: readonly string[] | undefined;
+  },
 ): Promise<z.input<typeof AgendaOut>['entries']> {
   const { layers, items } = await readCalendarItemsInRange(db, {
     userId,

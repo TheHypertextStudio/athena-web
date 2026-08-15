@@ -39,7 +39,7 @@ export interface Elicitor {
       properties: Record<string, EnumField>;
       required?: string[];
     };
-  }): Promise<{ action: string; content?: Record<string, unknown> }>;
+  }): Promise<{ action: string; content?: Record<string, unknown> | undefined }>;
 }
 
 /** How many candidates are worth putting in front of a person as a list. */

@@ -57,7 +57,7 @@ export interface CreatePublishedProcessDefinitionCommand {
   /** Owning Docket workspace. */
   readonly organizationId: string;
   /** Actor credited with the definition and normalized rows. */
-  readonly actorId?: string;
+  readonly actorId?: string | undefined;
   /** Fully validated graph and reusable work specifications. */
   readonly definition: ProcessDefinitionCreateValue;
 }
@@ -67,7 +67,7 @@ export interface AppendPublishedProcessRevisionCommand {
   /** Owning Docket workspace. */
   readonly organizationId: string;
   /** Actor credited with the new revision. */
-  readonly actorId?: string;
+  readonly actorId?: string | undefined;
   /** Existing definition receiving the revision. */
   readonly definitionId: string;
   /** Replacement graph used only by future instances. */
@@ -89,9 +89,9 @@ export interface PublishedProcessRevision {
 /** Command for turning one ordinary project into a reusable process snapshot. */
 export interface CreateProcessDefinitionFromProjectCommand {
   readonly organizationId: string;
-  readonly actorId?: string;
+  readonly actorId?: string | undefined;
   readonly input: ProcessDefinitionFromProjectCreate;
-  readonly now?: Date;
+  readonly now?: Date | undefined;
 }
 
 /** Convert a persisted planning timestamp into a civil date. */
@@ -323,8 +323,8 @@ function timingColumns(
   stepIds: ReadonlyMap<string, string>,
 ): {
   readonly timingKind: 'on_trigger' | 'relative_to_trigger' | 'after_step_completion';
-  readonly offsetDays?: number;
-  readonly afterStepId?: string;
+  readonly offsetDays?: number | undefined;
+  readonly afterStepId?: string | undefined;
 } {
   if (timing.kind === 'on_trigger') return { timingKind: 'on_trigger' };
   if (timing.kind === 'relative_to_trigger') {
@@ -351,7 +351,7 @@ async function persistRevision(
   tx: Transaction,
   input: {
     readonly organizationId: string;
-    readonly actorId?: string;
+    readonly actorId?: string | undefined;
     readonly definitionId: string;
     readonly revisionNumber: number;
     readonly definition: ProcessDefinitionCreateValue;

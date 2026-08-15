@@ -379,9 +379,10 @@ export function taskStoreForContext(ctx: McpContext, sessionId?: string | null):
 
       const page = rows.slice(0, PAGE_SIZE);
       const hasMore = rows.length > PAGE_SIZE;
+      const lastId = hasMore ? page[page.length - 1]?.id : undefined;
       return {
         tasks: page.map(toSdkTask),
-        nextCursor: hasMore ? page[page.length - 1]?.id : undefined,
+        ...(lastId !== undefined ? { nextCursor: lastId } : {}),
       };
     },
   } satisfies DocketTaskStore;

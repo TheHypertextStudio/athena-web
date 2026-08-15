@@ -265,7 +265,7 @@ export function applyExclusivity(labels: readonly ResolvedLabel[]): ResolvedLabe
 export async function resolveLabelSet(
   orgId: string,
   labelIds: readonly string[] | undefined,
-  options: { teamId?: string | null; dbh?: Db } = {},
+  options: { teamId?: string | null | undefined; dbh?: Db | undefined } = {},
 ): Promise<ResolvedLabel[]> {
   const unique = [...new Set(labelIds ?? [])];
   if (unique.length === 0) return [];

@@ -89,16 +89,16 @@ export function cleanText(value: unknown): string | null {
 
 /** Pick the source row timestamp that best represents freshness for search ranking. */
 export function sourceUpdatedAt(row: {
-  updatedAt?: Date | null;
-  createdAt?: Date | null;
-  occurredAt?: Date | null;
+  updatedAt?: Date | null | undefined;
+  createdAt?: Date | null | undefined;
+  occurredAt?: Date | null | undefined;
 }): Date | null {
   return row.updatedAt ?? row.occurredAt ?? row.createdAt ?? null;
 }
 
 /** Visibility metadata for a work object with a public/private visibility column. */
 export function workVisibility(
-  row: { id: string; visibility?: string | null },
+  row: { id: string; visibility?: string | null | undefined },
   kind: SearchDocumentKind,
 ): SearchVisibilityDraft {
   return row.visibility === 'private'

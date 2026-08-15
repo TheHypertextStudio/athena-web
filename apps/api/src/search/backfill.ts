@@ -27,10 +27,10 @@ const DEFAULT_SOURCE_TABLES = [
 
 /** Options for a paged scan that enqueues search-index backfill jobs. */
 export interface BackfillSearchIndexOptions {
-  sourceTables?: readonly string[];
-  limit?: number;
+  sourceTables?: readonly string[] | undefined;
+  limit?: number | undefined;
   /** Opaque resume cursor returned by a previous paged scan. */
-  cursor?: string;
+  cursor?: string | undefined;
 }
 
 /** Counts and continuation state returned by a search-index backfill scan. */

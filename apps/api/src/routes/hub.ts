@@ -6,7 +6,14 @@
  * an active human Actor in and aggregates across them. Read-only projections only — never
  * merges tenant data (fan-out queries per membership, each item carries its own org id).
  */
-import { auditEvent, db, event, hub as hubTable, notification } from '@docket/db';
+import {
+  auditEvent,
+  db,
+  event,
+  hub as hubTable,
+  notification,
+  type HubPreferences as DbHubPreferences,
+} from '@docket/db';
 import {
   HighlightOut,
   HighlightPatch,
@@ -146,7 +153,11 @@ const hubRouter = new Hono<AppEnv>()
         const merged = mergeHubPreferences(HubPreferences.parse(current.preferences), patch);
         const rows = await tx
           .update(hubTable)
-          .set({ preferences: merged })
+          // `merged` is the zod-inferred wire shape; it doesn't structurally match the stored
+          // `HubPreferences` column type (packages/db) closely enough for TS to infer the
+          // assignment on its own, so the cast stays.
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+          .set({ preferences: merged as DbHubPreferences })
           .where(eq(hubTable.userId, session.user.id))
           .returning({ preferences: hubTable.preferences });
         const updated = rows[0];

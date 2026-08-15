@@ -27,11 +27,11 @@ export interface CreateScheduledProcessCommand {
   /** Owning Docket workspace. */
   readonly organizationId: string;
   /** Actor credited with the series and initially generated work. */
-  readonly actorId?: string;
+  readonly actorId?: string | undefined;
   /** Validated process definition, trigger, and optional effective date. */
   readonly series: RecurrenceSeriesCreateValue;
   /** Injectable clock for deterministic route and tool tests. */
-  readonly now?: Date;
+  readonly now?: Date | undefined;
 }
 
 /**

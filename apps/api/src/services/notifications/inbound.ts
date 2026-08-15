@@ -15,25 +15,25 @@ type ContactPointStatus = typeof contactPoint.$inferSelect.status;
 /** Normalized provider callback or inbound user message ready for durable recording. */
 export interface NormalizedNotificationProviderEvent {
   /** Provider-specific event id used for retry idempotency when present. */
-  readonly providerEventId?: string;
+  readonly providerEventId?: string | undefined;
   /** Channel that produced this callback or reply. */
   readonly channel: NotificationChannel;
   /** Normalized event kind stored in `notification_inbound_event`. */
   readonly kind: NotificationInboundEventKind;
   /** Related notification intent id, when known without a delivery lookup. */
-  readonly notificationId?: string | null;
+  readonly notificationId?: string | null | undefined;
   /** Related delivery id, when correlation succeeded. */
-  readonly deliveryId?: string | null;
+  readonly deliveryId?: string | null | undefined;
   /** Sender address/number/user token for inbound replies or STOP events. */
-  readonly from?: string | null;
+  readonly from?: string | null | undefined;
   /** Raw provider payload, plus normalized hints useful for support/debugging. */
   readonly payload: Record<string, unknown>;
   /** Delivery status to apply, when the callback represents a delivery lifecycle transition. */
-  readonly deliveryStatus?: NotificationDeliveryRow['status'];
+  readonly deliveryStatus?: NotificationDeliveryRow['status'] | undefined;
   /** Contact-point status to apply, when the provider marks the destination unhealthy. */
-  readonly contactPointStatus?: ContactPointStatus;
+  readonly contactPointStatus?: ContactPointStatus | undefined;
   /** Receipt timestamp; defaults to now. */
-  readonly receivedAt?: Date;
+  readonly receivedAt?: Date | undefined;
 }
 
 /** Record and apply one normalized notification provider/user inbound event. */

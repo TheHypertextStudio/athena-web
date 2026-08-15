@@ -28,10 +28,10 @@ export const DEFAULT_RUNNER_REQUEST_TIMEOUT_MS = 10_000;
 
 /** Minimal config needed to choose and authenticate the execution path. */
 export interface AsyncRunnerConfig {
-  readonly APP_MODE?: 'local' | 'test' | 'production';
-  readonly ATHENA_ASYNC_RUNNER_ENABLED?: boolean;
-  readonly CLOUDFLARE_ATHENA_RUNNER_URL?: string;
-  readonly DOCKET_TO_CLOUDFLARE_HMAC_SECRET?: string;
+  readonly APP_MODE?: 'local' | 'test' | 'production' | undefined;
+  readonly ATHENA_ASYNC_RUNNER_ENABLED?: boolean | undefined;
+  readonly CLOUDFLARE_ATHENA_RUNNER_URL?: string | undefined;
+  readonly DOCKET_TO_CLOUDFLARE_HMAC_SECRET?: string | undefined;
 }
 
 /** Transport needed after Docket has conditionally claimed a persisted intent. */

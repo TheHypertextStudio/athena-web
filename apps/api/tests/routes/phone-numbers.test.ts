@@ -9,6 +9,7 @@
  * application-owned copy the surface renders.
  */
 import type * as DbModule from '@docket/db';
+import { PHONE_VERIFICATION_TTL_MS } from '@docket/athena/phone';
 import { CaptureSmsSender } from '@docket/integrations';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -394,9 +395,36 @@ describe('phone number routes', () => {
 
     const deleted = await app.request(`/${created.phoneNumber.id}`, { method: 'DELETE' });
     expect(deleted.status).toBe(200);
+    // The number was mid-verification, so the response describes it as it stood when it was asked
+    // for — a `null` here would say no code had been sent, which is the opposite of what happened.
+    expect((await body<PhoneNumberWire>(deleted)).challenge).not.toBeNull();
 
     const list = await body<{ items: PhoneNumberWire[] }>(await app.request('/'));
     expect(list.items).toHaveLength(0);
+  });
+
+  it('refuses a code that outlived its challenge', async () => {
+    const { app, clock } = await harness('PhoneVerifyExpired');
+    const created = await body<ChallengeWire>(
+      await app.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ country: 'US', dialCode: '1', nationalNumber: '4155550122' }),
+      }),
+    );
+
+    clock.advance(PHONE_VERIFICATION_TTL_MS + 1_000);
+    const late = await app.request(`/${created.phoneNumber.id}/verify`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ code: CODE }),
+    });
+    expect(late.status).toBe(409);
+    expect((await body<{ code: string }>(late)).code).toBe('conflict');
+
+    // The number is still pending, so it can be rescued with a fresh code rather than re-added.
+    const list = await body<{ items: PhoneNumberWire[] }>(await app.request('/'));
+    expect(list.items[0]?.status).toBe('pending');
   });
 
   it('hides another caller’s number behind 404 for every owned action', async () => {

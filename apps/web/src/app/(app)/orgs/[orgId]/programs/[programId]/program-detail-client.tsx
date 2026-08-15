@@ -19,6 +19,7 @@ import { useAppParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { ApplyDescriptionTemplateControl } from '@/components/editor/apply-description-template';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EntityDocument } from '@/components/editor/entity-document';
@@ -42,6 +43,7 @@ import { useOrgMembership } from '@/lib/use-org-membership';
 import { fetchProgramDetail } from '@/lib/fetch-program-detail';
 import { useProgramMutations } from '@/lib/use-program-mutations';
 import { userErrorMessage } from '@/lib/problem';
+import { useSession } from '@/lib/auth-client';
 
 type TabId = 'overview' | 'projects' | 'work' | 'updates';
 
@@ -82,6 +84,9 @@ export default function ProgramDetailPage(): JSX.Element {
   const members = detail?.members ?? membership.members;
   const agents = detail?.agents ?? [];
   const roles = detail?.roles ?? membership.roles;
+  const { data: session } = useSession();
+  const currentActorId =
+    members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
 
   const updatesQ = useApiQuery(
     apiQueryOptions(
@@ -305,6 +310,18 @@ export default function ProgramDetailPage(): JSX.Element {
               patchProgram({ description });
             }}
             placeholder={`Add the ${programLabel} brief…`}
+            headerActions={
+              <ApplyDescriptionTemplateControl
+                orgId={orgId}
+                kind="program"
+                canEdit={canEdit}
+                current={program.description}
+                currentActorId={currentActorId}
+                onApply={(description) => {
+                  patchProgram({ description });
+                }}
+              />
+            }
           />
         </div>
       ) : null}

@@ -12,6 +12,7 @@ import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { ApplyDescriptionTemplateControl } from '@/components/editor/apply-description-template';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { formatWindow } from '@/components/cycles/format-window';
@@ -45,6 +46,7 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { stateTypeOf } from '@/lib/work-state';
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
+import { useSession } from '@/lib/auth-client';
 
 interface TaskFeedActor {
   name: string;
@@ -80,6 +82,10 @@ export default function TaskDetailPage(): JSX.Element {
     isError,
     error,
   } = useTaskDetail(orgId, taskId);
+
+  const { data: session } = useSession();
+  const currentActorId =
+    members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
 
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
   useRegisterTabTitle('task', orgId, taskId, task?.title);
@@ -370,6 +376,19 @@ export default function TaskDetailPage(): JSX.Element {
                 patchTask({ description: description ?? '' });
               }}
               placeholder="Add a description…"
+              headerActions={
+                <ApplyDescriptionTemplateControl
+                  orgId={orgId}
+                  kind="task"
+                  canEdit={canEdit}
+                  current={task.description}
+                  currentActorId={currentActorId}
+                  teamId={task.teamId}
+                  onApply={(description) => {
+                    patchTask({ description });
+                  }}
+                />
+              }
             />
           </section>
 

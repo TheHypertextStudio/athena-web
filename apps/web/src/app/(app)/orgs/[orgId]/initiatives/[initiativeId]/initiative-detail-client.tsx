@@ -28,6 +28,7 @@ import { useAppParams, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { ApplyDescriptionTemplateControl } from '@/components/editor/apply-description-template';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
@@ -63,6 +64,7 @@ import { useCreateLabel } from '@/components/labels/queries';
 import { useInitiativeMutations } from '@/lib/use-initiative-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { userErrorMessage } from '@/lib/problem';
+import { useSession } from '@/lib/auth-client';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
 
@@ -130,6 +132,9 @@ export default function InitiativeDetailPage(): JSX.Element {
   const roles = data?.roles ?? [];
   const canEdit = useOrgCapability(members, roles, 'contribute');
   const canManage = useOrgCapability(members, roles, 'manage');
+  const { data: session } = useSession();
+  const currentActorId =
+    members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
   const memberOptions = useMemo<readonly PickerOption[]>(
     () => memberActorOptions(members),
     [members],
@@ -660,6 +665,18 @@ export default function InitiativeDetailPage(): JSX.Element {
             mutations.patchInitiative({ description });
           }}
           placeholder="Add the Initiative brief…"
+          headerActions={
+            <ApplyDescriptionTemplateControl
+              orgId={orgId}
+              kind="initiative"
+              canEdit={canEdit}
+              current={detail.description}
+              currentActorId={currentActorId}
+              onApply={(description) => {
+                mutations.patchInitiative({ description });
+              }}
+            />
+          }
         />
       </div>
 

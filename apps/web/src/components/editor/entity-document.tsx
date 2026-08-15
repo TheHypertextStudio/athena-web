@@ -13,7 +13,7 @@
  * can target.
  */
 import { ExpandMoreRounded } from '@docket/ui/icons';
-import { type JSX, useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EditableFreeformText } from '@/components/editor/freeform-text';
 import { extractMarkdownHeadings } from '@/components/initiatives/markdown-toc';
@@ -58,6 +58,14 @@ export interface EntityDocumentProps {
    * a distance nobody has to travel, and it costs a column of the measure to say so.
    */
   contents?: boolean;
+  /**
+   * Entity-level actions on the body itself (e.g. applying a template), rendered above the editor.
+   *
+   * @remarks
+   * Lives inside the same tinted surface as the editor so a control with the reach to rewrite the
+   * body — not just format it — reads as part of that surface rather than as an unrelated neighbor.
+   */
+  headerActions?: ReactNode;
 }
 
 /** A document-style entity body with a responsive generated table of contents. */
@@ -67,6 +75,7 @@ export function EntityDocument({
   onSave,
   placeholder = 'Add a description…',
   contents = true,
+  headerActions,
 }: EntityDocumentProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const headings = useMemo(() => extractMarkdownHeadings(value ?? ''), [value]);
@@ -179,6 +188,7 @@ export function EntityDocument({
           }}
           className="entity-document bg-surface-container-low flex min-h-56 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0"
         >
+          {headerActions ? <div className="mb-2 flex justify-end">{headerActions}</div> : null}
           <EditableFreeformText
             value={value}
             placeholder={placeholder}

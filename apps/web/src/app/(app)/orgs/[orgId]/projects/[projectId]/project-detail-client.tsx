@@ -29,6 +29,7 @@ import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { ApplyDescriptionTemplateControl } from '@/components/editor/apply-description-template';
 import { FreeformText } from '@/components/editor/freeform-text';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -61,6 +62,7 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 import { useProjectDetailPage } from '@/lib/use-project-detail-page';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { userErrorMessage } from '@/lib/problem';
+import { useSession } from '@/lib/auth-client';
 
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 
@@ -111,6 +113,10 @@ export default function ProjectDetailPage(): JSX.Element {
     updatePosting,
     updateError,
   } = useProjectDetailPage(orgId, projectId);
+
+  const { data: session } = useSession();
+  const currentActorId =
+    members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
 
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
   useRegisterTabTitle('project', orgId, projectId, project?.name);
@@ -477,6 +483,19 @@ export default function ProjectDetailPage(): JSX.Element {
                 patchProject({ description });
               }}
               placeholder="Add the Project brief…"
+              headerActions={
+                <ApplyDescriptionTemplateControl
+                  orgId={orgId}
+                  kind="project"
+                  canEdit={canEdit}
+                  current={project.description}
+                  currentActorId={currentActorId}
+                  teamId={project.teamId ?? null}
+                  onApply={(description) => {
+                    patchProject({ description });
+                  }}
+                />
+              }
             />
           </section>
 

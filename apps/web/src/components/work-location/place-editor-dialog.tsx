@@ -99,7 +99,9 @@ export function PlaceEditorDialog({
               maxLength={120}
               value={name}
               placeholder="Main library"
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value);
+              }}
             />
           </label>
           <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
@@ -108,7 +110,9 @@ export function PlaceEditorDialog({
               maxLength={240}
               value={address}
               placeholder="10 Library Lane"
-              onChange={(event) => setAddress(event.target.value)}
+              onChange={(event) => {
+                setAddress(event.target.value);
+              }}
             />
           </label>
           <div className="flex flex-col gap-3">
@@ -116,7 +120,9 @@ export function PlaceEditorDialog({
               type="button"
               variant="outline"
               className="self-start"
-              onClick={() => setMapOpen((current) => !current)}
+              onClick={() => {
+                setMapOpen((current) => !current);
+              }}
             >
               <MapPin aria-hidden="true" />
               {mapOpen ? 'Hide map' : point ? 'Change map location' : 'Choose on map'}

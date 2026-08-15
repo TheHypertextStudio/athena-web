@@ -190,7 +190,12 @@ export function ScheduleEditorDialog({
         <form className="grid gap-4 @2xl:grid-cols-2" onSubmit={submit}>
           <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
             Place
-            <Select value={placeId} onChange={(event) => setPlaceId(event.target.value)}>
+            <Select
+              value={placeId}
+              onChange={(event) => {
+                setPlaceId(event.target.value);
+              }}
+            >
               {places.map((place) => (
                 <option key={place.id} value={place.id}>
                   {place.name}
@@ -237,7 +242,9 @@ export function ScheduleEditorDialog({
                 triggerVariant="outline"
                 value={effectiveUntil || null}
                 min={date || undefined}
-                onChange={(nextDate) => setEffectiveUntil(nextDate ?? '')}
+                onChange={(nextDate) => {
+                  setEffectiveUntil(nextDate ?? '');
+                }}
               />
             </div>
           ) : null}
@@ -282,13 +289,13 @@ export function ScheduleEditorDialog({
                   <input
                     type="checkbox"
                     checked={weekdays.includes(day)}
-                    onChange={(event) =>
+                    onChange={(event) => {
                       setWeekdays((current) =>
                         event.target.checked
                           ? [...current, day].sort()
                           : current.filter((value) => value !== day),
-                      )
-                    }
+                      );
+                    }}
                   />
                   {label}
                 </label>

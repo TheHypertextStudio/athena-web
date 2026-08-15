@@ -11,7 +11,13 @@ vi.mock('../../src/components/work-location/place-map-picker', () => ({
   }: {
     onChange: (point: { latitude: number; longitude: number }) => void;
   }) => (
-    <button type="button" aria-label="Place map" onClick={() => onChange(mapPoint)}>
+    <button
+      type="button"
+      aria-label="Place map"
+      onClick={() => {
+        onChange(mapPoint);
+      }}
+    >
       Pick library
     </button>
   ),

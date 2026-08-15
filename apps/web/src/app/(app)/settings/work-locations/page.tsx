@@ -270,7 +270,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
         'Could not update that occurrence.',
       ),
     invalidateKeys: invalidateAll,
-    onSuccess: () => setOccurrenceAssertion(null),
+    onSuccess: () => {
+      setOccurrenceAssertion(null);
+    },
   });
   const clearOccurrence = useApiMutation({
     mutationFn: ({ id, date }: { id: WorkLocationAssertionOut['id']; date: string }) =>
@@ -282,7 +284,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
         'Could not restore that occurrence.',
       ),
     invalidateKeys: invalidateAll,
-    onSuccess: () => setOccurrenceAssertion(null),
+    onSuccess: () => {
+      setOccurrenceAssertion(null);
+    },
   });
   const setCurrent = useApiMutation({
     mutationFn: (placeId: WorkPlaceOut['id']) =>
@@ -291,7 +295,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
         'Could not set your current work location.',
       ),
     invalidateKeys: invalidateAll,
-    onSuccess: () => setPointAt(new Date().toISOString()),
+    onSuccess: () => {
+      setPointAt(new Date().toISOString());
+    },
   });
   const clearCurrent = useApiMutation({
     mutationFn: () =>
@@ -300,7 +306,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
         'Could not clear your manual work location.',
       ),
     invalidateKeys: invalidateAll,
-    onSuccess: () => setPointAt(new Date().toISOString()),
+    onSuccess: () => {
+      setPointAt(new Date().toISOString());
+    },
   });
   const recordObservation = useApiMutation({
     mutationFn: (observation: { placeId: WorkPlaceOut['id']; accuracyMeters: number }) =>
@@ -309,7 +317,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
         'Could not record the matched place.',
       ),
     invalidateKeys: invalidateAll,
-    onSuccess: () => setPointAt(new Date().toISOString()),
+    onSuccess: () => {
+      setPointAt(new Date().toISOString());
+    },
   });
   const saveCommitmentPlace = useApiMutation({
     mutationFn: async ({
@@ -355,7 +365,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
         await sendObservation(observation);
         setDeviceStatus('Current place matched.');
       },
-      onError: (error) => setDeviceStatus(deviceErrorCopy(error)),
+      onError: (error) => {
+        setDeviceStatus(deviceErrorCopy(error));
+      },
     });
   }, [deviceActive, places, sendObservation]);
 
@@ -495,14 +507,18 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                               Edit place
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onSelect={() => setProfile.mutate(isHome ? null : place.id)}
+                              onSelect={() => {
+                                setProfile.mutate(isHome ? null : place.id);
+                              }}
                             >
                               {isHome ? 'Clear home' : 'Make home'}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-error"
-                              onSelect={() => retirePlace.mutate(place.id)}
+                              onSelect={() => {
+                                retirePlace.mutate(place.id);
+                              }}
                             >
                               Retire place
                             </DropdownMenuItem>
@@ -584,14 +600,20 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                             Edit schedule
                           </DropdownMenuItem>
                           {weekly ? (
-                            <DropdownMenuItem onSelect={() => setOccurrenceAssertion(assertion)}>
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                setOccurrenceAssertion(assertion);
+                              }}
+                            >
                               Change one occurrence
                             </DropdownMenuItem>
                           ) : null}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-error"
-                            onSelect={() => deleteAssertion.mutate(assertion.id)}
+                            onSelect={() => {
+                              deleteAssertion.mutate(assertion.id);
+                            }}
                           >
                             Delete schedule
                           </DropdownMenuItem>
@@ -777,8 +799,12 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
         assertion={occurrenceAssertion}
         places={places}
         pending={setOccurrence.isPending || clearOccurrence.isPending}
-        onSet={(id, date, input) => setOccurrence.mutate({ id, date, input })}
-        onRestore={(id, date) => clearOccurrence.mutate({ id, date })}
+        onSet={(id, date, input) => {
+          setOccurrence.mutate({ id, date, input });
+        }}
+        onRestore={(id, date) => {
+          clearOccurrence.mutate({ id, date });
+        }}
       />
 
       {mutationError ? (

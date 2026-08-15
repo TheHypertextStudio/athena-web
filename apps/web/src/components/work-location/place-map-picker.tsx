@@ -2,6 +2,7 @@
 
 /** Lazy interactive point picker for a private saved-place location. */
 import { Button } from '@docket/ui/primitives';
+import type { Map as MapLibreMap, Marker as MapLibreMarker } from 'maplibre-gl';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -28,8 +29,8 @@ export interface PlaceMapPickerProps {
  */
 export function PlaceMapPicker({ value, onChange }: PlaceMapPickerProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<import('maplibre-gl').Map | null>(null);
-  const markerRef = useRef<import('maplibre-gl').Marker | null>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const markerRef = useRef<MapLibreMarker | null>(null);
   const initialValueRef = useRef(value);
   const [status, setStatus] = useState<string | null>(null);
   const onChangeRef = useRef(onChange);
@@ -57,7 +58,7 @@ export function PlaceMapPicker({ value, onChange }: PlaceMapPickerProps): JSX.El
         zoom: initialValue ? 15 : 2.5,
         attributionControl: {},
       });
-      const addMarker = (point: [number, number]): import('maplibre-gl').Marker => {
+      const addMarker = (point: [number, number]): MapLibreMarker => {
         const marker = new Marker({ draggable: true }).setLngLat(point).addTo(map);
         marker.on('dragend', () => {
           const position = marker.getLngLat();
@@ -121,7 +122,9 @@ export function PlaceMapPicker({ value, onChange }: PlaceMapPickerProps): JSX.El
                 setMarker(point);
                 setStatus('Using this device’s current position.');
               },
-              () => setStatus('This browser could not use the current position.'),
+              () => {
+                setStatus('This browser could not use the current position.');
+              },
             );
           }}
         >

@@ -16,6 +16,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { assertDefined } from '@docket/test-utils';
 
 import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
@@ -49,7 +50,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const statusId = await seedStatuses(db, schema, orgId);
   const email = `${slug}@e.com`;
   const [user] = await db
@@ -58,7 +59,12 @@ async function seedOrg(): Promise<Seed> {
     .returning({ id: schema.user.id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: user!.id })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: assertDefined(user).id,
+    })
     .returning({ id: schema.actor.id });
   const [team] = await db
     .insert(schema.team)
@@ -68,15 +74,20 @@ async function seedOrg(): Promise<Seed> {
       key: `C${Math.random().toString(36).slice(2, 6)}`,
     })
     .returning({ id: schema.team.id });
-  await db.insert(schema.hub).values({ userId: user!.id });
+  await db.insert(schema.hub).values({ userId: assertDefined(user).id });
   return {
     orgId,
-    teamId: team!.id,
-    userId: user!.id,
-    actorId: human!.id,
+    teamId: assertDefined(team).id,
+    userId: assertDefined(user).id,
+    actorId: assertDefined(human).id,
     statusId,
     ctx: {
-      principal: { kind: 'user', userId: user!.id, userName: 'Ada', userEmail: email },
+      principal: {
+        kind: 'user',
+        userId: assertDefined(user).id,
+        userName: 'Ada',
+        userEmail: email,
+      },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     },
   };
@@ -99,7 +110,7 @@ async function seedTask(
       visibility,
     })
     .returning({ id: schema.task.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Grant the caller one explicit capability at the resource under test. */
@@ -204,7 +215,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
   resetAuthMocks();
 });
 
@@ -301,7 +312,7 @@ describe('track', () => {
     const rows = await db
       .select({ title: schema.task.title, organizationId: schema.task.organizationId })
       .from(schema.task)
-      .where(eq(schema.task.id, started.tracking.taskId!));
+      .where(eq(schema.task.id, assertDefined(started.tracking.taskId)));
     expect(rows[0]).toEqual({ title: 'Untangle the deploy', organizationId: s.orgId });
   });
 
@@ -444,7 +455,7 @@ describe('track', () => {
     const [record] = await db
       .select({ status: schema.timeRecord.status })
       .from(schema.timeRecord)
-      .where(eq(schema.timeRecord.id, started.tracking.timeRecordId!));
+      .where(eq(schema.timeRecord.id, assertDefined(started.tracking.timeRecordId)));
     expect(record?.status).toBe('paused');
   });
 
@@ -478,7 +489,7 @@ describe('track', () => {
     const [record] = await db
       .select({ status: schema.timeRecord.status, taskId: schema.timeRecord.taskId })
       .from(schema.timeRecord)
-      .where(eq(schema.timeRecord.id, unnamed.tracking.timeRecordId!));
+      .where(eq(schema.timeRecord.id, assertDefined(unnamed.tracking.timeRecordId)));
     expect(record).toMatchObject({ status: 'open', taskId: null });
   });
 
@@ -526,7 +537,7 @@ describe('track', () => {
     const taskId = await seedTask(s, 'Nameable work');
     const client = await connect(s.ctx);
     const started = payload(await track(client, { action: 'start', taskId }));
-    const recordId = started.tracking.timeRecordId!;
+    const recordId = assertDefined(started.tracking.timeRecordId);
 
     // Bypass every client and every validator, exactly as the REST case does: blank the record's
     // own label directly in storage so the stop-time guard is the only thing left to catch it.

@@ -393,7 +393,7 @@ describe('plan_day', () => {
       kind: 'human',
       displayName: 'Ada elsewhere',
       userId: s.userId,
-      roleId: foreignGuest!.id,
+      roleId: assertDefined(foreignGuest).id,
     });
     const crossOrg = await seedTask(foreign, 'Cross-org private task', { visibility: 'private' });
 
@@ -859,7 +859,10 @@ describe('brief', () => {
       .insert(schema.role)
       .values({ organizationId: s.orgId, key: 'guest', name: 'Guest' })
       .returning({ id: schema.role.id });
-    await db.update(schema.actor).set({ roleId: guest!.id }).where(eq(schema.actor.id, s.actorId));
+    await db
+      .update(schema.actor)
+      .set({ roleId: assertDefined(guest).id })
+      .where(eq(schema.actor.id, s.actorId));
     const privateTaskId = await seedTask(s, 'Private brief task', {
       visibility: 'private',
       dueDate: new Date(`${DATE}T12:00:00.000Z`),

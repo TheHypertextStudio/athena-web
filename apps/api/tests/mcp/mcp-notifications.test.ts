@@ -3,6 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { assertDefined } from '@docket/test-utils';
 
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import type { resetNotifications as ResetNotifications } from '../../src/mcp/notify';
@@ -38,27 +39,27 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = org!.id;
+  const orgId = assertDefined(org).id;
   const statusId = await seedStatuses(db, schema, orgId);
 
   const [role] = await db
     .insert(schema.role)
     .values({ organizationId: orgId, key: 'seeded', name: 'Seeded', capabilities: ['view'] })
     .returning({ id: schema.role.id });
-  const roleId = role!.id;
+  const roleId = assertDefined(role).id;
 
   const [user] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
     .returning({ id: schema.user.id });
-  const userId = user!.id;
+  const userId = assertDefined(user).id;
   await db.insert(schema.hub).values({ userId });
 
   const [actor] = await db
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, roleId })
     .returning({ id: schema.actor.id });
-  const actorId = actor!.id;
+  const actorId = assertDefined(actor).id;
 
   await db.insert(schema.grant).values({
     organizationId: orgId,
@@ -78,7 +79,7 @@ async function seedOrg(): Promise<Seed> {
       key: `C${Math.random().toString(36).slice(2, 6)}`,
     })
     .returning({ id: schema.team.id });
-  const teamId = team!.id;
+  const teamId = assertDefined(team).id;
 
   const [task] = await db
     .insert(schema.task)
@@ -92,7 +93,7 @@ async function seedOrg(): Promise<Seed> {
     })
     .returning({ id: schema.task.id });
 
-  return { userId, orgId, teamId, actorId, roleId, taskId: task!.id };
+  return { userId, orgId, teamId, actorId, roleId, taskId: assertDefined(task).id };
 }
 
 function app(): Hono {
@@ -125,7 +126,7 @@ async function openSession(seed: Seed): Promise<string> {
   });
   const sessionId = res.headers.get('Mcp-Session-Id');
   expect(sessionId).toEqual(expect.any(String));
-  return sessionId!;
+  return assertDefined(sessionId);
 }
 
 /** One JSON-RPC reply, as returned by {@link rpc}. */
@@ -190,7 +191,7 @@ async function openStream(
     signal: controller.signal,
   });
   expect(res.status).toBe(200);
-  const reader = res.body!.getReader();
+  const reader = assertDefined(res.body).getReader();
   const decoder = new TextDecoder();
   let buffered = '';
 

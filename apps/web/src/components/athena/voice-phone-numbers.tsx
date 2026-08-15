@@ -90,9 +90,6 @@ const COUNTRY_OPTIONS = DIAL_CODES.map((option) => (
   </option>
 ));
 
-/** A stable empty list, so a render before the first response does not churn dependents. */
-const NO_NUMBERS: readonly PhoneNumberOut[] = [];
-
 /**
  * Replace a number in the cached list, or add it to the front when it is not there yet.
  *
@@ -157,23 +154,16 @@ export function VoicePhoneNumbers(): JSX.Element {
    * Record a freshly issued challenge and point the code box at the number it belongs to.
    *
    * @remarks
-   * The number goes into the list cache rather than a state slot beside it. `bind` invalidates the
-   * list rather than awaiting it, so for one round trip the server does not yet report the row this
-   * person is holding a code for — and the section reads *everything* off that list, so a row
-   * missing from it has no code box, no expiry and no cooldown. Writing the server's own answer
-   * into the cache closes that window at the layer the rest of the section already reads from,
-   * instead of maintaining a parallel copy that every consumer has to remember to union in.
-   *
-   * Not {@link optimisticPatch}: this is not a guess awaiting confirmation but the row the server
-   * just returned, so there is nothing to roll back, and the patch helper no-ops before the first
-   * list response has been cached — exactly when this matters most.
-   *
-   * Undelivered SMS is not reported here either — the issued number carries the same
-   * `deliveryFailed` the listed row does, so one derivation covers both the send that just happened
-   * and the one this session is only reading back.
+   * `bind` invalidates the list rather than awaiting it, so for one round trip the server has not
+   * yet reported the row this person is holding a code for. The section reads everything off that
+   * list, so the server's own answer goes into it rather than into a state slot beside it.
    */
   const acceptChallenge = (result: PhoneChallengeOut): void => {
+    // `setQueryData`, not `optimisticPatch`: this is the row the server just returned rather than a
+    // guess, so there is nothing to roll back, and the patch helper no-ops before the first list
+    // response is cached — exactly the window this covers.
     queryClient.setQueryData<PhoneNumberListOut>(queryKeys.phoneNumbers(), (previous) => ({
+      ...previous,
       items: upsertNumber(previous?.items ?? [], result.phoneNumber),
     }));
     pointAt({ kind: 'number', id: result.phoneNumber.id });
@@ -243,7 +233,7 @@ export function VoicePhoneNumbers(): JSX.Element {
     },
   });
 
-  const items = numbersQ.data?.items ?? NO_NUMBERS;
+  const items = numbersQ.data?.items ?? [];
 
   /** Every number that can take a code right now. The cached list is the only source. */
   const verifiable = items.filter((number) => number.status === 'pending');
@@ -275,15 +265,21 @@ export function VoicePhoneNumbers(): JSX.Element {
   // The soonest moment any row's button should come back. Every pending row owns a cooldown, not
   // just the one being verified — a row the code box is not pointed at is equally capable of
   // having had a code sent moments ago.
-  const nextResendAt = Math.min(...verifiable.map(cooldownEnd));
+  const nextResendAt = verifiable.reduce(
+    (soonest, number) => Math.min(soonest, cooldownEnd(number)),
+    Infinity,
+  );
 
   useEffect(() => {
     // Re-check exactly when the earliest cooldown expires rather than polling: the deadline is
     // already known, and nothing on screen counts down, so a once-per-second re-render of the
     // whole section would buy nothing. Runs on mount too, which is what seeds `now`.
     setNow(Date.now());
+    // `Infinity` when nothing is pending, `NaN` if a row carried an unparseable timestamp: either
+    // way there is no moment to wake up for.
+    if (!Number.isFinite(nextResendAt)) return undefined;
     const delay = nextResendAt - Date.now();
-    if (!Number.isFinite(delay) || delay <= 0) return undefined;
+    if (delay <= 0) return undefined;
     const timer = setTimeout(() => {
       setNow(Date.now());
     }, delay);

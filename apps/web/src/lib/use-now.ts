@@ -16,10 +16,7 @@ export interface UseNowOptions {
    * Whether the clock should advance. Defaults to true.
    *
    * @remarks
-   * Most live-clock UI is only live for part of its life — a countdown matters while its deadline
-   * is pending, an elapsed-time readout while the timer runs. Gating here rather than at each call
-   * site keeps the interval's lifecycle in one place; when this goes false the last value is held,
-   * so whatever is on screen stays put rather than jumping to a stale zero.
+   * While false the last value is held, so what is on screen stays put instead of jumping.
    */
   readonly enabled?: boolean;
 }
@@ -41,6 +38,10 @@ export function useNow(intervalMs = 30_000, options: UseNowOptions = {}): Date {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     if (!enabled) return undefined;
+    // Catch up before ticking. A gated clock holds its last value while off, so resuming without
+    // this would serve a reading up to `intervalMs` old — half a minute stale on the 30s default,
+    // which is long enough for a deadline readout to be wrong at the moment it comes back.
+    setNow(new Date());
     const id = setInterval(() => {
       setNow(new Date());
     }, intervalMs);

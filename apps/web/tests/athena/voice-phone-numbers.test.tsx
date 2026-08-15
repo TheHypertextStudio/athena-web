@@ -18,6 +18,7 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { deferred } from '../support/deferred';
 import { makeQueryWrapper, okResponse, problemResponse } from '../support/query';
 
 const numbersGet = vi.fn();
@@ -209,13 +210,8 @@ describe('VoicePhoneNumbers', () => {
     // `bind` invalidates the list rather than awaiting it, so there is a window where the server's
     // last word on this account still predates the number just bound. The box has to be up in that
     // window, or a person holding a code would be shown the add form and retype the number.
-    let releaseRefetch = (): void => undefined;
-    const refetched = new Promise<unknown>((resolve) => {
-      releaseRefetch = () => {
-        resolve(listing(phoneNumber({ id: 'pn-1' })));
-      };
-    });
-    numbersGet.mockResolvedValueOnce(listing()).mockReturnValueOnce(refetched);
+    const refetch = deferred<unknown>();
+    numbersGet.mockResolvedValueOnce(listing()).mockReturnValueOnce(refetch.promise);
     bindPost.mockResolvedValue(
       okResponse({ phoneNumber: phoneNumber({ id: 'pn-1' }), ...challengeSummary() }),
     );
@@ -239,36 +235,11 @@ describe('VoicePhoneNumbers', () => {
     expect(addForm()).toBeNull();
 
     // And it survives the refetch landing, rather than only existing until the server answers.
-    releaseRefetch();
+    refetch.resolve(listing(phoneNumber({ id: 'pn-1' })));
     await waitFor(() => {
       expect(document.querySelector('[data-phone-number-id="pn-1"]')).not.toBeNull();
     });
     expect(verifyForm()).not.toBeNull();
-  });
-
-  it('refuses to invite a resend the cooldown will reject', async () => {
-    const soon = new Date(Date.now() + 60_000).toISOString();
-    numbersGet.mockResolvedValue(
-      listing(
-        phoneNumber({ id: 'pn-1', challenge: challengeSummary({ resendAvailableAt: soon }) }),
-      ),
-    );
-    renderSection();
-
-    await waitFor(() => {
-      expect(rowAction('pn-1', 'resend')).not.toBeNull();
-    });
-    expect(rowAction('pn-1', 'resend')).toBeDisabled();
-  });
-
-  it('enables the resend once the cooldown has passed', async () => {
-    numbersGet.mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
-    renderSection();
-
-    await waitFor(() => {
-      expect(rowAction('pn-1', 'resend')).not.toBeNull();
-    });
-    expect(rowAction('pn-1', 'resend')).toBeEnabled();
   });
 
   it('re-enables the resend on its own as the cooldown elapses', async () => {

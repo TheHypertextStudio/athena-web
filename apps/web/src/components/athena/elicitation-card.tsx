@@ -18,6 +18,8 @@ import { AlarmClock, CircleAlert, HelpCircle, ListChecks, Sparkles } from '@dock
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Button, Chip, ControlGroup, Text } from '@docket/ui/primitives';
 import Link from 'next/link';
+
+import { useNow } from '@/lib/use-now';
 import { type JSX, useMemo, useState } from 'react';
 
 import {
@@ -27,8 +29,6 @@ import {
   isElicitationAnswered,
   type ElicitationErrorMap,
 } from './elicitation-control';
-import { useNow } from '@/lib/use-now';
-
 import { useAnswerElicitation, type AnswerRejection } from './elicitation-data';
 
 /** Props for {@link ElicitationCard}. */

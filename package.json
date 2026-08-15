@@ -27,6 +27,7 @@
     "secret-scan": "tsx scripts/secret-scan.ts",
     "secret:paste": "tsx scripts/set-secret-from-clipboard.ts",
     "notion:webhook-token": "tsx scripts/notion-webhook-token.ts",
+    "sync:failure": "tsx scripts/sync-failure.ts",
     "launch:verify-prod": "tsx scripts/production-verify.ts",
     "launch:record": "tsx scripts/launch-record.ts",
     "icons": "pnpm --filter @docket/brand icons",

@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { queryKeys } from '../../src/lib/query';
 import { useTodayActions } from '../../src/app/(app)/today/use-today-actions';
+import { assertDefined } from '@docket/test-utils';
 
 const completePost = vi.hoisted(() => vi.fn());
 const deletePlan = vi.hoisted(() => vi.fn());
@@ -240,7 +241,7 @@ describe('useTodayActions', () => {
       });
     });
     expect(addPlan.mock.invocationCallOrder[0]).toBeLessThan(
-      startTimer.mock.invocationCallOrder[0]!,
+      assertDefined(startTimer.mock.invocationCallOrder[0]),
     );
     expect(addPlan).toHaveBeenCalledWith({
       json: {

@@ -16,6 +16,7 @@ import FocusSequence from '../../src/components/today/focus-sequence';
 import KeepTheMomentum from '../../src/components/today/keep-the-momentum';
 import PlanTodayCard from '../../src/components/today/plan-today-card';
 import WorkInMotion from '../../src/components/today/work-in-motion';
+import { assertDefined } from '@docket/test-utils';
 
 vi.mock('../../src/components/time-tracking/task-timer-button', () => ({
   TaskTimerButton: ({ taskId }: { taskId: string }) => <button>Track {taskId}</button>,
@@ -165,7 +166,7 @@ describe('KeepTheMomentum', () => {
     );
 
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Dismiss' })[0]!);
+    fireEvent.click(assertDefined(screen.getAllByRole('button', { name: 'Dismiss' })[0]));
     expect(screen.queryByText('Suggestion a')).not.toBeInTheDocument();
     expect(screen.getByText('Suggestion d')).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(3);

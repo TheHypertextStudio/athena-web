@@ -9,6 +9,7 @@
 import { signUpAndOnboard } from '../helpers/app';
 import { expect, test } from '../helpers/fixtures';
 import { apiJson } from '../helpers/net';
+import { assertDefined } from '@docket/test-utils';
 
 function testTimezone(): { readonly name: string; readonly offsetHours: number } {
   const utcHour = new Date().getUTCHours();
@@ -138,8 +139,12 @@ test('capture today + calendar baseline', async ({ page }, testInfo) => {
     timeout: 30_000,
   });
   await page.waitForTimeout(4000); // let the today data + agenda settle
-  await expect(page.getByRole('article', { name: `Now: ${plan[0]![0]}` })).toBeVisible();
-  await expect(page.getByRole('article', { name: `After this: ${plan[1]![0]}` })).toBeVisible();
+  await expect(
+    page.getByRole('article', { name: `Now: ${assertDefined(plan[0])[0]}` }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('article', { name: `After this: ${assertDefined(plan[1])[0]}` }),
+  ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Work in motion' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Launch Docket', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'A calmer launch', exact: true })).toBeVisible();
@@ -160,10 +165,12 @@ test('capture today + calendar baseline', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await page
-    .getByRole('article', { name: `Now: ${plan[0]![0]}` })
+    .getByRole('article', { name: `Now: ${assertDefined(plan[0])[0]}` })
     .getByRole('button', { name: 'Mark complete' })
     .click();
-  await expect(page.getByRole('article', { name: `Now: ${plan[1]![0]}` })).toBeVisible();
+  await expect(
+    page.getByRole('article', { name: `Now: ${assertDefined(plan[1])[0]}` }),
+  ).toBeVisible();
   await expect(page.getByText('1 of 4 tasks complete')).toBeVisible();
   await page.getByRole('heading', { name: 'Work in motion' }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath('today-work-in-motion.png') });

@@ -72,7 +72,9 @@ describe('notification service DTOs', () => {
     expect(patch.quietHours?.start).toBe('18:00');
 
     const preference = NotificationPreferenceOut.parse(
-      makeNotificationPreferenceOutFixture({ quietHours: patch.quietHours }),
+      makeNotificationPreferenceOutFixture(
+        patch.quietHours !== undefined ? { quietHours: patch.quietHours } : {},
+      ),
     );
     expect(preference.categories['security']?.locked).toBe(true);
 

@@ -1,4 +1,8 @@
-import type { Database, NotificationDestination } from '@docket/db';
+import type {
+  Database,
+  NotificationContent as NotificationContentRecord,
+  NotificationDestination,
+} from '@docket/db';
 import {
   notification,
   notificationDelivery,
@@ -32,11 +36,11 @@ export interface DispatchNotificationIntentInput extends NotificationIntentCreat
   /** Principal id or stable system name that created the intent. */
   readonly createdBy: string;
   /** Instant used for persistence and preference decisions. */
-  readonly now?: Date;
+  readonly now?: Date | undefined;
   /** Optional authenticated deep link for the web inbox projection. */
-  readonly webUrl?: string;
+  readonly webUrl?: string | undefined;
   /** Whether to apply user-managed category/channel toggles while resolving channels. */
-  readonly preferenceMode?: NotificationPreferenceMode;
+  readonly preferenceMode?: NotificationPreferenceMode | undefined;
 }
 
 /** Result of dispatching a notification intent through the currently implemented adapters. */
@@ -58,13 +62,13 @@ export interface DispatchNotificationResult {
 /** Options for dispatching an already persisted notification intent. */
 export interface DispatchPersistedNotificationIntentOptions {
   /** Instant used for persistence and preference decisions. */
-  readonly now?: Date;
+  readonly now?: Date | undefined;
   /** Optional authenticated deep link for the web inbox projection. */
-  readonly webUrl?: string;
+  readonly webUrl?: string | undefined;
   /** True when returning a previously dispatched idempotent result. */
-  readonly idempotent?: boolean;
+  readonly idempotent?: boolean | undefined;
   /** Whether to apply user-managed category/channel toggles while resolving channels. */
-  readonly preferenceMode?: NotificationPreferenceMode;
+  readonly preferenceMode?: NotificationPreferenceMode | undefined;
 }
 
 /** Creates a durable notification intent, snapshots recipients, and attempts channel delivery. */
@@ -100,7 +104,7 @@ export async function dispatchNotificationIntent(
       audience: parsed.audience,
       channels: [...parsed.channels],
       subject: parsed.subject,
-      body: parsed.body,
+      body: parsed.body as NotificationContentRecord,
       replyPolicy: parsed.replyPolicy,
       status: 'sending',
       scheduledAt: parsed.scheduledAt ? new Date(parsed.scheduledAt) : null,

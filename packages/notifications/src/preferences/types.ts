@@ -24,9 +24,9 @@ export interface NotificationPreferenceAllowsChannelInput {
   /** Requested delivery channel. */
   readonly channel: NotificationChannel;
   /** Organization context, when the notification is org-scoped. */
-  readonly organizationId?: string | null;
+  readonly organizationId?: string | null | undefined;
   /** User preference settings. */
-  readonly preferences?: Partial<NotificationPreferenceSettings> | null;
+  readonly preferences?: Partial<NotificationPreferenceSettings> | null | undefined;
 }
 
 /** Quiet-hours settings accepted by resolver helpers, including readonly DB jsonb arrays. */
@@ -40,7 +40,7 @@ export interface NotificationQuietHoursSettings {
   /** Local weekdays where quiet hours apply. */
   readonly days: readonly NotificationQuietHours['days'][number][];
   /** Whether urgent notifications may bypass quiet hours. */
-  readonly allowUrgent?: boolean;
+  readonly allowUrgent?: boolean | undefined;
 }
 
 /** Input for quiet-hours evaluation. */
@@ -58,9 +58,9 @@ export interface NotificationResolvedDestination {
   /** Destination type used by the eventual delivery row. */
   readonly type: NotificationDestinationType;
   /** Masked destination shown in operational views. */
-  readonly valueMasked?: string;
+  readonly valueMasked?: string | undefined;
   /** Contact point used by the delivery, when applicable. */
-  readonly contactPointId?: string;
+  readonly contactPointId?: string | undefined;
 }
 
 /** Per-channel result produced by preference/contact-point resolution. */
@@ -72,7 +72,7 @@ export interface NotificationChannelDecision {
   /** Destination selected for the delivery, if any. */
   readonly destination: NotificationResolvedDestination | null;
   /** Explicit reason when a delivery is delayed or suppressed. */
-  readonly suppression?: NotificationSuppression;
+  readonly suppression?: NotificationSuppression | undefined;
 }
 
 /** Input for resolving channel decisions for one recipient. */
@@ -80,7 +80,7 @@ export interface NotificationPreferenceResolutionInput {
   /** Recipient user id. */
   readonly userId: string;
   /** Organization context, when the notification is org-scoped. */
-  readonly organizationId?: string | null;
+  readonly organizationId?: string | null | undefined;
   /** Product category being delivered. */
   readonly category: NotificationCategory;
   /** Delivery urgency lane. */
@@ -88,5 +88,5 @@ export interface NotificationPreferenceResolutionInput {
   /** Requested channels to resolve. */
   readonly channels: readonly NotificationChannel[];
   /** Instant used for quiet-hours evaluation. */
-  readonly now?: Date;
+  readonly now?: Date | undefined;
 }

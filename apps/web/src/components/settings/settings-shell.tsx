@@ -35,6 +35,7 @@ import {
   personalSectionHref,
   sectionHref,
 } from './settings-registry';
+import { SettingsPane } from './settings-pane';
 import { SettingsShellNav, useSettingsShellWorkspace } from './settings-shell-nav';
 
 /** The pathname to fall back to when settings was opened with no prior page (a direct link). */
@@ -104,27 +105,38 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
       }}
     >
       <SettingsDialogContent className="p-0">
-        <div className="border-outline-variant flex shrink-0 items-center gap-3 border-b px-5 py-3">
-          <DialogTitle className="text-title-medium">Settings</DialogTitle>
-          <WorkspaceSwitcher
-            workspaces={workspaces}
-            onSelect={(orgId) => {
-              router.push(sectionHref(orgId, DEFAULT_WORKSPACE_SETTINGS_SECTION));
-            }}
-            onCreate={() => {
-              router.push(CREATE_WORKSPACE_PATH);
-            }}
-          />
+        {/* `pr-14` reserves the close button's absolute 48px so the switcher never runs under it. */}
+        <div className="border-outline-variant flex shrink-0 items-center gap-3 border-b py-3 pr-14 pl-5">
+          <DialogTitle className="text-title-medium shrink-0">Settings</DialogTitle>
+          {/*
+           * The switcher's trigger is `w-full`, so it needs a box that bounds it: unbounded it
+           * stretched the whole header and pushed its own chevron under the close button at every
+           * width. `min-w-0` lets the workspace name truncate instead of forcing the row wider
+           * than the panel; the cap keeps it chip-sized once there is room to spare.
+           */}
+          <div className="max-w-64 min-w-0 flex-1">
+            <WorkspaceSwitcher
+              workspaces={workspaces}
+              onSelect={(orgId) => {
+                router.push(sectionHref(orgId, DEFAULT_WORKSPACE_SETTINGS_SECTION));
+              }}
+              onCreate={() => {
+                router.push(CREATE_WORKSPACE_PATH);
+              }}
+            />
+          </div>
         </div>
-        <div className="flex min-h-0 flex-1 gap-8 overflow-hidden p-5">
-          <div className="w-52 shrink-0 overflow-y-auto">
+        <SettingsPane
+          renderNav={(onNavigate) => (
             <SettingsShellNav
               selectedOrgId={selectedOrgId}
               selectedOrgIsPersonal={selectedOrgIsPersonal}
+              onNavigate={onNavigate}
             />
-          </div>
-          <div className="min-w-0 flex-1 overflow-y-auto">{children}</div>
-        </div>
+          )}
+        >
+          {children}
+        </SettingsPane>
       </SettingsDialogContent>
     </Dialog>
   );

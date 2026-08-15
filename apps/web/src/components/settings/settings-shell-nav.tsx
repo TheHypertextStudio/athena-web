@@ -16,7 +16,7 @@
 import { useContextState } from '@docket/ui/components';
 import { cn } from '@docket/ui';
 import Link from 'next/link';
-import type { JSX } from 'react';
+import { type JSX, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { useAppPathname } from '@/lib/app-location';
@@ -34,23 +34,83 @@ import { useCanManageOrg } from './use-can-manage-org';
 const ROW_BASE =
   'flex min-h-9 w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-label-large transition-colors';
 
+/**
+ * Whether `href` is the section the viewer is currently on.
+ *
+ * @remarks
+ * Matches the section route itself and anything nested beneath it, so a section that grows a
+ * sub-route keeps its own row highlighted rather than un-highlighting the whole nav.
+ */
+export function isCurrentSection(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** One nav group with its sections already filtered for the viewer, and their routes resolved. */
+export interface SettingsNavGroup {
+  /** The group heading. */
+  readonly label: string;
+  /** The group's sections, filtered for what this viewer may manage. */
+  readonly sections: readonly SettingsSection[];
+  /** Build a section's absolute route. */
+  readonly hrefFor: (section: SettingsSection) => string;
+}
+
+/**
+ * The settings nav's content: the Personal group, then the selected workspace's groups.
+ *
+ * @remarks
+ * Shared deliberately. The rail ({@link SettingsShellNav}) and the narrow-viewport
+ * {@link SettingsSectionPicker} are two presentations of one list, and the audit finding that
+ * produced the picker was about a section being unreachable — so letting the two derive their
+ * sections independently would risk reintroducing exactly that defect in a form no screenshot
+ * would show. One resolution, two renderers.
+ */
+export function useSettingsNavGroups({
+  selectedOrgId,
+  selectedOrgIsPersonal,
+}: SettingsShellNavProps): readonly SettingsNavGroup[] {
+  const { canManage } = useCanManageOrg(selectedOrgId ?? '');
+
+  return useMemo(() => {
+    const personal: SettingsNavGroup = {
+      label: PERSONAL_SETTINGS_GROUP.label,
+      sections: PERSONAL_SETTINGS_GROUP.sections,
+      hrefFor: (section) => personalSectionHref(section.href),
+    };
+    if (!selectedOrgId) return [personal];
+
+    const workspace = workspaceSettingsSectionGroups(selectedOrgIsPersonal)
+      .map((group) => ({
+        label: group.label,
+        sections: group.sections.filter((section) => canManage || section.requiresManage !== true),
+        hrefFor: (section: SettingsSection) => sectionHref(selectedOrgId, section.href),
+      }))
+      .filter((group) => group.sections.length > 0);
+
+    return [personal, ...workspace];
+  }, [canManage, selectedOrgId, selectedOrgIsPersonal]);
+}
+
 /** Props for {@link NavRow}. */
 interface NavRowProps {
   /** The section's absolute route. */
   readonly href: string;
   /** The registry entry this row renders. */
   readonly section: SettingsSection;
+  /** Called once this row has been chosen, so a phone can leave the list for the section. */
+  readonly onNavigate?: (() => void) | undefined;
 }
 
 /** One nav row (a real link), highlighted when its own route is the current page. */
-function NavRow({ href, section }: NavRowProps): JSX.Element {
+function NavRow({ href, section, onNavigate }: NavRowProps): JSX.Element {
   const pathname = useAppPathname();
-  const active = pathname === href || pathname.startsWith(`${href}/`);
+  const active = isCurrentSection(pathname, href);
   const Icon = section.icon;
   return (
     <li className="shrink-0">
       <Link
         href={href}
+        onClick={() => onNavigate?.()}
         aria-current={active ? 'page' : undefined}
         className={cn(
           ROW_BASE,
@@ -75,17 +135,24 @@ interface NavGroupProps {
   readonly sections: readonly SettingsSection[];
   /** Build a section's absolute route. */
   readonly hrefFor: (section: SettingsSection) => string;
+  /** Forwarded to each {@link NavRow}. */
+  readonly onNavigate?: (() => void) | undefined;
 }
 
 /** A labelled group of {@link NavRow}s. */
-function NavGroup({ label, sections, hrefFor }: NavGroupProps): JSX.Element | null {
+function NavGroup({ label, sections, hrefFor, onNavigate }: NavGroupProps): JSX.Element | null {
   if (sections.length === 0) return null;
   return (
     <div className="flex flex-col gap-1">
       <h2 className="text-on-surface-variant text-label-medium px-2.5">{label}</h2>
       <ul className="flex flex-col gap-0.5">
         {sections.map((section) => (
-          <NavRow key={section.key} href={hrefFor(section)} section={section} />
+          <NavRow
+            key={section.key}
+            href={hrefFor(section)}
+            section={section}
+            onNavigate={onNavigate}
+          />
         ))}
       </ul>
     </div>
@@ -98,43 +165,42 @@ export interface SettingsShellNavProps {
   readonly selectedOrgId: string | null;
   /** Whether that workspace is the caller's personal space. */
   readonly selectedOrgIsPersonal: boolean;
+  /**
+   * Called once a section row has been chosen.
+   *
+   * @remarks
+   * Only the phone's two-level pane has anything to do here — the desktop rail sits beside the
+   * content it is navigating, so there is no view to leave.
+   */
+  readonly onNavigate?: (() => void) | undefined;
 }
 
-/** The full settings-modal nav: Personal, then the selected workspace's groups. */
+/**
+ * The full settings-modal nav: Personal, then the selected workspace's groups.
+ *
+ * @remarks
+ * One component serves both presentations {@link SettingsPane} lays out — the rail beside the
+ * content from `sm` up, and the whole pane on a phone browsing for a section. It renders the same
+ * markup either way; only its box changes across the breakpoint.
+ */
 export function SettingsShellNav({
   selectedOrgId,
   selectedOrgIsPersonal,
+  onNavigate,
 }: SettingsShellNavProps): JSX.Element {
-  const { canManage } = useCanManageOrg(selectedOrgId ?? '');
-
-  const workspaceGroups = selectedOrgId
-    ? workspaceSettingsSectionGroups(selectedOrgIsPersonal)
-        .map((group) => ({
-          ...group,
-          sections: group.sections.filter(
-            (section) => canManage || section.requiresManage !== true,
-          ),
-        }))
-        .filter((group) => group.sections.length > 0)
-    : [];
+  const groups = useSettingsNavGroups({ selectedOrgId, selectedOrgIsPersonal });
 
   return (
     <nav aria-label="Settings sections" className="flex flex-col gap-5">
-      <NavGroup
-        label={PERSONAL_SETTINGS_GROUP.label}
-        sections={PERSONAL_SETTINGS_GROUP.sections}
-        hrefFor={(section) => personalSectionHref(section.href)}
-      />
-      {selectedOrgId
-        ? workspaceGroups.map((group) => (
-            <NavGroup
-              key={group.label}
-              label={group.label}
-              sections={group.sections}
-              hrefFor={(section) => sectionHref(selectedOrgId, section.href)}
-            />
-          ))
-        : null}
+      {groups.map((group) => (
+        <NavGroup
+          key={group.label}
+          label={group.label}
+          sections={group.sections}
+          hrefFor={group.hrefFor}
+          onNavigate={onNavigate}
+        />
+      ))}
     </nav>
   );
 }

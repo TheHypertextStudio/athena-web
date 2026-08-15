@@ -61,11 +61,11 @@ export interface AuthDeps {
  * provider-present and provider-absent branches.
  */
 export interface AuthEnv {
-  readonly APP_MODE?: 'local' | 'test' | 'production';
+  readonly APP_MODE?: 'local' | 'test' | 'production' | undefined;
   readonly BETTER_AUTH_SECRET: string;
   readonly BETTER_AUTH_URL: string;
   readonly BETTER_AUTH_TRUSTED_ORIGINS?: string | undefined;
-  readonly BETTER_AUTH_ALLOWED_HOSTS?: string;
+  readonly BETTER_AUTH_ALLOWED_HOSTS?: string | undefined;
   readonly BETTER_AUTH_COOKIE_DOMAIN?: string | undefined;
   readonly BETTER_AUTH_PASSKEY_RP_ID: string;
   readonly BETTER_AUTH_PASSKEY_RP_NAME: string;

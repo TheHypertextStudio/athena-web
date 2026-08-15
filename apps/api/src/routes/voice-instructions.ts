@@ -17,6 +17,7 @@
  * - **Stay interruptible.** Short turns. A monologue is not a conversation, and a person cannot
  *   skim audio.
  */
+import { PROVENANCE_SYSTEM_RULE } from '../agent/provenance';
 
 /** How much recent conversation is replayed into a session's instructions. */
 export const VOICE_HISTORY_HEADING =
@@ -30,6 +31,10 @@ const PREAMBLE = [
   'Say plainly what you did after you do it — they cannot see a screen.',
   'If a request needs a screen (reviewing many changes, reading a long document), say so and offer to leave it for them in Docket.',
   'Never read out identifiers, URLs, or error text.',
+  // The history block below can contain lines that reached this conversation from outside, and this
+  // channel calls tools without an approval step, so the rule that explains the marker has to
+  // travel with it. Shared with the text loop's system prompt so the tag has one meaning.
+  PROVENANCE_SYSTEM_RULE,
 ].join(' ');
 
 /**

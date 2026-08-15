@@ -75,6 +75,31 @@ export function markProvenance(text: string, provenance: TurnProvenance, origin?
 }
 
 /**
+ * Mark third-party text on one line, for contexts that cannot carry the block envelope.
+ *
+ * @remarks
+ * The voice channel replays past turns as a compact `Who: text` transcript pinned into its system
+ * instructions, and each line is truncated. The multi-line envelope would not survive that shape,
+ * so this emits the same tag on a single line — same constant, same defanging, so the two forms
+ * cannot drift apart. Whatever consumes this must also carry {@link PROVENANCE_SYSTEM_RULE}, or
+ * the tag is markup the model has never been told how to read.
+ *
+ * @param text - The turn's text.
+ * @param provenance - Where the text came from.
+ * @param origin - Human-readable identity of the sender, when known.
+ * @returns the text to place in a single-line transcript.
+ */
+export function markProvenanceInline(
+  text: string,
+  provenance: TurnProvenance,
+  origin?: string,
+): string {
+  if (provenance === 'principal') return text;
+  const attribution = origin ? ` from="${defang(origin).replaceAll('"', "'")}"` : '';
+  return `<${TAG} source="${provenance}"${attribution}>${defang(text)}</${TAG}>`;
+}
+
+/**
  * The paragraph the system prompt carries so the delimiter means something to the model.
  *
  * @remarks

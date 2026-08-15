@@ -18,8 +18,13 @@ import type { InboundMessage } from '@docket/mail';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { markProvenance, PROVENANCE_SYSTEM_RULE } from '../../src/agent/provenance';
+import {
+  markProvenance,
+  markProvenanceInline,
+  PROVENANCE_SYSTEM_RULE,
+} from '../../src/agent/provenance';
 import { buildSystemPrompt } from '../../src/agent/system-prompt';
+import { voiceInstructions } from '../../src/routes/voice-instructions';
 import type * as DeliveryModule from '../../src/routes/inbound-mail-delivery';
 import { getDb, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
 
@@ -87,6 +92,25 @@ describe('markProvenance', () => {
   it('stops a hostile sender address from breaking out of the attribute', () => {
     const wrapped = markProvenance('hi', 'email', 'a" injected="yes');
     expect(wrapped).not.toContain('injected="yes"');
+  });
+});
+
+describe('the voice channel', () => {
+  it('marks third-party lines on one line, sharing the block envelope’s tag', () => {
+    expect(markProvenanceInline('hello', 'principal')).toBe('hello');
+    const wrapped = markProvenanceInline(INJECTION, 'email', 'attacker@evil.example');
+    expect(wrapped).toContain('<docket:external source="email" from="attacker@evil.example">');
+    expect(wrapped.split('\n')).toHaveLength(1);
+    expect(wrapped).toContain(INJECTION);
+  });
+
+  it('carries the rule, because voice tools run with no approval step', () => {
+    // The history block is pinned into the realtime session's *system* instructions, and
+    // `voice-store` writes voice tool calls `executing`. A marker the model was never told how to
+    // read would be decoration in the one place there is no human between the model and the act.
+    const instructions = voiceInstructions('Ada', 'They: hello');
+    expect(instructions).toContain(PROVENANCE_SYSTEM_RULE);
+    expect(instructions).toContain('docket:external');
   });
 });
 

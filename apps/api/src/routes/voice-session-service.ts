@@ -23,6 +23,7 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { assertAgentSessionsEntitled } from '../billing/entitlement';
 import { AgentPlanRequiredError, NotFoundError } from '../error';
 
+import { markProvenanceInline } from '../agent/provenance';
 import { loadTranscript } from '../agent/transcript';
 import { getContainer } from '../container';
 
@@ -303,7 +304,16 @@ export async function recentConversation(conversationId: string): Promise<string
       const text = typeof row.body.text === 'string' ? row.body.text : '';
       if (!text) return '';
       const who = row.body.author === 'athena' ? 'Athena' : 'They';
-      return `${who}: ${text.slice(0, RECENT_CONTEXT_LINE_CHARS)}`;
+      // This block is pinned into the voice session's *system* instructions, which is a stronger
+      // position than the user turn the transcript envelope already covers — and voice tool calls
+      // are written `executing`, so nothing stops one. A row whose text came from an emailed or
+      // relayed sender is therefore marked here too, rather than presented as the caller speaking.
+      const marked = markProvenanceInline(
+        text.slice(0, RECENT_CONTEXT_LINE_CHARS),
+        row.body.provenance ?? 'principal',
+        row.body.origin,
+      );
+      return `${who}: ${marked}`;
     })
     .filter(Boolean)
     .join('\n');
@@ -345,6 +355,10 @@ export async function recentTurns(
     const marker = row.body['voice'];
     const voice =
       typeof marker === 'object' && marker !== null ? (marker as Record<string, unknown>) : {};
+    // `role` only distinguishes Athena from not-Athena, so an emailed or relayed line would
+    // otherwise render as the account owner speaking. Provenance rides alongside it so the panel
+    // can attribute the line instead of the reader assuming they wrote it.
+    const provenance = row.body.provenance ?? 'principal';
     return [
       {
         id: row.id,
@@ -353,6 +367,8 @@ export async function recentTurns(
         channel: voice['channel'] === 'phone' ? ('phone' as const) : ('web' as const),
         interrupted: voice['interrupted'] === true,
         createdAt: row.createdAt.toISOString(),
+        provenance,
+        ...(row.body.origin ? { origin: row.body.origin } : {}),
       },
     ];
   });

@@ -187,8 +187,11 @@ export interface Toolbox {
    *
    * @remarks
    * The gate needs this because it must not let a remote server's self-declared `readOnlyHint`
-   * decide whether that same server's tool runs unreviewed. Unknown names resolve to Docket
-   * (matching {@link Toolbox.resolve}), so a typo cannot manufacture first-party trust.
+   * decide whether that same server's tool runs unreviewed. First-party means Docket's own
+   * `tools/list` plus the loop-owned `ask_user`, matching what {@link Toolbox.resolve} treats as
+   * Docket. An unknown name reports `remote` — the one place the two deliberately differ, since
+   * an unregistered name has no annotation worth trusting even though `resolve` still has to send
+   * it somewhere.
    */
   annotationSource(name: string): ToolAnnotationSource;
   /** Where a model-facing tool name routes (`docket` or a remote alias). */
@@ -414,9 +417,15 @@ export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
   return {
     tools: defs,
     annotations: (name) => annotationsByName.get(name),
-    // `docketNames` is built from Docket's own `tools/list`, so membership is proof the annotation
-    // came from this repo. Everything else — including a name that resolves nowhere — is remote.
-    annotationSource: (name) => (docketNames.has(name) ? 'first_party' : 'remote'),
+    // Deliberately the same test `resolve` applies, because the two must agree on what "Docket's
+    // own" means: `ask_user` is loop-owned and appended straight to `defs`, so it is never in
+    // `docketNames` and would otherwise be classified as though a remote server had described it.
+    // An unknown name still reports `remote`, which differs from `resolve` sending it to Docket —
+    // that asymmetry is intentional. `resolve` picks a destination and Docket answers with a clear
+    // tool-not-found; this picks how much to trust a claim, and a name nobody registered has no
+    // claim worth trusting.
+    annotationSource: (name) =>
+      docketNames.has(name) || name === ASK_USER_TOOL ? 'first_party' : 'remote',
     resolve,
     callTool: async (name, input) => {
       const target = resolve(name);

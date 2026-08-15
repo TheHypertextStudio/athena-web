@@ -14,8 +14,18 @@
  */
 import { z } from 'zod';
 
-/** Hostnames that are a bare IPv4/IPv6 literal rather than a resolvable push-service name. */
-const IP_LITERAL = /^(\[.*\]|\d{1,3}(\.\d{1,3}){3})$/;
+/**
+ * Hostnames that are an address literal rather than a resolvable push-service name.
+ *
+ * @remarks
+ * Dotted-quad is not the only spelling a resolver accepts. `inet_aton` forms — decimal
+ * (`2130706433`), octal, hex (`0x7f000001`), and short-form (`127.1`) — all reach 127.0.0.1, and a
+ * pattern that only matched four dot-separated octets would wave every one of them through. The
+ * shape that actually separates an address from a hostname is that a real hostname's rightmost
+ * label starts with a letter, so anything whose last label is all-digits or `0x`-prefixed is
+ * treated as an address, along with any bracketed IPv6 form.
+ */
+const IP_LITERAL = /^(\[.*\]|(.*\.)?(\d+|0[xX][0-9a-fA-F]+))$/;
 
 /**
  * Whether a push endpoint is shaped like a real push service rather than an internal address.

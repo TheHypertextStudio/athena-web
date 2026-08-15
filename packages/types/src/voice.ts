@@ -95,6 +95,18 @@ export const VoiceTurnOut = z
     /** True when this assistant line was cut short by the person speaking over it. */
     interrupted: z.boolean(),
     createdAt: z.string(),
+    /**
+     * Who actually wrote a `user` line.
+     *
+     * @remarks
+     * `role` separates Athena from everyone else and stops there, so without this an email
+     * delivered to the person's Athena inbox renders exactly like something they said. Absent
+     * means `principal` — every line written before this field existed came from a Docket surface
+     * the person had authenticated to.
+     */
+    provenance: z.enum(['principal', 'email', 'linear']).optional(),
+    /** Display identity of a non-principal author, e.g. the sending address. */
+    origin: z.string().optional(),
   })
   .meta({ id: 'VoiceTurnOut', description: 'One spoken line persisted into the conversation.' });
 /** Voice turn value. */

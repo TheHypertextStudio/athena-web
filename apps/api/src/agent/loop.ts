@@ -47,6 +47,7 @@ import {
   materializeElicitations,
 } from '../services/elicitation-service';
 import { classifyTool, decideUserOwnedToolExecution } from './approval-policy';
+import { markProvenance } from './provenance';
 import { buildSystemPrompt } from './system-prompt';
 import {
   ASK_USER_TOOL,
@@ -828,7 +829,12 @@ async function deriveBrief(
     .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'response')))
     .orderBy(asc(sessionActivity.createdAt))
     .limit(1);
-  return prompts[0]?.body.text ?? sessionId;
+  const seed = prompts[0];
+  if (!seed?.body.text) return sessionId;
+  // A conversation opened by an inbound email has that email as its earliest `response` row, so
+  // the brief this returns can be text a stranger wrote. It frames the model's first turn, which
+  // is why it gets the same envelope the transcript copy already carries.
+  return markProvenance(seed.body.text, seed.body.provenance ?? 'principal', seed.body.origin);
 }
 
 /**

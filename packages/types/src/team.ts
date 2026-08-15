@@ -12,15 +12,24 @@ import { z } from 'zod';
 
 import { ApprovalRouting } from './agent';
 import { OrganizationId, TeamId } from './primitives';
+import { compareWorkStatusOrder, DEFAULT_WORK_STATUSES, WorkStatusCategory } from './work-status';
 
-/** The five canonical workflow-state types a per-team state key maps onto. */
-export const WorkflowStateType = z
-  .enum(['backlog', 'unstarted', 'started', 'completed', 'canceled'])
-  .describe(
-    "The canonical category a team's workflow state maps onto, driving status icons and board grouping: 'backlog' (not yet committed) | 'unstarted' (committed, not begun) | 'started' (in progress) | 'completed' (done) | 'canceled' (abandoned). Multiple per-team states can share a type (e.g. several 'started' columns).",
-  );
-/** Workflow-state-type value. */
-export type WorkflowStateType = z.infer<typeof WorkflowStateType>;
+/**
+ * The five canonical workflow-state types a state key maps onto.
+ *
+ * @remarks
+ * An alias for {@link WorkStatusCategory}, which is the one declaration of this union.
+ * {@link WorkStatusCategory} is the name to reach for in new code; this one stays until the
+ * last caller has moved, at which point it goes away with them.
+ */
+export const WorkflowStateType = WorkStatusCategory;
+/**
+ * Workflow-state-type value.
+ *
+ * @remarks
+ * An alias for {@link WorkStatusCategory}.
+ */
+export type WorkflowStateType = WorkStatusCategory;
 
 /**
  * One configurable workflow state in a team's `workflow_states` array.
@@ -56,25 +65,30 @@ export const WorkflowState = z
 export type WorkflowState = z.infer<typeof WorkflowState>;
 
 /**
- * The default per-team workflow seeded on new teams.
+ * The default workflow seeded on new teams.
  *
  * @remarks
- * Mirrors `@docket/db`'s `defaultWorkflowStates`; the first state's key (`backlog`)
- * is the new-task default. Used to populate `workflowStates` when a create body
+ * Derived from {@link DEFAULT_WORK_STATUSES}`.task` — the one seed source — flattened into the
+ * positional `workflow_states` shape, so the two can never disagree. The first state's key
+ * (`backlog`) is the new-task default. Used to populate `workflowStates` when a create body
  * omits it.
  *
  * @example
  * ```typescript
  * const states = body.workflowStates ?? DEFAULT_WORKFLOW_STATES;
  * ```
+ *
+ * @see {@link DEFAULT_WORK_STATUSES} for the source, which also covers Projects, Programs, and
+ * Initiatives.
  */
-export const DEFAULT_WORKFLOW_STATES: readonly WorkflowState[] = [
-  { key: 'backlog', name: 'Backlog', type: 'backlog', position: 0 },
-  { key: 'todo', name: 'Todo', type: 'unstarted', position: 1 },
-  { key: 'in_progress', name: 'In Progress', type: 'started', position: 2 },
-  { key: 'done', name: 'Done', type: 'completed', position: 3 },
-  { key: 'canceled', name: 'Canceled', type: 'canceled', position: 4 },
-];
+export const DEFAULT_WORKFLOW_STATES: readonly WorkflowState[] = [...DEFAULT_WORK_STATUSES.task]
+  .sort(compareWorkStatusOrder)
+  .map((seed, index) => ({
+    key: seed.key,
+    name: seed.name,
+    type: seed.category,
+    position: index,
+  }));
 
 /**
  * Body for creating a Team (organizationId comes from the path, never the body).

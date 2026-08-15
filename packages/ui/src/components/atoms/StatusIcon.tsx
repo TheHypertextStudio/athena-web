@@ -32,6 +32,8 @@
  */
 import * as React from 'react';
 
+import type { WorkStatusCategory } from '@docket/types';
+
 import { Check, Circle, CircleDashed, CircleDot, X } from '../../icons';
 import { cn } from '../../lib/utils';
 
@@ -41,11 +43,11 @@ import { IdentityGlyph } from './IdentityGlyph';
  * The five canonical workflow-state types.
  *
  * @remarks
- * Mirrors `WorkflowStateType` in `@docket/db` (which the UI package does not depend on).
- * Every per-team workflow state maps onto exactly one of these, and the mapping — not the
- * free-form `state` key — drives the status icon and its token color.
+ * Aliases {@link WorkStatusCategory} from `@docket/types`, the one declaration of this union.
+ * Every workspace status maps onto exactly one of these, and the mapping drives the status icon
+ * and its token color — the `state` key a workspace chose does not.
  */
-export type WorkflowStateType = 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
+export type WorkflowStateType = WorkStatusCategory;
 
 /**
  * The `text-state-*` token utility class for each {@link WorkflowStateType}.

@@ -22,6 +22,7 @@ export * from './publish';
 export * from './task';
 export * from './actor';
 export * from './team';
+export * from './work-status';
 export * from './label';
 export * from './comment';
 export * from './attachment';

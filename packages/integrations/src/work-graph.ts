@@ -13,22 +13,20 @@
  * work-graph-capable omits {@link import('./connector').Connector.asWorkGraph} or
  * returns `undefined` there.
  */
+import type { WorkStatusCategory } from '@docket/types';
+
 import type { ExternalWriteResult } from './connector';
 
 /**
  * The provider-agnostic lifecycle bucket of a work item's state.
  *
  * @remarks
- * Mirrors Linear's `WorkflowState.type` (its closest analogue), which every provider
- * this port targets is expected to be able to classify into.
+ * Docket's own {@link WorkStatusCategory} plus `triage`, which several providers (Linear among
+ * them) model as a lifecycle bucket and Docket models as a queue. A reconciler folds `triage`
+ * into `backlog` on the way in; keeping it distinct here lets the port carry what the provider
+ * actually said.
  */
-export type ExternalStateType =
-  | 'triage'
-  | 'backlog'
-  | 'unstarted'
-  | 'started'
-  | 'completed'
-  | 'canceled';
+export type ExternalStateType = WorkStatusCategory | 'triage';
 
 /** The provider-agnostic priority of a work item. */
 export type ExternalPriority = 'none' | 'urgent' | 'high' | 'medium' | 'low';

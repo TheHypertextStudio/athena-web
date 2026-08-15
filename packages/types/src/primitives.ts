@@ -95,6 +95,10 @@ export const CycleId = id<'CycleId'>().describe(
 export const TaskId = id<'TaskId'>().describe(
   'ULID id of a Task — the atomic unit of work, with status, priority, assignee, and dependencies.',
 );
+/** Branded `WorkStatus` id. */
+export const WorkStatusId = id<'WorkStatusId'>().describe(
+  'ULID id of a work status — one entry in a workspace’s status set for Tasks, Projects, Programs, or Initiatives.',
+);
 /** Branded `Label` id. */
 export const LabelId = id<'LabelId'>().describe(
   'ULID id of a Label — a reusable tag applied to Tasks/Projects for filtering.',

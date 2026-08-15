@@ -7,6 +7,40 @@
 
 ## Active Tasks
 
+### [STATUS-001] A workspace defines its own statuses for every kind of work
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-14
+- **Priority**: P1
+- **Description**: One status system, defined at the workspace, covering Tasks, Projects, Programs,
+  and Initiatives, with per-team forking for Tasks. Today the story is half-built: Tasks already
+  carry customizable per-team `workflow_states` that no interface has ever exposed, while Project,
+  Program, and Initiative statuses are fixed Postgres enums. Statuses also sit on the Team, which a
+  personal workspace hides, so a solo user can never reach their own.
+- **Approach**: Keep the five canonical categories (`backlog`, `unstarted`, `started`, `completed`,
+  `canceled`) fixed and not user-definable, since every consumer already reads the category rather
+  than the key. A workspace names, describes, orders, and counts its statuses within that taxonomy.
+  Store them in a `work_status` table and bind each entity's existing key column to it with a
+  composite foreign key, so the wire contract (`state` plus `stateType`) is guaranteed by the
+  database instead of maintained by hand. Ship in slices that each stand alone.
+- **Subtasks**:
+  - [x] Agree the product decisions and write the implementation plan
+  - [x] Types foundation: one declaration of the category union, the DTOs, and the seeded defaults
+  - [ ] Schema, migration, and the seed that backfills every existing workspace
+  - [ ] The resolver, and unifying the two duplicate state-transition implementations
+  - [ ] Status routes: create, update, reorder, delete with remap, team fork and reset
+  - [ ] Carry `stateType` on every work DTO and retire the hardcoded key mapping in the web app
+  - [ ] Settings surface, including the first drag-to-reorder list in the codebase
+  - [ ] Amend the specs that state a Program cannot complete
+- **Blockers**: None.
+- **Notes**: Product amendment agreed with the owner: a Program **can** complete, though it is still
+  generally an ongoing concern, and Programs gain a `Proposed` status mirroring Initiatives. This
+  reverses `enums.ts:52`, `architecture.md:158`, and `mvp-plan.md:101`, and revises
+  `data-model.md:793` ("the product ships no custom fields"). Those passages are amended as part of
+  the final slice rather than left to contradict the code.
+  Per-status colour is deliberately absent: the category owns the colour, which keeps
+  `DECISIONS.md:375` intact and lets a status be compared across teams at a glance.
+
 ### [TODAY-001] Today becomes an Athena-guided daily operating surface
 
 - **Status**: REVIEW

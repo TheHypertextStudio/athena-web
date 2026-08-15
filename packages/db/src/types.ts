@@ -7,30 +7,34 @@
  * view config) lives in `@docket/types`; these mirror them so the schema is
  * self-contained and drizzle can attach a typed default.
  */
+import {
+  DEFAULT_WORKFLOW_STATES,
+  type WorkflowState as WorkflowStateShape,
+  type WorkStatusCategory,
+} from '@docket/types';
 
-/** The five workflow-state types a per-team state key maps onto. */
-export type WorkflowStateType = 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled';
+export type { WorkStatusCategory };
 
-/** One configurable workflow state in a team's `workflow_states` array. */
-export interface WorkflowState {
-  /** Stable key stored on `task.state`. */
-  readonly key: string;
-  /** Display name. */
-  readonly name: string;
-  /** The canonical type (drives status icons + grouping). */
-  readonly type: WorkflowStateType;
-  /** Order within the team's state list. */
-  readonly position: number;
-}
+/**
+ * The five workflow-state types a state key maps onto.
+ *
+ * @remarks
+ * Re-exported from `@docket/types`, which is the one declaration. The copy that used to live
+ * here drifted from it by construction; this alias cannot.
+ */
+export type WorkflowStateType = WorkStatusCategory;
+
+/**
+ * One configurable workflow state in a team's `workflow_states` array.
+ *
+ * @remarks
+ * Re-exported from `@docket/types` so the drizzle `.$type<>()` annotation and the Zod schema
+ * describe the same shape.
+ */
+export type WorkflowState = WorkflowStateShape;
 
 /** Default per-team workflow; the first state's key (`backlog`) is the new-task default. */
-export const defaultWorkflowStates: readonly WorkflowState[] = [
-  { key: 'backlog', name: 'Backlog', type: 'backlog', position: 0 },
-  { key: 'todo', name: 'Todo', type: 'unstarted', position: 1 },
-  { key: 'in_progress', name: 'In Progress', type: 'started', position: 2 },
-  { key: 'done', name: 'Done', type: 'completed', position: 3 },
-  { key: 'canceled', name: 'Canceled', type: 'canceled', position: 4 },
-];
+export const defaultWorkflowStates: readonly WorkflowState[] = DEFAULT_WORKFLOW_STATES;
 
 /** The vocabulary preset bundles selectable per org. */
 export type VocabularyPreset = 'startup' | 'nonprofit' | 'agency';

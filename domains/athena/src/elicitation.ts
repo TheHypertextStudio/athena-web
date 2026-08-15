@@ -679,6 +679,13 @@ function lengthCheck(
 }
 
 function isInteger(def: Record<string, unknown>): boolean {
+  // Zod records integer-ness in two different places depending on how it was declared.
+  // `z.number().int()` appends a `number_format` check, but `z.int()` and `z.int32()` are their
+  // own formats and carry it on the def with no check at all — so reading only the checks made
+  // the idiomatic `z.int()` render as a float control and validate as one, letting an answer of
+  // 2.5 through a schema that rejects it.
+  const format = def['format'];
+  if (typeof format === 'string' && format.includes('int')) return true;
   return checksOf(def).some(
     (check) =>
       check['check'] === 'number_format' &&

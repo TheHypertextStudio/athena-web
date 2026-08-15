@@ -340,6 +340,7 @@ describe('resolveAnchorSuggestion', () => {
   it('does not expose an ungranted private task from recent tracking', async () => {
     const taskId = await seedTask('Private recent task', {
       state: 'in_progress',
+      statusId: statusId('task', 'in_progress'),
       visibility: 'private',
     });
     await db

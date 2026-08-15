@@ -56,7 +56,7 @@ describe('Time share tokens', () => {
     const schema = await getDb();
     userId = await seedUserWithHub(schema.db, schema, 'TimeShare');
     organizationId = await seedOrg(schema.db, schema);
-    await addMember(schema.db, schema, organizationId, userId);
+    const actorId = await addMember(schema.db, schema, organizationId, userId);
     await schema.db
       .insert(schema.team)
       .values({
@@ -65,6 +65,16 @@ describe('Time share tokens', () => {
         key: `K${Math.random().toString(36).slice(2, 6)}`,
       })
       .returning({ id: schema.team.id });
+    await schema.db.insert(schema.grant).values({
+      organizationId,
+      subjectKind: 'actor',
+      subjectId: actorId,
+      resourceKind: 'organization',
+      resourceId: organizationId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+      cascades: true,
+    });
     app = appWithSession(time, fakeSession(userId));
   });
 

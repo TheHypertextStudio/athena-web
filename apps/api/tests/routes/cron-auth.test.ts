@@ -17,6 +17,7 @@ const CRON_PATHS: readonly string[] = [
   '/account-deletion-sweep',
   '/account-export-sweep',
   '/sync-calendars',
+  '/sync-work-locations',
   '/recurrence-materialization',
   '/run-linear-agent-sessions',
   '/directive-posture',

@@ -14,7 +14,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg, seedStatuses } from '../support/routes-harness';
+import { appWithActor, getDb, seedStatuses, seedTaskAccessOrg } from '../support/routes-harness';
 import type projectsRouter from '../../src/routes/projects';
 import type tasksRouter from '../../src/routes/tasks';
 import { assertDefined } from '@docket/test-utils';
@@ -38,6 +38,14 @@ async function json<T>(res: Response): Promise<T> {
 
 /** JSON request headers shared by every PATCH/POST below. */
 const JSON_HEADERS = { 'content-type': 'application/json' } as const;
+
+/** Seed each tenant with persisted task authority so task-targeted guards reach FK validation. */
+async function seedBaseOrg(
+  dbArg: Parameters<typeof seedTaskAccessOrg>[0],
+  schemaArg: Parameters<typeof seedTaskAccessOrg>[1],
+): ReturnType<typeof seedTaskAccessOrg> {
+  return seedTaskAccessOrg(dbArg, schemaArg, 'assign');
+}
 
 /** Insert a program in `orgId`, returning its id. */
 async function seedProgram(orgId: string, createdBy: string): Promise<string> {

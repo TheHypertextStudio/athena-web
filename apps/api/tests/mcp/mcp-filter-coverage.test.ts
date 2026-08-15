@@ -342,13 +342,11 @@ describe('the two that shipped unapplied', () => {
     await db
       .insert(schema.project)
       .values({ organizationId: s.orgId, name: 'No label', createdBy: s.actorId });
-    await db
-      .insert(schema.projectLabel)
-      .values({
-        organizationId: s.orgId,
-        projectId: assertDefined(proj).id,
-        labelId: assertDefined(tag).id,
-      });
+    await db.insert(schema.projectLabel).values({
+      organizationId: s.orgId,
+      projectId: assertDefined(proj).id,
+      labelId: assertDefined(tag).id,
+    });
 
     const [init] = await db
       .insert(schema.initiative)
@@ -357,13 +355,11 @@ describe('the two that shipped unapplied', () => {
     await db
       .insert(schema.initiative)
       .values({ organizationId: s.orgId, name: 'No label', createdBy: s.actorId });
-    await db
-      .insert(schema.initiativeLabel)
-      .values({
-        organizationId: s.orgId,
-        initiativeId: assertDefined(init).id,
-        labelId: assertDefined(tag).id,
-      });
+    await db.insert(schema.initiativeLabel).values({
+      organizationId: s.orgId,
+      initiativeId: assertDefined(init).id,
+      labelId: assertDefined(tag).id,
+    });
 
     const projects = await list(client, { orgId: s.orgId, entity: 'project', label: 'Tagged' });
     expect(projects.items.map((i) => i.title)).toEqual(['Has label']);

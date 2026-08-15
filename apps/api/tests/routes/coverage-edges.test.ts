@@ -138,14 +138,12 @@ describe('daily-plan: null timeboxes on create + a minimal patch', () => {
       .values({ userId: assertDefined(user).id })
       .returning({ id: schema.hub.id });
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    await db
-      .insert(schema.actor)
-      .values({
-        organizationId: orgId,
-        kind: 'human',
-        displayName: 'D',
-        userId: assertDefined(user).id,
-      });
+    await db.insert(schema.actor).values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'D',
+      userId: assertDefined(user).id,
+    });
     const [t] = await db
       .insert(schema.task)
       .values({ organizationId: orgId, title: 'T', teamId, state: 'todo', createdBy: humanActorId })

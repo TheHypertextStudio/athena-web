@@ -708,14 +708,12 @@ describe('hub router', () => {
       .values({ name: 'NoHub', email: `nh-${Math.random().toString(36).slice(2)}@e.com` })
       .returning({ id: schema.user.id });
     const { orgId } = await seedBaseOrg(db, schema);
-    await db
-      .insert(schema.actor)
-      .values({
-        organizationId: orgId,
-        kind: 'human',
-        displayName: 'NoHub',
-        userId: assertDefined(user).id,
-      });
+    await db.insert(schema.actor).values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'NoHub',
+      userId: assertDefined(user).id,
+    });
     const app = appWithSession(hub, fakeSession(assertDefined(user).id));
     const today = await body<{ plan: unknown[] }>(await app.request('/today?date=2026-06-01'));
     expect(today.plan).toHaveLength(0);

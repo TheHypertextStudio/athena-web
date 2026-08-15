@@ -554,13 +554,11 @@ describe('auth config', () => {
       key: SECRET,
       data: JSON.stringify({ not: 'an array' }),
     });
-    await db
-      .insert(twoFactor)
-      .values({
-        secret: 'x',
-        backupCodes: corruptEncrypted,
-        userId: assertDefined(corruptUser).id,
-      });
+    await db.insert(twoFactor).values({
+      secret: 'x',
+      backupCodes: corruptEncrypted,
+      userId: assertDefined(corruptUser).id,
+    });
     expect((await getRecoveryCodeStatus(assertDefined(corruptUser).id))?.remaining).toBe(0);
   });
 

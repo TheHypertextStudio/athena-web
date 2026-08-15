@@ -53,14 +53,12 @@ async function seed(): Promise<Fixture> {
     .values({ name: 'Ada', email: `${slug}@example.com` })
     .returning({ id: schema.user.id });
   await db.insert(schema.hub).values({ userId: assertDefined(owner).id, preferences: {} });
-  await db
-    .insert(schema.actor)
-    .values({
-      organizationId: assertDefined(org).id,
-      kind: 'human',
-      displayName: 'Ada',
-      userId: assertDefined(owner).id,
-    });
+  await db.insert(schema.actor).values({
+    organizationId: assertDefined(org).id,
+    kind: 'human',
+    displayName: 'Ada',
+    userId: assertDefined(owner).id,
+  });
   await db
     .insert(schema.team)
     .values({ organizationId: assertDefined(org).id, name: 'Core', key: `E${slug.slice(-4)}` });

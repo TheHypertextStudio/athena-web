@@ -170,13 +170,11 @@ describe('task.applyLabel — a label narrowed to another team', () => {
       .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
       .returning();
     // The attachment predates the narrowing, exactly as the settings action leaves it.
-    await db
-      .insert(schema.taskLabel)
-      .values({
-        taskId: assertDefined(row).id,
-        labelId: assertDefined(stranded).id,
-        organizationId: orgId,
-      });
+    await db.insert(schema.taskLabel).values({
+      taskId: assertDefined(row).id,
+      labelId: assertDefined(stranded).id,
+      organizationId: orgId,
+    });
 
     await expect(
       applyLabel(orgId, assertDefined(row).id, assertDefined(fresh).id),

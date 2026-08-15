@@ -41,11 +41,11 @@ import {
   workPlace,
   workPlaceProviderMapping,
 } from '@docket/db';
-import { and, eq, inArray, lte } from 'drizzle-orm';
+import { and, eq, isNull, lte } from 'drizzle-orm';
 
 import { getContainer } from '../container';
 import { env } from '../env';
-import { collectWorkLayer } from '../lib/export-collect';
+import { collectVisibleWorkLayerForActor } from '../lib/export-collect';
 import { one } from '../lib/one';
 import { linkedIdentities } from '../routes/integration-provider';
 import { dispatchSystemUserNotification } from '../services/notifications/system';
@@ -108,145 +108,142 @@ export async function collectAccountExport(
   const selectedWorkspaceIds = scope.workspaces.map((workspace) => workspace.id);
   // First wave: every read that doesn't depend on the hub id, in parallel. The org list is a
   // single query (subquery over the user's human memberships) rather than ids-then-fetch.
-  const [userRow, hubRow, identities, consents, orgs] = await Promise.all([
+  const [userRow, hubRow, identities, consents, activeMemberships] = await Promise.all([
     includesAccount ? one(db.select().from(user).where(eq(user.id, userId))) : null,
     includesPersonal ? one(db.select().from(hub).where(eq(hub.userId, userId))) : null,
     includesAccount ? linkedIdentities(userId) : [],
     includesAccount ? db.select().from(oauthConsent).where(eq(oauthConsent.userId, userId)) : [],
-    includesWorkspaces
+    includesWorkspaces || includesPersonal
       ? db
-          .select()
-          .from(organization)
+          .select({ org: organization, actorId: actor.id })
+          .from(actor)
+          .innerJoin(organization, eq(actor.organizationId, organization.id))
           .where(
             and(
-              inArray(
-                organization.id,
-                db
-                  .select({ id: actor.organizationId })
-                  .from(actor)
-                  .where(
-                    and(
-                      eq(actor.userId, userId),
-                      eq(actor.kind, 'human'),
-                      eq(actor.status, 'active'),
-                    ),
-                  ),
-              ),
-              ...(scope.allWorkspaces || selectedWorkspaceIds.length === 0
-                ? []
-                : [inArray(organization.id, selectedWorkspaceIds)]),
+              eq(actor.userId, userId),
+              eq(actor.kind, 'human'),
+              eq(actor.status, 'active'),
+              isNull(actor.archivedAt),
             ),
           )
       : [],
   ]);
   const hubId = hubRow?.id;
 
-  // Second wave: each org's work layer, and the cross-org personal rows, in parallel.
-  const [memberships, personal] = await Promise.all([
-    Promise.all(
-      orgs.map(async (org) => ({ organization: org, work: await collectWorkLayer(org.id, db) })),
-    ),
-    (async () => {
-      const [
-        planItems,
-        notifications,
-        events,
-        recipients,
-        digests,
-        days,
-        follows,
+  const visibleLayers = await Promise.all(
+    activeMemberships.map(async ({ org, actorId }) => ({
+      org,
+      actorId,
+      ...(await collectVisibleWorkLayerForActor(org.id, actorId, db)),
+    })),
+  );
+  const selectedWorkspaceIdSet = new Set(selectedWorkspaceIds);
+  const memberships = includesWorkspaces
+    ? visibleLayers
+        .filter(
+          ({ org }) =>
+            scope.allWorkspaces ||
+            selectedWorkspaceIdSet.size === 0 ||
+            selectedWorkspaceIdSet.has(org.id),
+        )
+        .map(({ org, work }) => ({ organization: org, work }))
+    : [];
+  const visibleTaskIds = new Set(visibleLayers.flatMap((layer) => [...layer.visibleTaskIds]));
+
+  // Second wave: cross-org personal rows, after current task visibility is known so personal
+  // pointers cannot disclose work the user no longer has permission to receive.
+  const personal = await (async () => {
+    const [
+      planItems,
+      notifications,
+      events,
+      recipients,
+      digests,
+      days,
+      follows,
+      places,
+      locationProfiles,
+      locationAssertions,
+      locationExceptions,
+      locationObservations,
+      placeProviderMappings,
+      locationSyncAccounts,
+      locationExternalBindings,
+      locationWrites,
+    ] = await Promise.all([
+      hubId
+        ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
+        : Promise.resolve([]),
+      includesPersonal ? db.select().from(notification).where(eq(notification.userId, userId)) : [],
+      includesPersonal ? db.select().from(event).where(eq(event.userId, userId)) : [],
+      includesPersonal
+        ? db.select().from(eventRecipient).where(eq(eventRecipient.userId, userId))
+        : [],
+      includesPersonal ? db.select().from(dailyDigest).where(eq(dailyDigest.userId, userId)) : [],
+      // The narrated day and its highlights, because `edited_narration` is the person's own
+      // writing about their own work — the clearest case there is of content an export owes them.
+      includesPersonal
+        ? db
+            .select()
+            .from(activityDay)
+            .leftJoin(activityHighlight, eq(activityHighlight.activityDayId, activityDay.id))
+            .where(eq(activityDay.userId, userId))
+        : [],
+      includesPersonal
+        ? db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId))
+        : [],
+      hubId ? db.select().from(workPlace).where(eq(workPlace.hubId, hubId)) : [],
+      hubId
+        ? db.select().from(workLocationProfile).where(eq(workLocationProfile.hubId, hubId))
+        : [],
+      hubId
+        ? db.select().from(workLocationAssertion).where(eq(workLocationAssertion.hubId, hubId))
+        : [],
+      hubId
+        ? db.select().from(workLocationException).where(eq(workLocationException.hubId, hubId))
+        : [],
+      hubId
+        ? db.select().from(workLocationObservation).where(eq(workLocationObservation.hubId, hubId))
+        : [],
+      hubId
+        ? db
+            .select()
+            .from(workPlaceProviderMapping)
+            .where(eq(workPlaceProviderMapping.hubId, hubId))
+        : [],
+      hubId
+        ? db.select().from(workLocationSyncAccount).where(eq(workLocationSyncAccount.hubId, hubId))
+        : [],
+      hubId
+        ? db
+            .select()
+            .from(workLocationExternalBinding)
+            .where(eq(workLocationExternalBinding.hubId, hubId))
+        : [],
+      hubId ? db.select().from(workLocationWrite).where(eq(workLocationWrite.hubId, hubId)) : [],
+    ]);
+    return {
+      hub: hubRow ?? null,
+      dailyPlan: planItems.filter((item) => visibleTaskIds.has(item.refTaskId)),
+      notifications,
+      events,
+      eventRecipients: recipients,
+      dailyDigests: digests,
+      activityDays: days,
+      streamSubscriptions: follows,
+      workLocation: {
         places,
-        locationProfiles,
-        locationAssertions,
-        locationExceptions,
-        locationObservations,
-        placeProviderMappings,
-        locationSyncAccounts,
-        locationExternalBindings,
-        locationWrites,
-      ] = await Promise.all([
-        hubId
-          ? db.select().from(dailyPlanItem).where(eq(dailyPlanItem.hubId, hubId))
-          : Promise.resolve([]),
-        includesPersonal
-          ? db.select().from(notification).where(eq(notification.userId, userId))
-          : [],
-        includesPersonal ? db.select().from(event).where(eq(event.userId, userId)) : [],
-        includesPersonal
-          ? db.select().from(eventRecipient).where(eq(eventRecipient.userId, userId))
-          : [],
-        includesPersonal ? db.select().from(dailyDigest).where(eq(dailyDigest.userId, userId)) : [],
-        // The narrated day and its highlights, because `edited_narration` is the person's own
-        // writing about their own work — the clearest case there is of content an export owes them.
-        includesPersonal
-          ? db
-              .select()
-              .from(activityDay)
-              .leftJoin(activityHighlight, eq(activityHighlight.activityDayId, activityDay.id))
-              .where(eq(activityDay.userId, userId))
-          : [],
-        includesPersonal
-          ? db.select().from(streamSubscription).where(eq(streamSubscription.userId, userId))
-          : [],
-        hubId ? db.select().from(workPlace).where(eq(workPlace.hubId, hubId)) : [],
-        hubId
-          ? db.select().from(workLocationProfile).where(eq(workLocationProfile.hubId, hubId))
-          : [],
-        hubId
-          ? db.select().from(workLocationAssertion).where(eq(workLocationAssertion.hubId, hubId))
-          : [],
-        hubId
-          ? db.select().from(workLocationException).where(eq(workLocationException.hubId, hubId))
-          : [],
-        hubId
-          ? db
-              .select()
-              .from(workLocationObservation)
-              .where(eq(workLocationObservation.hubId, hubId))
-          : [],
-        hubId
-          ? db
-              .select()
-              .from(workPlaceProviderMapping)
-              .where(eq(workPlaceProviderMapping.hubId, hubId))
-          : [],
-        hubId
-          ? db
-              .select()
-              .from(workLocationSyncAccount)
-              .where(eq(workLocationSyncAccount.hubId, hubId))
-          : [],
-        hubId
-          ? db
-              .select()
-              .from(workLocationExternalBinding)
-              .where(eq(workLocationExternalBinding.hubId, hubId))
-          : [],
-        hubId ? db.select().from(workLocationWrite).where(eq(workLocationWrite.hubId, hubId)) : [],
-      ]);
-      return {
-        hub: hubRow ?? null,
-        dailyPlan: planItems,
-        notifications,
-        events,
-        eventRecipients: recipients,
-        dailyDigests: digests,
-        activityDays: days,
-        streamSubscriptions: follows,
-        workLocation: {
-          places,
-          profiles: locationProfiles,
-          assertions: locationAssertions,
-          exceptions: locationExceptions,
-          observations: locationObservations,
-          providerMappings: placeProviderMappings,
-          syncAccounts: locationSyncAccounts,
-          externalBindings: locationExternalBindings,
-          writes: locationWrites,
-        },
-      };
-    })(),
-  ]);
+        profiles: locationProfiles,
+        assertions: locationAssertions,
+        exceptions: locationExceptions,
+        observations: locationObservations,
+        providerMappings: placeProviderMappings,
+        syncAccounts: locationSyncAccounts,
+        externalBindings: locationExternalBindings,
+        writes: locationWrites,
+      },
+    };
+  })();
 
   const document = {
     schemaVersion: 2,

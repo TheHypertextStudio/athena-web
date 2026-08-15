@@ -394,6 +394,15 @@ describe('the real workflows', () => {
     expect(report).toContain('advisory check workflow(s): .github/workflows/e2e.yml');
   });
 
+  it('preserves pnpm links when the E2E build crosses the artifact boundary', () => {
+    const source = readFileSync(join(REPO_ROOT, '.github/workflows/e2e.yml'), 'utf8');
+
+    expect(source).toContain('tar -C apps/web/.next/standalone -czf web-standalone.tar.gz .');
+    expect(source).toContain('path: web-standalone.tar.gz');
+    expect(source).toContain('tar -xzf web-standalone.tar.gz -C apps/web/.next/standalone');
+    expect(source).not.toContain('path: apps/web/.next/standalone');
+  });
+
   it('gates the production deploy on every check job ci.yml declares', () => {
     const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
     const deploy = ci?.jobs.find((job) => job.id === 'deploy-production');

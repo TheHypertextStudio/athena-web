@@ -77,15 +77,16 @@ jobs:
           set -euo pipefail
           cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
           cp -r apps/web/public apps/web/.next/standalone/apps/web/public
+          tar -C apps/web/.next/standalone -czf web-standalone.tar.gz .
 
-      # The assembled tree is self-contained, so the shards need nothing else from the build.
+      # Next's traced pnpm tree contains symlinks. Uploading the directory directly replaces those
+      # links with inert files, so the shards receive one tar archive that preserves them.
       # `retention-days: 1` because this artifact is an intra-run handoff, not a record.
       - uses: actions/upload-artifact@v6
         with:
           name: web-standalone
-          path: apps/web/.next/standalone
+          path: web-standalone.tar.gz
           retention-days: 1
-          include-hidden-files: true
 
   e2e:
     name: E2E (${{ matrix.shard }}/${{ strategy.job-total }})
@@ -138,13 +139,17 @@ jobs:
       - name: Map dev hosts to loopback
         run: echo "127.0.0.1 docket.localhost api.docket.localhost" | sudo tee -a /etc/hosts
 
-      # Built once by the `build` job above. `upload-artifact` does not preserve the executable
-      # bit or symlinks, but the standalone tree needs neither: it is plain `.js` plus a traced
-      # `node_modules`, started by `node server.js`.
+      # Built once by the `build` job above. The tar archive preserves the pnpm links in the traced
+      # module graph. Without them Next cannot resolve @swc/helpers and the server never starts.
       - uses: actions/download-artifact@v6
         with:
           name: web-standalone
-          path: apps/web/.next/standalone
+          path: .
+
+      - name: Extract the standalone server
+        run: |
+          mkdir -p apps/web/.next/standalone
+          tar -xzf web-standalone.tar.gz -C apps/web/.next/standalone
 
       # Through `dotenv -e .env.local`, exactly as the root `dev` script does. That file is
       # committed and carries the local-mode settings the suite depends on — `DATABASE_URL` for the

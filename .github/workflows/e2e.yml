@@ -20,6 +20,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The same Turbo Remote Cache ci.yml uses. Without these the build job below is the one place in
+# the pipeline still recomputing a Next build that ci.yml's `build` job has usually already done
+# and uploaded — same task, same hash, so it replays instead of rebuilding.
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  TURBO_API: ${{ vars.TURBO_API }}
+  TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+
 jobs:
   # The production build runs once here rather than once per shard. Each of the four shards used
   # to run `turbo run build --filter=@docket/web` itself, so the same Next build was paid for four
@@ -51,12 +60,6 @@ jobs:
           node-version-file: '.node-version'
           cache: pnpm
 
-      - uses: actions/cache@v5
-        with:
-          path: .turbo
-          key: turbo-e2e-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-e2e-${{ runner.os }}-
-
       - run: pnpm install --frozen-lockfile
 
       # A production build, not `next dev`. Under the dev server Turbopack compiles each route on
@@ -64,7 +67,7 @@ jobs:
       # any per-test budget worth setting and makes the suite's result a function of which spec
       # drew the cold route.
       - name: Build the app
-        run: pnpm turbo run build --filter=@docket/web --cache-dir=.turbo
+        run: pnpm turbo run build --filter=@docket/web
 
       # `output: standalone` emits a server plus a traced module graph, but neither the static
       # assets nor `public/` — Next expects the deployment to place those, exactly as the

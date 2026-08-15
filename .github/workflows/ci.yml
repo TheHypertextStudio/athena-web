@@ -15,11 +15,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-# Turbo Remote Cache (optional): set these to share the cache across CI runs and machines so a
-# task computed on one run is replayed on the next. All unset → turbo silently uses the local
-# `.turbo` cache only (current behavior, no-op). When TURBO_TOKEN is set, the signature key is
-# required by `remoteCache.signature` in turbo.json. For a self-hosted cache also set TURBO_API
-# (repo variable); omit it to use the Vercel Remote Cache.
+# Turbo Remote Cache. A task computed on any run — or on a developer's linked machine — is
+# replayed rather than recomputed here, so a pull request that touches one package no longer pays
+# to rebuild and retest the other eighteen.
+#
+# These are configured, not aspirational: TURBO_TOKEN is a Vercel Access Token scoped to the team
+# in TURBO_TEAM, and TURBO_REMOTE_CACHE_SIGNATURE_KEY is required by `remoteCache.signature` in
+# turbo.json. They were unset for a long time, during which turbo silently fell back to the local
+# cache and reported `Cached: 0 cached, 19 total` on every run — silently, because an unset token
+# is not an error. If cache hits ever vanish, check that the token has not expired before
+# suspecting the task graph. TURBO_API is only for a self-hosted cache; unset means Vercel's.
+#
+# There is deliberately no `actions/cache` step for `.turbo`. The remote cache supersedes it, and
+# keeping both meant paying GitHub's cache I/O for a result the remote cache already had — the
+# Build job spent 39s restoring and 24s saving to serve a task that took 2s.
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -53,18 +62,9 @@ jobs:
           node-version-file: '.node-version'
           cache: pnpm
 
-      # Turbo task cache — on exact SHA hit turbo replays outputs without re-running.
-      # restore-keys falls back to the nearest ancestor commit's cache so only
-      # tasks whose inputs changed are re-executed.
-      - uses: actions/cache@v5
-        with:
-          path: .turbo
-          key: turbo-lint-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-lint-${{ runner.os }}-
-
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run lint --cache-dir=.turbo
+      - run: pnpm turbo run lint
 
   typecheck:
     name: Types
@@ -81,17 +81,11 @@ jobs:
           node-version-file: '.node-version'
           cache: pnpm
 
-      - uses: actions/cache@v5
-        with:
-          path: .turbo
-          key: turbo-typecheck-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-typecheck-${{ runner.os }}-
-
       - run: pnpm install --frozen-lockfile
 
       # Rides with typecheck rather than lint to balance the two runners: typecheck 48s plus
       # format 33s lands beside lint's 83s.
-      - run: pnpm turbo run typecheck --cache-dir=.turbo
+      - run: pnpm turbo run typecheck
 
       - run: pnpm format:check
 
@@ -192,17 +186,9 @@ jobs:
           node-version-file: '.node-version'
           cache: pnpm
 
-      # Keyed per group. Sharing one key across the matrix would have three jobs racing to save
-      # the same entry, so two of the three uploads are discarded and their next run misses.
-      - uses: actions/cache@v5
-        with:
-          path: .turbo
-          key: turbo-test-${{ matrix.group }}-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-test-${{ matrix.group }}-${{ runner.os }}-
-
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run test:coverage ${{ matrix.filter }} --cache-dir=.turbo
+      - run: pnpm turbo run test:coverage ${{ matrix.filter }}
 
       # `turbo run test:coverage` only runs *package* suites. The repository-level suites under `tests/`
       # — the CI gate policy (tests/ci) and the launch-record reconciler (tests/launch) — belong
@@ -249,15 +235,9 @@ jobs:
           node-version-file: '.node-version'
           cache: pnpm
 
-      - uses: actions/cache@v5
-        with:
-          path: .turbo
-          key: turbo-build-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-build-${{ runner.os }}-
-
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run build --cache-dir=.turbo
+      - run: pnpm turbo run build
 
   # Deliberately NO `needs`. The Docker builds take ~4 minutes and depend on nothing the check
   # jobs produce, so they run alongside them rather than after: by the time the gates are green

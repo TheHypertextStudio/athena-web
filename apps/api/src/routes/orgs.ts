@@ -49,7 +49,7 @@ import activity from './activity';
 import stream from './stream';
 import agentSessions from './agent-sessions';
 import agents from './agents';
-import billing from './billing';
+import billing, { billingExportDownload } from './billing';
 import automationRules from './automation-rules';
 import capture from './capture';
 import calendarSchedules from './calendar-schedules';
@@ -506,6 +506,9 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/integrations/mcp', integrationsMcp)
   .route('/:orgId/integrations/linear-agent', integrationsLinearAgent)
   .route('/:orgId/integrations', integrations)
+  // Mounted BEFORE `/:orgId/billing` so the raw-bytes download matches here rather than falling
+  // through to the typed RPC router, which has no route for it.
+  .route('/:orgId/billing/export', billingExportDownload)
   .route('/:orgId/billing', billing)
   .route('/:orgId/publications', publications)
   .route('/:orgId/publishing', publishingAddresses)

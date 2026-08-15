@@ -5,16 +5,20 @@ import { eq } from 'drizzle-orm';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type billingRouter from '../../src/routes/billing';
+import type { billingExportDownload as BillingExportDownload } from '../../src/routes/billing';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let billing!: typeof billingRouter;
+let exportDownload!: typeof BillingExportDownload;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  billing = (await import('../../src/routes/billing')).default;
+  const mod = await import('../../src/routes/billing');
+  billing = mod.default;
+  exportDownload = mod.billingExportDownload;
 });
 
 /** Parse a JSON response body as the given shape. */
@@ -169,7 +173,12 @@ describe('billing: POST /export', () => {
     const res = await app.request('/export', { method: 'POST' });
     expect(res.status).toBe(200);
     const body = await json<{ downloadUrl: string; expiresAt: string }>(res);
-    expect(body.downloadUrl).toMatch(/^(file|https?):\/\//);
+    // The download is an API path behind the caller's session and `manage`, never the object
+    // store's own address. Handing back a blob URL made a full dump of the org readable by anyone
+    // who obtained the link, for as long as the object existed.
+    expect(body.downloadUrl).toBe(`/v1/orgs/${orgId}/billing/export/file`);
+    expect(body.downloadUrl).not.toMatch(/^(file|https?):\/\//);
+    expect(body.downloadUrl).not.toContain('blob.vercel-storage.com');
     // expiresAt is in the future.
     expect(new Date(body.expiresAt).getTime()).toBeGreaterThan(Date.now());
 
@@ -203,13 +212,46 @@ describe('billing: POST /export', () => {
     const app = appWithActor(billing, a.orgId, ['manage']);
     const res = await app.request('/export', { method: 'POST' });
     expect(res.status).toBe(200);
-    const { downloadUrl } = await json<{ downloadUrl: string }>(res);
 
-    // Read the stored artifact back off disk (the test/local blob is LocalDiskBlob,
-    // which addresses artifacts with file:// URLs) and verify tenant isolation.
-    const archive = await readArtifact(downloadUrl);
+    // Read the archive back through the authenticated route rather than off disk, so this also
+    // proves the route serves the bytes it promised.
+    const download = appWithActor(exportDownload, a.orgId, ['manage']);
+    const file = await download.request('/file');
+    expect(file.status).toBe(200);
+    const archive = await file.text();
     expect(archive).toContain('My org task');
     expect(archive).not.toContain('Other org secret');
+  });
+
+  it('denies the download to a member without manage', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(billing, orgId, ['manage']);
+    expect((await app.request('/export', { method: 'POST' })).status).toBe(200);
+
+    const download = appWithActor(exportDownload, orgId, ['contribute']);
+    expect((await download.request('/file')).status).toBe(403);
+  });
+
+  it('404s the download when no export has been generated', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const download = appWithActor(exportDownload, orgId, ['manage']);
+    expect((await download.request('/file')).status).toBe(404);
+  });
+
+  it('404s the download once the export has aged past its advertised TTL', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(billing, orgId, ['manage']);
+    expect((await app.request('/export', { method: 'POST' })).status).toBe(200);
+
+    // Age the artifact past the 14-day window. `expiresAt` used to be a number the handler
+    // computed and nothing checked; it is now enforced on every read.
+    await db
+      .update(schema.organization)
+      .set({ exportReadyAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000) })
+      .where(eq(schema.organization.id, orgId));
+
+    const download = appWithActor(exportDownload, orgId, ['manage']);
+    expect((await download.request('/file')).status).toBe(404);
   });
 
   it('is denied (403) for a member without manage', async () => {
@@ -225,10 +267,3 @@ describe('billing: POST /export', () => {
     expect(res.status).toBe(404);
   });
 });
-
-/** Read a `file://` export artifact's text contents directly off disk. */
-async function readArtifact(fileUrl: string): Promise<string> {
-  const { readFile } = await import('node:fs/promises');
-  const { fileURLToPath } = await import('node:url');
-  return readFile(fileURLToPath(fileUrl), 'utf8');
-}

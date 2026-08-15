@@ -151,6 +151,18 @@ export const organization = pgTable(
     estimationScale: estimationScale('estimation_scale').notNull().default('fibonacci'),
     lifecycleState: orgLifecycleState('lifecycle_state').notNull().default('trialing'),
     exportReadyAt: timestamp('export_ready_at'),
+    /**
+     * Blob key of the most recent work-layer export.
+     *
+     * @remarks
+     * Stored rather than derived because the key carries a ULID the caller never sees. The export
+     * used to live at `exports/<orgId>/<timestamp>.json` and the API handed back the object store's
+     * own URL, which made a full dump of the org readable forever by anyone who obtained the link
+     * and guessable by anyone who knew the org id and roughly when it ran. The key is now
+     * unguessable and the bytes are served only through the authenticated `GET /billing/export/file`
+     * route, so this column is the only way to find the object.
+     */
+    exportBlobKey: text('export_blob_key'),
     deleteAfterAt: timestamp('delete_after_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')

@@ -22,7 +22,7 @@
  * `/portal`, `/export`, the lifecycle transitions) requires the `manage` capability via
  * {@link capabilityGuard}.
  */
-import { db, organization } from '@docket/db';
+import { db, genId, organization } from '@docket/db';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -34,7 +34,7 @@ import { env } from '../env';
 import { NotFoundError } from '../error';
 import { collectWorkLayer } from '../lib/export-collect';
 import { ok } from '../lib/ok';
-import { apiDoc } from '../lib/openapi-route';
+import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
@@ -158,19 +158,24 @@ export const ExportOut = z
     downloadUrl: z
       .string()
       .describe(
-        'A fetchable URL for the generated work-layer JSON archive, served from the BlobStore.',
+        "API path for the generated work-layer JSON archive. Requires the caller's session and the org `manage` capability; it is not a direct object-store link.",
       ),
     expiresAt: z
       .string()
       .describe(
-        'ISO-8601 instant the download URL stops being advertised as valid (14 days after generation).',
+        'ISO-8601 instant the download stops working (14 days after generation), enforced on every read.',
       ),
   })
-  .meta({ id: 'ExportOut', description: "A generated work-layer export's download URL." });
+  .meta({ id: 'ExportOut', description: "A generated work-layer export's download path." });
 /** Work-layer export response value. */
 export type ExportOut = z.infer<typeof ExportOut>;
 
-/** Days a generated export download URL is advertised as valid for. */
+/** The authenticated route the generated export is served from. */
+function exportDownloadPath(orgId: string): string {
+  return `/v1/orgs/${orgId}/billing/export/file`;
+}
+
+/** Days a generated export download is valid for. */
 const EXPORT_TTL_DAYS = 14;
 
 /** Milliseconds in {@link EXPORT_TTL_DAYS}. */
@@ -337,7 +342,7 @@ Side effects: the subscription cancel is best-effort against the gateway (a neve
       summary: 'Generate a work-layer export',
       capability: 'manage',
       response: ExportOut,
-      description: `Generate a downloadable snapshot of the org's entire work layer and return {@link ExportOut} \`{ downloadUrl, expiresAt }\`. The handler scans the org's work-layer tables (\`collectWorkLayer\`), serializes them to a single JSON document, and writes it through the BlobStore **port** (in-memory/local or real object storage) under \`exports/<orgId>/<timestamp>.json\`. The returned \`downloadUrl\` is advertised as valid for 14 days (\`expiresAt\`).
+      description: `Generate a downloadable snapshot of the org's entire work layer and return {@link ExportOut} \`{ downloadUrl, expiresAt }\`. The handler scans the org's work-layer tables (\`collectWorkLayer\`), serializes them to a single JSON document, and writes it through the BlobStore **port** (in-memory/local or real object storage) under \`exports/<orgId>/<ulid>.json\`. \`downloadUrl\` is the API path \`GET /v1/orgs/:orgId/billing/export/file\` — a session and the \`manage\` capability are required to read it, and the 14-day \`expiresAt\` is enforced there on every read rather than advertised. Generating a new export deletes the object the previous one wrote.
 
 Side effect: stamps \`exportReadyAt\` on the org so both the org's \`GET /lifecycle\` view and the admin lifecycle views reflect the fresh artifact — this is the export an admin takes before letting the deletion pipeline proceed, and it can be generated at any time (not only inside the export window). A missing/purged org 404s. Requires \`manage\`. Related: \`POST /lifecycle/start-export-window\` (which opens the grace period this export is meant for), \`GET /lifecycle\`.`,
     }),
@@ -345,7 +350,7 @@ Side effect: stamps \`exportReadyAt\` on the org so both the org's \`GET /lifecy
       const { orgId } = c.get('actorCtx');
       // Prove the org exists (and is the actor's own, since orgId comes from actorCtx)
       // before doing the work-layer scan + blob write.
-      await loadOrg(orgId);
+      const org = await loadOrg(orgId);
 
       const now = new Date();
       const document = {
@@ -354,15 +359,70 @@ Side effect: stamps \`exportReadyAt\` on the org so both the org's \`GET /lifecy
         tables: await collectWorkLayer(orgId),
       };
       const bytes = new TextEncoder().encode(JSON.stringify(document));
-      const key = `exports/${orgId}/${now.getTime()}.json`;
-      const stored = await getContainer().blob.put(key, bytes, 'application/json');
+      // A ULID rather than a timestamp: the object store keeps objects publicly readable, so a key
+      // derived from the org id and the clock is one an outsider can reconstruct. This one carries
+      // 80 bits nobody outside this transaction ever sees.
+      const key = `exports/${orgId}/${genId()}.json`;
+      await getContainer().blob.put(key, bytes, 'application/json');
 
       // Stamp export_ready_at so the org + admin lifecycle views reflect the fresh artifact.
-      await db.update(organization).set({ exportReadyAt: now }).where(eq(organization.id, orgId));
+      await db
+        .update(organization)
+        .set({ exportReadyAt: now, exportBlobKey: key })
+        .where(eq(organization.id, orgId));
+
+      // Drop the superseded object. Best-effort: an orphaned blob is a cost and retention problem,
+      // never a reason to fail an export the caller is entitled to.
+      if (org.exportBlobKey && org.exportBlobKey !== key) {
+        await getContainer()
+          .blob.delete(org.exportBlobKey)
+          .catch(() => undefined);
+      }
 
       const expiresAt = new Date(now.getTime() + EXPORT_TTL_MS).toISOString();
-      return ok(c, ExportOut, { downloadUrl: stored.url, expiresAt });
+      return ok(c, ExportOut, { downloadUrl: exportDownloadPath(orgId), expiresAt });
     },
   );
+
+/**
+ * Stream the generated work-layer export.
+ *
+ * @remarks
+ * Mounted separately from the typed RPC router because it returns raw bytes rather than a JSON
+ * envelope — the same convention `meAccountExportDownload` follows for the personal archive.
+ *
+ * This route is the boundary. `POST /export` used to answer with the object store's own URL, which
+ * needed no session, honoured no expiry, and stayed live after the org was deleted; `expiresAt` was
+ * a number the handler computed and nothing enforced. Access is now the org's `manage` capability
+ * plus a TTL check on every read, and the key never leaves the server.
+ */
+export const billingExportDownload: Hono<AppEnv> = new Hono<AppEnv>().get(
+  '/file',
+  capabilityGuard('manage'),
+  describeRoute({
+    tags: ['Billing'],
+    summary: 'Download the generated work-layer export',
+    description: `Stream the most recent work-layer export as \`application/json\` bytes. Requires the \`manage\` capability on the org, and the export must have been generated within the last ${EXPORT_TTL_DAYS} days — the \`expiresAt\` returned by \`POST /export\` is enforced here rather than merely advertised. Returns **404** when no export has been generated, when it has expired, or when the underlying object has already been swept.`,
+  }),
+  async (c) => {
+    const { orgId } = c.get('actorCtx');
+    const org = await loadOrg(orgId);
+    if (!org.exportBlobKey || !org.exportReadyAt) throw new NotFoundError('Export not found.');
+    if (Date.now() - org.exportReadyAt.getTime() > EXPORT_TTL_MS) {
+      throw new NotFoundError('Export has expired.');
+    }
+    const bytes = await getContainer().blob.get(org.exportBlobKey);
+    if (!bytes) throw new NotFoundError('Export file is no longer available.');
+    // Copy into a fresh `ArrayBuffer`-backed view so the body is a valid `BodyInit` — same reason
+    // `meAccountExportDownload` does it.
+    return new Response(new Uint8Array(bytes), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Disposition': `attachment; filename="docket-export-${orgId}.json"`,
+      },
+    });
+  },
+);
 
 export default billing;

@@ -9,6 +9,7 @@
     "esModuleInterop": true,
     "strict": true,
     "strictNullChecks": true,
+    "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,

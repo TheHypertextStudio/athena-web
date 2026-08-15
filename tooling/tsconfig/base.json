@@ -15,6 +15,7 @@
     "checkJs": false,
     "strict": true,
     "strictNullChecks": true,
+    "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitReturns": true,
     "noImplicitOverride": true,

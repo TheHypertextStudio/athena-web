@@ -154,6 +154,8 @@ import {
   TaskDependencyCreate,
   TaskOut,
   TaskProvenance,
+  TaskReparentBatchIn,
+  TaskReparentBatchOut,
   TaskUpdate,
   dependencyEdgeId,
   subtaskEdgeId,
@@ -367,6 +369,50 @@ describe('project DTOs', () => {
 });
 
 describe('task DTOs', () => {
+  it('TaskReparentBatchIn parses atomic hierarchy moves', () => {
+    expect(
+      TaskReparentBatchIn.parse({
+        moves: [
+          { taskId: ID, parentTaskId: ID3 },
+          { taskId: ID2, parentTaskId: null },
+        ],
+        preserveSelectedSubtrees: true,
+      }),
+    ).toEqual({
+      moves: [
+        { taskId: ID, parentTaskId: ID3 },
+        { taskId: ID2, parentTaskId: null },
+      ],
+      preserveSelectedSubtrees: true,
+    });
+  });
+
+  it('TaskReparentBatchIn rejects empty and duplicate subject sets', () => {
+    expect(
+      TaskReparentBatchIn.safeParse({ moves: [], preserveSelectedSubtrees: true }).success,
+    ).toBe(false);
+    expect(
+      TaskReparentBatchIn.safeParse({
+        moves: [
+          { taskId: ID, parentTaskId: ID2 },
+          { taskId: ID, parentTaskId: ID3 },
+        ],
+        preserveSelectedSubtrees: false,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('TaskReparentBatchOut preserves each committed root previous parent', () => {
+    expect(
+      TaskReparentBatchOut.parse({
+        moves: [
+          { taskId: ID, previousParentTaskId: null, parentTaskId: ID3 },
+          { taskId: ID2, previousParentTaskId: ID, parentTaskId: ID3 },
+        ],
+      }).moves,
+    ).toHaveLength(2);
+  });
+
   it('TaskCreate parses minimal and full', () => {
     expect(TaskCreate.parse({ title: 'T', teamId: ID }).teamId).toBe(ID);
     const full = TaskCreate.parse({

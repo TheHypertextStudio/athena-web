@@ -17,6 +17,8 @@ import {
   TaskDetail,
   TaskListQuery,
   TaskOut,
+  TaskReparentBatchIn,
+  TaskReparentBatchOut,
   TaskStateUpdate,
   TaskUpdate,
 } from '@docket/types';
@@ -25,7 +27,7 @@ import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { CycleError, NotFoundError, ValidationError } from '../error';
+import { NotFoundError, ValidationError } from '../error';
 import { deferAfterResponse } from '../lib/after-response';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { labelsForSubject, labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
@@ -40,6 +42,7 @@ import { advanceCompletedProcessTask } from '../lib/recurrence/advance';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
+import { planTaskReparents, reparentTasks } from '../services/task-hierarchy';
 
 import { emitEvent } from './event-emit';
 import {
@@ -52,7 +55,6 @@ import {
   resolveStateTransition,
   toOut,
   toRef,
-  wouldCreateSubtaskCycle,
 } from './task-helpers';
 import { attachmentRoutes } from './attachment-routes';
 import { taskActivityRoutes } from './task-activity-routes';
@@ -356,6 +358,32 @@ Pagination is opt-in via the cursor query: omit \`limit\` to receive the full ac
       });
     },
   )
+  .post(
+    '/reparent',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'Reparent tasks atomically',
+      capability: 'contribute',
+      response: TaskReparentBatchOut,
+      description: `Assign one or more active tasks to new hierarchy parents as one atomic operation. Every subject and non-null parent must be an active task in the caller's organization; missing, archived, and cross-organization ids all return 404 without committing any assignment. The complete proposed hierarchy must remain acyclic or the whole request returns 409.
+
+When \`preserveSelectedSubtrees\` is true, a selected task whose ancestor is also selected remains attached to that ancestor, so dragging a selected hierarchy moves the selected roots without flattening it. The response contains only committed roots and includes each previous parent assignment; clients can submit those values back with preservation disabled to implement an exact Undo. Requires \`contribute\`.`,
+    }),
+    zJson(TaskReparentBatchIn),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      return ok(
+        c,
+        TaskReparentBatchOut,
+        await reparentTasks({
+          organizationId: orgId,
+          actorId,
+          ...c.req.valid('json'),
+        }),
+      );
+    },
+  )
   .get(
     '/:id',
     apiDoc({
@@ -596,9 +624,11 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
       const row =
         newParentId !== null
           ? await serializableTx(async (tx) => {
-              if (await wouldCreateSubtaskCycle(tx, orgId, id, newParentId)) {
-                throw new CycleError('Reparenting would create a subtask cycle');
-              }
+              const activeTasks = await tx
+                .select({ id: task.id, parentTaskId: task.parentTaskId })
+                .from(task)
+                .where(and(eq(task.organizationId, orgId), isNull(task.archivedAt)));
+              planTaskReparents(activeTasks, [{ taskId: id, parentTaskId: newParentId }], false);
               return (await tx.update(task).set(patch).where(where).returning())[0];
             })
           : (await db.update(task).set(patch).where(where).returning())[0];

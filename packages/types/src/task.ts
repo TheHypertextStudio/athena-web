@@ -363,7 +363,7 @@ export const TaskOut = z
 /** Task representation value. */
 export type TaskOut = z.infer<typeof TaskOut>;
 
-/** Body for updating a Task (reparenting goes through `/move`, not here). */
+/** Body for updating a Task, including a single-task hierarchy change. */
 export const TaskUpdate = z
   .object({
     title: z.string().min(1).optional().describe('New title (non-empty). Omit to leave unchanged.'),
@@ -448,6 +448,70 @@ export const TaskUpdate = z
   .meta({ id: 'TaskUpdate', description: 'Update a task.' });
 /** Validated task-update body. */
 export type TaskUpdate = z.infer<typeof TaskUpdate>;
+
+/** One requested task-parent assignment in an atomic hierarchy change. */
+const TaskReparentMoveIn = z.object({
+  taskId: TaskId.describe('Task whose parent assignment should change.'),
+  parentTaskId: TaskId.nullable().describe(
+    'New parent task, or null to move the task to the top level.',
+  ),
+});
+
+/**
+ * Body for atomically assigning one or more tasks to a parent.
+ *
+ * @remarks
+ * Subject task ids must be unique. When `preserveSelectedSubtrees` is true, the server moves only
+ * selected hierarchy roots so a selected descendant stays attached to its selected ancestor.
+ */
+export const TaskReparentBatchIn = z
+  .object({
+    moves: z.array(TaskReparentMoveIn).min(1).describe('Non-empty set of parent assignments.'),
+    preserveSelectedSubtrees: z
+      .boolean()
+      .describe('Whether selected descendants should remain attached to selected ancestors.'),
+  })
+  .superRefine(({ moves }, ctx) => {
+    const taskIds = new Set<string>();
+    moves.forEach(({ taskId }, index) => {
+      if (!taskIds.has(taskId)) {
+        taskIds.add(taskId);
+        return;
+      }
+      ctx.addIssue({
+        code: 'custom',
+        path: ['moves', index, 'taskId'],
+        message: 'Each task can appear only once',
+      });
+    });
+  })
+  .meta({
+    id: 'TaskReparentBatchIn',
+    description: 'Atomically assign one or more tasks to new hierarchy parents.',
+  });
+/** Validated atomic task-reparent body. */
+export type TaskReparentBatchIn = z.infer<typeof TaskReparentBatchIn>;
+
+/** One committed hierarchy assignment, including the value required to undo it. */
+const TaskReparentMoveOut = TaskReparentMoveIn.extend({
+  previousParentTaskId: TaskId.nullable().describe(
+    'Parent task before the atomic change, or null when previously top-level.',
+  ),
+});
+
+/** Result of an atomic task hierarchy change. */
+export const TaskReparentBatchOut = z
+  .object({
+    moves: z
+      .array(TaskReparentMoveOut)
+      .describe('Committed hierarchy roots and their previous parent assignments.'),
+  })
+  .meta({
+    id: 'TaskReparentBatchOut',
+    description: 'Committed task hierarchy assignments with undo information.',
+  });
+/** Atomic task-reparent result value. */
+export type TaskReparentBatchOut = z.infer<typeof TaskReparentBatchOut>;
 
 /** Body for changing a Task's workflow state; the key must exist in the team's `workflow_states`. */
 export const TaskStateUpdate = z

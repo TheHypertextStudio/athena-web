@@ -100,6 +100,9 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       estimation_scale estimation_scale not null default 'fibonacci',
       lifecycle_state org_lifecycle_state not null default 'trialing',
       export_ready_at timestamp,
+      -- Drizzle names every column of the table in its INSERT, so this fixture has to carry
+      -- columns these tests never read; omitting one fails the insert rather than the assertion.
+      export_blob_key text,
       delete_after_at timestamp,
       created_at timestamp not null default now(),
       updated_at timestamp not null default now(),

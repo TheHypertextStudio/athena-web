@@ -68,7 +68,7 @@ describe('phone verification', () => {
     const sms = new CaptureSmsSender();
     const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
     const service = new PhoneVerificationService({
-      sms,
+      sms: () => sms,
       now: clock.now,
       generateCode: () => CODE,
     });
@@ -91,7 +91,11 @@ describe('phone verification', () => {
   it('leaves the number unverified until the correct code comes back', async () => {
     const sms = new CaptureSmsSender();
     const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
-    const service = new PhoneVerificationService({ sms, now: clock.now, generateCode: () => CODE });
+    const service = new PhoneVerificationService({
+      sms: () => sms,
+      now: clock.now,
+      generateCode: () => CODE,
+    });
     const { row } = await seedNumber('VerifyHappyPath');
 
     await service.issueChallenge(row);
@@ -123,7 +127,11 @@ describe('phone verification', () => {
   it('expires a code and refuses it afterwards', async () => {
     const sms = new CaptureSmsSender();
     const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
-    const service = new PhoneVerificationService({ sms, now: clock.now, generateCode: () => CODE });
+    const service = new PhoneVerificationService({
+      sms: () => sms,
+      now: clock.now,
+      generateCode: () => CODE,
+    });
     const { row } = await seedNumber('VerifyExpiry');
 
     await service.issueChallenge(row);
@@ -140,7 +148,11 @@ describe('phone verification', () => {
   it('destroys the challenge once the attempt budget is spent', async () => {
     const sms = new CaptureSmsSender();
     const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
-    const service = new PhoneVerificationService({ sms, now: clock.now, generateCode: () => CODE });
+    const service = new PhoneVerificationService({
+      sms: () => sms,
+      now: clock.now,
+      generateCode: () => CODE,
+    });
     const { row } = await seedNumber('VerifyAttempts');
 
     await service.issueChallenge(row);
@@ -161,7 +173,11 @@ describe('phone verification', () => {
   it('rate limits resends and then the hourly send budget', async () => {
     const sms = new CaptureSmsSender();
     const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
-    const service = new PhoneVerificationService({ sms, now: clock.now, generateCode: () => CODE });
+    const service = new PhoneVerificationService({
+      sms: () => sms,
+      now: clock.now,
+      generateCode: () => CODE,
+    });
     const { row } = await seedNumber('VerifyRateLimit');
 
     await service.issueChallenge(row);
@@ -189,7 +205,7 @@ describe('phone verification', () => {
     const codes = ['111111', '222222'];
     let index = 0;
     const service = new PhoneVerificationService({
-      sms,
+      sms: () => sms,
       now: clock.now,
       generateCode: () => codes[index++] ?? '999999',
     });
@@ -209,9 +225,9 @@ describe('phone verification', () => {
   it('reports a delivery failure instead of leaving the person waiting', async () => {
     const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
     const service = new PhoneVerificationService({
-      sms: {
+      sms: () => ({
         send: () => Promise.reject(new Error('carrier refused the message')),
-      },
+      }),
       now: clock.now,
       generateCode: () => CODE,
     });
@@ -225,7 +241,11 @@ describe('phone verification', () => {
   it('refuses to re-verify a number that is already verified', async () => {
     const sms = new CaptureSmsSender();
     const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
-    const service = new PhoneVerificationService({ sms, now: clock.now, generateCode: () => CODE });
+    const service = new PhoneVerificationService({
+      sms: () => sms,
+      now: clock.now,
+      generateCode: () => CODE,
+    });
     const { row } = await seedNumber('VerifyIdempotent');
 
     await service.issueChallenge(row);

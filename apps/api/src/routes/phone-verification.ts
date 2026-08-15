@@ -73,8 +73,18 @@ export type VerificationResult =
 
 /** Everything {@link PhoneVerificationService} needs from the outside world. */
 export interface PhoneVerificationDeps {
-  /** The SMS transport. In local/test this is the capturing double, so no account is needed. */
-  readonly sms: SmsSender;
+  /**
+   * How to reach the SMS transport. In local/test this resolves the capturing double, so no
+   * account is needed.
+   *
+   * @remarks
+   * A factory rather than a resolved sender, matching `createVoiceRoutes(() => getContainer().voice)`
+   * in `app.ts`. The container publishes `sms` as a lazy getter that throws outside local mode
+   * without credentials, so storing the resolved value would move that failure to construction —
+   * and every method of this service, including the ones that only read, would then require the
+   * ability to send.
+   */
+  readonly sms: () => SmsSender;
   /** Injected clock; tests advance it rather than sleeping. */
   readonly now?: () => Date;
   /** Injected code generator; tests pin it so an assertion never depends on randomness. */
@@ -187,7 +197,7 @@ export class PhoneVerificationService {
     const code = this.generateCode();
     let deliveryFailed = false;
     try {
-      await this.deps.sms.send({ to: number.e164, body: verificationMessage(code) });
+      await this.deps.sms().send({ to: number.e164, body: verificationMessage(code) });
     } catch {
       // The provider's own words never reach a person or a log line here; the fact of failure is
       // what the caller needs, and it is carried as a boolean.
@@ -207,11 +217,6 @@ export class PhoneVerificationService {
       .returning();
     if (!challenge) throw new Error('phone verification insert returned no row');
     return { ok: true, challenge };
-  }
-
-  /** Read the challenge a submitted code would be checked against, if any. */
-  async outstanding(phoneNumberId: string): Promise<PhoneVerificationRow | null> {
-    return outstandingChallenge(phoneNumberId);
   }
 
   /**
@@ -236,7 +241,7 @@ export class PhoneVerificationService {
     if (number.status === 'verified') throw new ConflictError('This number is already verified.');
 
     const now = this.now();
-    const challenge = await this.outstanding(number.id);
+    const challenge = await outstandingChallenge(number.id);
     if (!challenge) return { ok: false, refusal: 'no-challenge', attemptsRemaining: 0 };
     if (challenge.expiresAt.getTime() <= now.getTime()) {
       await db

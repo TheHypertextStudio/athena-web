@@ -74,6 +74,23 @@ function toPhoneNumberOut(
   };
 }
 
+/**
+ * Project a stored binding along with whatever code is still awaiting entry on it.
+ *
+ * @remarks
+ * The one place that knows only a `pending` row can carry a challenge, so an endpoint returning a
+ * number cannot forget to look and cannot invent a lookup for a row that never has one.
+ *
+ * @param row - The stored binding.
+ * @returns the redacted number and its live challenge limits, if any.
+ */
+async function phoneNumberOut(row: PhoneNumberRow): Promise<z.input<typeof PhoneNumberOut>> {
+  return toPhoneNumberOut(
+    row,
+    row.status === 'pending' ? await outstandingChallenge(row.id) : null,
+  );
+}
+
 /** Project an outstanding challenge onto the limits a person is entitled to see. */
 function toChallengeSummary(
   challenge: PhoneVerificationRow,
@@ -115,20 +132,9 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
           .where(eq(phoneNumber.userId, userId))
           .orderBy(desc(phoneNumber.createdAt));
 
-        // Read the challenges directly rather than through `createVerification()`: building the
-        // service resolves the container's SMS transport, which throws outside local mode when no
-        // SMS credentials are configured, and listing your own numbers must not depend on the
-        // ability to send. Only a pending row can have one, and a person holds a handful of
-        // numbers — a couple of point lookups, not a fan-out worth batching.
-        const items = await Promise.all(
-          rows.map(async (row) =>
-            toPhoneNumberOut(
-              row,
-              row.status === 'pending' ? await outstandingChallenge(row.id) : null,
-            ),
-          ),
-        );
-        return ok(c, PhoneNumberListOut, { items });
+        // A person holds a handful of numbers and only the pending ones are looked up, so this is
+        // zero or one extra query, issued concurrently — not a fan-out worth batching.
+        return ok(c, PhoneNumberListOut, { items: await Promise.all(rows.map(phoneNumberOut)) });
       },
     )
     .post(
@@ -262,11 +268,11 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
       async (c) => {
         const userId = requireUserId(c);
         const row = await requireOwned(userId, c.req.valid('param').id);
-        // Read before deleting: the response describes the number as it stood at the moment of the
-        // call, and a pending number discarded mid-verification did have a code awaiting entry.
-        const challenge = row.status === 'pending' ? await outstandingChallenge(row.id) : null;
+        // Projected before the delete: the response describes the number as it stood at the moment
+        // of the call, and a pending number discarded mid-verification did have a code outstanding.
+        const projected = await phoneNumberOut(row);
         await db.delete(phoneNumber).where(eq(phoneNumber.id, row.id));
-        return ok(c, PhoneNumberOut, toPhoneNumberOut(row, challenge));
+        return ok(c, PhoneNumberOut, projected);
       },
     );
 }

@@ -34,7 +34,6 @@ import { DIAL_CODES, DEFAULT_DIAL_CODE } from '@docket/athena/phone';
 import type { PhoneChallengeOut, PhoneNumberOut, PhoneNumberStatus } from '@docket/athena/phone';
 import { Check, Phone, PhoneOff, Trash2 } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup, Field, Input, Select, Text } from '@docket/ui/primitives';
-import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -70,8 +69,23 @@ type CodeTarget =
   | { readonly kind: 'number'; readonly id: string }
   | { readonly kind: 'add' };
 
-/** How often the resend cooldown is re-evaluated against the wall clock. */
-const COOLDOWN_TICK_MS = 1000;
+/** When this number's resend button should come back, or `Infinity` if it was never disabled. */
+function cooldownEnd(number: PhoneNumberOut): number {
+  return number.challenge ? Date.parse(number.challenge.resendAvailableAt) : Infinity;
+}
+
+/** Shown when the transport could not deliver a code, whoever asked for it. */
+const UNDELIVERED_MESSAGE = 'We couldn’t deliver the code to that number. Check it and try again.';
+
+/** The country selector's options. Static data, so built once rather than per render. */
+const COUNTRY_OPTIONS = DIAL_CODES.map((option) => (
+  <option key={option.iso2} value={option.iso2}>
+    {option.name} +{option.dialCode}
+  </option>
+));
+
+/** A stable empty list, so a render before the first response does not churn dependents. */
+const NO_NUMBERS: readonly PhoneNumberOut[] = [];
 
 /**
  * The caller-owned phone numbers section.
@@ -88,7 +102,6 @@ export function VoicePhoneNumbers(): JSX.Element {
   const [target, setTarget] = useState<CodeTarget>({ kind: 'auto' });
   const [issued, setIssued] = useState<PhoneNumberOut | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const queryClient = useQueryClient();
 
   const dialCode = useMemo(
     () => DIAL_CODES.find((option) => option.iso2 === country)?.dialCode ?? DEFAULT_DIAL_CODE,
@@ -104,6 +117,20 @@ export function VoicePhoneNumbers(): JSX.Element {
   );
 
   /**
+   * Aim the code box somewhere and clear what belonged to where it was.
+   *
+   * @remarks
+   * One helper rather than a reset at each call site: the digits typed for one number and the error
+   * raised by one attempt are both meaningless against the next target, and spelling that out
+   * seven times is how they end up diverging.
+   */
+  const pointAt = (next: CodeTarget): void => {
+    setTarget(next);
+    setCode('');
+    setNotice(null);
+  };
+
+  /**
    * Point the code box at the number a fresh challenge was issued for.
    *
    * @remarks
@@ -113,8 +140,7 @@ export function VoicePhoneNumbers(): JSX.Element {
    */
   const acceptChallenge = (result: PhoneChallengeOut): void => {
     setIssued(result.phoneNumber);
-    setTarget({ kind: 'number', id: result.phoneNumber.id });
-    setNotice(null);
+    pointAt({ kind: 'number', id: result.phoneNumber.id });
   };
 
   const bind = useApiMutation<PhoneChallengeOut, undefined>({
@@ -144,17 +170,11 @@ export function VoicePhoneNumbers(): JSX.Element {
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
     onSuccess: () => {
-      setTarget({ kind: 'auto' });
       setIssued(null);
-      setCode('');
-      setNotice(null);
+      pointAt({ kind: 'auto' });
     },
     onError: (error) => {
       setNotice(userErrorMessage(error, 'That code didn’t work.'));
-      // A wrong code spends one of the tries this section promises to state, and the server has
-      // already counted it. Without this the description keeps offering the budget it had on the
-      // way in, which is the "locked out with no warning" the surface exists to prevent.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.phoneNumbers() });
     },
   });
 
@@ -183,15 +203,14 @@ export function VoicePhoneNumbers(): JSX.Element {
     onSuccess: (result) => {
       // Drop the optimistic row too, or the code box would stay open on a number that is gone.
       setIssued((prev) => (prev?.id === result.id ? null : prev));
-      setTarget({ kind: 'auto' });
-      setNotice(null);
+      pointAt({ kind: 'auto' });
     },
     onError: (error) => {
       setNotice(userErrorMessage(error, 'Could not remove that number.'));
     },
   });
 
-  const items = numbersQ.data?.items ?? [];
+  const items = numbersQ.data?.items ?? NO_NUMBERS;
 
   /**
    * Every number that can take a code right now: the server's pending rows, plus the number a
@@ -225,44 +244,38 @@ export function VoicePhoneNumbers(): JSX.Element {
    * @remarks
    * Null until mounted, deliberately: seeding this from `Date.now()` during render would put the
    * server's clock and the client's into the same `disabled` attribute and mismatch on hydration.
-   * Nothing is treated as cooling down until a real client clock exists, which is also the honest
-   * reading — the server prerender cannot know how long ago the code was sent.
-   *
-   * It ticks for as long as some number is still cooling down. A timestamp compared once at render
-   * would leave an idle tab's resend button dead long after the server would have accepted it.
+   * Nothing reads as cooling down until a real client clock exists, which is also the honest
+   * reading — a server prerender cannot know how long ago the code was sent.
    */
   const [now, setNow] = useState<number | null>(null);
 
   /** Whether this number's own cooldown has yet to elapse. */
-  const isCoolingDown = (number: PhoneNumberOut): boolean => {
-    if (now === null || !number.challenge) return false;
-    return new Date(number.challenge.resendAvailableAt).getTime() > now;
-  };
+  const isCoolingDown = (number: PhoneNumberOut): boolean =>
+    now !== null && cooldownEnd(number) > now;
 
-  // Every pending row carries its own cooldown, so the tick has to outlive the one being verified:
-  // a row the code box is not pointed at is just as capable of having a code sent moments ago.
-  const anyCoolingDown = verifiable.some(isCoolingDown);
+  // The soonest moment any row's button should come back. Every pending row owns a cooldown, not
+  // just the one being verified — a row the code box is not pointed at is equally capable of
+  // having had a code sent moments ago.
+  const nextResendAt = Math.min(...verifiable.map(cooldownEnd));
 
   useEffect(() => {
+    // Re-check exactly when the earliest cooldown expires rather than polling: the deadline is
+    // already known, and nothing on screen counts down, so a once-per-second re-render of the
+    // whole section would buy nothing. Runs on mount too, which is what seeds `now`.
     setNow(Date.now());
-  }, []);
-
-  useEffect(() => {
-    if (!anyCoolingDown) return undefined;
-    const timer = setInterval(() => {
+    const delay = nextResendAt - Date.now();
+    if (!Number.isFinite(delay) || delay <= 0) return undefined;
+    const timer = setTimeout(() => {
       setNow(Date.now());
-    }, COOLDOWN_TICK_MS);
+    }, delay);
     return () => {
-      clearInterval(timer);
+      clearTimeout(timer);
     };
-  }, [anyCoolingDown]);
+  }, [nextResendAt]);
 
   // A code that was never delivered is reported whether this session sent it or read it back, so
   // the warning survives the reload that the rest of this section's state now survives.
-  const undelivered = challenge?.deliveryFailed ?? false;
-  const alert =
-    notice ??
-    (undelivered ? 'We couldn’t deliver the code to that number. Check it and try again.' : null);
+  const alert = notice ?? (challenge?.deliveryFailed ? UNDELIVERED_MESSAGE : null);
 
   return (
     <section
@@ -311,9 +324,7 @@ export function VoicePhoneNumbers(): JSX.Element {
                         variant="ghost"
                         data-phone-action="enter-code"
                         onClick={() => {
-                          setTarget({ kind: 'number', id: number.id });
-                          setCode('');
-                          setNotice(null);
+                          pointAt({ kind: 'number', id: number.id });
                         }}
                       >
                         Enter code
@@ -324,8 +335,7 @@ export function VoicePhoneNumbers(): JSX.Element {
                       data-phone-action="resend"
                       disabled={resend.isPending || isCoolingDown(number)}
                       onClick={() => {
-                        setTarget({ kind: 'number', id: number.id });
-                        setCode('');
+                        pointAt({ kind: 'number', id: number.id });
                         resend.mutate(number.id);
                       }}
                     >
@@ -395,9 +405,7 @@ export function VoicePhoneNumbers(): JSX.Element {
               variant="ghost"
               data-phone-action="add-different"
               onClick={() => {
-                setTarget({ kind: 'add' });
-                setCode('');
-                setNotice(null);
+                pointAt({ kind: 'add' });
               }}
             >
               Add a different number
@@ -415,11 +423,7 @@ export function VoicePhoneNumbers(): JSX.Element {
                 }}
                 aria-label="Country calling code"
               >
-                {DIAL_CODES.map((option) => (
-                  <option key={option.iso2} value={option.iso2}>
-                    {option.name} +{option.dialCode}
-                  </option>
-                ))}
+                {COUNTRY_OPTIONS}
               </Select>
             </Field>
             <Field label="Phone number">
@@ -452,8 +456,7 @@ export function VoicePhoneNumbers(): JSX.Element {
                 variant="ghost"
                 data-phone-action="back-to-code"
                 onClick={() => {
-                  setTarget({ kind: 'auto' });
-                  setNotice(null);
+                  pointAt({ kind: 'auto' });
                 }}
               >
                 Enter the code instead

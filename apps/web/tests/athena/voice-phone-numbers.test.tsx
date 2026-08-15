@@ -14,10 +14,11 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { makeQueryWrapper, okResponse, problemResponse } from '../support/query';
 
 const numbersGet = vi.fn();
 const bindPost = vi.fn();
@@ -46,10 +47,8 @@ vi.mock('@/lib/api', () => ({
 // Imported after the mock above so the module under test shares it.
 const { VoicePhoneNumbers } = await import('@/components/athena/voice-phone-numbers');
 
-/** The shape `unwrap` consumes: a `Response`-like with `ok`, `status`, and `json()`. */
-function jsonResponse(body: unknown, { ok = true, status = 200 } = {}): unknown {
-  return { ok, status, json: async () => body };
-}
+/** Prose only the server would produce, so leaking it into the UI is unambiguous. */
+const SERVER_DIAGNOSTIC = 'psycopg2.errors.UniqueViolation at 0xdeadbeef';
 
 interface NumberOverrides {
   readonly id?: string;
@@ -58,10 +57,13 @@ interface NumberOverrides {
 }
 
 /** A listed number, pending with a live challenge unless told otherwise. */
-function phoneNumber(overrides: NumberOverrides = {}): Record<string, unknown> {
-  const status = overrides.status ?? 'pending';
+function phoneNumber({
+  id = 'pn-1',
+  status = 'pending',
+  challenge = status === 'pending' ? challengeSummary() : null,
+}: NumberOverrides = {}): Record<string, unknown> {
   return {
-    id: overrides.id ?? 'pn-1',
+    id,
     masked: '+1 ••• ••• ••58',
     dialCode: '1',
     country: 'US',
@@ -69,12 +71,7 @@ function phoneNumber(overrides: NumberOverrides = {}): Record<string, unknown> {
     callingEnabled: true,
     verifiedAt: null,
     createdAt: '2026-08-15T09:00:00.000Z',
-    challenge:
-      overrides.challenge !== undefined
-        ? overrides.challenge
-        : status === 'pending'
-          ? challengeSummary()
-          : null,
+    challenge,
   };
 }
 
@@ -90,16 +87,11 @@ function challengeSummary(overrides: Record<string, unknown> = {}): Record<strin
 }
 
 function listing(...items: Record<string, unknown>[]): unknown {
-  return jsonResponse({ items });
+  return okResponse({ items });
 }
 
 function renderSection(): ReturnType<typeof render> {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <VoicePhoneNumbers />
-    </QueryClientProvider>,
-  );
+  return render(<VoicePhoneNumbers />, { wrapper: makeQueryWrapper().wrapper });
 }
 
 const verifyForm = (): Element | null => document.querySelector('[data-phone-verify-form]');
@@ -135,7 +127,7 @@ describe('VoicePhoneNumbers', () => {
   it('offers the code box for a number the server already reports as pending', async () => {
     // No bind ran in this session — exactly the state a page reload leaves behind.
     numbersGet.mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
-    verifyPost.mockResolvedValue(jsonResponse(phoneNumber({ id: 'pn-1', status: 'verified' })));
+    verifyPost.mockResolvedValue(okResponse(phoneNumber({ id: 'pn-1', status: 'verified' })));
     renderSection();
 
     await waitFor(() => {
@@ -186,7 +178,7 @@ describe('VoicePhoneNumbers', () => {
     numbersGet.mockResolvedValue(
       listing(phoneNumber({ id: 'pn-new' }), phoneNumber({ id: 'pn-old' })),
     );
-    verifyPost.mockResolvedValue(jsonResponse(phoneNumber({ id: 'pn-new', status: 'verified' })));
+    verifyPost.mockResolvedValue(okResponse(phoneNumber({ id: 'pn-new', status: 'verified' })));
     renderSection();
 
     await waitFor(() => {
@@ -218,7 +210,7 @@ describe('VoicePhoneNumbers', () => {
     // form would flash back for one round trip.
     numbersGet.mockResolvedValue(listing());
     bindPost.mockResolvedValue(
-      jsonResponse({
+      okResponse({
         phoneNumber: phoneNumber({ id: 'pn-1' }),
         ...challengeSummary(),
       }),
@@ -340,7 +332,7 @@ describe('VoicePhoneNumbers', () => {
     const failed = challengeSummary({ deliveryFailed: true });
     numbersGet.mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
     resendPost.mockResolvedValue(
-      jsonResponse({
+      okResponse({
         phoneNumber: phoneNumber({ id: 'pn-1', challenge: failed }),
         ...failed,
       }),
@@ -363,7 +355,7 @@ describe('VoicePhoneNumbers', () => {
   it('reconciles the list after a resend so the new code’s limits are the ones shown', async () => {
     numbersGet.mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
     resendPost.mockResolvedValue(
-      jsonResponse({ phoneNumber: phoneNumber({ id: 'pn-1' }), ...challengeSummary() }),
+      okResponse({ phoneNumber: phoneNumber({ id: 'pn-1' }), ...challengeSummary() }),
     );
     renderSection();
 
@@ -380,12 +372,7 @@ describe('VoicePhoneNumbers', () => {
 
   it('surfaces a delete that failed instead of leaving the row unexplained', async () => {
     numbersGet.mockResolvedValue(listing(phoneNumber({ id: 'pn-1', status: 'verified' })));
-    removeDelete.mockResolvedValue(
-      jsonResponse(
-        { code: 'internal', title: 'Boom', detail: 'stack' },
-        { ok: false, status: 500 },
-      ),
-    );
+    removeDelete.mockResolvedValue(problemResponse(SERVER_DIAGNOSTIC, 500, 'internal'));
     renderSection();
 
     await waitFor(() => {
@@ -399,13 +386,12 @@ describe('VoicePhoneNumbers', () => {
     });
     const alert = await screen.findByRole('alert');
     // Application-owned copy only — never the server's title or detail.
-    expect(alert.textContent).not.toContain('Boom');
-    expect(alert.textContent).not.toContain('stack');
+    expect(alert.textContent).not.toContain(SERVER_DIAGNOSTIC);
   });
 
   it('closes the code box when the number being verified is removed', async () => {
     numbersGet.mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
-    removeDelete.mockResolvedValue(jsonResponse(phoneNumber({ id: 'pn-1' })));
+    removeDelete.mockResolvedValue(okResponse(phoneNumber({ id: 'pn-1' })));
     renderSection();
 
     await waitFor(() => {
@@ -425,9 +411,7 @@ describe('VoicePhoneNumbers', () => {
 
   it('refreshes the remaining tries when a code is rejected', async () => {
     numbersGet.mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
-    verifyPost.mockResolvedValue(
-      jsonResponse({ code: 'conflict', title: 'nope' }, { ok: false, status: 409 }),
-    );
+    verifyPost.mockResolvedValue(problemResponse('wrong code, 2 tries left', 409, 'conflict'));
     renderSection();
 
     await waitFor(() => {

@@ -53,7 +53,7 @@ async function harness(label: string) {
   const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
   const createVerification = () =>
     new PhoneVerificationService({
-      sms,
+      sms: () => sms,
       now: clock.now,
       generateCode: () => CODE,
     });
@@ -91,7 +91,11 @@ interface ChallengeWire {
 describe('phone number routes', () => {
   it('requires a signed-in caller for every route', async () => {
     const routes = createPhoneNumberRoutes(
-      () => new PhoneVerificationService({ sms: new CaptureSmsSender(), generateCode: () => CODE }),
+      () =>
+        new PhoneVerificationService({
+          sms: () => new CaptureSmsSender(),
+          generateCode: () => CODE,
+        }),
     );
     const app = appWithSession(routes, null);
     expect((await app.request('/')).status).toBe(401);
@@ -267,17 +271,18 @@ describe('phone number routes', () => {
     expect(verified?.challenge).toBeNull();
   });
 
-  it('lists numbers without building the SMS-backed verification service', async () => {
-    // `container.sms` throws outside local mode when no SMS credentials are configured, so a
-    // factory that resolves it must never be on the read path — listing your own numbers cannot
-    // depend on the ability to send to them.
+  it('lists numbers on a deploy that cannot send SMS at all', async () => {
+    // `container.sms` throws outside local mode when no SMS credentials are configured. Reading
+    // your own numbers must not depend on the ability to send to them, so nothing on this path may
+    // resolve the transport — which is why the service takes a thunk rather than a sender.
     const userId = await seedUserWithHub(db, schema, 'PhoneListNoSms');
-    const routes = createPhoneNumberRoutes(() => {
-      throw new Error(
-        'Missing required production SMS config: SMS_ENDPOINT, SMS_API_KEY, SMS_FROM',
-      );
-    });
-    const app = appWithSession(routes, fakeSession(userId));
+    const unconfigured = () =>
+      new PhoneVerificationService({
+        sms: () => {
+          throw new Error('Missing required production SMS config: SMS_ENDPOINT, SMS_API_KEY');
+        },
+      });
+    const app = appWithSession(createPhoneNumberRoutes(unconfigured), fakeSession(userId));
 
     const res = await app.request('/');
     expect(res.status).toBe(200);

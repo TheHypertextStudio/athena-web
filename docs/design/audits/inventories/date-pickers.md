@@ -55,6 +55,8 @@ Asserted in `apps/web/tests/pickers/date-picker-contract.test.tsx` (17 cases) an
 | 19  | Repeating work → schedule editor          | `apps/web/src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page.tsx` | Apply from, moved occurrence      | Shared picker                                 |
 | 20  | Task composer → repeat property           | `apps/web/src/components/recurrence/repeat-task-control.tsx`                | Start date, End date              | Shared picker                                 |
 | 21  | Settings → work locations                 | `apps/web/src/app/(app)/settings/work-locations/page.tsx`                   | Date, effective range, occurrence | Shared picker                                 |
+| 22  | Work locations → schedule editor          | `apps/web/src/components/work-location/schedule-editor-dialog.tsx`          | Date, effective range             | Shared picker                                 |
+| 23  | Work locations → occurrence editor        | `apps/web/src/components/work-location/occurrence-editor-dialog.tsx`        | Occurrence date                   | Shared picker                                 |
 
 Before this pass, rows 9–12 each hosted their own `<input type="date">`, so four surfaces had four
 different behaviours and none of them had bounds. Rows 1–8 already shared a component, but that

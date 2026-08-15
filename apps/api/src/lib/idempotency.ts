@@ -39,7 +39,6 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 import type { AppEnv } from '../context';
 import { ConflictError, IdempotencyConflictError } from '../error';
-import { memberUrl } from './ok';
 
 /** How long a recorded outcome stays replayable. */
 const RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -103,14 +102,14 @@ export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
       throw new ConflictError('An earlier request with this key is still in flight');
     }
     c.header(REPLAY_HEADER, 'true');
-    // A replay must be indistinguishable from the original answer, and a `201` without a
-    // `Location` is not that. Only the status and body are stored, but the header can be
-    // rebuilt exactly rather than approximately: the request fingerprint already proved this
-    // is the same method and path, so the same derivation yields the same URL.
-    const replayedId: unknown = (prior.responseBody as { id?: unknown } | null)?.id;
-    if (prior.responseStatus === 201 && typeof replayedId === 'string') {
-      c.header('Location', memberUrl(c, replayedId));
-    }
+    // Only the status and body are recorded, so a replayed `201` carries no `Location`. It is
+    // tempting to rebuild one from the request path and the body's `id`, and that is wrong:
+    // `created()` takes an explicit location precisely because some resources do not live below
+    // the collection posted to — a subtask created through `POST /tasks/{id}/subtasks` is
+    // addressed at `/tasks/{newId}` — so the derivation would hand a retrying client a URL that
+    // matches no route, and none at all for a body without a top-level `id`. An absent header is
+    // a smaller lie than a fabricated one; recording the real one needs a column this table has
+    // not got.
     return c.json(prior.responseBody, prior.responseStatus as ContentfulStatusCode);
   }
 

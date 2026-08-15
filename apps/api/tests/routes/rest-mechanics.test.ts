@@ -89,9 +89,10 @@ describe('Idempotency-Key', () => {
     const replay = await createCategory('Retried', { 'Idempotency-Key': key });
     expect(replay.status).toBe(201);
     expect(replay.headers.get('idempotency-replayed')).toBe('true');
-    // A replay is the original answer again, `Location` included — a client that lost the first
-    // response and retried must not end up with a 201 it cannot follow.
-    expect(replay.headers.get('location')).toBe(first.headers.get('location'));
+    // Only the status and body are recorded, so the replay carries no `Location`. Deriving one
+    // would be worse than omitting it: `created()` takes an explicit location for resources that
+    // do not live below the collection posted to, so a derived URL can name nothing at all.
+    expect(replay.headers.get('location')).toBeNull();
     // The same resource comes back, and no second one was written.
     expect((await replay.json()) as { id: string }).toMatchObject({ id: created.id });
     expect(
@@ -223,6 +224,37 @@ describe('conditional requests', () => {
       headers: { ...JSON_HEADERS, 'If-Match': '*' },
     });
     expect(res.status).toBe(412);
+  });
+
+  it('works on a resource outside the authoritative-session prefixes', async () => {
+    const { app } = await setup();
+    const PREFERENCES = '/v1/me/notification-preferences';
+    const tag = (await app.request(PREFERENCES)).headers.get('etag') ?? '';
+
+    // The tag is resolved by a sub-request into the `/v1` app, which does not carry the root
+    // server's `sessionMiddleware`. Without routing that sub-request through it, this 412s —
+    // and it would 412 on every resource except the three `/me/*` prefixes that happen to
+    // register `authoritativeSessionMiddleware`, one of which the cases above use.
+    const res = await app.request(PREFERENCES, {
+      method: 'PATCH',
+      headers: { ...JSON_HEADERS, 'If-Match': tag },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('ignores a conditional read header travelling alongside If-Match', async () => {
+    const { app } = await setup();
+    const tag = (await app.request(PROFILE)).headers.get('etag') ?? '';
+
+    // A client that kept its header set from the read sends both. Forwarding `If-None-Match` to
+    // the sub-request would have it answered `304`, which reads as "no current representation".
+    const res = await app.request(PROFILE, {
+      method: 'PATCH',
+      headers: { ...JSON_HEADERS, 'If-Match': tag, 'If-None-Match': tag },
+      body: JSON.stringify({ name: 'Sent both headers' }),
+    });
+    expect(res.status).toBe(200);
   });
 
   it('writes last-writer-wins when no precondition is sent', async () => {
@@ -394,7 +426,16 @@ describe('media types', () => {
 
   it('treats a wildcard, a suffix, and silence as acceptable', async () => {
     const { app } = await setup();
-    for (const accept of ['*/*', 'application/*', 'application/problem+json', 'text/html, */*']) {
+    for (const accept of [
+      '*/*',
+      'application/*',
+      'application/problem+json',
+      'text/html, */*',
+      // Media types are case-insensitive (RFC 9110 §8.3.1); comparing the client's spelling
+      // against a lowercase list refused this with `406`.
+      'APPLICATION/JSON',
+      'Application/Problem+JSON',
+    ]) {
       expect(
         (await app.request('/v1/time/categories', { headers: { Accept: accept } })).status,
       ).toBe(200);
@@ -554,5 +595,27 @@ describe('canonical URLs', () => {
     // a client — or a search engine — record the canonical one.
     expect(res.status).toBe(301);
     expect(res.headers.get('location')).toBe('http://api.test/things');
+  });
+});
+
+describe('cross-origin redirects', () => {
+  it('keeps CORS headers on the trailing-slash redirect', async () => {
+    const { trimTrailingSlash } = await import('hono/trailing-slash');
+    const { cors } = await import('hono/cors');
+    const { Hono } = await import('hono');
+    // The server's order: CORS first, then the redirect, so the 301 is inside the CORS response.
+    const probe = new Hono()
+      .use('*', cors({ origin: ['https://app.test'], credentials: true }))
+      .use('*', trimTrailingSlash({ alwaysRedirect: true }))
+      .get('/things', (c) => c.json({ ok: true }));
+
+    const res = await probe.request('http://api.test/things/', {
+      headers: { Origin: 'https://app.test' },
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(301);
+    // A browser CORS-checks the redirect itself; without this the product app — which only ever
+    // reaches this API cross-origin — sees an opaque failure instead of following it.
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://app.test');
   });
 });

@@ -83,8 +83,12 @@ export const mediaTypes: MiddlewareHandler<AppEnv> = async (c, next) => {
     match: (ranges) =>
       ranges
         .filter((range) => range.q > 0)
+        // Lowercased before comparing: a media type is case-insensitive, and Hono's parser
+        // hands back whatever the client wrote, so `Accept: APPLICATION/JSON` would otherwise
+        // match nothing on offer and be refused with `406`.
+        .map((range) => range.type.toLowerCase())
         .some(
-          ({ type }) =>
+          (type) =>
             type === '*/*' ||
             type === 'application/*' ||
             PRODUCED.includes(type) ||

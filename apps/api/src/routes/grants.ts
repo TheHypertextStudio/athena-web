@@ -170,7 +170,9 @@ Semantics that flow into the resolver: \`cascades\` (default true) makes the gra
       // A grant change is the only thing that can move a live MCP client's tool list, since the
       // surface is principal-aware. Best-effort: a missed frame must not fail the grant write.
       await notifyGrantsChanged(orgId, row.subjectKind, row.subjectId).catch(() => undefined);
-      return existed ? ok(c, GrantOut, toOut(row)) : created(c, GrantOut, toOut(row));
+      // No `Location`: a grant is listed and deleted by id but never read on its own, so the
+      // derived `/grants/{id}` would answer 405 to any client that followed it.
+      return existed ? ok(c, GrantOut, toOut(row)) : created(c, GrantOut, toOut(row), null);
     },
   )
   .delete(

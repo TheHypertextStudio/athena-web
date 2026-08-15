@@ -58,7 +58,7 @@ import { createNotificationPreferenceRoutes } from './routes/notification-prefer
 import { createNotificationsRoutes } from './routes/notifications';
 import oauthClients from './routes/oauth-clients';
 import orgs from './routes/orgs';
-import { authoritativeSessionMiddleware } from './auth/session-middleware';
+import { authoritativeSessionMiddleware, sessionMiddleware } from './auth/session-middleware';
 import { requireAuth } from './permissions/require-auth';
 import { AdminNotificationService } from './services/notifications/admin-service';
 import { NotificationContactPointService } from './services/notifications/contact-point-service';
@@ -119,12 +119,29 @@ app.use('*', requireAuth);
 // header is unaffected.
 app.use('*', idempotency);
 
+/**
+ * The `/v1` app behind the session middleware, for the precondition sub-request.
+ *
+ * @remarks
+ * `sessionMiddleware` is registered on the **root server**, so `app.request(...)` on its own
+ * enters `/v1` with no session and `requireAuth` rejects it — which the precondition middleware
+ * would read as a stale tag and turn into a `412` for every conditional write outside the few
+ * prefixes carrying `authoritativeSessionMiddleware` above.
+ *
+ * Built on first use rather than here, because `.route()` copies the sub-app's routes at call
+ * time and the chain below has not been assembled yet.
+ */
+let selfWithSession: Hono<AppEnv> | undefined;
+
 // Optimistic concurrency for writes. Resolves the target's current `ETag` by asking this same
 // app for it, so the tag a write is checked against is the one a read actually hands out, for
 // every resource, with no per-handler code. Only a request that sends `If-Match` pays for it.
 app.use(
   '*',
-  preconditions(async (url, init) => app.request(url, init)),
+  preconditions(async (url, init) => {
+    selfWithSession ??= new Hono<AppEnv>().use('*', sessionMiddleware).route('/', app);
+    return selfWithSession.request(url, init);
+  }),
 );
 
 const notificationInbox = new NotificationInboxService(db);

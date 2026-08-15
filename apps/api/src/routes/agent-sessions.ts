@@ -187,7 +187,7 @@ const agentSessions = new Hono<AppEnv>()
 
 Behavior: the session binds to the supplied \`agentId\` (validated to be a registered agent in this workspace, else 404 \`Agent not found\`) or, when omitted, to the caller's personal Athena executor. Athena stores the caller's user id as owner and this workspace only as context; no workspace agent or grant is created. The prompt is persisted as the session's first \`response\` activity (there is no schema brief column) and threaded through as the runtime task brief. \`trigger\` is recorded as \`delegation\`, and the caller becomes the session \`initiatorId\`.
 
-Side effects: dispatches the executor against the runtime; each yielded activity is persisted and streams live over \`GET /:id/stream\`. Athena resolves the owner's current human Actor and permissions on every Docket call; a registered agent retains its own Actor. The approval gate may delay a call but never grants missing authority. Requires \`contribute\`. Related: \`POST /:id/run\`, the activity approve/reject/reply routes, and the pause/resume/cancel lifecycle routes.`,
+Side effects: dispatches the executor against the runtime; each yielded activity is persisted and streams live over \`GET /:id/stream\`. Athena resolves the owner's current human Actor and permissions on every Docket call; a registered agent retains its own Actor. The approval gate may delay a call but never grants missing authority. Requires \`contribute\`. Related: \`POST /:id/run\`, \`PUT /:id/activity/:activityId/decision\` and \`POST /:id/activity/:activityId/reply\`, and the pause/resume/cancel lifecycle routes.`,
     }),
     zJson(SessionFromPromptBody),
     async (c) => {
@@ -351,7 +351,7 @@ Behavior & side effects: atomically claims a durable \`agent_session_run\` gener
       summary: 'Stream agent session activity (SSE)',
       description: `Stream a session's Activity entries as **Server-Sent Events** (\`text/event-stream\`), rather than a JSON envelope. Each persisted activity is emitted as one SSE message whose \`id\` is the activity id, whose \`event\` name is the activity \`type\` (\`thought\` | \`action\` | \`response\` | \`elicitation\` | \`error\`), and whose \`data\` is the JSON-serialized {@link SessionActivityOut}. A client subscribes (e.g. via \`EventSource\`) to render the agent's reasoning, proposed actions, questions, and results as they arrive — the live counterpart to the one-shot \`GET /:id\` transcript.
 
-Semantics: the org-scoped session must exist (404 \`Session not found\` otherwise). The stream replays the session's existing activities in chronological order. Because each event carries the activity \`id\`, a reconnecting client can use the standard SSE \`Last-Event-ID\` header to resume after the last entry it saw. Reads only; org membership suffices. Approval is driven separately via the activity approve/reject/reply routes; this endpoint is read-only observation.`,
+Semantics: the org-scoped session must exist (404 \`Session not found\` otherwise). The stream replays the session's existing activities in chronological order. Because each event carries the activity \`id\`, a reconnecting client can use the standard SSE \`Last-Event-ID\` header to resume after the last entry it saw. Reads only; org membership suffices. Approval is driven separately via \`PUT /:id/activity/:activityId/decision\` and \`POST /:id/activity/:activityId/reply\`; this endpoint is read-only observation.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -436,7 +436,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
       tag: 'Agents',
       summary: 'List pending proposal groups',
       response: z.array(ProposalGroupOut),
-      description: `List the session's still-\`proposed\` actions grouped by \`proposalGroupId\` (one batch per assistant turn), each member ghost-projected as {@link ProposalItemOut} — the read behind both the session proposal card ("review all N") and the workspace ghost rows. A proposal that resolves to exactly one task — a \`capture\`, or a single-item \`organize\` — carries a \`ghost\` task shape (title/team/project/dueDate) that views render as a translucent, editable row; proposals without a spatial home have \`ghost: null\` and review in the session card. Editing goes through \`PATCH /:id/activity/:activityId/proposal\`; deciding through the group approve/reject routes. Org-scoped 404 when the session is missing. A read; org membership suffices.`,
+      description: `List the session's still-\`proposed\` actions grouped by \`proposalGroupId\` (one batch per assistant turn), each member ghost-projected as {@link ProposalItemOut} — the read behind both the session proposal card ("review all N") and the workspace ghost rows. A proposal that resolves to exactly one task — a \`capture\`, or a single-item \`organize\` — carries a \`ghost\` task shape (title/team/project/dueDate) that views render as a translucent, editable row; proposals without a spatial home have \`ghost: null\` and review in the session card. Editing goes through \`PATCH /:id/activity/:activityId/proposal\`; deciding through \`PUT /:id/proposals/:groupId/decision\`. Org-scoped 404 when the session is missing. A read; org membership suffices.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -520,7 +520,7 @@ Answers **202** when Athena's durable runner takes the work rather than finishin
       tag: 'Agents',
       summary: 'List agent session activity',
       response: pageOf(SessionActivityOut),
-      description: `List a session's Activity entries as a single page of {@link SessionActivityOut}, oldest-first — the JSON (non-streaming) equivalent of \`GET /:id/stream\`, suited to a plain fetch/poll rather than an \`EventSource\`. The org-scoped session must exist (404 \`Session not found\`). Each entry has a \`type\` (\`thought\`/\`action\`/\`response\`/\`elicitation\`/\`error\`) and, for \`action\` rows, an \`approvalStatus\` showing its position in the approval gate. A read; org membership suffices. To drive the gate, see the activity-scoped \`/activity/:activityId/approve|reject|reply\` routes.`,
+      description: `List a session's Activity entries as a single page of {@link SessionActivityOut}, oldest-first — the JSON (non-streaming) equivalent of \`GET /:id/stream\`, suited to a plain fetch/poll rather than an \`EventSource\`. The org-scoped session must exist (404 \`Session not found\`). Each entry has a \`type\` (\`thought\`/\`action\`/\`response\`/\`elicitation\`/\`error\`) and, for \`action\` rows, an \`approvalStatus\` showing its position in the approval gate. A read; org membership suffices. To drive the gate, see \`PUT /:id/activity/:activityId/decision\` and \`POST /:id/activity/:activityId/reply\`.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -584,7 +584,7 @@ Athena decisions require the authenticated owner; registered-agent decisions req
       response: SessionActivityOut,
       description: `Answer an agent's \`elicitation\` (a mid-run question the agent asked the human) by appending a human \`response\` activity carrying the reply \`body\`, and return that new {@link SessionActivityOut}. The referenced \`:activityId\` must be an \`elicitation\` belonging to this org-scoped session — otherwise 404 (\`Activity not found\` / \`Session not found\`) or 409 (\`Activity is not an elicitation\`).
 
-Side effect: when the session was parked in \`awaiting_input\` it is resumed to \`running\` so the agent can continue with the answer; if it was already running the reply is simply recorded into the stream. Athena requires its authenticated owner; registered-agent work requires \`contribute\`. Related: \`/approve\` & \`/reject\` (for gated actions), and \`POST /:id/resume\` (resume without a textual answer).`,
+Side effect: when the session was parked in \`awaiting_input\` it is resumed to \`running\` so the agent can continue with the answer; if it was already running the reply is simply recorded into the stream. Athena requires its authenticated owner; registered-agent work requires \`contribute\`. Related: \`PUT /:id/activity/:activityId/decision\` (for gated actions), and \`POST /:id/resume\` (resume without a textual answer).`,
     }),
     zParam(activityParam),
     zJson(SessionReplyBody),

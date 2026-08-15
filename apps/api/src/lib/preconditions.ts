@@ -26,6 +26,31 @@ import { PreconditionFailedError } from '../error';
 const GUARDED = new Set(['PUT', 'PATCH', 'DELETE']);
 
 /**
+ * Conditional headers that must not travel to the sub-request.
+ *
+ * @remarks
+ * The sub-request exists to ask "what is this resource's current tag", and any of these turns it
+ * into a different question. `If-None-Match` is the one that bites: a client that kept one header
+ * set from its read — `If-None-Match` for the conditional GET, `If-Match` for the conditional
+ * write — would have the sub-request answered `304`, which this middleware reads as "no current
+ * representation" and refuses with `412`, despite the caller holding exactly the right version.
+ */
+const CONDITIONAL_HEADERS = [
+  'if-match',
+  'if-none-match',
+  'if-modified-since',
+  'if-unmodified-since',
+  'if-range',
+];
+
+/** The original request's headers minus anything that would re-condition the sub-request. */
+function unconditional(headers: Headers): Headers {
+  const forwarded = new Headers(headers);
+  for (const name of CONDITIONAL_HEADERS) forwarded.delete(name);
+  return forwarded;
+}
+
+/**
  * Whether an `If-Match` header selects `tag`.
  *
  * @remarks
@@ -51,8 +76,14 @@ function tagListMatches(header: string, tag: string): boolean {
  * resource's representation happens to be.
  *
  * The cost is one extra read, and only for a request that opted in by sending the header. The
- * internal `GET` carries the original request's headers so it resolves the same session, and it
- * re-enters this middleware harmlessly because a `GET` is not a guarded method.
+ * internal `GET` carries the original request's credentials so it resolves the same caller, minus
+ * the conditional headers (see {@link CONDITIONAL_HEADERS}), and it re-enters this middleware
+ * harmlessly because a `GET` is not a guarded method.
+ *
+ * `fetchSelf` must route through the session middleware, not straight into the `/v1` app: that
+ * middleware is registered on the root server, so a sub-request that skips it arrives with no
+ * session at all and `requireAuth` rejects it — which this would then read as a stale tag and
+ * refuse every conditional write with `412`.
  *
  * A URI with no readable representation cannot satisfy any precondition, including `*`, and is
  * refused — a caller asserting the version of something it could never have read is mistaken
@@ -69,7 +100,7 @@ export function preconditions(
 
     const current = await fetchSelf(c.req.url, {
       method: 'GET',
-      headers: c.req.raw.headers,
+      headers: unconditional(c.req.raw.headers),
     });
     const tag = current.status === 200 ? current.headers.get('ETag') : null;
     if (tag === null || !tagListMatches(header, tag)) throw new PreconditionFailedError();

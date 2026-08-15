@@ -146,24 +146,27 @@ export function memberUrl(c: Context, id: string): string {
  * ordinary case, where it is derived from the request path and the body's `id`. Pass it
  * explicitly whenever the canonical URL is somewhere else: a subtask created through
  * `POST /tasks/:id/subtasks` is addressed at `/tasks/:newId`, not below its parent, and a
- * wrong `Location` misleads more than an absent one.
+ * wrong `Location` misleads more than an absent one. Pass `null` where the resource has no
+ * address to read at all, so the header is left off rather than pointing somewhere that 405s.
  *
  * @param c - The Hono context.
  * @param schema - The response Zod schema.
  * @param data - The created resource (the schema's input shape).
- * @param location - The new resource's URL, when it is not a member of this collection.
+ * @param location - The new resource's URL when it is not a member of this collection, or
+ *   `null` when it has none to give.
  * @throws {ApiError} 500 `internal` when the data does not satisfy its declared schema.
  */
 export function created<T extends z.ZodType>(
   c: Context,
   schema: T,
   data: z.input<T>,
-  location?: string,
+  location?: string | null,
 ) {
   const body = serialize(c, schema, data);
   const id: unknown = (body as { id?: unknown }).id;
-  const url = location ?? (typeof id === 'string' ? memberUrl(c, id) : undefined);
-  if (url !== undefined) c.header('Location', url);
+  const url =
+    location === undefined ? (typeof id === 'string' ? memberUrl(c, id) : undefined) : location;
+  if (url !== null && url !== undefined) c.header('Location', url);
   withStatus(c, 201);
   return c.json(body);
 }

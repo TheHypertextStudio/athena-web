@@ -93,13 +93,11 @@ describe('grants router', () => {
         expiresAt: '2030-01-01T00:00:00.000Z',
       }),
     });
-    // A tuple that did not exist yet: created, so 201 and a Location naming the new grant. The
-    // router is mounted bare here, so that URL resolves against the root rather than the
-    // `/v1/orgs/{orgId}/grants` it carries on the real server.
+    // A tuple that did not exist yet: created, so 201. Deliberately no `Location` — a grant is
+    // listed and deleted by id but never read on its own, so the derived `/grants/{id}` would
+    // answer 405 to a client that followed it.
     expect(upsert.status).toBe(201);
-    expect(upsert.headers.get('location')).toContain(
-      (await body<{ id: string }>(upsert.clone())).id,
-    );
+    expect(upsert.headers.get('location')).toBeNull();
 
     // Upsert again with the same unique key → onConflictDoUpdate branch.
     const upsert2 = await w.request('/', {

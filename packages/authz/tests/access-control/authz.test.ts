@@ -61,6 +61,7 @@ let projectFutureId!: string;
 let taskFullId!: string;
 let taskBareId!: string;
 let client: PGlite | undefined;
+let statusId!: (entityType: 'task' | 'project' | 'program' | 'initiative', key: string) => string;
 
 interface ExplicitGrantParityCase {
   readonly capabilities: readonly ('view' | 'contribute' | 'manage')[];
@@ -455,7 +456,7 @@ beforeAll(async () => {
     )[0],
   ).id;
   const statuses = await seedWorkspaceStatuses(db, orgId);
-  const statusId = (entityType: 'task' | 'project' | 'program' | 'initiative', key: string) => {
+  statusId = (entityType, key) => {
     const id = statuses.get(statusLookupKey(entityType, key));
     if (id === undefined) throw new Error(`no seeded ${entityType} status ${key}`);
     return id;
@@ -651,18 +652,20 @@ describe('canActor', () => {
   });
 
   it('an active but archived actor is denied (actor_archived)', async () => {
-    const archivedActorId = (
-      await db
-        .insert(actor)
-        .values({
-          organizationId: orgId,
-          kind: 'human',
-          displayName: 'Archived member',
-          roleId: memberRoleId,
-          archivedAt: new Date('2026-08-14T00:00:00.000Z'),
-        })
-        .returning({ id: actor.id })
-    )[0]!.id;
+    const archivedActorId = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({
+            organizationId: orgId,
+            kind: 'human',
+            displayName: 'Archived member',
+            roleId: memberRoleId,
+            archivedAt: new Date('2026-08-14T00:00:00.000Z'),
+          })
+          .returning({ id: actor.id })
+      )[0],
+    ).id;
 
     const result = await canActor(archivedActorId, 'contribute', orgTarget(), db);
 
@@ -692,28 +695,32 @@ describe('canActor', () => {
   });
 
   it('does not treat an actor grant addressed to a role id as a role grant', async () => {
-    const subjectRoleId = (
-      await db
-        .insert(role)
-        .values({
-          organizationId: orgId,
-          key: 'actor-grant-role-id',
-          name: 'Actor grant role id',
-          capabilities: [],
-        })
-        .returning({ id: role.id })
-    )[0]!.id;
-    const subjectActorId = (
-      await db
-        .insert(actor)
-        .values({
-          organizationId: orgId,
-          kind: 'human',
-          displayName: 'Actor grant role id holder',
-          roleId: subjectRoleId,
-        })
-        .returning({ id: actor.id })
-    )[0]!.id;
+    const subjectRoleId = assertDefined(
+      (
+        await db
+          .insert(role)
+          .values({
+            organizationId: orgId,
+            key: 'actor-grant-role-id',
+            name: 'Actor grant role id',
+            capabilities: [],
+          })
+          .returning({ id: role.id })
+      )[0],
+    ).id;
+    const subjectActorId = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({
+            organizationId: orgId,
+            kind: 'human',
+            displayName: 'Actor grant role id holder',
+            roleId: subjectRoleId,
+          })
+          .returning({ id: actor.id })
+      )[0],
+    ).id;
 
     await db.insert(grant).values({
       organizationId: orgId,
@@ -733,28 +740,32 @@ describe('canActor', () => {
   });
 
   it('resolves a role grant for the actor’s authoritative in-org role', async () => {
-    const subjectRoleId = (
-      await db
-        .insert(role)
-        .values({
-          organizationId: orgId,
-          key: 'exact-role-grant',
-          name: 'Exact role grant',
-          capabilities: [],
-        })
-        .returning({ id: role.id })
-    )[0]!.id;
-    const subjectActorId = (
-      await db
-        .insert(actor)
-        .values({
-          organizationId: orgId,
-          kind: 'human',
-          displayName: 'Exact role grant holder',
-          roleId: subjectRoleId,
-        })
-        .returning({ id: actor.id })
-    )[0]!.id;
+    const subjectRoleId = assertDefined(
+      (
+        await db
+          .insert(role)
+          .values({
+            organizationId: orgId,
+            key: 'exact-role-grant',
+            name: 'Exact role grant',
+            capabilities: [],
+          })
+          .returning({ id: role.id })
+      )[0],
+    ).id;
+    const subjectActorId = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({
+            organizationId: orgId,
+            kind: 'human',
+            displayName: 'Exact role grant holder',
+            roleId: subjectRoleId,
+          })
+          .returning({ id: actor.id })
+      )[0],
+    ).id;
 
     await db.insert(grant).values({
       organizationId: orgId,
@@ -774,34 +785,40 @@ describe('canActor', () => {
   });
 
   it('does not resolve a role grant through a cross-org actor role id', async () => {
-    const foreignOrgId = (
-      await db
-        .insert(organization)
-        .values({ name: 'Foreign org', slug: 'foreign-org' })
-        .returning({ id: organization.id })
-    )[0]!.id;
-    const foreignRoleId = (
-      await db
-        .insert(role)
-        .values({
-          organizationId: foreignOrgId,
-          key: 'foreign-role',
-          name: 'Foreign role',
-          capabilities: [],
-        })
-        .returning({ id: role.id })
-    )[0]!.id;
-    const subjectActorId = (
-      await db
-        .insert(actor)
-        .values({
-          organizationId: orgId,
-          kind: 'human',
-          displayName: 'Cross-org role holder',
-          roleId: foreignRoleId,
-        })
-        .returning({ id: actor.id })
-    )[0]!.id;
+    const foreignOrgId = assertDefined(
+      (
+        await db
+          .insert(organization)
+          .values({ name: 'Foreign org', slug: 'foreign-org' })
+          .returning({ id: organization.id })
+      )[0],
+    ).id;
+    const foreignRoleId = assertDefined(
+      (
+        await db
+          .insert(role)
+          .values({
+            organizationId: foreignOrgId,
+            key: 'foreign-role',
+            name: 'Foreign role',
+            capabilities: [],
+          })
+          .returning({ id: role.id })
+      )[0],
+    ).id;
+    const subjectActorId = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({
+            organizationId: orgId,
+            kind: 'human',
+            displayName: 'Cross-org role holder',
+            roleId: foreignRoleId,
+          })
+          .returning({ id: actor.id })
+      )[0],
+    ).id;
 
     await db.insert(grant).values({
       organizationId: orgId,
@@ -843,29 +860,38 @@ describe('canActor', () => {
           title: 'Direct target task',
           teamId: isolatedTeamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
         },
         {
           organizationId: orgId,
           title: 'Cascading descendant task',
           teamId: isolatedTeamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
         },
         {
           organizationId: orgId,
           title: 'Non-cascading descendant task',
           teamId: isolatedTeamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
         },
       ])
       .returning();
+    const directActorRow = assertDefined(directActor);
+    const cascadingActorRow = assertDefined(cascadingActor);
+    const nonCascadingActorRow = assertDefined(nonCascadingActor);
+    const directTaskRow = assertDefined(directTask);
+    const cascadingTaskRow = assertDefined(cascadingTask);
+    const nonCascadingTaskRow = assertDefined(nonCascadingTask);
 
     await db.insert(grant).values([
       {
         organizationId: orgId,
         subjectKind: 'actor',
-        subjectId: directActor!.id,
+        subjectId: directActorRow.id,
         resourceKind: 'task',
-        resourceId: directTask!.id,
+        resourceId: directTaskRow.id,
         capabilities: ['view'],
         effect: 'allow',
         cascades: false,
@@ -873,7 +899,7 @@ describe('canActor', () => {
       {
         organizationId: orgId,
         subjectKind: 'actor',
-        subjectId: cascadingActor!.id,
+        subjectId: cascadingActorRow.id,
         resourceKind: 'team',
         resourceId: isolatedTeamId,
         capabilities: ['view'],
@@ -883,7 +909,7 @@ describe('canActor', () => {
       {
         organizationId: orgId,
         subjectKind: 'actor',
-        subjectId: nonCascadingActor!.id,
+        subjectId: nonCascadingActorRow.id,
         resourceKind: 'team',
         resourceId: isolatedTeamId,
         capabilities: ['view'],
@@ -893,15 +919,15 @@ describe('canActor', () => {
     ]);
 
     expect(
-      (await canActor(directActor!.id, 'view', { kind: 'task', id: directTask!.id, orgId }, db))
+      (await canActor(directActorRow.id, 'view', { kind: 'task', id: directTaskRow.id, orgId }, db))
         .allow,
     ).toBe(true);
     expect(
       (
         await canActor(
-          cascadingActor!.id,
+          cascadingActorRow.id,
           'view',
-          { kind: 'task', id: cascadingTask!.id, orgId },
+          { kind: 'task', id: cascadingTaskRow.id, orgId },
           db,
         )
       ).allow,
@@ -909,9 +935,9 @@ describe('canActor', () => {
     expect(
       (
         await canActor(
-          nonCascadingActor!.id,
+          nonCascadingActorRow.id,
           'view',
-          { kind: 'task', id: nonCascadingTask!.id, orgId },
+          { kind: 'task', id: nonCascadingTaskRow.id, orgId },
           db,
         )
       ).allow,
@@ -1086,52 +1112,62 @@ describe('Identity & Access explicit-grant delegation', () => {
   it.each(explicitGrantParityCases)('matches the pure evaluator for $label', async (testCase) => {
     const parityRole =
       testCase.subjectKind === 'role'
-        ? (
-            await db
-              .insert(role)
-              .values({
-                organizationId: orgId,
-                key: `delegation-${testCase.label.replaceAll(' ', '-')}`,
-                name: `Delegation ${testCase.label}`,
-                capabilities: [],
-              })
-              .returning({ id: role.id })
-          )[0]!
+        ? assertDefined(
+            (
+              await db
+                .insert(role)
+                .values({
+                  organizationId: orgId,
+                  key: `delegation-${testCase.label.replaceAll(' ', '-')}`,
+                  name: `Delegation ${testCase.label}`,
+                  capabilities: [],
+                })
+                .returning({ id: role.id })
+            )[0],
+          )
         : null;
-    const parityActor = (
-      await db
-        .insert(actor)
-        .values({
-          organizationId: orgId,
-          kind: 'human',
-          displayName: `Delegation ${testCase.label}`,
-          roleId: parityRole?.id ?? null,
-        })
-        .returning({ id: actor.id })
-    )[0]!;
-    const parityTeam = (
-      await db
-        .insert(team)
-        .values({
-          organizationId: orgId,
-          name: `Delegation ${testCase.label}`,
-          key: `DELEGATION-${testCase.label.replaceAll(' ', '-').toUpperCase()}`,
-        })
-        .returning({ id: team.id })
-    )[0]!;
-    const parityTask = (
-      await db
-        .insert(task)
-        .values({
-          organizationId: orgId,
-          title: `Delegation ${testCase.label}`,
-          teamId: parityTeam.id,
-          state: 'todo',
-        })
-        .returning({ id: task.id })
-    )[0]!;
+    const parityActor = assertDefined(
+      (
+        await db
+          .insert(actor)
+          .values({
+            organizationId: orgId,
+            kind: 'human',
+            displayName: `Delegation ${testCase.label}`,
+            roleId: parityRole?.id ?? null,
+          })
+          .returning({ id: actor.id })
+      )[0],
+    );
+    const parityTeam = assertDefined(
+      (
+        await db
+          .insert(team)
+          .values({
+            organizationId: orgId,
+            name: `Delegation ${testCase.label}`,
+            key: `DELEGATION-${testCase.label.replaceAll(' ', '-').toUpperCase()}`,
+          })
+          .returning({ id: team.id })
+      )[0],
+    );
+    const parityTask = assertDefined(
+      (
+        await db
+          .insert(task)
+          .values({
+            organizationId: orgId,
+            title: `Delegation ${testCase.label}`,
+            teamId: parityTeam.id,
+            state: 'todo',
+            statusId: statusId('task', 'todo'),
+          })
+          .returning({ id: task.id })
+      )[0],
+    );
 
-    const subjectId = testCase.subjectKind === 'role' ? parityRole!.id : parityActor.id;
+    const subjectId =
+      testCase.subjectKind === 'role' ? assertDefined(parityRole).id : parityActor.id;
     const resourceId = testCase.resourceKind === 'task' ? parityTask.id : parityTeam.id;
     const grants = [
       {
@@ -1305,24 +1341,28 @@ describe('lastOwnerGuard', () => {
   });
 
   it('does not count an archived owner as a surviving owner', async () => {
-    const guardedOrg = (
-      await db
-        .insert(organization)
-        .values({ name: 'Archived owner guard', slug: 'archived-owner-guard' })
-        .returning({ id: organization.id })
-    )[0]!.id;
-    const guardedOwnerRoleId = (
-      await db
-        .insert(role)
-        .values({
-          organizationId: guardedOrg,
-          key: 'owner',
-          name: 'Owner',
-          isSystem: true,
-          capabilities: ['manage'],
-        })
-        .returning({ id: role.id })
-    )[0]!.id;
+    const guardedOrg = assertDefined(
+      (
+        await db
+          .insert(organization)
+          .values({ name: 'Archived owner guard', slug: 'archived-owner-guard' })
+          .returning({ id: organization.id })
+      )[0],
+    ).id;
+    const guardedOwnerRoleId = assertDefined(
+      (
+        await db
+          .insert(role)
+          .values({
+            organizationId: guardedOrg,
+            key: 'owner',
+            name: 'Owner',
+            isSystem: true,
+            capabilities: ['manage'],
+          })
+          .returning({ id: role.id })
+      )[0],
+    ).id;
     const [targetOwner, archivedOwner] = await db
       .insert(actor)
       .values([
@@ -1343,9 +1383,9 @@ describe('lastOwnerGuard', () => {
       .returning({ id: actor.id });
 
     expect(archivedOwner).toBeDefined();
-    await expect(lastOwnerGuard(db, guardedOrg, targetOwner!.id)).rejects.toBeInstanceOf(
-      LastOwnerError,
-    );
+    await expect(
+      lastOwnerGuard(db, guardedOrg, assertDefined(targetOwner).id),
+    ).rejects.toBeInstanceOf(LastOwnerError);
   });
 
   it('throws when removing/downgrading the sole active owner', async () => {

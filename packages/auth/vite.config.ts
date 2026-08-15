@@ -17,6 +17,7 @@ export default docketVitest({
     GOOGLE_OAUTH_PUBLIC: 'false',
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
+    WORK_LOCATION_PROJECTION_ENABLED: 'false',
     MCP_TASKS_ENABLED: 'false',
     MCP_CIMD_STRICT: 'true',
   },

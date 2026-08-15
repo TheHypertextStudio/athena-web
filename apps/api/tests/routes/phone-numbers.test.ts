@@ -267,6 +267,23 @@ describe('phone number routes', () => {
     expect(verified?.challenge).toBeNull();
   });
 
+  it('lists numbers without building the SMS-backed verification service', async () => {
+    // `container.sms` throws outside local mode when no SMS credentials are configured, so a
+    // factory that resolves it must never be on the read path — listing your own numbers cannot
+    // depend on the ability to send to them.
+    const userId = await seedUserWithHub(db, schema, 'PhoneListNoSms');
+    const routes = createPhoneNumberRoutes(() => {
+      throw new Error(
+        'Missing required production SMS config: SMS_ENDPOINT, SMS_API_KEY, SMS_FROM',
+      );
+    });
+    const app = appWithSession(routes, fakeSession(userId));
+
+    const res = await app.request('/');
+    expect(res.status).toBe(200);
+    expect((await body<{ items: PhoneNumberWire[] }>(res)).items).toEqual([]);
+  });
+
   it('refuses to resend for a number that is not awaiting verification', async () => {
     const { app } = await harness('PhoneResendVerified');
     const created = await body<ChallengeWire>(

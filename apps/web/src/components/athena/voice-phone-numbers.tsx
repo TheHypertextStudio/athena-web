@@ -34,6 +34,7 @@ import { DIAL_CODES, DEFAULT_DIAL_CODE } from '@docket/athena/phone';
 import type { PhoneChallengeOut, PhoneNumberOut, PhoneNumberStatus } from '@docket/athena/phone';
 import { Check, Phone, PhoneOff, Trash2 } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup, Field, Input, Select, Text } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -87,6 +88,7 @@ export function VoicePhoneNumbers(): JSX.Element {
   const [target, setTarget] = useState<CodeTarget>({ kind: 'auto' });
   const [issued, setIssued] = useState<PhoneNumberOut | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const dialCode = useMemo(
     () => DIAL_CODES.find((option) => option.iso2 === country)?.dialCode ?? DEFAULT_DIAL_CODE,
@@ -101,15 +103,18 @@ export function VoicePhoneNumbers(): JSX.Element {
     ),
   );
 
-  /** Point the code box at the number a fresh challenge was issued for, and report undelivered SMS. */
+  /**
+   * Point the code box at the number a fresh challenge was issued for.
+   *
+   * @remarks
+   * Undelivered SMS is not reported here — the issued number carries the same `deliveryFailed` the
+   * listed row does, so one derivation covers both the send that just happened and the one this
+   * session is only reading back.
+   */
   const acceptChallenge = (result: PhoneChallengeOut): void => {
     setIssued(result.phoneNumber);
     setTarget({ kind: 'number', id: result.phoneNumber.id });
-    setNotice(
-      result.deliveryFailed
-        ? 'We couldn’t deliver the code to that number. Check it and try again.'
-        : null,
-    );
+    setNotice(null);
   };
 
   const bind = useApiMutation<PhoneChallengeOut, undefined>({
@@ -146,6 +151,10 @@ export function VoicePhoneNumbers(): JSX.Element {
     },
     onError: (error) => {
       setNotice(userErrorMessage(error, 'That code didn’t work.'));
+      // A wrong code spends one of the tries this section promises to state, and the server has
+      // already counted it. Without this the description keeps offering the budget it had on the
+      // way in, which is the "locked out with no warning" the surface exists to prevent.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.phoneNumbers() });
     },
   });
 
@@ -210,22 +219,50 @@ export function VoicePhoneNumbers(): JSX.Element {
 
   const challenge = verifying?.challenge ?? null;
 
-  // Wall-clock time does not re-render React on its own, so the cooldown is ticked for as long as
-  // one is outstanding. Deriving `disabled` from a timestamp read once at render would leave an
-  // idle tab's resend button dead long after the server would have accepted it.
-  const [now, setNow] = useState(() => Date.now());
-  const resendAt = challenge ? new Date(challenge.resendAvailableAt).getTime() : null;
-  const coolingDown = resendAt !== null && resendAt > now;
+  /**
+   * The wall clock, once the component is running in a browser.
+   *
+   * @remarks
+   * Null until mounted, deliberately: seeding this from `Date.now()` during render would put the
+   * server's clock and the client's into the same `disabled` attribute and mismatch on hydration.
+   * Nothing is treated as cooling down until a real client clock exists, which is also the honest
+   * reading — the server prerender cannot know how long ago the code was sent.
+   *
+   * It ticks for as long as some number is still cooling down. A timestamp compared once at render
+   * would leave an idle tab's resend button dead long after the server would have accepted it.
+   */
+  const [now, setNow] = useState<number | null>(null);
+
+  /** Whether this number's own cooldown has yet to elapse. */
+  const isCoolingDown = (number: PhoneNumberOut): boolean => {
+    if (now === null || !number.challenge) return false;
+    return new Date(number.challenge.resendAvailableAt).getTime() > now;
+  };
+
+  // Every pending row carries its own cooldown, so the tick has to outlive the one being verified:
+  // a row the code box is not pointed at is just as capable of having a code sent moments ago.
+  const anyCoolingDown = verifiable.some(isCoolingDown);
 
   useEffect(() => {
-    if (!coolingDown) return undefined;
+    setNow(Date.now());
+  }, []);
+
+  useEffect(() => {
+    if (!anyCoolingDown) return undefined;
     const timer = setInterval(() => {
       setNow(Date.now());
     }, COOLDOWN_TICK_MS);
     return () => {
       clearInterval(timer);
     };
-  }, [coolingDown]);
+  }, [anyCoolingDown]);
+
+  // A code that was never delivered is reported whether this session sent it or read it back, so
+  // the warning survives the reload that the rest of this section's state now survives.
+  const undelivered = challenge?.deliveryFailed ?? false;
+  const alert =
+    notice ??
+    (undelivered ? 'We couldn’t deliver the code to that number. Check it and try again.' : null);
 
   return (
     <section
@@ -285,7 +322,7 @@ export function VoicePhoneNumbers(): JSX.Element {
                     <Button
                       variant="ghost"
                       data-phone-action="resend"
-                      disabled={resend.isPending || (number.id === verifying?.id && coolingDown)}
+                      disabled={resend.isPending || isCoolingDown(number)}
                       onClick={() => {
                         setTarget({ kind: 'number', id: number.id });
                         setCode('');
@@ -338,6 +375,7 @@ export function VoicePhoneNumbers(): JSX.Element {
                 setCode(event.target.value.replace(/\D/g, ''));
               }}
               placeholder="000000"
+              data-phone-field="code"
             />
           </Field>
           <ControlGroup>
@@ -394,6 +432,7 @@ export function VoicePhoneNumbers(): JSX.Element {
                   setNationalNumber(event.target.value);
                 }}
                 placeholder="415 555 0123"
+                data-phone-field="national-number"
               />
             </Field>
           </ControlGroup>
@@ -424,10 +463,10 @@ export function VoicePhoneNumbers(): JSX.Element {
         </div>
       )}
 
-      {notice ? (
+      {alert ? (
         <p role="alert" className="text-error">
           <Text token="body-small" tone="inherit">
-            {notice}
+            {alert}
           </Text>
         </p>
       ) : null}

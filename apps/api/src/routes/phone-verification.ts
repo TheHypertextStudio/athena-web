@@ -211,19 +211,7 @@ export class PhoneVerificationService {
 
   /** Read the challenge a submitted code would be checked against, if any. */
   async outstanding(phoneNumberId: string): Promise<PhoneVerificationRow | null> {
-    const rows = await db
-      .select()
-      .from(phoneVerification)
-      .where(
-        and(
-          eq(phoneVerification.phoneNumberId, phoneNumberId),
-          isNull(phoneVerification.consumedAt),
-          isNull(phoneVerification.invalidatedAt),
-        ),
-      )
-      .orderBy(desc(phoneVerification.createdAt))
-      .limit(1);
-    return rows[0] ?? null;
+    return outstandingChallenge(phoneNumberId);
   }
 
   /**
@@ -294,6 +282,37 @@ export class PhoneVerificationService {
       return { ok: true, number: verified };
     });
   }
+}
+
+/**
+ * Read the challenge a submitted code would be checked against, if any.
+ *
+ * @remarks
+ * A free function rather than only a method because this is a pure read of `phone_verification`
+ * and needs no SMS transport. {@link PhoneVerificationService} resolves the container's `sms`
+ * value on construction, which throws outside local mode when the SMS credentials are absent — so
+ * a caller that only wants to *report* a challenge (listing numbers, say) must not have to build
+ * the service to do it, or a deploy that never sends SMS could not read its own phone numbers.
+ *
+ * @param phoneNumberId - The number whose outstanding challenge to load.
+ * @returns the live challenge, or null when none is awaiting a code.
+ */
+export async function outstandingChallenge(
+  phoneNumberId: string,
+): Promise<PhoneVerificationRow | null> {
+  const rows = await db
+    .select()
+    .from(phoneVerification)
+    .where(
+      and(
+        eq(phoneVerification.phoneNumberId, phoneNumberId),
+        isNull(phoneVerification.consumedAt),
+        isNull(phoneVerification.invalidatedAt),
+      ),
+    )
+    .orderBy(desc(phoneVerification.createdAt))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 /** How many wrong codes remain against an outstanding challenge, for display. */

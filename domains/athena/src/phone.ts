@@ -430,29 +430,23 @@ export const PhoneVerifyBody = z
 export type PhoneVerifyBody = z.infer<typeof PhoneVerifyBody>;
 
 /**
- * The live state of an outstanding verification challenge.
+ * The live state of an outstanding verification challenge, with the number it belongs to.
  *
  * @remarks
  * `attemptsRemaining` and `resendAvailableAt` are returned so the UI can render the real limits
  * instead of guessing them, and so a person is never left pressing a button that silently no-ops.
  * The code itself is never in this shape, in any environment.
+ *
+ * Built from {@link PhoneChallengeSummary} rather than restating its fields: this is the same
+ * challenge the listed number carries, and a field added to one must never go missing from the
+ * other.
  */
-export const PhoneChallengeOut = z
-  .object({
-    phoneNumber: PhoneNumberOut,
-    /** When the outstanding code stops being accepted. */
-    expiresAt: z.string(),
-    /** Wrong-code submissions still allowed before the challenge is destroyed. */
-    attemptsRemaining: z.number().int(),
-    /** When another code may be requested for this number. */
-    resendAvailableAt: z.string(),
-    /** True when the challenge could not be delivered and the number cannot be verified yet. */
-    deliveryFailed: z.boolean(),
-  })
-  .meta({
-    id: 'PhoneChallengeOut',
-    description: 'The outstanding one-time-code challenge for a phone number.',
-  });
+export const PhoneChallengeOut = PhoneChallengeSummary.extend({
+  phoneNumber: PhoneNumberOut,
+}).meta({
+  id: 'PhoneChallengeOut',
+  description: 'The outstanding one-time-code challenge for a phone number.',
+});
 /** Phone-challenge-out value. */
 export type PhoneChallengeOut = z.infer<typeof PhoneChallengeOut>;
 

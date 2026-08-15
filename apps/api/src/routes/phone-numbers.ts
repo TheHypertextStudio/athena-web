@@ -36,6 +36,7 @@ import { zJson, zParam } from '../lib/validate';
 
 import {
   attemptsRemaining,
+  outstandingChallenge,
   resendAvailableAt,
   type PhoneNumberRow,
   type PhoneVerificationRow,
@@ -114,14 +115,16 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
           .where(eq(phoneNumber.userId, userId))
           .orderBy(desc(phoneNumber.createdAt));
 
-        // Only a pending row can have an outstanding challenge, and a person holds at most a
-        // handful of numbers — so this is a couple of point lookups, not a fan-out worth batching.
-        const verification = createVerification();
+        // Read the challenges directly rather than through `createVerification()`: building the
+        // service resolves the container's SMS transport, which throws outside local mode when no
+        // SMS credentials are configured, and listing your own numbers must not depend on the
+        // ability to send. Only a pending row can have one, and a person holds a handful of
+        // numbers — a couple of point lookups, not a fan-out worth batching.
         const items = await Promise.all(
           rows.map(async (row) =>
             toPhoneNumberOut(
               row,
-              row.status === 'pending' ? await verification.outstanding(row.id) : null,
+              row.status === 'pending' ? await outstandingChallenge(row.id) : null,
             ),
           ),
         );
@@ -259,8 +262,11 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
       async (c) => {
         const userId = requireUserId(c);
         const row = await requireOwned(userId, c.req.valid('param').id);
+        // Read before deleting: the response describes the number as it stood at the moment of the
+        // call, and a pending number discarded mid-verification did have a code awaiting entry.
+        const challenge = row.status === 'pending' ? await outstandingChallenge(row.id) : null;
         await db.delete(phoneNumber).where(eq(phoneNumber.id, row.id));
-        return ok(c, PhoneNumberOut, toPhoneNumberOut(row));
+        return ok(c, PhoneNumberOut, toPhoneNumberOut(row, challenge));
       },
     );
 }

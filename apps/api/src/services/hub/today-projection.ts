@@ -10,9 +10,9 @@ export interface TodayPlanCandidate {
   readonly title: string;
   readonly state: string;
   readonly priority: Priority;
-  readonly assigneeId?: string | null;
-  readonly projectId?: string | null;
-  readonly dueDate?: string | null;
+  readonly assigneeId?: string | null | undefined;
+  readonly projectId?: string | null | undefined;
+  readonly dueDate?: string | null | undefined;
   readonly planItemId: string;
   readonly planStatus: 'planned' | 'done';
   readonly sort: number;

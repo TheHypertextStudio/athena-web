@@ -133,19 +133,19 @@ export interface EventDraft {
   /** Display title/headline. */
   readonly title: string;
   /** Optional supporting summary. */
-  readonly summary?: string;
+  readonly summary?: string | undefined;
   /** Canonical URL of the source object, when available. */
-  readonly permalink?: string;
+  readonly permalink?: string | undefined;
   /** Who performed the action, when known. */
-  readonly actor?: EventActorRef;
+  readonly actor?: EventActorRef | undefined;
   /** The canonical thing the event is about, when known. */
-  readonly entity?: EventEntityRef;
+  readonly entity?: EventEntityRef | undefined;
   /** Other people involved, when known. */
-  readonly participants?: readonly EventActorRef[];
+  readonly participants?: readonly EventActorRef[] | undefined;
   /** Typed, tool-specific detail (a closed-union variant, or `generic`). */
-  readonly detail?: EventDetail;
+  readonly detail?: EventDetail | undefined;
   /** The source object's native id. */
-  readonly externalId?: string;
+  readonly externalId?: string | undefined;
   /** A stable key that collapses duplicates of this event within an org. */
   readonly dedupeKey: string;
 }

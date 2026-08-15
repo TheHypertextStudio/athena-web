@@ -29,7 +29,7 @@ import { useCurateHighlight, useDayHighlights } from './use-day-highlights';
 export interface DayHighlightsProps {
   /** The local day to show (`YYYY-MM-DD`). */
   /** An explicitly chosen day, or omitted for the caller's today as the server resolves it. */
-  readonly date?: string;
+  readonly date?: string | undefined;
   /**
    * Whether the sentences can be curated.
    *
@@ -39,7 +39,7 @@ export interface DayHighlightsProps {
    */
   readonly mode: 'review' | 'record';
   /** Heading level, so the panel nests correctly under whatever mounts it. */
-  readonly headingLevel?: 2 | 3;
+  readonly headingLevel?: 2 | 3 | undefined;
 }
 
 /** The panel's own heading. */

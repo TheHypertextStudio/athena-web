@@ -63,17 +63,17 @@ export interface RealStripeGatewayConfig {
   /** Stripe secret key (`sk_...`). Never logged. */
   readonly secretKey: string;
   /** Stripe webhook signing secret (`whsec_...`). */
-  readonly webhookSecret?: string;
+  readonly webhookSecret?: string | undefined;
   /** Default price the checkout subscribes to when the caller supplies none. */
-  readonly priceKey?: string;
+  readonly priceKey?: string | undefined;
   /** Stripe billing-portal configuration id (`bpc_...`). */
-  readonly portalConfigId?: string;
+  readonly portalConfigId?: string | undefined;
   /** Free-trial length in days; defaults to {@link DEFAULT_TRIAL_DAYS}. */
-  readonly trialDays?: number;
+  readonly trialDays?: number | undefined;
   /** API host override for testing against `stripe-mock` (e.g. `http://localhost:12111`). */
-  readonly apiBase?: string;
+  readonly apiBase?: string | undefined;
   /** API version override; defaults to {@link STRIPE_API_VERSION}. */
-  readonly apiVersion?: string;
+  readonly apiVersion?: string | undefined;
 }
 
 /** The result of opening an embedded Checkout session (for the embedded Stripe.js UI). */
@@ -115,7 +115,9 @@ export class RealStripeGateway implements BillingGateway {
     const fetchFn: typeof fetch = (input, init) => http(toUrl(input), init ?? undefined);
     /* v8 ignore start */
     type StripeOptions = NonNullable<ConstructorParameters<typeof Stripe>[1]>;
-    const apiVersion = (config.apiVersion ?? STRIPE_API_VERSION) as StripeOptions['apiVersion'];
+    const apiVersion = (config.apiVersion ?? STRIPE_API_VERSION) as NonNullable<
+      StripeOptions['apiVersion']
+    >;
     const options: StripeOptions = {
       apiVersion,
       httpClient: Stripe.createFetchHttpClient(fetchFn),

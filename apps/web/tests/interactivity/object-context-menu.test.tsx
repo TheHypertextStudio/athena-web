@@ -179,6 +179,36 @@ describe('object context menu: contents come from the object', () => {
     expect(seen[0]?.surfaceId).toBe('tasks');
   });
 
+  it('finishes closing before invoking an action that may open another overlay', async () => {
+    let invoked = false;
+    let menuAtInvocation: HTMLElement | null = null;
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        {
+          id: 'task.openPicker',
+          label: 'Open picker',
+          objectKinds: ['task'],
+          run: () => {
+            invoked = true;
+            menuAtInvocation = screen.queryByRole('menu');
+          },
+        },
+      ]),
+    );
+    render(<Page registry={registry} />);
+
+    rightClick(screen.getByTestId('row-1'));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Open picker' }));
+    expect(invoked).toBe(false);
+
+    await waitFor(() => {
+      expect(invoked).toBe(true);
+    });
+    expect(menuAtInvocation).not.toBeInTheDocument();
+  });
+
   it('acts on the whole selection when the right-clicked row is part of one', async () => {
     // Otherwise multi-select is a lie the moment a menu opens.
     const seen: ActionContext[] = [];

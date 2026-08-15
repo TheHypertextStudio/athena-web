@@ -309,7 +309,12 @@ function renderSections(actions: readonly ResolvedAction[], onClose: () => void)
         className={cn(action.destructive && 'text-error focus:text-error')}
         onSelect={() => {
           onClose();
-          void action.invoke();
+          // Let Radix finish its close and focus-restoration cycle before an action opens a
+          // second overlay. Invoking in the same select event makes that restored focus count as
+          // an outside interaction, so picker actions appear to flash closed immediately.
+          window.setTimeout(() => {
+            void action.invoke();
+          }, 0);
         }}
       >
         <Icon className="h-4 w-4" />

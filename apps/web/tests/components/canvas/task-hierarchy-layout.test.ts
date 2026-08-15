@@ -39,6 +39,7 @@ describe('layoutTaskHierarchy', () => {
     ]);
     expect(byId.get('child-a')).toMatchObject({ parentId: 'root-a', position: { x: 48 } });
     expect(byId.get('grandchild-a')).toMatchObject({ parentId: 'child-a', position: { x: 48 } });
+    expect(byId.get('child-a')?.extent).toBeUndefined();
     expect(Number(byId.get('root-a')?.style?.width)).toBeGreaterThan(240);
     expect(Number(byId.get('root-a')?.style?.height)).toBeGreaterThan(56 * 3);
   });

@@ -17,6 +17,10 @@ vi.mock('@/lib/query', () => ({
   }),
 }));
 
+vi.mock('@/components/tasks/use-task-hierarchy-mutation', () => ({
+  useTaskHierarchyMutation: () => ({ reparent: vi.fn() }),
+}));
+
 // The stack registers the app's action domains, and a task action navigates, so the tree now
 // reaches for the router. There is no app router under a bare `render`, so stub it the same way
 // every other routing-dependent test here does.
@@ -51,5 +55,17 @@ describe('Providers', () => {
 
     expect(screen.getByText('Receipt-ready')).toBeTruthy();
     expect(container.querySelector('script')).toBeNull();
+  });
+
+  it('installs exactly one document-level object context-menu handler', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    render(
+      <Providers>
+        <main>One menu</main>
+      </Providers>,
+    );
+
+    expect(add.mock.calls.filter(([type]) => type === 'contextmenu')).toHaveLength(1);
+    add.mockRestore();
   });
 });

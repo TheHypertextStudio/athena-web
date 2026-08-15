@@ -7,7 +7,6 @@ import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import ActionDomainsProvider from '@/components/actions/action-domains-provider';
-import { ObjectContextMenuProvider } from '@/components/context-menu';
 import { PickerOverlayProvider } from '@/components/pickers/picker-overlay';
 import { InteractionProvider } from '@/lib/actions';
 import { InteractionReceiptProvider } from '@/lib/interactions/receipt-context';
@@ -56,7 +55,9 @@ export interface ProvidersProps {
  * 7. {@link PickerOverlayProvider} — the app's one moved "edit labels on N objects" popover,
  *    mounted above {@link ActionDomainsProvider} so both the `task.label` registry action and
  *    every task list's `L` hotkey can summon it via `usePickerOverlay().open(...)`.
- * 8. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
+ * 8. {@link ActionDomainsProvider} — registers each object domain with the one registry owned by
+ *    {@link InteractionProvider}; it does not mount another menu handler.
+ * 9. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
  *    authenticated shell. Offline support has to be installed before it is needed, and someone
  *    arriving at `/sign-in` is exactly who benefits from the offline page being cached already.
  *
@@ -87,17 +88,9 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
               <UnauthorizedWatcher handlerRef={handleCacheError} />
               <InteractionReceiptProvider>
                 <InteractionProvider>
-                  {/*
-                  The object menu was built and left unplugged: with no domain ever registered,
-                  every right-click fell through to the browser. These two providers are what make
-                  the app's one contextmenu handler live — one introduces the domains to the
-                  registry, the other renders what the registry resolves.
-                */}
                   <PickerOverlayProvider>
                     <ActionDomainsProvider>
-                      <ObjectContextMenuProvider>
-                        <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
-                      </ObjectContextMenuProvider>
+                      <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
                     </ActionDomainsProvider>
                   </PickerOverlayProvider>
                 </InteractionProvider>

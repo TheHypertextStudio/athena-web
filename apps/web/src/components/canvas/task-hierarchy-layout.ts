@@ -232,9 +232,9 @@ export function layoutTaskHierarchy(
       type: 'taskBranch',
       position: parentPosition ?? { x: 0, y: 0 },
       ...(parentId
-        ? { parentId, extent: 'parent' as const }
+        ? { parentId }
         : rootParents.has(node.id)
-          ? { parentId: rootParents.get(node.id), extent: 'parent' as const }
+          ? { parentId: rootParents.get(node.id) }
           : {}),
       dragHandle: '.task-branch-header',
       sourcePosition,

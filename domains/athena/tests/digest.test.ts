@@ -38,6 +38,12 @@ function episode(key: string, over: Partial<NarrationEpisode> = {}): NarrationEp
   };
 }
 
+/** Build an episode whose optional subject is genuinely absent. */
+function subjectlessEpisode(key: string, over: Partial<NarrationEpisode> = {}): NarrationEpisode {
+  const { subject: _subject, ...result } = episode(key, over);
+  return result;
+}
+
 const INPUT: NarrateDayInput = {
   dateLabel: 'Wednesday, August 12, 2026',
   recipientName: 'Willie',
@@ -172,13 +178,12 @@ describe('fallbackSentence', () => {
   });
 
   it('still says something for an unknown kind or a subject-less episode', () => {
-    const odd = episode('ep-a', {
-      subject: undefined,
+    const odd = subjectlessEpisode('ep-a', {
       events: [{ kind: 'something_new', occurredAt: '2026-08-12T09:00:00.000Z', title: 'A thing' }],
     });
     expect(fallbackSentence(odd)).toContain('A thing');
 
-    const bare = episode('ep-b', { subject: undefined, events: [] });
+    const bare = subjectlessEpisode('ep-b', { events: [] });
     expect(fallbackSentence(bare).length).toBeGreaterThan(0);
   });
 });

@@ -66,7 +66,9 @@ describe('Athena conversation browsing', () => {
   });
 
   it('composes date ranges with the search term and keeps a truthful semantic flag', () => {
-    const result = searchConversation(TOPICS, { text: 'migration', from: TOPICS[6]?.at });
+    const from = TOPICS[6]?.at;
+    if (from === undefined) throw new Error('conversation fixture is missing its date boundary');
+    const result = searchConversation(TOPICS, { text: 'migration', from });
 
     expect(result.hits.map((hit) => hit.message.id)).toEqual(
       expect.arrayContaining(['m006', 'm007']),

@@ -23,7 +23,7 @@ export interface RowActor {
   /** Actor kind, driving the avatar shape (human / agent / team). */
   kind: ActorKind;
   /** Optional avatar image URL. */
-  avatarUrl?: string | null;
+  avatarUrl?: string | null | undefined;
 }
 
 /** The view-model one agent-aware work row renders. */

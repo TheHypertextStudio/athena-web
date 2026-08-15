@@ -67,10 +67,10 @@ const AthenaPanelContext = createContext<AthenaPanelValue | null>(null);
 /** Props for the global personal Athena layer. */
 export interface AthenaPanelProviderProps {
   readonly children: ReactNode;
-  readonly context?: PersonalAthenaContext | null;
-  readonly transport?: PersonalAthenaTransport;
-  readonly showPulse?: boolean;
-  readonly locationKey?: string;
+  readonly context?: PersonalAthenaContext | null | undefined;
+  readonly transport?: PersonalAthenaTransport | undefined;
+  readonly showPulse?: boolean | undefined;
+  readonly locationKey?: string | undefined;
 }
 
 /**

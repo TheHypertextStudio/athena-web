@@ -20,7 +20,7 @@ export interface ResolvedActor {
   /** Actor kind (drives the avatar shape). */
   readonly kind: ActorKind;
   /** Optional avatar image URL. */
-  readonly avatarUrl?: string | null;
+  readonly avatarUrl?: string | null | undefined;
 }
 
 /** The actor directory: a resolver keyed by actor id, plus per-agent owner lookup. */

@@ -171,7 +171,7 @@ export function useLiveInfiniteApiQuery<TPage>(
   def: ApiInfiniteDef<TPage>,
   intervalMs: number,
 ): UseInfiniteQueryResult<InfiniteData<TPage>> {
-  return useInfiniteQuery({ ...def, refetchInterval: intervalMs });
+  return useInfiniteQuery(Object.assign({}, def, { refetchInterval: intervalMs }));
 }
 
 /**

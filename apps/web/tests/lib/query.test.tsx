@@ -215,7 +215,7 @@ describe('useApiMutation', () => {
         useApiMutation<
           ProjectShape,
           { id: string; name: string },
-          { previous?: readonly ProjectShape[] }
+          { previous?: readonly ProjectShape[] | undefined }
         >({
           mutationFn: (vars) => Promise.resolve(okResponse<ProjectShape>(vars).json()),
           invalidateKeys: [listKey],
@@ -404,7 +404,7 @@ describe('useApiMutation', () => {
         useApiMutation<
           ProjectShape,
           { id: string; name: string },
-          { previous?: readonly ProjectShape[] }
+          { previous?: readonly ProjectShape[] | undefined }
         >({
           // Reject to simulate a failed write (the unwrap layer throws on non-OK in real use).
           mutationFn: () => Promise.reject(new Error('Could not update the project.')),

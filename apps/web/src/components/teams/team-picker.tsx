@@ -38,9 +38,9 @@ export interface TeamPickerProps {
   /** Notify the parent that a different team was chosen. */
   onChange: (teamId: string) => void;
   /** Disable the control (e.g. while a create is in flight). */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   /** Optional extra classes for the trigger button. */
-  className?: string;
+  className?: string | undefined;
 }
 
 /**
@@ -84,7 +84,7 @@ export function TeamPicker({
         <DropdownMenuLabel>Create in team</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup
-          value={value ?? undefined}
+          {...(value !== null ? { value } : {})}
           onValueChange={(next) => {
             onChange(next);
           }}

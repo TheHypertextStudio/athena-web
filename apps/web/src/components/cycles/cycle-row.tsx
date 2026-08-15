@@ -50,13 +50,13 @@ export interface CycleRowProps {
   /** Href to the cycle's detail screen. */
   href: string;
   /** Warm the cycle-detail cache on hover/focus so the row opens instantly (prefetch-on-intent). */
-  onPrefetch?: () => void;
+  onPrefetch?: (() => void) | undefined;
   /** Whether the viewer may rename this cycle in place (double-click the title). */
-  canRename?: boolean;
+  canRename?: boolean | undefined;
   /** Persist a renamed cycle name. Enables inline rename when provided with `canRename`. */
-  onRename?: (cycleId: string, name: string) => void;
+  onRename?: ((cycleId: string, name: string) => void) | undefined;
   /** Open the cycle — used by the inline title so a single click still navigates. */
-  onOpen?: () => void;
+  onOpen?: (() => void) | undefined;
 }
 
 /**
@@ -106,8 +106,7 @@ export function CycleRow({
       role="row"
       aria-label={`${title}, ${teamName}`}
       {...dragProps}
-      onMouseEnter={onPrefetch}
-      onFocus={onPrefetch}
+      {...(onPrefetch !== undefined ? { onMouseEnter: onPrefetch, onFocus: onPrefetch } : {})}
       className={cn(
         'hover:bg-surface-container-high grid min-h-[72px] cursor-pointer items-center rounded-lg transition-colors',
         ROW_GRID,

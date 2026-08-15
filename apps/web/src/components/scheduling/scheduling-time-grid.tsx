@@ -19,9 +19,9 @@ export interface SchedulingTimeGridProps {
   /** Continuous vertical scale in pixels per hour. */
   readonly pixelsPerHour: number;
   /** Precision of the rendered hour labels. Defaults to the full `exact` form. */
-  readonly labelStyle?: ScheduleTickLabelStyle;
+  readonly labelStyle?: ScheduleTickLabelStyle | undefined;
   /** Optional deterministic ISO instant for the current-time indicator. */
-  readonly now?: string;
+  readonly now?: string | undefined;
   /** Width of the sticky time-label gutter. */
   readonly gutterWidth: number;
   /** Full width occupied by all lane cells. */

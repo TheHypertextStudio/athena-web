@@ -3,13 +3,13 @@ import { Problem, type ProblemCode } from '@docket/types';
 /** A failure whose message is application-owned and safe to render. */
 export class UserFacingError extends Error {
   /** HTTP status when the failure came from an API response. */
-  readonly status?: number;
+  readonly status?: number | undefined;
   /** Stable API problem code when the response contained a valid Problem body. */
-  readonly code?: ProblemCode;
+  readonly code?: ProblemCode | undefined;
 
   constructor(
     message: string,
-    details: { status?: number; code?: ProblemCode; cause?: unknown } = {},
+    details: { status?: number | undefined; code?: ProblemCode | undefined; cause?: unknown } = {},
   ) {
     super(message, { cause: details.cause });
     this.name = 'UserFacingError';

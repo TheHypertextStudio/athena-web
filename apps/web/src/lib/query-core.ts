@@ -35,7 +35,13 @@ import { readProblemError, UserFacingError } from '@/lib/problem';
  * rather than surfacing a generic inline "could not load" on whatever surface made the call.
  */
 export class AuthenticationRequiredError extends UserFacingError {
-  constructor(details: { message?: string; status?: number; code?: Problem['code'] } = {}) {
+  constructor(
+    details: {
+      message?: string | undefined;
+      status?: number | undefined;
+      code?: Problem['code'] | undefined;
+    } = {},
+  ) {
     super(details.message ?? 'Authentication is required. Please sign in again.', {
       status: details.status ?? 401,
       code: details.code ?? 'unauthorized',
@@ -100,7 +106,9 @@ const DEFAULT_GC_TIME_MS = 24 * 60 * 60_000;
  * @param handlers - Optional global cache handlers (`onError`), wired by the client providers.
  * @returns a configured {@link QueryClient}.
  */
-export function createQueryClient(handlers?: { onError?: (error: unknown) => void }): QueryClient {
+export function createQueryClient(handlers?: {
+  onError?: ((error: unknown) => void) | undefined;
+}): QueryClient {
   const onError = handlers?.onError;
   return new QueryClient({
     ...(onError
@@ -215,12 +223,12 @@ export class ApiRequestError extends UserFacingError {
   /** The response's HTTP status code. */
   override readonly status: number;
   /** The closed problem code, when the body parsed as a {@link Problem}. */
-  override readonly code?: Problem['code'];
+  override readonly code?: Problem['code'] | undefined;
 
   constructor(details: {
     message: string;
     status: number;
-    code?: Problem['code'];
+    code?: Problem['code'] | undefined;
     cause?: unknown;
   }) {
     super(details.message, {
@@ -326,9 +334,9 @@ export function apiQueryOptions<T>(
 /** Tunables forwarded to an infinite read (staleness + polling for the live seam). */
 export interface ApiInfiniteOptions {
   /** Override the {@link STALE} tier. */
-  readonly staleTime?: number;
+  readonly staleTime?: number | undefined;
   /** Focus-gated poll interval (ms); set by the live variant for the stream seam. */
-  readonly refetchInterval?: number;
+  readonly refetchInterval?: number | undefined;
 }
 
 /**
@@ -361,7 +369,8 @@ export function apiInfiniteQueryOptions<TPage>(
       unwrap(() => call(pageParam), fallbackMessage),
     initialPageParam: undefined as string | undefined,
     getNextPageParam,
-    ...options,
+    ...(options?.staleTime !== undefined ? { staleTime: options.staleTime } : {}),
+    ...(options?.refetchInterval !== undefined ? { refetchInterval: options.refetchInterval } : {}),
   });
 }
 

@@ -75,7 +75,7 @@ interface LayerRowProps {
   /** The layer this row toggles/describes. */
   readonly layer: CalendarLayerOut;
   /** Duplicate context, when this row stands for the same calendar on several accounts. */
-  readonly redundancy?: LayerRedundancy;
+  readonly redundancy?: LayerRedundancy | undefined;
   /**
    * Every layer id this one row governs.
    *

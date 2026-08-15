@@ -70,7 +70,7 @@ export interface ActionAsyncObservation {
 /** Construction options for {@link createActionRegistry}. */
 export interface ActionRegistryOptions {
   /** Optional receipt/runtime bridge, mounted only in the client provider tree. */
-  readonly receiptRuntime?: ActionReceiptRuntime;
+  readonly receiptRuntime?: ActionReceiptRuntime | undefined;
 }
 
 /** Apply return-shape validation to tuple entries without widening them through the array index. */

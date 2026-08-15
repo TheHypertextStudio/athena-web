@@ -41,10 +41,10 @@ export interface ComposerShellProps {
    */
   heading: ReactNode;
   /** Optional leading badge glyph for the breadcrumb (e.g. the entity-type icon). */
-  icon?: ReactNode;
+  icon?: ReactNode | undefined;
   /** Optional context shown next to `icon` (e.g. the team name). Purely visual — `heading` alone
    *  names the dialog for assistive tech. */
-  context?: ReactNode;
+  context?: ReactNode | undefined;
   /**
    * The ordered destination context rendered above the title.
    *
@@ -53,7 +53,7 @@ export interface ComposerShellProps {
    * conditional Team, then Template). The older `icon`/`context`/`templateSlot` API remains as a
    * compatibility seam for the page-owned composers that have not migrated yet.
    */
-  contextRow?: ReactNode;
+  contextRow?: ReactNode | undefined;
   /**
    * The template control, pinned to the right of the top row.
    *
@@ -63,7 +63,7 @@ export interface ComposerShellProps {
    * reach among controls without it — and *below* the description it rewrites — is what made the
    * old initiative picker read as a property and behave as a bulldozer.
    */
-  templateSlot?: ReactNode;
+  templateSlot?: ReactNode | undefined;
   /**
    * Whether the legacy template slot currently renders a control.
    *
@@ -72,7 +72,7 @@ export interface ComposerShellProps {
    * `null` for an empty response. It lets the shell hide an otherwise blank legacy row and use
    * the no-context title spacing without inferring visibility from a ReactNode.
    */
-  templateSlotVisible?: boolean;
+  templateSlotVisible?: boolean | undefined;
   /**
    * An optional action aligned to the leading side of the footer.
    *
@@ -80,9 +80,9 @@ export interface ComposerShellProps {
    * It is intentionally outside the primary-submit button so a composer can offer a continuation
    * such as "Create more" without making that path look like the default action.
    */
-  leadingAction?: ReactNode;
+  leadingAction?: ReactNode | undefined;
   /** Run the continuation action when Cmd/Ctrl+Shift+Enter is pressed. */
-  onLeadingAction?: () => void;
+  onLeadingAction?: (() => void) | undefined;
   /**
    * Extra fields rendered above the title, for composers whose subject is not the entity itself.
    *
@@ -91,29 +91,29 @@ export interface ComposerShellProps {
    * shell renders the ordinary entity fields, so authoring a template looks exactly like creating
    * the thing it makes.
    */
-  leadingFields?: ReactNode;
+  leadingFields?: ReactNode | undefined;
   /** The current title text. */
   title: string;
   /** Report a changed title. */
   onTitleChange: (title: string) => void;
   /** Optional ref used by a continuation action to return focus to the task title. */
-  titleInputRef?: RefObject<HTMLInputElement | null>;
+  titleInputRef?: RefObject<HTMLInputElement | null> | undefined;
   /** Accessible label + placeholder for the title field. */
   titlePlaceholder: string;
   /**
    * The current one-line summary text, rendered as an inline document subtitle directly beneath the
    * title. Only shown when {@link ComposerShellProps.onSummaryChange} is supplied.
    */
-  summary?: string;
+  summary?: string | undefined;
   /**
    * Report a changed summary. Providing this handler opts the composer into the inline subtitle line
    * between the title and the body; omit it and no summary field renders (backward compatible).
    */
-  onSummaryChange?: (summary: string) => void;
+  onSummaryChange?: ((summary: string) => void) | undefined;
   /** Placeholder ghost text for the summary subtitle line. */
-  summaryPlaceholder?: string;
+  summaryPlaceholder?: string | undefined;
   /** Max character length for the summary field, matching the entity's DTO limit (e.g. 280). */
-  summaryMaxLength?: number;
+  summaryMaxLength?: number | undefined;
   /** The current description text. */
   body: string;
   /**
@@ -124,21 +124,21 @@ export interface ComposerShellProps {
    * dialog open after creating an object may advance this key to start a fresh document without
    * remounting the rest of its draft or disrupting ordinary controlled updates.
    */
-  bodyResetKey?: string | number;
+  bodyResetKey?: string | number | undefined;
   /** Report a changed description. */
   onBodyChange: (body: string) => void;
   /** Placeholder for the description field (omit to hide the description body entirely). */
-  bodyPlaceholder?: string;
+  bodyPlaceholder?: string | undefined;
   /** The inline row of compact property pickers. */
   children: ReactNode;
   /** A server/validation error to surface under the pickers, if any. */
-  error?: string | null;
+  error?: string | null | undefined;
   /** Application-owned success copy announced without adding visible chrome to the composer. */
-  statusMessage?: string | null;
+  statusMessage?: string | null | undefined;
   /** Whether the object was committed and the remaining error belongs to post-create work. */
-  draftCommitted?: boolean;
+  draftCommitted?: boolean | undefined;
   /** Disable draft content without disabling a post-create recovery action. */
-  contentDisabled?: boolean;
+  contentDisabled?: boolean | undefined;
   /** Whether a create is in flight (disables the form + shows the busy label). */
   creating: boolean;
   /** Whether the form may be submitted (e.g. the title is non-empty + a team resolved). */

@@ -60,9 +60,9 @@ const ACTOR_A = '01HZZZ000000000000000000AA';
 
 /** A settled TanStack result: not pending, optionally errored, optionally carrying items. */
 function result(over: {
-  items?: unknown[];
+  items?: unknown[] | undefined;
   error?: unknown;
-  refetch?: () => void;
+  refetch?: (() => void) | undefined;
 }): Record<string, unknown> {
   return {
     isPending: false,

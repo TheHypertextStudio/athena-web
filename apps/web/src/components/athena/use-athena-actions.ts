@@ -52,7 +52,11 @@ export function useAthenaActions({
   });
   const decide = useApiMutation<
     PersonalAthenaSessionDetail,
-    { readonly id: string; readonly option: string; readonly kind?: 'approval' | 'question' }
+    {
+      readonly id: string;
+      readonly option: string;
+      readonly kind?: 'approval' | 'question' | undefined;
+    }
   >({
     mutationFn: ({ id, option, kind }) => {
       if (kind === 'question') {

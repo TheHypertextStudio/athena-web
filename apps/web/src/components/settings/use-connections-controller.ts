@@ -74,7 +74,7 @@ export interface UseConnectionsControllerArgs {
   orgId: string;
   canManage: boolean;
   /** Route to the personal "Connected accounts" surface; omit when it renders inline above. */
-  linkedAccountsHref?: string;
+  linkedAccountsHref?: string | undefined;
 }
 
 /** The Connections feature controller: assembles the live-sync view model over the shared data. */

@@ -439,7 +439,9 @@ function OccurrenceRows({ orgId, items, onResolve }: OccurrenceRowsProps): JSX.E
 interface OccurrenceRowProps {
   readonly orgId: string;
   readonly item: RecurrenceSeriesDetailOut['occurrences'][number];
-  readonly onResolve?: (scheduledFor: string, resolution: OccurrenceResolution) => void;
+  readonly onResolve?:
+    | ((scheduledFor: string, resolution: OccurrenceResolution) => void)
+    | undefined;
 }
 
 /** One durable occurrence, including explicit actions only when it needs a decision. */

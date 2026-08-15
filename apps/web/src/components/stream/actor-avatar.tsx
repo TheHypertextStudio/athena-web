@@ -58,7 +58,7 @@ export interface ActorAvatarProps {
   /** The actor's display name (drives initials + accent). */
   readonly name: string | null;
   /** The actor's avatar URL, when known (reserved; initials are shown for now). */
-  readonly avatarUrl?: string | null;
+  readonly avatarUrl?: string | null | undefined;
   /** The event kind + tone (for the corner badge). */
   readonly glyph: KindGlyph;
   /** A stable seed for the accent color (e.g. the actor name or event id). */

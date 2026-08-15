@@ -70,6 +70,16 @@ export function useComposerDraft<T extends object>(initial: T): ComposerDraft<T>
   return useMemo(() => ({ draft, setField, updateDraft }), [draft, setField, updateDraft]);
 }
 
+/**
+ * Like `Partial<T>`, but a present key may also hold `undefined` explicitly.
+ *
+ * @remarks
+ * `Partial<T>` only makes keys optional; under `exactOptionalPropertyTypes` it still rejects an
+ * explicit `undefined` value for a key that is present. Template patches are built by widening
+ * scripts that produce exactly that shape, so {@link templateMerge} needs this instead.
+ */
+type PartialWithUndefined<T> = { [K in keyof T]?: T[K] | undefined };
+
 /** How a composer's fields absorb a template's, per {@link templateMerge}. */
 export interface TemplateMergeRule<T> {
   /**
@@ -116,7 +126,7 @@ function isBlank(value: unknown): boolean {
  */
 export function templateMerge<T extends object>(
   current: T,
-  patch: Partial<T>,
+  patch: PartialWithUndefined<T>,
   rule: TemplateMergeRule<T>,
 ): Partial<T> {
   const merged: Partial<T> = {};

@@ -537,8 +537,8 @@ interface AppShellInnerProps {
    * populate the content region with. Degrades `<main>` only — the surrounding chrome stays live.
    */
   unavailable: boolean;
-  workspaceKey?: WorkspaceNavKey;
-  homeKey?: HomeNavKey;
+  workspaceKey?: WorkspaceNavKey | undefined;
+  homeKey?: HomeNavKey | undefined;
   children: ReactNode;
 }
 

@@ -70,8 +70,8 @@ export function SchedulingRegionPreview({
   readonly endMinutes: number;
   readonly pixelsPerHour: number;
   readonly presentation: SchedulingRegionPreviewPresentation;
-  readonly state?: 'preview' | 'selected';
-  readonly anchorRef?: Ref<HTMLDivElement>;
+  readonly state?: 'preview' | 'selected' | undefined;
+  readonly anchorRef?: Ref<HTMLDivElement> | undefined;
 }): JSX.Element {
   const selected = state === 'selected';
   return (

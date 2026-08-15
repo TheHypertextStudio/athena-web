@@ -26,9 +26,9 @@ export interface McpAppRenderResource {
   readonly uri: string;
   readonly mimeType: string;
   readonly text: string;
-  readonly prefersBorder?: boolean;
-  readonly csp?: Readonly<Record<string, readonly string[]>>;
-  readonly permissions?: Readonly<Record<string, Record<string, unknown>>>;
+  readonly prefersBorder?: boolean | undefined;
+  readonly csp?: Readonly<Record<string, readonly string[]>> | undefined;
+  readonly permissions?: Readonly<Record<string, Record<string, unknown>>> | undefined;
 }
 
 /** Everything needed to render one widget: the document, the result, and the input. */

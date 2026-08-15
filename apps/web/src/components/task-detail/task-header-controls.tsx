@@ -30,7 +30,7 @@ export interface TaskHeaderControlsProps {
   readonly status: ReactNode;
   readonly priority: ReactNode;
   readonly assignee: ReactNode;
-  readonly delegate?: ReactNode;
+  readonly delegate?: ReactNode | undefined;
   readonly actions: ReactNode;
   readonly overflow: ReactNode;
 }
@@ -145,7 +145,7 @@ export function TaskHeaderOverflowMenu({
                 <DropdownMenuRadioItem
                   key={option.value}
                   value={option.value}
-                  disabled={option.disabled}
+                  {...(option.disabled !== undefined ? { disabled: option.disabled } : {})}
                 >
                   {option.icon}
                   {option.label}

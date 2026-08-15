@@ -21,10 +21,10 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 /** CycleMutations describes the use cycle mutations data contract shared by the hook or component. */
 export interface CycleMutations {
   patchCycle: (patch: {
-    status?: CycleStatus;
-    startsAt?: string;
-    endsAt?: string;
-    name?: string;
+    status?: CycleStatus | undefined;
+    startsAt?: string | undefined;
+    endsAt?: string | undefined;
+    name?: string | undefined;
   }) => void;
   propsPending: boolean;
   propsError: string | null;
@@ -181,8 +181,13 @@ export function useCycleMutations(
 
   const patch = useApiMutation<
     CycleOut,
-    { status?: CycleStatus; startsAt?: string; endsAt?: string; name?: string },
-    { previous?: CycleDetailData }
+    {
+      status?: CycleStatus | undefined;
+      startsAt?: string | undefined;
+      endsAt?: string | undefined;
+      name?: string | undefined;
+    },
+    { previous?: CycleDetailData | undefined }
   >({
     mutationFn: (patchBody) =>
       unwrap(
@@ -197,7 +202,7 @@ export function useCycleMutations(
       await queryClient.cancelQueries({ queryKey: detailKey as string[] });
       const previous = queryClient.getQueryData<CycleDetailData>(detailKey);
       queryClient.setQueryData<CycleDetailData>(detailKey, (cur) =>
-        cur ? { ...cur, cycle: { ...cur.cycle, ...patchBody } } : cur,
+        cur ? { ...cur, cycle: Object.assign({}, cur.cycle, patchBody) } : cur,
       );
       return { previous };
     },

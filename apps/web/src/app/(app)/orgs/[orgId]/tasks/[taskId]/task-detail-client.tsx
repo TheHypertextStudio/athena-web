@@ -51,7 +51,7 @@ import { useSession } from '@/lib/auth-client';
 interface TaskFeedActor {
   name: string;
   kind: ActorKind;
-  avatarUrl?: string | null;
+  avatarUrl?: string | null | undefined;
 }
 
 /** TaskDetailPage renders the authenticated task page. */

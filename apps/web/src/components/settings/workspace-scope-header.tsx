@@ -8,7 +8,7 @@ export interface WorkspaceScopeHeaderProps {
    * identity linking; when omitted, the linked-accounts list is rendered inline above this surface
    * (the personal Connections page) and the header points "above" instead.
    */
-  linkedAccountsHref?: string;
+  linkedAccountsHref?: string | undefined;
 }
 
 /**

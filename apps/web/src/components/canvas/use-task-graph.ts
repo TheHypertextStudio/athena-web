@@ -35,9 +35,9 @@ export type ResolveProjectName = (projectId: string | null) => string | null;
 /** Optional resolvers that enrich node cards with assignee + project names. */
 export interface UseTaskGraphOptions {
   /** Maps an assignee actor id to its avatar/name (from the org's members/agents). */
-  resolveAssignee?: ResolveAssignee;
+  resolveAssignee?: ResolveAssignee | undefined;
   /** Maps a project id to its display name (from the org's projects). */
-  resolveProjectName?: ResolveProjectName;
+  resolveProjectName?: ResolveProjectName | undefined;
 }
 
 /** Dependency-edge stroke color per tone (CSS vars from the `--color-state-*` tokens). */

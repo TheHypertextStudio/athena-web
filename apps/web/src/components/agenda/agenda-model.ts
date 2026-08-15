@@ -24,29 +24,29 @@ export interface AgendaEntry {
   /** Projection that produced the entry. */
   source: AgendaEntrySource;
   /** Underlying task id for task entries. */
-  taskId?: string;
+  taskId?: string | undefined;
   /** Organization that owns the task, when applicable. */
-  organizationId?: string;
+  organizationId?: string | undefined;
   /** User-visible entry title. */
   title: string;
   /** Exact timebox start instant. */
-  startsAt?: string;
+  startsAt?: string | undefined;
   /** Exact timebox end instant. */
-  endsAt?: string;
+  endsAt?: string | undefined;
   /** Stable order within the source projection. */
   sort: number;
   /** Whether the daily-plan entry is complete. */
   done: boolean;
   /** Daily-plan item id used by plan mutations. */
-  planItemId?: string;
+  planItemId?: string | undefined;
   /** Provider deep link for external events. */
-  externalUrl?: string | null;
+  externalUrl?: string | null | undefined;
   /** Calendar/account presentation metadata. */
-  calendar?: { title: string; color: string | null; accountEmail: string | null };
+  calendar?: { title: string; color: string | null; accountEmail: string | null } | undefined;
   /** Full normalized layered-calendar item used by the shared drawer and cards. */
-  calendarItem?: CalendarItemOut;
+  calendarItem?: CalendarItemOut | undefined;
   /** Owning layer color for layered-calendar entries. */
-  layerColor?: string | null;
+  layerColor?: string | null | undefined;
 }
 
 /** An agenda entry with exact start and end instants. */

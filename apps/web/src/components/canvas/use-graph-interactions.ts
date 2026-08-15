@@ -22,11 +22,11 @@ import { useCallback } from 'react';
 /** The intent callbacks the host wires to its mutations. */
 export interface GraphInteractionHandlers {
   /** Create a `blocking → blocked` dependency edge. */
-  onConnectEdge?: (source: string, target: string) => void;
+  onConnectEdge?: ((source: string, target: string) => void) | undefined;
   /** Remove a dependency edge. */
-  onDeleteEdge?: (edge: Edge) => void;
+  onDeleteEdge?: ((edge: Edge) => void) | undefined;
   /** Reparent a subtask edge's child under a new parent: `(childId, newParentId)`. */
-  onReparentEdge?: (childId: string, newParentId: string) => void;
+  onReparentEdge?: ((childId: string, newParentId: string) => void) | undefined;
 }
 
 /** The xyflow props this hook produces (spread onto `<ReactFlow>`). */

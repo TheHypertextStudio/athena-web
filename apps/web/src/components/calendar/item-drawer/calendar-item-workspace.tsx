@@ -20,9 +20,9 @@ export interface CalendarItemWorkspaceProps {
   /** Loaded calendar item to render. */
   item: CalendarItemOut;
   /** Owning layer, used for color, title, and provider context. */
-  layer?: CalendarLayerOut;
+  layer?: CalendarLayerOut | undefined;
   /** Every layer for the signed-in user, used to name the calendars a duplicate arrived on. */
-  layers?: readonly CalendarLayerOut[];
+  layers?: readonly CalendarLayerOut[] | undefined;
   /**
    * Copies of this event folded into the single block on the grid.
    *
@@ -30,7 +30,7 @@ export interface CalendarItemWorkspaceProps {
    * Empty for an ordinary event. Supplied so collapsing a cross-account duplicate stays
    * discoverable rather than silent — see {@link CalendarItemDuplicateSources}.
    */
-  duplicates?: readonly CalendarItemOut[];
+  duplicates?: readonly CalendarItemOut[] | undefined;
   /** Close the drawer after deletion. */
   onClose: () => void;
   /** Report whether editable core fields differ from their saved values. */

@@ -100,12 +100,12 @@ export default function CalendarItemDrawer({
 interface CalendarItemDrawerContentProps {
   displayTimezone: string;
   initialItemId: string;
-  duplicatesByItemId?: ReadonlyMap<string, readonly CalendarItemOut[]>;
+  duplicatesByItemId?: ReadonlyMap<string, readonly CalendarItemOut[]> | undefined;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onBeforeItemChange: () => boolean;
   onOpenTask: (orgId: string, taskId: string) => void;
-  onOpenItem?: (itemId: string) => void;
+  onOpenItem?: ((itemId: string) => void) | undefined;
 }
 
 function CalendarItemDrawerContent({

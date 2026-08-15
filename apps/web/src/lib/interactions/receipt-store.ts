@@ -17,11 +17,11 @@ export const MAX_COMPLETED_RECEIPTS = 512;
 /** Construction options for an interaction receipt store. */
 export interface InteractionReceiptStoreOptions {
   /** Clock used to stamp lifecycle changes; injectable for deterministic tests. */
-  readonly now?: () => number;
+  readonly now?: (() => number) | undefined;
   /** Observes the metadata-only failure emitted by the built-in development/test reporter. */
-  readonly onLeak?: (failure: InteractionLeakFailure) => void;
+  readonly onLeak?: ((failure: InteractionLeakFailure) => void) | undefined;
   /** Explicit runtime mode, primarily for deterministic development/test diagnostics. */
-  readonly environment?: 'development' | 'production' | 'test';
+  readonly environment?: 'development' | 'production' | 'test' | undefined;
 }
 
 /** A bounded local trace of named interaction lifecycles. */

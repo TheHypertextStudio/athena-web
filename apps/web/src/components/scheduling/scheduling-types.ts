@@ -11,19 +11,19 @@ export interface ScheduleItem {
   /** Exclusive ISO instant at which the item ends. */
   readonly endsAt: string;
   /** Whether the item belongs in the all-day header instead of the hour grid. */
-  readonly allDay?: boolean;
+  readonly allDay?: boolean | undefined;
   /** Optional item color supplied by the consuming surface. */
-  readonly color?: string;
+  readonly color?: string | undefined;
   /** Whether move and resize affordances are available. Defaults to the lane's policy. */
-  readonly editable?: boolean;
+  readonly editable?: boolean | undefined;
   /** Whether activating the item opens consumer-owned details. Defaults to `true`. */
-  readonly openable?: boolean;
+  readonly openable?: boolean | undefined;
   /** Optional application-owned label for a domain-level read-only state. */
-  readonly readOnlyLabel?: string;
+  readonly readOnlyLabel?: string | undefined;
   /** Optional app object exposed when this item is dragged onto another scheduling item. */
-  readonly dragObject?: ScheduleDragObject;
+  readonly dragObject?: ScheduleDragObject | undefined;
   /** Whether tasks/events may be dropped onto this item as a relationship target. */
-  readonly dropTarget?: boolean;
+  readonly dropTarget?: boolean | undefined;
 }
 
 /** Cross-surface objects that may be associated with a calendar target. */
@@ -62,11 +62,11 @@ export interface ScheduleLane {
   /** Items already assigned to this lane by the consuming surface. */
   readonly items: readonly ScheduleItem[];
   /** Optional resource represented by the lane, such as a person, room, or calendar. */
-  readonly resourceId?: string;
+  readonly resourceId?: string | undefined;
   /** Optional resource timezone shown as metadata; it never controls shared canvas geometry. */
-  readonly timezone?: string;
+  readonly timezone?: string | undefined;
   /** Whether items in the lane may be moved or resized. Defaults to `true`. */
-  readonly editable?: boolean;
+  readonly editable?: boolean | undefined;
 }
 
 /** A pointer-selected time region in one schedule lane. */
@@ -151,7 +151,7 @@ export interface ScheduleItemRenderContext {
 /** Public contract for the pure, callback-driven scheduling canvas. */
 export interface SchedulingCanvasProps {
   /** Surface-specific chrome while geometry and interactions remain shared. */
-  readonly presentation?: 'calendar' | 'agenda';
+  readonly presentation?: 'calendar' | 'agenda' | undefined;
   /** IANA timezone shared by labels, item geometry, selection, and mutation conversion. */
   readonly displayTimezone: string;
   /** Arbitrary date/resource lanes. No view mode or fixed lane count is assumed. */
@@ -159,13 +159,13 @@ export interface SchedulingCanvasProps {
   /** Continuous vertical zoom. Every positive value is supported. */
   readonly pixelsPerHour: number;
   /** Optional ISO instant used for deterministic current-time rendering. */
-  readonly now?: string;
+  readonly now?: string | undefined;
   /** Deterministic width override; when omitted the canvas observes its own viewport. */
-  readonly viewportWidth?: number;
+  readonly viewportWidth?: number | undefined;
   /** Consumer-owned viewport height; defaults to a bounded responsive calendar surface. */
-  readonly viewportHeight?: string | number;
+  readonly viewportHeight?: string | number | undefined;
   /** Minimum readable lane width; the visible lane count is derived from this and the viewport. */
-  readonly minimumLaneWidth?: number;
+  readonly minimumLaneWidth?: number | undefined;
   /**
    * Consumer-owned chrome placed in the header's hour-gutter cell.
    *
@@ -174,33 +174,31 @@ export interface SchedulingCanvasProps {
    * surface around it. This is the one exception's escape hatch: a control that has to sit *inside*
    * the grid's own coordinate system to make sense, which today is the rail's scale stepper.
    */
-  readonly gutterSlot?: ReactNode;
+  readonly gutterSlot?: ReactNode | undefined;
   /** Lane aligned at the leading edge when a rolling window mounts. */
-  readonly initialLaneIndex?: number;
+  readonly initialLaneIndex?: number | undefined;
   /** Consumer-owned signal that realigns the initial lane even when the lane window is unchanged. */
-  readonly horizontalAnchorKey?: string | number;
+  readonly horizontalAnchorKey?: string | number | undefined;
   /** Minute brought near the top; defaults to one hour before live time, or 07:00 off today. */
-  readonly initialScrollMinutes?: number;
+  readonly initialScrollMinutes?: number | undefined;
   /** Reports the live viewport-derived geometry to a rolling lane source. */
-  readonly onViewportGeometry?: (geometry: {
-    readonly visibleLaneCount: number;
-    readonly laneWidth: number;
-  }) => void;
+  readonly onViewportGeometry?:
+    | ((geometry: { readonly visibleLaneCount: number; readonly laneWidth: number }) => void)
+    | undefined;
   /** Reports the first and last lanes intersecting the live horizontal viewport. */
-  readonly onVisibleLaneRange?: (range: {
-    readonly startLane: ScheduleLane;
-    readonly endLane: ScheduleLane;
-  }) => void;
+  readonly onVisibleLaneRange?:
+    | ((range: { readonly startLane: ScheduleLane; readonly endLane: ScheduleLane }) => void)
+    | undefined;
   /** Requests the preceding/following window when horizontal scrolling reaches a boundary. */
-  readonly onReachBoundary?: (direction: 'previous' | 'next') => void;
+  readonly onReachBoundary?: ((direction: 'previous' | 'next') => void) | undefined;
   /** Optional application-owned error copy. The grid remains mounted underneath it. */
-  readonly error?: string | null;
+  readonly error?: string | null | undefined;
   /** Application-owned empty copy shown when every lane has no items. */
-  readonly emptyMessage?: string;
+  readonly emptyMessage?: string | undefined;
   /** One control rendered beside {@link emptyMessage}, so an empty canvas offers a way forward. */
-  readonly emptyAction?: ReactNode;
+  readonly emptyAction?: ReactNode | undefined;
   /** Customize item content without transferring gesture or geometry ownership. */
-  readonly renderItem?: (context: ScheduleItemRenderContext) => ReactNode;
+  readonly renderItem?: ((context: ScheduleItemRenderContext) => ReactNode) | undefined;
   /**
    * Optional per-item action control (e.g. a start-timer button), rendered as a fixed corner
    * control alongside the built-in resize/move/relationship controls.
@@ -210,35 +208,35 @@ export interface SchedulingCanvasProps {
    * content — this supplies a separate, independently-clickable control anchored to one corner of
    * the item, the way the move handle and relationship-source control already are.
    */
-  readonly renderItemAction?: (context: ScheduleItemRenderContext) => ReactNode;
+  readonly renderItemAction?: ((context: ScheduleItemRenderContext) => ReactNode) | undefined;
   /** Consumer-owned committed selection kept visible after its pointer gesture completes. */
-  readonly selectedRegion?: ScheduleRegionSelection | null;
+  readonly selectedRegion?: ScheduleRegionSelection | null | undefined;
   /** Optional ref to the committed selection element for contextual consumer UI. */
-  readonly selectedRegionAnchorRef?: Ref<HTMLDivElement>;
+  readonly selectedRegionAnchorRef?: Ref<HTMLDivElement> | undefined;
   /** Receive a pointer-created time region. */
-  readonly onSelectRegion?: (selection: ScheduleRegionSelection) => void;
+  readonly onSelectRegion?: ((selection: ScheduleRegionSelection) => void) | undefined;
   /** Receive an explicit create request from one lane's all-day strip. */
-  readonly onSelectAllDayRegion?: (lane: ScheduleLane, anchor: HTMLElement) => void;
+  readonly onSelectAllDayRegion?: ((lane: ScheduleLane, anchor: HTMLElement) => void) | undefined;
   /** Receive a focused-grid day shortcut without teaching shared geometry how dates navigate. */
-  readonly onDateShortcut?: (shortcut: 'previous' | 'next' | 'today') => void;
+  readonly onDateShortcut?: ((shortcut: 'previous' | 'next' | 'today') => void) | undefined;
   /** Receive item activation. */
-  readonly onOpenItem?: (request: ScheduleItemOpen) => void;
+  readonly onOpenItem?: ((request: ScheduleItemOpen) => void) | undefined;
   /** Receive a proposed lane/time move. */
-  readonly onMoveItem?: (request: ScheduleItemMove) => void;
+  readonly onMoveItem?: ((request: ScheduleItemMove) => void) | undefined;
   /** Receive a proposed start/end resize. */
-  readonly onResizeItem?: (request: ScheduleItemResize) => void;
+  readonly onResizeItem?: ((request: ScheduleItemResize) => void) | undefined;
   /** Receive a proposed calendar-date move for an all-day item. */
-  readonly onMoveAllDayItem?: (request: ScheduleAllDayItemMove) => void;
+  readonly onMoveAllDayItem?: ((request: ScheduleAllDayItemMove) => void) | undefined;
   /** Receive a proposed calendar-date resize for an all-day item. */
-  readonly onResizeAllDayItem?: (request: ScheduleAllDayItemResize) => void;
+  readonly onResizeAllDayItem?: ((request: ScheduleAllDayItemResize) => void) | undefined;
   /** Associate a cross-surface task/event with an item target. */
-  readonly onDropObjectOnItem?: (request: ScheduleObjectDrop) => void;
+  readonly onDropObjectOnItem?: ((request: ScheduleObjectDrop) => void) | undefined;
   /** Schedule a cross-surface object dropped onto empty grid time as a new block at that time. */
-  readonly onDropObjectOnGrid?: (request: ScheduleObjectGridDrop) => void;
+  readonly onDropObjectOnGrid?: ((request: ScheduleObjectGridDrop) => void) | undefined;
   /**
    * Receive a pinch / ctrl+wheel zoom intent as a multiplicative scale factor.
    * `> 1` zooms in (more pixels per hour), `< 1` zooms out. The canvas emits raw intent only;
    * the consumer owns clamping, rounding, and persistence.
    */
-  readonly onZoomGesture?: (scale: number) => void;
+  readonly onZoomGesture?: ((scale: number) => void) | undefined;
 }

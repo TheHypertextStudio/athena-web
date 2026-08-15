@@ -39,13 +39,13 @@ export interface UseDraggableOptions {
    * For rows the viewer genuinely may not move — a cross-workspace reference, a read-only
    * projection. A suppressed row keeps normal text-selection behavior instead of pretending.
    */
-  readonly disabled?: boolean;
+  readonly disabled?: boolean | undefined;
   /** The selection surface this row belongs to, recorded on the drag for targets that care. */
-  readonly surfaceId?: string;
+  readonly surfaceId?: string | undefined;
   /** Run as the gesture starts, after the payload is written (e.g. to dim the row). */
-  readonly onDragStart?: () => void;
+  readonly onDragStart?: (() => void) | undefined;
   /** Run once the gesture ends, dropped or cancelled. */
-  readonly onDragEnd?: () => void;
+  readonly onDragEnd?: (() => void) | undefined;
 }
 
 /** The props {@link useDraggable} contributes to an element. */

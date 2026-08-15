@@ -303,7 +303,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
               columns={columns}
               groups={groups}
               getRowKey={(row) => row.id}
-              selected={opened ? new Set([opened.id]) : undefined}
+              {...(opened ? { selected: new Set([opened.id]) } : {})}
               onRowClick={(row) => {
                 setOpened(row.entityId);
               }}

@@ -19,11 +19,13 @@ const DYNAMIC_UPDATE_QUEUE_KEY = 'calendar-item-by-id-updates';
 
 /** Build the optimistic state shown while a calendar item write is pending. */
 function pendingItemPatch(patch: CalendarItemUpdate): (item: CalendarItemOut) => CalendarItemOut {
-  return (item) => ({
-    ...item,
-    ...patch,
-    ...(item.kind === 'provider_event' ? { syncState: 'push_pending' as const } : {}),
-  });
+  return (item) =>
+    Object.assign(
+      {},
+      item,
+      patch,
+      item.kind === 'provider_event' ? { syncState: 'push_pending' as const } : {},
+    );
 }
 
 /**

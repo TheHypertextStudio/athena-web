@@ -11,8 +11,8 @@ export function deriveInitialScheduleScrollMinutes({
   displayTimezone,
   lanes,
 }: {
-  readonly initialScrollMinutes?: number;
-  readonly now?: string;
+  readonly initialScrollMinutes?: number | undefined;
+  readonly now?: string | undefined;
   readonly displayTimezone: string;
   readonly lanes: readonly ScheduleLane[];
 }): number {

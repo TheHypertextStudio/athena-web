@@ -25,14 +25,14 @@ import { visibleScheduleLaneRange } from './scheduling-visible-lanes';
 interface UseSchedulingViewportOptions {
   readonly lanes: readonly ScheduleLane[];
   readonly pixelsPerHour: number;
-  readonly viewportWidth?: number;
+  readonly viewportWidth?: number | undefined;
   readonly minimumLaneWidth: number;
   readonly initialLaneIndex: number;
-  readonly horizontalAnchorKey?: string | number;
+  readonly horizontalAnchorKey?: string | number | undefined;
   readonly initialScrollMinutes: number;
-  readonly onViewportGeometry?: SchedulingCanvasProps['onViewportGeometry'];
-  readonly onVisibleLaneRange?: SchedulingCanvasProps['onVisibleLaneRange'];
-  readonly onReachBoundary?: SchedulingCanvasProps['onReachBoundary'];
+  readonly onViewportGeometry?: SchedulingCanvasProps['onViewportGeometry'] | undefined;
+  readonly onVisibleLaneRange?: SchedulingCanvasProps['onVisibleLaneRange'] | undefined;
+  readonly onReachBoundary?: SchedulingCanvasProps['onReachBoundary'] | undefined;
 }
 
 /** The minute-of-day under a zoom pointer, plus where that pointer sat in the viewport. */

@@ -130,7 +130,7 @@ export function useMyWork(orgId: string, userId: string | null): MyWorkState {
   const actorInfo = useMemo(() => {
     const byId = new Map<
       string,
-      { name: string; kind: 'human' | 'agent' | 'team'; avatarUrl?: string | null }
+      { name: string; kind: 'human' | 'agent' | 'team'; avatarUrl?: string | null | undefined }
     >();
     for (const member of members) {
       byId.set(member.actorId, {

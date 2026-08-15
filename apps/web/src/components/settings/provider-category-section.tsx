@@ -36,7 +36,7 @@ export interface ProviderCategorySectionProps {
   teams: readonly TeamOut[];
   canManage: boolean;
   /** The Linear "add another account" affordance, when this category is Project management. */
-  linearAdd?: LinearAddModel;
+  linearAdd?: LinearAddModel | undefined;
 }
 
 /** One provider card, wiring its inline config panel from the row model when configurable. */

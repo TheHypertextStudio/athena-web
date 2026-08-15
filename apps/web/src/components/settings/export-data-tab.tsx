@@ -30,7 +30,7 @@ import { ExportRequestForm } from './export-request-form';
 /** Props for {@link ExportDataTab}. */
 export interface ExportDataTabProps {
   /** An export linked from email; it is fetched and pinned above the general history. */
-  readonly focusedExportId?: string;
+  readonly focusedExportId?: string | undefined;
 }
 
 /** Select data, request an archive, and securely download completed exports. */

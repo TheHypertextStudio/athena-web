@@ -27,16 +27,16 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 /** The unbranded properties-panel patch surface. */
 export interface ProjectPatch {
   /** New name. Non-empty; the name cannot be cleared. */
-  name?: string;
-  summary?: string | null;
-  description?: string | null;
-  health?: Health | null;
-  leadId?: string | null;
-  status?: ProjectStatus;
-  startDate?: string | null;
-  targetDate?: string | null;
-  programId?: string | null;
-  labelIds?: readonly string[];
+  name?: string | undefined;
+  summary?: string | null | undefined;
+  description?: string | null | undefined;
+  health?: Health | null | undefined;
+  leadId?: string | null | undefined;
+  status?: ProjectStatus | undefined;
+  startDate?: string | null | undefined;
+  targetDate?: string | null | undefined;
+  programId?: string | null | undefined;
+  labelIds?: readonly string[] | undefined;
 }
 
 function toProjectPatchBody(patch: ProjectPatch): ProjectUpdate {
@@ -96,7 +96,11 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
     [queryClient, detailKey],
   );
 
-  const patch = useApiMutation<ProjectOut, ProjectPatch, { previous?: ProjectDetailData }>({
+  const patch = useApiMutation<
+    ProjectOut,
+    ProjectPatch,
+    { previous?: ProjectDetailData | undefined }
+  >({
     mutationFn: (patchBody) =>
       unwrap(
         () =>
@@ -109,7 +113,7 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
     onMutate: async (patchBody) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
       const body = toProjectPatchBody(patchBody);
-      const previous = patchCachedProject((cur) => ({ ...cur, ...body }));
+      const previous = patchCachedProject((cur) => Object.assign({}, cur, body));
       if (patchBody.labelIds !== undefined) {
         const selected = new Set(patchBody.labelIds);
         queryClient.setQueryData<ProjectDetailData>(detailKey, (cur) =>
@@ -144,7 +148,7 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
   const initiativeM = useApiMutation<
     undefined,
     readonly string[],
-    { previous?: ProjectDetailData }
+    { previous?: ProjectDetailData | undefined }
   >({
     mutationFn: async (nextInitiativeIds) => {
       const current = initiativeIdsBeforeMutate.current;

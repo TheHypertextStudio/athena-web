@@ -56,15 +56,15 @@ export interface FreeformTextEditorProps {
   /** Accessible label for the editable writing surface. */
   ariaLabel: string;
   /** Disable edits while the host mutation is in flight. */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   /** Keep the rendered document readable while preventing edits. */
-  readOnly?: boolean;
+  readOnly?: boolean | undefined;
   /** Called by Cmd/Ctrl+Enter when the host supports an explicit save action. */
-  onSubmit?: () => void;
+  onSubmit?: (() => void) | undefined;
   /** Called by Escape when the host supports cancelling an edit. */
-  onCancel?: () => void;
+  onCancel?: (() => void) | undefined;
   /** Additional styling for the editor container. */
-  className?: string;
+  className?: string | undefined;
   /**
    * The organization whose entities and connected apps `@` can reference.
    *
@@ -72,7 +72,7 @@ export interface FreeformTextEditorProps {
    * Absent means mentions are off for this surface, which is the right default for a field with
    * no workspace context rather than a reason to guess one.
    */
-  mentionOrgId?: string;
+  mentionOrgId?: string | undefined;
 }
 
 /** Render a bare freeform rich-text field backed by Markdown. */
@@ -346,7 +346,7 @@ export interface FreeformTextProps {
   /** Empty-state text when no content exists. */
   emptyText: string;
   /** Additional container styling. */
-  className?: string;
+  className?: string | undefined;
 }
 
 /** Render stored Markdown as the same quiet text surface without editing controls. */

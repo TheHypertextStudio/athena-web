@@ -28,11 +28,11 @@ import {
 /** Props for {@link EntityDetailSkeleton}. */
 export interface EntityDetailSkeletonProps {
   /** How many property chips the metadata row will hold. Defaults to a typical detail page. */
-  chipCount?: number;
+  chipCount?: number | undefined;
   /** How many tabs the tab bar will hold. Defaults to a typical detail page. */
-  tabCount?: number;
+  tabCount?: number | undefined;
   /** Whether the page shows a summary line under its title. */
-  hasSubtitle?: boolean;
+  hasSubtitle?: boolean | undefined;
   /** Accessible label naming what is loading (e.g. "Loading project"). */
   label: string;
   /**
@@ -44,9 +44,9 @@ export interface EntityDetailSkeletonProps {
    * came from. Showing it is the difference between a page that is loading and a page that gives
    * no sign of what it is.
    */
-  title?: string;
+  title?: string | undefined;
   /** The entity's real one-line summary, when it is already known. */
-  subtitle?: string;
+  subtitle?: string | undefined;
 }
 
 /**

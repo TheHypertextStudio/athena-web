@@ -5,9 +5,9 @@ interface SchedulingCanvasNoticeProps {
   /** Guidance shown when every lane is empty. */
   readonly emptyMessage: string;
   /** One control offered beside {@link emptyMessage}, so the empty state is not only prose. */
-  readonly emptyAction?: ReactNode;
+  readonly emptyAction?: ReactNode | undefined;
   /** A read failure to surface instead of the empty-state guidance. */
-  readonly error?: string | null;
+  readonly error?: string | null | undefined;
   /** Whether every visible lane has zero items. */
   readonly isEmpty: boolean;
   /** The visible width of the scroll viewport, so the notice centres on what is on screen. */

@@ -139,7 +139,7 @@ export interface TaskGlobalCreation {
     continueCreating: boolean,
   ) => void | Promise<void>;
   /** Open a committed Task when destination-independent completion work could not finish. */
-  readonly onOpenCreated?: (task: TaskOut) => void;
+  readonly onOpenCreated?: ((task: TaskOut) => void) | undefined;
 }
 
 /** Props for {@link CreateTaskDialog}. */
@@ -159,13 +159,13 @@ export interface CreateTaskDialogProps {
   /** Notify the parent that a task was created, so it can prepend + route. */
   onCreated: (task: TaskOut) => void;
   /** Pre-seed the project picker (e.g. opening from a project's Tasks tab). */
-  defaultProjectId?: string | null;
+  defaultProjectId?: string | null | undefined;
   /** Pre-seed the assignee picker (e.g. opening from My Work's "Assigned to me" tab). */
-  defaultAssigneeId?: string | null;
+  defaultAssigneeId?: string | null | undefined;
   /** A template to apply on open, from a `?template=` compose request. */
-  defaultTemplateId?: string | null;
+  defaultTemplateId?: string | null | undefined;
   /** Destination facts when this dialog is mounted by the global creation host. */
-  globalCreation?: TaskGlobalCreation;
+  globalCreation?: TaskGlobalCreation | undefined;
 }
 
 /**

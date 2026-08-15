@@ -14,13 +14,13 @@ export interface CalendarTimeFieldProps {
   readonly occurrence: LocalInputOccurrence | null;
   readonly onValueChange: (value: string) => void;
   readonly onOccurrenceChange: (occurrence: LocalInputOccurrence) => void;
-  readonly disabled?: boolean;
-  readonly invalid?: boolean;
-  readonly describedBy?: string;
+  readonly disabled?: boolean | undefined;
+  readonly invalid?: boolean | undefined;
+  readonly describedBy?: string | undefined;
   /** Native input shape; Agenda supplies a separate date for its time-only editor. */
-  readonly inputType?: 'datetime-local' | 'time';
+  readonly inputType?: 'datetime-local' | 'time' | undefined;
   /** Calendar date paired with a time-only value for DST resolution. */
-  readonly date?: string;
+  readonly date?: string | undefined;
 }
 
 /**

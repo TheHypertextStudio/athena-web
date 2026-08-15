@@ -30,7 +30,7 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 /** Fields accepted by the task patch mutation. All are optional; `null` clears the field. */
 export interface TaskPatch {
   /** New title. Non-empty; titles cannot be cleared. */
-  title?: string;
+  title?: string | undefined;
   /**
    * New description body, or `''` to empty it.
    *
@@ -40,14 +40,14 @@ export interface TaskPatch {
    * present on the type but missing from the body compiles, saves nothing, and still shows the
    * editor's own "saved" state — a silent no-op is worse than a type error.
    */
-  description?: string;
-  assigneeId?: string | null;
-  projectId?: string | null;
-  programId?: string | null;
-  milestoneId?: string | null;
-  cycleId?: string | null;
+  description?: string | undefined;
+  assigneeId?: string | null | undefined;
+  projectId?: string | null | undefined;
+  programId?: string | null | undefined;
+  milestoneId?: string | null | undefined;
+  cycleId?: string | null | undefined;
   /** New point estimate, or `null` to clear it. */
-  estimate?: number | null;
+  estimate?: number | null | undefined;
   /**
    * The anticipated start date as a bare `YYYY-MM-DD` calendar day, or `null` to clear it.
    *
@@ -58,8 +58,8 @@ export interface TaskPatch {
    * this as `z.iso.date()` and rejects a full datetime with a 422 — send the day only, never an
    * instant.
    */
-  startDate?: string | null;
-  dueDate?: string | null;
+  startDate?: string | null | undefined;
+  dueDate?: string | null | undefined;
   /**
    * The task's complete label set, replacing whatever it carried.
    *
@@ -68,7 +68,7 @@ export interface TaskPatch {
    * The server collapses any exclusive-group collision on the way in, so a picker can send both
    * members of a single-choice group and get the one the user clicked last.
    */
-  labels?: readonly string[];
+  labels?: readonly string[] | undefined;
 }
 
 /** Stable mutation callbacks + pending/error state returned by {@link useTaskMutations}. */
@@ -83,7 +83,7 @@ export interface TaskMutations {
    * Archive (soft-delete) the task. Fires the DELETE mutation and invalidates the org task list;
    * the caller supplies `onSuccess` to close its confirm dialog and navigate away.
    */
-  deleteTask: (options?: { onSuccess?: () => void }) => void;
+  deleteTask: (options?: { onSuccess?: (() => void) | undefined }) => void;
   actionError: string | null;
   propsPending: boolean;
   statusPending: boolean;
@@ -144,7 +144,7 @@ export function useTaskMutations(
     [queryClient, detailKey],
   );
 
-  const stateMutation = useApiMutation<TaskOut, string, { previous?: TaskDetail }>({
+  const stateMutation = useApiMutation<TaskOut, string, { previous?: TaskDetail | undefined }>({
     mutationFn: (stateKey) =>
       unwrap(
         () =>
@@ -167,30 +167,32 @@ export function useTaskMutations(
     invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
   });
 
-  const priorityMutation = useApiMutation<TaskOut, Priority, { previous?: TaskDetail }>({
-    mutationFn: (priority) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].tasks[':id'].$patch({
-            param: { orgId, id: taskId },
-            json: { priority },
-          }),
-        'Could not update the priority.',
-      ),
-    onMutate: async (priority) => {
-      await queryClient.cancelQueries({ queryKey: detailKey });
-      return { previous: writeDetail({ priority }) };
+  const priorityMutation = useApiMutation<TaskOut, Priority, { previous?: TaskDetail | undefined }>(
+    {
+      mutationFn: (priority) =>
+        unwrap(
+          () =>
+            api.v1.orgs[':orgId'].tasks[':id'].$patch({
+              param: { orgId, id: taskId },
+              json: { priority },
+            }),
+          'Could not update the priority.',
+        ),
+      onMutate: async (priority) => {
+        await queryClient.cancelQueries({ queryKey: detailKey });
+        return { previous: writeDetail({ priority }) };
+      },
+      onError: (_err, _priority, ctx) => {
+        if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+      },
+      onSuccess: (updated) => {
+        adoptTaskOut(updated);
+      },
+      invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
     },
-    onError: (_err, _priority, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
-    },
-    onSuccess: (updated) => {
-      adoptTaskOut(updated);
-    },
-    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
-  });
+  );
 
-  const patchMutation = useApiMutation<TaskOut, TaskPatch, { previous?: TaskDetail }>({
+  const patchMutation = useApiMutation<TaskOut, TaskPatch, { previous?: TaskDetail | undefined }>({
     mutationFn: (patch) => {
       const body = {
         ...(patch.title !== undefined ? { title: patch.title } : {}),
@@ -230,7 +232,12 @@ export function useTaskMutations(
     },
     onMutate: async (patch) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
-      return { previous: writeDetail(patch as Partial<TaskDetail>) };
+      // `labels` carries ids on the patch but full label records on the cached detail;
+      // `writeDetail` blindly spreads its argument onto the cache, so the key must actually be
+      // absent from the object here (not just from its type) or the optimistic write stamps ids
+      // in where label records belong.
+      const { labels, ...detailPatch } = patch;
+      return { previous: writeDetail(detailPatch as Partial<TaskDetail>) };
     },
     onError: (_err, _patch, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
@@ -264,7 +271,7 @@ export function useTaskMutations(
   const toggleSubtaskMutation = useApiMutation<
     TaskOut,
     { subtaskId: string; done: boolean },
-    { previous?: TaskDetail }
+    { previous?: TaskDetail | undefined }
   >({
     mutationFn: ({ subtaskId, done }) =>
       unwrap(
@@ -347,8 +354,11 @@ export function useTaskMutations(
     [commentMutation],
   );
   const deleteTask = useCallback(
-    (options?: { onSuccess?: () => void }): void => {
-      deleteMutation.mutate(undefined, options);
+    (options?: { onSuccess?: (() => void) | undefined }): void => {
+      deleteMutation.mutate(
+        undefined,
+        options?.onSuccess ? { onSuccess: options.onSuccess } : undefined,
+      );
     },
     [deleteMutation],
   );

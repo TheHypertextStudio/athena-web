@@ -15,9 +15,9 @@ export interface PersonalAthenaSource {
 
 /** The optional workspace and object focus carried into personal Athena work. */
 export interface PersonalAthenaContext {
-  readonly workspaceId?: string;
-  readonly workspaceName?: string;
-  readonly source?: PersonalAthenaSource;
+  readonly workspaceId?: string | undefined;
+  readonly workspaceName?: string | undefined;
+  readonly source?: PersonalAthenaSource | undefined;
 }
 
 /** Stable lifecycle states exposed by the personal Athena API. */
@@ -86,14 +86,17 @@ export type PersonalAthenaActivity =
 
 /** The selected personal work item returned by `/v1/me/athena/sessions/:id`. */
 export interface PersonalAthenaSessionDetail extends PersonalAthenaSessionSummary {
-  readonly decision?: PersonalAthenaDecision | null;
+  readonly decision?: PersonalAthenaDecision | null | undefined;
   readonly activities: readonly PersonalAthenaActivity[];
-  readonly activityNextCursor?: string;
-  readonly result?: {
-    readonly title: string;
-    readonly summary: string;
-    readonly receipt?: readonly { readonly label: string; readonly value: string }[];
-  } | null;
+  readonly activityNextCursor?: string | undefined;
+  readonly result?:
+    | {
+        readonly title: string;
+        readonly summary: string;
+        readonly receipt?: readonly { readonly label: string; readonly value: string }[];
+      }
+    | null
+    | undefined;
 }
 
 /** A single user-facing work-log row. */

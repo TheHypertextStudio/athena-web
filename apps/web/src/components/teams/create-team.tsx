@@ -72,9 +72,9 @@ export interface CreateTeamDialogProps {
   /** Notify the parent that a team was created, so it can prepend the row. */
   onCreated: (team: TeamOut) => void;
   /** Destination vocabulary label; omitted by legacy mounts to preserve their current API. */
-  teamNoun?: string;
+  teamNoun?: string | undefined;
   /** Destination facts when mounted by the shell-global creation host. */
-  globalCreation?: TeamGlobalCreation;
+  globalCreation?: TeamGlobalCreation | undefined;
 }
 
 /**

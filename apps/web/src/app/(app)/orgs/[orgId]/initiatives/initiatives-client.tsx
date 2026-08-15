@@ -315,7 +315,7 @@ export default function InitiativesListClient(): JSX.Element {
       colorKey: EntityDisplayColorKey;
       customColor: string | null;
     },
-    { previous?: InitiativeOverviewOut }
+    { previous?: InitiativeOverviewOut | undefined }
   >({
     mutationFn: ({ initiativeId, iconKey, colorKey, customColor }) =>
       unwrap(
@@ -452,7 +452,7 @@ export default function InitiativesListClient(): JSX.Element {
   const createLink = useApiMutation<
     unknown,
     { parentInitiativeId: string; childInitiativeId: string },
-    { previous?: InitiativeOverviewOut }
+    { previous?: InitiativeOverviewOut | undefined }
   >({
     mutationFn: (vars) =>
       unwrap(
@@ -478,7 +478,7 @@ export default function InitiativesListClient(): JSX.Element {
   const moveLink = useApiMutation<
     unknown,
     { linkId: string; parentInitiativeId: string; childInitiativeId: string },
-    { previous?: InitiativeOverviewOut }
+    { previous?: InitiativeOverviewOut | undefined }
   >({
     mutationFn: (vars) =>
       unwrap(
@@ -501,7 +501,7 @@ export default function InitiativesListClient(): JSX.Element {
   const detachLink = useApiMutation<
     unknown,
     { linkId: string; childInitiativeId: string },
-    { previous?: InitiativeOverviewOut }
+    { previous?: InitiativeOverviewOut | undefined }
   >({
     mutationFn: (vars) =>
       unwrap(

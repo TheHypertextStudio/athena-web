@@ -35,7 +35,7 @@ export interface WizardShellProps {
    * shows a neutral "Getting started" label and a single un-committed lead segment instead of a
    * committed "Step N of M" + full segmented bar.
    */
-  totalKnown?: boolean;
+  totalKnown?: boolean | undefined;
   /** A short label above the title (e.g. "Get started"). */
   eyebrow: string;
   /** The step's headline. */
@@ -47,7 +47,7 @@ export interface WizardShellProps {
   /** The footer action row (primary / secondary buttons). */
   footer: ReactNode;
   /** Invoked when the back affordance is used; omit on the first step to hide it. */
-  onBack?: () => void;
+  onBack?: (() => void) | undefined;
 }
 
 /**

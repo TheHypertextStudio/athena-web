@@ -119,7 +119,7 @@ export interface CreateProjectDialogProps {
   teamsLoading: boolean;
   /** The program id the new project is pre-filed under, or `null` for none (e.g. opened from a
    * Program's own Projects tab). The picker remains editable — this only seeds the draft. */
-  defaultProgramId?: string | null;
+  defaultProgramId?: string | null | undefined;
   /** Whether the dialog is open (the host page owns this state). */
   open: boolean;
   /** Notify the parent that the open state changed (Esc, backdrop, X, Cancel, or success). */
@@ -127,9 +127,9 @@ export interface CreateProjectDialogProps {
   /** Notify the parent that a project was created, so it can prepend + route. */
   onCreated: (project: ProjectOut) => void;
   /** A template to apply on open, from a `?template=` compose request. */
-  defaultTemplateId?: string | null;
+  defaultTemplateId?: string | null | undefined;
   /** Destination facts when mounted by the shell-global creation host. */
-  globalCreation?: ProjectGlobalCreation;
+  globalCreation?: ProjectGlobalCreation | undefined;
 }
 
 /**

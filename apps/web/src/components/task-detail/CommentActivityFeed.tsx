@@ -16,7 +16,7 @@ export interface FeedActor {
   /** The actor kind, selecting the avatar shape/ring. */
   kind: ActorKind;
   /** Optional avatar image URL. */
-  avatarUrl?: string | null;
+  avatarUrl?: string | null | undefined;
 }
 
 /** Props for {@link CommentActivityFeed}. */

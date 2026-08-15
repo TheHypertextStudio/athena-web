@@ -24,12 +24,12 @@ interface IntegrationProviderCardProps {
    * persistent descriptor under the provider name. Omitted on surfaces (e.g. Import) that keep
    * their own terser {@link connectHint} wording.
    */
-  effect?: string;
+  effect?: string | undefined;
   /**
    * Short data-flow direction phrase (Connections surface only), shown as the secondary line while
    * the provider is not yet connected. Once connected, the status/last-synced line replaces it.
    */
-  mechanics?: string;
+  mechanics?: string | undefined;
   /** A connect/verify ceremony is in flight for this provider. */
   busy: boolean;
   /** A manual sync is in flight for this integration. */
@@ -54,7 +54,7 @@ interface IntegrationProviderCardProps {
    * do not fit in a card disclosure. Without this link that page is reachable only by typing the
    * URL, so it is the provider's entry point rather than a convenience.
    */
-  manageHref?: string | null;
+  manageHref?: string | null | undefined;
   /** Connect this provider on the current surface (pattern is fixed by the surface). */
   onConnect: () => void;
   /** Repair a failed connection, or change a provider-owned installation. */

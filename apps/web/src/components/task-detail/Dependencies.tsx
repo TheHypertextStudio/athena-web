@@ -32,8 +32,8 @@ interface DependencyRowProps {
   projectName: (projectId: string) => string;
   projectLabel: string;
   onOpen: (taskId: string) => void;
-  canEdit?: boolean;
-  onRename?: (taskId: string, title: string) => void;
+  canEdit?: boolean | undefined;
+  onRename?: ((taskId: string, title: string) => void) | undefined;
 }
 
 /** One dependency edge rendered as a status glyph, title, and the task's project. */

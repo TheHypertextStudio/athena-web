@@ -20,7 +20,7 @@ export interface DenseScheduleArrangement {
 
 /** Optional user choice that replaces one default visible collision column. */
 export interface DenseScheduleArrangementOptions {
-  readonly promotedItemId?: string;
+  readonly promotedItemId?: string | undefined;
 }
 
 /** Derive the number of collision columns that remain readable at the measured lane width. */

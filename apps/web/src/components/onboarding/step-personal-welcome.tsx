@@ -45,7 +45,7 @@ const HIGHLIGHTS: readonly Highlight[] = [
 /** Props for {@link StepPersonalWelcome}. */
 export interface StepPersonalWelcomeProps {
   /** The signed-in person's first name, when known, for a warmer greeting. */
-  firstName?: string;
+  firstName?: string | undefined;
 }
 
 /**

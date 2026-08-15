@@ -78,17 +78,17 @@ function calendarSelectionKey(
 /** Props for {@link CreateBlockForm}. */
 export interface CreateBlockFormProps {
   readonly displayTimezone: string;
-  readonly layers?: readonly CalendarLayerOut[];
-  readonly preferences?: CalendarPreferences;
-  readonly selection?: CalendarRegionSelection | null;
-  readonly selectionAnchorRef?: PopoverVirtualAnchorRef;
-  readonly onSelectionConsumed?: () => void;
-  readonly trigger?: 'visible' | 'hidden';
-  readonly presentation?: 'calendar' | 'agenda';
-  readonly onDraftChange?: (selection: CalendarRegionSelection) => void;
-  readonly onDirtyChange?: (dirty: boolean) => void;
+  readonly layers?: readonly CalendarLayerOut[] | undefined;
+  readonly preferences?: CalendarPreferences | undefined;
+  readonly selection?: CalendarRegionSelection | null | undefined;
+  readonly selectionAnchorRef?: PopoverVirtualAnchorRef | undefined;
+  readonly onSelectionConsumed?: (() => void) | undefined;
+  readonly trigger?: 'visible' | 'hidden' | undefined;
+  readonly presentation?: 'calendar' | 'agenda' | undefined;
+  readonly onDraftChange?: ((selection: CalendarRegionSelection) => void) | undefined;
+  readonly onDirtyChange?: ((dirty: boolean) => void) | undefined;
   /** Agenda-owned sibling host used below the shell desktop breakpoint. */
-  readonly agendaMobileHost?: HTMLElement | null;
+  readonly agendaMobileHost?: HTMLElement | null | undefined;
 }
 
 /** Focus-managed quick create; Agenda uses a draggable sibling hosted outside its rail. */
@@ -402,20 +402,19 @@ export default function CreateBlockForm({
   if (presentation === 'agenda') {
     const desktopHosted = agendaDesktop ? shellOverlayHost : null;
     const mobileHosted = !agendaDesktop ? (agendaMobileHost ?? null) : null;
-    const portalHost = desktopHosted ?? mobileHosted ?? undefined;
+    const portalHost = desktopHosted ?? mobileHosted ?? null;
+    const overlayClassName = desktopHosted
+      ? 'pointer-events-none absolute inset-0 bg-transparent'
+      : mobileHosted
+        ? 'absolute inset-0 bg-surface'
+        : undefined;
     return (
       <>
         <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogContent
             ref={position.dialogRef}
             portalContainer={portalHost}
-            overlayClassName={
-              desktopHosted
-                ? 'pointer-events-none absolute inset-0 bg-transparent'
-                : mobileHosted
-                  ? 'absolute inset-0 bg-surface'
-                  : undefined
-            }
+            overlayClassName={overlayClassName}
             showClose={false}
             onOpenAutoFocus={(event) => {
               event.preventDefault();

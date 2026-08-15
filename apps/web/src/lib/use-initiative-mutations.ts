@@ -21,16 +21,16 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** InitiativePatch describes the use initiative mutations data contract shared by the hook or component. */
 export interface InitiativePatch {
-  name?: string;
-  summary?: string | null;
-  description?: string | null;
-  ownerId?: string | null;
-  status?: InitiativeStatus;
-  health?: Health | null;
-  priority?: InitiativePriority;
-  updateCadence?: InitiativeUpdateCadence;
-  targetDate?: string | null;
-  labelIds?: string[];
+  name?: string | undefined;
+  summary?: string | null | undefined;
+  description?: string | null | undefined;
+  ownerId?: string | null | undefined;
+  status?: InitiativeStatus | undefined;
+  health?: Health | null | undefined;
+  priority?: InitiativePriority | undefined;
+  updateCadence?: InitiativeUpdateCadence | undefined;
+  targetDate?: string | null | undefined;
+  labelIds?: string[] | undefined;
 }
 
 function toInitiativePatchBody(patch: InitiativePatch): InitiativeUpdate {
@@ -96,60 +96,65 @@ export function useInitiativeMutations(
     return previous;
   };
 
-  const patch = useApiMutation<InitiativeOut, InitiativePatch, { previous?: InitiativeDetailData }>(
-    {
-      mutationFn: (patchBody) =>
-        unwrap(
-          () =>
-            api.v1.orgs[':orgId'].initiatives[':id'].$patch({
-              param: { orgId, id: initiativeId },
-              json: toInitiativePatchBody(patchBody),
-            }),
-          `Could not update the ${initiativeNounLower}.`,
-        ),
-      onMutate: async (patchBody) => {
-        await queryClient.cancelQueries({ queryKey: detailKey });
-        const body = toInitiativePatchBody(patchBody);
-        const cached = queryClient.getQueryData<InitiativeDetailData>(detailKey);
-        const { labelIds, ...properties } = body;
-        const previous = patchDetail((d) => ({
-          ...d,
-          ...properties,
-          ...(labelIds
+  const patch = useApiMutation<
+    InitiativeOut,
+    InitiativePatch,
+    { previous?: InitiativeDetailData | undefined }
+  >({
+    mutationFn: (patchBody) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].initiatives[':id'].$patch({
+            param: { orgId, id: initiativeId },
+            json: toInitiativePatchBody(patchBody),
+          }),
+        `Could not update the ${initiativeNounLower}.`,
+      ),
+    onMutate: async (patchBody) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const body = toInitiativePatchBody(patchBody);
+      const cached = queryClient.getQueryData<InitiativeDetailData>(detailKey);
+      const { labelIds, ...properties } = body;
+      const previous = patchDetail((d) =>
+        Object.assign(
+          {},
+          d,
+          properties,
+          labelIds
             ? { labels: (cached?.labels ?? []).filter((label) => labelIds.includes(label.id)) }
-            : {}),
-        }));
-        return { previous };
-      },
-      onError: (_err, _body, ctx) => {
-        if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
-      },
-      onSuccess: (updated) => {
-        queryClient.setQueryData<InitiativeDetailData>(detailKey, (cur) =>
-          cur
-            ? {
-                ...cur,
-                detail: {
-                  ...cur.detail,
-                  ...updated,
-                  childMix: cur.detail.childMix,
-                  distribution: cur.detail.distribution,
-                  rolledUpHealth: cur.detail.rolledUpHealth,
-                },
-              }
-            : cur,
-        );
-      },
-      // The Resources tab's derived sections are a projection of this record's prose, and the query
-      // cache survives a reload — so without this, adding a mention to the description leaves that
-      // tab showing the pre-edit answer until the staleness tier happens to expire.
-      invalidateKeys: [
-        detailKey,
-        overviewKey,
-        queryKeys.entityMentions(orgId, 'initiative', initiativeId),
-      ],
+            : {},
+        ),
+      );
+      return { previous };
     },
-  );
+    onError: (_err, _body, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<InitiativeDetailData>(detailKey, (cur) =>
+        cur
+          ? {
+              ...cur,
+              detail: {
+                ...cur.detail,
+                ...updated,
+                childMix: cur.detail.childMix,
+                distribution: cur.detail.distribution,
+                rolledUpHealth: cur.detail.rolledUpHealth,
+              },
+            }
+          : cur,
+      );
+    },
+    // The Resources tab's derived sections are a projection of this record's prose, and the query
+    // cache survives a reload — so without this, adding a mention to the description leaves that
+    // tab showing the pre-edit answer until the staleness tier happens to expire.
+    invalidateKeys: [
+      detailKey,
+      overviewKey,
+      queryKeys.entityMentions(orgId, 'initiative', initiativeId),
+    ],
+  });
 
   const linkProgramM = useApiMutation({
     mutationFn: (programId: string) =>

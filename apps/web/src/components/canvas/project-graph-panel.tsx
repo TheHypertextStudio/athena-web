@@ -134,7 +134,7 @@ export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.
   const connectMutation = useApiMutation<
     ProjectDependencyCreated,
     { source: string; target: string },
-    { previous?: ProjectOverviewOut }
+    { previous?: ProjectOverviewOut | undefined }
   >({
     mutationFn: ({ source, target }) =>
       unwrap(
@@ -158,7 +158,7 @@ export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.
   const disconnectMutation = useApiMutation<
     ProjectDependencyRemoved,
     { source: string; target: string },
-    { previous?: ProjectOverviewOut }
+    { previous?: ProjectOverviewOut | undefined }
   >({
     mutationFn: ({ source, target }) =>
       unwrap(

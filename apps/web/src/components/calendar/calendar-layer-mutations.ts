@@ -62,7 +62,7 @@ export function useUpdateLayerGroupVisibility(layerIds: readonly string[]) {
     onMutate: (vars) =>
       optimisticPatch<CalendarLayersOut>(queryClient, queryKeys.calendarLayers(), (previous) => ({
         items: previous.items.map((layer) =>
-          ids.includes(layer.id) ? { ...layer, ...vars } : layer,
+          ids.includes(layer.id) ? Object.assign({}, layer, vars) : layer,
         ),
       })),
     onError: (_error, _vars, context) => context?.rollback(),

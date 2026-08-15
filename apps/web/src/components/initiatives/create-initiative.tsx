@@ -118,9 +118,9 @@ export interface CreateInitiativeDialogProps {
   /** Notify the parent that an initiative was created, so it can route to its detail. */
   onCreated: (initiative: InitiativeOut) => void;
   /** A template to apply on open, from a `?template=` compose request. */
-  defaultTemplateId?: string | null;
+  defaultTemplateId?: string | null | undefined;
   /** Destination facts when mounted by the shell-global creation host. */
-  globalCreation?: InitiativeGlobalCreation;
+  globalCreation?: InitiativeGlobalCreation | undefined;
 }
 
 /**

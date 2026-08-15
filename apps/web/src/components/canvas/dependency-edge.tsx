@@ -54,7 +54,7 @@ const MAX_COUNTER_SCALE = 2.5;
 
 /** Read the `kind` discriminator off an edge's data. */
 function edgeDataKind(data: unknown): string | undefined {
-  return (data as { kind?: string } | undefined)?.kind;
+  return (data as { kind?: string | undefined } | undefined)?.kind;
 }
 
 /** A dependency (or subtask) edge with a hover/selected remove affordance. */
@@ -99,7 +99,7 @@ function DependencyEdgeComponent({
       <BaseEdge
         id={id}
         path={path}
-        markerEnd={markerEnd}
+        {...(markerEnd !== undefined ? { markerEnd } : {})}
         interactionWidth={HIT_WIDTH}
         style={{
           ...style,

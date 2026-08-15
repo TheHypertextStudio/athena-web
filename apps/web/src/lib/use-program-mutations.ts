@@ -18,18 +18,18 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 /** ProgramPatch describes the use program mutations data contract shared by the hook or component. */
 export interface ProgramPatch {
   /** New name. Non-empty; the name cannot be cleared. */
-  name?: string;
-  ownerId?: string | null;
-  status?: ProgramStatus;
-  health?: Health | null;
-  visibility?: Visibility;
+  name?: string | undefined;
+  ownerId?: string | null | undefined;
+  status?: ProgramStatus | undefined;
+  health?: Health | null | undefined;
+  visibility?: Visibility | undefined;
   /**
    * The plain-text summary/subtitle. Optional-not-nullable on the wire: send an empty string to
    * clear it (never `null`); omit to leave it unchanged.
    */
-  summary?: string;
+  summary?: string | undefined;
   /** The Markdown description/brief. `null` clears it. */
-  description?: string | null;
+  description?: string | null | undefined;
 }
 
 function toProgramPatchBody(patch: ProgramPatch): ProgramUpdate {
@@ -100,7 +100,11 @@ export function useProgramMutations(
     invalidateKeys: [updatesKey, detailKey],
   });
 
-  const patch = useApiMutation<ProgramOut, ProgramPatch, { previous?: ProgramDetailData }>({
+  const patch = useApiMutation<
+    ProgramOut,
+    ProgramPatch,
+    { previous?: ProgramDetailData | undefined }
+  >({
     mutationFn: (patchBody) =>
       unwrap(
         () =>
@@ -113,7 +117,7 @@ export function useProgramMutations(
     onMutate: async (patchBody) => {
       await queryClient.cancelQueries({ queryKey: detailKey as string[] });
       const body = toProgramPatchBody(patchBody);
-      const previous = patchCachedProgram((cur) => ({ ...cur, ...body }));
+      const previous = patchCachedProgram((cur) => Object.assign({}, cur, body));
       return { previous };
     },
     onError: (_err, _body, ctx) => {

@@ -61,7 +61,7 @@ export interface TaskTableActor {
   /** The actor's kind, selecting the avatar shape. */
   readonly kind: ActorKind;
   /** Optional avatar image URL. */
-  readonly avatarUrl?: string | null;
+  readonly avatarUrl?: string | null | undefined;
 }
 
 /** A neutral fallback header label, used only if the catalog omits a field (it never should). */
@@ -92,11 +92,11 @@ export interface TaskColumnsDeps {
   /** Resolve a task's assignee actor id to its display name + kind for the avatar column. */
   resolveActor: (actorId: string) => TaskTableActor;
   /** Whether the viewer may rename a task in place (double-click the title). */
-  canEdit?: boolean;
+  canEdit?: boolean | undefined;
   /** Persist a renamed task title. Enables inline rename when provided with `canEdit`. */
-  onRename?: (taskId: string, title: string) => void;
+  onRename?: ((taskId: string, title: string) => void) | undefined;
   /** Open a task — used by the inline title so a single click still navigates. */
-  onOpen?: (task: TaskOut) => void;
+  onOpen?: ((task: TaskOut) => void) | undefined;
 }
 
 /** A short, year-less day formatter for a task's due date (e.g. "Jun 21"). */
@@ -241,21 +241,41 @@ export interface TaskTableProps {
   /** The task columns, from {@link buildTaskColumns}. */
   columns: readonly Column<TaskOut>[];
   /** The flat tasks to render. Provide *either* `tasks` *or* {@link TaskTableProps.groups}. */
-  tasks?: readonly TaskOut[];
+  tasks?: readonly TaskOut[] | undefined;
   /** Grouped tasks: full-width group headers with their task rows beneath (wins over `tasks`). */
-  groups?: readonly EntityTableGroup<TaskOut>[];
+  groups?: readonly EntityTableGroup<TaskOut>[] | undefined;
   /** Build the task-detail href for a task (a real, right-clickable link target). */
   taskHref: (task: TaskOut) => string;
   /** Optional override for row activation (e.g. push via router); links navigate by default. */
-  onOpenTask?: (task: TaskOut) => void;
+  onOpenTask?: ((task: TaskOut) => void) | undefined;
   /** Warm a task's detail cache on row hover/focus (prefetch-on-intent). Optional; no-op if unset. */
-  onRowPrefetch?: (task: TaskOut) => void;
+  onRowPrefetch?: ((task: TaskOut) => void) | undefined;
   /** Accessible label for the grid. */
   label: string;
   /** Initial collapsed group ids (uncontrolled). */
-  defaultCollapsed?: Iterable<string>;
+  defaultCollapsed?: Iterable<string> | undefined;
   /** Extra classes merged onto the table's outer container. */
-  className?: string;
+  className?: string | undefined;
+}
+
+/**
+ * Drop every key whose value is `undefined`, keeping the rest under their original (now
+ * `undefined`-free) types — for spreading an object with optional-and-possibly-`undefined`
+ * fields onto a target whose own prop types don't accept an explicit `undefined`.
+ */
+function withoutUndefinedValues<T extends object>(
+  value: T,
+): {
+  [K in keyof T]: Exclude<T[K], undefined>;
+} {
+  const result = {} as { [K in keyof T]: Exclude<T[K], undefined> };
+  for (const key of Object.keys(value) as (keyof T)[]) {
+    const fieldValue = value[key];
+    if (fieldValue !== undefined) {
+      result[key] = fieldValue as Exclude<T[typeof key], undefined>;
+    }
+  }
+  return result;
 }
 
 /**
@@ -295,17 +315,19 @@ export function TaskTable({
       rowDrag={(task) => entityDragSource(taskObject(task))}
       renderRowLink={({ children, ...linkProps }) => (
         // Spread rather than cherry-pick: a dropped `draggable`/`onDragStart` would silently turn
-        // the row back into an undraggable one with no type error.
-        <Link {...linkProps}>{children}</Link>
+        // the row back into an undraggable one with no type error. `withoutUndefinedValues` keeps
+        // that guarantee while dropping the explicit-`undefined` values Link's own prop types
+        // (unlike ours) don't accept under exactOptionalPropertyTypes.
+        <Link {...withoutUndefinedValues(linkProps)}>{children}</Link>
       )}
-      onRowPrefetch={onRowPrefetch}
-      onRowClick={
-        onOpenTask
-          ? (task) => {
+      {...(onRowPrefetch !== undefined ? { onRowPrefetch } : {})}
+      {...(onOpenTask
+        ? {
+            onRowClick: (task: TaskOut) => {
               onOpenTask(task);
-            }
-          : undefined
-      }
+            },
+          }
+        : {})}
       onRowPropertyKey={(key, task, anchor) => {
         if (key !== 'l') return false;
         const object = taskObject(task);
@@ -318,8 +340,8 @@ export function TaskTable({
         });
         return true;
       }}
-      defaultCollapsed={defaultCollapsed}
-      className={className}
+      {...(defaultCollapsed !== undefined ? { defaultCollapsed } : {})}
+      {...(className !== undefined ? { className } : {})}
     />
   );
 }

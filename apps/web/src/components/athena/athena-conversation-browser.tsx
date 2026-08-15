@@ -38,7 +38,11 @@ function segmentsDef() {
 }
 
 /** Query definition for one conversation search. */
-function searchDef(query: { readonly q?: string; readonly from?: string; readonly to?: string }) {
+function searchDef(query: {
+  readonly q?: string | undefined;
+  readonly from?: string | undefined;
+  readonly to?: string | undefined;
+}) {
   return apiQueryOptions(
     ['me', 'athena', 'chat', 'search', query.q ?? '', query.from ?? '', query.to ?? ''] as const,
     () =>
@@ -93,9 +97,9 @@ function Highlighted({
 /** Props for {@link AthenaConversationBrowser}. */
 export interface AthenaConversationBrowserProps {
   /** Called with the activity id to scroll to when a topic or result is chosen. */
-  readonly onJump?: (activityId: string) => void;
+  readonly onJump?: ((activityId: string) => void) | undefined;
   /** Extra class names for the root element; the host owns width and height. */
-  readonly className?: string;
+  readonly className?: string | undefined;
 }
 
 /** Longer than the palette's: this search scans the whole conversation history in process. */

@@ -53,7 +53,7 @@ export interface SessionSidebarProps {
   /** The agent's display name. */
   agentName: string;
   /** The agent's avatar URL, when known. */
-  agentAvatarUrl?: string | null;
+  agentAvatarUrl?: string | null | undefined;
   /** The accountable owner's display name, or `null` when unattributed. */
   ownerName: string | null;
   /** The session initiator's display name (who kicked it off), or `null`. */

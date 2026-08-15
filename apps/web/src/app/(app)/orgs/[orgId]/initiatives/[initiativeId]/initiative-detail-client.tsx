@@ -178,7 +178,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   const displayMutation = useApiMutation<
     EntityDisplayOut,
     { iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey; customColor: string | null },
-    { previous?: EntityDisplayOut }
+    { previous?: EntityDisplayOut | undefined }
   >({
     mutationFn: (json) =>
       unwrap(

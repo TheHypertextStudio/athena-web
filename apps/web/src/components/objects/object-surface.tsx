@@ -31,13 +31,13 @@ export interface ObjectSurfaceProps {
   /** The canonical identity and action context for the rendered object. */
   readonly object: ObjectRef;
   /** Suppress movement while retaining object identity and right-click actions. */
-  readonly dragDisabled?: boolean;
+  readonly dragDisabled?: boolean | undefined;
   /** The selection/list surface recorded as the drag origin. */
-  readonly surfaceId?: string;
+  readonly surfaceId?: string | undefined;
   /** Called after a body drag begins. */
-  readonly onDragStart?: () => void;
+  readonly onDragStart?: (() => void) | undefined;
   /** Called when a body drag ends or is cancelled. */
-  readonly onDragEnd?: () => void;
+  readonly onDragEnd?: (() => void) | undefined;
   /** A single element that already owns the surface's layout. No wrapper is rendered. */
   readonly children: ReactElement<ObjectSurfaceChildProps>;
 }

@@ -23,7 +23,7 @@ export interface SchedulingGestureDelta {
 /** Minimal lane policy needed by the pure gesture controller. */
 export interface SchedulingGestureLanePolicy {
   readonly id: string;
-  readonly editable?: boolean;
+  readonly editable?: boolean | undefined;
 }
 
 /** Horizontal viewport and scroll geometry captured for one gesture preview. */

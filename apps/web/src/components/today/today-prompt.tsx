@@ -63,7 +63,7 @@ export interface TodayPromptProps {
   /** The active workspace's display name (shown so the target is explicit). */
   orgLabel: string;
   /** Invoked after a successful capture so the host can refresh the plan. */
-  onCaptured?: () => void;
+  onCaptured?: (() => void) | undefined;
   /**
    * Expand this page into the Athena conversation, carrying the draft with it.
    *
@@ -72,7 +72,7 @@ export interface TodayPromptProps {
    * the draft rides along. Same conversation either way — the dock and the page render the one
    * persistent thread — so this only decides where it appears, not how many there are.
    */
-  onStartSession?: (draft: string) => void;
+  onStartSession?: ((draft: string) => void) | undefined;
 }
 
 /** The hybrid prompt box: capture a task, or hand the thought to Athena. */

@@ -26,7 +26,7 @@ export interface MemberRowProps {
   /** The member's display name. */
   displayName: string;
   /** The member's avatar URL, if any. */
-  avatarUrl?: string | null;
+  avatarUrl?: string | null | undefined;
   /** The member's current role id, or `null` when unknown. */
   roleId: string | null;
   /** Whether this row represents the signed-in caller. */

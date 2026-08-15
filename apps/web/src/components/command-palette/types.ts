@@ -38,7 +38,7 @@ export interface PaletteItem {
   /** The primary, human-readable label. */
   label: string;
   /** Optional secondary line (e.g. the entity kind, or a hint). */
-  hint?: string;
+  hint?: string | undefined;
   /**
    * Leading glyph: either a Lucide icon component (rendered as `<Icon />`, the common case — every
    * search hit, static command, and org switch) or a fully-rendered node such as a label's own
@@ -46,7 +46,7 @@ export interface PaletteItem {
    */
   icon: LucideIcon | ReactNode;
   /** Extra terms (besides `label`) the local filter matches against. */
-  keywords?: readonly string[];
+  keywords?: readonly string[] | undefined;
   /**
    * Hide this item until the user has typed something.
    *
@@ -55,16 +55,16 @@ export interface PaletteItem {
    * otherwise fill the idle palette and push the destinations people actually open it for below
    * the fold.
    */
-  requiresQuery?: boolean;
+  requiresQuery?: boolean | undefined;
   /**
    * The org this item belongs to, when org-chipped (search hits, org switches, org-scoped
    * navigation). Omitted for Hub-global navigation/actions.
    */
-  org?: { id: string; name: string };
+  org?: { id: string; name: string } | undefined;
   /** Source/provider label for integration-backed search hits. */
-  source?: string;
+  source?: string | undefined;
   /** The search-hit entity kind, for result rows (drives the trailing kind label). */
-  hitType?: SearchDocumentKind;
+  hitType?: SearchDocumentKind | undefined;
   /** Invoked when the row is selected; the palette closes immediately after. */
   run: () => void;
 }

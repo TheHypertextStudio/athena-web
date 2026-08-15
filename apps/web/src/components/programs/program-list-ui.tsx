@@ -101,8 +101,8 @@ interface ProgramItemProps {
   taskNoun: string;
   taskNounPlural: string;
   onOpen: (programId: string) => void;
-  canRename?: boolean;
-  onRename?: (programId: string, name: string) => void;
+  canRename?: boolean | undefined;
+  onRename?: ((programId: string, name: string) => void) | undefined;
 }
 
 /** The Program name: inline-editable when the viewer can rename, else a real link (right-clickable, keyboard-reachable). */
@@ -114,8 +114,8 @@ function ProgramName({
   className,
 }: {
   program: ProgramOut;
-  canRename?: boolean;
-  onRename?: (programId: string, name: string) => void;
+  canRename?: boolean | undefined;
+  onRename?: ((programId: string, name: string) => void) | undefined;
   onOpen: (programId: string) => void;
   className: string;
 }): JSX.Element {
@@ -271,9 +271,9 @@ export interface ProgramRowsProps extends ComponentPropsWithoutRef<'div'> {
   ariaLabel: string;
   onOpen: (programId: string) => void;
   /** Whether the viewer may rename a program in place (double-click the title). */
-  canRename?: boolean;
+  canRename?: boolean | undefined;
   /** Persist a renamed program name. Enables inline rename when provided with `canRename`. */
-  onRename?: (programId: string, name: string) => void;
+  onRename?: ((programId: string, name: string) => void) | undefined;
 }
 
 /** Column-header widths shared by {@link ProgramRows}'s header and data rows. */

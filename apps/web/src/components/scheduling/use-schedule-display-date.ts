@@ -14,7 +14,7 @@ import { scheduleWallPositionForInstant } from './scheduling-time-axis';
 /** Inputs for a date selection anchored to asynchronously loaded Hub timezone preferences. */
 export interface UseScheduleDisplayDateOptions {
   /** Explicit consumer-selected initial date; explicit values are never reconciled. */
-  readonly initialDate?: string;
+  readonly initialDate?: string | undefined;
   /** Resolved display timezone for current-day semantics. */
   readonly displayTimezone: string;
   /** Whether the first Hub preference read has settled. */

@@ -17,15 +17,15 @@ export type CalendarCanvasRegionSelection = CalendarTimedRegionSelection & {
 export interface CalendarSchedulingSurfaceProps {
   readonly axis: CalendarAxis;
   readonly visibleLaneCount: number;
-  readonly horizontalAnchorKey?: number;
+  readonly horizontalAnchorKey?: number | undefined;
   readonly pixelsPerHour: number;
   readonly displayTimezone: string;
-  readonly now?: string;
-  readonly preferences?: CalendarPreferences;
+  readonly now?: string | undefined;
+  readonly preferences?: CalendarPreferences | undefined;
   readonly dateAxis: CalendarDateAxisState;
   readonly peopleAxis: CalendarPeopleAxisState;
-  readonly selectedRegion?: ScheduleRegionSelection | null;
-  readonly selectedRegionAnchorRef?: SchedulingCanvasProps['selectedRegionAnchorRef'];
+  readonly selectedRegion?: ScheduleRegionSelection | null | undefined;
+  readonly selectedRegionAnchorRef?: SchedulingCanvasProps['selectedRegionAnchorRef'] | undefined;
   readonly onVisibleLaneCountChange: (count: number) => void;
   readonly onVisibleDateRangeChange: (range: {
     readonly startDate: string;
@@ -40,5 +40,5 @@ export interface CalendarSchedulingSurfaceProps {
    * `> 1` zooms in (more pixels per hour), `< 1` zooms out. The canvas emits raw intent only;
    * the consumer owns clamping, rounding, and persistence.
    */
-  readonly onZoomGesture?: (scale: number) => void;
+  readonly onZoomGesture?: ((scale: number) => void) | undefined;
 }

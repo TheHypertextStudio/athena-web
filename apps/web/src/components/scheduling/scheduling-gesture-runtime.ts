@@ -41,9 +41,9 @@ export interface UseSchedulingGestureOptions {
   readonly bounds: ScheduleItemLaneBounds;
   readonly editable: boolean;
   readonly viewportRef: RefObject<HTMLElement | null>;
-  readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
-  readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'];
-  readonly onResizeItem?: SchedulingCanvasProps['onResizeItem'];
+  readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'] | undefined;
+  readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'] | undefined;
+  readonly onResizeItem?: SchedulingCanvasProps['onResizeItem'] | undefined;
   readonly presentPreviewTimeRange: (
     mode: ScheduleGestureMode,
     preview: ScheduleGesturePreview,

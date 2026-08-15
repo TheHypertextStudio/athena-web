@@ -20,7 +20,11 @@ export interface SessionDetailState {
   pendingActivityId: string | null;
   controlPending: boolean;
   directory: ActorDirectory;
-  agentActor: { name: string; kind: 'human' | 'agent' | 'team'; avatarUrl?: string | null };
+  agentActor: {
+    name: string;
+    kind: 'human' | 'agent' | 'team';
+    avatarUrl?: string | null | undefined;
+  };
   ownerName: string | null;
   initiatorName: string | null;
   changes: readonly ChangeReceiptItem[];

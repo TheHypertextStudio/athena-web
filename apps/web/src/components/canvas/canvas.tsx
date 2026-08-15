@@ -43,27 +43,27 @@ export interface CanvasProps extends GraphInteractionHandlers {
   /** Directed edges between nodes. */
   edges: Edge[];
   /** Custom node renderers keyed by node `type`. */
-  nodeTypes?: NodeTypes;
+  nodeTypes?: NodeTypes | undefined;
   /** Custom edge renderers keyed by edge `type`; hosts override `default` to skin every edge. */
-  edgeTypes?: EdgeTypes;
+  edgeTypes?: EdgeTypes | undefined;
   /** `compact` for small embeds (no minimap), `full` for the focused view. Default `full`. */
-  density?: CanvasDensity;
+  density?: CanvasDensity | undefined;
   /** Layout flow direction (dagre rankdir). Default `LR`. */
-  layoutDirection?: LayoutDirection;
+  layoutDirection?: LayoutDirection | undefined;
   /** Skip the dagre pass and render `nodes` at their given positions (e.g. swimlane layout). */
-  disableLayout?: boolean;
+  disableLayout?: boolean | undefined;
   /** When true, handles are connectable and dependency edges are deletable/reconnectable. */
-  interactive?: boolean;
+  interactive?: boolean | undefined;
   /** When set, persistently dims everything off this id set (e.g. the critical path). */
-  highlightIds?: Set<string> | null;
+  highlightIds?: Set<string> | null | undefined;
   /**
    * When false, hovering or selecting a node no longer dims the rest of the graph off its
    * dependency chain (the persistent `highlightIds` set is still honored). Defaults to true; a
    * small portfolio graph opts out so hovering a card leaves its neighbors untouched.
    */
-  highlightChains?: boolean;
+  highlightChains?: boolean | undefined;
   /** When it changes, the canvas pans/zooms to fit these node ids (e.g. search matches). */
-  focusOn?: readonly string[];
+  focusOn?: readonly string[] | undefined;
   /**
    * The largest zoom a *user* may reach by pinching or pressing the zoom-in control.
    *
@@ -72,7 +72,7 @@ export interface CanvasProps extends GraphInteractionHandlers {
    * meant capping the automatic fit also took away the user's ability to zoom in, and leaving the
    * user free meant a one-node graph opened at 200%.
    */
-  maxZoom?: number;
+  maxZoom?: number | undefined;
   /**
    * The largest zoom the canvas will apply *on its own* when fitting the graph into view.
    *
@@ -83,9 +83,9 @@ export interface CanvasProps extends GraphInteractionHandlers {
    * graph to fit, and never enlarges one past its natural size. The user can still zoom in by hand
    * up to {@link CanvasProps.maxZoom}.
    */
-  fitMaxZoom?: number;
+  fitMaxZoom?: number | undefined;
   /** Optional minimap node colorer; hosts inject any dataset-specific coloring. */
-  nodeColor?: (node: Node) => string;
+  nodeColor?: ((node: Node) => string) | undefined;
   /**
    * Whether to render the minimap. Defaults to `density === 'full'`.
    *
@@ -95,17 +95,17 @@ export interface CanvasProps extends GraphInteractionHandlers {
    * the canvas, telling you nothing the canvas is not already showing. Hosts of the second kind
    * turn it off.
    */
-  minimap?: boolean;
+  minimap?: boolean | undefined;
   /** When provided, renders an expand affordance that calls this. */
-  onExpand?: () => void;
+  onExpand?: (() => void) | undefined;
   /** Called when a node is single-clicked (selected), or null when the pane is clicked. */
-  onSelectNode?: (id: string | null) => void;
+  onSelectNode?: ((id: string | null) => void) | undefined;
   /** Called when a node is double-clicked (navigate to it). */
-  onNavigate?: (id: string) => void;
+  onNavigate?: ((id: string) => void) | undefined;
   /** Overlays rendered inside the flow (e.g. `<Panel>` legend/toolbar/peek). */
-  children?: ReactNode;
+  children?: ReactNode | undefined;
   /** Extra classes for the canvas container. */
-  className?: string;
+  className?: string | undefined;
 }
 
 /** The inner canvas; must live under a {@link ReactFlowProvider}. */
@@ -155,8 +155,8 @@ function CanvasInner({
           edges={highlight.edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
+          {...(nodeTypes !== undefined ? { nodeTypes } : {})}
+          {...(edgeTypes !== undefined ? { edgeTypes } : {})}
           onNodeClick={(_, node) => onSelectNode?.(node.id)}
           onNodeDoubleClick={(_, node) => onNavigate?.(node.id)}
           onPaneClick={() => onSelectNode?.(null)}
@@ -199,7 +199,7 @@ function CanvasInner({
             <MiniMap
               pannable
               zoomable
-              nodeColor={nodeColor}
+              {...(nodeColor !== undefined ? { nodeColor } : {})}
               maskColor="color-mix(in srgb, var(--color-surface) 70%, transparent)"
               bgColor="var(--color-surface-container-low)"
               className="!rounded-lg"

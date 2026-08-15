@@ -146,7 +146,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const displayMutation = useApiMutation<
     EntityDisplayOut,
     { iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey; customColor: string | null },
-    { previous?: typeof detail }
+    { previous?: typeof detail | undefined }
   >({
     mutationFn: (json) =>
       unwrap(

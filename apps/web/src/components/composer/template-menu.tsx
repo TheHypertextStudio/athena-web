@@ -64,7 +64,7 @@ export interface TemplateMenuProps {
   /** Where "Manage templates…" leads (the workspace's Templates settings). */
   manageHref: string;
   /** Close a shell-global composer before the persistent shell navigates to settings. */
-  onManage?: () => void;
+  onManage?: (() => void) | undefined;
   /** Whether the composer is submitting, which disables the control with everything else. */
   disabled: boolean;
 }
@@ -124,7 +124,7 @@ export function TemplateMenu({
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href={manageHref} onClick={onManage}>
+          <Link href={manageHref} {...(onManage !== undefined ? { onClick: onManage } : {})}>
             <Settings />
             Manage templates…
           </Link>
@@ -152,7 +152,7 @@ export interface ComposerTemplateControlProps {
    * preserves the legacy page-owned menu behavior until that composer migrates to a destination
    * context that can identify the selected member.
    */
-  currentActorId?: string | null;
+  currentActorId?: string | null | undefined;
   /**
    * The task's selected team in this destination workspace.
    *
@@ -161,7 +161,7 @@ export interface ComposerTemplateControlProps {
    * legacy page-owned menu behavior; `null` deliberately hides team-scoped templates while the
    * destination has no resolved team.
    */
-  teamId?: string | null;
+  teamId?: string | null | undefined;
   /**
    * Decorative content to render only when this control itself is rendered.
    *
@@ -169,7 +169,7 @@ export interface ComposerTemplateControlProps {
    * Global context rows use this for the separator before Template. Keeping it inside this
    * data-connected control means pending and empty template lists cannot leave a dangling glyph.
    */
-  leadingSeparator?: ReactNode;
+  leadingSeparator?: ReactNode | undefined;
   /**
    * A template to apply as soon as the list loads, from a `?template=` compose request.
    *
@@ -178,11 +178,11 @@ export interface ComposerTemplateControlProps {
    * deliver the bug-report outline, and the page it lands on cannot know the payload until this
    * read resolves.
    */
-  autoApplyId?: string | null;
+  autoApplyId?: string | null | undefined;
   /** Report whether this data-connected control renders a visible template menu. */
-  onVisibilityChange?: (visible: boolean) => void;
+  onVisibilityChange?: ((visible: boolean) => void) | undefined;
   /** Close a shell-global composer before navigating to template settings. */
-  onManage?: () => void;
+  onManage?: (() => void) | undefined;
   /** Whether the composer is submitting. */
   disabled: boolean;
 }

@@ -117,7 +117,7 @@ const AgendaContext = createContext<AgendaContextValue | null>(null);
 
 /** Props for the agenda data provider. */
 interface AgendaProviderProps {
-  readonly initialDate?: string;
+  readonly initialDate?: string | undefined;
   readonly children: ReactNode;
 }
 

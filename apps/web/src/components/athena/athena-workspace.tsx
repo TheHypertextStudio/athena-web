@@ -31,16 +31,16 @@ import { useAthenaActions } from './use-athena-actions';
 
 /** Props for the full personal Athena operations workspace. */
 export interface AthenaWorkspaceProps {
-  readonly initialSessionId?: string | null;
-  readonly workspaceFilter?: string | null;
-  readonly invocationContext?: PersonalAthenaContext | null;
-  readonly startNewWork?: boolean;
-  readonly transport?: PersonalAthenaTransport;
+  readonly initialSessionId?: string | null | undefined;
+  readonly workspaceFilter?: string | null | undefined;
+  readonly invocationContext?: PersonalAthenaContext | null | undefined;
+  readonly startNewWork?: boolean | undefined;
+  readonly transport?: PersonalAthenaTransport | undefined;
 }
 
 interface AthenaQueueContinuation {
   readonly items: readonly PersonalAthenaSessionSummary[];
-  readonly nextCursor?: string;
+  readonly nextCursor?: string | undefined;
 }
 
 const QUEUE_LANE_CONTINUATION = {
@@ -92,7 +92,7 @@ export function AthenaWorkspace({
   const [activityHistory, setActivityHistory] = useState<{
     readonly sessionId: string;
     readonly items: readonly PersonalAthenaActivity[];
-    readonly nextCursor?: string;
+    readonly nextCursor?: string | undefined;
   } | null>(null);
   const [loadingOlderLane, setLoadingOlderLane] = useState<AthenaQueueState | null>(null);
   const [loadingOlderActivity, setLoadingOlderActivity] = useState(false);

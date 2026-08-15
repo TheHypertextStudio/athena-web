@@ -11,7 +11,7 @@ export interface CompleteCreateObjectOptions<Created> {
   /** Completion requested by the launcher for an unchanged destination. */
   readonly sameWorkspaceCompletion: SameWorkspaceCompletion;
   /** Launcher-owned same-workspace update, suppressed after destination changes. */
-  readonly onCreated?: (created: Created) => void;
+  readonly onCreated?: ((created: Created) => void) | undefined;
   /** Destination query keys whose cached reads are stale after the create. */
   readonly invalidationKeys: readonly (readonly unknown[])[];
   /** Invalidate one destination key. */

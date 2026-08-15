@@ -200,7 +200,7 @@ export function createMentionExtension(addNodeView: () => unknown) {
       };
     },
 
-    renderMarkdown(node: { attrs?: NodeAttributeBag }) {
+    renderMarkdown(node: { attrs?: NodeAttributeBag | undefined }) {
       const attrs = readMentionAttributes(node.attrs ?? {});
       return formatMentionLink(attrs.label, attrs.href, refFromAttributes(attrs));
     },

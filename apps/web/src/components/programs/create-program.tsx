@@ -99,9 +99,9 @@ export interface CreateProgramDialogProps {
   /** Notify the parent that a program was created, so it can prepend + route. */
   onCreated: (program: ProgramOut) => void;
   /** A template to apply on open, from a `?template=` compose request. */
-  defaultTemplateId?: string | null;
+  defaultTemplateId?: string | null | undefined;
   /** Destination facts when mounted by the shell-global creation host. */
-  globalCreation?: ProgramGlobalCreation;
+  globalCreation?: ProgramGlobalCreation | undefined;
 }
 
 /**

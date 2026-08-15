@@ -91,17 +91,17 @@ export interface CalendarToolbarProps {
    * Truncation is the row's release valve, but a clipped `August 2...` drops the year while an
    * abbreviated month keeps the whole answer. Defaults to {@link CalendarToolbarProps.heading}.
    */
-  readonly headingShort?: string;
+  readonly headingShort?: string | undefined;
   /** Which lane axis the canvas is drawing. */
   readonly axis: CalendarAxis;
   /** The live, continuous row height in pixels per hour. */
   readonly pixelsPerHour: number;
   /** The Calendars popover; rendered only on the date axis. */
-  readonly layersControl?: ReactNode;
+  readonly layersControl?: ReactNode | undefined;
   /** The People popover; rendered only on the people axis. */
-  readonly comparisonControl?: ReactNode;
+  readonly comparisonControl?: ReactNode | undefined;
   /** The create affordance; rendered only on the date axis, where creating makes sense. */
-  readonly createControl?: ReactNode;
+  readonly createControl?: ReactNode | undefined;
   readonly onToday: () => void;
   readonly onPrevious: () => void;
   readonly onNext: () => void;

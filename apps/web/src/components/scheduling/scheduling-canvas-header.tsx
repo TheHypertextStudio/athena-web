@@ -52,7 +52,7 @@ function SchedulingLaneHeading({
 }: {
   readonly lane: ScheduleLane;
   readonly displayTimezone: string;
-  readonly todayDate?: string;
+  readonly todayDate?: string | undefined;
   /** Stack the weekday over the day number, for a rail-width canvas. */
   readonly compact: boolean;
 }): JSX.Element {
@@ -134,7 +134,7 @@ export function SchedulingCanvasHeader({
   readonly lanes: readonly ScheduleLane[];
   readonly displayTimezone: string;
   /** Today's date in `displayTimezone`, used only to mark the current lane. */
-  readonly todayDate?: string;
+  readonly todayDate?: string | undefined;
   readonly viewportRef: RefObject<HTMLElement | null>;
   /** Rail-width canvas: stack the lane date and drop the visible `All day` gutter label. */
   readonly compact: boolean;
@@ -148,18 +148,18 @@ export function SchedulingCanvasHeader({
    * chrome that is neither a lane nor an item. It exists because the rail needs a scale stepper and
    * the gutter cell is the one place on a 280px surface with room for it.
    */
-  readonly gutterSlot?: ReactNode;
+  readonly gutterSlot?: ReactNode | undefined;
   readonly gutterWidth: number;
   readonly contentWidth: number;
   readonly laneWidth: number;
-  readonly renderItem?: SchedulingCanvasProps['renderItem'];
-  readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
-  readonly onMoveAllDayItem?: SchedulingCanvasProps['onMoveAllDayItem'];
-  readonly onResizeAllDayItem?: SchedulingCanvasProps['onResizeAllDayItem'];
-  readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'];
+  readonly renderItem?: SchedulingCanvasProps['renderItem'] | undefined;
+  readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'] | undefined;
+  readonly onMoveAllDayItem?: SchedulingCanvasProps['onMoveAllDayItem'] | undefined;
+  readonly onResizeAllDayItem?: SchedulingCanvasProps['onResizeAllDayItem'] | undefined;
+  readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'] | undefined;
   readonly relationshipMode: SchedulingRelationshipMode;
   readonly onGestureAnnouncementChange: (announcement: string) => void;
-  readonly onSelectAllDayRegion?: SchedulingCanvasProps['onSelectAllDayRegion'];
+  readonly onSelectAllDayRegion?: SchedulingCanvasProps['onSelectAllDayRegion'] | undefined;
 }): JSX.Element {
   return (
     // No rule under the header at all: the tonal step from `surface-container-low` onto the grid's

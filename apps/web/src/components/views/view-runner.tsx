@@ -36,7 +36,7 @@ export interface RunnerActor {
   /** Actor kind (drives the avatar shape). */
   kind: 'human' | 'agent' | 'team';
   /** Optional avatar image URL. */
-  avatarUrl?: string | null;
+  avatarUrl?: string | null | undefined;
 }
 
 /** Props for {@link ViewRunner}. */

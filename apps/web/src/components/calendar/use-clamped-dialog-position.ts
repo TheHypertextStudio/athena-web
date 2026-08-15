@@ -97,9 +97,9 @@ export function useClampedDialogPosition({
 }: {
   readonly open: boolean;
   readonly host: HTMLElement | null;
-  readonly anchorRef?: DialogAnchorRef;
-  readonly anchorKey?: string | null;
-  readonly preferredTop?: number;
+  readonly anchorRef?: DialogAnchorRef | undefined;
+  readonly anchorKey?: string | null | undefined;
+  readonly preferredTop?: number | undefined;
 }): {
   readonly dialogRef: React.RefObject<HTMLDivElement | null>;
   readonly style: CSSProperties;

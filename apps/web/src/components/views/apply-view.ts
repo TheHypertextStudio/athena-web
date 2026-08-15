@@ -311,12 +311,15 @@ function groupRows<T>(sorted: readonly T[], field: FieldDescriptor<T>): readonly
   const hintOf = (id: string): string | undefined =>
     field.options?.find((o) => o.value === id)?.hint;
 
-  return order.map((id) => ({
-    id,
-    label: id === EMPTY_GROUP_ID ? `No ${field.label.toLowerCase()}` : labelForValue(field, id),
-    hint: hintOf(id),
-    rows: buckets.get(id) ?? [],
-  }));
+  return order.map((id) => {
+    const hint = hintOf(id);
+    return {
+      id,
+      label: id === EMPTY_GROUP_ID ? `No ${field.label.toLowerCase()}` : labelForValue(field, id),
+      ...(hint === undefined ? {} : { hint }),
+      rows: buckets.get(id) ?? [],
+    };
+  });
 }
 
 /**

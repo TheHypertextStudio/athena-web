@@ -53,7 +53,7 @@ const catalog: FieldCatalog<Item> = [
     accessor: (i) => i.status,
     options: [
       { value: 'planned', label: 'Planned' },
-      { value: 'active', label: 'Active' },
+      { value: 'active', label: 'Active', hint: 'In progress' },
       { value: 'done', label: 'Done' },
     ],
     groupable: true,
@@ -265,6 +265,8 @@ describe('applyView', () => {
     const result = applyView(rows, viewState({ groupBy: { field: 'status' } }), catalog);
     const groups = result.groups ?? [];
     expect(groups.map((g) => g.id)).toEqual(['planned', 'active', 'done']);
+    expect(groups.find((g) => g.id === 'active')?.hint).toBe('In progress');
+    expect(groups.find((g) => g.id === 'planned')).not.toHaveProperty('hint');
     // The "active" bucket holds both active rows.
     expect(groups.find((g) => g.id === 'active')?.rows).toHaveLength(2);
   });

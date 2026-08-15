@@ -84,16 +84,14 @@ jobs:
           GOOGLE_OAUTH_TEST_EMAILS: "${{ vars.GOOGLE_OAUTH_TEST_EMAILS }}"
           AGENT_MAX_TURNS: "${{ vars.AGENT_MAX_TURNS }}"
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
-          BILLING_ENABLED: "false"
+          BILLING_ENABLED: "${{ vars.BILLING_ENABLED }}"
           # Required by the API's own env contract, which is validated at boot — so a missing value
           # is not a disabled feature, it is a container that exits before it listens on $PORT and a
           # Cloud Run deploy that fails on the health check with nothing pointing at the cause.
           # "false" is the documented kill-switch default: outbound projection stops, while canonical
           # reads, edits, and inbound bootstrap stay active.
           WORK_LOCATION_PROJECTION_ENABLED: "false"
-          MCP_ALLOWED_ORIGINS: "${{ vars.WEB_URL }},https://claude.ai,https://claude.com"
           MCP_TASKS_ENABLED: "false"
-          MCP_CIMD_STRICT: "true"
           EOF
 
       - id: deploy-api

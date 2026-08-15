@@ -75,7 +75,9 @@
   Local validation passed `pnpm env:check`, `pnpm typecheck`, `pnpm lint`, `pnpm test` (26 package
   tasks; 4,494 API tests), and `pnpm build` after rebasing the two commits onto current
   `origin/main` with zero merge commits. Stripe sandbox and production were reconciled through the
-  shared `pnpm integrations` provider path without Vercel or a one-off provisioning script.
+  shared `pnpm integrations` provider path without Vercel or a one-off provisioning script. The
+  production workflow now reads `BILLING_ENABLED` from that bootstrap-managed environment variable
+  and carries no MCP vendor-origin list; a repository test locks both deployment properties.
 
 ### [WORK-LOCATION-002] Make work-location settings feel like a place list
 

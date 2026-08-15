@@ -409,4 +409,12 @@ describe('production account-creation deployment contract', () => {
   it('boots the API with outbound work-location projection disabled', () => {
     expect(workflow).toContain('WORK_LOCATION_PROJECTION_ENABLED: "false"');
   });
+
+  it('deploys bootstrap-managed billing without an MCP vendor allowlist', () => {
+    expect(workflow).toContain('BILLING_ENABLED: "${{ vars.BILLING_ENABLED }}"');
+    expect(workflow).not.toContain('BILLING_ENABLED: "false"');
+    expect(workflow).not.toContain('MCP_ALLOWED_ORIGINS');
+    expect(workflow).not.toContain('https://claude.ai');
+    expect(workflow).not.toContain('https://claude.com');
+  });
 });

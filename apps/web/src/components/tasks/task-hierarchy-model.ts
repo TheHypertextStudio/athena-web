@@ -3,7 +3,7 @@
 /** Minimum task fields required to derive hierarchy relationships. */
 export interface TaskHierarchyItem {
   readonly id: string;
-  readonly parentTaskId?: string | null;
+  readonly parentTaskId?: string | null | undefined;
 }
 
 /** Shared hierarchy index consumed by list, picker, and graph interactions. */

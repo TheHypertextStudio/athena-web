@@ -165,14 +165,15 @@ export function useTaskHierarchyDrag({
         instance.setNodes((current) =>
           current.map((node) => {
             const base = laidOut.get(node.id);
-            return base
-              ? {
-                  ...node,
-                  position: base.position,
-                  parentId: base.parentId,
-                  data: withoutDragData(node.data),
-                }
-              : node;
+            if (!base) return node;
+            const { parentId: _dragParentId, ...nodeWithoutParent } = node;
+            void _dragParentId;
+            return {
+              ...nodeWithoutParent,
+              position: base.position,
+              ...(base.parentId !== undefined ? { parentId: base.parentId } : {}),
+              data: withoutDragData(node.data),
+            };
           }),
         );
       }

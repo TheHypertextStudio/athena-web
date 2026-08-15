@@ -26,10 +26,13 @@ beforeAll(async () => {
 
 /** Insert an active task row and return its id. */
 async function seedTask(orgId: string, teamId: string, title: string, parentTaskId?: string) {
+  const statuses = await schema.seedWorkspaceStatuses(db, orgId);
+  const statusId = statuses.get(schema.statusLookupKey('task', 'todo'));
+  if (statusId === undefined) throw new Error('seeded workspace has no todo task status');
   return one(
     await db
       .insert(schema.task)
-      .values({ organizationId: orgId, title, teamId, state: 'todo', parentTaskId })
+      .values({ organizationId: orgId, title, teamId, state: 'todo', statusId, parentTaskId })
       .returning({ id: schema.task.id }),
   ).id;
 }

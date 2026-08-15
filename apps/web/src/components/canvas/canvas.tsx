@@ -171,10 +171,10 @@ function CanvasInner({
           {...(edgeTypes !== undefined ? { edgeTypes } : {})}
           onNodeClick={(_, node) => onSelectNode?.(node.id)}
           onNodeDoubleClick={(_, node) => onNavigate?.(node.id)}
-          onInit={onInit}
-          onNodeDragStart={onNodeDragStart}
-          onNodeDrag={onNodeDrag}
-          onNodeDragStop={onNodeDragStop}
+          {...(onInit !== undefined ? { onInit } : {})}
+          {...(onNodeDragStart !== undefined ? { onNodeDragStart } : {})}
+          {...(onNodeDrag !== undefined ? { onNodeDrag } : {})}
+          {...(onNodeDragStop !== undefined ? { onNodeDragStop } : {})}
           onPaneClick={() => onSelectNode?.(null)}
           onEdgeContextMenu={menus.onEdgeContextMenu}
           onPaneContextMenu={menus.onPaneContextMenu}

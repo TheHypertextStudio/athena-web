@@ -227,15 +227,12 @@ export function layoutTaskHierarchy(
     const parentPosition = parentId
       ? measured.get(parentId)?.childPositions.get(node.id)
       : rootPositions.get(node.id);
+    const rootParentId = rootParents.get(node.id);
     taskNodes.push({
       ...node,
       type: 'taskBranch',
       position: parentPosition ?? { x: 0, y: 0 },
-      ...(parentId
-        ? { parentId }
-        : rootParents.has(node.id)
-          ? { parentId: rootParents.get(node.id) }
-          : {}),
+      ...(parentId ? { parentId } : rootParentId !== undefined ? { parentId: rootParentId } : {}),
       dragHandle: '.task-branch-header',
       sourcePosition,
       targetPosition,

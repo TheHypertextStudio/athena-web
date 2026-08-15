@@ -43,7 +43,14 @@ describe('taskGraphToFlow', () => {
       ],
     });
 
-    const flow = taskGraphToFlow(graph, 'org-1', 'compact', undefined, {});
+    const flow = taskGraphToFlow(
+      graph,
+      'org-1',
+      'compact',
+      undefined,
+      (key) => ({ key, name: key, category: 'unstarted' }),
+      {},
+    );
 
     expect(flow.nodes[1]?.data['parentTaskId']).toBe('01J00000000000000000000010');
     expect(flow.edges).toHaveLength(1);

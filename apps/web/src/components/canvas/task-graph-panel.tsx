@@ -122,9 +122,9 @@ function TaskGraphSelectionFrame({
   onDrop,
 }: {
   readonly children: React.ReactNode;
-  readonly onDragOver?: DragEventHandler<HTMLDivElement>;
-  readonly onDragLeave?: DragEventHandler<HTMLDivElement>;
-  readonly onDrop?: DragEventHandler<HTMLDivElement>;
+  readonly onDragOver?: DragEventHandler<HTMLDivElement> | undefined;
+  readonly onDragLeave?: DragEventHandler<HTMLDivElement> | undefined;
+  readonly onDrop?: DragEventHandler<HTMLDivElement> | undefined;
 }): React.JSX.Element {
   const { containerProps } = useSelection();
   return (
@@ -551,7 +551,7 @@ export default function TaskGraphPanel({
                     edges={filtered.edges}
                     canEdit={canEdit}
                     onNavigate={navigate}
-                    onSetState={mutations.setState}
+                    onSetComplete={setComplete}
                     onClose={() => {
                       setSelectedId(null);
                     }}

@@ -36,7 +36,7 @@ export default function UsersPage(): JSX.Element {
     setAuthFailed(false);
     try {
       const res = await api.admin.users.$get({
-        query: { search: term || undefined, limit: String(PAGE_SIZE), offset: '0' },
+        query: { ...(term ? { search: term } : {}), limit: String(PAGE_SIZE), offset: '0' },
       });
       if (!res.ok) {
         setAuthFailed(isAuthError(res));

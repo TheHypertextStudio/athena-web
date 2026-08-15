@@ -50,8 +50,8 @@ export default function OrgsPage(): JSX.Element {
     try {
       const res = await api.admin.orgs.$get({
         query: {
-          search: term || undefined,
-          lifecycleState: state === ALL_STATES ? undefined : state,
+          ...(term ? { search: term } : {}),
+          ...(state === ALL_STATES ? {} : { lifecycleState: state }),
           limit: String(PAGE_SIZE),
           offset: '0',
         },

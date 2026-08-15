@@ -592,8 +592,8 @@ function PreviewPane({
   body,
 }: {
   readonly label: string;
-  readonly title?: string;
-  readonly body?: string;
+  readonly title?: string | undefined;
+  readonly body?: string | undefined;
 }): JSX.Element {
   return (
     <div className="border-outline-variant bg-surface-container-low rounded-md border p-3">

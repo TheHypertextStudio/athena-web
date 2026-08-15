@@ -313,4 +313,8 @@ describe('production account-creation deployment contract', () => {
     expect(workflow).toContain('env_vars_update_strategy: overwrite');
     expect(workflow).toContain('secrets_update_strategy: overwrite');
   });
+
+  it('boots the API with outbound work-location projection disabled', () => {
+    expect(workflow).toContain('WORK_LOCATION_PROJECTION_ENABLED: "false"');
+  });
 });

@@ -64,9 +64,11 @@ describe('rewriteLegacyMentions', () => {
     expect(rewriteLegacyMentions(prose, ORG)).toBe(prose);
   });
 
-  it('falls back to the id when there is no label, rather than emitting an empty link', () => {
+  it('falls back to a kind-based label when there is no label, rather than the raw id', () => {
+    // The chip renders this stored text until hydration resolves, so falling back to the raw id
+    // would leak it to a viewer for a moment — a generic kind name stays honest without that leak.
     expect(rewriteLegacyMentions('[mention kind="task" id="t1"]', ORG)).toBe(
-      '[t1](/orgs/org_1/tasks/t1 "docket:v1:task:t1")',
+      '[Task](/orgs/org_1/tasks/t1 "docket:v1:task:t1")',
     );
   });
 

@@ -4,6 +4,7 @@ import type { OrgSummary, TeamOut, VocabularySkin } from '@docket/types';
 import { createContext, type JSX, type ReactNode, useContext, useMemo } from 'react';
 
 import { api } from '@/lib/api';
+import { RESOLVING_LABEL } from '@/components/views/field-catalog';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /**
@@ -29,8 +30,15 @@ export interface ActiveOrgValue {
   readonly skin: VocabularySkin | null;
   /** A non-fatal org-load error to surface, if any. */
   readonly orgsError: string | null;
-  /** Resolve an org's display name by id (for org chips), falling back to a short id. */
+  /**
+   * Resolve an org's display name by id (for org chips), falling back to a short id — but only
+   * once the org list has actually loaded; while it's still in flight this returns
+   * {@link RESOLVING_LABEL} instead, so a chip never shows a raw id during the ordinary load
+   * window.
+   */
   readonly orgName: (orgId: string) => string;
+  /** Whether the caller's org list is still loading (drives {@link orgName}'s placeholder). */
+  readonly orgsLoading: boolean;
   /**
    * The active org's teams, or an empty list on the Hub / before they load.
    *
@@ -59,6 +67,8 @@ export interface ActiveOrgContextProps {
   activeOrgId: string | null;
   /** A non-fatal org-load error to surface, if any. */
   orgsError: string | null;
+  /** Whether `orgs` is still loading — false once it has settled, even to an empty list. */
+  orgsLoading: boolean;
   /** The subtree that reads the org state via {@link useActiveOrg}. */
   children: ReactNode;
 }
@@ -80,6 +90,7 @@ export function ActiveOrgContext({
   orgs,
   activeOrgId,
   orgsError,
+  orgsLoading,
   children,
 }: ActiveOrgContextProps): JSX.Element {
   // The bound org's full record (for its vocabulary skin) and its teams flow through the shared
@@ -116,12 +127,17 @@ export function ActiveOrgContext({
       activeOrg: activeOrgId ? (byId.get(activeOrgId) ?? null) : null,
       skin: activeOrgId ? skin : null,
       orgsError,
-      orgName: (orgId: string) => byId.get(orgId)?.name ?? `Org ${orgId.slice(0, 6)}`,
+      orgName: (orgId: string) => {
+        const found = byId.get(orgId)?.name;
+        if (found) return found;
+        return orgsLoading ? RESOLVING_LABEL : `Org ${orgId.slice(0, 6)}`;
+      },
+      orgsLoading,
       teams: activeOrgId ? teams : [],
       defaultTeamId: activeOrgId ? (defaultTeam?.id ?? null) : null,
       teamsLoading: activeOrgId ? teamsLoading : false,
     };
-  }, [orgs, activeOrgId, skin, orgsError, teams, teamsLoading]);
+  }, [orgs, activeOrgId, skin, orgsError, orgsLoading, teams, teamsLoading]);
 
   return <ActiveOrgReactContext.Provider value={value}>{children}</ActiveOrgReactContext.Provider>;
 }

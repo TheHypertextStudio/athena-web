@@ -572,7 +572,12 @@ export function createGoogleCalendarAdapter(
           if (!item.id) continue;
           layers.push({
             externalLayerId: item.id,
-            title: item.summary ?? item.id,
+            // Every sync tick overwrites the stored title unconditionally (see
+            // `upsertProviderLayer`), so falling back to the opaque Google calendar id here would
+            // persist it as the visible name until the next tick happens to see a `summary`. The
+            // short id tail keeps two summary-less calendars distinguishable in a picker without
+            // going back to showing the raw id as the name.
+            title: item.summary ?? `Untitled calendar ${item.id.slice(0, 6)}`,
             description: item.description ?? null,
             timezone: item.timeZone ?? null,
             color: item.backgroundColor ?? null,

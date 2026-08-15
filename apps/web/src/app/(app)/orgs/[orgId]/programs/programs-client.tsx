@@ -20,7 +20,7 @@ import { useCreateObject } from '@/components/create-object/create-object-provid
 import { buildProgramCatalog } from '@/components/programs/program-catalog';
 import { statusGlyphType } from '@/components/programs/program-status';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
-import type { FieldOption } from '@/components/views/field-catalog';
+import { resolveRelationLabel, type FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { useViewState } from '@/components/views/use-view-state';
@@ -190,9 +190,10 @@ export default function ProgramsListClient(): JSX.Element {
         ownerLabel: 'Owner',
         ownerOptions: (): readonly FieldOption[] =>
           members.map((m) => ({ value: m.actorId, label: m.displayName })),
-        resolveOwner: (id) => ownerNameById.get(id) ?? id,
+        resolveOwner: (id) =>
+          resolveRelationLabel(id, membersQ.isPending, (i) => ownerNameById.get(i)),
       }),
-    [members, ownerNameById],
+    [members, membersQ.isPending, ownerNameById],
   );
 
   /** Filter + sort + group the loaded roster client-side per the active view state. */

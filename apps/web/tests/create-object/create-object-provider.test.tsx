@@ -556,7 +556,7 @@ function DelayedProviderHarness(): JSX.Element {
       >
         Navigate shell to Alpha workspace
       </button>
-      <ActiveOrgContext orgs={workspaces} activeOrgId={null} orgsError={null}>
+      <ActiveOrgContext orgs={workspaces} activeOrgId={null} orgsError={null} orgsLoading={false}>
         <CreateObjectProvider>
           <ProviderProbe />
         </CreateObjectProvider>
@@ -576,7 +576,7 @@ function renderProvider(workspaces: readonly OrgSummary[] = WORKSPACES): {
   const frame = (): JSX.Element => (
     <QueryClientProvider client={client}>
       <ContextProvider initialContext={ALPHA_ID}>
-        <ActiveOrgContext orgs={workspaces} activeOrgId={null} orgsError={null}>
+        <ActiveOrgContext orgs={workspaces} activeOrgId={null} orgsError={null} orgsLoading={false}>
           <CreateObjectProvider>
             <ProviderProbe />
           </CreateObjectProvider>

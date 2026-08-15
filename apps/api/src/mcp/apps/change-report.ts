@@ -104,13 +104,17 @@ const SCRIPT = String.raw`
 
   function text(node, value) { node.textContent = value; }
 
+  function untitled(item) {
+    return window.docket.untitled(item.kind);
+  }
+
   function diffRow(item) {
     const row = document.createElement('div');
     row.className = 'row';
     const name = document.createElement('span');
     name.className = 'name';
-    name.textContent = item.title || item.id;
-    name.title = item.title || item.id;
+    name.textContent = item.title || untitled(item);
+    name.title = item.title || untitled(item);
     row.appendChild(name);
     const fields = item.fields || [];
     if (fields.length > 0) {
@@ -147,8 +151,8 @@ const SCRIPT = String.raw`
     row.className = 'row';
     const name = document.createElement('span');
     name.className = 'name';
-    name.textContent = item.title || item.id;
-    name.title = item.title || item.id;
+    name.textContent = item.title || untitled(item);
+    name.title = item.title || untitled(item);
     const reason = document.createElement('span');
     reason.className = 'reason';
     // Spelled out, because "not_permitted" is a wire value, not something to show a person.
@@ -194,20 +198,24 @@ const SCRIPT = String.raw`
     return 'Done';
   }
 
+  // Every source names its own kind somewhere — \`update\`/\`archive\` scope the whole call to one
+  // \`entity\`, \`organize\` tags each placed node with its \`kind\`, and \`capture\` only ever makes a
+  // task — so every row below carries a real \`kind\` rather than leaving the title's fallback to
+  // guess.
   function itemsOf(data) {
     if (Array.isArray(data.changes)) {
-      return data.changes;
+      return data.changes.map((c) => ({ ...c, kind: data.entity }));
     }
     if (Array.isArray(data.items)) {
-      return data.items;
+      return data.items.map((i) => ({ ...i, kind: data.entity }));
     }
     if (Array.isArray(data.placed)) {
       return data.placed
         .filter((p) => p.created)
-        .map((p) => ({ id: p.id, title: p.ref, fields: [] }));
+        .map((p) => ({ id: p.id, title: p.ref, fields: [], kind: p.kind }));
     }
     if (data.id) {
-      return [{ id: data.id, title: data.title, fields: [] }];
+      return [{ id: data.id, title: data.title, fields: [], kind: 'task' }];
     }
     return [];
   }
@@ -229,7 +237,9 @@ const SCRIPT = String.raw`
       rows.appendChild(more);
     }
 
-    const left = data.skipped || [];
+    // \`skipped\` only ever comes from \`update\`/\`archive\`, both scoped to one \`entity\` — same
+    // reasoning as \`itemsOf\` above.
+    const left = (data.skipped || []).map((s) => ({ ...s, kind: data.entity }));
     const skipped = el('skipped');
     skipped.replaceChildren();
     for (const item of left) {

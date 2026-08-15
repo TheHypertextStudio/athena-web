@@ -29,6 +29,7 @@ import { type JSX, useMemo } from 'react';
 
 import type { ActorDirectory } from '@/components/agents/actor-directory';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
+import { resolveRelationLabel } from '@/components/views/field-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { asNameMap, cycleDetailDef } from '@/lib/fetch-cycle-detail';
 import { userErrorMessage } from '@/lib/problem';
@@ -143,8 +144,10 @@ export function ActiveCycleOverview({
     const catalog = buildTaskCatalog({
       projectLabel: projectNoun,
       programLabel: programNoun,
-      resolveProject: (id) => projectName.get(id) ?? id,
-      resolveProgram: (id) => programName.get(id) ?? id,
+      resolveProject: (id) =>
+        resolveRelationLabel(id, detailQ.isPending, (i) => projectName.get(i)),
+      resolveProgram: (id) =>
+        resolveRelationLabel(id, detailQ.isPending, (i) => programName.get(i)),
       resolveAssignee: (id) => resolveActor(id).name,
       assigneeOptions: () => [],
       projectOptions: () => [],
@@ -157,7 +160,16 @@ export function ActiveCycleOverview({
         router.push(`/orgs/${orgId}/tasks/${task.id}`);
       },
     });
-  }, [projectNoun, programNoun, projectName, programName, resolveActor, router, orgId]);
+  }, [
+    projectNoun,
+    programNoun,
+    projectName,
+    programName,
+    detailQ.isPending,
+    resolveActor,
+    router,
+    orgId,
+  ]);
 
   const preview = useMemo(() => tasks.slice(0, TASK_PREVIEW_LIMIT), [tasks]);
 

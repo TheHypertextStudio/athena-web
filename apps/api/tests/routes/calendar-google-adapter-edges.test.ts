@@ -344,12 +344,19 @@ describe('listLayers — a page with no items key, and a layer with no summary',
     await expect(adapter.listLayers({ credentials })).resolves.toEqual([]);
   });
 
-  it('falls back to the calendar id as the title when summary is absent', async () => {
+  it('falls back to a placeholder title when summary is absent, not the opaque calendar id', async () => {
+    // Every sync tick overwrites the stored title unconditionally, so falling back to the id here
+    // would persist an opaque Google calendar id as the visible name until the next tick happens
+    // to see a `summary` — a placeholder self-heals the same way without that leak. The short id
+    // tail keeps two summary-less calendars distinguishable in a picker.
     const fetchJson = fakeFetchJson(() => ({ items: [{ id: 'cal-no-summary' }] }));
     const adapter = createGoogleCalendarAdapter(fetchJson);
     const layers = await adapter.listLayers({ credentials });
     expect(layers).toEqual([
-      expect.objectContaining({ externalLayerId: 'cal-no-summary', title: 'cal-no-summary' }),
+      expect.objectContaining({
+        externalLayerId: 'cal-no-summary',
+        title: 'Untitled calendar cal-no',
+      }),
     ]);
   });
 });

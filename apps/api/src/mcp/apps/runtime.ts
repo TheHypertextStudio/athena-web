@@ -222,6 +222,13 @@ export const RUNTIME_JS = String.raw`
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
   }
 
+  // Shared so every widget spells a missing title the same way instead of each writing its own
+  // 'Untitled <kind>' string — the kind names a real fact ("no name was captured for this task"),
+  // where a bare 'Untitled' or the row's raw id would not.
+  function untitled(kind) {
+    return 'Untitled ' + (kind || 'item');
+  }
+
   function stateGlyph(type) {
     // own(), not STATE_GLYPHS[type]: the key comes off the wire, and a plain property read finds
     // inherited members — STATE_GLYPHS['constructor'] is a function, which passes a truthy guard
@@ -461,6 +468,8 @@ export const RUNTIME_JS = String.raw`
     stateGlyph,
     /** A wire value rendered for a person: snake_case enums and ISO dates, everything else as-is. */
     label,
+    /** A placeholder title for a row with none, naming its kind ('Untitled task') rather than its id. */
+    untitled,
     /** Read a table keyed by an untrusted value without reaching Object.prototype. */
     own,
     /** Format an instant in the host's locale and timezone, never the browser's. */

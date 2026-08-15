@@ -16,7 +16,11 @@ import { type Dispatch, type SetStateAction, useCallback, useMemo, useState } fr
 
 import { useActiveOrg } from '@/components/active-org';
 import type { FieldOption, ViewState } from '@/components/views/field-catalog';
-import { EMPTY_VIEW_STATE, findField } from '@/components/views/field-catalog';
+import {
+  EMPTY_VIEW_STATE,
+  findField,
+  resolveRelationLabel,
+} from '@/components/views/field-catalog';
 import { buildTaskCatalog, toStoredView, toViewState } from '@/components/views/task-catalog';
 import type { RunnerActor } from '@/components/views/view-runner';
 import { api } from '@/lib/api';
@@ -157,9 +161,16 @@ export function useViewsPage(orgId: string): ViewsPageData {
       buildTaskCatalog({
         projectLabel,
         programLabel,
-        resolveProject: (id) => projectName.get(id) ?? id,
-        resolveProgram: (id) => programName.get(id) ?? id,
-        resolveAssignee: (id) => actorById.get(id)?.name ?? id,
+        resolveProject: (id) =>
+          resolveRelationLabel(id, projectsQ.isPending, (i) => projectName.get(i)),
+        resolveProgram: (id) =>
+          resolveRelationLabel(id, programsQ.isPending, (i) => programName.get(i)),
+        resolveAssignee: (id) =>
+          resolveRelationLabel(
+            id,
+            membersQ.isPending || agentsQ.isPending,
+            (i) => actorById.get(i)?.name,
+          ),
         assigneeOptions: (): readonly FieldOption[] =>
           [...actorById.entries()].map(([value, actor]) => ({ value, label: actor.name })),
         projectOptions: (): readonly FieldOption[] =>
@@ -167,7 +178,19 @@ export function useViewsPage(orgId: string): ViewsPageData {
         programOptions: (): readonly FieldOption[] =>
           programs.map((p) => ({ value: p.id, label: p.name })),
       }),
-    [actorById, programLabel, programName, programs, projectLabel, projectName, projects],
+    [
+      actorById,
+      agentsQ.isPending,
+      membersQ.isPending,
+      programLabel,
+      programName,
+      programs,
+      programsQ.isPending,
+      projectLabel,
+      projectName,
+      projects,
+      projectsQ.isPending,
+    ],
   );
 
   const querySummary = useMemo(() => {

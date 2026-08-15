@@ -34,7 +34,7 @@ import { useTimelineViewport } from '@/components/timeline/use-timeline-viewport
 import type { ScheduleChange } from '@/components/timeline/cascade';
 import type { TimelineSpan } from '@/components/timeline/timeline-catalog';
 import { type AppliedView, applyView } from '@/components/views/apply-view';
-import type { FieldOption } from '@/components/views/field-catalog';
+import { resolveRelationLabel, type FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { useViewState } from '@/components/views/use-view-state';
@@ -349,7 +349,7 @@ function ListLens({
 export default function ProjectsListClient(): JSX.Element {
   const router = useRouter();
   const { orgId } = useAppParams<{ orgId: string }>();
-  const { teams } = useActiveOrg();
+  const { teams, teamsLoading } = useActiveOrg();
   const { openCreate } = useCreateObject();
   const queryClient = useQueryClient();
   const prefetch = usePrefetchApi();
@@ -410,12 +410,13 @@ export default function ProjectsListClient(): JSX.Element {
         teamLabel: teamNoun,
         leadOptions: (): readonly FieldOption[] =>
           members.map((member) => ({ value: member.actorId, label: member.displayName })),
-        resolveLead: (id) => leadNameById.get(id) ?? id,
+        resolveLead: (id) =>
+          resolveRelationLabel(id, membersQ.isPending, (i) => leadNameById.get(i)),
         teamOptions: (): readonly FieldOption[] =>
           teams.map((team) => ({ value: team.id, label: team.name })),
-        resolveTeam: (id) => teamNameById.get(id) ?? id,
+        resolveTeam: (id) => resolveRelationLabel(id, teamsLoading, (i) => teamNameById.get(i)),
       }),
-    [leadNameById, members, teamNameById, teamNoun, teams],
+    [leadNameById, members, membersQ.isPending, teamNameById, teamNoun, teams, teamsLoading],
   );
   const applied = useMemo(() => applyView(projects, state, catalog), [catalog, projects, state]);
   // The dependency canvas is inherently flat (it lays out a graph, not a list), so it takes the

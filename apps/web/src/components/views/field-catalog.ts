@@ -30,6 +30,7 @@
  * The model is deliberately framework-agnostic and `T`-generic so it is unit-reviewable and so a
  * new list page only writes a catalog plus the page's data fetch — never a new filter UI.
  */
+import { useCallback } from 'react';
 
 /** The value type of a field, which selects its operators and value-entry affordance. */
 export type FieldValueType =
@@ -337,4 +338,53 @@ export function labelForValue<T>(field: FieldDescriptor<T>, value: string): stri
   const option = optionsFor(field).find((o) => o.value === value);
   if (option) return option.label;
   return value;
+}
+
+/** Shown in place of a relation's name while the data that would resolve it is still loading. */
+export const RESOLVING_LABEL = 'Loading…';
+
+/**
+ * Resolve a relation id to its name, or {@link RESOLVING_LABEL} while the query backing
+ * `resolve` is still pending.
+ *
+ * @remarks
+ * A page's primary rows query often settles before the auxiliary reference query (projects,
+ * members, teams, …) that a `resolveX` closure looks names up in. Without this guard, the
+ * closure runs against a still-empty lookup and falls through to the raw id — which then leaks
+ * into group headers, filter chips, and table cells until the slower query lands. The `?? id`
+ * fallback inside `resolve` stays the correct behavior once `isPending` is false and the id
+ * genuinely has no match.
+ */
+export function resolveRelationLabel(
+  id: string,
+  isPending: boolean,
+  resolve: (id: string) => string | undefined,
+): string {
+  if (isPending) return RESOLVING_LABEL;
+  return resolve(id) ?? id;
+}
+
+/**
+ * A stable `(id) => name` resolver for one query's lookup map, wrapping {@link resolveRelationLabel}.
+ *
+ * @remarks
+ * Calling `resolveRelationLabel` directly inside a `resolveX` closure means the enclosing
+ * `useMemo` must separately list the backing query's `isPending` flag in its dependency array —
+ * two things that have to be kept in sync by hand, and a call site that adds the closure but
+ * forgets the dependency silently keeps showing {@link RESOLVING_LABEL} after the query settles.
+ * This hook ties the two together: the returned function's identity changes only when `map` or
+ * `isPending` actually change, so a caller depends on one reference instead of two.
+ *
+ * @param map - The id → name lookup, typically a `useMemo`'d `Map` built from a list query's rows.
+ * @param isPending - Whether the query backing `map` is still loading.
+ * @returns a resolver suitable for a `FieldCatalog` `resolveX` dependency.
+ */
+export function useResolvedLabel(
+  map: ReadonlyMap<string, string>,
+  isPending: boolean,
+): (id: string) => string {
+  return useCallback(
+    (id: string) => resolveRelationLabel(id, isPending, (i) => map.get(i)),
+    [map, isPending],
+  );
 }

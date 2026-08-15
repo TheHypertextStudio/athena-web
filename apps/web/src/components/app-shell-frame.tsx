@@ -317,7 +317,12 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
           `status` is the shell's own answer and is strictly better than `navigator.onLine`, which
           is true behind a captive portal and true when the server itself is down. */}
       <ReachabilityProvider reachable={status !== 'unreachable'}>
-        <ActiveOrgContext orgs={orgs} activeOrgId={routeOrgId} orgsError={orgsError}>
+        <ActiveOrgContext
+          orgs={orgs}
+          activeOrgId={routeOrgId}
+          orgsError={orgsError}
+          orgsLoading={workspacesUnknown}
+        >
           {/* Creation state belongs above the palette so commands and page launchers converge on
             one request. Kind-specific bodies are mounted into this seam as they migrate. */}
           <CreateObjectProvider>

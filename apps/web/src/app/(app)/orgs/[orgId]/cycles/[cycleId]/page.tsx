@@ -18,6 +18,7 @@ import { CycleMetadata } from '@/components/cycle-detail/cycle-metadata-row';
 import { CyclePacePanel } from '@/components/cycle-detail/cycle-pace-panel';
 import { formatWindow, windowProgress, windowRunway } from '@/components/cycles/format-window';
 import { GroupByMenu } from '@/components/cycles/group-by-menu';
+import { resolveRelationLabel } from '@/components/views/field-catalog';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
@@ -183,8 +184,10 @@ export default function CycleDetailPage(): JSX.Element {
     const catalog = buildTaskCatalog({
       projectLabel: projectNoun,
       programLabel: programNoun,
-      resolveProject: (id) => projectName.get(id) ?? id,
-      resolveProgram: (id) => programName.get(id) ?? id,
+      resolveProject: (id) =>
+        resolveRelationLabel(id, detailQ.isPending, (i) => projectName.get(i)),
+      resolveProgram: (id) =>
+        resolveRelationLabel(id, detailQ.isPending, (i) => programName.get(i)),
       resolveAssignee: (id) => resolveActor(id).name,
       assigneeOptions: () => [],
       projectOptions: () => [],
@@ -204,6 +207,7 @@ export default function CycleDetailPage(): JSX.Element {
     programNoun,
     projectName,
     programName,
+    detailQ.isPending,
     resolveActor,
     canEditCycle,
     renameCycleTask,

@@ -197,6 +197,7 @@ function renderDrawer(
         orgs={[{ id: ORG_ID, name: 'Acme', slug: 'acme', avatar: null, isPersonal: false }]}
         activeOrgId={null}
         orgsError={null}
+        orgsLoading={false}
       >
         {children}
       </ActiveOrgContext>

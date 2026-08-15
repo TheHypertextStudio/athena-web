@@ -426,6 +426,9 @@ export function registerUpdateTool(
       outputSchema: {
         matched: z.number().int().describe('How many items the scope selected.'),
         changed: z.number().int().describe('How many were actually written.'),
+        entity: z
+          .enum(WORK_ENTITIES)
+          .describe('The kind every row in `changes`/`skipped` is — the call scope, echoed back.'),
         changes: z
           .array(
             z.object({
@@ -579,6 +582,7 @@ export function registerUpdateTool(
         return jsonResult({
           matched: rows.length,
           changed: changes.length,
+          entity,
           changes: report,
           skipped,
           changeSetId,

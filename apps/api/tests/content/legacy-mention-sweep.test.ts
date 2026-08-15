@@ -34,6 +34,16 @@ async function seedTask(orgId: string, teamId: string, description: string): Pro
   ).id;
 }
 
+/** Create a task with a specific `title` and no description, and hand back its id. */
+async function seedTaskTitled(orgId: string, teamId: string, title: string): Promise<string> {
+  return one(
+    await db
+      .insert(schema.task)
+      .values({ organizationId: orgId, teamId, title, state: 'todo' })
+      .returning({ id: schema.task.id }),
+  ).id;
+}
+
 /** Read a task's description back. */
 async function readTask(id: string): Promise<string> {
   const rows = await db
@@ -62,6 +72,49 @@ describe('sweepLegacyMentions', () => {
     expect(after.startsWith('Blocked by [Ship it](')).toBe(true);
     expect(after.endsWith(' until Friday.')).toBe(true);
     expect(after).not.toContain('[mention ');
+  });
+
+  it('looks up the real name for a shortcode with no captured label, not a placeholder', async () => {
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const target = await seedTaskTitled(orgId, teamId, 'Renovate the loading dock');
+    const carrier = await seedTask(
+      orgId,
+      teamId,
+      `Blocked by [mention kind="task" id="${target}"] until Friday.`,
+    );
+
+    await sweepLegacyMentions(db);
+
+    const after = await readTask(carrier);
+    // The id still appears in the href and the machine-reference title, so this checks the *link
+    // text* specifically starts with the real name rather than the id — not that the id is absent.
+    expect(after.startsWith('Blocked by [Renovate the loading dock](')).toBe(true);
+  });
+
+  it('never resolves a name across orgs, even when the id belongs to a real task elsewhere', async () => {
+    const other = await seedBaseOrg(db, schema);
+    const foreign = await seedTaskTitled(other.orgId, other.teamId, 'Confidential renovation plan');
+
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const carrier = await seedTask(orgId, teamId, `See [mention kind="task" id="${foreign}"].`);
+
+    await sweepLegacyMentions(db);
+
+    const after = await readTask(carrier);
+    expect(after).not.toContain('Confidential renovation plan');
+    // Same treatment as a deleted/unreachable entity: a generic kind label, not the foreign name.
+    expect(after).toContain('[Task](');
+  });
+
+  it('falls back to a kind-based label only when the referenced entity is gone', async () => {
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const target = await seedTask(orgId, teamId, 'Temporary');
+    await db.delete(schema.task).where(eq(schema.task.id, target));
+    const carrier = await seedTask(orgId, teamId, `See [mention kind="task" id="${target}"].`);
+
+    await sweepLegacyMentions(db);
+
+    expect(await readTask(carrier)).toContain('[Task](');
   });
 
   it('finds prose in a `body` column too, not only `description`', async () => {

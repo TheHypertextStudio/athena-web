@@ -39,6 +39,7 @@ import {
   EMPTY_VIEW_STATE,
   findField,
   labelForValue,
+  RESOLVING_LABEL,
 } from '@/components/views/field-catalog';
 import { filterRows } from '@/components/views/apply-view';
 
@@ -180,9 +181,13 @@ export default function TaskGraphPanel({
       const m = members?.find((x) => x.actorId === assigneeId);
       if (m) return { name: m.displayName, kind: 'human', avatarUrl: m.avatar ?? null };
       if (agents?.some((x) => x.actorId === assigneeId)) return { name: 'Agent', kind: 'agent' };
+      // `members`/`agents` are `undefined` while their queries are still pending, so this branch
+      // fires both mid-load and for a genuinely-unresolvable assignee — tell them apart rather
+      // than always showing the id-derived fallback.
+      if (membersQ.isPending || agentsQ.isPending) return { name: RESOLVING_LABEL, kind: 'human' };
       return { name: `Member ${assigneeId.slice(0, 6)}`, kind: 'human' };
     },
-    [members, agents],
+    [members, agents, membersQ.isPending, agentsQ.isPending],
   );
   const resolveProjectName = useCallback(
     (projectId: string | null): string | null => {

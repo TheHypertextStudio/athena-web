@@ -45,10 +45,13 @@ const SCRIPT = String.raw`
       node.appendChild(glyph);
     }
 
+    // Every row in one response is the same kind, so a missing title can name what it's missing
+    // — "Untitled project" reads as a real fact about the row, not a shrug.
+    const untitled = window.docket.untitled(state && state.entity);
     const name = document.createElement('span');
     name.className = 'name';
-    name.textContent = item.title || item.id;
-    name.title = item.title || item.id;
+    name.textContent = item.title || untitled;
+    name.title = item.title || untitled;
     node.appendChild(name);
 
     // A task shows its workflow state; a container shows its status. One of the two is always set.

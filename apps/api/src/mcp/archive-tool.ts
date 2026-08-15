@@ -76,6 +76,9 @@ export function registerArchiveTool(
       outputSchema: {
         matched: z.number().int().describe('How many items the scope selected.'),
         changed: z.number().int().describe('How many moved.'),
+        entity: z
+          .enum(WORK_ENTITIES)
+          .describe('The kind every row in `items`/`skipped` is — the call scope, echoed back.'),
         items: z
           .array(z.object({ id: z.string(), title: z.string() }))
           .describe('What moved, so the caller can see it was the right set.'),
@@ -207,6 +210,7 @@ export function registerArchiveTool(
         return jsonResult({
           matched: rows.length,
           changed: items.length,
+          entity,
           items,
           skipped,
           changeSetId,

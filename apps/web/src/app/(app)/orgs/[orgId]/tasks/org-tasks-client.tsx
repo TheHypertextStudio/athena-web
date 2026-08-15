@@ -27,7 +27,7 @@ import { type JSX, useMemo } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { applyView } from '@/components/views/apply-view';
-import type { FieldOption } from '@/components/views/field-catalog';
+import { resolveRelationLabel, type FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
@@ -89,12 +89,23 @@ export default function OrgTasksClient(): JSX.Element {
       { staleTime: STALE.static },
     ),
   );
+  // A task's assignee can be an agent, not only a human member — fetched so the assignee resolver
+  // below can recognize one instead of falling through to the raw actor id.
+  const agentsQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.agents(orgId),
+      () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
+      'Could not load agents.',
+      { staleTime: STALE.static },
+    ),
+  );
 
   const tasks = useMemo(() => tasksQ.data?.items ?? [], [tasksQ.data]);
   const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
   const projects = useMemo(() => projectsQ.data?.items ?? [], [projectsQ.data]);
   const programs = useMemo(() => programsQ.data?.items ?? [], [programsQ.data]);
   const roles = useMemo(() => rolesQ.data?.items ?? [], [rolesQ.data]);
+  const agents = useMemo(() => agentsQ.data?.items ?? [], [agentsQ.data]);
 
   const canEdit = useOrgCapability(members, roles, 'contribute');
   const renameTask = useRenameTask(orgId, [queryKeys.tasks(orgId)]);
@@ -114,15 +125,26 @@ export default function OrgTasksClient(): JSX.Element {
     () => new Map<string, string>(programs.map((program) => [program.id, program.name])),
     [programs],
   );
+  const agentActorIds = useMemo(
+    () => new Set<string>(agents.map((agent) => agent.actorId)),
+    [agents],
+  );
 
   const catalog = useMemo(
     () =>
       buildTaskCatalog({
         projectLabel: projectNoun,
         programLabel: programNoun,
-        resolveProject: (id) => projectNameById.get(id) ?? id,
-        resolveProgram: (id) => programNameById.get(id) ?? id,
-        resolveAssignee: (id) => memberById.get(id)?.displayName ?? id,
+        resolveProject: (id) =>
+          resolveRelationLabel(id, projectsQ.isPending, (i) => projectNameById.get(i)),
+        resolveProgram: (id) =>
+          resolveRelationLabel(id, programsQ.isPending, (i) => programNameById.get(i)),
+        resolveAssignee: (id) =>
+          resolveRelationLabel(id, membersQ.isPending || agentsQ.isPending, (i) => {
+            const displayName = memberById.get(i)?.displayName;
+            if (displayName) return displayName;
+            return agentActorIds.has(i) ? 'Agent' : undefined;
+          }),
         assigneeOptions: (): readonly FieldOption[] =>
           members.map((member) => ({ value: member.actorId, label: member.displayName })),
         projectOptions: (): readonly FieldOption[] =>
@@ -133,14 +155,19 @@ export default function OrgTasksClient(): JSX.Element {
       }),
     [
       tasks,
+      agentActorIds,
+      agentsQ.isPending,
       memberById,
       members,
+      membersQ.isPending,
       programNameById,
       programNoun,
       programs,
+      programsQ.isPending,
       projectNameById,
       projectNoun,
       projects,
+      projectsQ.isPending,
     ],
   );
 

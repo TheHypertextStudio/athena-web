@@ -47,7 +47,11 @@ import { ActiveCycleOverview, findActiveCycle } from '@/components/cycles/active
 import { buildCycleCatalog } from '@/components/cycles/cycle-catalog';
 import { type CycleRowProps, CycleRows } from '@/components/cycles/cycle-row';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
-import { type FieldOption, type ViewState } from '@/components/views/field-catalog';
+import {
+  resolveRelationLabel,
+  type FieldOption,
+  type ViewState,
+} from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { useViewState } from '@/components/views/use-view-state';
@@ -88,7 +92,7 @@ export default function CyclesClient(): JSX.Element {
   const prefetch = usePrefetchApi();
   const router = useRouter();
 
-  const { teams } = useActiveOrg();
+  const { teams, teamsLoading } = useActiveOrg();
 
   const cycleNoun = useVocabulary('cycle');
   const cycleNounPlural = useVocabulary('cycle', { plural: true });
@@ -159,9 +163,9 @@ export default function CyclesClient(): JSX.Element {
         teamLabel,
         teamOptions: (): readonly FieldOption[] =>
           teams.map((t) => ({ value: t.id, label: t.name })),
-        resolveTeam: (id) => teamNameById.get(id) ?? id,
+        resolveTeam: (id) => resolveRelationLabel(id, teamsLoading, (i) => teamNameById.get(i)),
       }),
-    [teamLabel, teamNameById, teams],
+    [teamLabel, teamNameById, teams, teamsLoading],
   );
 
   /** Default to the legacy group-by-status segments until the user configures the view. */
@@ -180,7 +184,7 @@ export default function CyclesClient(): JSX.Element {
     (cycle: CycleOut): CycleRowProps => ({
       cycle,
       stats: statsById[cycle.id] ?? null,
-      teamName: teamNameById.get(cycle.teamId) ?? cycle.teamId,
+      teamName: resolveRelationLabel(cycle.teamId, teamsLoading, (i) => teamNameById.get(i)),
       cycleNoun,
       href: `/orgs/${orgId}/cycles/${cycle.id}`,
       onPrefetch: () => {
@@ -194,7 +198,17 @@ export default function CyclesClient(): JSX.Element {
         router.push(`/orgs/${orgId}/cycles/${cycle.id}`);
       },
     }),
-    [cycleNoun, orgId, statsById, teamNameById, prefetch, canRename, renameCycle, router],
+    [
+      cycleNoun,
+      orgId,
+      statsById,
+      teamNameById,
+      teamsLoading,
+      prefetch,
+      canRename,
+      renameCycle,
+      router,
+    ],
   );
 
   /** The cycle running right now — the overview's subject, when there is one. */
@@ -219,7 +233,9 @@ export default function CyclesClient(): JSX.Element {
         <ActiveCycleOverview
           orgId={orgId}
           cycle={activeCycle}
-          teamName={teamNameById.get(activeCycle.teamId) ?? activeCycle.teamId}
+          teamName={resolveRelationLabel(activeCycle.teamId, teamsLoading, (i) =>
+            teamNameById.get(i),
+          )}
           stats={statsById[activeCycle.id] ?? null}
           cycleNoun={cycleNoun}
         />

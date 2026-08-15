@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-14
+> **Last Updated**: 2026-08-15
 
 ---
 
@@ -27,12 +27,16 @@
 - **Blockers**: None.
 - **Notes**: The fixed 250 metre matching rule remains an implementation policy, not user
   configuration. Map rendering uses MapLibre with OpenFreeMap only after explicit disclosure;
-  address text is not sent to a third-party geocoder. The branch was rebased onto `4b3fba7c` with
-  zero merge commits; the work-location migrations were regenerated as `0090` and `0091` from
-  main's current snapshots. Focused rebased-tree validation passes for types (14 tests), database
-  schema (6), API repository (5), and web work-location/calendar integration (37). The local
-  whole-API compiler reached the explicit 2 GB heap cap, so the full monorepo gate remains assigned
-  to hosted CI rather than running another unbounded local process.
+  address text is not sent to a third-party geocoder. The branch was rebased onto `e1833378` with
+  zero merge commits; the work-location migrations remain `0090` and `0091` on main's current
+  snapshots. Root typecheck and lint pass with Turbo package concurrency fixed at one. The serial
+  package test run executed 362 API files: 358 passed initially, and all 41 tests across the four
+  stale fixture files passed after their focused repairs; the other 23 package test tasks passed.
+  The serial production build passes, with MapLibre's network-dependent runtime modules excluded
+  from offline precache and the resulting manifest measured at 9.8 MB against its 12 MB budget.
+  API lint now processes 791 TypeScript files in sequential 100-file batches because one typed
+  ESLint process otherwise retained more than 2.5 GB. CI's Turbo gates also run one package at a
+  time so separate workspaces do not multiply that memory footprint.
 
 ### [STATUS-001] A workspace defines its own statuses for every kind of work
 

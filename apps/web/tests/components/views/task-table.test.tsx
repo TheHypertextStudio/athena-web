@@ -337,7 +337,7 @@ describe('TaskTable', () => {
     );
 
     const titleLink = screen.getByRole('link', { name: 'Wire the table' });
-    const row = titleLink.closest('[role="row"]')!;
+    const row = titleLink.closest<HTMLElement>('[role="row"]')!;
     expect(row).not.toBeNull();
     // The leading status glyph reads as the `started` category for an in-progress task, and names
     // itself with the workspace's own word for that status rather than the field's header.
@@ -407,7 +407,7 @@ describe('TaskTable', () => {
     );
 
     const titleLink = screen.getByRole('link', { name: 'Wire the table' });
-    const row = titleLink.closest('[role="row"]')!;
+    const row = titleLink.closest<HTMLElement>('[role="row"]')!;
     const timerButton = await within(row).findByTestId(`task-timer-${TASK_1}`);
 
     fireEvent.click(timerButton);

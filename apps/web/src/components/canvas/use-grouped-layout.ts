@@ -2,7 +2,7 @@
  * `components/canvas/use-grouped-layout` — swimlane layout (dagre per group, packed into lanes).
  *
  * @remarks
- * xyflow's `parentId` grouping does NOT compose with dagre (dagre lays out a flat graph, unaware of
+ * For flat graphs, xyflow's `parentId` grouping does NOT compose with dagre (dagre lays out a flat graph, unaware of
  * parent extents), so grouping is done here manually: partition nodes by a group key, run dagre on
  * each group's subgraph independently, pack the groups into stacked lanes, and emit a `group`
  * container node per lane plus the task nodes reparented into it (positions relative to the

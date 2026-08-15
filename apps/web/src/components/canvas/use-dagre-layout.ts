@@ -3,8 +3,8 @@
  *
  * @remarks
  * `@xyflow/react` ships no layout engine, so we run `dagre` to place nodes left-to-right by
- * rank. The combined edge set (dependency ∪ subtask) is fed to dagre as one directed graph;
- * dagre breaks any incidental cycle introduced by mixing the two edge kinds. Positions are
+ * rank. Flat hosts feed their visible directed edges to dagre; the Task graph instead uses its
+ * compound hierarchy layout. Positions are
  * memoized on the graph *structure* (node ids + edge endpoints + density) so node-data
  * refreshes (a renamed title, a changed state) reuse the existing layout instead of
  * reshuffling the canvas.

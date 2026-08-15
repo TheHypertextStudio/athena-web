@@ -72,6 +72,8 @@ export interface TaskNodeData extends Record<string, unknown> {
   teamId: string;
   /** The owning milestone id, or null (used by the group-by control). */
   milestoneId: string | null;
+  /** Hierarchy parent, independent from dependency edges. */
+  parentTaskId: string | null;
   /** The raw assignee actor id, or null (used by the toolbar's assignee filter). */
   assigneeId: string | null;
   /** The resolved assignee, or null when unassigned/unknown. */
@@ -134,7 +136,7 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
       })}
       style={{ viewTransitionName: taskNodeTransitionName(id) }}
       className={cn(
-        'group bg-surface-container-high border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',
+        'task-branch-header group bg-surface-container-high border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',
         compact ? 'h-14 w-[240px] px-2.5 py-2' : 'h-[84px] w-[300px] px-3 py-2.5',
         selected && 'ring-primary ring-2',
       )}

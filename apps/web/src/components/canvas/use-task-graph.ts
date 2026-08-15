@@ -1,13 +1,13 @@
 'use client';
 
 /**
- * `components/canvas/use-task-graph` — fetch a scoped dependency graph and map it to xyflow.
+ * `components/canvas/use-task-graph` — fetch a scoped task graph and map it to xyflow.
  *
  * @remarks
  * The single feeder behind every canvas embed. It reads the bulk graph endpoint for a scope
  * (org / project / task-neighborhood — the host decides), keyed so each scope caches apart,
- * and projects `GraphOut` into xyflow `nodes`/`edges`: nodes get the `task` renderer; edges are
- * styled by kind (dependency = solid arrow, subtask = dashed). It polls on a focus-gated
+ * and projects `GraphOut` into xyflow `nodes`/`edges`: hierarchy lives on each node's parent id,
+ * while only scheduling dependencies become visible edges. It polls on a focus-gated
  * interval because edges change out-of-band when teammates add or remove `blocks` links.
  */
 import type { GraphOut } from '@docket/types';
@@ -67,7 +67,7 @@ export interface TaskGraphResult {
 const REFRESH_MS = 15_000;
 
 /** Project the API payload into xyflow nodes/edges, enriched with derived semantics. */
-function toFlow(
+export function taskGraphToFlow(
   graph: GraphOut | undefined,
   orgId: string,
   density: CanvasDensity,
@@ -107,6 +107,7 @@ function toFlow(
         projectName: options.resolveProjectName?.(n.projectId ?? null) ?? null,
         teamId: n.teamId,
         milestoneId: n.milestoneId ?? null,
+        parentTaskId: n.parentTaskId,
         assigneeId: n.assigneeId ?? null,
         assignee: options.resolveAssignee?.(n.assigneeId ?? null) ?? null,
         isBlocked: flags.isBlocked,
@@ -120,34 +121,33 @@ function toFlow(
     };
   });
 
-  const edges: Edge[] = graph.edges.map((e) => {
-    const tone = edgeTone.get(e.id) ?? 'neutral';
-    const isSubtask = e.kind === 'subtask';
-    const critical = insights.criticalEdgeIds.has(e.id);
-    // Critical-path edges read bold in the primary accent; others follow their blocker-completion tone.
-    const stroke = critical ? 'var(--color-primary)' : TONE_STROKE[tone];
-    return {
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      // The edge id encodes its kind (`dep:`/`sub:`); keep `kind` on data for delete/reparent gating.
-      data: { kind: e.kind },
-      // Only subtask edges reparent by dragging; dependency edges are created/deleted, not reconnected.
-      reconnectable: isSubtask,
-      markerEnd: { type: MarkerType.ArrowClosed, ...(stroke ? { color: stroke } : {}) },
-      style: {
-        ...(stroke ? { stroke } : {}),
-        ...(critical ? { strokeWidth: 2.5 } : {}),
-        ...(isSubtask ? { strokeDasharray: '5 4', strokeOpacity: 0.7 } : {}),
-      },
-    };
-  });
+  const edges: Edge[] = graph.edges
+    .filter((edge) => edge.kind === 'dependency')
+    .map((e) => {
+      const tone = edgeTone.get(e.id) ?? 'neutral';
+      const critical = insights.criticalEdgeIds.has(e.id);
+      // Critical-path edges read bold in the primary accent; others follow their blocker-completion tone.
+      const stroke = critical ? 'var(--color-primary)' : TONE_STROKE[tone];
+      return {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        // Keep the stable kind on data for dependency delete/reconnect gating.
+        data: { kind: e.kind },
+        reconnectable: false,
+        markerEnd: { type: MarkerType.ArrowClosed, ...(stroke ? { color: stroke } : {}) },
+        style: {
+          ...(stroke ? { stroke } : {}),
+          ...(critical ? { strokeWidth: 2.5 } : {}),
+        },
+      };
+    });
 
   return { nodes, edges };
 }
 
 /**
- * Read the dependency graph for `scope` and return xyflow-ready nodes/edges + status.
+ * Read the task graph for `scope` and return xyflow-ready nodes/edges + status.
  *
  * @param scope - The graph scope (org by default; project or task-neighborhood when set).
  * @param density - The canvas density, baked into each node's data for sizing.
@@ -172,7 +172,7 @@ export function useTaskGraph(
     apiQueryOptions(
       queryKeys.taskGraph(orgId, taskGraphScopeKey(scope)),
       () => api.v1.orgs[':orgId'].graph.$get({ param: { orgId }, query }),
-      'Could not load the dependency graph.',
+      'Could not load the task graph.',
       { staleTime: STALE.volatile },
     ),
     REFRESH_MS,
@@ -180,7 +180,7 @@ export function useTaskGraph(
 
   const { nodes, edges } = useMemo(
     () =>
-      toFlow(
+      taskGraphToFlow(
         q.data,
         orgId,
         density,
@@ -196,8 +196,8 @@ export function useTaskGraph(
     edges,
     isLoading: q.isLoading,
     error: q.isError
-      ? userErrorMessage(q.error, 'Could not load the dependency graph.') ||
-        'Could not load the dependency graph.'
+      ? userErrorMessage(q.error, 'Could not load the task graph.') ||
+        'Could not load the task graph.'
       : null,
     isEmpty: !q.isLoading && nodes.length === 0,
   };

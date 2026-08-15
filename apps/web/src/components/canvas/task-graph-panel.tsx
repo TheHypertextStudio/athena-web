@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `components/canvas/task-graph-panel` — the dependency-graph host every surface renders.
+ * `components/canvas/task-graph-panel` — the task-graph host every surface renders.
  *
  * @remarks
  * Feeds {@link useTaskGraph} for a scope into the generic {@link Canvas} and owns everything
@@ -52,15 +52,17 @@ import { buildGraphCatalog, UNSET } from './graph-catalog';
 import GraphViewBar from './graph-view-bar';
 import GroupNode from './group-node';
 import { edgeKind } from './use-graph-interactions';
-import { type GroupSpec, layoutGrouped } from './use-grouped-layout';
+import { type GroupSpec } from './use-grouped-layout';
 import NodePeek from './node-peek';
 import TaskNode, { type ResolvedAssignee, taskData } from './task-node';
+import TaskBranchNode from './task-branch-node';
+import { layoutTaskHierarchy, retainTaskHierarchyAncestors } from './task-hierarchy-layout';
 import { type CanvasDensity } from './use-dagre-layout';
 import { type TaskGraphScope, useTaskGraph } from './use-task-graph';
 import { useTaskGraphMutations } from './use-task-graph-mutations';
 
 /** Stable registries (must not be re-created per render — xyflow warns otherwise). */
-const NODE_TYPES = { task: TaskNode, group: GroupNode };
+const NODE_TYPES = { task: TaskNode, taskBranch: TaskBranchNode, group: GroupNode };
 const EDGE_TYPES = { default: DependencyEdge };
 
 /** Props for {@link TaskGraphPanel}. */
@@ -284,7 +286,10 @@ export default function TaskGraphPanel({
       needle.length === 0
         ? byPredicate
         : byPredicate.filter((n) => taskData(n).title.toLowerCase().includes(needle));
-    const keptNodes = [...bySearch];
+    const keptNodes = retainTaskHierarchyAncestors(
+      nodes,
+      bySearch.map(({ id }) => id),
+    );
     return { nodes: keptNodes, edges: pruneEdges(keptNodes, edges) };
   }, [renderChrome, nodes, edges, viewState.filters, catalog, needle]);
 
@@ -374,12 +379,10 @@ export default function TaskGraphPanel({
     };
   }, [viewState.groupBy, catalog]);
 
-  // When grouped, pre-lay-out into swimlanes (dagre per lane); otherwise the canvas lays out.
+  // Hierarchy is always a pre-positioned compound layout; optional grouping wraps whole roots.
   const canvasNodes = useMemo(
     () =>
-      groupSpec === null
-        ? filtered.nodes
-        : layoutGrouped(filtered.nodes, filtered.edges, density, display.direction, groupSpec),
+      layoutTaskHierarchy(filtered.nodes, filtered.edges, density, display.direction, groupSpec),
     [groupSpec, filtered, density, display.direction],
   );
 
@@ -402,8 +405,8 @@ export default function TaskGraphPanel({
         <div className="flex h-full items-center justify-center p-4">
           <EmptyState
             icon={Workflow}
-            title="No dependencies yet"
-            body="Tasks in this scope have no dependency or subtask links to map."
+            title="No tasks to map yet"
+            body="Tasks and their hierarchy will appear here, with dependencies drawn between them."
           />
         </div>
       );
@@ -417,7 +420,7 @@ export default function TaskGraphPanel({
           edgeTypes={EDGE_TYPES}
           density={density}
           layoutDirection={display.direction}
-          disableLayout={groupSpec !== null}
+          disableLayout
           nodeColor={taskStateColor}
           minimap={display.minimap}
           interactive={canEdit}

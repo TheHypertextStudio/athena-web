@@ -106,14 +106,18 @@ export function OccurrenceEditorDialog({
               placeholder="Pick a day"
               triggerVariant="outline"
               value={date || null}
-              onChange={(nextDate) => setDate(nextDate ?? '')}
+              onChange={(nextDate) => {
+                setDate(nextDate ?? '');
+              }}
             />
           </div>
           <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
             Change
             <Select
               value={action}
-              onChange={(event) => setAction(event.target.value as OccurrenceAction)}
+              onChange={(event) => {
+                setAction(event.target.value as OccurrenceAction);
+              }}
             >
               <option value="replace">Work somewhere else</option>
               <option value="cancel">No expected location</option>
@@ -123,7 +127,12 @@ export function OccurrenceEditorDialog({
           {action === 'replace' ? (
             <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
               Place
-              <Select value={placeId} onChange={(event) => setPlaceId(event.target.value)}>
+              <Select
+                value={placeId}
+                onChange={(event) => {
+                  setPlaceId(event.target.value);
+                }}
+              >
                 {places.map((place) => (
                   <option key={place.id} value={place.id}>
                     {place.name}

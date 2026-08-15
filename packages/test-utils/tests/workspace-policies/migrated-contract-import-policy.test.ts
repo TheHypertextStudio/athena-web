@@ -557,9 +557,8 @@ function runtimeModuleLoaderBinding(
   if (isRequireValueReference(node) || isModuleLoaderRequireProperty(node)) {
     return { kind: 'require', node };
   }
-  if (destructuring || assignment || globalAlias) {
-    return { kind: 'require', node: destructuring ?? assignment ?? globalAlias! };
-  }
+  const aliasedLoader = destructuring ?? assignment ?? globalAlias;
+  if (aliasedLoader) return { kind: 'require', node: aliasedLoader };
   if (
     (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
     isRuntimeModuleLoaderSpecifier(node.moduleSpecifier)

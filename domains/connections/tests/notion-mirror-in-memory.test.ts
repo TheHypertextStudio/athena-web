@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import { MockNotionMirror } from '../src/notion/adapters/in-memory';
 
@@ -46,14 +46,15 @@ describe('MockNotionMirror — the flow the reconciler depends on', () => {
     const mirror = new MockNotionMirror();
     const ds = (await mirror.provisionDatabase(spec)).externalDataSourceId;
     const created = await mirror.writeRow({ kind: 'create', dataSourceId: ds, properties: {} });
+    assert(created);
     const updated = await mirror.writeRow({
       kind: 'update',
       dataSourceId: ds,
-      externalPageId: created?.externalPageId,
+      externalPageId: created.externalPageId,
       properties: {},
     });
     expect(Date.parse(updated?.externalUpdatedAt ?? '')).toBeGreaterThan(
-      Date.parse(created?.externalUpdatedAt ?? ''),
+      Date.parse(created.externalUpdatedAt),
     );
   });
 
@@ -160,10 +161,11 @@ describe('MockNotionMirror — the flow the reconciler depends on', () => {
     const mirror = new MockNotionMirror();
     const ds = (await mirror.provisionDatabase(spec)).externalDataSourceId;
     const created = await mirror.writeRow({ kind: 'create', dataSourceId: ds, properties: {} });
+    assert(created);
     await mirror.writeRow({
       kind: 'delete',
       dataSourceId: ds,
-      externalPageId: created?.externalPageId,
+      externalPageId: created.externalPageId,
     });
     expect(mirror.snapshot()).toHaveLength(1);
     expect(mirror.snapshot()[0]?.inTrash).toBe(true);

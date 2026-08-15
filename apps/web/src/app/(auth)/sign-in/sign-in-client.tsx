@@ -257,9 +257,7 @@ export function SignInClient(): JSX.Element {
         await routeAfterSignIn();
       } catch (caught) {
         if (!autoFill && isMounted()) {
-          setError(
-            passkeyErrorMessage(caught, 'Something went wrong signing in. Please try again.'),
-          );
+          setError(passkeyErrorMessage(caught, 'Docket could not finish sign-in. Try again.'));
         }
       } finally {
         if (!autoFill && isMounted()) setPending(false);
@@ -309,8 +307,7 @@ export function SignInClient(): JSX.Element {
 
   return (
     <AuthShell
-      title="Welcome back"
-      description="Sign in to your Docket workspace."
+      title="Sign in"
       footer={
         <>
           New to Docket?{' '}

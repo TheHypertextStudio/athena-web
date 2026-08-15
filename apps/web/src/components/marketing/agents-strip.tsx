@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 
 import { Text } from '@docket/ui/primitives';
 
-import { PlaceholderSurface } from './placeholder-surface';
+import { ProductScreenshot } from './product-screenshot';
 
 /**
  * Let your agents work with you — the shortest section on the page.
@@ -26,7 +26,7 @@ export function AgentsStrip(): JSX.Element {
             tone="inherit"
             className="font-display text-ink text-balance"
           >
-            Let your agents work with you
+            MCP connections
           </Text>
           <Text
             as="p"
@@ -34,15 +34,15 @@ export function AgentsStrip(): JSX.Element {
             tone="inherit"
             className="text-ink-muted mt-3 text-balance"
           >
-            Ask an AI assistant about your tasks today and it has nothing to look at unless you copy
-            your list into the chat by hand. An agent connected to Docket over MCP reads your actual
-            projects and updates status directly, so there is nothing to copy.
+            Docket Pro includes an MCP endpoint for work stored in Docket.
           </Text>
         </div>
-        <PlaceholderSurface
-          label="An MCP client connected to Docket"
+        <ProductScreenshot
+          src="/marketing/connected-apps.jpg"
+          alt="A connected MCP app in Docket settings"
           aspect="aspect-[2/1]"
           tone="paper"
+          position="center"
         />
       </div>
     </section>

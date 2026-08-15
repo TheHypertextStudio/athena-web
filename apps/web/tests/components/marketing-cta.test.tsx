@@ -103,21 +103,27 @@ describe('marketing CTAs', () => {
       render(<HeaderActions />);
 
       expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/sign-in');
-      expect(screen.getByRole('link', { name: 'Get started' }).getAttribute('href')).toBe('/open');
+      expect(screen.getByRole('link', { name: 'Create free account' }).getAttribute('href')).toBe(
+        '/open',
+      );
       expect(screen.queryByRole('link', { name: 'Open Docket' })).toBeNull();
     });
 
     it('keeps the conversion pair in the hero', () => {
       render(<HeroActions />);
 
-      expect(screen.getByRole('link', { name: /Get started/ }).getAttribute('href')).toBe('/open');
+      expect(screen.getByRole('link', { name: 'Create free account' }).getAttribute('href')).toBe(
+        '/open',
+      );
       expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/sign-in');
     });
 
     it('keeps the footer inviting a visitor to start', () => {
       render(<FooterEntryLink className="link" />);
 
-      expect(screen.getByRole('link', { name: 'Get started' }).getAttribute('href')).toBe('/open');
+      expect(screen.getByRole('link', { name: 'Create free account' }).getAttribute('href')).toBe(
+        '/open',
+      );
     });
   });
 

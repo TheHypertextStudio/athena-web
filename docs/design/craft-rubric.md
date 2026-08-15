@@ -1,7 +1,7 @@
 # The Docket Craft Rubric
 
-> **Version**: 1.0.0
-> **Last Updated**: 2026-06-09
+> **Version**: 1.0.1
+> **Last Updated**: 2026-08-15
 > **Applies To**: Every user-facing surface — marketing, auth, onboarding, and the app.
 
 This is the canonical framework for evaluating UI in Docket. It exists because "looks fine" is not a standard. Every surface is scored against eight dimensions and checked against five hard gates. The rubric is run by the `/design-review` skill (`.claude/skills/design-review/`), and scorecards live in `docs/design/audits/`.
@@ -44,7 +44,8 @@ Does this surface unmistakably read as _Docket_?
 
 - Correct register for the surface (paper/ink editorial vs. calm Plex/MD3) and a designed seam where they meet.
 - Copy is specific and confident. Never filler ("Powerful features to help you work smarter"), never developer jargon on a domain-neutral surface.
-- One tagline, used consistently: **"Run every organization from one calm place."**
+- One public position, used once on the home page:
+  **"Docket is one tool for planning, scheduling, and tracking every kind of work."**
 - Vocabulary respects the org's skin (Campaign vs. Initiative) — the UI never leaks internal entity names.
 
 _1:_ interchangeable with any SaaS template. _3:_ register correct, copy authored, seam intentional. _4:_ the surface itself communicates the separation/unification idea without being told.

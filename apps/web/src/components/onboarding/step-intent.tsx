@@ -33,20 +33,19 @@ export const INTENT_OPTIONS: readonly IntentOption[] = [
   {
     intent: 'personal',
     title: 'Just me',
-    description: 'A personal command center to run your own work and bring everything together.',
+    description: 'Plan, schedule, and track your own work.',
     icon: User,
   },
   {
     intent: 'startup',
     title: 'My team or company',
-    description: 'A shared workspace for a startup or growing team to plan and ship together.',
+    description: 'Plan and track work with other people.',
     icon: Users,
   },
   {
     intent: 'nonprofit',
     title: 'A nonprofit',
-    description:
-      'A home for mission-driven work — programs, initiatives, and the people behind them.',
+    description: 'Plan programs, initiatives, and shared responsibilities.',
     icon: Sparkles,
   },
 ];

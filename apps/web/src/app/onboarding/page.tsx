@@ -10,7 +10,6 @@ import { interpolate, primaryLabel, stepCopy } from '@/components/onboarding/onb
 import { StepIntent } from '@/components/onboarding/step-intent';
 import { StepConnect } from '@/components/onboarding/step-connect';
 import { StepPasskey } from '@/components/onboarding/step-passkey';
-import { StepPersonalWelcome } from '@/components/onboarding/step-personal-welcome';
 import type { OnboardingIntent, OnboardingStep } from '@/components/onboarding/types';
 import { WizardShell } from '@/components/onboarding/wizard-shell';
 import { WorkspaceNameField } from '@/components/workspace-creation/workspace-name-field';
@@ -20,7 +19,7 @@ import { userErrorMessage } from '@/lib/problem';
 import { createWorkspace } from '@/lib/workspace-creation';
 
 /** The ordered steps for the individual ("just me") fork. */
-const PERSONAL_STEPS: readonly OnboardingStep[] = ['intent', 'personal-welcome', 'connect'];
+const PERSONAL_STEPS: readonly OnboardingStep[] = ['intent', 'connect'];
 
 /** The ordered steps for the team / nonprofit fork. */
 const TEAM_STEPS: readonly OnboardingStep[] = ['intent', 'name', 'connect'];
@@ -38,9 +37,8 @@ function firstNameOf(name: string | undefined): string | undefined {
  * @remarks
  * A Client Component that runs a small state machine. The first screen forks on intent:
  *
- * - **Just me** → a welcome beat that explains the personal command center, then the live
- *   connect step. The personal space (`isPersonal: true`, named after the signed-in user when
- *   known) is created silently when the user leaves the welcome beat.
+ * - **Just me** → create a personal workspace and open the live connection step. The personal
+ *   workspace is created as soon as the user makes that selection.
  * - **Team / nonprofit** → name the org, then continue to the live connect step. New workspaces
  *   use Docket's standard terminology; intent remains an informational onboarding hint.
  *
@@ -128,7 +126,6 @@ export default function OnboardingPage(): JSX.Element {
     return isPersonal
       ? {
           isPersonal: true,
-          name: firstName ? `${firstName}'s space` : 'Personal',
           intent: 'personal',
           vocabulary: 'startup',
         }
@@ -138,7 +135,7 @@ export default function OnboardingPage(): JSX.Element {
           intent: intent ?? 'startup',
           vocabulary: 'startup',
         };
-  }, [isPersonal, firstName, name, intent]);
+  }, [isPersonal, name, intent]);
 
   /**
    * Create the org (personal or team) and advance into the connect step bound to it.
@@ -161,16 +158,18 @@ export default function OnboardingPage(): JSX.Element {
       setOrgId(organization.id);
       setStep('connect');
     } catch (caught) {
-      setError(
-        userErrorMessage(
-          caught,
-          'Something went wrong setting up your workspace. Please try again.',
-        ),
-      );
+      setError(userErrorMessage(caught, 'Docket could not create this workspace. Try again.'));
+      if (isPersonal) setStep('intent');
     } finally {
       setPending(false);
     }
   }, [intent, pending, orgId, orgBody, recoverAuthentication]);
+
+  useEffect(() => {
+    if (intent === 'personal' && step === 'connect' && orgId === null && !pending) {
+      void enterConnect();
+    }
+  }, [intent, step, orgId, pending, enterConnect]);
 
   /** Route into Home (the cross-org cockpit) — matches sign-in's landing; used by both Skip and Enter. */
   const enterWorkspace = useCallback((): void => {
@@ -280,15 +279,13 @@ export default function OnboardingPage(): JSX.Element {
               disabled={pending || (step === 'name' && !nameReady)}
               className={cn((isConnectStep || isPasskeyStep) && 'min-w-44')}
             >
-              {primaryLabel(step, isConnectStep, isPersonal, pending, mirroredTotal)}
+              {primaryLabel(step, isConnectStep, pending, mirroredTotal)}
             </Button>
           )}
         </>
       }
     >
       {step === 'intent' ? <StepIntent value={intent} onChange={chooseIntent} /> : null}
-
-      {step === 'personal-welcome' ? <StepPersonalWelcome firstName={firstName} /> : null}
 
       {step === 'name' ? (
         <WorkspaceNameField
@@ -301,6 +298,12 @@ export default function OnboardingPage(): JSX.Element {
 
       {step === 'connect' && orgId !== null ? (
         <StepConnect orgId={orgId} onMirroredTotalChange={setMirroredTotal} />
+      ) : null}
+
+      {step === 'connect' && orgId === null ? (
+        <p className="text-on-surface-variant text-body-medium" role="status">
+          Creating your workspace…
+        </p>
       ) : null}
 
       {step === 'passkey' ? <StepPasskey /> : null}

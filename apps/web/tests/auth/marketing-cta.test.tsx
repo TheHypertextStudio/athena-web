@@ -102,6 +102,6 @@ describe('marketing entry controls', () => {
 
     useMarketingAuthState.mockReturnValue('unknown');
     render(<HeroActions />);
-    expect(screen.getByTestId('open-app').textContent).toContain('Get started');
+    expect(screen.getByTestId('open-app').textContent).toBe('Create free account');
   });
 });

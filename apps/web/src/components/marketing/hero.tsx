@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 
 import { HeroActions } from './marketing-cta';
-import { PlaceholderSurface } from './placeholder-surface';
+import { ProductScreenshot } from './product-screenshot';
 
 /**
  * Hero — display headline, one supporting line, the action row, then a wide product plate.
@@ -22,17 +22,17 @@ export function Hero(): JSX.Element {
           Docket is one tool for planning, scheduling, and tracking every kind of work.
         </h1>
         <p className="text-ink-muted max-w-xl text-lg text-balance">
-          Engineering teams have had software like this for a decade. Everyone else runs a project
-          tracker, a calendar, and a timesheet that never agree. No single tool has all of the
-          information, so there is nothing complete for an agent to work from either.
+          Each task carries its estimate, its place on the calendar, and the hours it took.
         </p>
         <HeroActions />
       </div>
       <div className="mt-16 sm:mt-20">
-        <PlaceholderSurface
-          label="Today — the landing view, tasks across every organization"
+        <ProductScreenshot
+          src="/marketing/today.jpg"
+          alt="Today with estimated, scheduled, and tracked tasks"
           aspect="aspect-[16/9]"
           tone="paper"
+          eager
         />
       </div>
     </section>

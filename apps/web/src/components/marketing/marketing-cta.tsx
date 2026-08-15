@@ -58,7 +58,7 @@ export function HeaderActions(): JSX.Element {
   if (auth === 'signed-in') {
     return (
       <div className="flex items-center gap-2">
-        <Button asChild size="sm">
+        <Button asChild className="h-10 min-h-10">
           <Link href={openAppUrl} prefetch={false} data-testid="open-app">
             Open Docket
           </Link>
@@ -69,12 +69,12 @@ export function HeaderActions(): JSX.Element {
 
   return (
     <div className="flex items-center gap-2">
-      <Button asChild variant="ghost" size="sm">
+      <Button asChild variant="ghost" className="h-10 min-h-10 max-[359px]:hidden">
         <Link href={signInUrl}>Sign in</Link>
       </Button>
-      <Button asChild size="sm">
+      <Button asChild className="h-10 min-h-10">
         <Link href={openAppUrl} prefetch={false} data-testid="open-app">
-          Get started
+          Create free account
         </Link>
       </Button>
     </div>
@@ -97,7 +97,6 @@ export function HeroActions(): JSX.Element {
             Open Docket
           </Link>
         </Button>
-        <span className="text-ink-muted font-mono text-xs">You&rsquo;re already signed in.</span>
       </div>
     );
   }
@@ -106,7 +105,7 @@ export function HeroActions(): JSX.Element {
     <div className="flex flex-wrap items-center gap-5">
       <Button asChild size="lg">
         <Link href={openAppUrl} prefetch={false} data-testid="open-app">
-          Get started — it&rsquo;s free
+          Create free account
         </Link>
       </Button>
       <Link
@@ -115,7 +114,6 @@ export function HeroActions(): JSX.Element {
       >
         Sign in
       </Link>
-      <span className="text-ink-muted font-mono text-xs">No credit card to start.</span>
     </div>
   );
 }
@@ -140,7 +138,7 @@ export function FooterEntryLink({ className }: FooterEntryLinkProps): JSX.Elemen
   const auth = useMarketingAuthState();
   return (
     <Link href={openAppUrl} prefetch={false} className={className} data-testid="open-app">
-      {auth === 'signed-in' ? 'Open Docket' : 'Get started'}
+      {auth === 'signed-in' ? 'Open Docket' : 'Create free account'}
     </Link>
   );
 }
@@ -161,7 +159,6 @@ export function CtaBandActions(): JSX.Element {
             Open Docket
           </Link>
         </Button>
-        <span className="text-paper/60 font-mono text-xs">Pick up where you left off.</span>
       </div>
     );
   }
@@ -170,10 +167,9 @@ export function CtaBandActions(): JSX.Element {
     <div className="flex flex-wrap items-center gap-5">
       <Button asChild size="lg" variant="secondary">
         <Link href={openAppUrl} prefetch={false} data-testid="open-app">
-          Get started — it&rsquo;s free
+          Create free account
         </Link>
       </Button>
-      <span className="text-paper/60 font-mono text-xs">No credit card to begin.</span>
     </div>
   );
 }

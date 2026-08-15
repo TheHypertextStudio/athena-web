@@ -37,6 +37,46 @@
   is to persist `ProviderErrorKind` — an existing stable taxonomy — and key application-owned copy
   to it.
 
+### [DOCKET-PRO-001] Ship product-based billing and literal public copy
+
+- **Status**: REVIEW
+- **Started**: 2026-08-15
+- **Priority**: P0
+- **Description**: Sell Docket Pro as the single paid organization product, keep personal Docket
+  useful without payment, replace lifecycle-shaped feature gating with explicit product
+  capabilities, and rewrite every customer-facing page so its voice, character, and structure are
+  each unambiguously aligned. Replace every marketing placeholder with a real application capture
+  made from coherent, plausible seed data.
+- **Approach**: Port the approved release behavior onto current `main` rather than replaying its
+  obsolete pre-domain-refactor files. First add an organization-product entitlement keyed by
+  organization and product, resolve `shared_work`, `integrations`, `mcp`, `athena`, and `voice`
+  through the billing domain, and make the repository bootstrap own repeatable Stripe setup. Then
+  port the copy, onboarding, legal terminology, billing UI, and real screenshots. Validate locally,
+  provision Stripe sandbox then production through `pnpm integrations`, and fast-forward the
+  resulting commits directly to `main`; this repository does not use pull requests.
+- **Subtasks**:
+  - [x] Port and test Docket Pro product entitlements on the current billing-domain architecture.
+  - [x] Port and test idempotent Stripe sandbox/production provisioning in standard bootstrap tooling.
+  - [x] Port the approved copy, auth/onboarding changes, billing UI, and legal terminology.
+  - [x] Install the nine real seeded application screenshots and remove every placeholder frame.
+  - [x] Run focused checks and the full typecheck, lint, test, and build gates.
+  - [x] Provision Stripe sandbox, transfer the same contract to production, and verify both.
+  - [ ] Fast-forward directly to `main`, monitor Git-driven deployment, and verify production.
+- **Blockers**: The implementation and Stripe objects are ready, but production checkout, webhook
+  activation, return routing, and cancellation cannot be verified until these commits are deployed.
+  Revised pricing must remain unpublished until that live verification is complete.
+- **Notes**: Product owner approved the Privacy and Terms mechanics on 2026-08-15. Docket is free by
+  default; Docket Pro costs USD $8 per organization each month and grants the five named
+  capabilities. Products are not ordered tiers. MCP access is vendor-neutral and rests on OAuth
+  consent, scopes, grants, and the Docket Pro capability rather than a client allowlist. Future
+  Startup and Chief of Staff products remain out of public copy. The superseded release branch is
+  retained as evidence, but rebasing it over 215 newer commits produced broad conflicts because
+  billing has since moved into `domains/billing`; this task ports behavior into the current design.
+  Local validation passed `pnpm env:check`, `pnpm typecheck`, `pnpm lint`, `pnpm test` (26 package
+  tasks; 4,494 API tests), and `pnpm build` after rebasing the two commits onto current
+  `origin/main` with zero merge commits. Stripe sandbox and production were reconciled through the
+  shared `pnpm integrations` provider path without Vercel or a one-off provisioning script.
+
 ### [WORK-LOCATION-002] Make work-location settings feel like a place list
 
 - **Status**: REVIEW

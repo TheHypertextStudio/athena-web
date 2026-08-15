@@ -6,9 +6,9 @@
  * (not at the very end), so connect has a real org to mirror work into. These tests pin that
  * contract for both forks and both exits:
  *
- * - **Personal fork**: "Just me" → welcome → create the personal space (auto-named, no org-name
- *   prompt) → land on the live connect step bound to the new org id → "Skip for now" routes into
- *   that org's My Work. Back-nav disappears once the org exists (the user is committed).
+ * - **Personal fork**: "Just me" creates the personal space (auto-named, no org-name prompt), then
+ *   lands on the live connect step bound to the new org id. "Skip for now" routes into that org's
+ *   My Work. Back-nav disappears once the org exists (the user is committed).
  * - **Team fork**: "My team" → name/create → connect → enter with standard terminology.
  * - A failed create keeps the user on the setup step and shows the server's message rather than
  *   advancing to a connect step with no org behind it.
@@ -91,17 +91,14 @@ describe('OnboardingPage — personal fork', () => {
     );
     renderPage(<OnboardingPage />);
 
-    // Step 1: choose "Just me" — no org-name prompt appears for the personal fork.
+    // Choosing "Just me" creates the personal workspace without a separate welcome action.
     fireEvent.click(screen.getByText('Just me'));
     expect(screen.queryByLabelText(/name/i)).toBeNull();
-
-    // Leaving the welcome beat creates the personal space (auto-named after the user).
-    fireEvent.click(screen.getByRole('button', { name: 'Create your space' }));
     await waitFor(() => {
       expect(orgPost).toHaveBeenCalledTimes(1);
     });
     expect(orgPost).toHaveBeenCalledWith({
-      json: expect.objectContaining({ isPersonal: true, name: "Ada's space" }),
+      json: expect.objectContaining({ isPersonal: true, intent: 'personal' }),
     });
 
     // We are now on the live connect step, bound to the created org.
@@ -121,7 +118,6 @@ describe('OnboardingPage — personal fork', () => {
     renderPage(<OnboardingPage />);
 
     fireEvent.click(screen.getByText('Just me'));
-    fireEvent.click(screen.getByRole('button', { name: 'Create your space' }));
 
     await waitFor(() => {
       expect(
@@ -183,7 +179,6 @@ describe('OnboardingPage — passkey enrollment (social sign-up)', () => {
     renderPage(<OnboardingPage />);
 
     fireEvent.click(screen.getByText('Just me'));
-    fireEvent.click(screen.getByRole('button', { name: 'Create your space' }));
 
     // On the connect step, leaving it now advances to the passkey beat instead of navigating.
     await waitFor(() => {
@@ -212,7 +207,6 @@ describe('OnboardingPage — passkey enrollment (social sign-up)', () => {
     renderPage(<OnboardingPage />);
 
     fireEvent.click(screen.getByText('Just me'));
-    fireEvent.click(screen.getByRole('button', { name: 'Create your space' }));
 
     await waitFor(() => {
       expect(screen.getByText('Google Tasks')).toBeTruthy();

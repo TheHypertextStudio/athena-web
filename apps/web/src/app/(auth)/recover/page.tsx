@@ -93,7 +93,7 @@ export default function RecoverPage(): JSX.Element {
       }
       setPhase('enroll');
     } catch {
-      setError('Something went wrong. Please try again.');
+      setError('Docket could not verify that recovery code. Try again.');
     } finally {
       setPending(false);
     }
@@ -129,8 +129,8 @@ export default function RecoverPage(): JSX.Element {
   if (phase === 'enroll') {
     return (
       <AuthShell
-        title="You're back in"
-        description="Set up a new passkey so you can sign in without a code next time."
+        title="Add a new passkey"
+        description="You are signed in. Add a passkey now or skip this step."
         footer={
           <Link
             href={HOME_DESTINATION}
@@ -175,7 +175,7 @@ export default function RecoverPage(): JSX.Element {
   return (
     <AuthShell
       title="Recover your account"
-      description="Lost your passkey? Use a recovery code to get back in."
+      description="Enter the email and recovery code for this account."
       footer={
         <>
           Remembered it?{' '}

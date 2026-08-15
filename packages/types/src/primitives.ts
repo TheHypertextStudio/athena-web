@@ -191,7 +191,7 @@ export const NotificationId = id<'NotificationId'>().describe(
 export const DailyPlanItemId = id<'DailyPlanItemId'>().describe(
   "ULID id of a DailyPlanItem — one entry in a user's planned day.",
 );
-/** Branded `Hub` id (the user's personal, cross-workspace command center). */
+/** Branded `Hub` id (the user's personal cross-workspace data boundary). */
 export const HubId = id<'HubId'>().describe(
   'ULID id of a Hub — the personal cross-workspace ownership boundary for user-owned data.',
 );

@@ -35,7 +35,7 @@ export function SiteHeader(): JSX.Element {
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-6 px-6">
         <Link
           href="/"
-          className="font-display text-ink wonk text-2xl leading-none font-semibold tracking-tight"
+          className="font-display text-ink wonk inline-flex min-h-10 items-center text-2xl leading-none font-semibold tracking-tight"
         >
           Docket
         </Link>
@@ -44,7 +44,7 @@ export function SiteHeader(): JSX.Element {
             <Link
               key={item.href}
               href={item.href}
-              className="text-on-surface-variant hover:text-on-surface text-body-medium transition-colors"
+              className="text-on-surface-variant hover:text-on-surface text-body-medium inline-flex min-h-10 items-center transition-colors"
             >
               {item.label}
             </Link>

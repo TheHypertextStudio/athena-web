@@ -28,7 +28,7 @@ export default function TermsPage(): JSX.Element {
         <h1 className="font-display text-display-large-small text-ink mt-4 tracking-tight">
           Terms of service
         </h1>
-        <p className="text-ink-muted mt-4">Effective July 10, 2026</p>
+        <p className="text-ink-muted mt-4">Effective August 15, 2026</p>
       </header>
 
       <TermsSection title="Agreement and eligibility">
@@ -54,6 +54,20 @@ export default function TermsPage(): JSX.Element {
           license to host, process, reproduce, and transmit that content only as needed to operate,
           secure, support, and improve the service. You represent that you have the rights needed to
           provide the content and authorize requested connector actions.
+        </p>
+      </TermsSection>
+
+      <TermsSection title="Docket and Docket Pro">
+        <p>
+          Docket is available without charge for a personal workspace with planning, scheduling, and
+          time tracking. Docket Pro costs USD $8 per organization each month and adds shared work,
+          integrations, MCP, and current Athena functionality. A Docket Pro subscription renews
+          monthly until an authorized workspace administrator cancels it.
+        </p>
+        <p>
+          Canceling Docket Pro for a personal workspace removes Docket Pro capabilities but keeps
+          the free workspace and its data. Canceling Docket Pro for a shared workspace begins a
+          14-day period in which its data can be exported before the workspace enters deletion.
         </p>
       </TermsSection>
 

@@ -2,7 +2,7 @@
  * `@docket/types` — Hub aggregation slice DTOs.
  *
  * @remarks
- * The Hub is the caller's personal, cross-org command center. Its read surfaces
+ * The Hub is the caller's personal cross-organization data boundary. Its read surfaces
  * aggregate across every organization the session user is an active human Actor in,
  * returning org-chipped items (each carries its originating `organizationId`). These
  * are read-only projections composed from per-org work, notifications, agent sessions,

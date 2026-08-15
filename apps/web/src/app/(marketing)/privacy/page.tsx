@@ -29,7 +29,7 @@ export default function PrivacyPage(): JSX.Element {
         <h1 className="font-display text-display-large-small text-ink mt-4 tracking-tight">
           Privacy policy
         </h1>
-        <p className="text-ink-muted mt-4">Effective July 10, 2026</p>
+        <p className="text-ink-muted mt-4">Effective August 15, 2026</p>
       </header>
 
       <PolicySection title="Who operates Docket">

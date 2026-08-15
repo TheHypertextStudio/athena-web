@@ -53,19 +53,19 @@ const PROVIDER_CARDS: readonly ProviderCard<OnboardingProvider>[] = [
   {
     provider: 'calendar',
     name: 'Google Calendar',
-    blurb: 'Pull your events in as upcoming time and deadlines.',
+    blurb: 'Import selected events and keep their Google Calendar source.',
     icon: Calendar,
   },
   {
     provider: 'gtasks',
     name: 'Google Tasks',
-    blurb: 'Bring your personal to-dos in as tasks you can act on.',
+    blurb: 'Import tasks and keep them linked to Google Tasks.',
     icon: TaskAlt,
   },
   {
     provider: 'linear',
     name: 'Linear',
-    blurb: 'Mirror your assigned issues so nothing gets lost in the move.',
+    blurb: 'Import assigned issues and keep them linked to Linear.',
     icon: Layers,
   },
 ];
@@ -194,7 +194,10 @@ export function StepConnect({
           [provider]: { phase: 'connected' as const, mirrored: items.length, error: null },
         }));
       } catch (caught) {
-        const message = userErrorMessage(caught, 'Something went wrong connecting this source.');
+        const message = userErrorMessage(
+          caught,
+          'Docket could not connect this source. Try again.',
+        );
         setStates((prev) => ({
           ...prev,
           [provider]: { phase: 'error', mirrored: 0, error: message },

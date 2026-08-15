@@ -22,7 +22,7 @@ export interface AuthShellProps {
   /** The screen title (e.g. `'Create your account'`). */
   title: string;
   /** The supporting line under the title. */
-  description: string;
+  description?: string;
   /** The screen body (form + actions). */
   children: ReactNode;
   /** The footer row (the cross-link to the other auth screen). */
@@ -48,7 +48,9 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
             <PasskeyMark className="size-4" />
           </span>
           <h1 className="text-headline-small text-on-surface font-medium">{title}</h1>
-          <p className="text-on-surface-variant text-body-medium">{description}</p>
+          {description ? (
+            <p className="text-on-surface-variant text-body-medium">{description}</p>
+          ) : null}
         </>
       }
     >

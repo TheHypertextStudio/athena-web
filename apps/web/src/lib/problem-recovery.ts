@@ -42,8 +42,8 @@ export const PUBLIC_PROBLEM_RECOVERY: Record<ProblemRecovery, PublicProblemRecov
   },
   billing: {
     href: '/pricing',
-    label: 'View plans',
-    instruction: 'Review your plan or billing information, then return to Docket to continue.',
+    label: 'View Docket Pro',
+    instruction: 'Add or manage Docket Pro, then retry the action.',
   },
   reconnect: {
     href: '/sign-in',

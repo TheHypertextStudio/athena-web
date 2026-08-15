@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 
 import { Text } from '@docket/ui/primitives';
 
-import { PlaceholderSurface } from './placeholder-surface';
+import { ProductScreenshot } from './product-screenshot';
 
 /** Props for {@link FeatureBand}. */
 export interface FeatureBandProps {
@@ -48,7 +48,7 @@ export function FeatureBand({ title, description, surface, tone }: FeatureBandPr
           {description}
         </Text>
         <div className="mt-12">
-          <PlaceholderSurface label={surface} aspect="aspect-[16/9]" tone={tone} />
+          <ProductScreenshot src={surface} alt={title} aspect="aspect-[16/9]" tone={tone} />
         </div>
       </div>
     </section>

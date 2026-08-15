@@ -18,6 +18,7 @@ import type {
   NotionMirrorPort,
   ProvisionedMirrorDatabase,
 } from '../mirror-port';
+import { ProviderError } from '../../provider-error';
 
 /** One page held by the mock. */
 interface MockPage {
@@ -180,12 +181,46 @@ export class MockNotionMirror implements NotionMirrorPort {
     });
   }
 
-  /** {@inheritDoc NotionMirrorPort.updateDatabaseSchema} */
+  /**
+   * Forget a data source, as deleting its database in Notion would.
+   *
+   * @remarks
+   * Exists because this is a state the mirror has to survive and could not previously be
+   * reproduced: a database Docket created and recorded, removed by a human in Notion afterwards.
+   * Every subsequent request naming it answers `object_not_found`.
+   *
+   * @param dataSourceId - The data source to remove.
+   */
+  deleteDataSource(dataSourceId: string): void {
+    this.schemas.delete(dataSourceId);
+    for (const [id, page] of this.pages) {
+      if (page.dataSourceId === dataSourceId) this.pages.delete(id);
+    }
+  }
+
+  /**
+   * {@inheritDoc NotionMirrorPort.updateDatabaseSchema}
+   *
+   * @remarks
+   * Refuses an unknown data source rather than inventing one. This mock used to accept any id and
+   * quietly mint a schema for it, which made a deleted database indistinguishable from a live one
+   * — so the whole provision → project flow passed locally and in E2E while production answered
+   * `object_not_found` and failed every run.
+   */
   updateDatabaseSchema(
     dataSourceId: string,
     spec: MirrorDatabaseSpec,
   ): Promise<Record<string, string>> {
-    const existing = this.schemas.get(dataSourceId) ?? {};
+    const existing = this.schemas.get(dataSourceId);
+    if (existing === undefined) {
+      return Promise.reject(
+        new ProviderError(`Notion schema update for "${spec.title}" failed (object_not_found)`, {
+          provider: 'notion',
+          kind: 'provider',
+          status: 404,
+        }),
+      );
+    }
     const next: Record<string, string> = {};
     for (const column of spec.columns) {
       next[column.field] = existing[column.field] ?? `mock_prop_${dataSourceId}_${column.field}`;

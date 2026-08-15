@@ -23,6 +23,7 @@ import type {
   ProvisionedMirrorDatabase,
 } from '@docket/connections/notion/mirror-port';
 import { ConnectorError } from '@docket/integrations';
+import { ProviderError } from '@docket/connections/provider-error';
 import { MIRROR_ENTITY_ORDER, orderedColumns } from '@docket/connections/notion/mirror-schema';
 import {
   projectRow,
@@ -116,13 +117,42 @@ class RecordingMirror implements NotionMirrorPort {
     });
   }
 
+  /**
+   * Data sources deleted at the provider, which answer `object_not_found` from then on.
+   *
+   * @remarks
+   * Modelled because this fake ignored the data source id entirely, so a deleted database was
+   * indistinguishable from a live one and the mirror's behaviour against one could not be tested
+   * at all — which is how `object_not_found` reached production unnoticed.
+   */
+  readonly missingDataSources = new Set<string>();
+
+  /** Delete a data source, as removing its database in Notion would. */
+  deleteDataSource(dataSourceId: string): void {
+    this.missingDataSources.add(dataSourceId);
+  }
+
   updateDatabaseSchema(
-    _dataSourceId: string,
+    dataSourceId: string,
     spec: MirrorDatabaseSpec,
   ): Promise<Record<string, string>> {
+    if (this.missingDataSources.has(dataSourceId)) {
+      return Promise.reject(
+        new ProviderError(`Notion schema update for "${spec.title}" failed (object_not_found)`, {
+          provider: 'notion',
+          kind: 'provider',
+          status: 404,
+        }),
+      );
+    }
     this.schemaUpdates.push(spec);
     return Promise.resolve(
-      Object.fromEntries(spec.columns.map((column) => [column.field, `property-${column.field}`])),
+      // Keyed by data source, as Notion's property ids are. A constant id per field made two
+      // different databases hand out the same ones, which hid whether a rebuild had actually
+      // rebound its columns to the database it just created.
+      Object.fromEntries(
+        spec.columns.map((column) => [column.field, `property-${dataSourceId}-${column.field}`]),
+      ),
     );
   }
 
@@ -239,6 +269,42 @@ describe('Notion mirror reconciliation', () => {
       provisionedAt: ctx.now,
     });
     expect(task[0]?.propertyMap['title']?.propertyId).toBeDefined();
+  });
+
+  it('rebuilds a database somebody deleted in Notion instead of failing every pass', async () => {
+    // The production failure this reproduces: `Notion schema update for "Teams" failed
+    // (object_not_found)`. Wave one skips creation because an id is recorded, wave two patches a
+    // data source that no longer exists, and the throw fails the whole pass before a single row
+    // is projected — identically on every retry, so the connection can never recover on its own.
+    const { designs, mirror, ctx } = await seedMirror();
+    await provisionMirror(ctx, 'parent-1');
+    const before = one(
+      await db
+        .select()
+        .from(schema.notionMirrorDatabase)
+        .where(eq(schema.notionMirrorDatabase.id, findDesign(designs, 'task').id)),
+    );
+    const deleted = assertDefined(before.externalDataSourceId);
+
+    mirror.deleteDataSource(deleted);
+
+    await expect(provisionMirror(ctx, 'parent-1')).resolves.toBeGreaterThan(0);
+
+    const after = one(
+      await db
+        .select()
+        .from(schema.notionMirrorDatabase)
+        .where(eq(schema.notionMirrorDatabase.id, findDesign(designs, 'task').id)),
+    );
+    // Rebuilt, not merely un-wedged: a fresh data source, and property ids belonging to it rather
+    // than the ones the deleted database handed out.
+    expect(after.externalDataSourceId).not.toBeNull();
+    expect(after.externalDataSourceId).not.toBe(deleted);
+    expect(after.provisionedAt).not.toBeNull();
+    expect(after.propertyMap['title']?.propertyId).toBeDefined();
+    expect(after.propertyMap['title']?.propertyId).not.toBe(
+      before.propertyMap['title']?.propertyId,
+    );
   });
 
   it('creates, skips, updates, and budgets projected rows truthfully', async () => {

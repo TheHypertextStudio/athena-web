@@ -30,6 +30,7 @@ import {
   provisionedKind,
 } from '@docket/connections/notion/mirror-schema';
 import type { MirrorColumnSpec, NotionMirrorPort } from '@docket/connections/notion/mirror-port';
+import { isProviderMissingObjectError } from '@docket/connections/provider-error';
 import {
   type MirrorEntityPages,
   type MirrorReferences,
@@ -363,6 +364,7 @@ export async function provisionMirror(ctx: MirrorContext, parentPageId: string):
   // get created. Gating on "has a relation" alone meant a design with no relation column was never
   // patched again after creation, so a column added later existed in Docket's map and nowhere in
   // Notion, and every value written to it was silently dropped.
+  let forgotten = 0;
   for (const design of designs) {
     const refreshed = await db
       .select()
@@ -376,19 +378,86 @@ export async function provisionMirror(ctx: MirrorContext, parentPageId: string):
       columns.some((binding) => provisionedKind(binding) === 'relation') ||
       columns.some((binding) => binding.propertyId === undefined);
     if (!needsPatch) continue;
-    const ids = await ctx.mirror.updateDatabaseSchema(row.externalDataSourceId, {
-      title: row.title,
-      parentPageId,
-      columns: toColumnSpecs(row.entityType, columns, dataSourceByEntity),
-    });
-    await db
-      .update(notionMirrorDatabase)
-      .set({ propertyMap: withPropertyIds(row.propertyMap, ids) })
-      .where(eq(notionMirrorDatabase.id, row.id));
+    try {
+      const ids = await ctx.mirror.updateDatabaseSchema(row.externalDataSourceId, {
+        title: row.title,
+        parentPageId,
+        columns: toColumnSpecs(row.entityType, columns, dataSourceByEntity),
+      });
+      await db
+        .update(notionMirrorDatabase)
+        .set({ propertyMap: withPropertyIds(row.propertyMap, ids) })
+        .where(eq(notionMirrorDatabase.id, row.id));
+    } catch (error) {
+      if (!isProviderMissingObjectError(error)) throw error;
+      // The database Docket recorded no longer exists — somebody deleted it in Notion. Forget the
+      // ids so the next wave recreates it.
+      //
+      // Without this the connection wedges permanently, and in exactly the way the reader can do
+      // nothing about: wave one skips creation because an id is recorded, then this patch throws
+      // `object_not_found`, which fails the whole pass before a single row is projected. Every
+      // retry — scheduled or by hand — reproduces it, so the surface shows databases that exist
+      // in Docket, no rows in Notion, and a connection stuck in `error`.
+      await forgetProvisionedDatabase(row.id);
+      forgotten += 1;
+    }
     await pace();
   }
 
+  // Recreate anything forgotten above in this same pass, rather than leaving the workspace a
+  // sweep short of correct. Bounded by construction: recreation happens only for rows this call
+  // just nulled, and the recursive pass can only forget rows it did not create.
+  if (forgotten > 0) created += await provisionMirror(ctx, parentPageId);
+
   return created;
+}
+
+/**
+ * Drop every trace of a Notion database that no longer exists, keeping the design itself.
+ *
+ * @remarks
+ * The design is deliberately kept: it is the user's configuration — the table's name, its columns,
+ * whether it is enabled — and none of that became wrong because the database was deleted. Only the
+ * ids pointing at Notion did. Clearing the property ids too matters as much as clearing the data
+ * source: a stale `propertyId` would be written into a *recreated* database whose properties have
+ * entirely different ids, and Notion would reject every row.
+ *
+ * @param id - The `notion_mirror_database` row to reset.
+ */
+async function forgetProvisionedDatabase(id: string): Promise<void> {
+  const rows = await db
+    .select()
+    .from(notionMirrorDatabase)
+    .where(eq(notionMirrorDatabase.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return;
+  const cleared: Record<string, NotionColumnBinding> = {};
+  for (const [field, binding] of Object.entries(row.propertyMap)) {
+    const { propertyId: _dropped, ...rest } = binding;
+    cleared[field] = rest;
+  }
+  await db
+    .update(notionMirrorDatabase)
+    .set({
+      externalDatabaseId: null,
+      externalDataSourceId: null,
+      externalUrl: null,
+      provisionedAt: null,
+      propertyMap: cleared,
+    })
+    .where(eq(notionMirrorDatabase.id, id));
+  // The row mirrors are addressed by page id inside the deleted database, so every one of them is
+  // a pointer to nothing. Left behind, `projectEntity` would treat each entity as already present
+  // and issue an update against a page that no longer exists instead of creating a fresh row.
+  await db
+    .delete(notionMirrorRow)
+    .where(
+      and(
+        eq(notionMirrorRow.integrationId, row.integrationId),
+        eq(notionMirrorRow.entityType, row.entityType),
+      ),
+    );
 }
 
 /** Fold provisioned Notion property ids back into the stored bindings. */

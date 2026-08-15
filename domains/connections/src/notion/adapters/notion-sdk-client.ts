@@ -45,6 +45,10 @@ function asProviderError(err: unknown, context: string): ProviderError<'notion'>
     return new ProviderError(`Notion ${context} failed (${err.code})`, {
       provider: 'notion',
       kind,
+      // Carried so callers can tell "this id is gone" apart from every other `provider` failure.
+      // The two want opposite handling: a transient fault should be retried against the same id,
+      // while a deleted object makes every future request naming it fail the same way.
+      ...(err.code === APIErrorCode.ObjectNotFound ? { status: 404 } : {}),
     });
   }
   return new ProviderError(`Notion ${context} failed`, { provider: 'notion', kind: 'network' });
@@ -272,7 +276,12 @@ export class NotionMirrorClient implements NotionMirrorPort {
         data_source_id: dataSourceId,
         page_size: NOTION_PAGE_SIZE,
         ...(filter ? { filter } : {}),
-        ...(archived ? { in_trash: true } : {}),
+        // `is_archived`, not `in_trash` — the SDK's own types advertise the latter, and the live
+        // API rejects it with `body.in_trash should be not present`. `in_trash` is the spelling
+        // for *page updates* (see `writeRow`'s delete branch, where it is correct). The cast below
+        // is what let the wrong one through, so it stays narrow enough to keep reading as a cast
+        // over the SDK's parameter union rather than a licence to send anything.
+        ...(archived ? { is_archived: true } : {}),
       } as unknown as QueryDataSourceParameters;
       const results = await collectPaginatedAPI(this.notion.dataSources.query, parameters);
       return fullPages(results).map((page) => toMirrorChange(page, archived));

@@ -239,7 +239,7 @@ describe('NotionProviderClient.importWork', () => {
     http.get = () => trackerSchemaPayload;
     http.post = (path, body) => {
       if (!path.endsWith('/query')) return { results: [], has_more: false };
-      if ((body as Record<string, unknown>)['in_trash'] === true) {
+      if ((body as Record<string, unknown>)['is_archived'] === true) {
         return { results: [], has_more: false };
       }
       return {
@@ -268,7 +268,7 @@ describe('NotionProviderClient.importWork', () => {
   it('deduplicates a page that appears in both the live and archived passes, live winning', async () => {
     const http = new RecordingHttp();
     http.get = () => trackerSchemaPayload;
-    // A router that ignores `in_trash` returns the same rows twice — the mid-pagination race.
+    // A router that ignores `is_archived` returns the same rows twice — the mid-pagination race.
     http.post = (path) =>
       path.endsWith('/query')
         ? {
@@ -285,12 +285,38 @@ describe('NotionProviderClient.importWork', () => {
     expect(items[0]?.removed).toBeUndefined();
   });
 
+  it('asks for the archived partition with `is_archived`, never `in_trash`', async () => {
+    // Sending `in_trash` here is rejected outright — `body failed validation: body.in_trash should
+    // be not present` — which failed every sync of every Notion connection rather than merely
+    // skipping the trashed partition. The spelling is endpoint-specific: `in_trash` is correct
+    // when updating a *page* (asserted separately below), and wrong on a data-source query, so an
+    // assertion on the request body is the only thing that keeps the two apart.
+    const http = new RecordingHttp();
+    http.get = () => trackerSchemaPayload;
+    http.post = (path) =>
+      path.endsWith('/query') ? { results: [], has_more: false } : { results: [], has_more: false };
+
+    await notion(http).importWork(
+      { connectionId: 'c', provider: 'notion', listIds: [TASKS_TRACKER_DATA_SOURCE] },
+      '2026-08-02T00:00:00.000Z',
+    );
+
+    const queries = http.calls.filter((call) => call.path.endsWith('/query'));
+    expect(queries.length).toBeGreaterThan(0);
+    expect(
+      queries.some((call) => (call.body as Record<string, unknown>)['is_archived'] === true),
+    ).toBe(true);
+    expect(queries.every((call) => !('in_trash' in (call.body as Record<string, unknown>)))).toBe(
+      true,
+    );
+  });
+
   it('pulls the archived partition too, so a Notion delete arrives as a tombstone', async () => {
     const http = new RecordingHttp();
     http.get = () => trackerSchemaPayload;
     http.post = (path, body) => {
       if (!path.endsWith('/query')) return { results: [], has_more: false };
-      const archived = (body as Record<string, unknown>)['in_trash'] === true;
+      const archived = (body as Record<string, unknown>)['is_archived'] === true;
       return {
         results: archived
           ? [tasksTrackerPage({ id: 'gone', title: 'Deleted in Notion', inTrash: true })]
@@ -410,7 +436,7 @@ describe('NotionProviderClient.importWork', () => {
     let archivedPage = 0;
     http.post = (path, body) => {
       if (!path.endsWith('/query')) return { results: [], has_more: false };
-      if ((body as Record<string, unknown>)['in_trash'] === true) {
+      if ((body as Record<string, unknown>)['is_archived'] === true) {
         archivedPage += 1;
         return archivedPage === 1
           ? {

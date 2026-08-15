@@ -247,7 +247,12 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
         `/data_sources/${dataSourceId}/query`,
         {
           ...filter,
-          in_trash: true,
+          // `is_archived`, not `in_trash`. The two are not interchangeable: `in_trash` is the
+          // *page-update* spelling (see `writeRow`'s delete below, where it is correct), and
+          // sending it here makes Notion reject the whole request —
+          // `body failed validation: body.in_trash should be not present` — which failed every
+          // sync of every Notion connection rather than merely skipping the trashed partition.
+          is_archived: true,
           page_size: NOTION_PAGE_SIZE,
           ...(cursor !== undefined ? { start_cursor: cursor } : {}),
         },

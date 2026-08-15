@@ -17,6 +17,7 @@
         "./voice",
         "./phone",
         "./digest",
+        "./digest-episodes",
         "./anthropic",
         "./turn",
         "./turn/translate",

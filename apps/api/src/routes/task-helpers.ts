@@ -1,6 +1,6 @@
 import { canActor, type Capability } from '@docket/authz';
 import type { cycle, program } from '@docket/db';
-import { actor, db, grant, milestone, project, role, task, team } from '@docket/db';
+import { actor, db, grant, milestone, project, role, task } from '@docket/db';
 import type { GrantResourceKind } from '@docket/identity-access/grants';
 import type { TaskOut, TaskRef } from '@docket/types';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
@@ -329,50 +329,18 @@ export async function assertTaskCapability(
 }
 
 /**
- * Resolve a workflow-state transition: validate `state` against the team's
- * `workflow_states` and derive `completedAt`/`canceledAt`.
+ * Resolve a workflow-state transition using the canonical status catalogue.
  *
  * @remarks
- * Single source of truth for state mutation, shared by `POST /:id/state` and
- * `PATCH /:id`. Setting a `completed`/`canceled`-typed state stamps the matching
- * terminal timestamp and clears the other; any non-terminal state clears both.
- *
- * @throws {NotFoundError} When the team is missing.
- * @throws {ValidationError} When `state` is not one of the team's workflow states.
+ * This preserves the legacy route helper while ensuring callers persist both
+ * the human-readable state and its required status identifier.
  */
 export async function resolveStateTransition(
   orgId: string,
   teamId: string,
   state: string,
-): Promise<{ state: string; completedAt: Date | null; canceledAt: Date | null }> {
-  const teamRows = await db
-    .select()
-    .from(team)
-    .where(and(eq(team.id, teamId), eq(team.organizationId, orgId)))
-    .limit(1);
-  const teamRow = teamRows[0];
-  /* v8 ignore next -- @preserve defensive: a task always references an in-org team (FK + cascade) */
-  if (!teamRow) throw new NotFoundError('Team not found');
-
-  const target = teamRow.workflowStates.find((s) => s.key === state);
-  if (!target) {
-    throw new ValidationError(
-      new z.ZodError([
-        {
-          code: 'custom',
-          path: ['state'],
-          message: `Unknown workflow state '${state}' for this team`,
-          input: state,
-        },
-      ]),
-    );
-  }
-
-  return {
-    state,
-    completedAt: target.type === 'completed' ? new Date() : null,
-    canceledAt: target.type === 'canceled' ? new Date() : null,
-  };
+): Promise<TaskStatusTransition> {
+  return resolveTaskStatus(orgId, teamId, state);
 }
 
 /**

@@ -26,7 +26,7 @@ type AuditEventRow = typeof auditEvent.$inferSelect;
 /** The event fields needed to decide whether it carries a private task. */
 export type TaskBearingStreamEventRow = Pick<
   EventRow,
-  'organizationId' | 'entityKind' | 'docketEntityId'
+  'organizationId' | 'entityKind' | 'entityAssociation' | 'docketEntityId'
 >;
 
 /** The audit fields needed to decide whether it carries a private task or task comment. */
@@ -91,6 +91,15 @@ function agentSessionKey(session: {
   return organizationId ? taskKey(organizationId, session.id) : null;
 }
 
+/** Whether a manually resolved mail or calendar observation now identifies a Docket task. */
+function manuallyLinkedTask(row: TaskBearingStreamEventRow): boolean {
+  return (
+    row.entityAssociation === 'matched' &&
+    row.docketEntityId !== null &&
+    (row.entityKind === 'thread' || row.entityKind === 'calendar_event')
+  );
+}
+
 /** Resolve each observation's direct task or indirect task-bound agent-session subject. */
 async function taskRelationsForStreamEvents(
   rows: readonly TaskBearingStreamEventRow[],
@@ -120,6 +129,10 @@ async function taskRelationsForStreamEvents(
   }
 
   return rows.map((row) => {
+    if (manuallyLinkedTask(row)) {
+      const taskId = row.docketEntityId;
+      return taskId ? { kind: 'task', taskId } : NON_TASK_EVENT;
+    }
     if (row.entityKind === 'work_item') {
       return row.docketEntityId ? { kind: 'task', taskId: row.docketEntityId } : NON_TASK_EVENT;
     }
@@ -366,7 +379,13 @@ export async function canUserReceiveTaskBearingStreamEvent(
   userId: string,
   row: TaskBearingStreamEventRow,
 ): Promise<boolean> {
-  if (row.entityKind !== 'work_item' && row.entityKind !== 'agent_session') return true;
+  if (
+    row.entityKind !== 'work_item' &&
+    row.entityKind !== 'agent_session' &&
+    !manuallyLinkedTask(row)
+  ) {
+    return true;
+  }
   if (row.entityKind === 'work_item' && !row.docketEntityId) return true;
   const visibility = await buildTaskBearingEventVisibility(
     await activeUserTaskEventViewers(userId, row.organizationId),

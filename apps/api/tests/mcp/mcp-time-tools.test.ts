@@ -21,7 +21,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-import { one } from '../support/routes-harness';
+import { one, seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -38,6 +38,7 @@ interface Seed {
   teamId: string;
   userId: string;
   actorId: string;
+  statusId: StatusIdLookup;
   ctx: McpContext;
 }
 
@@ -49,6 +50,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = org!.id;
+  const statusId = await seedStatuses(db, schema, orgId);
   const email = `${slug}@e.com`;
   const [user] = await db
     .insert(schema.user)
@@ -72,6 +74,7 @@ async function seedOrg(): Promise<Seed> {
     teamId: team!.id,
     userId: user!.id,
     actorId: human!.id,
+    statusId,
     ctx: {
       principal: { kind: 'user', userId: user!.id, userName: 'Ada', userEmail: email },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
@@ -91,6 +94,7 @@ async function seedTask(
       title,
       teamId: s.teamId,
       state: 'backlog',
+      statusId: s.statusId('task', 'backlog'),
       createdBy: s.actorId,
       visibility,
     })

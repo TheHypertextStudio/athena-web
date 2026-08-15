@@ -24,6 +24,7 @@ import {
   decodeCursor,
   decodeFilter,
   encodeCursor,
+  type StreamCursor,
 } from '../lib/view-filter-sql';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
@@ -31,7 +32,11 @@ import { zJson, zQuery } from '../lib/validate';
 
 import { routeAndWriteRecipients } from '../consumers/routing';
 import { enqueueSearchIndexJobs } from '../search/enqueue';
-import { toStreamEventOut } from './stream-helpers';
+import {
+  buildTaskBearingEventVisibility,
+  collectVisibilityFilteredPage,
+  toStreamEventOut,
+} from './stream-helpers';
 
 /**
  * Load a saved view's stored filters.
@@ -119,15 +124,25 @@ Filtering & paging: \`?system\` and \`?kind\` are convenience quick-filters; \`?
           ? [asc(event.occurredAt), asc(event.id)]
           : [desc(event.occurredAt), desc(event.id)];
 
-      const rows = await db
-        .select()
-        .from(event)
-        .where(and(...conds))
-        .orderBy(...orderBy)
-        .limit(q.limit + 1);
-
-      const hasMore = rows.length > q.limit;
-      const page = hasMore ? rows.slice(0, q.limit) : rows;
+      const visibility = await buildTaskBearingEventVisibility([
+        { organizationId: orgId, actorId },
+      ]);
+      const { items: page, hasMore } = await collectVisibilityFilteredPage<
+        typeof event.$inferSelect,
+        StreamCursor
+      >({
+        limit: q.limit,
+        initialCursor: cursor,
+        cursorOf: (row) => ({ occurredAt: row.occurredAt, id: row.id }),
+        fetch: (after, limit) =>
+          db
+            .select()
+            .from(event)
+            .where(and(...conds, ...(after ? [cursorCondition(after, q.order)] : [])))
+            .orderBy(...orderBy)
+            .limit(limit),
+        filter: (rows) => visibility.filterStreamEvents(rows),
+      });
       const last = page[page.length - 1];
       return ok(c, StreamPageOut, {
         items: page.map((r) => toStreamEventOut(r, null, new Set([actorId]))),

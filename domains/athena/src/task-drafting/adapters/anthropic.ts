@@ -73,10 +73,11 @@ export function defaultMessageCreator(config: RealTaskSynthesizerConfig): Messag
 
 /** Build the safe Work draft used when provider output is unusable. */
 export function fallbackDraft(input: TaskDraftInput): TaskDraft {
+  const description = input.snippet.trim();
   return {
     title: truncateTitle(input.subject),
-    description: input.snippet.trim() || undefined,
     priority: 'medium',
+    ...(description ? { description } : {}),
   };
 }
 

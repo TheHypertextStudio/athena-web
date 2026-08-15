@@ -22,6 +22,17 @@ beforeAll(async () => {
   db = schema.db;
 });
 
+async function statusId(
+  orgId: string,
+  entityType: 'task' | 'project' | 'program',
+  key: string,
+): Promise<string> {
+  const statuses = await schema.seedWorkspaceStatuses(db, orgId);
+  const id = statuses.get(schema.statusLookupKey(entityType, key));
+  if (!id) throw new Error(`missing ${entityType} status ${key}`);
+  return id;
+}
+
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
@@ -62,7 +73,12 @@ describe('Time Ledger task visibility', () => {
     const program = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: programTitle })
+        .values({
+          organizationId: orgId,
+          name: programTitle,
+          status: 'active',
+          statusId: await statusId(orgId, 'program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     );
     const projectTitle = 'Executive compensation project';
@@ -74,6 +90,8 @@ describe('Time Ledger task visibility', () => {
           teamId,
           programId: program.id,
           name: projectTitle,
+          status: 'planned',
+          statusId: await statusId(orgId, 'project', 'planned'),
           visibility: 'private',
         })
         .returning({ id: schema.project.id }),
@@ -88,6 +106,7 @@ describe('Time Ledger task visibility', () => {
           programId: program.id,
           title: taskTitle,
           state: 'backlog',
+          statusId: await statusId(orgId, 'task', 'backlog'),
           visibility: 'private',
         })
         .returning({ id: schema.task.id }),
@@ -376,7 +395,14 @@ describe('Time Ledger task visibility', () => {
     const visibleProject = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, teamId, name: projectTitle, visibility: 'public' })
+        .values({
+          organizationId: orgId,
+          teamId,
+          name: projectTitle,
+          status: 'planned',
+          statusId: await statusId(orgId, 'project', 'planned'),
+          visibility: 'public',
+        })
         .returning({ id: schema.project.id }),
     );
     const taskTitle = 'Publish the release notes';
@@ -389,6 +415,7 @@ describe('Time Ledger task visibility', () => {
           projectId: visibleProject.id,
           title: taskTitle,
           state: 'backlog',
+          statusId: await statusId(orgId, 'task', 'backlog'),
           visibility: 'public',
         })
         .returning({ id: schema.task.id }),

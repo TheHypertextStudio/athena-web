@@ -30,9 +30,9 @@
  */
 import { activityDay, activityHighlight, db, event, hub } from '@docket/db';
 import type { ActorRef, DigestStats, EntityRef } from '@docket/db';
-import type { NarrationEpisode } from '@docket/agent-runtime';
+import type { NarrationEpisode } from '@docket/athena/digest';
 import type { CanonicalEntityKind, EventDetail, EventKind, SourceSystemKind } from '@docket/types';
-import { groupSubjectDayEpisodes } from '@docket/types';
+import { groupSubjectDayEpisodes } from '@docket/athena/digest-episodes';
 import { and, asc, eq, gte, isNull, lt, or } from 'drizzle-orm';
 
 import { getContainer } from '../../container';

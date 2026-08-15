@@ -168,6 +168,36 @@ async function seedTaskStreamEvent(
   return { eventId: eventRow.id, taskId: taskRow.id };
 }
 
+/** Persist a manually resolved calendar/thread event without changing its source entity kind. */
+async function seedManuallyLinkedTaskStreamEvent(
+  fixture: PrivateTaskEventFixture,
+): Promise<string> {
+  return one(
+    await db
+      .insert(schema.event)
+      .values({
+        organizationId: fixture.orgId,
+        sourceSystem: 'google_calendar',
+        kind: 'calendar_update',
+        occurredAt: new Date('2026-08-14T12:04:00.000Z'),
+        title: 'Private manually linked meeting',
+        entity: {
+          kind: 'calendar_event',
+          source: 'google_calendar',
+          externalId: `meeting-${fixture.taskId}`,
+          title: 'Private manually linked meeting',
+          url: null,
+          docketEntityId: fixture.taskId,
+        },
+        entityKind: 'calendar_event',
+        entityAssociation: 'matched',
+        docketEntityId: fixture.taskId,
+        dedupeKey: `manual-task-event-${fixture.taskId}`,
+      })
+      .returning({ id: schema.event.id }),
+  ).id;
+}
+
 /** Add a private task and direct audit row at a fixed position in the Hub activity timeline. */
 async function seedPrivateTaskAuditEvent(
   fixture: PrivateTaskEventFixture,
@@ -444,7 +474,9 @@ async function openLiveStream(userId: string) {
     signal: controller.signal,
   });
   expect(response.status).toBe(200);
-  const reader = response.body!.getReader();
+  const body = response.body;
+  if (!body) throw new Error('stream response has no body');
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffered = '';
 
@@ -619,6 +651,28 @@ describe('task-bearing event delivery', () => {
     ).items.map((item) => item.id);
     expect(hubAuditIds).not.toContain(fixture.taskAuditId);
     expect(hubAuditIds).not.toContain(fixture.commentAuditId);
+  });
+
+  it('treats a manually linked calendar event as task-bearing', async () => {
+    const fixture = await seedPrivateTaskEventFixture();
+    const eventId = await seedManuallyLinkedTaskStreamEvent(fixture);
+    const orgStream = appWithActor(stream, fixture.orgId, [], fixture.viewerActorId);
+    const hubApp = appWithSession(hub, fakeSession(fixture.viewerUserId));
+
+    for (const response of [await orgStream.request('/'), await hubApp.request('/stream')]) {
+      const ids = (
+        (await response.json()) as { readonly items: readonly { readonly id: string }[] }
+      ).items.map((item) => item.id);
+      expect(ids).not.toContain(eventId);
+    }
+
+    await grantTaskContribute(fixture);
+    for (const response of [await orgStream.request('/'), await hubApp.request('/stream')]) {
+      const ids = (
+        (await response.json()) as { readonly items: readonly { readonly id: string }[] }
+      ).items.map((item) => item.id);
+      expect(ids).toContain(eventId);
+    }
   });
 
   it('requires canonical task visibility for task-bound agent-session events and audits', async () => {

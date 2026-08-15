@@ -23,11 +23,15 @@ beforeAll(async () => {
   tasks = (await import('../../src/routes/tasks')).default;
 });
 
+async function statusId(orgId: string, entityType: 'task', key: string): Promise<string> {
+  const statuses = await schema.seedWorkspaceStatuses(db, orgId);
+  const id = statuses.get(schema.statusLookupKey(entityType, key));
+  if (!id) throw new Error(`missing ${entityType} status ${key}`);
+  return id;
+}
+
 /** Insert a human actor carrying a real in-org role but no resource grants. */
-async function seedUnprivilegedActor(
-  orgId: string,
-  roleKey: 'member' | 'guest',
-): Promise<string> {
+async function seedUnprivilegedActor(orgId: string, roleKey: 'member' | 'guest'): Promise<string> {
   const roleRow = one(
     await db
       .insert(schema.role)
@@ -68,6 +72,7 @@ async function seedPrivateTask(
         teamId,
         title,
         state: 'todo',
+        statusId: await statusId(orgId, 'task', 'todo'),
         visibility: 'private',
         createdAt,
         parentTaskId,
@@ -91,7 +96,10 @@ async function grantTaskContribute(orgId: string, actorId: string, taskId: strin
 }
 
 /** Read the standard task page while preserving its cursor for the next request. */
-async function taskPage(app: ReturnType<typeof appWithActor>, query = ''): Promise<{
+async function taskPage(
+  app: ReturnType<typeof appWithActor>,
+  query = '',
+): Promise<{
   readonly items: readonly { readonly id: string; readonly title: string }[];
   readonly nextCursor?: string;
 }> {
@@ -158,7 +166,8 @@ describe('task resource delivery', () => {
         ).status,
       ).toBe(404);
       expect(
-        (await caller.request(`/${secretId}/dependencies/${blockerId}`, { method: 'DELETE' })).status,
+        (await caller.request(`/${secretId}/dependencies/${blockerId}`, { method: 'DELETE' }))
+          .status,
       ).toBe(404);
     }
 
@@ -168,9 +177,9 @@ describe('task resource delivery', () => {
     const childOnly = appWithActor(tasks, orgId, [], memberId);
     const childDetail = await childOnly.request(`/${childId}`, { method: 'GET' });
     expect(childDetail.status).toBe(200);
-    expect(((await childDetail.json()) as { readonly parentTaskId: string | null }).parentTaskId).toBe(
-      null,
-    );
+    expect(
+      ((await childDetail.json()) as { readonly parentTaskId: string | null }).parentTaskId,
+    ).toBe(null);
 
     for (const taskId of [secretId, blockerId, childId]) {
       await grantTaskContribute(orgId, humanActorId, taskId);
@@ -191,8 +200,9 @@ describe('task resource delivery', () => {
     const dependencies = await authorized.request(`/${secretId}/dependencies`, { method: 'GET' });
     expect(dependencies.status).toBe(200);
     expect(
-      ((await dependencies.json()) as { readonly blockedBy: readonly { readonly id: string }[] })
-        .blockedBy.map((item) => item.id),
+      (
+        (await dependencies.json()) as { readonly blockedBy: readonly { readonly id: string }[] }
+      ).blockedBy.map((item) => item.id),
     ).toContain(blockerId);
     const subtasks = await authorized.request(`/${secretId}/subtasks`, { method: 'GET' });
     expect(subtasks.status).toBe(200);
@@ -205,9 +215,9 @@ describe('task resource delivery', () => {
     const attachments = await authorized.request(`/${secretId}/attachments`, { method: 'GET' });
     expect(attachments.status).toBe(200);
     expect(
-      ((await attachments.json()) as { readonly items: readonly { readonly title: string }[] }).items.map(
-        (item) => item.title,
-      ),
+      (
+        (await attachments.json()) as { readonly items: readonly { readonly title: string }[] }
+      ).items.map((item) => item.title),
     ).toContain('Private source');
     expect(
       (
@@ -268,6 +278,7 @@ describe('task resource delivery', () => {
           teamId,
           title: 'Public, but not mutable',
           state: 'todo',
+          statusId: await statusId(orgId, 'task', 'todo'),
           visibility: 'public',
         })
         .returning({ id: schema.task.id }),
@@ -359,7 +370,8 @@ describe('task resource delivery', () => {
       ).status,
     ).toBe(404);
     expect(
-      (await caller.request(`/${targetId}/attachments/${attachmentId}`, { method: 'DELETE' })).status,
+      (await caller.request(`/${targetId}/attachments/${attachmentId}`, { method: 'DELETE' }))
+        .status,
     ).toBe(404);
     expect(
       (await caller.request(`/${targetId}/attachments/${attachmentId}/download`, { method: 'GET' }))

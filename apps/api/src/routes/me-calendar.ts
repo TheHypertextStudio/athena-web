@@ -70,6 +70,7 @@ import { labelsForSubject } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
+import { landingStatus } from '../lib/work-status';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import { calendarItemRelationRoutes } from './calendar-item-relation-routes';
@@ -120,7 +121,13 @@ function toVisibilityPatch(body: {
 async function resolveTaskTarget(
   userId: string,
   body: z.infer<typeof CalendarEventCreateTask>,
-): Promise<{ organizationId: string; teamId: string; actorId: string; state: string }> {
+): Promise<{
+  organizationId: string;
+  teamId: string;
+  actorId: string;
+  state: string;
+  statusId: string;
+}> {
   const actorRows = await db
     .select({ actor, role })
     .from(actor)
@@ -139,7 +146,7 @@ async function resolveTaskTarget(
   const member = actorRows[0];
   if (!member) throw new NotFoundError('Target workspace not found');
 
-  const capabilities = (member.role?.capabilities ?? []) as Capability[];
+  const capabilities: Capability[] = member.role?.capabilities ?? [];
   if (!capabilities.some((capability) => satisfies(capability, 'contribute'))) {
     throw new CapabilityError();
   }
@@ -160,7 +167,10 @@ async function resolveTaskTarget(
     organizationId: member.actor.organizationId,
     teamId: targetTeam.id,
     actorId: member.actor.id,
-    state: targetTeam.workflowStates[0]?.key ?? 'backlog',
+    ...(await landingStatus(member.actor.organizationId, 'task', targetTeam.id).then((status) => ({
+      state: status.key,
+      statusId: status.id,
+    }))),
   };
 }
 
@@ -352,6 +362,7 @@ const meCalendar = new Hono<AppEnv>()
             title: body.title ?? row.event.title,
             description: body.note ?? row.event.description,
             state: target.state,
+            statusId: target.statusId,
             priority: 'none',
             externalUrl: row.event.htmlLink,
           })

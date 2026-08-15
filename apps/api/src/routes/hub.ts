@@ -43,6 +43,7 @@ import {
   decodeCursor,
   decodeFilter,
   encodeCursor,
+  type StreamCursor,
 } from '../lib/view-filter-sql';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { SearchHttpQuery } from '../search/http';
@@ -51,8 +52,12 @@ import { searchWorkspace } from '../search/query';
 import { curateHighlight } from '../services/highlights/curate';
 import { readActivityDay } from '../services/highlights/read';
 
-import { callerActorIds, callerOrgIds, toAuditEventOut, toNotificationOut } from './hub-helpers';
-import { toStreamEventOut } from './stream-helpers';
+import { activeCallerActors, toAuditEventOut, toNotificationOut } from './hub-helpers';
+import {
+  buildTaskBearingEventVisibility,
+  collectVisibilityFilteredPage,
+  toStreamEventOut,
+} from './stream-helpers';
 import { buildHubTodayPayload } from './hub-today';
 import { completeTodayItem } from './hub-today-actions';
 import { buildHubPortfolioPayload } from './hub-portfolio';
@@ -93,6 +98,20 @@ export function mergeHubPreferences(
     ...(patch.athena ? { athena: { ...current.athena, ...patch.athena } } : {}),
   };
 }
+/** Resolve Hub activity's public raw-ID cursor to its internal `(createdAt, id)` keyset position. */
+async function resolveHubActivityCursor(
+  cursorId: string | undefined,
+  organizationIds: string[],
+): Promise<StreamCursor | null> {
+  if (!cursorId) return null;
+  const [row] = await db
+    .select({ occurredAt: auditEvent.createdAt, id: auditEvent.id })
+    .from(auditEvent)
+    .where(and(eq(auditEvent.id, cursorId), inArray(auditEvent.organizationId, organizationIds)))
+    .limit(1);
+  return row ?? null;
+}
+
 /** Hub router: cross-org `today`, `inbox`, `activity`, `portfolio`, and `search` surfaces. */
 const hubRouter = new Hono<AppEnv>()
   .get(
@@ -156,7 +175,6 @@ const hubRouter = new Hono<AppEnv>()
           // `merged` is the zod-inferred wire shape; it doesn't structurally match the stored
           // `HubPreferences` column type (packages/db) closely enough for TS to infer the
           // assignment on its own, so the cast stays.
-          // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
           .set({ preferences: merged as DbHubPreferences })
           .where(eq(hubTable.userId, session.user.id))
           .returning({ preferences: hubTable.preferences });
@@ -221,20 +239,41 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
     async (c) => {
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
-      const { limit, order } = c.req.valid('query');
-      const orgIds = await callerOrgIds(session.user.id);
+      const { cursor, limit, order } = c.req.valid('query');
+      const callers = await activeCallerActors(session.user.id);
+      const orgIds = [...new Set(callers.map((caller) => caller.organizationId))];
       if (orgIds.length === 0) return ok(c, HubActivityOut, { items: [] });
-
-      const orderBy = order === 'asc' ? auditEvent.createdAt : desc(auditEvent.createdAt);
-      const rows = await db
-        .select()
-        .from(auditEvent)
-        .where(inArray(auditEvent.organizationId, orgIds))
-        .orderBy(orderBy)
-        .limit(limit + 1);
-
-      const hasMore = rows.length > limit;
-      const page = hasMore ? rows.slice(0, limit) : rows;
+      const activityCursor = await resolveHubActivityCursor(cursor, orgIds);
+      const orderBy =
+        order === 'asc'
+          ? [asc(auditEvent.createdAt), asc(auditEvent.id)]
+          : [desc(auditEvent.createdAt), desc(auditEvent.id)];
+      const visibility = await buildTaskBearingEventVisibility(
+        callers.map((caller) => ({ organizationId: caller.organizationId, actorId: caller.id })),
+      );
+      const { items: page, hasMore } = await collectVisibilityFilteredPage<
+        typeof auditEvent.$inferSelect,
+        StreamCursor
+      >({
+        limit,
+        initialCursor: activityCursor,
+        cursorOf: (row) => ({ occurredAt: row.createdAt, id: row.id }),
+        fetch: (after, pageLimit) =>
+          db
+            .select()
+            .from(auditEvent)
+            .where(
+              and(
+                inArray(auditEvent.organizationId, orgIds),
+                ...(after
+                  ? [cursorCondition(after, order, auditEvent.createdAt, auditEvent.id)]
+                  : []),
+              ),
+            )
+            .orderBy(...orderBy)
+            .limit(pageLimit),
+        filter: (rows) => visibility.filterAuditEvents(rows),
+      });
       const last = page[page.length - 1];
       return ok(c, HubActivityOut, {
         items: page.map(toAuditEventOut),
@@ -257,9 +296,10 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
       const q = c.req.valid('query');
-      const orgIds = await callerOrgIds(session.user.id);
+      const callers = await activeCallerActors(session.user.id);
+      const orgIds = [...new Set(callers.map((caller) => caller.organizationId))];
       if (orgIds.length === 0) return ok(c, StreamPageOut, { items: [] });
-      const viewerActorIds = new Set(await callerActorIds(session.user.id));
+      const viewerActorIds = new Set(callers.map((caller) => caller.id));
 
       const conds: SQL[] = [
         inArray(event.organizationId, orgIds),
@@ -276,15 +316,25 @@ Read-only; session-only, no capability. 401 when unauthenticated. To mutate read
           ? [asc(event.occurredAt), asc(event.id)]
           : [desc(event.occurredAt), desc(event.id)];
 
-      const rows = await db
-        .select()
-        .from(event)
-        .where(and(...conds))
-        .orderBy(...orderBy)
-        .limit(q.limit + 1);
-
-      const hasMore = rows.length > q.limit;
-      const page = hasMore ? rows.slice(0, q.limit) : rows;
+      const visibility = await buildTaskBearingEventVisibility(
+        callers.map((caller) => ({ organizationId: caller.organizationId, actorId: caller.id })),
+      );
+      const { items: page, hasMore } = await collectVisibilityFilteredPage<
+        typeof event.$inferSelect,
+        StreamCursor
+      >({
+        limit: q.limit,
+        initialCursor: cursor,
+        cursorOf: (row) => ({ occurredAt: row.occurredAt, id: row.id }),
+        fetch: (after, pageLimit) =>
+          db
+            .select()
+            .from(event)
+            .where(and(...conds, ...(after ? [cursorCondition(after, q.order)] : [])))
+            .orderBy(...orderBy)
+            .limit(pageLimit),
+        filter: (rows) => visibility.filterStreamEvents(rows),
+      });
       const last = page[page.length - 1];
       return ok(c, StreamPageOut, {
         items: page.map((row) => toStreamEventOut(row, null, viewerActorIds)),

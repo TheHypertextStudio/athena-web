@@ -1,5 +1,5 @@
-import type { Priority } from '@docket/types';
 import type { WorkStatusCategory } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 
 /** Scheduling evidence used to distinguish an untouched day from a generated empty one. */
 export type TodayReadiness = 'not_generated' | 'ready' | 'empty_week';

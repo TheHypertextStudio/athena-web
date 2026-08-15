@@ -115,8 +115,8 @@ describe('hub /activity (cross-org audit feed)', () => {
       await db.insert(schema.auditEvent).values({
         organizationId: a.orgId,
         actorId: a.humanActorId,
-        subjectType: 'task',
-        subjectId: `task-a-${i}`,
+        subjectType: 'organization',
+        subjectId: a.orgId,
         type: 'created',
       });
     }

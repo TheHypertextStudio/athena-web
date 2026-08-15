@@ -235,7 +235,7 @@ export async function seedTaskAccessOrg(
   db: Db,
   schema: typeof DbModule,
   capability: Capability = 'contribute',
-): Promise<{ orgId: string; teamId: string; humanActorId: string }> {
+): Promise<Awaited<ReturnType<typeof seedBaseOrg>>> {
   const base = await seedBaseOrg(db, schema);
   await db.insert(schema.grant).values({
     organizationId: base.orgId,

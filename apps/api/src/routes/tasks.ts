@@ -169,17 +169,17 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       // lost the race, so a body carrying an invalid state *and* an unknown label would report a
       // different error from run to run. Settled in declaration order for the same reason the
       // tenant guards above are.
-      const firstState = teamRow.workflowStates[0];
-      const transitionRead = firstState
-        ? resolveStateTransition(orgId, body.teamId, body.state ?? firstState.key)
-        : Promise.resolve({
-            state: body.state ?? 'backlog',
-            completedAt: null,
-            canceledAt: null,
-          });
+      const transitionRead =
+        body.state === undefined
+          ? landingStatus(orgId, 'task', body.teamId).then((status) => ({
+              statusId: status.id,
+              state: status.key,
+              ...terminalStampsFor(status.category),
+            }))
+          : resolveStateTransition(orgId, body.teamId, body.state);
       const labelsRead = resolveLabelSet(orgId, body.labels, { teamId: body.teamId });
       await guardsInOrder([transitionRead, labelsRead]);
-      const [{ state, completedAt, canceledAt }, resolvedLabels] = await Promise.all([
+      const [{ statusId, state, completedAt, canceledAt }, resolvedLabels] = await Promise.all([
         transitionRead,
         labelsRead,
       ]);
@@ -191,6 +191,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
           title: body.title,
           description: body.description,
           teamId: body.teamId,
+          statusId,
           state,
           completedAt,
           canceledAt,
@@ -544,6 +545,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(statePatch !== undefined
           ? {
+              statusId: statePatch.statusId,
               state: statePatch.state,
               completedAt: statePatch.completedAt,
               canceledAt: statePatch.canceledAt,

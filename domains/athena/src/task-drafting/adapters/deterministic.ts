@@ -17,10 +17,11 @@ export class MockTaskSynthesizer implements TaskSynthesizer {
   /** {@inheritDoc TaskSynthesizer.synthesize} */
   async synthesize(input: TaskDraftInput): Promise<TaskDraft> {
     const dueDate = ISO_DATE_IN_TEXT.exec(input.snippet)?.[1];
+    const description = input.snippet.trim();
     return {
       title: truncateTitle(input.subject),
-      description: input.snippet.trim() || undefined,
       priority: 'medium',
+      ...(description ? { description } : {}),
       ...(dueDate !== undefined ? { dueDate } : {}),
     };
   }

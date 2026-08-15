@@ -1,5 +1,5 @@
 /**
- * `@docket/types` — the channel-agnostic vocabulary of a live Athena voice session.
+ * `@docket/athena` — the channel-agnostic vocabulary of a live Athena voice session.
  *
  * @remarks
  * There is exactly one voice session model, and both channels speak it: the browser (WebRTC to a

@@ -9,13 +9,16 @@
  */
 import type { StreamEvent } from '../../src/lib/event-bus';
 import { listenerCount, publish } from '../../src/lib/event-bus';
-import { appWithSession, fakeSession } from '../support/routes-harness';
-import { afterEach, describe, expect, it } from 'vitest';
-import { assertDefined } from '@docket/test-utils';
+import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 let streamSse!: unknown;
 
 const openConnections: (() => void)[] = [];
+
+beforeAll(async () => {
+  await getDb();
+});
 
 async function loadRouter() {
   streamSse ??= (await import('../../src/routes/stream-sse')).default;
@@ -36,7 +39,7 @@ async function openStream(userId: string) {
     signal: controller.signal,
   });
   expect(res.status).toBe(200);
-  const reader = assertDefined(res.body).getReader();
+  const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buffered = '';
 

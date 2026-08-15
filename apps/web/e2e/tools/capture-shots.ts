@@ -157,7 +157,11 @@ async function captureCleanFrame(
 
 /** Resolve a reusable shared workspace, creating one through the authenticated test session. */
 async function ensureSharedWorkspace(page: Page, baseURL: string): Promise<string> {
-  await openReviewRoute(page, `${baseURL}/settings/workspaces`);
+  // Any authenticated same-origin page will do — this only needs a document whose `fetch` carries
+  // the session cookie. `/settings/profile` is the stable one; the workspace list this used to
+  // open no longer has a route of its own, so it 404'd and took every shared-workspace capture
+  // down with it.
+  await openReviewRoute(page, `${baseURL}/settings/profile`);
   return page.evaluate(async () => {
     const listResponse = await fetch('/v1/orgs');
     if (!listResponse.ok) throw new Error('Could not list audit workspaces');

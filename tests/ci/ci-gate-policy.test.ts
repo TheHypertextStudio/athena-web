@@ -364,6 +364,9 @@ describe('the real workflows', () => {
 
   it('parses every file in .github/workflows', () => {
     expect(workflows.map((workflow) => workflow.path)).toEqual([
+      // Builds the deploy images. ci.yml invokes it with no `needs` so it overlaps the gates;
+      // it runs no tests or checks, so it is not a gate and holds nothing back.
+      '.github/workflows/build-images.yml',
       '.github/workflows/ci.yml',
       '.github/workflows/deploy.yml',
       // e2e is a check job that deliberately does not gate the deploy; see e2e.yml for why.
@@ -397,20 +400,47 @@ describe('the real workflows', () => {
     // Recorded expectation: adding a check job to ci.yml must update this list *and*
     // deploy-production.needs, which is exactly the coupling SCR-19 asks for.
     expect(checkJobs).toEqual(['lint', 'typecheck', 'secret-scan', 'test', 'build']);
-    expect(deploy?.needs).toEqual(['lint', 'typecheck', 'secret-scan', 'test', 'build']);
+    // `build-images` is in `needs` without being a check job, and the asymmetry is deliberate:
+    // it runs no tests, so SCR-19 does not require it, but the deploy consumes the images it
+    // pushes so the ordering is a real data dependency. Every check job still appears here.
+    expect(deploy?.needs).toEqual([
+      'lint',
+      'typecheck',
+      'secret-scan',
+      'test',
+      'build',
+      'build-images',
+    ]);
+    expect(checkJobs.every((job) => deploy?.needs.includes(job))).toBe(true);
   });
 
   it('runs the coverage gate — a bare `vitest run` enforces no thresholds (SCR-15)', () => {
     const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
-    // One job, not two. `test` and `coverage` ran the same suites over the same file set; only
-    // the `test:coverage` script applies tooling/vitest/preset.ts's thresholds, so that is the
-    // command the gate has to see.
+    // The job is sharded across a package matrix, so the gating command now carries a
+    // `--filter`. What must hold is what held before sharding: the command that runs is
+    // `test:coverage` — the only script tooling/vitest/preset.ts applies thresholds to — never a
+    // bare `turbo run test`, and no step in the job is soft-failed.
     const test = ci?.jobs.find((job) => job.id === 'test');
     const commands = (test?.steps ?? []).flatMap((step) => (step.run ? [step.run] : []));
 
-    expect(commands).toContain('pnpm turbo run test:coverage --cache-dir=.turbo');
-    expect(commands).not.toContain('pnpm turbo run test --cache-dir=.turbo');
+    expect(commands.some((command) => command.startsWith('pnpm turbo run test:coverage'))).toBe(
+      true,
+    );
+    expect(commands.some((command) => /^pnpm turbo run test(?:\s|$)/.test(command))).toBe(false);
     expect(test?.steps.every((step) => !step.continueOnError)).toBe(true);
+  });
+
+  it('leaves no package untested when the test job is sharded (SCR-15)', () => {
+    // Sharding introduces a failure mode the coverage gate cannot see: a package that matches
+    // no shard's filter is never run, and a suite that never runs cannot fail. The protection is
+    // structural — the catch-all group is defined by EXCLUSION (`--filter=!…`) rather than by an
+    // enumerated list, so a newly added package lands there by default instead of nowhere.
+    // Rewriting that group as a list of package names is the regression this guards against.
+    const source = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
+    const groups = [...source.matchAll(/^ +- group: (\S+)$/gm)].map(([, group]) => group);
+
+    expect(groups).toEqual(['api', 'web', 'rest']);
+    expect(source).toContain('filter: --filter=!@docket/api --filter=!@docket/web');
   });
 
   it('runs the secret scan against the committed .gitleaks.toml (GEN-06 clause 1)', () => {

@@ -144,9 +144,40 @@ jobs:
   # One job, not two. `turbo run test` and `turbo run test:coverage` run the same suites over the
   # same file set; `--coverage` is additive instrumentation and `all: true` makes it the slower of
   # the pair, so a separate uninstrumented run reports nothing this one does not.
+  # Sharded across three runners, because the work does not fit one. Measured on run 31865988406,
+  # this task ran 19 package suites on a single two-core runner in 16m47s — 87% of the whole
+  # pipeline — while four other runners sat idle. The split is by PACKAGE, not by test file:
+  # each package computes its own coverage, so the thresholds in tooling/vitest/preset.ts stay
+  # intact with no report-merging machinery. Splitting by file would hand each shard a partial
+  # coverage number and fail the 89% gate in apps/api/vite.config.ts.
+  #
+  # The groups partition the task set exactly — `turbo run test:coverage --dry` reports 19
+  # packages, and api(1) + web(1) + rest(17) = 19. If a package is ever added that matches none
+  # of these filters it would silently go untested, so the `rest` group is defined by EXCLUSION
+  # rather than by an enumerated list: anything new lands there by default.
+  #
+  # The job id stays `test`, so `deploy-production.needs` and scripts/ci-gate-policy.ts (SCR-19)
+  # keep working unchanged — a matrix multiplies the runs, not the id.
   test:
-    name: Test
+    name: Test (${{ matrix.group }})
     runs-on: ubuntu-latest
+    strategy:
+      # One slow package's failure must not hide the other two shards' results.
+      fail-fast: false
+      matrix:
+        include:
+          # apps/api — 6m20s, the long pole. 345 suites, 241 of which bootstrap a database.
+          - group: api
+            filter: --filter=@docket/api
+            tooling: false
+          # apps/web — 4m35s.
+          - group: web
+            filter: --filter=@docket/web
+            tooling: false
+          # The other 17 packages, ~6m combined.
+          - group: rest
+            filter: --filter=!@docket/api --filter=!@docket/web
+            tooling: true
     env:
       # Tests run in local/pglite mode — skip prod env validation.
       SKIP_ENV_VALIDATION: '1'
@@ -161,21 +192,25 @@ jobs:
           node-version-file: '.node-version'
           cache: pnpm
 
+      # Keyed per group. Sharing one key across the matrix would have three jobs racing to save
+      # the same entry, so two of the three uploads are discarded and their next run misses.
       - uses: actions/cache@v5
         with:
           path: .turbo
-          key: turbo-test-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-test-${{ runner.os }}-
+          key: turbo-test-${{ matrix.group }}-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-test-${{ matrix.group }}-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run test:coverage --cache-dir=.turbo
+      - run: pnpm turbo run test:coverage ${{ matrix.filter }} --cache-dir=.turbo
 
       # `turbo run test:coverage` only runs *package* suites. The repository-level suites under `tests/`
       # — the CI gate policy (tests/ci) and the launch-record reconciler (tests/launch) — belong
       # to no workspace package, so turbo never sees them. Without this step the guards that
-      # protect this very file would not run in CI at all.
+      # protect this very file would not run in CI at all. They ride with `rest` so they run
+      # exactly once rather than three times.
       - run: pnpm test:tooling
+        if: matrix.tooling
 
       - id: coverage
         if: always()
@@ -224,6 +259,25 @@ jobs:
 
       - run: pnpm turbo run build --cache-dir=.turbo
 
+  # Deliberately NO `needs`. The Docker builds take ~4 minutes and depend on nothing the check
+  # jobs produce, so they run alongside them rather than after: by the time the gates are green
+  # both images are already in Artifact Registry and `deploy-production` has only migrations and
+  # the Cloud Run rollout left to do.
+  #
+  # This is not a hole in the gating. Building an image publishes nothing a user can reach —
+  # `deploy-production` below still needs every check job, so a red run rolls out nothing. The
+  # cost is one discarded image build on a failing run, which is the point of the trade.
+  # `scripts/ci-gate-policy.ts` sees a job with no gating command and correctly does not classify
+  # it as a check job, so SCR-19 is unaffected.
+  build-images:
+    name: Build deploy images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/build-images.yml
+    secrets: inherit
+
   # Browser e2e against the real dev stack (Portless routing + Next dev + Hono API + PGlite),
   # exactly the topology `pnpm dev` gives a developer — including the MCP OAuth flows
   # (register → consent → token → Bearer /mcp), which .env.local enables locally.
@@ -233,7 +287,7 @@ jobs:
   deploy-production:
     name: Deploy production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [lint, typecheck, secret-scan, test, build]
+    needs: [lint, typecheck, secret-scan, test, build, build-images]
     permissions:
       contents: read
       id-token: write

@@ -1,0 +1,84 @@
+name: Build deploy images
+
+# Split out of deploy.yml so the Docker builds can overlap the test gates instead of queueing
+# behind them.
+#
+# deploy.yml is a reusable workflow invoked by ci.yml's `deploy-production`, which needs every
+# check job — so anything living in that file inherently starts only after the slowest gate is
+# green. Moving the builds into their own `workflow_call` lets ci.yml invoke them with no `needs`,
+# at t=0, alongside lint/typecheck/test. By the time the gates finish, both images are already in
+# Artifact Registry and deploy.yml has nothing left to do but migrate and roll out.
+#
+# This changes WHEN images are built, never WHAT ships: `deploy-production` still needs every
+# gate, so a red run deploys nothing. The only cost is one wasted image build on a failing run,
+# which is the trade this split is for.
+
+on:
+  workflow_call:
+
+env:
+  REGION: ${{ vars.GCP_REGION }}
+  REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/docket
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # One job per image so the two builds run concurrently. They share no inputs — every build arg
+  # comes from repository variables — so there is nothing to sequence them for.
+  build:
+    name: Build ${{ matrix.image }} image
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # apps/api/Dockerfile declares only NODE_VERSION. The public URLs reach the API through
+          # Cloud Run's environment at run time, so baking them in would be inert.
+          - image: api
+            dockerfile: apps/api/Dockerfile
+            extra_build_args: ''
+          # apps/admin/Dockerfile declares the four below alongside NODE_VERSION: Next inlines
+          # NEXT_PUBLIC_* into the client bundle at build time, so they must be present here
+          # rather than supplied to the running service.
+          - image: admin
+            dockerfile: apps/admin/Dockerfile
+            extra_build_args: |
+              API_URL=${{ vars.API_URL }}
+              NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
+              NEXT_PUBLIC_APP_URL=${{ vars.WEB_URL }}
+              NEXT_PUBLIC_PASSKEY_RP_ID=${{ vars.PASSKEY_RP_ID }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - id: node-ver
+        run: echo "value=$(cat .node-version)" >> "$GITHUB_OUTPUT"
+
+      # Layer cache lives in Artifact Registry, not the GitHub Actions cache. `type=gha` draws
+      # from a 10GB repository-wide budget shared with the `.turbo` caches, and two `mode=max`
+      # scopes were large enough to evict each other — so each build restored a cache the other
+      # had just displaced. A registry-backed cache sits next to the images it belongs to, has no
+      # such budget, and is readable by an operator building the same image locally.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ matrix.image }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ matrix.image }}:buildcache,mode=max
+          build-args: |
+            NODE_VERSION=${{ steps.node-ver.outputs.value }}
+            ${{ matrix.extra_build_args }}

@@ -21,8 +21,72 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The production build runs once here rather than once per shard. Each of the four shards used
+  # to run `turbo run build --filter=@docket/web` itself, so the same Next build was paid for four
+  # times over — and all four raced to write the same `turbo-e2e-<os>-<sha>` cache entry, so three
+  # of the four uploads were discarded. Building once and shipping the output as an artifact makes
+  # the cost independent of the shard count.
+  build:
+    name: Build the app
+    runs-on: ubuntu-latest
+    env:
+      # `NEXT_PUBLIC_*` are inlined into the client bundle at build time, so the build must see
+      # the same values the shards will serve under. Kept byte-identical to the `env:` block on
+      # the e2e job below — if these drift, the bundle points at hosts the suite never starts.
+      APP_URL: http://docket.localhost:3000
+      WEB_URL: http://docket.localhost:3000
+      API_URL: http://api.docket.localhost:4000
+      NEXT_PUBLIC_APP_URL: http://docket.localhost:3000
+      NEXT_PUBLIC_API_URL: http://api.docket.localhost:4000
+      NEXT_PUBLIC_PASSKEY_RP_ID: docket.localhost
+      SKIP_ENV_VALIDATION: '1'
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: pnpm
+
+      - uses: actions/cache@v5
+        with:
+          path: .turbo
+          key: turbo-e2e-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-e2e-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      # A production build, not `next dev`. Under the dev server Turbopack compiles each route on
+      # first request — inside whichever test asked for it — which on a two-core runner outlasts
+      # any per-test budget worth setting and makes the suite's result a function of which spec
+      # drew the cold route.
+      - name: Build the app
+        run: pnpm turbo run build --filter=@docket/web --cache-dir=.turbo
+
+      # `output: standalone` emits a server plus a traced module graph, but neither the static
+      # assets nor `public/` — Next expects the deployment to place those, exactly as the
+      # Dockerfiles do.
+      - name: Assemble the standalone server
+        run: |
+          set -euo pipefail
+          cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+          cp -r apps/web/public apps/web/.next/standalone/apps/web/public
+
+      # The assembled tree is self-contained, so the shards need nothing else from the build.
+      # `retention-days: 1` because this artifact is an intra-run handoff, not a record.
+      - uses: actions/upload-artifact@v6
+        with:
+          name: web-standalone
+          path: apps/web/.next/standalone
+          retention-days: 1
+          include-hidden-files: true
+
   e2e:
     name: E2E (${{ matrix.shard }}/${{ strategy.job-total }})
+    needs: build
     runs-on: ubuntu-latest
     # Each shard is a separate runner with its own stack and its own embedded database, which is
     # what lets `workers: 1` (playwright.config.ts — the specs share one mutable database) coexist
@@ -66,33 +130,18 @@ jobs:
           node-version-file: '.node-version'
           cache: pnpm
 
-      - uses: actions/cache@v5
-        with:
-          path: .turbo
-          key: turbo-e2e-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-e2e-${{ runner.os }}-
-
       - run: pnpm install --frozen-lockfile
 
       - name: Map dev hosts to loopback
         run: echo "127.0.0.1 docket.localhost api.docket.localhost" | sudo tee -a /etc/hosts
 
-      # A production build, not `next dev`. Under the dev server Turbopack compiles each route on
-      # first request — inside whichever test asked for it — which on a two-core runner outlasts
-      # any per-test budget worth setting and makes the suite's result a function of which spec
-      # drew the cold route. `NEXT_PUBLIC_*` above are inlined here, so this must run after they
-      # are set.
-      - name: Build the app
-        run: pnpm turbo run build --filter=@docket/web --cache-dir=.turbo
-
-      # `output: standalone` emits a server plus a traced module graph, but neither the static
-      # assets nor `public/` — Next expects the deployment to place those, exactly as the
-      # Dockerfiles do.
-      - name: Assemble the standalone server
-        run: |
-          set -euo pipefail
-          cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
-          cp -r apps/web/public apps/web/.next/standalone/apps/web/public
+      # Built once by the `build` job above. `upload-artifact` does not preserve the executable
+      # bit or symlinks, but the standalone tree needs neither: it is plain `.js` plus a traced
+      # `node_modules`, started by `node server.js`.
+      - uses: actions/download-artifact@v6
+        with:
+          name: web-standalone
+          path: apps/web/.next/standalone
 
       # Through `dotenv -e .env.local`, exactly as the root `dev` script does. That file is
       # committed and carries the local-mode settings the suite depends on — `DATABASE_URL` for the

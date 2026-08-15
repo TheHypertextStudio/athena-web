@@ -24,35 +24,31 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: pnpm
+
+      # A filtered install, matching `deploy-runner` below: this job needs `tsx` and nothing else
+      # from the workspace. The previous `npx -y tsx` re-resolved and downloaded tsx from the
+      # registry on every single deploy, and did it outside the `tsx@^4.22.4` pin in the root
+      # package.json — so the production secret gate ran on whatever version npm served that day.
+      - run: pnpm install --frozen-lockfile --filter @docket/root
+
       - name: Validate production Secret Manager bindings
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           API_SECRET_BINDINGS: ${{ vars.API_SECRET_BINDINGS }}
-        run: npx -y tsx scripts/production-secrets.ts
-
-      - uses: docker/setup-buildx-action@v4
+        run: pnpm exec tsx scripts/production-secrets.ts
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
-      - id: node-ver
-        run: echo "value=$(cat .node-version)" >> "$GITHUB_OUTPUT"
-
-      - name: Build and push API image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: apps/api/Dockerfile
-          push: true
-          # The migration step below runs this exact image. Exporting it to the runner's daemon
-          # here costs a local image load; re-fetching it from Artifact Registry cost a full pull
-          # of an image this runner builds moments earlier.
-          load: true
-          tags: ${{ env.REGISTRY }}/api:${{ github.sha }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
-          build-args: NODE_VERSION=${{ steps.node-ver.outputs.value }}
-
+      # Built by the `build-images` workflow, which ci.yml starts at t=0 alongside the gates
+      # rather than after them. `docker run` below pulls this tag; it is no longer in the local
+      # daemon because a different runner produced it.
       - name: Apply production database migrations
         env:
           API_IMAGE: ${{ env.REGISTRY }}/api:${{ github.sha }}
@@ -156,12 +152,21 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile --filter @docket/root
+
       - name: Ensure Cloud Scheduler jobs
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           GCP_REGION: ${{ vars.GCP_REGION }}
           API_URL: ${{ vars.API_URL }}
-        run: npx -y tsx scripts/scheduler-setup.ts
+        run: pnpm exec tsx scripts/scheduler-setup.ts
 
   # No `needs: deploy-api`. The admin image consumes nothing the API job produces — every build
   # arg comes from repo vars — so the two Docker builds ran back to back for no reason. Admin is
@@ -182,29 +187,8 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
-      - uses: docker/setup-buildx-action@v4
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
-
-      - id: node-ver
-        run: echo "value=$(cat .node-version)" >> "$GITHUB_OUTPUT"
-
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: apps/admin/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/admin:${{ github.sha }}
-          cache-from: type=gha,scope=admin
-          cache-to: type=gha,scope=admin,mode=max
-          build-args: |
-            NODE_VERSION=${{ steps.node-ver.outputs.value }}
-            API_URL=${{ vars.API_URL }}
-            NEXT_PUBLIC_API_URL=${{ vars.API_URL }}
-            NEXT_PUBLIC_APP_URL=${{ vars.WEB_URL }}
-            NEXT_PUBLIC_PASSKEY_RP_ID=${{ vars.PASSKEY_RP_ID }}
-
+      # No build step: `admin:${{ github.sha }}` was pushed by the `build-images` workflow while
+      # the gates were still running. This job only rolls it out.
       - id: deploy-admin
         uses: google-github-actions/deploy-cloudrun@v3
         with:

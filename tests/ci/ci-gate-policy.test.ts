@@ -388,7 +388,9 @@ describe('the real workflows', () => {
     const report = formatReport(workflows, checkGatePolicy(workflows));
 
     expect(e2e?.name).toBe('E2E');
-    expect(isAdvisoryWorkflow(e2e!)).toBe(true);
+    expect(e2e).toBeDefined();
+    if (!e2e) throw new Error('Expected the E2E workflow fixture');
+    expect(isAdvisoryWorkflow(e2e)).toBe(true);
     expect(report).toContain('advisory check workflow(s): .github/workflows/e2e.yml');
   });
 
@@ -441,6 +443,21 @@ describe('the real workflows', () => {
 
     expect(groups).toEqual(['api', 'web', 'rest']);
     expect(source).toContain('filter: --filter=!@docket/api --filter=!@docket/web');
+  });
+
+  it('bounds every Turbo workspace gate to one package at a time', () => {
+    const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
+    const commands = (ci?.jobs ?? []).flatMap((job) =>
+      job.steps.flatMap((step) => (step.run ? [step.run] : [])),
+    );
+    const turboGates = commands.filter((command) => command.startsWith('pnpm turbo run '));
+
+    expect(turboGates).toEqual([
+      'pnpm turbo run lint --concurrency=1',
+      'pnpm turbo run typecheck --concurrency=1',
+      'pnpm turbo run test:coverage ${{ matrix.filter }} --concurrency=1',
+      'pnpm turbo run build --concurrency=1',
+    ]);
   });
 
   it('runs the secret scan against the committed .gitleaks.toml (GEN-06 clause 1)', () => {

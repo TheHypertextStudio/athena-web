@@ -64,7 +64,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run lint
+      - run: pnpm turbo run lint --concurrency=1
 
   typecheck:
     name: Types
@@ -85,7 +85,7 @@ jobs:
 
       # Rides with typecheck rather than lint to balance the two runners: typecheck 48s plus
       # format 33s lands beside lint's 83s.
-      - run: pnpm turbo run typecheck
+      - run: pnpm turbo run typecheck --concurrency=1
 
       - run: pnpm format:check
 
@@ -188,7 +188,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run test:coverage ${{ matrix.filter }}
+      - run: pnpm turbo run test:coverage ${{ matrix.filter }} --concurrency=1
 
       # `turbo run test:coverage` only runs *package* suites. The repository-level suites under `tests/`
       # — the CI gate policy (tests/ci) and the launch-record reconciler (tests/launch) — belong
@@ -237,7 +237,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run build
+      - run: pnpm turbo run build --concurrency=1
 
   # Deliberately NO `needs`. The Docker builds take ~4 minutes and depend on nothing the check
   # jobs produce, so they run alongside them rather than after: by the time the gates are green

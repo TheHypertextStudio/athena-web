@@ -1,5 +1,7 @@
 /**
- * Repo-invariant tests for the two committed env files.
+ * Repo-invariant tests for the committed env files and for the manifests that generate an
+ * environment: the Cloud Run env file `deploy.yml` writes, and the `.env.local` skeleton
+ * `pnpm bootstrap` writes.
  *
  * @remarks
  * `.env.local` is tracked on purpose — it carries safe local defaults so a fresh clone runs the whole
@@ -29,6 +31,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import { VAR_REGISTRY } from '../../src/registry';
 import {
   agentServer,
   authServer,
@@ -178,6 +181,86 @@ describe('committed env files', () => {
     // framework-managed (`next build` → production) and pinning it here poisons the build.
     expect(assignedKeys(committed('.env.local')).has('NODE_ENV')).toBe(false);
     expect(assignedKeys(working('.env.example')).has('NODE_ENV')).toBe(false);
+  });
+});
+
+/** The required set for the API alone, without the browser vars only the web apps validate. */
+function requiredApiKeys(): string[] {
+  const out = new Set<string>();
+  for (const slice of API_SLICES) {
+    for (const [key, schema] of Object.entries(slice)) {
+      if (!tolerable(schema)) out.add(key);
+    }
+  }
+  return [...out].sort();
+}
+
+/** Names the registry marks as credentials, which production mounts from Secret Manager. */
+const SENSITIVE_VARS = new Set(VAR_REGISTRY.filter((spec) => spec.sensitive).map((s) => s.name));
+
+/**
+ * `PORT` is set by Cloud Run itself on every container, so the deploy manifest must not pin it.
+ * It is the one required var whose absence there is correct.
+ */
+const CLOUD_RUN_SUPPLIED = new Set(['PORT']);
+
+/** The `KEY:` names in the heredoc `deploy.yml` writes and passes as `--env-vars-file`. */
+function cloudRunEnvKeys(): Set<string> {
+  const workflow = working('.github/workflows/deploy.yml');
+  const start = workflow.indexOf('docket-api-env.yaml');
+  const body = workflow.slice(start).split("<<'EOF'")[1]?.split('\n          EOF')[0] ?? '';
+  const keys = new Set<string>();
+  for (const line of body.split('\n')) {
+    const match = /^\s*([A-Z_][A-Z0-9_]*)\s*:/.exec(line);
+    if (match?.[1]) keys.add(match[1]);
+  }
+  return keys;
+}
+
+/** The `KEY=` names in the `.env.local` skeleton `pnpm bootstrap` writes for a fresh machine. */
+function bootstrapSkeletonKeys(): Set<string> {
+  const script = working('scripts/bootstrap.ts');
+  const skeleton = script.split('const content = `')[1]?.split('\n`;')[0] ?? '';
+  return assignedKeys(skeleton);
+}
+
+/**
+ * The two manifests that provision a required var somewhere other than a committed env file.
+ *
+ * @remarks
+ * Both were unguarded, and production found out the hard way: `WORK_LOCATION_PROJECTION_ENABLED`
+ * shipped as required, went into `.env.example` and `.env.local` (which the tests above cover) and
+ * into neither of these. `--env-vars-file` replaces the service's entire environment, so the next
+ * deploy handed Cloud Run an env missing a required var, every container exited 1 before binding
+ * the port, and the release never promoted.
+ */
+describe('generated deployment manifests', () => {
+  const requiredApi = requiredApiKeys();
+
+  it('derives a non-trivial API required set', () => {
+    expect(requiredApi.length).toBeGreaterThan(10);
+    expect(requiredApi).toContain('APP_MODE');
+    expect(requiredApi).not.toContain('NEXT_PUBLIC_API_URL');
+  });
+
+  it('gives Cloud Run every required var it does not mount as a secret', () => {
+    const present = cloudRunEnvKeys();
+    // Guards the guard: a heredoc this parser failed to find would pass every check below.
+    expect(present.has('APP_MODE')).toBe(true);
+    const missing = requiredApi.filter(
+      (key) => !present.has(key) && !SENSITIVE_VARS.has(key) && !CLOUD_RUN_SUPPLIED.has(key),
+    );
+    expect(
+      missing,
+      `deploy.yml writes no value for: ${missing.join(', ')} — the API exits 1 on boot`,
+    ).toEqual([]);
+  });
+
+  it('gives the bootstrap skeleton every required var', () => {
+    const present = bootstrapSkeletonKeys();
+    expect(present.has('APP_MODE')).toBe(true);
+    const missing = requiredApi.filter((key) => !present.has(key));
+    expect(missing, `scripts/bootstrap.ts writes no value for: ${missing.join(', ')}`).toEqual([]);
   });
 });
 

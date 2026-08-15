@@ -185,9 +185,9 @@ describe('RFC 8292 VAPID authorization', () => {
     // scalar, not merely some valid one.
     const token = /vapid t=([^,]+), k=(.+)/.exec(header);
     expect(token).not.toBeNull();
-    const [, jwt, advertised] = token!;
+    const [, jwt, advertised] = assertDefined(token);
     expect(advertised).toBe(keys.publicKey);
-    const [headerPart, claimsPart, signaturePart] = jwt!.split('.');
+    const [headerPart, claimsPart, signaturePart] = assertDefined(jwt).split('.');
     const spki = Buffer.concat([
       Buffer.from('3059301306072a8648ce3d020106082a8648ce3d030107034200', 'hex'),
       Buffer.from(keys.publicKey, 'base64url'),
@@ -197,7 +197,7 @@ describe('RFC 8292 VAPID authorization', () => {
     expect(
       verifier.verify(
         { key: spki, format: 'der', type: 'spki', dsaEncoding: 'ieee-p1363' },
-        Buffer.from(signaturePart!, 'base64url'),
+        Buffer.from(assertDefined(signaturePart), 'base64url'),
       ),
     ).toBe(true);
   });

@@ -12,6 +12,7 @@ import {
   isSubstantiveEpisodeEvent,
   subjectDayEpisodeKey,
 } from '../../src/activity-episode';
+import { assertDefined } from '@docket/test-utils';
 
 const DAY = '2026-08-12';
 
@@ -210,7 +211,7 @@ describe('groupAdjacentEpisodes', () => {
     const older = event('older', '2026-08-12T11:30:00.000Z');
     const episodes = groupAdjacentEpisodes([newer, older]);
     expect(episodes).toHaveLength(1);
-    expect(episodes[0]!.allEvents.map((e) => e.id)).toEqual(['newer', 'older']);
+    expect(assertDefined(episodes[0]).allEvents.map((e) => e.id)).toEqual(['newer', 'older']);
   });
 
   it('splits a run when the adjacent gap exceeds the window, and not when it meets it', () => {
@@ -241,14 +242,14 @@ describe('groupAdjacentEpisodes', () => {
     const ascending = groupAdjacentEpisodes([first, second, third]);
     expect(descending).toHaveLength(1);
     expect(ascending).toHaveLength(1);
-    expect(ascending[0]!.key).toBe(descending[0]!.key);
+    expect(assertDefined(ascending[0]).key).toBe(assertDefined(descending[0]).key);
   });
 
   it('breaks a timestamp tie by id so the key cannot depend on listing order', () => {
     const alpha = event('alpha', '2026-08-12T12:00:00.000Z');
     const beta = event('beta', '2026-08-12T12:00:00.000Z');
-    expect(groupAdjacentEpisodes([alpha, beta])[0]!.key).toBe(
-      groupAdjacentEpisodes([beta, alpha])[0]!.key,
+    expect(assertDefined(groupAdjacentEpisodes([alpha, beta])[0]).key).toBe(
+      assertDefined(groupAdjacentEpisodes([beta, alpha])[0]).key,
     );
   });
 
@@ -256,7 +257,7 @@ describe('groupAdjacentEpisodes', () => {
     const done = event('done', '2026-08-12T12:00:00.000Z', { kind: 'completed' });
     const reaction = event('reaction', '2026-08-12T11:58:00.000Z', { kind: 'reaction' });
     const status = event('status', '2026-08-12T11:56:00.000Z');
-    const episode = groupAdjacentEpisodes([done, reaction, status])[0]!;
+    const episode = assertDefined(groupAdjacentEpisodes([done, reaction, status])[0]);
     expect(episode.visibleEvents.map((e) => e.id)).toEqual(['done', 'status']);
     expect(episode.relatedEvents.map((e) => e.id)).toEqual(['reaction']);
     expect(episode.allEvents).toHaveLength(3);
@@ -266,7 +267,7 @@ describe('groupAdjacentEpisodes', () => {
   it('marks an all-minor episode so it can still be summarized', () => {
     const started = event('started', '2026-08-12T12:00:00.000Z', { kind: 'timer_started' });
     const stopped = event('stopped', '2026-08-12T11:59:00.000Z', { kind: 'timer_stopped' });
-    const episode = groupAdjacentEpisodes([started, stopped])[0]!;
+    const episode = assertDefined(groupAdjacentEpisodes([started, stopped])[0]);
     expect(episode.visibleEvents).toEqual([]);
     expect(episode.minorOnly).toBe(true);
   });
@@ -281,11 +282,11 @@ describe('groupAdjacentEpisodes', () => {
     const echo = event('echo', '2026-08-12T11:58:00.000Z', { kind: 'completed', detail });
     const later = event('later', '2026-08-12T11:00:00.000Z', { kind: 'completed', detail });
 
-    const folded = groupAdjacentEpisodes([first, echo])[0]!;
+    const folded = assertDefined(groupAdjacentEpisodes([first, echo])[0]);
     expect(folded.visibleEvents.map((e) => e.id)).toEqual(['first']);
     expect(folded.relatedEvents.map((e) => e.id)).toEqual(['echo']);
 
-    const recurrence = groupAdjacentEpisodes([first, later])[0]!;
+    const recurrence = assertDefined(groupAdjacentEpisodes([first, later])[0]);
     expect(recurrence.visibleEvents.map((e) => e.id)).toEqual(['first', 'later']);
   });
 });
@@ -300,16 +301,15 @@ describe('groupSubjectDayEpisodes', () => {
     const evening = event('evening', '2026-08-12T21:00:00.000Z');
     const episodes = groupSubjectDayEpisodes([morning, evening], DAY);
     expect(episodes).toHaveLength(1);
-    expect(episodes[0]!.allEvents.map((e) => e.id)).toEqual(['morning', 'evening']);
+    expect(assertDefined(episodes[0]).allEvents.map((e) => e.id)).toEqual(['morning', 'evening']);
   });
 
   it('orders episodes by when each subject was first touched', () => {
     const late = event('late', '2026-08-12T18:00:00.000Z');
     const early = otherSubject('early', '2026-08-12T08:00:00.000Z');
-    expect(groupSubjectDayEpisodes([late, early], DAY).map((e) => e.allEvents[0]!.id)).toEqual([
-      'early',
-      'late',
-    ]);
+    expect(
+      groupSubjectDayEpisodes([late, early], DAY).map((e) => assertDefined(e.allEvents[0]).id),
+    ).toEqual(['early', 'late']);
   });
 
   it('produces identical episodes from ascending and descending input', () => {
@@ -337,19 +337,21 @@ describe('groupSubjectDayEpisodes', () => {
     const after = groupSubjectDayEpisodes(backfilled, DAY);
 
     expect(after).toHaveLength(1);
-    expect(after[0]!.key).toBe(before[0]!.key);
-    expect(after[0]!.allEvents.map((e) => e.id)).toEqual(['13', '14', '15']);
+    expect(assertDefined(after[0]).key).toBe(assertDefined(before[0]).key);
+    expect(assertDefined(after[0]).allEvents.map((e) => e.id)).toEqual(['13', '14', '15']);
   });
 
   it('keys each episode by its subject and the day', () => {
-    const only = groupSubjectDayEpisodes([event('a', '2026-08-12T09:00:00.000Z')], DAY)[0]!;
+    const only = assertDefined(
+      groupSubjectDayEpisodes([event('a', '2026-08-12T09:00:00.000Z')], DAY)[0],
+    );
     expect(only.key).toBe(subjectDayEpisodeKey(only.subjectKey, DAY));
   });
 
   it('applies the same substantive classification as adjacent grouping', () => {
     const done = event('done', '2026-08-12T09:00:00.000Z', { kind: 'completed' });
     const reaction = event('reaction', '2026-08-12T20:00:00.000Z', { kind: 'reaction' });
-    const episode = groupSubjectDayEpisodes([done, reaction], DAY)[0]!;
+    const episode = assertDefined(groupSubjectDayEpisodes([done, reaction], DAY)[0]);
     expect(episode.visibleEvents.map((e) => e.id)).toEqual(['done']);
     expect(episode.relatedEvents.map((e) => e.id)).toEqual(['reaction']);
   });

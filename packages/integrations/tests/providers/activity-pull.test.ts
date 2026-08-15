@@ -5,6 +5,7 @@ import { GitHubProviderClient } from '../../src/github';
 import { GmailProviderClient } from '../../src/gmail';
 import { MockConnector } from '../../src/mock-connector';
 import type { ProviderHttp } from '../../src/provider-http';
+import { assertDefined } from '@docket/test-utils';
 
 /** A record-only ProviderHttp double — captures GET paths and answers via a per-test router. */
 class RecordingHttp {
@@ -83,7 +84,9 @@ describe('Gmail activity pull', () => {
     const second = await client(http).pullActivity({ ...WINDOW, maxDrafts: 50 });
 
     expect(first.drafts).toHaveLength(1);
-    expect(first.drafts[0]!.dedupeKey).toBe(second.drafts[0]!.dedupeKey);
+    expect(assertDefined(first.drafts[0]).dedupeKey).toBe(
+      assertDefined(second.drafts[0]).dedupeKey,
+    );
   });
 
   it('groups a day of replies on one thread under one subject', async () => {
@@ -219,9 +222,10 @@ describe('GitHub activity pull', () => {
     const { drafts } = await client(http).pullActivity({ ...WINDOW, maxDrafts: 50 });
 
     expect(drafts.map((d) => d.kind)).toEqual(['completed']);
-    expect(drafts[0]!.detail?.schema === 'github.pull_request' && drafts[0]!.detail.merged).toBe(
-      false,
-    );
+    expect(
+      assertDefined(drafts[0]).detail?.schema === 'github.pull_request' &&
+        assertDefined(drafts[0]).detail.merged,
+    ).toBe(false);
   });
 
   it('never asks GitHub for more rows per page than it allows', async () => {

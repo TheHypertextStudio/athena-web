@@ -919,9 +919,37 @@
 }
 
 .detail-header {
-  padding-block-start: 1.25rem;
   padding-block-end: 0.5rem;
   animation-name: detail-header-collapse;
+}
+
+/*
+ * `padding-block-start` used to live on `.detail-header` itself. That worked only while the cover
+ * was the header's own direct absolutely-positioned child — an out-of-flow element ignores its
+ * containing block's padding, so `inset: 0` reached the header's true top edge regardless. Once
+ * the cover moved to live inside `.masthead-band` (so `.detail-tabs` could be its sibling instead
+ * of its sibling-behind-a-paint-order-trick), it became an ordinary in-flow box again, and the
+ * same padding started pushing the cover down with everything else — a plain strip of the
+ * header's own background above it that had no reason to exist. Moving the padding to this wrapper
+ * (a sibling of the cover, not an ancestor of it) keeps the identity content indented exactly as
+ * before while letting the cover fill `.masthead-band` all the way to its actual top.
+ */
+.masthead-content {
+  padding-block-start: 1.25rem;
+  /*
+   * Constant, not animated: `.detail-identity`'s compact height (2.5rem) is tuned to exactly match
+   * the collapsed glyph's scaled size, so at full collapse the glyph fills that row edge to edge —
+   * and since `.masthead-band` (and the cover with it) ends exactly where this content does, the
+   * glyph landed flush against the cover's own boundary with nothing between them. This is the
+   * buffer that boundary needs, in every collapse state, not just the ones this animation interpolates.
+   *
+   * 0.75rem, matching `.detail-tabs`'s own collapsed `margin-block-start` exactly: the cover/white
+   * boundary sits between them, and the two gaps that straddle it read as one visual rhythm — the
+   * moment they're different amounts, the boundary looks like it landed in the wrong place instead
+   * of like a deliberate line.
+   */
+  padding-block-end: 0.75rem;
+  animation-name: detail-masthead-content-collapse;
 }
 
 .detail-primary {
@@ -944,7 +972,18 @@
   inset-inline-start: 0;
   width: var(--detail-expanded-glyph-size);
   height: var(--detail-expanded-glyph-size);
-  transform-origin: left center;
+  /*
+   * `left top`, not `left center`: the glyph's *layout* box stays a fixed 48px (its scale
+   * transform never changes that), pinned to `.detail-identity`'s top edge — but the row's actual
+   * rendered height shrinks well below 48px as the title's collapsing padding shrinks it (down to
+   * 2.5rem at full collapse). Scaling around the box's own center meant the shrunk glyph's visual
+   * bottom edge stayed anchored 24px down from a center that no longer matched the row's real
+   * center, so it poked a few px past the row — and once the cover started ending exactly at that
+   * row's edge, past the cover too. Anchoring the scale at the top-left corner instead keeps the
+   * glyph's top pinned where its layout box already is, so it only ever shrinks inward from the
+   * bottom/right — never past a boundary its own row has already shrunk to.
+   */
+  transform-origin: left top;
   animation-name: detail-glyph-collapse;
 }
 
@@ -1048,6 +1087,7 @@
 
 .detail-backdrop-space,
 .detail-header,
+.masthead-content,
 .detail-masthead,
 .detail-glyph,
 .detail-title,
@@ -1108,8 +1148,13 @@
 
 @keyframes detail-header-collapse {
   to {
-    padding-block-start: 0.25rem;
     padding-block-end: 0.25rem;
+  }
+}
+
+@keyframes detail-masthead-content-collapse {
+  to {
+    padding-block-start: 0.25rem;
   }
 }
 
@@ -1121,7 +1166,7 @@
 
 @keyframes detail-tabs-collapse {
   to {
-    margin-block-start: 0.25rem;
+    margin-block-start: 0.75rem;
   }
 }
 

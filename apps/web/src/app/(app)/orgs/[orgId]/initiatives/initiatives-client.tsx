@@ -24,7 +24,7 @@ import { EditableTitle } from '@/components/editor/editable-title';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { formatDate } from '@/components/initiatives/format-date';
 import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
-import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import {
   type InitiativeDragObject,
   selfOrDescendantPredicate,
@@ -782,9 +782,9 @@ export default function InitiativesListClient(): JSX.Element {
                             className={`relative flex h-full min-w-0 ${hasSummary ? 'items-start pt-2' : 'items-center'}`}
                             style={{ paddingLeft: `${itemLeft}px` }}
                           >
-                            <InitiativeIconPicker
+                            <EntityIconPicker
                               display={item.display}
-                              initiativeName={item.name}
+                              entityName={item.name}
                               editable={item.organizationId === orgId}
                               pending={displayMutation.isPending}
                               onChange={(iconKey, colorKey, customColor) => {

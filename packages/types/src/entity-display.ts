@@ -233,7 +233,7 @@ export function defaultEntityDisplay(
     subjectType,
     subjectId,
     iconKey: DEFAULT_SUBJECT_ICON[subjectType],
-    colorKey: 'neutral',
+    colorKey: subjectType === 'team' ? hashTeamColorKey(subjectId) : 'neutral',
     customColor: null,
     coverImage: null,
     customized: false,
@@ -246,3 +246,44 @@ const DEFAULT_SUBJECT_ICON: Record<EntityDisplaySubjectType, EntityDisplayIconKe
   project: 'folder',
   team: 'users',
 };
+
+/**
+ * The colors an uncustomized team's default may land on.
+ *
+ * @remarks
+ * Only the decorative named palette — the five semantic keys (`primary`/`success`/`warning`/
+ * `danger`) carry meaning elsewhere in the product and would be misleading to hand a team by
+ * chance.
+ */
+export const TEAM_DEFAULT_COLOR_KEYS = [
+  'blue',
+  'sky',
+  'teal',
+  'green',
+  'amber',
+  'orange',
+  'rose',
+  'purple',
+  'indigo',
+] as const satisfies readonly EntityDisplayColorKey[];
+
+/**
+ * Derive an uncustomized team's default color from its id.
+ *
+ * @remarks
+ * A workspace that has just created six teams should not read as six identical gray tiles, but a
+ * cover that shuffled its color on every reload would read as a bug (see the `team-cover.tsx`
+ * doc comment). Hashing the id keeps the result varied *and* stable — the same team always lands
+ * on the same color, with no `entity_display` row and no migration required, so it applies to
+ * every existing team retroactively the next time its display is read.
+ *
+ * @param subjectId - The team's id.
+ * @returns A deterministic pick from {@link TEAM_DEFAULT_COLOR_KEYS}.
+ */
+function hashTeamColorKey(subjectId: string): EntityDisplayColorKey {
+  let hash = 0;
+  for (const char of subjectId) hash = (hash * 31 + char.charCodeAt(0)) | 0;
+  const picked = TEAM_DEFAULT_COLOR_KEYS[Math.abs(hash) % TEAM_DEFAULT_COLOR_KEYS.length];
+  /* v8 ignore next -- unreachable: modulo of a non-empty array is always a valid index. */
+  return picked ?? 'blue';
+}

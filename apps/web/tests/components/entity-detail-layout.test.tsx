@@ -38,6 +38,75 @@ describe('EntityDetailLayout', () => {
     expect(within(primary as HTMLElement).getByRole('button', { name: 'Publish' })).toBeVisible();
     expect(primary?.querySelector('.detail-identity')).not.toBeNull();
   });
+
+  it('bleeds the cover to the header/main edges rather than the gutter-inset measure track', () => {
+    render(
+      <EntityDetailLayout
+        icon={<span>icon</span>}
+        title="Launch"
+        tabs={<div>tabs</div>}
+        cover={<div data-testid="cover-content" />}
+      >
+        <div>body</div>
+      </EntityDetailLayout>,
+    );
+
+    const coverWrapper = screen.getByTestId('cover-content').parentElement;
+    // Every other direct child of a `.page-grid` element defaults to the gutter-inset `measure`
+    // track (see `.page-grid > *` in globals.css); an absolutely-positioned cover is no exception,
+    // so without `page-bleed` its `inset-0` was flush with that inset track, not with the header —
+    // the gap this test guards against actually shipped once already.
+    expect(coverWrapper).toHaveClass('page-bleed', 'absolute', 'inset-0');
+    // Matches `<main>`'s own `lg:rounded-xl` on purpose: the cover's rect now coincides exactly
+    // with `<main>`'s, so an unmatched radius here would make `<main>` clip it unpredictably.
+    expect(coverWrapper).toHaveClass('rounded-t-xl');
+  });
+
+  it('keeps the eyebrow/title indent off the cover, so the cover reaches the band without a gap', () => {
+    render(
+      <EntityDetailLayout
+        icon={<span>icon</span>}
+        title="Launch"
+        tabs={<div>tabs</div>}
+        cover={<div data-testid="cover-content" />}
+      >
+        <div>body</div>
+      </EntityDetailLayout>,
+    );
+
+    const coverWrapper = screen.getByTestId('cover-content').parentElement;
+    const band = coverWrapper?.closest('.masthead-band');
+    const paddedContent = band?.querySelector('.masthead-content');
+    // `.masthead-content` (which carries the indent that used to sit on `.detail-header`) must be
+    // the cover's *sibling*, not its ancestor — padding on an ancestor of an `inset-0` cover pushes
+    // the cover down with it and reopens the exact top gap this test guards against, which shipped
+    // once already the moment the padding moved one level too high.
+    expect(paddedContent?.contains(coverWrapper ?? null)).toBe(false);
+    expect(coverWrapper?.contains(paddedContent ?? null)).toBe(false);
+  });
+
+  it('structurally excludes the tab row from the cover, rather than painting over it', () => {
+    render(
+      <EntityDetailLayout
+        icon={<span>icon</span>}
+        title="Launch"
+        tabs={<div>tabs</div>}
+        cover={<div data-testid="cover-content" />}
+      >
+        <div>body</div>
+      </EntityDetailLayout>,
+    );
+
+    const coverWrapper = screen.getByTestId('cover-content').parentElement;
+    const tabsRow = screen.getByText('tabs').closest('.detail-tabs');
+    // Not a z-index bet, not an opaque backing standing in for a boundary: the cover's positioned
+    // ancestor (`.masthead-band`) simply does not contain `.detail-tabs` at all, so there is no
+    // lower edge for the cover to cross in the first place, in any scroll or collapse state.
+    expect(coverWrapper?.closest('.masthead-band')?.contains(tabsRow)).toBe(false);
+    expect(tabsRow?.contains(coverWrapper)).toBe(false);
+    // `.detail-tabs` is the masthead band's next sibling, not its descendant.
+    expect(coverWrapper?.closest('.masthead-band')?.nextElementSibling).toBe(tabsRow);
+  });
 });
 
 describe('EntityMetadataRow', () => {

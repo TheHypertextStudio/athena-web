@@ -96,8 +96,12 @@ export function TeamCard({
         {/* The glyph straddles the cover's lower edge, so the identity reads as one unit rather
             than as a picture with a caption under it. No Triage badge here: triage is on for every
             team by default, so a chip that is always present says nothing and costs a corner. It
-            belongs on the team page, where it is a setting someone can act on. */}
-        <div className="-mt-9 flex items-end">
+            belongs on the team page, where it is a setting someone can act on.
+
+            `relative z-10`: TeamCover is `position: relative` for its own clipping, which — per
+            CSS painting order — puts it above later *static* siblings regardless of DOM order. An
+            explicit stacking order here is what actually gets the glyph on top. */}
+        <div className="relative z-10 -mt-9 flex items-end">
           <span className="ring-surface-container-low group-hover:ring-surface rounded-full ring-4 transition-[--tw-ring-color] motion-reduce:transition-none">
             <EntityIconGlyph
               iconKey={display.iconKey}

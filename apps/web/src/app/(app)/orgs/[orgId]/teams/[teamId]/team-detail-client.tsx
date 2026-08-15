@@ -23,17 +23,19 @@
  * empty sections, not about kinds of team: a committee that meets monthly has cycles and tasks like
  * anyone else, and nothing here treats it as a lesser sort of team.
  */
-import type { EntityDisplayOut } from '@docket/types';
+import type { EntityDisplayColorKey, EntityDisplayIconKey, EntityDisplayOut } from '@docket/types';
 import { defaultEntityDisplay } from '@docket/types';
+import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { ChevronLeft } from '@docket/ui/icons';
+import { ChevronLeft, Folder } from '@docket/ui/icons';
 import { Button, Skeleton, Tabs } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { type JSX, useMemo, useState } from 'react';
 
 import { EntityDocument } from '@/components/editor/entity-document';
 import MentionedResources from '@/components/entity-detail/mentioned-resources';
-import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { CapacityChart } from '@/components/team-detail/capacity-chart';
 import { ThroughputChart } from '@/components/team-detail/throughput-chart';
 import { TeamPeople, TeamPeopleSkeleton } from '@/components/team-detail/team-people';
@@ -51,6 +53,8 @@ import {
 } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
+import { useOrgCapability } from '@/lib/use-org-capability';
+import { useOrgMembership } from '@/lib/use-org-membership';
 
 /** The team page's sections. */
 type TabId = 'overview' | 'activity' | 'library' | 'people';
@@ -65,11 +69,18 @@ type ActivityLens = 'capacity' | 'throughput';
  */
 export default function TeamDetailClient(): JSX.Element {
   const { orgId, teamId } = useAppParams<{ orgId: string; teamId: string }>();
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabId>('overview');
   const [lens, setLens] = useState<ActivityLens>('capacity');
   const [weightByEstimate, setWeightByEstimate] = useState(false);
 
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
+
+  // The entity-display PUT route is gated at `contribute`, a lower bar than the `manage`
+  // capability team CRUD itself requires — mirrors how program-detail-client.tsx resolves its
+  // own `canEdit` from the org-wide roster rather than a team-scoped one.
+  const membership = useOrgMembership(orgId);
+  const canEdit = useOrgCapability(membership.members, membership.roles, 'contribute');
 
   const teamQ = useApiQuery(
     apiQueryOptions(
@@ -106,6 +117,41 @@ export default function TeamDetailClient(): JSX.Element {
   const team = teamQ.data;
   const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
   const display: EntityDisplayOut = displayQ.data ?? defaultEntityDisplay('team', teamId);
+
+  const displayKey = queryKeys.entityDisplay(orgId, 'team', teamId);
+  const displayMutation = useApiMutation<
+    EntityDisplayOut,
+    { iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey; customColor: string | null },
+    { previous?: EntityDisplayOut }
+  >({
+    mutationFn: (json) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
+            param: { orgId, subjectType: 'team', subjectId: teamId },
+            json,
+          }),
+        'Could not customize this team.',
+      ),
+    onMutate: async ({ iconKey, colorKey, customColor }) => {
+      await queryClient.cancelQueries({ queryKey: displayKey });
+      const previous = queryClient.getQueryData<EntityDisplayOut>(displayKey);
+      queryClient.setQueryData<EntityDisplayOut>(displayKey, {
+        subjectType: 'team',
+        subjectId: teamId,
+        iconKey,
+        colorKey,
+        customColor,
+        coverImage: previous?.coverImage ?? null,
+        customized: true,
+      });
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(displayKey, context.previous);
+    },
+    invalidateKeys: [displayKey],
+  });
 
   const saveDescription = useApiMutation({
     mutationFn: (value: string | null) =>
@@ -158,11 +204,15 @@ export default function TeamDetailClient(): JSX.Element {
       cover={<TeamCover display={display} teamName={team.name} className="size-full" />}
       eyebrow={<BackToTeams orgId={orgId} />}
       icon={
-        <EntityIconGlyph
-          iconKey={display.iconKey}
-          colorKey={display.colorKey}
-          customColor={display.customColor}
+        <EntityIconPicker
+          display={display}
+          entityName={team.name}
+          editable={canEdit}
+          pending={displayMutation.isPending}
           size={48}
+          onChange={(iconKey, colorKey, customColor) => {
+            displayMutation.mutate({ iconKey, colorKey, customColor });
+          }}
         />
       }
       title={
@@ -191,7 +241,17 @@ export default function TeamDetailClient(): JSX.Element {
       }
     >
       {tab === 'overview' ? (
-        <section className="flex flex-col gap-6">
+        // The same `min-block-size` formula `.detail-body` itself uses (globals.css) — `100%`
+        // doesn't work here: it needs a *definite* parent height to resolve against, and
+        // `.detail-body`'s own height comes from a `min-block-size`, not a definite value, so a
+        // percentage on this section silently computes to nothing. `cqb` reads the actual
+        // scroll-container size directly, sidestepping that. Overview is the whole tab today, with
+        // no milestones or roster panel stacked below it the way a project's Overview has — so the
+        // document below is free to grow into all the height this section reserves, rather than
+        // reading as a business-card-sized box floating over an otherwise-empty panel.
+        // EntityDocument's own flex chain is inert until a wrapper like this one actually has
+        // spare height to give it.
+        <section className="flex min-h-[calc(100cqb-4rem+var(--detail-collapse-range))] flex-col gap-6">
           <EntityDocument
             value={team.description}
             canEdit
@@ -272,10 +332,17 @@ export default function TeamDetailClient(): JSX.Element {
             hasProse={hasProse}
           />
           {referenceCount === 0 && !mentions.isPending ? (
-            <p className="text-on-surface-variant text-body-medium">
-              Nothing is in this team’s library yet. Mention a document or a project in the team
-              description and it appears here — nobody has to attach it separately.
-            </p>
+            <EmptyState
+              icon={Folder}
+              title="Nothing in the library yet"
+              body="Mention a document or a project in the team description and it appears here — nobody has to attach it separately."
+              cta={{
+                label: 'Write the description',
+                onClick: () => {
+                  setTab('overview');
+                },
+              }}
+            />
           ) : null}
         </section>
       ) : null}
@@ -288,6 +355,12 @@ export default function TeamDetailClient(): JSX.Element {
             <TeamPeople members={members} taskNounPlural={taskNounPlural} />
           )}
         </section>
+      ) : null}
+
+      {displayMutation.error ? (
+        <p role="alert" className="text-error text-body-medium">
+          {userErrorMessage(displayMutation.error, 'Could not customize this team.')}
+        </p>
       ) : null}
     </EntityDetailLayout>
   );

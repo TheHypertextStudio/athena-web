@@ -16,7 +16,7 @@ const typographyPath = join(root, 'packages/ui/src/styles/globals.css');
 const buttonPath = join(root, 'packages/ui/src/primitives/button.tsx');
 const dialogPath = join(root, 'packages/ui/src/primitives/dialog.tsx');
 const controlPath = join(root, 'packages/ui/src/primitives/control.tsx');
-const iconPickerPath = join(root, 'apps/web/src/components/initiatives/initiative-icon-picker.tsx');
+const iconPickerPath = join(root, 'apps/web/src/components/entity-display/entity-icon-picker.tsx');
 const pageLayoutPath = join(root, 'apps/web/src/components/views/page-layout.tsx');
 const entityDetailLayoutPath = join(root, 'apps/web/src/components/views/entity-detail-layout.tsx');
 
@@ -192,12 +192,12 @@ describe('Initiative visual contract', () => {
     const picker = source(iconPickerPath);
     expect(overview).toContain('<ChevronLeft');
     expect(overview).toContain('<ChevronRight');
-    expect(overview).toContain('<InitiativeIconPicker');
+    expect(overview).toContain('<EntityIconPicker');
     expect(picker).toContain('<PopoverContent');
     expect(picker).toContain('Rounded');
     expect(picker).toContain('type="search"');
-    expect(picker).toContain('aria-label="Initiative icon"');
-    expect(picker).toContain('aria-label="Initiative color"');
+    expect(picker).toContain('aria-label="Entity icon"');
+    expect(picker).toContain('aria-label="Entity color"');
     expect(overview).not.toMatch(/[←→›⌄]/u);
   });
 

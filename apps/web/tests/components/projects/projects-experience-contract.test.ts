@@ -60,7 +60,7 @@ describe('Projects experience contract', () => {
 
   it('uses decoupled customizable display icons with 40px targets', () => {
     const overview = source(overviewPath);
-    expect(overview).toContain('<InitiativeIconPicker');
+    expect(overview).toContain('<EntityIconPicker');
     expect(overview).toContain("subjectType: 'project'");
   });
 
@@ -73,7 +73,7 @@ describe('Projects experience contract', () => {
     expect(detail).toContain('<EntityMetadataRow ariaLabel="Project properties">');
     expect(detail).toContain('<PropertiesPanel');
     expect(detail).toContain('<ProjectPeopleRow');
-    expect(detail).toContain('<InitiativeIconPicker');
+    expect(detail).toContain('<EntityIconPicker');
     expect(detail.indexOf('<ProjectPeopleRow')).toBeLessThan(
       detail.indexOf('<EntityMetadataRow ariaLabel="Project properties">'),
     );

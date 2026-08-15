@@ -11,10 +11,11 @@ import {
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useMemo, useState } from 'react';
 
-/** Props for the anchored Initiative icon and color picker. */
-export interface InitiativeIconPickerProps {
+/** Props for the anchored entity icon and color picker. */
+export interface EntityIconPickerProps {
   display: EntityDisplayOut;
-  initiativeName: string;
+  /** The entity's name, used for the trigger's accessible label and read-only title. */
+  entityName: string;
   editable: boolean;
   pending: boolean;
   /** Visual glyph diameter; detail mastheads use 48dp while list surfaces keep 32dp. */
@@ -26,15 +27,15 @@ export interface InitiativeIconPickerProps {
   ) => void;
 }
 
-/** Render a stable Initiative glyph and, when editable, its anchored customization popover. */
-export function InitiativeIconPicker({
+/** Render a stable entity glyph and, when editable, its anchored customization popover. */
+export function EntityIconPicker({
   display,
-  initiativeName,
+  entityName,
   editable,
   pending,
   size = 32,
   onChange,
-}: InitiativeIconPickerProps): JSX.Element {
+}: EntityIconPickerProps): JSX.Element {
   const [search, setSearch] = useState('');
   const filteredOptions = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -58,7 +59,7 @@ export function InitiativeIconPicker({
       <span
         className="flex shrink-0 items-center justify-center"
         style={{ width: Math.max(40, size), height: Math.max(40, size) }}
-        title={initiativeName}
+        title={entityName}
       >
         {glyph}
       </span>
@@ -72,7 +73,7 @@ export function InitiativeIconPicker({
           type="button"
           className="hover:bg-surface-container-high focus-visible:ring-ring flex shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
           style={{ width: Math.max(40, size), height: Math.max(40, size) }}
-          aria-label={`Customize ${initiativeName} icon`}
+          aria-label={`Customize ${entityName} icon`}
           disabled={pending}
         >
           {glyph}
@@ -97,7 +98,7 @@ export function InitiativeIconPicker({
           />
         </label>
         <div
-          aria-label="Initiative icon"
+          aria-label="Entity icon"
           className="grid max-h-48 grid-cols-7 gap-0.5 overflow-y-auto pr-1"
         >
           {filteredOptions.map((option) => {
@@ -126,7 +127,7 @@ export function InitiativeIconPicker({
           <p className="text-on-surface-variant py-4 text-center text-sm">No matching icons</p>
         ) : null}
         <p className="text-on-surface mt-3 mb-2 text-sm font-medium">Color</p>
-        <div aria-label="Initiative color" className="flex flex-wrap gap-1">
+        <div aria-label="Entity color" className="flex flex-wrap gap-1">
           {COLOR_OPTIONS.map((option) => {
             const selected = display.customColor === null && display.colorKey === option.key;
             return (

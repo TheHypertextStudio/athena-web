@@ -56,6 +56,7 @@ import {
   EntityDisplayOut,
   EntityDisplaySubjectType,
   EntityDisplayUpdate,
+  TEAM_DEFAULT_COLOR_KEYS,
   defaultEntityDisplay,
 } from '../../src/entity-display';
 import {
@@ -732,15 +733,31 @@ describe('entity display DTOs', () => {
       coverImage: null,
       customized: false,
     });
+    // A team's color is hashed from its id rather than defaulted to neutral (see the next test),
+    // so this fixed id's expected color is the hash's own deterministic output for it.
     expect(defaultEntityDisplay('team', ID)).toEqual({
       subjectType: 'team',
       subjectId: ID,
       iconKey: 'users',
-      colorKey: 'neutral',
+      colorKey: 'rose',
       customColor: null,
       coverImage: null,
       customized: false,
     });
+  });
+
+  it('gives an uncustomized team a stable, varied default color instead of neutral', () => {
+    // Stable: the same team always lands on the same color.
+    expect(defaultEntityDisplay('team', ID).colorKey).toBe(
+      defaultEntityDisplay('team', ID).colorKey,
+    );
+    // Varied: different teams don't all collapse onto the same color.
+    const colors = new Set([ID, ID2, ID3].map((id) => defaultEntityDisplay('team', id).colorKey));
+    expect(colors.size).toBeGreaterThan(1);
+    // Never a semantic color — those carry meaning elsewhere in the product.
+    for (const id of [ID, ID2, ID3]) {
+      expect(TEAM_DEFAULT_COLOR_KEYS).toContain(defaultEntityDisplay('team', id).colorKey);
+    }
   });
 });
 

@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { InitiativeIconPicker } from '../../src/components/initiatives/initiative-icon-picker';
+import { EntityIconPicker } from '../../src/components/entity-display/entity-icon-picker';
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn();
@@ -12,11 +12,11 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe('InitiativeIconPicker', () => {
+describe('EntityIconPicker', () => {
   it('opens from the anchored icon and reports Material icon and semantic color changes', () => {
     const onChange = vi.fn();
     render(
-      <InitiativeIconPicker
+      <EntityIconPicker
         display={{
           subjectType: 'initiative',
           subjectId: 'initiative-1',
@@ -26,7 +26,7 @@ describe('InitiativeIconPicker', () => {
           coverImage: null,
           customized: false,
         }}
-        initiativeName="Transit coalition"
+        entityName="Transit coalition"
         editable
         pending={false}
         onChange={onChange}
@@ -34,8 +34,8 @@ describe('InitiativeIconPicker', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Customize Transit coalition icon' }));
-    expect(screen.getByLabelText('Initiative icon')).toBeTruthy();
-    expect(screen.getByLabelText('Initiative color')).toBeTruthy();
+    expect(screen.getByLabelText('Entity icon')).toBeTruthy();
+    expect(screen.getByLabelText('Entity color')).toBeTruthy();
     expect(screen.getAllByTestId('initiative-icon-option').length).toBeGreaterThan(40);
     // The glyph is a stable 32px circle sized through EntityIconGlyph's numeric `size` prop (inline
     // style) — nested inside the 40px customization tap target — rather than a Tailwind size class.
@@ -52,7 +52,7 @@ describe('InitiativeIconPicker', () => {
 
   it('searches the rounded icon catalog by label and keyword', () => {
     render(
-      <InitiativeIconPicker
+      <EntityIconPicker
         display={{
           subjectType: 'initiative',
           subjectId: 'initiative-3',
@@ -62,7 +62,7 @@ describe('InitiativeIconPicker', () => {
           coverImage: null,
           customized: false,
         }}
-        initiativeName="Transit education"
+        entityName="Transit education"
         editable
         pending={false}
         onChange={vi.fn()}
@@ -82,7 +82,7 @@ describe('InitiativeIconPicker', () => {
 
   it('renders a non-interactive icon for a read-only cross-workspace reference', () => {
     render(
-      <InitiativeIconPicker
+      <EntityIconPicker
         display={{
           subjectType: 'initiative',
           subjectId: 'initiative-2',
@@ -92,7 +92,7 @@ describe('InitiativeIconPicker', () => {
           coverImage: null,
           customized: true,
         }}
-        initiativeName="Regional coalition"
+        entityName="Regional coalition"
         editable={false}
         pending={false}
         onChange={vi.fn()}

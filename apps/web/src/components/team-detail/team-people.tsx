@@ -19,7 +19,8 @@
  * without anyone maintaining anything.
  */
 import type { TeamMemberOut, TeamMemberRole } from '@docket/types';
-import { ActorAvatar } from '@docket/ui/components';
+import { ActorAvatar, EmptyState } from '@docket/ui/components';
+import { Users } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
@@ -50,9 +51,12 @@ export interface TeamPeopleProps {
 export function TeamPeople({ members, taskNounPlural, className }: TeamPeopleProps): JSX.Element {
   if (members.length === 0) {
     return (
-      <p className={cn('text-on-surface-variant text-body-medium', className)}>
-        Nobody is on this team yet.
-      </p>
+      <EmptyState
+        icon={Users}
+        title="Nobody is on this team yet"
+        body="Once someone is added to this team, they show up here alongside how much open work they're carrying."
+        className={className}
+      />
     );
   }
 

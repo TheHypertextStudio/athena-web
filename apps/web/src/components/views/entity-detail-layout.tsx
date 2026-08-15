@@ -93,35 +93,63 @@ export function EntityDetailLayout({
 
   const header = (
     <header className="detail-header page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-0">
-      {/* The backdrop is a layer of this header, not a section above it. `isolate` traps it in
-          the header's own stacking context, so it cannot paint over anything outside — the class
-          of bug that made an opaque icon look transparent. It has no height of its own: it is
-          whatever the header is, so collapsing the header collapses the artwork with it. */}
-      {cover ? <div className="absolute inset-0 -z-10 overflow-hidden">{cover}</div> : null}
+      {/* The masthead band: the cover, eyebrow, and identity live inside this one wrapper, and
+          nothing else does. `.detail-tabs` is this wrapper's sibling, not its descendant, so the
+          cover's box structurally ends at the wrapper's bottom edge — there is no lower boundary
+          for it to cross, not a z-index or an opaque backing standing in for one. `page-bleed` +
+          `page-grid` bleed the wrapper itself edge to edge and then re-open the measure track for
+          `eyebrow`/`detail-masthead`, mirroring how `header` does the same thing one level up. */}
+      <div className="masthead-band page-bleed page-grid relative isolate gap-y-0">
+        {/* The backdrop is a layer of this band, not a section above it. `isolate` (on the band,
+            not the header) traps it in the band's own stacking context, so it cannot paint over
+            anything outside the band — including `detail-tabs`, which sits outside it entirely.
+            It has no height of its own: it is whatever the band is, so collapsing the header
+            collapses the artwork with it.
 
-      {eyebrow ? <div className="mb-3 min-w-0">{eyebrow}</div> : null}
-
-      {cover ? <div aria-hidden="true" className="detail-backdrop-space" /> : null}
-
-      <div className="detail-masthead">
-        <div className="detail-primary">
-          <div className="detail-identity">
-            <div className="detail-glyph">{icon}</div>
-            <h1 className="detail-title text-on-surface text-headline-medium min-w-0 font-medium">
-              {title}
-            </h1>
+            `page-bleed`: without it this div is still a `.page-grid` child like any other, so the
+            blanket `.page-grid > *` rule silently placed it on the gutter-inset `measure` track —
+            `inset-0` was flush with that track, not with the band, so the cover sat inside a
+            margin on both sides no matter how full-bleed the band itself was. `rounded-t-xl`
+            matches `<main>`'s own corner radius exactly, so the now-genuinely-flush cover
+            terminates at the panel's real top corners on purpose instead of getting clipped to
+            them by accident. */}
+        {cover ? (
+          <div className="page-bleed absolute inset-0 -z-10 overflow-hidden rounded-t-xl">
+            {cover}
           </div>
-          {actions ? (
-            <div className="detail-actions flex shrink-0 items-center gap-1">{actions}</div>
-          ) : null}
-        </div>
+        ) : null}
 
-        <div className="detail-secondary">
-          <div className="flex min-w-0 flex-col gap-3">
-            {subtitle ? (
-              <div className="text-on-surface-variant text-body-large min-w-0">{subtitle}</div>
-            ) : null}
-            {metadata}
+        {/* `.masthead-content` carries the indent that used to sit on `.detail-header` itself
+            (`padding-block-start`). It has to live here, as a sibling of the cover rather than an
+            ancestor of it — the cover is `inset-0` against `.masthead-band`, so any padding on
+            *that* element would push the cover down with it and reopen the exact gap this whole
+            restructuring exists to close. */}
+        <div className="masthead-content">
+          {eyebrow ? <div className="mb-3 min-w-0">{eyebrow}</div> : null}
+
+          {cover ? <div aria-hidden="true" className="detail-backdrop-space" /> : null}
+
+          <div className="detail-masthead">
+            <div className="detail-primary">
+              <div className="detail-identity">
+                <div className="detail-glyph">{icon}</div>
+                <h1 className="detail-title text-on-surface text-headline-medium min-w-0 font-medium">
+                  {title}
+                </h1>
+              </div>
+              {actions ? (
+                <div className="detail-actions flex shrink-0 items-center gap-1">{actions}</div>
+              ) : null}
+            </div>
+
+            <div className="detail-secondary">
+              <div className="flex min-w-0 flex-col gap-3">
+                {subtitle ? (
+                  <div className="text-on-surface-variant text-body-large min-w-0">{subtitle}</div>
+                ) : null}
+                {metadata}
+              </div>
+            </div>
           </div>
         </div>
       </div>

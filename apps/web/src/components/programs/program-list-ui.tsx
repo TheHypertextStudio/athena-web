@@ -11,8 +11,8 @@
  * grid Initiatives and Projects use (leading glyph + name + summary, then aligned status/health/
  * owner/count columns), so all three read as one product at the same visual weight.
  *
- * Programs have no per-entity customizable icon (unlike Initiatives/Projects'
- * {@link EntityDisplayOut}-backed {@link InitiativeIconPicker}) — a Program's identity is its
+ * Programs have no per-entity customizable icon (unlike Initiatives/Projects/Teams'
+ * {@link EntityDisplayOut}-backed {@link EntityIconPicker}) — a Program's identity is its
  * ongoing liveness, not a chosen glyph. Rather than fake a picker over a field that doesn't
  * exist, {@link ProgramGlyph} renders the same fixed mark everywhere: a neutral tonal circle
  * around `Layers` (the icon already used for Programs in the nav and empty state), sized to

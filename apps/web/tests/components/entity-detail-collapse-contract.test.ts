@@ -45,6 +45,13 @@ describe('entity detail collapse contract', () => {
     expect(css).toContain('font-size: var(--text-title-medium)');
     expect(css).toContain('--detail-expanded-glyph-size: 3rem');
     expect(css).toMatch(/@keyframes detail-glyph-collapse[\s\S]*scale\(0\.833333\)/);
+    // `left top`, not `left center`: centering the scale on the glyph's own (fixed 48px) box let
+    // the shrunk glyph's visual bottom edge outrun `.detail-identity`'s real, shrunk-below-48px
+    // height at full collapse — a few px past the row, and once the cover started ending exactly
+    // at that row's edge, past the cover too. Top-left anchoring keeps the glyph's top pinned to
+    // the row's top the whole time, so it only ever shrinks inward, never past a boundary the row
+    // has already shrunk to.
+    expect(css).toMatch(/\.detail-glyph\s*\{[^}]*transform-origin:\s*left top/);
   });
 
   it('keeps masthead actions in the compact identity row and disables body dragging', () => {
@@ -60,10 +67,17 @@ describe('entity detail collapse contract', () => {
     expect(css).toContain('animation-name: detail-masthead-collapse');
     expect(css).toMatch(/@keyframes detail-masthead-collapse[\s\S]*row-gap:\s*0/);
     expect(layout).toContain('className="detail-header');
-    expect(css).toMatch(/\.detail-header\s*\{[\s\S]*padding-block-start:\s*1\.25rem/);
+    // `padding-block-start` moved off `.detail-header` onto `.masthead-content` — a sibling of the
+    // cover rather than an ancestor of it, so the cover's `inset-0` against `.masthead-band` isn't
+    // pushed down by the same padding that indents the eyebrow/title text.
+    expect(layout).toContain('className="masthead-content"');
+    expect(css).toMatch(/\.masthead-content\s*\{[\s\S]*padding-block-start:\s*1\.25rem/);
+    expect(css).not.toMatch(/\.detail-header\s*\{[^}]*padding-block-start/);
     expect(css).toMatch(/\.detail-tabs\s*\{[\s\S]*margin-block-start:\s*1rem/);
-    expect(css).toMatch(/@keyframes detail-header-collapse[\s\S]*padding-block-start:\s*0\.25rem/);
-    expect(css).toMatch(/@keyframes detail-tabs-collapse[\s\S]*margin-block-start:\s*0\.25rem/);
+    expect(css).toMatch(
+      /@keyframes detail-masthead-content-collapse[\s\S]*padding-block-start:\s*0\.25rem/,
+    );
+    expect(css).toMatch(/@keyframes detail-tabs-collapse[\s\S]*margin-block-start:\s*0\.75rem/);
     expect(css).toMatch(
       /@keyframes detail-title-collapse\s*\{[\s\S]*from\s*\{[\s\S]*white-space:\s*normal/,
     );

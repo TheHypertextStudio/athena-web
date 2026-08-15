@@ -24,7 +24,7 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { buildProjectCatalog } from '@/components/projects/project-catalog';
 import { buildProjectTimelineCatalog } from '@/components/projects/project-timeline-catalog';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
@@ -149,9 +149,9 @@ function ProjectIdentity({
   return (
     <div className="flex min-w-0 items-center gap-3">
       <span className="relative z-10 shrink-0">
-        <InitiativeIconPicker
+        <EntityIconPicker
           display={item.display}
-          initiativeName={item.name}
+          entityName={item.name}
           editable
           pending={pending}
           onChange={onDisplayChange}

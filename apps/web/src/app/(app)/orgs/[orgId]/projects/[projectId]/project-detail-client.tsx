@@ -34,7 +34,7 @@ import { FreeformText } from '@/components/editor/freeform-text';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
-import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { AgentActivityFeed } from '@/components/project-detail/agent-activity-feed';
 import { AgentsStrip } from '@/components/project-detail/agents-strip';
 import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
@@ -287,7 +287,7 @@ export default function ProjectDetailPage(): JSX.Element {
         title: project.name,
       }}
       icon={
-        <InitiativeIconPicker
+        <EntityIconPicker
           display={
             detail?.display ?? {
               subjectType: 'project',
@@ -299,7 +299,7 @@ export default function ProjectDetailPage(): JSX.Element {
               customized: false,
             }
           }
-          initiativeName={project.name}
+          entityName={project.name}
           editable={canEdit}
           pending={displayMutation.isPending}
           size={48}

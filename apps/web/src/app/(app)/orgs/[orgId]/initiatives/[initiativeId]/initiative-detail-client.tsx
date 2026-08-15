@@ -35,8 +35,8 @@ import { EntityDocument } from '@/components/editor/entity-document';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
-import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import { InitiativeRelationshipPanels } from '@/components/initiatives/initiative-relationship-panels';
 import {
   INITIATIVE_CADENCE_LABEL,
@@ -322,9 +322,9 @@ export default function InitiativeDetailPage(): JSX.Element {
         </nav>
       }
       icon={
-        <InitiativeIconPicker
+        <EntityIconPicker
           display={display}
-          initiativeName={detail.name}
+          entityName={detail.name}
           editable={canEdit}
           pending={displayMutation.isPending}
           size={48}

@@ -24,7 +24,7 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -277,6 +277,32 @@ describe('PublishingSettings — custom domain verification state', () => {
     const row = addressRow('updates.acme.com');
     expect(within(row).queryByRole('button', { name: /check/i })).not.toBeInTheDocument();
     expect(within(row).getByRole('button', { name: /remove/i })).toBeInTheDocument();
+  });
+
+  it('re-checks a pending domain on its own instead of asking the operator to poll it', () => {
+    vi.useFakeTimers();
+    try {
+      renderSettings({
+        domains: [domain({ id: 'dom_2', host: 'pending.acme.com', verified: false })],
+      });
+
+      expect(verifyMutateMock).not.toHaveBeenCalled();
+      act(() => {
+        vi.advanceTimersByTime(20_000);
+      });
+      expect(verifyMutateMock).toHaveBeenCalledWith('dom_2');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('states plainly that a verified domain with nowhere to route is not serving', () => {
+    renderSettings({
+      domains: [domain({ id: 'dom_1', host: 'updates.acme.com', verified: true })],
+    });
+
+    const row = addressRow('updates.acme.com');
+    expect(within(row).getByRole('status')).toHaveTextContent(/isn.t serving/i);
   });
 
   it('offers a manual check for an unverified domain, and does not auto-verify it', () => {

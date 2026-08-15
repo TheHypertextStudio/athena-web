@@ -19,6 +19,7 @@ import { Check, Edit, Globe, Trash2, X } from '@docket/ui/icons';
 import { Badge, Button, Input, Text } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
+import { relativeTime } from '@/components/settings/format-time';
 import { SettingRowStatus } from '@/components/settings/setting-row-status';
 import { userErrorMessage } from '@/lib/problem';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
@@ -39,6 +40,26 @@ const VERIFY_FAILURE_COPY: Record<string, string> = {
 
 /** Indent that lines a row's disclosed content up with the address above it. */
 const ROW_INDENT = 'pl-7';
+
+/**
+ * How long to wait before each re-check of a pending domain, widening as propagation drags on.
+ *
+ * @remarks
+ * Publishing a DNS record and having the world see it are minutes apart at best and an hour apart
+ * at worst, and nothing about that wait is the operator's to manage. Without this the surface asks
+ * them to poll it by hand: leave for the registrar, come back, press a button, read "not yet",
+ * press it again. Docket does the waiting instead, and the row turns itself green.
+ *
+ * The schedule widens rather than repeating a fixed interval because the likely outcome changes:
+ * a record published seconds ago may land immediately, while one still missing after five minutes
+ * is usually waiting on a slow zone rather than on us. The last entry repeats until
+ * {@link MAX_AUTO_RECHECKS} is spent, at which point the manual control is the only path — a tab
+ * left open overnight must not keep asking a resolver forever.
+ */
+const RECHECK_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000] as const;
+
+/** How many automatic re-checks one mounted row will run before it stops on its own. */
+const MAX_AUTO_RECHECKS = 12;
 
 /**
  * The one badge that answers "where do visitors actually land?".
@@ -252,8 +273,28 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
     // click a button — so re-confirm automatically on every view. If the record was removed since
     // the last check, the API's own verify handler already clears `verifiedAt`, and this row
     // re-renders into its unverified state (with the reason and the record to re-add) on its own.
-    if (domain.verified) verify.mutate(domain.id);
-  }, [domain.id]);
+    if (domain.verified) {
+      verify.mutate(domain.id);
+      return;
+    }
+
+    // Pending: wait on propagation on the operator's behalf. See RECHECK_DELAYS_MS.
+    let attempt = 0;
+    let timer = 0;
+    const scheduleNext = (): void => {
+      if (attempt >= MAX_AUTO_RECHECKS) return;
+      const delay = RECHECK_DELAYS_MS[Math.min(attempt, RECHECK_DELAYS_MS.length - 1)] ?? 0;
+      timer = window.setTimeout(() => {
+        attempt += 1;
+        verify.mutate(domain.id);
+        scheduleNext();
+      }, delay);
+    };
+    scheduleNext();
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [domain.id, domain.verified]);
 
   return (
     <li className="bg-surface-container-low flex flex-col gap-3 rounded-xl px-4 py-2">
@@ -329,17 +370,23 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
       {domain.verified ? null : (
         <div className={`flex flex-col gap-2 ${ROW_INDENT}`}>
           <Text as="p" token="body-small" tone="muted">
-            Add this record at your DNS provider, then check it.
+            {domain.routingRecord
+              ? 'Add both records at your DNS provider. We’ll keep checking until they land.'
+              : 'Add this record at your DNS provider. We’ll keep checking until it lands.'}
           </Text>
-          <div className="bg-surface-container rounded-lg px-3 py-2">
+          <div className="bg-surface-container flex flex-col gap-3 rounded-lg px-3 py-2">
             <DnsRecord record={domain.verificationRecord} />
+            {/* Both records up front. Publishing them is one visit to a registrar; splitting the
+                routing record out until after verification made it two, with a propagation wait
+                in the middle of each. */}
+            {domain.routingRecord ? <DnsRecord record={domain.routingRecord} /> : null}
           </div>
           {failure ? (
             <Text as="p" token="body-small" tone="muted" role="status">
               {VERIFY_FAILURE_COPY[failure] ?? 'That record could not be confirmed yet.'}
             </Text>
           ) : null}
-          <div>
+          <div className="flex items-center gap-3">
             <Button
               type="button"
               size="sm"
@@ -349,8 +396,13 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
                 verify.mutate(domain.id);
               }}
             >
-              {verify.isPending ? 'Checking…' : 'Check DNS'}
+              {verify.isPending ? 'Checking…' : 'Check now'}
             </Button>
+            {domain.lastCheckedAt ? (
+              <Text as="span" token="body-small" tone="muted" aria-live="polite">
+                {`Checked ${relativeTime(domain.lastCheckedAt)}`}
+              </Text>
+            ) : null}
           </div>
         </div>
       )}
@@ -364,6 +416,16 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
             <DnsRecord record={domain.routingRecord} />
           </div>
         </div>
+      ) : null}
+
+      {/* Ownership proved, but this deployment has no custom-domain target to send traffic to, so
+          there is no record to publish and the domain serves nothing. Saying so is the whole point:
+          a "Verified" badge over a silent omission reads as working. */}
+      {domain.verified && !domain.routingRecord ? (
+        <Text as="p" token="body-small" tone="muted" className={ROW_INDENT} role="status">
+          Ownership is confirmed, but this deployment has no address to route the domain to yet, so
+          it isn’t serving your pages.
+        </Text>
       ) : null}
 
       {verify.error || remove.error ? (

@@ -78,7 +78,7 @@ Pass a name to any tool that takes an ID.
 Docket matches exact, then prefix, then substring, and takes only an unambiguous hit. Send "Sam"
 with two Sams in the workspace and the call comes back listing both.
 
-## Authorization, briefly
+## How your client gets a token
 
 The client registers through DCR or a URL-form client ID, sends you to the consent screen, and
 exchanges the code with PKCE for a token bound to the `/mcp` resource URL. **A token can never do
@@ -125,7 +125,7 @@ issuer from the API URL, the resource from `${API_URL}/mcp`, and the login page 
 discovery documents are public under an open credential-free CORS policy, per RFC 7591, 6749, 7662,
 7009, 8414, and 9728.
 
-## Next
+## The tool, resource, and prompt reference
 
 <Card title="Tools, resources, and prompts" icon="wrench" href="/developers/mcp-tools-and-resources">
   All 25 tools, the `docket://` resource scheme, and the bootstrap prompts.

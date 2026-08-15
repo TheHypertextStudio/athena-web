@@ -31,14 +31,15 @@ Content-Type: application/problem+json
   The live catalog: each code, its status, and what to do. Any `type` URI resolves into it.
 </Card>
 
-## Two that will catch you
+## `not_found` can mean hidden
 
-**`not_found` also means "you may not see this."** A 404 from `/v1/orgs/{orgId}/tasks` can mean the
-workspace exists and you are not a member. Never treat it as proof of absence.
+A 404 from `/v1/orgs/{orgId}/tasks` can mean the workspace exists and you are not a member. Never
+treat it as proof of absence.
 
-**`reauth_required` returns 401 without signing anyone out.** The session is too old for a
-high-risk action. Prompt for a passkey step-up and retry the same request. Clear the session here
-and you log someone out for no reason.
+## `reauth_required` is not a sign-out
+
+It returns 401, but the session is only too old for a high-risk action. Prompt for a passkey
+step-up and retry the same request. Clear the session here and you log someone out for no reason.
 
 ## Errors over MCP
 

@@ -131,12 +131,32 @@ describe('env + RPC transport contract', () => {
   });
 
   it('exposes API-owned RPC types through a side-effect-free named subpath', async () => {
-    expectTypeOf<RpcContractAppType>().toEqualTypeOf<SourceAppType>();
-    expectTypeOf<RpcContractAdminAppType>().toEqualTypeOf<SourceAdminAppType>();
+    // Compared by identity rather than structurally. `toEqualTypeOf` walks both `AppType`s, and
+    // the router surface has grown large enough that doing so exceeds the compiler's
+    // instantiation budget — `tsc` reported TS2589 and then gave up, which fails the gate without
+    // saying anything about the contract. Deferring the comparison into a conditional signature
+    // resolves to a plain boolean without instantiating either structure, and is the stricter
+    // check: it holds only if the two are the same type, not merely mutually assignable.
+    expectTypeOf<Identical<RpcContractAppType, SourceAppType>>().toEqualTypeOf<true>();
+    expectTypeOf<Identical<RpcContractAdminAppType, SourceAdminAppType>>().toEqualTypeOf<true>();
 
     expect(Object.keys(await import('@docket/api/rpc-contract'))).toEqual([]);
   });
 });
+
+/**
+ * Whether two types are the same type, decided without instantiating either.
+ *
+ * @remarks
+ * The two conditional signatures are only mutually assignable when `A` and `B` are identical, and
+ * TypeScript defers both rather than expanding them — so this answers the question a structural
+ * comparison of two large Hono `AppType`s cannot answer without running out of depth.
+ */
+type Identical<A, B> =
+  // Each `T` appearing once is the mechanism, not an oversight: the comparison works precisely
+  // because both signatures stay generic and unresolved, which is what defers the instantiation.
+  /* eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- see above */
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
 describe('app.ts route composition', () => {
   it('mounts the /v1 base path and the orgs/notifications/daily-plan/hub routers', async () => {

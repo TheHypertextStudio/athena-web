@@ -206,14 +206,18 @@ describe('VoicePhoneNumbers', () => {
   });
 
   it('holds the code box open between binding and the list catching up', async () => {
-    // `bind` invalidates the list rather than awaiting it; without the optimistic bridge the add
-    // form would flash back for one round trip.
-    numbersGet.mockResolvedValue(listing());
+    // `bind` invalidates the list rather than awaiting it, so there is a window where the server's
+    // last word on this account still predates the number just bound. The box has to be up in that
+    // window, or a person holding a code would be shown the add form and retype the number.
+    let releaseRefetch = (): void => undefined;
+    const refetched = new Promise<unknown>((resolve) => {
+      releaseRefetch = () => {
+        resolve(listing(phoneNumber({ id: 'pn-1' })));
+      };
+    });
+    numbersGet.mockResolvedValueOnce(listing()).mockReturnValueOnce(refetched);
     bindPost.mockResolvedValue(
-      okResponse({
-        phoneNumber: phoneNumber({ id: 'pn-1' }),
-        ...challengeSummary(),
-      }),
+      okResponse({ phoneNumber: phoneNumber({ id: 'pn-1' }), ...challengeSummary() }),
     );
     renderSection();
 
@@ -228,10 +232,18 @@ describe('VoicePhoneNumbers', () => {
         json: { country: 'US', dialCode: '1', nationalNumber: '4155550123' },
       });
     });
-    // The list still reports nothing, yet the code box is up.
+    // The refetch is still in flight — the server has told this session nothing about the row yet.
     await waitFor(() => {
       expect(verifyForm()).not.toBeNull();
     });
+    expect(addForm()).toBeNull();
+
+    // And it survives the refetch landing, rather than only existing until the server answers.
+    releaseRefetch();
+    await waitFor(() => {
+      expect(document.querySelector('[data-phone-number-id="pn-1"]')).not.toBeNull();
+    });
+    expect(verifyForm()).not.toBeNull();
   });
 
   it('refuses to invite a resend the cooldown will reject', async () => {

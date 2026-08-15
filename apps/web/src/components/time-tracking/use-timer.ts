@@ -22,10 +22,11 @@
 import type { TimeActiveOut, TimeAnchorSuggestion, TimeRecordOut } from '@docket/types';
 import { writeStoredValue } from '@docket/ui/lib/browser-storage';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
+import { useNow } from '@/lib/use-now';
 import { STALE, apiQueryOptions, queryKeys, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
 /** How often the shell re-reads the tracker. Focus-gated by {@link useLiveApiQuery}. */
@@ -200,16 +201,8 @@ export function useTimerState(): TimerState {
   };
   const running = status.phase === 'running';
 
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!running) return undefined;
-    const timer = window.setInterval(() => {
-      setNow(Date.now());
-    }, 1_000);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [running]);
+  // The elapsed readout only moves while the timer does, so the clock is gated on `running`.
+  const now = useNow(1_000, { enabled: running }).getTime();
 
   return {
     ...status,

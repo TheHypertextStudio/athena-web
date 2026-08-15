@@ -31,9 +31,15 @@
  * resend the rate limiter refuses. A code that exists on the server is always enterable here.
  */
 import { DIAL_CODES, DEFAULT_DIAL_CODE } from '@docket/athena/phone';
-import type { PhoneChallengeOut, PhoneNumberOut, PhoneNumberStatus } from '@docket/athena/phone';
+import type {
+  PhoneChallengeOut,
+  PhoneNumberListOut,
+  PhoneNumberOut,
+  PhoneNumberStatus,
+} from '@docket/athena/phone';
 import { Check, Phone, PhoneOff, Trash2 } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup, Field, Input, Select, Text } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -88,6 +94,23 @@ const COUNTRY_OPTIONS = DIAL_CODES.map((option) => (
 const NO_NUMBERS: readonly PhoneNumberOut[] = [];
 
 /**
+ * Replace a number in the cached list, or add it to the front when it is not there yet.
+ *
+ * @remarks
+ * Position is preserved for a number already listed, so re-sending a code does not shuffle a row
+ * up the page; the server's `createdAt` ordering reasserts itself on the next refetch either way.
+ *
+ * @param list - The currently cached numbers.
+ * @param number - The number the server just returned.
+ * @returns the list with `number` present exactly once.
+ */
+function upsertNumber(list: readonly PhoneNumberOut[], number: PhoneNumberOut): PhoneNumberOut[] {
+  return list.some((existing) => existing.id === number.id)
+    ? list.map((existing) => (existing.id === number.id ? number : existing))
+    : [number, ...list];
+}
+
+/**
  * The caller-owned phone numbers section.
  *
  * @remarks
@@ -100,8 +123,8 @@ export function VoicePhoneNumbers(): JSX.Element {
   const [nationalNumber, setNationalNumber] = useState('');
   const [code, setCode] = useState('');
   const [target, setTarget] = useState<CodeTarget>({ kind: 'auto' });
-  const [issued, setIssued] = useState<PhoneNumberOut | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const dialCode = useMemo(
     () => DIAL_CODES.find((option) => option.iso2 === country)?.dialCode ?? DEFAULT_DIAL_CODE,
@@ -131,15 +154,28 @@ export function VoicePhoneNumbers(): JSX.Element {
   };
 
   /**
-   * Point the code box at the number a fresh challenge was issued for.
+   * Record a freshly issued challenge and point the code box at the number it belongs to.
    *
    * @remarks
-   * Undelivered SMS is not reported here — the issued number carries the same `deliveryFailed` the
-   * listed row does, so one derivation covers both the send that just happened and the one this
-   * session is only reading back.
+   * The number goes into the list cache rather than a state slot beside it. `bind` invalidates the
+   * list rather than awaiting it, so for one round trip the server does not yet report the row this
+   * person is holding a code for — and the section reads *everything* off that list, so a row
+   * missing from it has no code box, no expiry and no cooldown. Writing the server's own answer
+   * into the cache closes that window at the layer the rest of the section already reads from,
+   * instead of maintaining a parallel copy that every consumer has to remember to union in.
+   *
+   * Not {@link optimisticPatch}: this is not a guess awaiting confirmation but the row the server
+   * just returned, so there is nothing to roll back, and the patch helper no-ops before the first
+   * list response has been cached — exactly when this matters most.
+   *
+   * Undelivered SMS is not reported here either — the issued number carries the same
+   * `deliveryFailed` the listed row does, so one derivation covers both the send that just happened
+   * and the one this session is only reading back.
    */
   const acceptChallenge = (result: PhoneChallengeOut): void => {
-    setIssued(result.phoneNumber);
+    queryClient.setQueryData<PhoneNumberListOut>(queryKeys.phoneNumbers(), (previous) => ({
+      items: upsertNumber(previous?.items ?? [], result.phoneNumber),
+    }));
     pointAt({ kind: 'number', id: result.phoneNumber.id });
   };
 
@@ -170,7 +206,6 @@ export function VoicePhoneNumbers(): JSX.Element {
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
     onSuccess: () => {
-      setIssued(null);
       pointAt({ kind: 'auto' });
     },
     onError: (error) => {
@@ -200,9 +235,7 @@ export function VoicePhoneNumbers(): JSX.Element {
         'Could not remove that number.',
       ),
     invalidateKeys: [queryKeys.phoneNumbers()],
-    onSuccess: (result) => {
-      // Drop the optimistic row too, or the code box would stay open on a number that is gone.
-      setIssued((prev) => (prev?.id === result.id ? null : prev));
+    onSuccess: () => {
       pointAt({ kind: 'auto' });
     },
     onError: (error) => {
@@ -212,22 +245,8 @@ export function VoicePhoneNumbers(): JSX.Element {
 
   const items = numbersQ.data?.items ?? NO_NUMBERS;
 
-  /**
-   * Every number that can take a code right now: the server's pending rows, plus the number a
-   * challenge was just issued for while the list has yet to refetch it.
-   *
-   * @remarks
-   * The second half is a one-round-trip bridge. `bind` invalidates the list rather than awaiting
-   * it, so between the `POST` resolving and the refetch landing the server does not yet report the
-   * row this person is holding a code for — without the bridge the add form would flash back. It
-   * yields to the server the moment the refetch knows the id, so the list stays the authority.
-   */
-  const verifiable = useMemo(() => {
-    const pending = items.filter((number) => number.status === 'pending');
-    return issued && !items.some((number) => number.id === issued.id)
-      ? [issued, ...pending]
-      : pending;
-  }, [items, issued]);
+  /** Every number that can take a code right now. The cached list is the only source. */
+  const verifiable = items.filter((number) => number.status === 'pending');
 
   const verifying =
     target.kind === 'add'

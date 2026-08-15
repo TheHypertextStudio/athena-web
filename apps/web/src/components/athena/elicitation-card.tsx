@@ -18,7 +18,7 @@ import { AlarmClock, CircleAlert, HelpCircle, ListChecks, Sparkles } from '@dock
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Button, Chip, ControlGroup, Text } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { type JSX, useEffect, useMemo, useState } from 'react';
+import { type JSX, useMemo, useState } from 'react';
 
 import {
   ElicitationControlView,
@@ -27,6 +27,8 @@ import {
   isElicitationAnswered,
   type ElicitationErrorMap,
 } from './elicitation-control';
+import { useNow } from '@/lib/use-now';
+
 import { useAnswerElicitation, type AnswerRejection } from './elicitation-data';
 
 /** Props for {@link ElicitationCard}. */
@@ -162,18 +164,8 @@ export function ElicitationCard({
   const [value, setValue] = useState<unknown>(() => emptyElicitationValue(incoming.spec));
   const [errors, setErrors] = useState<ElicitationErrorMap>({});
   const [failure, setFailure] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-
-  // The deadline is on the card, so it has to keep being true while the card is on screen.
-  useEffect(() => {
-    if (!pending) return;
-    const timer = setInterval(() => {
-      setNow(Date.now());
-    }, 30_000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [pending]);
+  // The deadline is on the card, so it has to keep being true while the card is awaiting an answer.
+  const now = useNow(30_000, { enabled: pending }).getTime();
 
   const ready = useMemo(
     () => isElicitationAnswered(elicitation.spec, value),

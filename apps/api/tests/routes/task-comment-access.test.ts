@@ -14,7 +14,13 @@ import type * as DbModule from '@docket/db';
 import type { CommentOut } from '@docket/types';
 
 import type commentsRouter from '../../src/routes/comments';
-import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import {
+  appWithActor,
+  getDb,
+  one,
+  seedBaseOrg,
+  type StatusIdLookup,
+} from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -33,6 +39,7 @@ async function seedPrivateTaskComment(
   orgId: string,
   teamId: string,
   actorId: string,
+  statusId: StatusIdLookup,
 ): Promise<{
   readonly taskId: string;
   readonly commentId: string;
@@ -45,6 +52,7 @@ async function seedPrivateTaskComment(
         teamId,
         title: 'Private comment subject',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         visibility: 'private',
         createdBy: actorId,
       })
@@ -110,8 +118,13 @@ async function postTaskComment(
 
 describe('task comment authorization', () => {
   it('uses canonical task visibility for task comment reads and task-level contribute for writes, including revocation', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const { taskId, commentId } = await seedPrivateTaskComment(orgId, teamId, humanActorId);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { taskId, commentId } = await seedPrivateTaskComment(
+      orgId,
+      teamId,
+      humanActorId,
+      statusId,
+    );
     // The generic capability is intentionally present: it must not bypass the task boundary.
     const caller = appWithActor(comments, orgId, ['comment'], humanActorId);
 
@@ -196,7 +209,7 @@ describe('task comment authorization', () => {
   });
 
   it('keeps comments on public tasks readable to an active non-guest member', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const memberRoleId = one(
       await db
         .insert(schema.role)
@@ -227,6 +240,7 @@ describe('task comment authorization', () => {
           teamId,
           title: 'Public comment subject',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
           createdBy: humanActorId,
         })

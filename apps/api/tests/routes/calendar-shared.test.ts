@@ -67,6 +67,7 @@ async function seedLegacyTimeboxFixture(options: LegacyTimeboxFixtureOptions = {
         teamId: base.teamId,
         title: 'Legacy private timebox',
         state: 'todo',
+        statusId: base.statusId('task', 'todo'),
         priority: 'high',
         visibility: options.taskVisibility ?? 'public',
       })

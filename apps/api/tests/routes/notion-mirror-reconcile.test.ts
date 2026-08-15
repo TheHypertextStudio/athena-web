@@ -325,7 +325,7 @@ describe('Notion mirror reconciliation', () => {
   });
 
   it('paces sequential Notion creates by 350ms before issuing the next one', async () => {
-    const { orgId, teamId, designs, mirror, ctx } = await seedMirror();
+    const { orgId, teamId, statusId, designs, mirror, ctx } = await seedMirror();
     const seeded = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
@@ -338,8 +338,20 @@ describe('Notion mirror reconciliation', () => {
         .where(eq(schema.notionMirrorDatabase.id, seeded.id)),
     );
     await db.insert(schema.task).values([
-      { organizationId: orgId, teamId, title: 'First', state: 'backlog' },
-      { organizationId: orgId, teamId, title: 'Second', state: 'backlog' },
+      {
+        organizationId: orgId,
+        teamId,
+        title: 'First',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      },
+      {
+        organizationId: orgId,
+        teamId,
+        title: 'Second',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      },
     ]);
 
     const deferred = (): { readonly promise: Promise<void>; readonly resolve: () => void } => {

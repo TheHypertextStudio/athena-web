@@ -24,6 +24,7 @@ import type {
 } from '../../src/mcp/resources';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { getMigratedDb } from '../support/db';
+import { one, seedStatuses } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -51,32 +52,33 @@ interface Seed {
 /** Seed an active human who can read the org but has no cascading or task-level grant. */
 async function seedPrivateTaskComment(): Promise<Seed> {
   const slug = `mcp-task-comment-${Math.random().toString(36).slice(2, 10)}`;
-  const orgId = (
+  const orgId = one(
     await db
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
-      .returning({ id: schema.organization.id })
-  )[0]!.id;
-  const teamId = (
+      .returning({ id: schema.organization.id }),
+  ).id;
+  const statusId = await seedStatuses(db, schema, orgId);
+  const teamId = one(
     await db
       .insert(schema.team)
       .values({ organizationId: orgId, name: 'Core', key: `K${slug.slice(-5)}` })
-      .returning({ id: schema.team.id })
-  )[0]!.id;
+      .returning({ id: schema.team.id }),
+  ).id;
   const email = `${slug}@example.test`;
-  const userId = (
+  const userId = one(
     await db
       .insert(schema.user)
       .values({ name: 'MCP member', email })
-      .returning({ id: schema.user.id })
-  )[0]!.id;
-  const actorId = (
+      .returning({ id: schema.user.id }),
+  ).id;
+  const actorId = one(
     await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'MCP member', userId })
-      .returning({ id: schema.actor.id })
-  )[0]!.id;
-  const taskId = (
+      .returning({ id: schema.actor.id }),
+  ).id;
+  const taskId = one(
     await db
       .insert(schema.task)
       .values({
@@ -84,12 +86,13 @@ async function seedPrivateTaskComment(): Promise<Seed> {
         teamId,
         title: 'MCP private comment subject',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         visibility: 'private',
         createdBy: actorId,
       })
-      .returning({ id: schema.task.id })
-  )[0]!.id;
-  const commentId = (
+      .returning({ id: schema.task.id }),
+  ).id;
+  const commentId = one(
     await db
       .insert(schema.comment)
       .values({
@@ -100,8 +103,8 @@ async function seedPrivateTaskComment(): Promise<Seed> {
         body: 'private MCP comment body',
         createdBy: actorId,
       })
-      .returning({ id: schema.comment.id })
-  )[0]!.id;
+      .returning({ id: schema.comment.id }),
+  ).id;
   // Exact org view makes ordinary in-org comment reads pass today, but must not turn into a
   // cascading task grant. This is the critical private-task disclosure shape.
   await db.insert(schema.grant).values({
@@ -129,7 +132,7 @@ async function seedPrivateTaskComment(): Promise<Seed> {
 
 /** Create an exact task grant and return its id, so the test can update and revoke it live. */
 async function grantTask(seed: Seed, capabilities: readonly Capability[]): Promise<string> {
-  return (
+  return one(
     await db
       .insert(schema.grant)
       .values({
@@ -142,8 +145,8 @@ async function grantTask(seed: Seed, capabilities: readonly Capability[]): Promi
         effect: 'allow',
         cascades: false,
       })
-      .returning({ id: schema.grant.id })
-  )[0]!.id;
+      .returning({ id: schema.grant.id }),
+  ).id;
 }
 
 interface Harness {
@@ -176,7 +179,10 @@ async function harnessFor(ctx: McpContext): Promise<Harness> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await harnesses.pop()!.close();
+  while (harnesses.length > 0) {
+    const harness = harnesses.pop();
+    if (harness) await harness.close();
+  }
 });
 
 function toolPayload(result: CallToolResult): Record<string, unknown> {

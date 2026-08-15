@@ -34,7 +34,11 @@ async function seedPrivateTask(): Promise<PrivateTaskFixture> {
   const programId = one(
     await db
       .insert(schema.program)
-      .values({ organizationId: base.orgId, name: 'Private program' })
+      .values({
+        organizationId: base.orgId,
+        name: 'Private program',
+        statusId: base.statusId('program', 'active'),
+      })
       .returning({ id: schema.program.id }),
   ).id;
   const projectId = one(
@@ -46,6 +50,7 @@ async function seedPrivateTask(): Promise<PrivateTaskFixture> {
         teamId: base.teamId,
         programId,
         createdBy: base.humanActorId,
+        statusId: base.statusId('project', 'planned'),
       })
       .returning({ id: schema.project.id }),
   ).id;
@@ -59,6 +64,7 @@ async function seedPrivateTask(): Promise<PrivateTaskFixture> {
         programId,
         title: 'Private task',
         state: 'todo',
+        statusId: base.statusId('task', 'todo'),
         visibility: 'private',
       })
       .returning({

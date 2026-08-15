@@ -103,7 +103,7 @@ interface DailyPlanAccessFixtureOptions {
 /** Seed a task reference candidate and the session actor that will try to plan it. */
 async function seedDailyPlanAccessFixture(options: DailyPlanAccessFixtureOptions = {}) {
   const { userId, hubId } = await seedUserWithHub();
-  const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+  const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
   const role = one(
     await db
       .insert(schema.role)
@@ -131,6 +131,7 @@ async function seedDailyPlanAccessFixture(options: DailyPlanAccessFixtureOptions
         teamId,
         title: 'Daily-plan access task',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         priority: 'high',
         visibility: options.taskVisibility ?? 'public',
       })
@@ -971,12 +972,12 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
         initiatorId: humanActorId,
       })
       .returning({ id: schema.agentSession.id });
-    return { orgId, sessionId: assertDefined(s).id };
+    return { orgId, actorId: humanActorId, sessionId: assertDefined(s).id };
   }
 
   it('lists (with + without status filter), gets with activities, 404s', async () => {
-    const { orgId, sessionId } = await seedSession('pending');
-    const w = appWithActor(agentSessions, orgId, ['contribute']);
+    const { orgId, actorId, sessionId } = await seedSession('pending');
+    const w = appWithActor(agentSessions, orgId, ['contribute'], actorId);
 
     expect(
       (await body<{ items: unknown[] }>(await w.request('/'))).items.length,

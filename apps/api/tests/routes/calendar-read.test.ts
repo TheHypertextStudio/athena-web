@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { PgDialect } from 'drizzle-orm/pg-core';
 
-import { addMember, getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  addMember,
+  getDb,
+  one,
+  seedBaseOrg,
+  seedStatus,
+  seedUserWithHub,
+} from '../support/routes-harness';
 import {
   calendarItemOverlapCondition,
   readCalendarItemsInRange,
@@ -311,6 +318,15 @@ describe('linked-task visibility on calendar items', () => {
                 })
                 .returning({ id: schema.actor.id }),
             ).id;
+      const taskStatusId = await seedStatus(schema.db, schema, {
+        organizationId: base.orgId,
+        entityType: 'task',
+        teamId: null,
+        key: 'public_link_state',
+        name: 'Public link state',
+        category: 'unstarted',
+        position: 100,
+      });
       const task = one(
         await schema.db
           .insert(schema.task)
@@ -319,6 +335,7 @@ describe('linked-task visibility on calendar items', () => {
             teamId: base.teamId,
             title: 'Public linked task title',
             state: 'public_link_state',
+            statusId: taskStatusId,
             visibility: 'public',
           })
           .returning({ id: schema.task.id }),
@@ -455,6 +472,15 @@ describe('linked-task visibility on calendar items', () => {
     const base = await seedBaseOrg(schema.db, schema);
     const viewerUserId = await seedUserWithHub(schema.db, schema, 'NonCascadingCalendarViewer');
     const viewerActorId = await addMember(schema.db, schema, base.orgId, viewerUserId, 'member');
+    const taskStatusId = await seedStatus(schema.db, schema, {
+      organizationId: base.orgId,
+      entityType: 'task',
+      teamId: null,
+      key: 'classified_state',
+      name: 'Classified state',
+      category: 'unstarted',
+      position: 100,
+    });
     const task = one(
       await schema.db
         .insert(schema.task)
@@ -463,6 +489,7 @@ describe('linked-task visibility on calendar items', () => {
           teamId: base.teamId,
           title: 'Classified calendar task title',
           state: 'classified_state',
+          statusId: taskStatusId,
           visibility: 'private',
         })
         .returning({ id: schema.task.id }),

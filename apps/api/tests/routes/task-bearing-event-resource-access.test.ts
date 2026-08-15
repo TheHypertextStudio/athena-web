@@ -25,6 +25,7 @@ import {
   getDb,
   one,
   seedBaseOrg,
+  type StatusIdLookup,
 } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
@@ -52,6 +53,7 @@ afterEach(() => {
 interface PrivateTaskEventFixture {
   readonly orgId: string;
   readonly teamId: string;
+  readonly statusId: StatusIdLookup;
   readonly viewerActorId: string;
   readonly viewerUserId: string;
   readonly taskId: string;
@@ -136,6 +138,7 @@ async function seedTaskStreamEvent(
         teamId: fixture.teamId,
         title,
         state: 'todo',
+        statusId: fixture.statusId('task', 'todo'),
         visibility,
         createdBy: fixture.viewerActorId,
       })
@@ -212,6 +215,7 @@ async function seedPrivateTaskAuditEvent(
         teamId: fixture.teamId,
         title,
         state: 'todo',
+        statusId: fixture.statusId('task', 'todo'),
         visibility: 'private',
         createdBy: fixture.viewerActorId,
       })
@@ -507,7 +511,7 @@ async function openLiveStream(userId: string) {
 
 /** Seed one active human viewer and private task-bearing audit and observation rows. */
 async function seedPrivateTaskEventFixture(): Promise<PrivateTaskEventFixture> {
-  const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+  const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
   const viewerUser = one(
     await db
       .insert(schema.user)
@@ -530,6 +534,7 @@ async function seedPrivateTaskEventFixture(): Promise<PrivateTaskEventFixture> {
         teamId,
         title: 'Private event task',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         visibility: 'private',
         createdBy: humanActorId,
       })
@@ -603,6 +608,7 @@ async function seedPrivateTaskEventFixture(): Promise<PrivateTaskEventFixture> {
   return {
     orgId,
     teamId,
+    statusId,
     viewerActorId: humanActorId,
     viewerUserId: viewerUser.id,
     taskId: privateTask.id,
@@ -929,6 +935,7 @@ describe('task-bearing event delivery', () => {
           organizationId: fixture.orgId,
           teamId: fixture.teamId,
           name: 'Visible project discussion',
+          statusId: fixture.statusId('project', 'planned'),
           createdBy: fixture.viewerActorId,
         })
         .returning({ id: schema.project.id }),

@@ -10,6 +10,7 @@ import {
   getDb,
   one,
   seedOrg,
+  seedStatuses,
   seedUserWithHub,
 } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
@@ -137,6 +138,7 @@ describe('collectAccountExport', () => {
     const { db, schema, buildExportArchive, collectAccountExport } = await setup();
     const userId = await seedUserWithHub(db, schema, 'Suspended');
     const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
     const actorId = await addMember(db, schema, orgId, userId);
     const teamId = one(
       await db
@@ -149,6 +151,7 @@ describe('collectAccountExport', () => {
       teamId,
       title: 'former-private-task',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       visibility: 'private',
     });
     const scope: AccountExportScope = {
@@ -200,6 +203,7 @@ describe('collectAccountExport', () => {
     const { db, schema, buildExportArchive, collectAccountExport } = await setup();
     const userId = await seedUserWithHub(db, schema, 'Guest export');
     const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
     const teamId = one(
       await db
         .insert(schema.team)
@@ -237,6 +241,7 @@ describe('collectAccountExport', () => {
           teamId,
           title: 'directly-granted-private-task',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'private',
         })
         .returning({ id: schema.task.id }),
@@ -249,6 +254,7 @@ describe('collectAccountExport', () => {
           teamId,
           title: 'hidden-private-task',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'private',
         })
         .returning({ id: schema.task.id }),
@@ -286,6 +292,7 @@ describe('collectAccountExport', () => {
           organizationId: orgId,
           teamId,
           name: 'unattributed-private-project',
+          statusId: statusId('project', 'planned'),
         })
         .returning({ id: schema.project.id }),
     ).id;
@@ -363,6 +370,7 @@ describe('collectAccountExport', () => {
     const { db, schema, collectAccountExport } = await setup();
     const userId = await seedUserWithHub(db, schema, 'Personal owner');
     const orgId = await seedOrg(db, schema, true);
+    const statusId = await seedStatuses(db, schema, orgId);
     const teamId = one(
       await db
         .insert(schema.team)
@@ -407,6 +415,7 @@ describe('collectAccountExport', () => {
           teamId,
           title: 'personal-private-task',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'private',
         })
         .returning({ id: schema.task.id }),

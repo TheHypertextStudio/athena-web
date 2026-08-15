@@ -1177,7 +1177,7 @@ describe('hydrated resources', () => {
       })
       .returning({ id: schema.agentSession.id });
     await db.insert(schema.sessionActivity).values({
-      sessionId: session!.id,
+      sessionId: assertDefined(session).id,
       organizationId: s.orgId,
       type: 'thought',
       body: { text: 'Ship 2 private task summary' },
@@ -1193,7 +1193,7 @@ describe('hydrated resources', () => {
       })
       .returning({ id: schema.agentSession.id });
     await db.insert(schema.sessionActivity).values({
-      sessionId: tasklessSession!.id,
+      sessionId: assertDefined(tasklessSession).id,
       organizationId: s.orgId,
       type: 'thought',
       body: { text: 'Taskless session activity remains visible' },
@@ -1210,12 +1210,16 @@ describe('hydrated resources', () => {
       (await client.readResource({ uri: `docket://${s.orgId}/cycle/${s.cycleId}` })).contents,
     );
     const sessionDto = readJson(
-      (await client.readResource({ uri: `docket://${s.orgId}/session/${session!.id}` })).contents,
+      (
+        await client.readResource({
+          uri: `docket://${s.orgId}/session/${assertDefined(session).id}`,
+        })
+      ).contents,
     );
     const tasklessSessionDto = readJson(
       (
         await client.readResource({
-          uri: `docket://${s.orgId}/session/${tasklessSession!.id}`,
+          uri: `docket://${s.orgId}/session/${assertDefined(tasklessSession).id}`,
         })
       ).contents,
     );
@@ -1517,7 +1521,10 @@ describe('hub resources', () => {
       .insert(schema.role)
       .values({ organizationId: s.orgId, key: 'guest', name: 'Guest' })
       .returning({ id: schema.role.id });
-    await db.update(schema.actor).set({ roleId: guest!.id }).where(eq(schema.actor.id, s.actorId));
+    await db
+      .update(schema.actor)
+      .set({ roleId: assertDefined(guest).id })
+      .where(eq(schema.actor.id, s.actorId));
     const date = new Date().toISOString().slice(0, 10);
     const [privateTask] = await db
       .insert(schema.task)
@@ -1526,6 +1533,7 @@ describe('hub resources', () => {
         teamId: s.teamId,
         title: 'Private static resource task',
         state: 'todo',
+        statusId: s.statusId('task', 'todo'),
         visibility: 'private',
         createdBy: s.actorId,
       })
@@ -1535,9 +1543,9 @@ describe('hub resources', () => {
       .from(schema.hub)
       .where(eq(schema.hub.userId, s.userId));
     await db.insert(schema.dailyPlanItem).values({
-      hubId: hub!.id,
+      hubId: assertDefined(hub).id,
       refOrganizationId: s.orgId,
-      refTaskId: privateTask!.id,
+      refTaskId: assertDefined(privateTask).id,
       date,
     });
 
@@ -1577,7 +1585,10 @@ describe('hub resources', () => {
         defaultVisibility: 'private',
       })
       .returning({ id: schema.role.id });
-    await db.update(schema.actor).set({ roleId: guest!.id }).where(eq(schema.actor.id, s.actorId));
+    await db
+      .update(schema.actor)
+      .set({ roleId: assertDefined(guest).id })
+      .where(eq(schema.actor.id, s.actorId));
     await db.update(schema.task).set({ visibility: 'private' }).where(eq(schema.task.id, s.taskId));
     const [bound, taskless] = await db
       .insert(schema.agentSession)
@@ -1602,8 +1613,11 @@ describe('hub resources', () => {
     const client = await connect(s.ctx);
 
     const hidden = readJson((await client.readResource({ uri: 'docket://hub/inbox' })).contents);
-    expect(hidden['approvals']).toContainEqual({ sessionId: taskless!.id, taskId: null });
-    expect(JSON.stringify(hidden)).not.toContain(bound!.id);
+    expect(hidden['approvals']).toContainEqual({
+      sessionId: assertDefined(taskless).id,
+      taskId: null,
+    });
+    expect(JSON.stringify(hidden)).not.toContain(assertDefined(bound).id);
     expect(JSON.stringify(hidden)).not.toContain(s.taskId);
 
     await db.insert(schema.grant).values({
@@ -1618,7 +1632,10 @@ describe('hub resources', () => {
     });
 
     const shared = readJson((await client.readResource({ uri: 'docket://hub/inbox' })).contents);
-    expect(shared['approvals']).toContainEqual({ sessionId: bound!.id, taskId: s.taskId });
+    expect(shared['approvals']).toContainEqual({
+      sessionId: assertDefined(bound).id,
+      taskId: s.taskId,
+    });
   });
 
   it('filters Hub Portfolio through each project and program visibility decision', async () => {
@@ -1677,8 +1694,8 @@ describe('hub resources', () => {
     );
 
     await Promise.all([
-      db.delete(schema.grant).where(eq(schema.grant.id, projectGrant!.id)),
-      db.delete(schema.grant).where(eq(schema.grant.id, programGrant!.id)),
+      db.delete(schema.grant).where(eq(schema.grant.id, assertDefined(projectGrant).id)),
+      db.delete(schema.grant).where(eq(schema.grant.id, assertDefined(programGrant).id)),
       db
         .update(schema.project)
         .set({ visibility: 'public' })
@@ -1734,7 +1751,7 @@ describe('hub resources', () => {
       expect(completion.completion.values).toEqual([]);
       expect(JSON.stringify({ orgs, today, inbox, portfolio, completion })).not.toContain(s.orgId);
       expect(JSON.stringify({ orgs, today, inbox, portfolio, completion })).not.toContain(
-        session!.id,
+        assertDefined(session).id,
       );
     };
 

@@ -37,7 +37,7 @@ interface ProjectionFixture {
 
 /** Seed one viewer, one team member, and paired task rows with distinguishable report weight. */
 async function seedProjectionFixture(): Promise<ProjectionFixture> {
-  const { orgId, teamId, humanActorId: viewerActorId } = await seedBaseOrg(db, schema);
+  const { orgId, teamId, humanActorId: viewerActorId, statusId } = await seedBaseOrg(db, schema);
   const createdAt = new Date(Date.now() - 86_400_000);
   const assigneeActorId = one(
     await db
@@ -61,6 +61,7 @@ async function seedProjectionFixture(): Promise<ProjectionFixture> {
         assigneeId: assigneeActorId,
         title: 'Private staffing plan',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         estimate: 8,
         visibility: 'private',
         createdAt,
@@ -76,6 +77,7 @@ async function seedProjectionFixture(): Promise<ProjectionFixture> {
         assigneeId: assigneeActorId,
         title: 'Public volunteer shift',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         estimate: 3,
         visibility: 'public',
         createdAt,

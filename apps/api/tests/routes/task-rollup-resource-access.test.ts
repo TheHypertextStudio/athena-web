@@ -10,7 +10,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import {
+  appWithActor,
+  getDb,
+  one,
+  seedBaseOrg,
+  type StatusIdLookup,
+} from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';
 import type projectRollupRouter from '../../src/routes/project-rollup';
 import type projectsRouter from '../../src/routes/projects';
@@ -34,6 +40,7 @@ beforeAll(async () => {
 
 /** Create an active private task in a selected roll-up context. */
 async function seedPrivateTask(
+  statusId: StatusIdLookup,
   orgId: string,
   teamId: string,
   options: {
@@ -59,6 +66,7 @@ async function seedPrivateTask(
         ...(options.createdAt ? { createdAt: options.createdAt } : {}),
         title: 'Private roll-up work',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         visibility: 'private',
       })
       .returning({ id: schema.task.id }),
@@ -83,11 +91,22 @@ async function seedCycle(orgId: string, teamId: string, actorId: string): Promis
 }
 
 /** Create a project for the project delivery roll-up regressions. */
-async function seedProject(orgId: string, teamId: string, actorId: string): Promise<string> {
+async function seedProject(
+  statusId: StatusIdLookup,
+  orgId: string,
+  teamId: string,
+  actorId: string,
+): Promise<string> {
   return one(
     await db
       .insert(schema.project)
-      .values({ organizationId: orgId, teamId, name: 'Private project', createdBy: actorId })
+      .values({
+        organizationId: orgId,
+        teamId,
+        name: 'Private project',
+        statusId: statusId('project', 'planned'),
+        createdBy: actorId,
+      })
       .returning({ id: schema.project.id }),
   ).id;
 }
@@ -173,14 +192,19 @@ function programWorkTaskIds(body: {
 
 describe('task roll-up resource access', () => {
   it('filters private program work until the caller receives a direct task grant', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const programId = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'Private delivery', createdBy: humanActorId })
+        .values({
+          organizationId: orgId,
+          name: 'Private delivery',
+          statusId: statusId('program', 'active'),
+          createdBy: humanActorId,
+        })
         .returning({ id: schema.program.id }),
     ).id;
-    const taskId = await seedPrivateTask(orgId, teamId, { programId });
+    const taskId = await seedPrivateTask(statusId, orgId, teamId, { programId });
     const caller = appWithActor(programs, orgId, [], humanActorId);
 
     const hidden = await caller.request(`/${programId}/work`);
@@ -198,14 +222,19 @@ describe('task roll-up resource access', () => {
   });
 
   it('excludes private tasks from a program roll-up count until directly granted', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const programId = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'Private count', createdBy: humanActorId })
+        .values({
+          organizationId: orgId,
+          name: 'Private count',
+          statusId: statusId('program', 'active'),
+          createdBy: humanActorId,
+        })
         .returning({ id: schema.program.id }),
     ).id;
-    const taskId = await seedPrivateTask(orgId, teamId, { programId });
+    const taskId = await seedPrivateTask(statusId, orgId, teamId, { programId });
     const caller = appWithActor(programs, orgId, [], humanActorId);
 
     const hidden = await caller.request(`/${programId}`);
@@ -222,9 +251,9 @@ describe('task roll-up resource access', () => {
   });
 
   it('filters private task metadata and pace data from cycle roll-ups until directly granted', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const cycleId = await seedCycle(orgId, teamId, humanActorId);
-    const taskId = await seedPrivateTask(orgId, teamId, {
+    const taskId = await seedPrivateTask(statusId, orgId, teamId, {
       cycleId,
       estimate: 5,
       createdAt: new Date('2026-01-02T00:00:00.000Z'),
@@ -307,10 +336,10 @@ describe('task roll-up resource access', () => {
   });
 
   it('filters private task metadata and counts from project roll-ups until directly granted', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const projectId = await seedProject(orgId, teamId, humanActorId);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
     const milestoneId = await seedMilestone(orgId, projectId, humanActorId);
-    const taskId = await seedPrivateTask(orgId, teamId, { projectId, milestoneId });
+    const taskId = await seedPrivateTask(statusId, orgId, teamId, { projectId, milestoneId });
     const projectsCaller = appWithActor(projects, orgId, [], humanActorId);
     const rollupCaller = appWithActor(projectRollup, orgId, [], humanActorId);
 
@@ -362,9 +391,9 @@ describe('task roll-up resource access', () => {
   });
 
   it('filters activity rooted in a private project task until directly granted', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const projectId = await seedProject(orgId, teamId, humanActorId);
-    const taskId = await seedPrivateTask(orgId, teamId, { projectId });
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
+    const taskId = await seedPrivateTask(statusId, orgId, teamId, { projectId });
     const activityId = await seedTaskSessionActivity(orgId, taskId, humanActorId);
     const caller = appWithActor(projectRollup, orgId, [], humanActorId);
 

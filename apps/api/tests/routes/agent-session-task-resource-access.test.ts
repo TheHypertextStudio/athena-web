@@ -37,7 +37,7 @@ interface RegisteredFixture {
 
 /** Seed a terminal registered session, optionally bound to a private task. */
 async function seedRegisteredFixture(taskBound: boolean): Promise<RegisteredFixture> {
-  const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+  const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
   const agentActorId = one(
     await db
       .insert(schema.actor)
@@ -59,6 +59,7 @@ async function seedRegisteredFixture(taskBound: boolean): Promise<RegisteredFixt
             teamId,
             title: 'Private delegated work',
             state: 'todo',
+            statusId: statusId('task', 'todo'),
             visibility: 'private',
           })
           .returning({ id: schema.task.id }),

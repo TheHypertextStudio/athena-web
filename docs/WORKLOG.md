@@ -5140,22 +5140,37 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   resend button is disabled for the length of its cooldown; a resend that could not be delivered
   and a delete that failed both say so instead of reporting nothing.
 - **Files Changed**: `domains/athena/src/phone.ts` (new `PhoneChallengeSummary`, hung off
-  `PhoneNumberOut`), `apps/api/src/routes/phone-numbers.ts` (list populates it via the existing
-  `PhoneVerificationService.outstanding`), `apps/web/src/components/athena/voice-phone-numbers.tsx`,
-  and tests in `apps/api/tests/routes/phone-numbers.test.ts` plus the new
-  `apps/web/tests/athena/voice-phone-numbers.test.tsx`.
-- **Validation**: The new component suite passes 12 of 12 and was first run against the unmodified
-  component, where 11 of 12 fail — including the reload case this work exists for. API phone routes
-  pass 14 of 14. Root typecheck passes 26 tasks, root lint 25, Prettier reports every file clean,
-  and `turbo run test` passes 25 of 25 packages. `@docket/env` fails independently of this work on
-  a clean tree (`.env.local` lacks `WORK_LOCATION_PROJECTION_ENABLED`), as do the pre-existing
-  coverage thresholds in `@docket/connections` and `@docket/athena`.
+  `PhoneNumberOut`), `apps/api/src/routes/phone-numbers.ts` and `phone-verification.ts` (the
+  challenge read became a free function and the SMS port a thunk, so reading a number never
+  resolves the transport), `apps/api/src/app.ts`,
+  `apps/web/src/components/athena/voice-phone-numbers.tsx`, and tests in
+  `apps/api/tests/routes/phone-numbers.test.ts` and `phone-verification.test.ts` plus the new
+  `apps/web/tests/athena/voice-phone-numbers.test.tsx`. Follow-on cleanup reached
+  `apps/web/src/lib/use-now.ts` (an `enabled` gate that absorbed two hand-rolled tickers, in
+  `time-tracking/use-timer.ts` and `athena/elicitation-card.tsx`) and `apps/web/src/lib/query.ts`
+  (`seedListItem`, which also took over the same cache write in `settings/use-members-mutations.ts`
+  and `orgs/[orgId]/views/use-views-page.ts`).
+- **Validation**: The new component suite passes 15 of 15 and was first run against the unmodified
+  component, where 11 of 12 then-existing cases fail — including the reload case this work exists
+  for. Both the cooldown timer and the cache-seed write were separately re-verified by removing
+  them and confirming their tests fail. API phone routes pass 14 of 14. Root typecheck passes 26
+  tasks, root lint 25, Prettier reports every file clean, and `turbo run test` passes 25 of 25
+  packages. `@docket/env` fails independently of this work on a clean tree (`.env.local` lacks
+  `WORK_LOCATION_PROJECTION_ENABLED`), as do the pre-existing coverage thresholds in
+  `@docket/connections` and `@docket/athena`.
+- **Deliberately not done**: `useNow` still seeds the wall clock during render, so a prerendered
+  caller can bake the server's clock into its markup. Every current caller formats at a coarse
+  enough grain to survive it, and making it safe by default means returning `Date | null` and
+  teaching six call sites — including the `WorkLocationStrip` and calendar scheduling prop
+  contracts — what to show before mount. The constraint is now documented on the hook itself rather
+  than left as tribal knowledge; the change is worth making deliberately, not as a side effect.
 - **Learnings**: State that gates a recovery path must be owned by whatever survives the recovery.
   The give-away here was a control whose only trigger was the mutation it was meant to follow up —
   the code box could be reached from `bind.onSuccess` and nowhere else, which is the same as saying
   it only existed if nothing went wrong. Deriving it from the server's rows removed a whole class of
   neighbouring bugs for free: a removed or verified number now collapses the box with no cleanup
   code, because the box was never a thing being cleaned up.
+
 ### [DOCS-SITE-001] Docket has public documentation
 
 - **Completed**: 2026-08-15

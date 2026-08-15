@@ -61,6 +61,12 @@ async function seedLinkedTask(
   return assertDefined(row).id;
 }
 
+describe('externalEntityKey', () => {
+  it('separates the canonical kind and provider id with a NUL delimiter', () => {
+    expect(externalEntityKey('work_item', 'LIN-1')).toBe('work_item\0LIN-1');
+  });
+});
+
 describe('resolveExternalEntities', () => {
   it('resolves a mirrored task by its external id', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);

@@ -23,16 +23,18 @@ import {
   InitiativeId,
   InitiativeStatus,
   OrganizationId,
-  Priority,
   ProjectId,
   ProjectStatus,
   RoleId,
   TaskId,
 } from '@docket/types';
+import { Priority } from '@docket/work/task-contract';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+
+import { buildTaskViewFilter } from './task-helpers';
 
 /** The maximum length of a person's workspace display name. */
 export const PERSON_DISPLAY_NAME_MAX = 120;
@@ -188,12 +190,14 @@ export type PersonProfileOut = z.infer<typeof PersonProfileOut>;
  *
  * @param orgId - The active organization id (from the verified actor context).
  * @param actorId - The person's Actor id.
+ * @param viewerActorId - The current actor, whose task visibility gates assigned-work metadata.
  * @returns the assembled {@link PersonProfileOut} payload.
  * @throws {NotFoundError} when no human Actor with that id exists in this org.
  */
 export async function loadPersonProfile(
   orgId: string,
   actorId: string,
+  viewerActorId: string,
 ): Promise<z.input<typeof PersonProfileOut>> {
   const rows = await db
     .select({
@@ -213,16 +217,20 @@ export async function loadPersonProfile(
     .limit(1);
   const person = rows[0];
   if (!person) throw new NotFoundError('Person not found');
+  const taskVisibility = await buildTaskViewFilter(orgId, viewerActorId);
 
   const [tasks, projects, initiatives] = await Promise.all([
     db
       .select({
         id: task.id,
+        teamId: task.teamId,
         title: task.title,
         state: task.state,
         priority: task.priority,
         dueDate: task.dueDate,
         projectId: task.projectId,
+        programId: task.programId,
+        visibility: task.visibility,
       })
       .from(task)
       .where(
@@ -268,7 +276,7 @@ export async function loadPersonProfile(
     roleId: person.roleId,
     roleName: person.roleName ?? null,
     createdAt: person.createdAt.toISOString(),
-    assignedTasks: tasks.map((t) => ({
+    assignedTasks: tasks.filter(taskVisibility).map((t) => ({
       id: t.id,
       title: t.title,
       state: t.state,

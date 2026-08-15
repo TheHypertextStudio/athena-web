@@ -13,16 +13,14 @@
  *
  * @see `docs/engineering/specs/notion-sync.md`
  */
-import { ConnectorConfig } from '@docket/types';
 import type {
-  IntegrationOut,
   NotionMirrorDatabaseOut,
   NotionMirrorDesignOut,
   NotionMirrorEntity,
   NotionParentPageOut,
   NotionWorkspacePerson,
-  SyncRunOut,
-} from '@docket/types';
+} from '@docket/connections/notion/mirror-contract';
+import { ConnectorConfig, type IntegrationOut, type SyncRunOut } from '@docket/types';
 import { useState } from 'react';
 
 import { api } from '@/lib/api';

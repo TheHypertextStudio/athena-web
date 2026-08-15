@@ -46,8 +46,8 @@ const securityHeaders = [
  *
  * @remarks
  * Workspace packages (`@docket/ui`, `@docket/types`, `@docket/env`) ship raw TypeScript and
- * are transpiled by Next via `transpilePackages`. `@docket/api` is consumed type-only (for
- * the `AdminAppType` RPC contract) so it needs no transpilation.
+ * are transpiled by Next via `transpilePackages`. `@docket/api/rpc-contract` is consumed
+ * type-only (for `AdminAppType`) so it needs no transpilation.
  *
  * The {@link NextConfig.rewrites | rewrites} make the browser same-origin with the Hono
  * API: `/admin/*` (the typed admin RPC router), `/v1/*` (the public RPC routers), and

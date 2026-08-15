@@ -24,7 +24,7 @@ import {
   ProfileSettingsUpdate,
   type OwnershipBlocker,
 } from '@docket/types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { z } from 'zod';
@@ -112,7 +112,14 @@ async function exportableWorkspaces(
     .select({ id: organization.id, name: organization.name })
     .from(actor)
     .innerJoin(organization, eq(actor.organizationId, organization.id))
-    .where(and(eq(actor.userId, userId), eq(actor.kind, 'human'), eq(actor.status, 'active')))
+    .where(
+      and(
+        eq(actor.userId, userId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    )
     .orderBy(organization.name);
   return rows.map((workspace) => ({ id: workspace.id, name: workspace.name }));
 }

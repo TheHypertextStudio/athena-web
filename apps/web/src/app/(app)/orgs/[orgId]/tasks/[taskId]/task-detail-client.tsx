@@ -1,6 +1,6 @@
 'use client';
 
-import { type Priority } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';

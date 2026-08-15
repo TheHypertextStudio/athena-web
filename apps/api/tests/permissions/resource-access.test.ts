@@ -178,6 +178,24 @@ describe('resource access permission service', () => {
     }
   });
 
+  it('does not give an active but archived member a public-resource baseline', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'ArchivedResourceMember');
+    const organizationId = await seedOrg(db, schema);
+    const actorId = await addMember(db, schema, organizationId, userId);
+    const teamId = await seedTeam(db, schema, organizationId);
+    const ref = { organizationId, kind: 'team', id: teamId } as const;
+    await db
+      .update(schema.actor)
+      .set({ archivedAt: new Date('2026-08-14T00:00:00.000Z') })
+      .where(eq(schema.actor.id, actorId));
+
+    const result = await resolveResourceAccess(userId, [ref]);
+
+    expect(accessFor(result, ref)).toEqual({ canView: false, effectiveCapability: null });
+  });
+
   it('does not give guests the public membership baseline', async () => {
     const schema = await getDb();
     const { db } = schema;

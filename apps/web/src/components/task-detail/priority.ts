@@ -1,4 +1,4 @@
-import type { Priority } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 
 /**
  * The human-readable label for each {@link Priority} level.

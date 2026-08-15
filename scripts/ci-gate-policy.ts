@@ -572,8 +572,31 @@ export interface Workflow {
   readonly path: string;
   /** The workflow's `name`, when declared. */
   readonly name: string | null;
+  /** Whether the workflow header declares its checks intentionally advisory. */
+  readonly advisory: boolean;
   /** The workflow's jobs, in declaration order. */
   readonly jobs: readonly WorkflowJob[];
+}
+
+/**
+ * A source directive that declares a check workflow intentionally non-gating.
+ *
+ * @remarks
+ * This must appear in the leading comment header, before the workflow's YAML
+ * content. Keeping it outside the workflow name preserves GitHub's existing
+ * check context while still making the exception visible and enforceable.
+ */
+export const ADVISORY_WORKFLOW_MARKER = '# ci-gate-policy: advisory';
+
+/** Whether a workflow source has the advisory directive in its leading comment header. */
+function hasAdvisoryWorkflowMarker(source: string): boolean {
+  for (const line of source.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed === ADVISORY_WORKFLOW_MARKER) return true;
+    if (trimmed.length === 0 || trimmed.startsWith('#')) continue;
+    return false;
+  }
+  return false;
 }
 
 /**
@@ -653,7 +676,7 @@ export function parseWorkflow(path: string, source: string): Workflow {
       uses: asString(job['uses']),
     });
   }
-  return { path, name: asString(doc['name']), jobs };
+  return { path, name: asString(doc['name']), advisory: hasAdvisoryWorkflowMarker(source), jobs };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -801,8 +824,9 @@ export interface GatePolicyOptions {
    * Identifier of the job that performs the production deploy.
    *
    * @remarks
-   * SCR-19 is only meaningful for the workflow that owns this job; other workflow
-   * files are still checked for SCR-20.
+   * Check jobs in a workflow that owns this job must be listed in its `needs`.
+   * A separate check-running workflow must instead identify itself as advisory;
+   * otherwise SCR-19 reports that it has no production-gating path.
    */
   readonly deployJobId?: string;
 }
@@ -811,13 +835,24 @@ export interface GatePolicyOptions {
 export const DEFAULT_DEPLOY_JOB_ID = 'deploy-production';
 
 /**
+ * Determines whether a workflow visibly declares its checks advisory rather than deploy gates.
+ *
+ * @param workflow - Parsed workflow to classify
+ * @returns `true` when its leading comment header contains the advisory directive
+ */
+export function isAdvisoryWorkflow(workflow: Workflow): boolean {
+  return workflow.advisory;
+}
+
+/**
  * Evaluates every workflow against the SCR-19 and SCR-20 gate rules.
  *
  * @remarks
  * SCR-19: within the workflow that declares the deploy job, every job that runs a
- * gating check must appear in that job's `needs`. This is what makes "a new test
- * job was added but nobody wired it into the deploy gate" a build failure instead
- * of a silent hole.
+ * gating check must appear in that job's `needs`. A separate workflow that runs a
+ * check must visibly call itself advisory, because GitHub Actions cannot make its
+ * result a dependency of a deployment in another workflow. This makes both kinds
+ * of signal explicit instead of reporting an advisory check as a deploy gate.
  *
  * SCR-20: a gating step may not be soft-failed. Three distinct soft-fails are
  * detected — `continue-on-error: true` anywhere inside a check job (including at
@@ -839,11 +874,11 @@ export function checkGatePolicy(
 
   for (const workflow of workflows) {
     const deployJob = workflow.jobs.find((job) => job.id === deployJobId);
+    const checkJobs = workflow.jobs.filter((job) => isCheckJob(job));
     if (deployJob) {
       const needs = new Set(deployJob.needs);
-      for (const job of workflow.jobs) {
+      for (const job of checkJobs) {
         if (job.id === deployJobId) continue;
-        if (!isCheckJob(job)) continue;
         if (needs.has(job.id)) continue;
         findings.push({
           rule: 'SCR-19',
@@ -854,6 +889,19 @@ export function checkGatePolicy(
             `Job "${job.id}" runs gating checks but is not listed in ` +
             `${deployJobId}.needs — a failure there would not stop the production deploy. ` +
             `Add "${job.id}" to ${deployJobId}.needs.`,
+        });
+      }
+    } else if (!isAdvisoryWorkflow(workflow)) {
+      for (const job of checkJobs) {
+        findings.push({
+          rule: 'SCR-19',
+          workflow: workflow.path,
+          job: job.id,
+          step: null,
+          message:
+            `Job "${job.id}" runs gating checks in a workflow with no ${deployJobId} job. ` +
+            'Move it into the deploy workflow so it gates production, or add ' +
+            `${ADVISORY_WORKFLOW_MARKER} to this workflow's comment header to mark the signal explicitly advisory.`,
         });
       }
     }
@@ -972,10 +1020,18 @@ export function formatReport(
     if (deployJob)
       lines.push(`    ${DEFAULT_DEPLOY_JOB_ID}.needs = [${deployJob.needs.join(', ')}]`);
   }
+  const advisoryWorkflows = workflows
+    .filter(
+      (workflow) => isAdvisoryWorkflow(workflow) && workflow.jobs.some((job) => isCheckJob(job)),
+    )
+    .map((workflow) => workflow.path);
+  if (advisoryWorkflows.length > 0)
+    lines.push(`  advisory check workflow(s): ${advisoryWorkflows.join(', ')}`);
   lines.push('');
   if (findings.length === 0) {
     lines.push(
-      'PASS — every check job gates the production deploy, and no gating step is soft-failed.',
+      'PASS — every check in a deploy workflow gates production; advisory checks are explicitly ' +
+        'identified; and no gating step is soft-failed.',
     );
     return lines.join('\n');
   }

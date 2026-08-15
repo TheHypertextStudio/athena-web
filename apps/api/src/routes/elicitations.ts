@@ -26,7 +26,7 @@ import {
   ElicitationOut,
   ElicitationRejectionOut,
   ElicitationSweepOut,
-} from '@docket/types';
+} from '@docket/athena/elicitation-api';
 import { WebPushSubscription } from '@docket/notifications/webpush';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';

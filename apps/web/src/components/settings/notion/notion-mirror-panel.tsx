@@ -24,7 +24,7 @@
  *
  * Pure presentation — all reads and writes live in `use-notion-mirror-controller.ts`.
  */
-import type { NotionMirrorDatabaseOut } from '@docket/types';
+import type { NotionMirrorDatabaseOut } from '@docket/connections/notion/mirror-contract';
 import { ArrowRight, CheckCircle2, CircleAlert, OpenInNew } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import NextLink from 'next/link';

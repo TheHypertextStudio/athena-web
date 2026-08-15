@@ -8,7 +8,7 @@
  * data, not code branches — so a user can edit or delete them. See `docs/engineering/specs/automations.md`.
  */
 import { automationRule, db } from '@docket/db';
-import type { ActionSpec, AutomationEventMatch, Predicate } from '@docket/types';
+import type { ActionSpec, AutomationEventMatch, Predicate } from '@docket/automation/contracts';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import type { EngineRule } from './engine';

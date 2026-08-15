@@ -31,7 +31,7 @@
  * synthesis and never tells us what it said. Without this mirror the phone transcript would be
  * missing Athena's half of the conversation entirely.
  */
-import type { VoiceEndReason, VoiceInboundEvent, VoiceOutboundCommand } from '@docket/types';
+import type { VoiceEndReason, VoiceInboundEvent, VoiceOutboundCommand } from '@docket/athena/voice';
 
 /** A message Twilio sends over the ConversationRelay socket. */
 export interface RelayInboundMessage {

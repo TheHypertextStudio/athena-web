@@ -14,7 +14,7 @@
  * lives in one state tree on the card, so a server rejection can re-render the form with the
  * person's other fields intact — which is the whole point of returning field-level errors.
  */
-import type { ElicitationControl, ElicitationFileAnswer } from '@docket/types';
+import type { ElicitationControl, ElicitationFileAnswer } from '@docket/athena/elicitation';
 import { Check, Paperclip, Plus, X } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Button, Chip, ControlGroup, Field, Input, Text, Textarea } from '@docket/ui/primitives';

@@ -29,7 +29,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
-import { resolveModelBackend, type TurnEvent, type TurnToolDef } from '@docket/agent-runtime';
+import type { TurnEvent, TurnToolDef } from '@docket/athena/turn';
+import { resolveModelBackend } from '@docket/athena/turn/model-backend';
 
 /** Where the recorded evidence is written. */
 const REPORT_PATH = resolve(

@@ -22,7 +22,7 @@
  * Presentational: the search term, the results and the fetch all live in the setup card, which is
  * the one component that needs to know whether this connection can see any pages at all.
  */
-import type { NotionParentPageOut } from '@docket/types';
+import type { NotionParentPageOut } from '@docket/connections/notion/mirror-contract';
 import { OptionPicker } from '@docket/ui/components';
 import { FileText } from '@docket/ui/icons';
 import type { JSX } from 'react';

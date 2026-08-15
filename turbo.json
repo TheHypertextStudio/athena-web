@@ -47,9 +47,10 @@
       // (marketing) simply skip it. Replaces the old `db:up && db:migrate &&` shell chain.
       "dependsOn": ["^db:migrate"]
     },
-    // lint/typecheck/test no longer depend on `^build`: workspace packages expose raw TS
-    // (`"types": "./src/index.ts"`), so tsc/eslint/vitest resolve dependency source directly —
-    // building deps first was pure overhead in CI.
+    // Most lint/typecheck/test tasks do not depend on `^build`: JIT workspace packages expose raw
+    // TS, so tsc/eslint/vitest resolve dependency source directly. Delivery apps that consume the
+    // compiled `@docket/api/rpc-contract` declaration name that one necessary API build in their
+    // local turbo configs instead of making every workspace task build every dependency.
     "lint": {
       "outputs": [],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]

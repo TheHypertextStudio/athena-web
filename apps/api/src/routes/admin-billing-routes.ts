@@ -12,7 +12,7 @@ import {
   SetLifecycleBody,
 } from '../admin-dto';
 import type { AppEnv } from '../context';
-import { onReactivated, onTrialOrPaymentTerminal } from '../billing/lifecycle';
+import { onReactivated, onTrialOrPaymentTerminal } from '@docket/billing/application/lifecycle';
 import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';

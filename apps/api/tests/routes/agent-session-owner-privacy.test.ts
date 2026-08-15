@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { SessionActivityBody } from '@docket/db';
-import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AgentRuntimeModule from '@docket/athena/turn';
 import type { SessionStatus } from '@docket/types';
 
 import type * as AsyncRunnerModule from '../../src/agent/async-runner';
@@ -58,7 +58,7 @@ interface Seed {
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  agentRuntime = await import('@docket/agent-runtime');
+  agentRuntime = await import('@docket/athena/turn');
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   ({ getContainer } = await import('../../src/container'));
 });

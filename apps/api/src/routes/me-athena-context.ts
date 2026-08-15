@@ -330,20 +330,23 @@ async function batchedDisplaySnapshot(
         allowed = workSource?.workspaceId === workspaceId;
         label = workSource?.label ?? null;
         if (allowed && workSource && currentActor) {
-          const subjectsForActor = new Set(
-            [currentActor.id, currentActor.roleId].filter((id): id is string => !!id),
-          );
-          allowed = grants.some(
-            (row) =>
+          allowed = grants.some((row) => {
+            const subjectMatchesActor =
+              (row.subjectKind === 'actor' && row.subjectId === currentActor.id) ||
+              (row.subjectKind === 'role' && row.subjectId === currentActor.roleId);
+            const resourceIndex = workSource.ancestors.findIndex(
+              (ancestor) => ancestor.kind === row.resourceKind && ancestor.id === row.resourceId,
+            );
+            return (
               row.organizationId === workspaceId &&
-              subjectsForActor.has(row.subjectId) &&
+              subjectMatchesActor &&
               row.effect === 'allow' &&
               (!row.expiresAt || row.expiresAt.getTime() >= now) &&
               row.capabilities.length > 0 &&
-              workSource.ancestors.some(
-                (ancestor) => ancestor.kind === row.resourceKind && ancestor.id === row.resourceId,
-              ),
-          );
+              resourceIndex >= 0 &&
+              (resourceIndex === 0 || row.cascades)
+            );
+          });
         }
       } else if (source.type === 'calendar_item') {
         const item = calendarById.get(source.id);

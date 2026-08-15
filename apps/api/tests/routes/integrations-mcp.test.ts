@@ -6,7 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AgentRuntimeModule from '@docket/athena/turn';
 import type * as IntegrationsModule from '@docket/integrations';
 import type { McpIntegrationOut } from '@docket/types';
 
@@ -48,7 +48,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
-  agentRuntime = await import('@docket/agent-runtime');
+  agentRuntime = await import('@docket/athena/turn');
   integrations = await import('@docket/integrations');
   integrationsMcp = (await import('../../src/routes/integrations-mcp')).default;
   agentSessions = (await import('../../src/routes/agent-sessions')).default;

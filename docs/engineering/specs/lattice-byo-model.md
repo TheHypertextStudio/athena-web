@@ -2,7 +2,7 @@
 
 > **Status**: implemented, gated behind the routed-default verification (see §8)
 > **Owner**: Athena model backend
-> **Last updated**: 2026-08-02
+> **Last updated**: 2026-08-13
 
 Someone can point Athena's model work at a computer they own. They authorize Docket from their
 Lovelace account, pick one of the machines they have paired with Lattice, and from then on Athena's
@@ -79,7 +79,8 @@ It is enforced at four layers, deliberately redundantly:
 2. **`runLatticeChat`** checks readiness before dispatch and maps every failure to a
    `LatticeUnavailableReason`. There is no branch that returns text on failure.
 3. **`LatticeAgentTurnRuntime.streamTurn`** does not catch. A port failure propagates with its
-   reason intact.
+   reason intact. Its deliberate public entry point is
+   `@docket/athena/turn/adapters/lattice`.
 4. **`resolveOwnerBackend`** throws rather than degrading when a stored grant cannot produce a
    usable token.
 
@@ -94,7 +95,7 @@ carries a single text message (upstream `OpenAiChatMessage` / `OpenAiChatComplet
 Athena's loop is built on tool calls. Something has to bridge that, and the only place a bridge can
 live is inside the text.
 
-So `lattice-tool-protocol.ts` defines one:
+The private text-protocol module behind `@docket/athena/turn/adapters/lattice` defines one:
 
 - Tools are described in the system prompt, each with its **verbatim** JSON Schema. A paraphrase
   produces inputs that fail validation, and recovering costs a whole turn on the person's hardware.
@@ -118,10 +119,10 @@ model, and replaying another model's private deliberation as instruction is wors
 
 ## 5. Per-user backend resolution
 
-`resolveModelBackend` in `@docket/agent-runtime` picks a backend from the **process** environment.
-That is right for the tiers Docket operates (the Cloudflare model router on Docket's key, or direct
-provider access) because those are properties of the deployment. It cannot express Lattice, which
-is a property of a _person_.
+`resolveModelBackend` in `@docket/athena/turn/model-backend` picks a backend from the **process**
+environment. That is right for the tiers Docket operates (the Cloudflare model router on Docket's
+key, or direct provider access) because those are properties of the deployment. It cannot express
+Lattice, which is a property of a _person_.
 
 `apps/api/src/routes/lattice-backend.ts` is the per-owner layer above it. The agent loop asks it
 once per turn:
@@ -133,9 +134,10 @@ const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.o
 No connection, not enabled, or no device chosen ⇒ the container's process-level runtime, unchanged.
 Two people on the same API instance can be on different backends in the same second.
 
-`@docket/agent-runtime` takes **no** dependency on `@docket/integrations`. The network edge arrives
-as an injected `LatticeChatPort`, wired by `apps/api`, which already depends on both. That keeps
-OAuth and HTTP out of the package that defines the ports.
+`@docket/athena` takes **no** dependency on `@docket/integrations`. The network edge arrives as an
+injected `LatticeChatPort`, exposed by `@docket/athena/turn/adapters/lattice` and wired by
+`apps/api`, which already depends on both. That keeps OAuth and HTTP out of the domain package that
+defines the port.
 
 ## 6. Data model
 
@@ -220,22 +222,23 @@ export * from '@reasonabletech/lattice-client';
 
 ## 11. Files
 
-| Path                                                         | What                                                   |
-| ------------------------------------------------------------ | ------------------------------------------------------ |
-| `packages/integrations/src/lattice-sdk.ts`                   | The vendored gateway client. The only Lattice HTTP.    |
-| `packages/integrations/src/lattice-oauth.ts`                 | PKCE flow, token exchange, refresh, scope check.       |
-| `packages/integrations/src/lattice-gateway.ts`               | Device discovery, turn dispatch, error→reason mapping. |
-| `packages/agent-runtime/src/lattice-tool-protocol.ts`        | The text tool protocol (pure).                         |
-| `packages/agent-runtime/src/lattice-turn.ts`                 | `LatticeAgentTurnRuntime` + transcript flattening.     |
-| `apps/api/src/routes/lattice.ts`                             | The owner-only REST surface.                           |
-| `apps/api/src/routes/lattice-connection.ts`                  | Load/seal/refresh one person's grant.                  |
-| `apps/api/src/routes/lattice-oauth.ts`                       | The browser callback.                                  |
-| `apps/api/src/routes/lattice-backend.ts`                     | Per-owner backend resolution for the agent loop.       |
-| `apps/api/src/routes/lattice-gate.ts`                        | The sequencing gate.                                   |
-| `apps/web/src/app/(app)/settings/athena/lattice-section.tsx` | The settings surface.                                  |
-| `apps/web/src/app/(app)/settings/athena/lattice-copy.ts`     | Application-owned copy per reason.                     |
-| `packages/db/src/schema/agents.ts`                           | `lattice_connection`, `lattice_credential`.            |
-| `packages/db/drizzle/0063_lattice_byo_model.sql`             | The additive migration.                                |
+| Path                                                         | What                                                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `packages/integrations/src/lattice-sdk.ts`                   | The vendored gateway client. The only Lattice HTTP.                      |
+| `packages/integrations/src/lattice-oauth.ts`                 | PKCE flow, token exchange, refresh, scope check.                         |
+| `packages/integrations/src/lattice-gateway.ts`               | Device discovery, turn dispatch, error→reason mapping.                   |
+| `domains/athena/src/turn/internal/lattice-tool-protocol.ts`  | Private text-tool protocol; reached through the adapter.                 |
+| `domains/athena/src/turn/adapters/lattice.ts`                | `LatticeAgentTurnRuntime`, `LatticeChatPort`, and transcript flattening. |
+| `domains/athena/src/turn/model-backend.ts`                   | Process-level backend selection.                                         |
+| `apps/api/src/routes/lattice.ts`                             | The owner-only REST surface.                                             |
+| `apps/api/src/routes/lattice-connection.ts`                  | Load/seal/refresh one person's grant.                                    |
+| `apps/api/src/routes/lattice-oauth.ts`                       | The browser callback.                                                    |
+| `apps/api/src/routes/lattice-backend.ts`                     | Per-owner backend resolution for the agent loop.                         |
+| `apps/api/src/routes/lattice-gate.ts`                        | The sequencing gate.                                                     |
+| `apps/web/src/app/(app)/settings/athena/lattice-section.tsx` | The settings surface.                                                    |
+| `apps/web/src/app/(app)/settings/athena/lattice-copy.ts`     | Application-owned copy per reason.                                       |
+| `packages/db/src/schema/agents.ts`                           | `lattice_connection`, `lattice_credential`.                              |
+| `packages/db/drizzle/0063_lattice_byo_model.sql`             | The additive migration.                                                  |
 
 ## 12. Evidence
 

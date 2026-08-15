@@ -1,10 +1,10 @@
-import type { BillingEvent } from '@docket/billing';
+import { applyBillingEvent } from '@docket/billing/application/lifecycle';
+import type { BillingEvent } from '@docket/billing/contracts';
 import { type Database, organization } from '@docket/db';
 import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { applyBillingEvent } from '../../src/billing/lifecycle';
 import { createBillingLifecycleDb } from './test-db';
 import { assertDefined } from '@docket/test-utils';
 

@@ -30,7 +30,7 @@
  * {@link TWILIO_RELAY_PROVIDER_ID} on the session row for support diagnostics and appears nowhere
  * else — see `twilio-voice.ts`.
  */
-import type { VoiceProviderCredential } from '@docket/types';
+import type { VoiceProviderCredential } from '@docket/athena/voice';
 
 import type { VoiceToolDefinition } from './voice-engine';
 

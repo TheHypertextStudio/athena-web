@@ -142,7 +142,7 @@ describe('POST /me/account/exports', () => {
     expect(rows).toHaveLength(1);
   });
 
-  it('lists active selectable workspaces and rejects unavailable or suspended memberships', async () => {
+  it('lists active selectable workspaces and rejects unavailable, suspended, or archived memberships', async () => {
     const { db, schema, meAccount } = await setup();
     const userId = await seedUserWithHub(db, schema, 'selector');
     const ownOrg = await seedOrg(db, schema);
@@ -150,6 +150,12 @@ describe('POST /me/account/exports', () => {
     const outsiderOrg = await seedOrg(db, schema);
     const suspendedOrg = await seedOrg(db, schema);
     await addMember(db, schema, suspendedOrg, userId, 'member', 'suspended');
+    const archivedOrg = await seedOrg(db, schema);
+    const archivedActorId = await addMember(db, schema, archivedOrg, userId);
+    await db
+      .update(schema.actor)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.actor.id, archivedActorId));
     const app = appWithSession(meAccount, fakeSession(userId));
 
     const options = await app.request('/exports/options', { method: 'GET' });
@@ -158,6 +164,7 @@ describe('POST /me/account/exports', () => {
     expect(body.deliveryEmail).toBe('ada@example.com');
     expect(body.workspaces).not.toHaveLength(0);
     expect(body.workspaces.map((workspace) => workspace.id)).not.toContain(suspendedOrg);
+    expect(body.workspaces.map((workspace) => workspace.id)).not.toContain(archivedOrg);
 
     const selected = await app.request('/exports', {
       method: 'POST',
@@ -182,6 +189,13 @@ describe('POST /me/account/exports', () => {
       body: JSON.stringify({ categories: ['workspaces'], workspaceIds: [suspendedOrg] }),
     });
     expect(suspended.status).toBe(404);
+
+    const archived = await app.request('/exports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ categories: ['workspaces'], workspaceIds: [archivedOrg] }),
+    });
+    expect(archived.status).toBe(404);
   });
 });
 

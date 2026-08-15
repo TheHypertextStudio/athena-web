@@ -307,9 +307,9 @@ The target must be a human Actor in this org; anything else 404s (existence-hidi
     }),
     zParam(actorIdParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId: viewerActorId } = c.get('actorCtx');
       const { actorId } = c.req.valid('param');
-      return ok(c, PersonProfileOut, await loadPersonProfile(orgId, actorId));
+      return ok(c, PersonProfileOut, await loadPersonProfile(orgId, actorId, viewerActorId));
     },
   )
   .patch(
@@ -329,7 +329,7 @@ Role and status live on \`PATCH /:actorId\` (they carry the last-owner guard); t
     zParam(actorIdParam),
     zJson(PersonUpdate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId: viewerActorId } = c.get('actorCtx');
       const { actorId } = c.req.valid('param');
       const body = c.req.valid('json');
 
@@ -354,7 +354,7 @@ Role and status live on \`PATCH /:actorId\` (they carry the last-owner guard); t
           .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId)));
         await enqueueSearchUpsert(orgId, 'actor', actorId);
       }
-      return ok(c, PersonProfileOut, await loadPersonProfile(orgId, actorId));
+      return ok(c, PersonProfileOut, await loadPersonProfile(orgId, actorId, viewerActorId));
     },
   )
   .patch(

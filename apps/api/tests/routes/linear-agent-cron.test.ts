@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AgentRuntimeModule from '@docket/athena/turn';
 
 import type { getContainer as GetContainer } from '../../src/container';
 import type cronRouter from '../../src/routes/cron';
@@ -23,7 +23,7 @@ beforeAll(async () => {
   db = schema.db;
   cron = (await import('../../src/routes/cron')).default;
   ({ getContainer } = await import('../../src/container'));
-  agentRuntime = await import('@docket/agent-runtime');
+  agentRuntime = await import('@docket/athena/turn');
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
 });
 

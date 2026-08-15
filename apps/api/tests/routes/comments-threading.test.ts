@@ -35,7 +35,7 @@ async function seedOrg() {
   return seedBaseOrg(db, schema);
 }
 
-/** Create a comment on the canonical task subject, returning the parsed body. */
+/** Create a comment on the generic project subject used by threading-only regressions. */
 async function createComment(
   app: ReturnType<typeof appWithActor>,
   payload: {
@@ -49,8 +49,8 @@ async function createComment(
     method: 'POST',
     headers: J,
     body: JSON.stringify({
-      subjectType: payload.subjectType ?? 'task',
-      subjectId: payload.subjectId ?? 'task-1',
+      subjectType: payload.subjectType ?? 'project',
+      subjectId: payload.subjectId ?? 'project-1',
       body: payload.body ?? 'hello',
       ...(payload.parentCommentId ? { parentCommentId: payload.parentCommentId } : {}),
     }),
@@ -63,28 +63,28 @@ describe('comments router', () => {
     const { orgId, humanActorId } = await seedOrg();
     const w = appWithActor(comments, orgId, ['comment'], humanActorId);
 
-    await createComment(w, { subjectId: 'task-A', body: 'first' });
-    await createComment(w, { subjectId: 'task-A', body: 'second' });
-    // Different subject id — must NOT appear in the task-A listing.
-    await createComment(w, { subjectId: 'task-B', body: 'other' });
+    await createComment(w, { subjectId: 'project-A', body: 'first' });
+    await createComment(w, { subjectId: 'project-A', body: 'second' });
+    // Different subject id — must NOT appear in the project-A listing.
+    await createComment(w, { subjectId: 'project-B', body: 'other' });
     // Different subject type, same id — must NOT appear either.
-    await createComment(w, { subjectType: 'project', subjectId: 'task-A', body: 'proj' });
+    await createComment(w, { subjectType: 'program', subjectId: 'project-A', body: 'program' });
 
-    const res = await w.request('/?subjectType=task&subjectId=task-A');
+    const res = await w.request('/?subjectType=project&subjectId=project-A');
     expect(res.status).toBe(200);
     const page = await body<Page<CommentOut>>(res);
     expect(page.items).toHaveLength(2);
     expect(page.items.map((c) => c.body)).toEqual(['first', 'second']);
-    expect(page.items.every((c) => c.subjectType === 'task' && c.subjectId === 'task-A')).toBe(
-      true,
-    );
+    expect(
+      page.items.every((c) => c.subjectType === 'project' && c.subjectId === 'project-A'),
+    ).toBe(true);
   });
 
   it('rejects an invalid list query with 422', async () => {
     const { orgId, humanActorId } = await seedOrg();
     const w = appWithActor(comments, orgId, ['comment'], humanActorId);
     // subjectType not in the enum.
-    const res = await w.request('/?subjectType=bogus&subjectId=task-1');
+    const res = await w.request('/?subjectType=bogus&subjectId=project-1');
     expect(res.status).toBe(422);
   });
 
@@ -112,7 +112,7 @@ describe('comments router', () => {
 
     // The reply is returned in the subject listing carrying its parent link.
     const page = await body<Page<CommentOut>>(
-      await w.request('/?subjectType=task&subjectId=task-1'),
+      await w.request('/?subjectType=project&subjectId=project-1'),
     );
     const found = page.items.find((c) => c.id === reply.id);
     expect(found?.parentCommentId).toBe(root.id);
@@ -122,10 +122,10 @@ describe('comments router', () => {
     const { orgId, humanActorId } = await seedOrg();
     const w = appWithActor(comments, orgId, ['comment'], humanActorId);
     const root = await body<CommentOut>(
-      await createComment(w, { subjectId: 'task-X', body: 'root' }),
+      await createComment(w, { subjectId: 'project-X', body: 'root' }),
     );
     const res = await createComment(w, {
-      subjectId: 'task-Y',
+      subjectId: 'project-Y',
       body: 'cross-subject reply',
       parentCommentId: root.id,
     });
@@ -250,7 +250,7 @@ describe('comments router', () => {
     expect((await viewer.request(`/${created.id}`, { method: 'DELETE' })).status).toBe(403);
 
     // But a view-only actor CAN read (list + detail).
-    expect((await viewer.request('/?subjectType=task&subjectId=task-1')).status).toBe(200);
+    expect((await viewer.request('/?subjectType=project&subjectId=project-1')).status).toBe(200);
     expect((await viewer.request(`/${created.id}`)).status).toBe(200);
   });
 
@@ -263,7 +263,7 @@ describe('comments router', () => {
     // Org B (a different tenant) sees none of org A's comments and cannot touch them.
     const wb = appWithActor(comments, b.orgId, ['comment'], b.humanActorId);
     const page = await body<Page<CommentOut>>(
-      await wb.request('/?subjectType=task&subjectId=task-1'),
+      await wb.request('/?subjectType=project&subjectId=project-1'),
     );
     expect(page.items).toHaveLength(0);
     expect((await wb.request(`/${created.id}`)).status).toBe(404);
@@ -289,7 +289,7 @@ describe('comments router', () => {
     const res = await w.request('/', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ subjectType: 'task', subjectId: 'task-1', body: '' }),
+      body: JSON.stringify({ subjectType: 'project', subjectId: 'project-1', body: '' }),
     });
     expect(res.status).toBe(422);
   });

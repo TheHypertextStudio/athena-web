@@ -8,7 +8,8 @@
  */
 'use client';
 
-import type { ActionSpec, AutomationRuleCreate, AutomationRuleOut } from '@docket/types';
+import type { ActionSpec } from '@docket/automation/contracts';
+import type { AutomationRuleCreate, AutomationRuleOut } from '@docket/types';
 import { Button, Card, CardContent, Input, Select } from '@docket/ui/primitives';
 import { type JSX, useEffect, useRef, useState } from 'react';
 

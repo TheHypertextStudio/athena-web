@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  presetAgency as WorkPresetAgency,
+  presetNonprofit as WorkPresetNonprofit,
+  presetStartup as WorkPresetStartup,
+  VOCABULARY_PRESETS as WorkVocabularyPresets,
+} from '@docket/work/vocabulary';
+import {
   presetAgency,
   presetNonprofit,
   presetStartup,
@@ -8,6 +14,13 @@ import {
 } from '../../src/vocabulary/presets';
 
 describe('vocabulary presets', () => {
+  it('re-exports the Work-owned vocabulary tables without a local copy', () => {
+    expect(presetStartup).toBe(WorkPresetStartup);
+    expect(presetNonprofit).toBe(WorkPresetNonprofit);
+    expect(presetAgency).toBe(WorkPresetAgency);
+    expect(VOCABULARY_PRESETS).toBe(WorkVocabularyPresets);
+  });
+
   it('every preset defines all six keys with singular + plural', () => {
     const keys = ['initiative', 'program', 'project', 'task', 'cycle', 'team'] as const;
     for (const preset of [presetStartup, presetNonprofit, presetAgency]) {

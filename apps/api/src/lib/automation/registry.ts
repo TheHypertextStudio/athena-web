@@ -4,7 +4,7 @@
  * @remarks
  * Action handlers register themselves by a `type` string (`mail.archive`,
  * `suggestion.autoAccept`, `task.route`, …); the engine dispatches a {@link
- * import('@docket/types').ActionSpec} by looking its `type` up here. Adding a new action is
+ * import('@docket/automation/contracts').ActionSpec} by looking its `type` up here. Adding a new action is
  * registering a handler — the engine is never edited. Handlers close over whatever services
  * they need (db, connector) at registration time, so {@link ActionContext} stays minimal.
  * See `docs/engineering/specs/automations.md`.

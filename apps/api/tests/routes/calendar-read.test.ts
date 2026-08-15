@@ -276,6 +276,82 @@ describe('readItemDetail', () => {
 });
 
 describe('linked-task visibility on calendar items', () => {
+  it.each(['guest', 'suspended'] as const)(
+    'does not disclose a linked public task title or state to a %s membership',
+    async (membership) => {
+      const schema = await getDb();
+      const base = await seedBaseOrg(schema.db, schema);
+      const viewerUserId = await seedUserWithHub(
+        schema.db,
+        schema,
+        `PublicTask${membership}Viewer`,
+      );
+      const viewerActorId =
+        membership === 'suspended'
+          ? await addMember(schema.db, schema, base.orgId, viewerUserId, 'member', 'suspended')
+          : one(
+              await schema.db
+                .insert(schema.actor)
+                .values({
+                  organizationId: base.orgId,
+                  kind: 'human',
+                  displayName: 'Guest viewer',
+                  userId: viewerUserId,
+                  roleId: one(
+                    await schema.db
+                      .insert(schema.role)
+                      .values({
+                        organizationId: base.orgId,
+                        key: 'guest',
+                        name: 'Guest',
+                        defaultVisibility: 'public',
+                      })
+                      .returning({ id: schema.role.id }),
+                  ).id,
+                })
+                .returning({ id: schema.actor.id }),
+            ).id;
+      const task = one(
+        await schema.db
+          .insert(schema.task)
+          .values({
+            organizationId: base.orgId,
+            teamId: base.teamId,
+            title: 'Public linked task title',
+            state: 'public_link_state',
+            visibility: 'public',
+          })
+          .returning({ id: schema.task.id }),
+      );
+      const layer = await seedLayer(schema, viewerUserId, {
+        sourceKind: 'native_blocks',
+        provider: null,
+        editableCore: true,
+      });
+      const item = await seedItem(schema, viewerUserId, layer.id, {
+        kind: 'native_block',
+        provider: null,
+        title: 'Public task calendar block',
+        startsAt: new Date('2026-07-01T10:00:00.000Z'),
+        endsAt: new Date('2026-07-01T11:00:00.000Z'),
+      });
+      await schema.db.insert(schema.calendarItemTaskLink).values({
+        calendarItemId: item.id,
+        taskId: task.id,
+        organizationId: base.orgId,
+        createdBy: viewerActorId,
+        role: 'prep',
+      });
+
+      const detail = await readItemDetail(schema.db, { userId: viewerUserId, itemId: item.id });
+      const serialized = JSON.stringify(detail);
+
+      expect(detail?.linkedTasks).toEqual([]);
+      expect(serialized).not.toContain('Public linked task title');
+      expect(serialized).not.toContain('public_link_state');
+    },
+  );
+
   it('shows a linked task to a viewer with an actor in the link organization', async () => {
     const schema = await getDb();
     const base = await seedBaseOrg(schema.db, schema);
@@ -372,5 +448,60 @@ describe('linked-task visibility on calendar items', () => {
     const detail = await readItemDetail(schema.db, { userId: outsiderUserId, itemId: item.id });
 
     expect(detail?.linkedTasks).toEqual([]);
+  });
+
+  it('does not disclose a private linked task through a non-cascading team grant', async () => {
+    const schema = await getDb();
+    const base = await seedBaseOrg(schema.db, schema);
+    const viewerUserId = await seedUserWithHub(schema.db, schema, 'NonCascadingCalendarViewer');
+    const viewerActorId = await addMember(schema.db, schema, base.orgId, viewerUserId, 'member');
+    const task = one(
+      await schema.db
+        .insert(schema.task)
+        .values({
+          organizationId: base.orgId,
+          teamId: base.teamId,
+          title: 'Classified calendar task title',
+          state: 'classified_state',
+          visibility: 'private',
+        })
+        .returning({ id: schema.task.id }),
+    );
+    const layer = await seedLayer(schema, viewerUserId, {
+      sourceKind: 'native_blocks',
+      provider: null,
+      editableCore: true,
+    });
+    const item = await seedItem(schema, viewerUserId, layer.id, {
+      kind: 'native_block',
+      provider: null,
+      title: 'Private task calendar block',
+      startsAt: new Date('2026-07-01T10:00:00.000Z'),
+      endsAt: new Date('2026-07-01T11:00:00.000Z'),
+    });
+    await schema.db.insert(schema.calendarItemTaskLink).values({
+      calendarItemId: item.id,
+      taskId: task.id,
+      organizationId: base.orgId,
+      createdBy: base.humanActorId,
+      role: 'prep',
+    });
+    await schema.db.insert(schema.grant).values({
+      organizationId: base.orgId,
+      subjectKind: 'actor',
+      subjectId: viewerActorId,
+      resourceKind: 'team',
+      resourceId: base.teamId,
+      capabilities: ['view'],
+      effect: 'allow',
+      cascades: false,
+    });
+
+    const detail = await readItemDetail(schema.db, { userId: viewerUserId, itemId: item.id });
+    const serialized = JSON.stringify(detail);
+
+    expect(detail?.linkedTasks).toEqual([]);
+    expect(serialized).not.toContain('Classified calendar task title');
+    expect(serialized).not.toContain('classified_state');
   });
 });

@@ -17,11 +17,11 @@
  * already-normalized events, so the raw body is parsed and shape-checked instead. `now` is
  * read at request time (never at module scope).
  */
-import type { BillingEvent, BillingGateway } from '@docket/billing';
+import { applyBillingEvent } from '@docket/billing/application/lifecycle';
+import type { BillingEvent, BillingGateway } from '@docket/billing/contracts';
 import { db } from '@docket/db';
 import { Hono } from 'hono';
 
-import { applyBillingEvent } from '../billing/lifecycle';
 import { getContainer } from '../container';
 
 /**

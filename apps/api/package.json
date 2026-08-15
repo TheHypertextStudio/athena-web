@@ -4,15 +4,13 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Docket backend: authentication, the typed RPC API, billing and cron, and the MCP server.",
+  "description": "Docket backend: authentication, billing and cron, the MCP server, and its API-owned RPC transport contract.",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
+    "./rpc-contract": {
+      "types": "./dist/rpc-contract.d.ts",
+      "default": "./src/rpc-contract.ts"
     }
   },
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
   "portless": {
     "name": "api.docket",
     "script": "dev:app"
@@ -24,6 +22,7 @@
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "pretest": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
@@ -33,16 +32,19 @@
     "@docket/auth": "workspace:*",
     "@docket/authz": "workspace:*",
     "@docket/athena": "workspace:*",
-    "@docket/agent-runtime": "workspace:*",
+    "@docket/automation": "workspace:*",
     "@docket/billing": "workspace:*",
     "@docket/blob-store": "workspace:*",
+    "@docket/connections": "workspace:*",
     "@docket/db": "workspace:*",
     "@docket/env": "workspace:*",
+    "@docket/identity-access": "workspace:*",
     "@docket/integrations": "workspace:*",
     "@docket/mail": "workspace:*",
     "@docket/markdown-tree": "workspace:*",
     "@docket/notifications": "workspace:*",
     "@docket/types": "workspace:*",
+    "@docket/work": "workspace:*",
     "@hono/node-server": "^2.0.4",
     "@hono/standard-validator": "catalog:",
     "@modelcontextprotocol/sdk": "catalog:",

@@ -25,7 +25,7 @@ import {
   project,
   task,
 } from '@docket/db';
-import { Priority } from '@docket/types';
+import { Priority } from '@docket/work/task-contract';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 

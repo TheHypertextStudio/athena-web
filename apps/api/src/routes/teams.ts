@@ -301,10 +301,10 @@ Ordered by name, case-insensitively. Requires only org membership. Unknown or ar
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { teamId } = c.req.valid('param');
       if (!(await teamExists(orgId, teamId))) throw new NotFoundError('Team not found');
-      const items = await loadTeamMembers(orgId, teamId);
+      const items = await loadTeamMembers(orgId, teamId, actorId);
       return ok(c, pageOf(TeamMemberOut), { items });
     },
   )
@@ -324,10 +324,10 @@ Requires only org membership. Unknown or archived team → **404**.`,
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { teamId } = c.req.valid('param');
       if (!(await teamExists(orgId, teamId))) throw new NotFoundError('Team not found');
-      const report = await loadTeamActivity(orgId, teamId, new Date());
+      const report = await loadTeamActivity(orgId, teamId, actorId, new Date());
       return ok(c, TeamActivityOut, report);
     },
   )
@@ -348,7 +348,7 @@ Requires only org membership. Unknown or archived team → **404**.`,
     zParam(idParam),
     zJson(TeamMemberUpsert),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { teamId } = c.req.valid('param');
       const body = c.req.valid('json');
       if (!(await teamExists(orgId, teamId))) throw new NotFoundError('Team not found');
@@ -376,7 +376,7 @@ Requires only org membership. Unknown or archived team → **404**.`,
           set: { role },
         });
 
-      const members = await loadTeamMembers(orgId, teamId);
+      const members = await loadTeamMembers(orgId, teamId, actorId);
       const added = members.find((m) => m.actorId === body.actorId);
       /* v8 ignore next -- @preserve defensive: the row was just written */
       if (!added) throw new NotFoundError('Person not found');

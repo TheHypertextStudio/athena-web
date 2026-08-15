@@ -4,10 +4,10 @@
  * @remarks
  * Two separate typed surfaces, never mixed:
  * - **`AppType`** — the public product API under `/v1`, consumed by `apps/web` (and any
- *   future public client) via `hc<AppType>`.
+ *   future public client) via `hc<AppType>` and `@docket/api/rpc-contract`.
  * - **`AdminAppType`** — the internal staff back-office under `/admin`, consumed ONLY by
- *   `apps/admin` via `hc<AdminAppType>`. Kept off `/v1` so it is neither in the public RPC
- *   type nor the public Scalar spec.
+ *   `apps/admin` via `hc<AdminAppType>` and `@docket/api/rpc-contract`. Kept off `/v1` so it is
+ *   neither in the public RPC type nor the public Scalar spec.
  *
  * Each method chain must never be broken — `*AppType = typeof routes` is what the Next apps
  * consume. Cross-cutting concerns (CORS, session, `/api/auth/*`, `/internal/*` machine edges,
@@ -140,7 +140,7 @@ const routes = app
   .route('/me/athena/mcp-apps', mcpAppHostRoutes)
   .route('/oauth/clients', oauthClients);
 
-/** The public Hono RPC contract consumed by the web app via `hc<AppType>`. */
+/** The public Hono RPC contract exported through `@docket/api/rpc-contract`. */
 export type AppType = typeof routes;
 
 /**
@@ -162,5 +162,5 @@ export const adminRouter = createAdminRoutes(createAdminNotificationRoutes(admin
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const adminRoutes = adminApp.route('/admin', adminRouter);
 
-/** The internal admin RPC contract consumed by `apps/admin` via `hc<AdminAppType>`. */
+/** The internal admin RPC contract exported through `@docket/api/rpc-contract`. */
 export type AdminAppType = typeof adminRoutes;

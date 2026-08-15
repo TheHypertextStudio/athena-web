@@ -20,6 +20,7 @@
  */
 import { sql } from 'drizzle-orm';
 import type { AccountExportScope } from '@docket/types';
+import { defaultVocabularySkin, type VocabularySkin } from '@docket/work/vocabulary';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   boolean,
@@ -46,8 +47,8 @@ import {
   visibility,
 } from '../enums';
 import { genId } from '../id';
-import type { ApprovalRouting, HubPreferences, VocabularySkin, WorkflowState } from '../types';
-import { defaultWorkflowStates, presetStartup } from '../types';
+import type { ApprovalRouting, HubPreferences, WorkflowState } from '../types';
+import { defaultWorkflowStates } from '../types';
 import { user } from './auth';
 import { role } from './crosscutting';
 
@@ -144,7 +145,10 @@ export const organization = pgTable(
     purpose: text('purpose'),
     avatar: text('avatar'),
     isPersonal: boolean('is_personal').notNull().default(false),
-    vocabulary: jsonb('vocabulary').$type<VocabularySkin>().notNull().default(presetStartup),
+    vocabulary: jsonb('vocabulary')
+      .$type<VocabularySkin>()
+      .notNull()
+      .default(defaultVocabularySkin),
     agentGuidance: text('agent_guidance'),
     approvalRouting: jsonb('approval_routing').$type<ApprovalRouting>(),
     initiativeMaxDepth: integer('initiative_max_depth').notNull().default(2),

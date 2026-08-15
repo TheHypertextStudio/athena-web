@@ -27,7 +27,7 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { onReactivated, onTrialOrPaymentTerminal } from '../billing/lifecycle';
+import { onReactivated, onTrialOrPaymentTerminal } from '@docket/billing/application/lifecycle';
 import type { AppEnv } from '../context';
 import { getContainer } from '../container';
 import { env } from '../env';

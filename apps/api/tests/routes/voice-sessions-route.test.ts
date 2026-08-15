@@ -58,6 +58,21 @@ async function seedPerson(name = 'VoiceRoute') {
   return { userId, orgId };
 }
 
+/** An entitled shared workspace, deliberately without a member unless the test adds one. */
+async function seedEntitledWorkspace(): Promise<string> {
+  const orgId = await seedOrg(db, schema);
+  await db
+    .update(schema.organization)
+    .set({ lifecycleState: 'active' })
+    .where(eq(schema.organization.id, orgId));
+  await db.insert(schema.team).values({
+    organizationId: orgId,
+    name: 'Shared',
+    key: `S${Math.random().toString(36).slice(2, 6)}`,
+  });
+  return orgId;
+}
+
 interface VoiceSessionWire {
   readonly id: string;
   readonly conversationId: string;
@@ -97,6 +112,41 @@ describe('browser voice routes', () => {
       .where(eq(schema.voiceSession.id, started.id));
     expect(row?.conversationId).toBe(started.conversationId);
     expect(row?.userId).toBe(userId);
+  });
+
+  it('refuses a browser workspace focus without an active, unarchived human membership', async () => {
+    const person = await seedPerson('VoiceWorkspaceGate');
+    const nonmemberOrgId = await seedEntitledWorkspace();
+    const suspendedOrgId = await seedEntitledWorkspace();
+    await addMember(db, schema, suspendedOrgId, person.userId, 'member', 'suspended');
+    const archivedOrgId = await seedEntitledWorkspace();
+    const archivedActorId = await addMember(db, schema, archivedOrgId, person.userId, 'member');
+    await db
+      .update(schema.actor)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.actor.id, archivedActorId));
+
+    const routes = createVoiceRoutes(() => new MockRealtimeProvider());
+    const app = appWithSession(routes, fakeSession(person.userId));
+    const before = await db
+      .select({ id: schema.voiceSession.id })
+      .from(schema.voiceSession)
+      .where(eq(schema.voiceSession.userId, person.userId));
+
+    for (const workspaceId of [nonmemberOrgId, suspendedOrgId, archivedOrgId]) {
+      const res = await app.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ workspaceId }),
+      });
+      expect(res.status).toBe(404);
+    }
+
+    const after = await db
+      .select({ id: schema.voiceSession.id })
+      .from(schema.voiceSession)
+      .where(eq(schema.voiceSession.userId, person.userId));
+    expect(after).toEqual(before);
   });
 
   it('reads back recent transcript lines from the caller’s conversation', async () => {

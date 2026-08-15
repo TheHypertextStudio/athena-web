@@ -19,7 +19,11 @@
  *
  * Pure presentation — reads and writes live in `use-notion-mirror-controller.ts`.
  */
-import type { NotionMirrorDesignOut, NotionPersonRepresentation } from '@docket/types';
+import type {
+  NotionMirrorDesignOut,
+  NotionMirrorEntity,
+  NotionPersonRepresentation,
+} from '@docket/connections/notion/mirror-contract';
 import { cn } from '@docket/ui';
 import { Plus, Settings } from '@docket/ui/icons';
 import { Input, Select, Skeleton } from '@docket/ui/primitives';
@@ -33,7 +37,6 @@ import {
   excludedRowsNote,
 } from './notion-copy';
 import { type DesignerColumn, useNotionTableDesign } from './use-notion-mirror-controller';
-import type { NotionMirrorEntity } from '@docket/types';
 
 /** Props for {@link NotionTableDesigner}. */
 export interface NotionTableDesignerProps {

@@ -18,7 +18,7 @@
  *   cannot @-mention them, because its native people property only references Notion members.
  *   Left unexplained this reads as the sync having dropped somebody.
  */
-import type { NotionWorkspacePerson } from '@docket/types';
+import type { NotionWorkspacePerson } from '@docket/connections/notion/mirror-contract';
 import { cn } from '@docket/ui';
 import { CheckCircle2, CircleAlert, User, UserOff } from '@docket/ui/icons';
 import { Button, Select, Skeleton } from '@docket/ui/primitives';

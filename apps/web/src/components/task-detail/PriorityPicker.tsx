@@ -1,6 +1,6 @@
 'use client';
 
-import type { Priority } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import { Check } from '@docket/ui/icons';
 import {
   Button,

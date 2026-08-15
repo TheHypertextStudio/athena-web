@@ -13,7 +13,7 @@
  * reach a person's production workspace.
  */
 import { actor, db } from '@docket/db';
-import type { ElicitationRequest } from '@docket/types';
+import type { ElicitationRequest } from '@docket/athena/elicitation';
 import { and, eq } from 'drizzle-orm';
 
 import { ownerActorIn, resolveCanonicalConversation } from '../routes/agent-dispatch';

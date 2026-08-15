@@ -2,7 +2,7 @@
  * `@docket/api` — the account (user) end-of-life state machine.
  *
  * @remarks
- * The account-level mirror of `apps/api/src/billing/lifecycle.ts`. Scheduling deletion moves
+ * The account-level counterpart to `@docket/billing/application/lifecycle`. Scheduling deletion moves
  * the user's `hub` into a recoverable `pending_deletion` grace window (`delete_after_at = now
  * + {@link ACCOUNT_GRACE_DAYS}`); signing back in and cancelling rescues it. After the window
  * elapses, an idempotent cron sweep hard-deletes the user via {@link purgeUser}, which also

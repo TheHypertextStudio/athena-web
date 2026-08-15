@@ -12,7 +12,7 @@ import {
   PHONE_VERIFICATION_MAX_ATTEMPTS,
   PHONE_VERIFICATION_MAX_SENDS,
   PHONE_VERIFICATION_TTL_MS,
-} from '@docket/types';
+} from '@docket/athena/phone';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 

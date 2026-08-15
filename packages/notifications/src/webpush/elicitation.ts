@@ -12,7 +12,7 @@
  * date, a file, a whole form — cannot be answered from a banner, so those get a body-click that
  * lands on the question in context rather than buttons that would lie about what they do.
  */
-import type { ElicitationSpec } from '@docket/types';
+import type { ElicitationSpec } from '@docket/athena/elicitation';
 
 import {
   WEB_PUSH_MAX_ACTIONS,

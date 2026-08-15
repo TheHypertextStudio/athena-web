@@ -1,4 +1,4 @@
-import type { AppType } from '@docket/api';
+import type { AppType } from '@docket/api/rpc-contract';
 import { dehydrate, type QueryClient } from '@tanstack/react-query';
 import { hc } from 'hono/client';
 import { cookies, headers } from 'next/headers';

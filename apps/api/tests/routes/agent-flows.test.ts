@@ -251,7 +251,7 @@ describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
   it('GET /:id/stream replays the stored activities as SSE', async () => {
     const s = await seedOrg();
     const sessionId = await seedSession(s);
-    const app = appFor(agentSessions, s.orgId, ['contribute']);
+    const app = appFor(agentSessions, s.orgId, ['contribute'], s.humanActorId);
     await app.request(`/${sessionId}/run`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

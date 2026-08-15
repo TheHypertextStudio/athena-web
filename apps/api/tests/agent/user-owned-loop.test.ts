@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 const getSession = vi.fn(async () => null);
 vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 
-import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AgentRuntimeModule from '@docket/athena/turn';
 import type * as DbModule from '@docket/db';
 
 import type {
@@ -33,7 +33,7 @@ let toolboxModule!: typeof ToolboxModule;
 beforeAll(async () => {
   schema = await getMigratedDb();
   db = schema.db;
-  runtime = await import('@docket/agent-runtime');
+  runtime = await import('@docket/athena/turn');
   ({
     driveClaimedGeneration,
     driveSession,

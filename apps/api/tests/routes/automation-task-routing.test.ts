@@ -20,7 +20,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { TaskSynthesizer } from '@docket/agent-runtime';
+import type { TaskSynthesizer } from '@docket/work/task-drafting';
 import { RealGitHubObserver } from '@docket/integrations';
 
 import { addMember, getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';

@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
+import { assertTaskCapability, loadTask } from '../routes/task-helpers';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
@@ -53,7 +54,6 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
     },
     (input) =>
       runTool(async () => {
-        // The comments router gates create on the `comment` capability.
         const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
         // Resolution doubles as the tenant check: a descriptor only matches within this org.
         const subjectId = await resolveSubject(
@@ -62,11 +62,23 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
           input.subjectId,
           'subjectId',
         );
-        await authorize(actorCtx, 'comment', {
-          kind: input.subjectType,
-          id: subjectId,
-          orgId: input.orgId,
-        });
+        if (input.subjectType === 'task') {
+          // A task comment changes task-attached discussion, so it follows the same current-task
+          // contribution boundary as the REST route rather than a generic org comment grant.
+          await assertTaskCapability(
+            input.orgId,
+            actorCtx.actorId,
+            await loadTask(input.orgId, subjectId),
+            'contribute',
+          );
+        } else {
+          // Non-task comments retain the existing polymorphic subject capability contract.
+          await authorize(actorCtx, 'comment', {
+            kind: input.subjectType,
+            id: subjectId,
+            orgId: input.orgId,
+          });
+        }
 
         if (input.parentCommentId !== undefined) {
           const parentRows = await db

@@ -35,13 +35,13 @@ import {
   CycleId,
   LabelId,
   MilestoneId,
-  type Priority,
   ProjectId,
   type TaskOut,
   TeamId,
   type TeamOut,
   type WorkflowState,
 } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import { todayIso } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';

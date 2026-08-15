@@ -15,11 +15,14 @@
  * and rendered on the live surface, so they never contain an exception message, a provider string,
  * or an identifier a person would have to read aloud.
  */
-import { actor, db, task, team } from '@docket/db';
-import { and, asc, desc, eq, ilike, isNull, ne } from 'drizzle-orm';
+import { canActor } from '@docket/authz';
+import { db, task, team } from '@docket/db';
+import { and, desc, eq, ilike, isNull } from 'drizzle-orm';
 
+import { encodeListCursor, seekAfter } from '../lib/list-cursor';
 import { resolveLandingTarget } from '../lib/task-landing';
 
+import { buildTaskViewFilter } from './task-helpers';
 import type {
   VoiceSessionContext,
   VoiceToolDefinition,
@@ -29,6 +32,9 @@ import type {
 
 /** How many open items a spoken list may name before it stops being listenable. */
 const SPOKEN_LIST_LIMIT = 5;
+
+/** A raw query batch while filtering task visibility in-memory. */
+const TASK_SCAN_BATCH_SIZE = 100;
 
 /** The tool declarations handed verbatim to the realtime model. */
 export const VOICE_TOOL_DEFINITIONS: readonly VoiceToolDefinition[] = [
@@ -123,14 +129,25 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
         summary: 'I need to know which workspace this belongs to before I can add it.',
       };
     }
-    const landing = await resolveLandingTarget(
-      ctx.organizationId,
-      ctx.initiatorActorId ?? (await this.resolveActor(ctx)) ?? '',
-    );
+    const actorId = ctx.initiatorActorId;
+    if (!actorId) return unavailableActorOutcome();
+    const landing = await resolveLandingTarget(ctx.organizationId, actorId);
     if (!landing) {
       return {
         ok: false,
         summary: 'That workspace has no team to file work into yet, so I can’t add it there.',
+      };
+    }
+    const contribution = await canActor(
+      actorId,
+      'contribute',
+      { kind: 'team', id: landing.teamId, orgId: ctx.organizationId },
+      db,
+    );
+    if (!contribution.allow) {
+      return {
+        ok: false,
+        summary: 'I can’t add a task in that workspace with your current access.',
       };
     }
     const notes = stringArg(args, 'notes');
@@ -146,7 +163,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
         assigneeId: landing.assigneeId,
         cycleId: landing.cycleId,
         source: 'native',
-        createdBy: ctx.initiatorActorId,
+        createdBy: actorId,
       })
       .returning({ id: task.id });
     if (!created) return { ok: false, summary: 'I couldn’t save that one. Try me again.' };
@@ -157,23 +174,56 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
     if (!ctx.organizationId) {
       return { ok: false, summary: 'I need to know which workspace to look in.' };
     }
-    const rows = await db
-      .select({ title: task.title })
-      .from(task)
-      .where(
-        and(
-          eq(task.organizationId, ctx.organizationId),
-          isNull(task.completedAt),
-          isNull(task.canceledAt),
-          isNull(task.archivedAt),
-        ),
-      )
-      .orderBy(desc(task.createdAt))
-      .limit(SPOKEN_LIST_LIMIT);
-    if (rows.length === 0) return { ok: true, summary: 'Nothing open right now.' };
+    const actorId = ctx.initiatorActorId;
+    if (!actorId) return unavailableActorOutcome();
+    const canView = await buildTaskViewFilter(ctx.organizationId, actorId);
+    const visible: { id: string; title: string; createdAt: Date }[] = [];
+    let after: string | undefined;
+
+    // View access is a data-backed predicate so it cannot be safely pushed into this SQL query.
+    // Keep keyset-scanning until the spoken limit is filled: a run of private rows must not hide a
+    // later task the caller is actually allowed to hear.
+    while (visible.length < SPOKEN_LIST_LIMIT) {
+      const rows = await db
+        .select({
+          id: task.id,
+          title: task.title,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+          createdAt: task.createdAt,
+        })
+        .from(task)
+        .where(
+          and(
+            eq(task.organizationId, ctx.organizationId),
+            isNull(task.completedAt),
+            isNull(task.canceledAt),
+            isNull(task.archivedAt),
+            seekAfter(task.createdAt, task.id, after),
+          ),
+        )
+        .orderBy(desc(task.createdAt), desc(task.id))
+        .limit(TASK_SCAN_BATCH_SIZE);
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        if (!canView(row)) continue;
+        visible.push({ id: row.id, title: row.title, createdAt: row.createdAt });
+        if (visible.length === SPOKEN_LIST_LIMIT) break;
+      }
+      if (visible.length === SPOKEN_LIST_LIMIT || rows.length < TASK_SCAN_BATCH_SIZE) break;
+      const last = rows[rows.length - 1];
+      /* v8 ignore next -- @preserve non-empty batch above guarantees a last row */
+      if (!last) break;
+      after = encodeListCursor(last.createdAt, last.id);
+    }
+
+    if (visible.length === 0) return { ok: true, summary: 'Nothing open right now.' };
     return {
       ok: true,
-      summary: `${String(rows.length)} open: ${rows.map((r) => r.title).join('; ')}.`,
+      summary: `${String(visible.length)} open: ${visible.map((r) => r.title).join('; ')}.`,
     };
   }
 
@@ -186,20 +236,61 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
     if (!ctx.organizationId) {
       return { ok: false, summary: 'I need to know which workspace to look in.' };
     }
-    const matches = await db
-      .select({ id: task.id, title: task.title })
-      .from(task)
-      .where(
-        and(
-          eq(task.organizationId, ctx.organizationId),
-          isNull(task.completedAt),
-          isNull(task.canceledAt),
-          isNull(task.archivedAt),
-          ilike(task.title, `%${query}%`),
-        ),
-      )
-      .orderBy(asc(task.createdAt))
-      .limit(2);
+    const actorId = ctx.initiatorActorId;
+    if (!actorId) return unavailableActorOutcome();
+    const canView = await buildTaskViewFilter(ctx.organizationId, actorId);
+    const matches: {
+      id: string;
+      title: string;
+      teamId: string;
+      projectId: string | null;
+      programId: string | null;
+      visibility: 'public' | 'private';
+      createdAt: Date;
+    }[] = [];
+    let after: string | undefined;
+
+    // As with the spoken list, scan past hidden matches before deciding whether the caller named
+    // zero, one, or several tasks. A private row cannot make a visible exact match disappear or
+    // turn it into a false ambiguity.
+    while (matches.length <= 1) {
+      const rows = await db
+        .select({
+          id: task.id,
+          title: task.title,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+          createdAt: task.createdAt,
+        })
+        .from(task)
+        .where(
+          and(
+            eq(task.organizationId, ctx.organizationId),
+            isNull(task.completedAt),
+            isNull(task.canceledAt),
+            isNull(task.archivedAt),
+            ilike(task.title, `%${query}%`),
+            seekAfter(task.createdAt, task.id, after),
+          ),
+        )
+        .orderBy(desc(task.createdAt), desc(task.id))
+        .limit(TASK_SCAN_BATCH_SIZE);
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        if (!canView(row)) continue;
+        matches.push(row);
+        if (matches.length > 1) break;
+      }
+      if (matches.length > 1 || rows.length < TASK_SCAN_BATCH_SIZE) break;
+      const last = rows[rows.length - 1];
+      /* v8 ignore next -- @preserve non-empty batch above guarantees a last row */
+      if (!last) break;
+      after = encodeListCursor(last.createdAt, last.id);
+    }
+
     if (matches.length === 0) return { ok: false, summary: `I don’t see an open “${query}”.` };
     if (matches.length > 1) {
       // Refusing beats guessing: closing the wrong task over a phone call is silent and hard to
@@ -208,26 +299,29 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
     }
     const [match] = matches;
     if (!match) return { ok: false, summary: `I don’t see an open “${query}”.` };
+    const contribution = await canActor(
+      actorId,
+      'contribute',
+      { kind: 'task', id: match.id, orgId: ctx.organizationId },
+      db,
+    );
+    if (!contribution.allow) {
+      return {
+        ok: false,
+        summary: 'I can see that task, but I don’t have permission to close it.',
+      };
+    }
     await db.update(task).set({ completedAt: new Date() }).where(eq(task.id, match.id));
     return { ok: true, summary: `Closed “${match.title}”.` };
   }
+}
 
-  /** Find the person's actor in the session's workspace, for task attribution. */
-  private async resolveActor(ctx: VoiceSessionContext): Promise<string | null> {
-    if (!ctx.organizationId) return null;
-    const rows = await db
-      .select({ id: actor.id })
-      .from(actor)
-      .where(
-        and(
-          eq(actor.organizationId, ctx.organizationId),
-          eq(actor.userId, ctx.userId),
-          ne(actor.kind, 'team'),
-        ),
-      )
-      .limit(1);
-    return rows[0]?.id ?? null;
-  }
+/** Keep an unbound or stale session from saying anything about a workspace it cannot authorize. */
+function unavailableActorOutcome(): VoiceToolOutcome {
+  return {
+    ok: false,
+    summary: 'I can’t verify your workspace access for that right now.',
+  };
 }
 
 /** Whether a workspace can host voice task creation at all, for the session greeting. */

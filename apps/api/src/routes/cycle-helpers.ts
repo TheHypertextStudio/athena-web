@@ -265,11 +265,23 @@ export async function ensureOrgCycleWindows(
  * The minimal task shape the pace-stats roll-up reads.
  *
  * @remarks
- * `computeStats`/`effort`/`isCompleted` need only these three columns, so the batched list query
- * ({@link committedTasksForCycles}) can `select` just them instead of whole rows. Full `TaskRow`s
- * (from {@link committedTasks}) satisfy this structurally, so both feed the same helpers.
+ * `computeStats`/`effort`/`isCompleted` need only the pace fields, while the delivery route also
+ * needs the canonical view-filter fields before it serializes their aggregate. The batched list
+ * query ({@link committedTasksForCycles}) selects exactly that combined shape instead of whole
+ * rows. Full `TaskRow`s (from {@link committedTasks}) satisfy it structurally, so both feed the
+ * same helpers.
  */
-export type CycleStatTask = Pick<TaskRow, 'estimate' | 'completedAt' | 'createdAt'>;
+export type CycleStatTask = Pick<
+  TaskRow,
+  | 'id'
+  | 'teamId'
+  | 'projectId'
+  | 'programId'
+  | 'visibility'
+  | 'estimate'
+  | 'completedAt'
+  | 'createdAt'
+>;
 
 /** Whether a task counts as completed (its workflow state stamped a `completed_at`). */
 export function isCompleted(t: CycleStatTask): boolean {
@@ -327,7 +339,12 @@ export async function committedTasksForCycles(
   // rows — the list rolls up every committed task across every cycle, so the row width matters.
   const rows = await db
     .select({
+      id: task.id,
       cycleId: task.cycleId,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
       estimate: task.estimate,
       completedAt: task.completedAt,
       createdAt: task.createdAt,

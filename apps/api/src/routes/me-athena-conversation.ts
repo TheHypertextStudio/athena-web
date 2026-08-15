@@ -16,8 +16,12 @@
  * the chore the derivation exists to remove.
  */
 import { agentSession, athenaConversationSegment, db, sessionActivity } from '@docket/db';
-import { LexicalCohesionSegmenter, searchConversation } from '@docket/agent-runtime';
-import type { ConversationMessage, ConversationSegment } from '@docket/agent-runtime';
+import {
+  LexicalCohesionSegmenter,
+  searchConversation,
+  type ConversationMessage,
+  type ConversationSegment,
+} from '@docket/athena/conversation';
 import { and, asc, count, desc, eq, gte, inArray, lte, ne } from 'drizzle-orm';
 import { z } from 'zod';
 

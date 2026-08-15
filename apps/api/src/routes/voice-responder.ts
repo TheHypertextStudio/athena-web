@@ -23,7 +23,8 @@
  * synthesizing from the first token, so audio is already playing while later tokens are still
  * being generated.
  */
-import type { AgentTurnRuntime, TurnMessage, TurnToolDef } from '@docket/agent-runtime';
+import type { AgentTurnRuntime, TurnToolDef } from '@docket/athena/turn';
+import type { TurnMessage } from '@docket/athena/turn-protocol';
 
 import type {
   VoiceReplyChunk,

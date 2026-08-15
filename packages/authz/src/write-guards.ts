@@ -7,8 +7,8 @@
  * effective rank (no privilege self-escalation).
  */
 import { actor as actorTable, type Database, role as roleTable } from '@docket/db';
-import { type Capability, CAPABILITY_RANK } from '@docket/types';
-import { and, eq, ne } from 'drizzle-orm';
+import { type Capability, CAPABILITY_RANK } from '@docket/identity-access/capabilities';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 
 /** Thrown when an operation would leave an org with no active Owner (HTTP 409). */
 export class LastOwnerError extends Error {
@@ -55,6 +55,7 @@ export async function lastOwnerGuard(
         eq(actorTable.organizationId, orgId),
         eq(actorTable.roleId, ownerRole.id),
         eq(actorTable.status, 'active'),
+        isNull(actorTable.archivedAt),
         ne(actorTable.id, targetActorId),
       ),
     )

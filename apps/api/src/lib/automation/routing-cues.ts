@@ -23,7 +23,7 @@
  * See `docs/engineering/specs/automations.md` and `docs/engineering/specs/email-to-task.md` §6.
  */
 import { automationRule, db } from '@docket/db';
-import type { ActionSpec, AutomationEventMatch, Predicate } from '@docket/types';
+import type { ActionSpec, AutomationEventMatch, Predicate } from '@docket/automation/contracts';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import type { RoutingCue } from '../email-to-task/funnel';
@@ -36,7 +36,7 @@ const WORK_CREATING_ACTIONS: ReadonlySet<string> = new Set(['task.route']);
  * thread the funnel should compare them against.
  *
  * @remarks
- * These are exactly the fields the ingest emit puts on an `email_suggestion` observation's
+ * These are exactly the fields the ingest emit puts on an `email_suggestion` event's
  * `detail`. A rule keying on anything else (`detail.category`, `detail.confidence`) is describing
  * the classifier's own output rather than the mail, which says nothing about which threads the
  * person cares about and would be circular to feed back into the classifier.

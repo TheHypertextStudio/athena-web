@@ -18,13 +18,14 @@
  * time into whichever human happened to be nearby.
  */
 import { db, task } from '@docket/db';
-import { eq, inArray } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { errorResult, jsonResult, runTool } from './result';
 import { requireScope } from './scope';
+import { resourceAccessKey, resolveResourceAccess } from '../permissions/resource-access';
 import {
   createTimeRecord,
   getActiveTime,
@@ -36,6 +37,9 @@ import {
 
 /** The lifecycle verbs `track` accepts. */
 const TRACK_ACTIONS = ['start', 'pause', 'resume', 'switch', 'stop', 'status', 'segments'] as const;
+
+/** The stable title used when a historical task can no longer be read. */
+const REDACTED_TASK_TITLE = 'Restricted work';
 
 /** One segment as an assistant sees it. */
 const SEGMENT_SHAPE = z.object({
@@ -212,33 +216,34 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
           const records = await getTimeTimeline(userId, { start: args.start, end: args.end });
           // A still-running session in the period may not be anchored yet, so its id is absent
           // rather than pointing at a task that does not exist.
-          const taskIds = [...new Set(records.map((record) => record.taskId))].filter(
-            (id): id is string => id !== null,
-          );
-          const titles = new Map(
-            taskIds.length > 0
-              ? (
-                  await db
-                    .select({ id: task.id, title: task.title })
-                    .from(task)
-                    .where(inArray(task.id, taskIds))
-                ).map((row) => [row.id, row.title] as const)
-              : [],
-          );
+          const taskIds = [
+            ...new Set(
+              records.flatMap((record) =>
+                record.intervals.flatMap((interval) => (interval.taskId ? [interval.taskId] : [])),
+              ),
+            ),
+          ];
+          const titles = await resolveVisibleTaskTitles(userId, taskIds);
           const segments = records
             .flatMap((record) =>
               record.intervals
                 .filter((interval) => interval.supersededById === null)
-                .map((interval) => ({
-                  taskId: interval.taskId,
-                  taskTitle: (interval.taskId ? titles.get(interval.taskId) : null) ?? record.title,
-                  startedAt: interval.startedAt,
-                  endedAt: interval.endedAt,
-                  durationMs:
-                    (interval.endedAt ? Date.parse(interval.endedAt) : Date.now()) -
-                    Date.parse(interval.startedAt),
-                  running: interval.endedAt === null,
-                })),
+                .map((interval) => {
+                  const taskTitle = interval.taskId ? titles.get(interval.taskId) : undefined;
+                  const taskIsStillVisible = interval.taskId === null || taskTitle !== undefined;
+                  return {
+                    taskId: taskIsStillVisible ? interval.taskId : null,
+                    taskTitle: taskIsStillVisible
+                      ? (taskTitle ?? record.title)
+                      : REDACTED_TASK_TITLE,
+                    startedAt: interval.startedAt,
+                    endedAt: interval.endedAt,
+                    durationMs:
+                      (interval.endedAt ? Date.parse(interval.endedAt) : Date.now()) -
+                      Date.parse(interval.startedAt),
+                    running: interval.endedAt === null,
+                  };
+                }),
             )
             .sort((left, right) => left.startedAt.localeCompare(right.startedAt));
           const active = await getActiveTime(userId);
@@ -251,10 +256,9 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
           }
           // A bare `start` with nothing named is deliberate, not an omission: it is the clock
           // beginning before the person has decided what to call the work.
-          const label = args.label ?? (await taskTitle(args.taskId));
           const record = await createTimeRecord(userId, {
             context: {
-              ...(label ? { label } : {}),
+              ...(args.label ? { label: args.label } : {}),
               ...(args.taskId ? { taskId: args.taskId } : {}),
               ...(args.orgId ? { organizationId: args.orgId } : {}),
               contextualRefs: [],
@@ -277,13 +281,27 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
   );
 }
 
-/** Read a task's own title so an assistant need not repeat it back to start tracking. */
-async function taskTitle(taskId: string | undefined): Promise<string | null> {
-  if (!taskId) return null;
+/** Re-check current task visibility before adding live titles to historical MCP segments. */
+async function resolveVisibleTaskTitles(
+  userId: string,
+  taskIds: readonly string[],
+): Promise<Map<string, string>> {
+  if (taskIds.length === 0) return new Map();
   const rows = await db
-    .select({ title: task.title })
+    .select({ id: task.id, organizationId: task.organizationId, title: task.title })
     .from(task)
-    .where(eq(task.id, taskId))
-    .limit(1);
-  return rows[0]?.title ?? null;
+    .where(inArray(task.id, taskIds));
+  const access = await resolveResourceAccess(
+    userId,
+    rows.map((row) => ({ organizationId: row.organizationId, kind: 'task' as const, id: row.id })),
+  );
+  return new Map(
+    rows.flatMap((row) =>
+      access.get(
+        resourceAccessKey({ organizationId: row.organizationId, kind: 'task', id: row.id }),
+      )?.canView
+        ? [[row.id, row.title] as const]
+        : [],
+    ),
+  );
 }

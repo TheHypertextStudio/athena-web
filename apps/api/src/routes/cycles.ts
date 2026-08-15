@@ -46,6 +46,7 @@ import {
 } from './cycle-helpers';
 import { backfillCycleBacklog } from './cycle-backfill';
 import { buildCycleBurnupPayload } from './cycle-burnup';
+import { buildTaskViewFilter } from './task-helpers';
 
 /**
  * The cycles list query: cursor pagination plus an opt-in `roll` flag. The list surfaces pass
@@ -62,7 +63,7 @@ const cycles = new Hono<AppEnv>()
       tag: 'Cycles',
       summary: 'List cycles',
       response: pageOf(CycleDetail),
-      description: `List the organization's cycles — fixed-length team iterations (sprints) on a configurable cadence. Each item is a {@link CycleDetail}: the cycle plus its pace \`stats\` (committed/completed/capacity/scopeChange/carryover) folded in inline, and the date-derived \`isCurrent\` flag, so a roster renders complete without a per-cycle fan-out. The page's committed tasks are fetched in ONE batched query and run through the same pure \`computeStats\` the detail endpoint uses (avoiding an N+1). Keyset-paginated newest-first by \`startsAt\` (\`id\` tiebreak); \`limit\` optional. Opt-in side effect: pass \`roll=true\` to auto-materialize every team's rolling cycle window in-process before listing (one batched ensure instead of a per-team \`/current\` HTTP fan-out on SSR) — so surfaces that need the live rolling roster never see an empty list; other callers omit \`roll\` and get the raw stored roster with NO write. Read-only otherwise; org membership suffices. Returns a page of {@link CycleDetail}.`,
+      description: `List the organization's cycles — fixed-length team iterations (sprints) on a configurable cadence. Each item is a {@link CycleDetail}: the cycle plus its pace \`stats\` (committed/completed/capacity/scopeChange/carryover) folded in inline, and the date-derived \`isCurrent\` flag, so a roster renders complete without a per-cycle fan-out. The page's committed tasks are fetched in ONE batched query and run through the same pure \`computeStats\` the detail endpoint uses (avoiding an N+1), after canonical task visibility filters each caller's aggregate. Keyset-paginated newest-first by \`startsAt\` (\`id\` tiebreak); \`limit\` optional. Opt-in side effect: pass \`roll=true\` to auto-materialize every team's rolling cycle window in-process before listing (one batched ensure instead of a per-team \`/current\` HTTP fan-out on SSR) — so surfaces that need the live rolling roster never see an empty list; other callers omit \`roll\` and get the raw stored roster with NO write. Read-only otherwise; organization membership accesses cycles while task-derived stats use canonical task visibility. Returns a page of {@link CycleDetail}.`,
     }),
     zQuery(CycleListQuery),
     async (c) => {
@@ -93,9 +94,10 @@ const cycles = new Hono<AppEnv>()
         orgId,
         pageRows.map((r) => r.id),
       );
+      const canView = await buildTaskViewFilter(orgId, actorId);
       const items: z.input<typeof CycleDetail>[] = pageRows.map((r) => ({
         ...toOut(r, now),
-        stats: computeStats(r, tasksByCycle.get(r.id) ?? []),
+        stats: computeStats(r, (tasksByCycle.get(r.id) ?? []).filter(canView)),
       }));
       return ok(c, pageOf(CycleDetail), { items, nextCursor });
     },
@@ -184,14 +186,15 @@ const cycles = new Hono<AppEnv>()
       tag: 'Cycles',
       summary: 'Get cycle detail',
       response: CycleDetail,
-      description: `Fetch a single cycle plus its rolled-up pace \`stats\` — the "are we on pace?" banner. The cycle must exist in the caller's org (404 \`Cycle not found\`). \`stats\` is computed from the cycle's active committed tasks: \`committed\` (tasks currently on the cycle), \`completed\` (those with a \`completed_at\`), \`capacity\` (sum of committed estimates, unestimated = 0), \`completedCapacity\` (estimate sum of the completed subset), \`scopeChange\` (tasks added after \`starts_at\`, i.e. mid-cycle scope creep), and \`carryover\` (still-incomplete committed tasks — what would roll if the cycle closed now). The response also carries the date-derived \`isCurrent\`. Read-only; org membership suffices. Returns {@link CycleDetail}. See \`GET /:id/burnup\` for the daily series and \`GET /:id/tasks\` for the grouped task list.`,
+      description: `Fetch a single cycle plus its rolled-up pace \`stats\` — the "are we on pace?" banner. The cycle must exist in the caller's org (404 \`Cycle not found\`). \`stats\` is computed from the active committed tasks the caller can view: \`committed\` (tasks currently on the cycle), \`completed\` (those with a \`completed_at\`), \`capacity\` (sum of committed estimates, unestimated = 0), \`completedCapacity\` (estimate sum of the completed subset), \`scopeChange\` (tasks added after \`starts_at\`, i.e. mid-cycle scope creep), and \`carryover\` (still-incomplete committed tasks — what would roll if the cycle closed now). The response also carries the date-derived \`isCurrent\`. Read-only; organization membership accesses the cycle while its stats use canonical task visibility. Returns {@link CycleDetail}. See \`GET /:id/burnup\` for the daily series and \`GET /:id/tasks\` for the grouped task list.`,
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await loadCycle(orgId, id);
-      const tasks = await committedTasks(orgId, id);
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      const tasks = (await committedTasks(orgId, id)).filter(canView);
       const detail: z.input<typeof CycleDetail> = {
         ...toOut(row, new Date()),
         stats: computeStats(row, tasks),
@@ -262,16 +265,17 @@ const cycles = new Hono<AppEnv>()
       tag: 'Cycles',
       summary: 'List cycle tasks',
       response: CycleTasksOut,
-      description: `List a cycle's active committed tasks, grouped by a containment axis. The \`groupBy\` query selects the axis — \`project\` (default) buckets tasks by their \`project_id\`, \`program\` buckets by their \`program_id\` — and the response echoes the chosen \`groupBy\`. Exactly one id field is populated per group (\`projectId\` when grouped by project, \`programId\` when by program), and it is \`null\` for the "no project"/"no program" bucket holding tasks not filed under that axis. Only active (non-archived) tasks currently committed to the cycle are returned. The cycle must exist in the caller's org (404 \`Cycle not found\`). Read-only; org membership suffices. Returns {@link CycleTasksOut}.`,
+      description: `List a cycle's active committed tasks, grouped by a containment axis. The \`groupBy\` query selects the axis — \`project\` (default) buckets tasks by their \`project_id\`, \`program\` buckets by their \`program_id\` — and the response echoes the chosen \`groupBy\`. Exactly one id field is populated per group (\`projectId\` when grouped by project, \`programId\` when by program), and it is \`null\` for the "no project"/"no program" bucket holding tasks not filed under that axis. Only active (non-archived) tasks currently committed to the cycle that the caller can view are returned. The cycle must exist in the caller's org (404 \`Cycle not found\`). Read-only; task delivery uses canonical task visibility. Returns {@link CycleTasksOut}.`,
     }),
     zParam(idParam),
     zQuery(CycleTasksQuery),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { groupBy = 'project' } = c.req.valid('query');
       await loadCycle(orgId, id);
-      const tasks = await committedTasks(orgId, id);
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      const tasks = (await committedTasks(orgId, id)).filter(canView);
 
       // Group committed tasks by the requested containment axis (Project or Program).
       // The bucket key is the entity id, or `null` for the no-project/no-program bucket.
@@ -305,13 +309,13 @@ const cycles = new Hono<AppEnv>()
       tag: 'Cycles',
       summary: 'Get cycle burn-up',
       response: CycleBurnupOut,
-      description: `The cycle's burn-up report — the data behind the "are we on pace?" chart. \`series\` walks every calendar day of the window \`[starts_at, ends_at]\` inclusive (UTC day boundaries); for each day \`planned\` is the cumulative committed capacity KNOWN by that day (it rises as scope is added mid-cycle, which is why this is a burn-UP not a burn-down), \`completed\` is the cumulative effort whose \`completed_at\` falls on or before that day, and \`remaining = planned - completed\` is the open distance to the plan line. \`scopeChanges\` itemizes every task added after \`starts_at\` (its \`taskId\`, when it joined, and the estimate it added), sorted by when it joined. The flat \`capacity\` and \`stats\` mirror {@link CycleStats} so the chart and its summary come from one read. The cycle must exist in the caller's org (404 \`Cycle not found\`). Read-only; org membership suffices. Returns {@link CycleBurnupOut}.`,
+      description: `The cycle's burn-up report — the data behind the "are we on pace?" chart. \`series\` walks every calendar day of the window \`[starts_at, ends_at]\` inclusive (UTC day boundaries); for each day \`planned\` is the cumulative capacity from committed tasks the caller can view (it rises as scope is added mid-cycle, which is why this is a burn-UP not a burn-down), \`completed\` is the cumulative effort whose \`completed_at\` falls on or before that day, and \`remaining = planned - completed\` is the open distance to the plan line. \`scopeChanges\` itemizes every visible task added after \`starts_at\` (its \`taskId\`, when it joined, and the estimate it added), sorted by when it joined. The flat \`capacity\` and \`stats\` mirror {@link CycleStats} so the chart and its summary come from one read. The cycle must exist in the caller's org (404 \`Cycle not found\`). Read-only; organization membership accesses the cycle while task-derived data uses canonical task visibility. Returns {@link CycleBurnupOut}.`,
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      return ok(c, CycleBurnupOut, await buildCycleBurnupPayload(orgId, id));
+      return ok(c, CycleBurnupOut, await buildCycleBurnupPayload(orgId, id, actorId));
     },
   )
   .post(

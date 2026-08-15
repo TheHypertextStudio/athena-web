@@ -4,19 +4,21 @@
  * @remarks
  * Org-scoped CRUD over {@link role} capability bundles. The four seeded system roles
  * (`isSystem = true`) keep an immutable `key` (the update body has no `key` field) and
- * cannot be deleted. `manage` is required to mutate.
+ * cannot be deleted. Custom roles require `manage` to mutate; patching a system role also
+ * requires an Owner membership.
  */
-import { db, role } from '@docket/db';
+import { actor, db, grant, role } from '@docket/db';
 import { pageOf, RoleCreate, RoleOut, RoleUpdate } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { ConflictError, NotFoundError } from '../error';
+import { CapabilityError, ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
+import { notifyGrantsChanged } from '../mcp/notify';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 type RoleRow = typeof role.$inferSelect;
@@ -36,6 +38,36 @@ function toOut(r: RoleRow): z.input<typeof RoleOut> {
 }
 
 const idParam = z.object({ id: z.string() });
+
+/** The single org-root grant that materializes a role's base capability. */
+function roleBaseGrantValues(
+  orgId: string,
+  roleId: string,
+  baseCapability: NonNullable<RoleRow['baseCapability']>,
+): typeof grant.$inferInsert {
+  return {
+    organizationId: orgId,
+    subjectKind: 'role',
+    subjectId: roleId,
+    resourceKind: 'organization',
+    resourceId: orgId,
+    capabilities: [baseCapability],
+    effect: 'allow',
+    cascades: true,
+  };
+}
+
+/** Match only the org-root grant that represents a role's base capability. */
+function roleBaseGrantWhere(orgId: string, roleId: string) {
+  return and(
+    eq(grant.organizationId, orgId),
+    eq(grant.subjectKind, 'role'),
+    eq(grant.subjectId, roleId),
+    eq(grant.resourceKind, 'organization'),
+    eq(grant.resourceId, orgId),
+    eq(grant.effect, 'allow'),
+  );
+}
 
 /** Roles router: org-scoped CRUD; system roles are immutable-key and non-deletable. */
 const roles = new Hono<AppEnv>()
@@ -73,23 +105,36 @@ Returns the created \`RoleOut\`. Assign the role to members via the invitation \
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const body = c.req.valid('json');
-      const inserted = await db
-        .insert(role)
-        .values({
-          organizationId: orgId,
-          key: body.key,
-          name: body.name,
-          isSystem: false,
-          capabilities: body.capabilities ?? [],
-          baseCapability: body.baseCapability ?? null,
-          ...(body.defaultVisibility !== undefined
-            ? { defaultVisibility: body.defaultVisibility }
-            : {}),
-        })
-        .returning();
-      const row = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-      if (!row) throw new Error('role insert returned no row');
+      const row = await db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(role)
+          .values({
+            organizationId: orgId,
+            key: body.key,
+            name: body.name,
+            isSystem: false,
+            capabilities: body.capabilities ?? [],
+            baseCapability: body.baseCapability ?? null,
+            ...(body.defaultVisibility !== undefined
+              ? { defaultVisibility: body.defaultVisibility }
+              : {}),
+          })
+          .returning();
+        const created = inserted[0];
+        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+        if (!created) throw new Error('role insert returned no row');
+
+        if (created.baseCapability !== null) {
+          await tx
+            .insert(grant)
+            .values(roleBaseGrantValues(orgId, created.id, created.baseCapability));
+        }
+
+        return created;
+      });
+      // A base grant changes the live MCP surface for every actor assigned this role. Delivery is
+      // best-effort, like grant writes: the persisted transaction must not fail on a missed frame.
+      await notifyGrantsChanged(orgId, 'role', row.id).catch(() => undefined);
       return ok(c, RoleOut, toOut(row));
     },
   )
@@ -130,32 +175,75 @@ Notably the update body has **no \`key\` field**: a role's \`key\` is immutable 
     zParam(idParam),
     zJson(RoleUpdate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, roleId: callerRoleId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
 
-      const existing = await db
-        .select()
-        .from(role)
-        .where(and(eq(role.id, id), eq(role.organizationId, orgId)))
-        .limit(1);
-      if (!existing[0]) throw new NotFoundError('Role not found');
+      const row = await db.transaction(async (tx) => {
+        const existing = await tx
+          .select()
+          .from(role)
+          .where(and(eq(role.id, id), eq(role.organizationId, orgId)))
+          .limit(1);
+        const target = existing[0];
+        if (!target) throw new NotFoundError('Role not found');
+        if (target.isSystem) {
+          const callerRole = callerRoleId
+            ? await tx
+                .select({ key: role.key })
+                .from(role)
+                .where(and(eq(role.id, callerRoleId), eq(role.organizationId, orgId)))
+                .limit(1)
+            : [];
+          if (callerRole[0]?.key !== 'owner') {
+            throw new CapabilityError('Only an owner can modify a system role');
+          }
+        }
 
-      const updated = await db
-        .update(role)
-        .set({
-          ...(body.name !== undefined ? { name: body.name } : {}),
-          ...(body.capabilities !== undefined ? { capabilities: body.capabilities } : {}),
-          ...(body.baseCapability !== undefined ? { baseCapability: body.baseCapability } : {}),
-          ...(body.defaultVisibility !== undefined
-            ? { defaultVisibility: body.defaultVisibility }
-            : {}),
-        })
-        .where(and(eq(role.id, id), eq(role.organizationId, orgId)))
-        .returning();
-      const row = updated[0];
-      /* v8 ignore next -- @preserve defensive: the role was verified to exist above */
-      if (!row) throw new NotFoundError('Role not found');
+        const updated = await tx
+          .update(role)
+          .set({
+            ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.capabilities !== undefined ? { capabilities: body.capabilities } : {}),
+            ...(body.baseCapability !== undefined ? { baseCapability: body.baseCapability } : {}),
+            ...(body.defaultVisibility !== undefined
+              ? { defaultVisibility: body.defaultVisibility }
+              : {}),
+          })
+          .where(and(eq(role.id, id), eq(role.organizationId, orgId)))
+          .returning();
+        const patched = updated[0];
+        /* v8 ignore next -- @preserve defensive: the role was verified to exist above */
+        if (!patched) throw new NotFoundError('Role not found');
+
+        if (body.baseCapability === null) {
+          await tx.delete(grant).where(roleBaseGrantWhere(orgId, id));
+        } else if (body.baseCapability !== undefined) {
+          const baseline = roleBaseGrantValues(orgId, id, body.baseCapability);
+          await tx
+            .insert(grant)
+            .values(baseline)
+            .onConflictDoUpdate({
+              target: [
+                grant.organizationId,
+                grant.subjectKind,
+                grant.subjectId,
+                grant.resourceKind,
+                grant.resourceId,
+                grant.effect,
+              ],
+              set: {
+                capabilities: baseline.capabilities,
+                cascades: baseline.cascades,
+              },
+            });
+        }
+
+        return patched;
+      });
+      if (body.baseCapability !== undefined) {
+        await notifyGrantsChanged(orgId, 'role', row.id).catch(() => undefined);
+      }
       return ok(c, RoleOut, toOut(row));
     },
   )
@@ -169,30 +257,55 @@ Notably the update body has **no \`key\` field**: a role's \`key\` is immutable 
       response: RoleOut,
       description: `Delete a custom role by id. Requires the \`manage\` capability. The role must exist in this org — otherwise **404** (existence-hiding). **System roles cannot be deleted**: if the target's \`isSystem\` is true (Owner/Admin/Member/Guest), the request is rejected with **409**, since the seeded bundles are structural to the permission model and the org's role grants.
 
-This is a hard delete of the \`role\` row. Members currently assigned the role keep their \`actor.roleId\` FK (a bare global FK), so callers should re-point affected members to another role (via \`PATCH /members/:actorId\`) before or after deletion to avoid leaving them without a resolvable org-wide capability. Returns the deleted \`RoleOut\` as a tombstone of what was removed.`,
+This is a hard delete of the \`role\` row and its role-subject grants. The role FK clears affected members' \`actor.roleId\`, so reassign members (via \`PATCH /members/:actorId\`) when they should retain an org-wide baseline. Returns the deleted \`RoleOut\` as a tombstone of what was removed.`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
 
-      const existing = await db
-        .select()
-        .from(role)
-        .where(and(eq(role.id, id), eq(role.organizationId, orgId)))
-        .limit(1);
-      const target = existing[0];
-      if (!target) throw new NotFoundError('Role not found');
-      if (target.isSystem) throw new ConflictError('Cannot delete a system role');
+      const deletedRole = await db.transaction(async (tx) => {
+        const existing = await tx
+          .select()
+          .from(role)
+          .where(and(eq(role.id, id), eq(role.organizationId, orgId)))
+          .limit(1);
+        const target = existing[0];
+        if (!target) throw new NotFoundError('Role not found');
+        if (target.isSystem) throw new ConflictError('Cannot delete a system role');
 
-      const deleted = await db
-        .delete(role)
-        .where(and(eq(role.id, id), eq(role.organizationId, orgId)))
-        .returning();
-      const row = deleted[0];
-      /* v8 ignore next -- @preserve defensive: the role was verified to exist above */
-      if (!row) throw new NotFoundError('Role not found');
-      return ok(c, RoleOut, toOut(row));
+        // Deleting the role sets these foreign keys to null. Capture the members now so the
+        // post-commit invalidation can still address the sessions whose tools just changed.
+        const affectedActors = await tx
+          .select({ id: actor.id })
+          .from(actor)
+          .where(and(eq(actor.organizationId, orgId), eq(actor.roleId, id)));
+
+        await tx
+          .delete(grant)
+          .where(
+            and(
+              eq(grant.organizationId, orgId),
+              eq(grant.subjectKind, 'role'),
+              eq(grant.subjectId, id),
+            ),
+          );
+
+        const deleted = await tx
+          .delete(role)
+          .where(and(eq(role.id, id), eq(role.organizationId, orgId)))
+          .returning();
+        const removed = deleted[0];
+        /* v8 ignore next -- @preserve defensive: the role was verified to exist above */
+        if (!removed) throw new NotFoundError('Role not found');
+        return { row: removed, affectedActorIds: affectedActors.map((affected) => affected.id) };
+      });
+      await Promise.all(
+        deletedRole.affectedActorIds.map((actorId) =>
+          notifyGrantsChanged(orgId, 'actor', actorId).catch(() => undefined),
+        ),
+      );
+      return ok(c, RoleOut, toOut(deletedRole.row));
     },
   );
 

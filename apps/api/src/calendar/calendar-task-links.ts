@@ -37,8 +37,6 @@ type TeamRow = typeof team.$inferSelect;
 interface ContributingActor {
   /** The resolved actor row id (distinct from the Docket user id). */
   id: string;
-  /** The actor's role id, or `null` when unassigned — fed into {@link buildTaskViewFilter}. */
-  roleId: string | null;
 }
 
 /** Load the caller's own calendar item, or throw {@link NotFoundError} (existence-hiding). */
@@ -65,7 +63,8 @@ async function requireOwnedItem(
  * cross-org `roleId` never leaks capabilities), adapted to a plain function since these
  * routes are user-scoped rather than mounted behind that middleware.
  *
- * @throws {NotFoundError} When the caller has no actor in `organizationId` (existence-hiding).
+ * @throws {NotFoundError} When the caller has no active human actor in `organizationId`
+ * (existence-hiding).
  * @throws {CapabilityError} When the actor's role capabilities do not satisfy `contribute`.
  */
 async function requireContributingActor(
@@ -77,7 +76,15 @@ async function requireContributingActor(
     .select({ actor, role })
     .from(actor)
     .leftJoin(role, and(eq(actor.roleId, role.id), eq(role.organizationId, organizationId)))
-    .where(and(eq(actor.userId, userId), eq(actor.organizationId, organizationId)))
+    .where(
+      and(
+        eq(actor.userId, userId),
+        eq(actor.organizationId, organizationId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    )
     .limit(1);
   const row = rows[0];
   if (row === undefined) throw new NotFoundError('Organization not found');
@@ -85,13 +92,13 @@ async function requireContributingActor(
   const capabilities = (row.role !== null ? row.role.capabilities : []) as Capability[];
   if (!capabilities.some((cap) => satisfies(cap, 'contribute'))) throw new CapabilityError();
 
-  return { id: row.actor.id, roleId: row.actor.roleId };
+  return { id: row.actor.id };
 }
 
 /** Load a task in `organizationId` that the actor may view, or throw {@link NotFoundError}. */
 async function requireViewableTask(
   db: Database,
-  input: { organizationId: string; taskId: string; actorId: string; roleId: string | null },
+  input: { organizationId: string; taskId: string; actorId: string },
 ): Promise<TaskRow> {
   const rows = await db
     .select()
@@ -107,7 +114,7 @@ async function requireViewableTask(
   const row = rows[0];
   if (row === undefined) throw new NotFoundError('Task not found');
 
-  const canView = await buildTaskViewFilter(input.organizationId, input.actorId, input.roleId);
+  const canView = await buildTaskViewFilter(input.organizationId, input.actorId);
   if (!canView(row)) throw new NotFoundError('Task not found');
 
   return row;
@@ -218,7 +225,6 @@ export async function linkTaskToItem(
       organizationId: body.organizationId,
       taskId: body.taskId,
       actorId: actingActor.id,
-      roleId: actingActor.roleId,
     });
 
     const existingLinkRows = await db

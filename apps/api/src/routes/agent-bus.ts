@@ -20,8 +20,12 @@
  * a failure of the durable write can never cost the live one.
  */
 import { agentSession, db } from '@docket/db';
-import { InMemoryAgentBus } from '@docket/agent-runtime';
-import type { AgentBusFilter, AgentUpdate, AgentUpdateKind } from '@docket/agent-runtime';
+import {
+  InMemoryAgentBus,
+  type AgentBusFilter,
+  type AgentUpdate,
+  type AgentUpdateKind,
+} from '@docket/athena/agent-bus';
 import { eq } from 'drizzle-orm';
 
 import { emitAgentMilestone } from './event-emit';

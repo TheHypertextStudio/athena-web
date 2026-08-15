@@ -12,13 +12,13 @@ import {
   CycleId,
   LabelId,
   MilestoneId,
-  type Priority,
   ProgramId,
   ProjectId,
   type TaskArchived,
   type TaskDetail,
   type TaskOut,
 } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import type { QueryKey } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';

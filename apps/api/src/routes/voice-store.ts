@@ -20,7 +20,8 @@
  * lane.
  */
 import { db, sessionActivity, voiceSession } from '@docket/db';
-import type { TurnMessage, VoiceActionOut, VoiceEndReason, VoiceTurnOut } from '@docket/types';
+import type { TurnMessage } from '@docket/athena/turn-protocol';
+import type { VoiceActionOut, VoiceEndReason, VoiceTurnOut } from '@docket/athena/voice';
 import { eq, sql } from 'drizzle-orm';
 
 import { loadTranscript, saveTranscript } from '../agent/transcript';

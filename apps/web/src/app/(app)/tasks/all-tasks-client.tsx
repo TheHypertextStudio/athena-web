@@ -18,7 +18,8 @@
  * do have, above a notice saying the list may be incomplete, because a silently-short list reads as
  * a complete one.
  */
-import type { Priority, TaskOut } from '@docket/types';
+import type { TaskOut } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import { cn } from '@docket/ui';
 import { StatusGlyph } from '@docket/ui/components';
 import { dragSourceProps } from '@docket/ui/lib/draggable';

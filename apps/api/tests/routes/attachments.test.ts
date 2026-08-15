@@ -3,7 +3,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type { AttachmentOut } from '@docket/types';
 
-import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import {
+  appWithActor,
+  getDb,
+  one,
+  seedTaskAccessOrg as seedBaseOrg,
+} from '../support/routes-harness';
 import type { attachmentRoutes as attachmentRouter } from '../../src/routes/attachment-routes';
 import type * as ContainerModule from '../../src/container';
 
@@ -54,6 +59,27 @@ async function seedOrgWithTask(): Promise<{
       .returning({ id: schema.task.id }),
   );
   return { orgId, teamId, humanActorId, taskId: task.id };
+}
+
+/** Seed a distinct human actor with an explicit view-only grant on one task. */
+async function seedTaskViewer(orgId: string, taskId: string): Promise<string> {
+  const viewer = one(
+    await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Viewer' })
+      .returning({ id: schema.actor.id }),
+  );
+  await db.insert(schema.grant).values({
+    organizationId: orgId,
+    subjectKind: 'actor',
+    subjectId: viewer.id,
+    resourceKind: 'task',
+    resourceId: taskId,
+    capabilities: ['view'],
+    effect: 'allow',
+    cascades: false,
+  });
+  return viewer.id;
 }
 
 /** POST a url attachment onto a task. */
@@ -175,7 +201,7 @@ describe('attachment routes', () => {
     const writer = appWithActor(attachments, orgId, ['contribute'], humanActorId);
     const created = await body<AttachmentOut>(await createUrl(writer, taskId));
 
-    const viewer = appWithActor(attachments, orgId, ['view'], humanActorId);
+    const viewer = appWithActor(attachments, orgId, [], await seedTaskViewer(orgId, taskId));
     expect((await createUrl(viewer, taskId)).status).toBe(403);
     expect(
       (await viewer.request(`/${taskId}/attachments/${created.id}`, { method: 'DELETE' })).status,
@@ -326,8 +352,8 @@ describe('attachment routes', () => {
   });
 
   it('requires `contribute` to upload (403 for a viewer)', async () => {
-    const { orgId, humanActorId, taskId } = await seedOrgWithTask();
-    const viewer = appWithActor(attachments, orgId, ['view'], humanActorId);
+    const { orgId, taskId } = await seedOrgWithTask();
+    const viewer = appWithActor(attachments, orgId, [], await seedTaskViewer(orgId, taskId));
     expect((await uploadFile(viewer, taskId, fileOfSize('x.txt', 3))).status).toBe(403);
   });
 });

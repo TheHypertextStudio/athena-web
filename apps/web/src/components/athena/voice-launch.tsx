@@ -9,7 +9,7 @@
  * and a mode you have to go looking for is a mode nobody uses. Opening it never navigates —
  * {@link VoiceMode} renders in place.
  */
-import type { VoiceTurnOut } from '@docket/types';
+import type { VoiceTurnOut } from '@docket/athena/voice';
 import { Mic } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';

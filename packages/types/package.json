@@ -4,10 +4,9 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
-  "description": "Docket shared types — branded primitives, DTO schemas, and the RPC AppType contract.",
+  "description": "Docket shared types — branded primitives and DTO schemas.",
   "exports": {
-    ".": "./src/index.ts",
-    "./api": "./src/api.ts"
+    ".": "./src/index.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -20,6 +19,11 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@docket/athena": "workspace:*",
+    "@docket/automation": "workspace:*",
+    "@docket/connections": "workspace:*",
+    "@docket/identity-access": "workspace:*",
+    "@docket/work": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

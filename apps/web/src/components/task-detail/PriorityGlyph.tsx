@@ -1,4 +1,4 @@
-import type { Priority } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import type { JSX } from 'react';
 
 import { PRIORITY_BAR_CLASS, PRIORITY_LABEL } from './priority';

@@ -27,6 +27,81 @@ beforeAll(async () => {
   calendarShared = await import('../../src/routes/calendar-shared');
 });
 
+interface LegacyTimeboxFixtureOptions {
+  readonly actorStatus?: 'active' | 'suspended';
+  readonly archived?: boolean;
+  readonly guest?: boolean;
+  readonly taskVisibility?: 'public' | 'private';
+  readonly grantTaskView?: boolean;
+}
+
+/** Seed a pre-existing pointer, as can exist from before daily-plan write authorization. */
+async function seedLegacyTimeboxFixture(options: LegacyTimeboxFixtureOptions = {}) {
+  const schema = await getDb();
+  const userId = await seedUserWithHub(schema.db, schema, 'LegacyTimebox');
+  const base = await seedBaseOrg(schema.db, schema);
+  const role = one(
+    await schema.db
+      .insert(schema.role)
+      .values({
+        organizationId: base.orgId,
+        key: options.guest ? 'guest' : 'member',
+        name: options.guest ? 'Guest' : 'Member',
+      })
+      .returning({ id: schema.role.id }),
+  );
+  await schema.db
+    .update(schema.actor)
+    .set({
+      userId,
+      roleId: role.id,
+      status: options.actorStatus ?? 'active',
+      archivedAt: options.archived ? new Date('2026-08-14T00:00:00.000Z') : null,
+    })
+    .where(eq(schema.actor.id, base.humanActorId));
+  const task = one(
+    await schema.db
+      .insert(schema.task)
+      .values({
+        organizationId: base.orgId,
+        teamId: base.teamId,
+        title: 'Legacy private timebox',
+        state: 'todo',
+        priority: 'high',
+        visibility: options.taskVisibility ?? 'public',
+      })
+      .returning({ id: schema.task.id }),
+  );
+  if (options.grantTaskView) {
+    await schema.db.insert(schema.grant).values({
+      organizationId: base.orgId,
+      subjectKind: 'actor',
+      subjectId: base.humanActorId,
+      resourceKind: 'task',
+      resourceId: task.id,
+      capabilities: ['view'],
+      effect: 'allow',
+      cascades: false,
+    });
+  }
+  const hubId = one(
+    await schema.db
+      .select({ id: schema.hub.id })
+      .from(schema.hub)
+      .where(eq(schema.hub.userId, userId)),
+  ).id;
+  await schema.db.insert(schema.dailyPlanItem).values({
+    hubId,
+    refOrganizationId: base.orgId,
+    refTaskId: task.id,
+    date: '2026-08-14',
+    timeboxStartsAt: new Date('2026-08-14T15:00:00.000Z'),
+    timeboxEndsAt: new Date('2026-08-14T16:00:00.000Z'),
+  });
+
+  return { userId, taskId: task.id };
+}
+
 describe('buildAgendaPayload', () => {
   it('returns no entries for a caller with no Hub row', async () => {
     const schema = await getDb();
@@ -82,6 +157,10 @@ describe('buildAgendaPayload', () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'Timeboxed');
     const base = await seedBaseOrg(schema.db, schema);
+    await schema.db
+      .update(schema.actor)
+      .set({ userId })
+      .where(eq(schema.actor.id, base.humanActorId));
     const hubId = one(
       await schema.db
         .select({ id: schema.hub.id })
@@ -119,6 +198,44 @@ describe('buildAgendaPayload', () => {
         kind: 'task_timebox',
         taskId: task.id,
         title: 'Timeboxed task',
+      }),
+    ]);
+  });
+
+  it.each([
+    ['an active Guest without a task grant', { guest: true }],
+    ['a suspended human member', { actorStatus: 'suspended' }],
+    ['an archived human member', { archived: true }],
+    ['an active member without a private-task grant', { taskVisibility: 'private' }],
+  ] as const)('does not disclose a legacy task timebox to %s', async (_label, options) => {
+    const fixture = await seedLegacyTimeboxFixture(options);
+
+    const payload = await calendarShared.buildAgendaPayload(fixture.userId, {
+      date: '2026-08-14',
+      includeGoogleCalendar: false,
+    });
+
+    expect(payload.entries).toEqual([]);
+  });
+
+  it('includes a legacy private timebox after the active member receives a task view grant', async () => {
+    const fixture = await seedLegacyTimeboxFixture({
+      taskVisibility: 'private',
+      grantTaskView: true,
+    });
+
+    const payload = await calendarShared.buildAgendaPayload(fixture.userId, {
+      date: '2026-08-14',
+      includeGoogleCalendar: false,
+    });
+
+    expect(payload.entries).toEqual([
+      expect.objectContaining({
+        kind: 'task_timebox',
+        taskId: fixture.taskId,
+        title: 'Legacy private timebox',
+        state: 'todo',
+        priority: 'high',
       }),
     ]);
   });

@@ -1,5 +1,5 @@
 import { type Capability, CAPABILITY_RANK } from '@docket/authz';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 /** A resource kind whose visibility can be resolved through grants. */
 export type GrantableResourceKind =
@@ -68,11 +68,11 @@ export function resourceAccessKey(ref: ResourceAccessRef): string {
  * Resolve view access and the effective capability for a batch of resources.
  *
  * @remarks
- * Only active human memberships participate. Public resources give non-guests a `view`
- * baseline, while actor and same-organization role grants can raise that capability. Private
- * resources and guests require a direct or cascading allow grant.
+ * Only active, unarchived human memberships participate. Public resources give non-guests a
+ * `view` baseline, while actor and same-organization role grants can raise that capability.
+ * Private resources and guests require a direct or cascading allow grant.
  *
- * @param userId - The user whose active organization memberships should be resolved.
+ * @param userId - The user whose active, unarchived organization memberships should be resolved.
  * @param refs - Resource references to resolve in one batch.
  * @returns A map containing an entry for every input reference, keyed by
  * {@link resourceAccessKey}.
@@ -137,6 +137,7 @@ async function loadCallerOrgAccess(
         eq(schema.actor.userId, userId),
         eq(schema.actor.kind, 'human'),
         eq(schema.actor.status, 'active'),
+        isNull(schema.actor.archivedAt),
         inArray(schema.actor.organizationId, organizationIds),
       ),
     );

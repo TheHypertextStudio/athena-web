@@ -18,13 +18,8 @@
  * canonical {@link satisfies} rank cascade. A user with no resolvable member/role — a guest, or
  * before the roster loads — is treated as unable to edit, so the UI fails closed.
  */
-import {
-  type Capability,
-  CAPABILITY_RANK,
-  type MemberOut,
-  type RoleOut,
-  satisfies,
-} from '@docket/types';
+import { type Capability, CAPABILITY_RANK, satisfies } from '@docket/identity-access/capabilities';
+import type { MemberOut, RoleOut } from '@docket/types';
 import { useMemo } from 'react';
 
 import { useSession } from '@/lib/auth-client';

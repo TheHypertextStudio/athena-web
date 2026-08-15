@@ -9,6 +9,78 @@
     "./execution-protocol": {
       "types": "./src/execution-protocol.ts",
       "default": "./src/execution-protocol.ts"
+    },
+    "./elicitation": {
+      "types": "./src/elicitation.ts",
+      "default": "./src/elicitation.ts"
+    },
+    "./elicitation-api": {
+      "types": "./src/elicitation-api.ts",
+      "default": "./src/elicitation-api.ts"
+    },
+    "./turn-protocol": {
+      "types": "./src/turn-protocol.ts",
+      "default": "./src/turn-protocol.ts"
+    },
+    "./agent-session": {
+      "types": "./src/agent-session.ts",
+      "default": "./src/agent-session.ts"
+    },
+    "./agent-bus": {
+      "types": "./src/agent-bus.ts",
+      "default": "./src/agent-bus.ts"
+    },
+    "./conversation": {
+      "types": "./src/conversation.ts",
+      "default": "./src/conversation.ts"
+    },
+    "./voice": {
+      "types": "./src/voice.ts",
+      "default": "./src/voice.ts"
+    },
+    "./phone": {
+      "types": "./src/phone.ts",
+      "default": "./src/phone.ts"
+    },
+    "./digest": {
+      "types": "./src/digest.ts",
+      "default": "./src/digest.ts"
+    },
+    "./digest-episodes": {
+      "types": "./src/digest-episodes.ts",
+      "default": "./src/digest-episodes.ts"
+    },
+    "./anthropic": {
+      "types": "./src/anthropic.ts",
+      "default": "./src/anthropic.ts"
+    },
+    "./turn": {
+      "types": "./src/turn/contracts.ts",
+      "default": "./src/turn/contracts.ts"
+    },
+    "./turn/translate": {
+      "types": "./src/turn/translate.ts",
+      "default": "./src/turn/translate.ts"
+    },
+    "./turn/adapters/anthropic": {
+      "types": "./src/turn/adapters/anthropic.ts",
+      "default": "./src/turn/adapters/anthropic.ts"
+    },
+    "./turn/adapters/lattice": {
+      "types": "./src/turn/adapters/lattice.ts",
+      "default": "./src/turn/adapters/lattice.ts"
+    },
+    "./turn/model-backend": {
+      "types": "./src/turn/model-backend.ts",
+      "default": "./src/turn/model-backend.ts"
+    },
+    "./task-drafting/adapters/anthropic": {
+      "types": "./src/task-drafting/adapters/anthropic.ts",
+      "default": "./src/task-drafting/adapters/anthropic.ts"
+    },
+    "./task-drafting/adapters/deterministic": {
+      "types": "./src/task-drafting/adapters/deterministic.ts",
+      "default": "./src/task-drafting/adapters/deterministic.ts"
     }
   },
   "scripts": {
@@ -18,6 +90,11 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "clean": "rm -rf .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "@docket/work": "workspace:*",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",

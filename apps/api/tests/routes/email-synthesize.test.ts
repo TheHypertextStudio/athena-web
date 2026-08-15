@@ -1,4 +1,4 @@
-import { MockTaskSynthesizer } from '@docket/agent-runtime';
+import type { TaskSynthesizer } from '@docket/work/task-drafting';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -8,7 +8,25 @@ import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 import { persistSuggestions, type CandidateThread } from '../../src/lib/email-to-task/synthesize';
 import { assertDefined } from '@docket/test-utils';
 
-const synthesizer = new MockTaskSynthesizer();
+/**
+ * A deterministic task-drafting adapter for the ingestion boundary.
+ *
+ * @remarks
+ * The test proves suggestion persistence against the Work-owned contract rather than depending
+ * on an Athena runtime adapter. Its literal-date behavior mirrors the prior offline adapter so
+ * the due-date assertion continues to exercise the same pipeline branch.
+ */
+const synthesizer: TaskSynthesizer = {
+  async synthesize(input) {
+    const dueDate = /\b(\d{4}-\d{2}-\d{2})\b/.exec(input.snippet)?.[1];
+    return {
+      title: input.subject.trim() || 'Follow up on an email',
+      description: input.snippet.trim() || undefined,
+      priority: 'medium',
+      ...(dueDate !== undefined ? { dueDate } : {}),
+    };
+  },
+};
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;

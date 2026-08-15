@@ -32,9 +32,20 @@ async function seedCalendarFixture() {
   const schema = await getDb();
   const userId = await seedUserWithHub(schema.db, schema, 'CalendarUser');
   const base = await seedBaseOrg(schema.db, schema);
+  const contributorRole = one(
+    await schema.db
+      .insert(schema.role)
+      .values({
+        organizationId: base.orgId,
+        key: 'calendar-contributor',
+        name: 'Calendar contributor',
+        capabilities: ['contribute'],
+      })
+      .returning({ id: schema.role.id }),
+  );
   await schema.db
     .update(schema.actor)
-    .set({ userId })
+    .set({ userId, roleId: contributorRole.id })
     .where(eq(schema.actor.id, base.humanActorId));
 
   const task = one(

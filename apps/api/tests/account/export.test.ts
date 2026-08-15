@@ -86,11 +86,24 @@ describe('collectAccountExport', () => {
     expect(strFromU8(assertDefined(files['README.md']))).toContain('the data you selected');
   });
 
-  it('omits a workspace when the membership is suspended before the worker collects it', async () => {
-    const { db, schema, collectAccountExport } = await setup();
+  it('omits private workspace data when the membership is suspended or archived before collection', async () => {
+    const { db, schema, buildExportArchive, collectAccountExport } = await setup();
     const userId = await seedUserWithHub(db, schema, 'Suspended');
     const orgId = await seedOrg(db, schema);
     const actorId = await addMember(db, schema, orgId, userId);
+    const teamId = one(
+      await db
+        .insert(schema.team)
+        .values({ organizationId: orgId, name: 'Former work', key: 'FORMER' })
+        .returning({ id: schema.team.id }),
+    ).id;
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      teamId,
+      title: 'former-private-task',
+      state: 'todo',
+      visibility: 'private',
+    });
     const scope: AccountExportScope = {
       categories: ['workspaces'],
       workspaces: [{ id: orgId, name: 'Former workspace' }],
@@ -99,7 +112,268 @@ describe('collectAccountExport', () => {
 
     expect((await collectAccountExport(db, userId, scope)).document.memberships).toHaveLength(1);
     await db.update(schema.actor).set({ status: 'suspended' }).where(eq(schema.actor.id, actorId));
-    expect((await collectAccountExport(db, userId, scope)).document.memberships).toEqual([]);
+    const suspendedDocument = (await collectAccountExport(db, userId, scope)).document;
+    expect(suspendedDocument.memberships).toEqual([]);
+    const suspendedZip = unzipSync(
+      buildExportArchive(suspendedDocument, {
+        generatedAt: NOW,
+        expiresAt: '2026-02-15T00:00:00.000Z',
+        name: 'Suspended',
+        email: 'ada@example.com',
+      }),
+    );
+    expect(
+      Object.values(suspendedZip)
+        .map((contents) => strFromU8(contents))
+        .join('\n'),
+    ).not.toContain('former-private-task');
+
+    await db
+      .update(schema.actor)
+      .set({ status: 'active', archivedAt: new Date() })
+      .where(eq(schema.actor.id, actorId));
+    const archivedDocument = (await collectAccountExport(db, userId, scope)).document;
+    expect(archivedDocument.memberships).toEqual([]);
+    const archivedZip = unzipSync(
+      buildExportArchive(archivedDocument, {
+        generatedAt: NOW,
+        expiresAt: '2026-02-15T00:00:00.000Z',
+        name: 'Suspended',
+        email: 'ada@example.com',
+      }),
+    );
+    expect(
+      Object.values(archivedZip)
+        .map((contents) => strFromU8(contents))
+        .join('\n'),
+    ).not.toContain('former-private-task');
+  });
+
+  it("puts only a guest's directly granted task data into the personal export ZIP", async () => {
+    const { db, schema, buildExportArchive, collectAccountExport } = await setup();
+    const userId = await seedUserWithHub(db, schema, 'Guest export');
+    const orgId = await seedOrg(db, schema);
+    const teamId = one(
+      await db
+        .insert(schema.team)
+        .values({ organizationId: orgId, name: 'Private work', key: 'PRIVATE' })
+        .returning({ id: schema.team.id }),
+    ).id;
+    const guestRoleId = one(
+      await db
+        .insert(schema.role)
+        .values({
+          organizationId: orgId,
+          key: 'guest',
+          name: 'Guest',
+          defaultVisibility: 'private',
+        })
+        .returning({ id: schema.role.id }),
+    ).id;
+    const actorId = one(
+      await db
+        .insert(schema.actor)
+        .values({
+          organizationId: orgId,
+          userId,
+          kind: 'human',
+          displayName: 'Guest export',
+          roleId: guestRoleId,
+        })
+        .returning({ id: schema.actor.id }),
+    ).id;
+    const directlyGrantedTaskId = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'directly-granted-private-task',
+          state: 'todo',
+          visibility: 'private',
+        })
+        .returning({ id: schema.task.id }),
+    ).id;
+    const hiddenTaskId = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'hidden-private-task',
+          state: 'todo',
+          visibility: 'private',
+        })
+        .returning({ id: schema.task.id }),
+    ).id;
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'actor',
+      subjectId: actorId,
+      resourceKind: 'task',
+      resourceId: directlyGrantedTaskId,
+      capabilities: ['view'],
+      effect: 'allow',
+      cascades: false,
+    });
+    await db.insert(schema.comment).values([
+      {
+        organizationId: orgId,
+        authorId: actorId,
+        subjectType: 'task',
+        subjectId: directlyGrantedTaskId,
+        body: 'directly-granted-private-comment',
+      },
+      {
+        organizationId: orgId,
+        authorId: actorId,
+        subjectType: 'task',
+        subjectId: hiddenTaskId,
+        body: 'hidden-private-comment',
+      },
+    ]);
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({
+          organizationId: orgId,
+          teamId,
+          name: 'unattributed-private-project',
+        })
+        .returning({ id: schema.project.id }),
+    ).id;
+    await db.insert(schema.update).values({
+      organizationId: orgId,
+      subjectType: 'project',
+      subjectId: projectId,
+      body: 'unattributed-private-update',
+    });
+    const hubId = one(
+      await db.select({ id: schema.hub.id }).from(schema.hub).where(eq(schema.hub.userId, userId)),
+    ).id;
+    await db.insert(schema.dailyPlanItem).values([
+      {
+        hubId,
+        refOrganizationId: orgId,
+        refTaskId: directlyGrantedTaskId,
+        date: '2026-02-01',
+      },
+      {
+        hubId,
+        refOrganizationId: orgId,
+        refTaskId: hiddenTaskId,
+        date: '2026-02-01',
+      },
+    ]);
+
+    const { document } = await collectAccountExport(db, userId, {
+      categories: ['personal', 'workspaces'],
+      workspaces: [{ id: orgId, name: 'Guest workspace' }],
+      allWorkspaces: false,
+    });
+    const workspace = document.memberships[0];
+    expect(workspace).toBeDefined();
+    expect(workspace?.work['task']).toEqual([
+      expect.objectContaining({
+        id: directlyGrantedTaskId,
+        title: 'directly-granted-private-task',
+      }),
+    ]);
+    expect(workspace?.work['comment']).toEqual([
+      expect.objectContaining({
+        subjectId: directlyGrantedTaskId,
+        body: 'directly-granted-private-comment',
+      }),
+    ]);
+    expect(workspace?.work['team']).toEqual([]);
+    expect(workspace?.work['project']).toEqual([]);
+    expect(workspace?.work['update']).toEqual([]);
+    expect(
+      (document.personal?.['dailyPlan'] as { refTaskId: string }[]).map((item) => item.refTaskId),
+    ).toEqual([directlyGrantedTaskId]);
+
+    const files = unzipSync(
+      buildExportArchive(document, {
+        generatedAt: NOW,
+        expiresAt: '2026-02-15T00:00:00.000Z',
+        name: 'Guest export',
+        email: 'ada@example.com',
+      }),
+    );
+    const archiveText = Object.entries(files)
+      .filter(([name]) => name.startsWith('workspaces/') || name === 'personal.json')
+      .map(([, contents]) => strFromU8(contents))
+      .join('\n');
+    expect(archiveText).toContain('directly-granted-private-task');
+    expect(archiveText).toContain('directly-granted-private-comment');
+    expect(archiveText).not.toContain('hidden-private-task');
+    expect(archiveText).not.toContain('hidden-private-comment');
+    expect(archiveText).not.toContain('unattributed-private-project');
+    expect(archiveText).not.toContain('unattributed-private-update');
+  });
+
+  it("keeps a personal workspace owner's private task through the materialized role grant", async () => {
+    const { db, schema, collectAccountExport } = await setup();
+    const userId = await seedUserWithHub(db, schema, 'Personal owner');
+    const orgId = await seedOrg(db, schema, true);
+    const teamId = one(
+      await db
+        .insert(schema.team)
+        .values({ organizationId: orgId, name: 'Personal work', key: 'PERSONAL' })
+        .returning({ id: schema.team.id }),
+    ).id;
+    const ownerRoleId = one(
+      await db
+        .insert(schema.role)
+        .values({
+          organizationId: orgId,
+          key: 'owner',
+          name: 'Owner',
+          isSystem: true,
+          baseCapability: 'manage',
+          capabilities: ['view', 'comment', 'contribute', 'assign', 'manage'],
+        })
+        .returning({ id: schema.role.id }),
+    ).id;
+    await db.insert(schema.actor).values({
+      organizationId: orgId,
+      userId,
+      kind: 'human',
+      displayName: 'Personal owner',
+      roleId: ownerRoleId,
+    });
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'role',
+      subjectId: ownerRoleId,
+      resourceKind: 'organization',
+      resourceId: orgId,
+      capabilities: ['manage'],
+      effect: 'allow',
+      cascades: true,
+    });
+    const privateTaskId = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'personal-private-task',
+          state: 'todo',
+          visibility: 'private',
+        })
+        .returning({ id: schema.task.id }),
+    ).id;
+
+    const { document } = await collectAccountExport(db, userId, {
+      categories: ['workspaces'],
+      workspaces: [{ id: orgId, name: 'Personal' }],
+      allWorkspaces: false,
+    });
+
+    expect(document.memberships[0]?.work['task']).toEqual([
+      expect.objectContaining({ id: privateTaskId, title: 'personal-private-task' }),
+    ]);
   });
 });
 

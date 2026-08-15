@@ -22,7 +22,7 @@
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 
-import type { VoiceInboundEvent } from '@docket/types';
+import type { VoiceInboundEvent } from '@docket/athena/voice';
 
 import {
   endReasonForClose,

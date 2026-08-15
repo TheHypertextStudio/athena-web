@@ -1,4 +1,5 @@
-import { eq } from 'drizzle-orm';
+import { canActor } from '@docket/authz';
+import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -349,13 +350,13 @@ describe('comments router', () => {
     const w = appWithActor(r['comments'], orgId, ['comment'], humanActorId);
 
     const subjectId = MISSING;
-    const empty = await w.request(`/?subjectType=task&subjectId=${subjectId}`);
+    const empty = await w.request(`/?subjectType=project&subjectId=${subjectId}`);
     expect((await body<{ items: unknown[] }>(empty)).items).toHaveLength(0);
 
     const created = await w.request('/', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ subjectType: 'task', subjectId, body: 'hi' }),
+      body: JSON.stringify({ subjectType: 'project', subjectId, body: 'hi' }),
     });
     expect(created.status).toBe(200);
     const id = (await body<{ id: string }>(created)).id;
@@ -387,7 +388,7 @@ describe('comments router', () => {
         await w.request('/', {
           method: 'POST',
           headers: J,
-          body: JSON.stringify({ subjectType: 'task' }),
+          body: JSON.stringify({ subjectType: 'project' }),
         })
       ).status,
     ).toBe(422);
@@ -468,6 +469,253 @@ describe('roles router', () => {
       (await w.request('/', { method: 'POST', headers: J, body: JSON.stringify({ key: '' }) }))
         .status,
     ).toBe(422);
+  });
+
+  it('materializes a custom base capability as the canonical org-root role grant', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(r['roles'], orgId, ['manage'], humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        key: 'contributor',
+        name: 'Contributor',
+        baseCapability: 'contribute',
+      }),
+    });
+
+    expect(created.status).toBe(200);
+    const { id: roleId } = await body<{ id: string }>(created);
+    await db.update(schema.actor).set({ roleId }).where(eq(schema.actor.id, humanActorId));
+
+    const baseline = await db
+      .select()
+      .from(schema.grant)
+      .where(
+        and(
+          eq(schema.grant.organizationId, orgId),
+          eq(schema.grant.subjectKind, 'role'),
+          eq(schema.grant.subjectId, roleId),
+          eq(schema.grant.resourceKind, 'organization'),
+          eq(schema.grant.resourceId, orgId),
+          eq(schema.grant.effect, 'allow'),
+        ),
+      );
+
+    expect(baseline).toHaveLength(1);
+    expect(baseline[0]).toMatchObject({
+      organizationId: orgId,
+      subjectKind: 'role',
+      subjectId: roleId,
+      resourceKind: 'organization',
+      resourceId: orgId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+      cascades: true,
+      expiresAt: null,
+      visibilityOverride: null,
+      visibility: 'public',
+    });
+    expect(
+      await canActor(humanActorId, 'contribute', { kind: 'organization', id: orgId, orgId }, db),
+    ).toMatchObject({ allow: true, effectiveCapability: 'contribute' });
+  });
+
+  it('updates and clears only the materialized role baseline', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(r['roles'], orgId, ['manage'], humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        key: 'contributor',
+        name: 'Contributor',
+        baseCapability: 'contribute',
+      }),
+    });
+    const { id: roleId } = await body<{ id: string }>(created);
+    await db.update(schema.actor).set({ roleId }).where(eq(schema.actor.id, humanActorId));
+
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'role',
+      subjectId: roleId,
+      resourceKind: 'team',
+      resourceId: teamId,
+      capabilities: ['manage'],
+      effect: 'allow',
+      cascades: false,
+    });
+
+    await db
+      .update(schema.grant)
+      .set({ visibility: 'private' })
+      .where(
+        and(
+          eq(schema.grant.organizationId, orgId),
+          eq(schema.grant.subjectKind, 'role'),
+          eq(schema.grant.subjectId, roleId),
+          eq(schema.grant.resourceKind, 'organization'),
+          eq(schema.grant.resourceId, orgId),
+          eq(schema.grant.effect, 'allow'),
+        ),
+      );
+
+    const baseline = () =>
+      db
+        .select()
+        .from(schema.grant)
+        .where(
+          and(
+            eq(schema.grant.organizationId, orgId),
+            eq(schema.grant.subjectKind, 'role'),
+            eq(schema.grant.subjectId, roleId),
+            eq(schema.grant.resourceKind, 'organization'),
+            eq(schema.grant.resourceId, orgId),
+            eq(schema.grant.effect, 'allow'),
+          ),
+        );
+    const manualGrant = () =>
+      db
+        .select()
+        .from(schema.grant)
+        .where(
+          and(
+            eq(schema.grant.organizationId, orgId),
+            eq(schema.grant.subjectKind, 'role'),
+            eq(schema.grant.subjectId, roleId),
+            eq(schema.grant.resourceKind, 'team'),
+            eq(schema.grant.resourceId, teamId),
+            eq(schema.grant.effect, 'allow'),
+          ),
+        );
+
+    const updated = await writer.request(`/${roleId}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ baseCapability: 'view' }),
+    });
+    expect(updated.status).toBe(200);
+    expect(await baseline()).toMatchObject([
+      { capabilities: ['view'], cascades: true, visibility: 'private' },
+    ]);
+    expect(
+      (await canActor(humanActorId, 'contribute', { kind: 'organization', id: orgId, orgId }, db))
+        .allow,
+    ).toBe(false);
+    expect(
+      await canActor(humanActorId, 'manage', { kind: 'team', id: teamId, orgId }, db),
+    ).toMatchObject({ allow: true, effectiveCapability: 'manage' });
+
+    const cleared = await writer.request(`/${roleId}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ baseCapability: null }),
+    });
+    expect(cleared.status).toBe(200);
+    expect(await baseline()).toEqual([]);
+    expect(await manualGrant()).toMatchObject([{ capabilities: ['manage'], cascades: false }]);
+    expect(
+      await canActor(humanActorId, 'view', { kind: 'organization', id: orgId, orgId }, db),
+    ).toMatchObject({ allow: false, effectiveCapability: null });
+    expect(
+      await canActor(humanActorId, 'manage', { kind: 'team', id: teamId, orgId }, db),
+    ).toMatchObject({ allow: true, effectiveCapability: 'manage' });
+  });
+
+  it('deleting a custom role removes every grant owned by that role', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(r['roles'], orgId, ['manage'], humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        key: 'contributor',
+        name: 'Contributor',
+        baseCapability: 'contribute',
+      }),
+    });
+    const { id: roleId } = await body<{ id: string }>(created);
+    await db.update(schema.actor).set({ roleId }).where(eq(schema.actor.id, humanActorId));
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'role',
+      subjectId: roleId,
+      resourceKind: 'team',
+      resourceId: teamId,
+      capabilities: ['manage'],
+      effect: 'allow',
+      cascades: false,
+    });
+    expect(
+      await canActor(humanActorId, 'manage', { kind: 'team', id: teamId, orgId }, db),
+    ).toMatchObject({ allow: true, effectiveCapability: 'manage' });
+
+    const deleted = await writer.request(`/${roleId}`, { method: 'DELETE' });
+
+    expect(deleted.status).toBe(200);
+    expect(
+      await db
+        .select()
+        .from(schema.grant)
+        .where(
+          and(
+            eq(schema.grant.organizationId, orgId),
+            eq(schema.grant.subjectKind, 'role'),
+            eq(schema.grant.subjectId, roleId),
+          ),
+        ),
+    ).toEqual([]);
+    expect(
+      await canActor(humanActorId, 'view', { kind: 'organization', id: orgId, orgId }, db),
+    ).toMatchObject({ allow: false, effectiveCapability: null });
+  });
+
+  it('requires an Owner to patch a system role without limiting custom-role mutations', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [ownerRole, adminRole, systemRole, customRole] = await db
+      .insert(schema.role)
+      .values([
+        { organizationId: orgId, key: 'owner', name: 'Owner', isSystem: true },
+        { organizationId: orgId, key: 'admin', name: 'Admin', isSystem: true },
+        { organizationId: orgId, key: 'member', name: 'Member', isSystem: true },
+        { organizationId: orgId, key: 'coordinator', name: 'Coordinator', isSystem: false },
+      ])
+      .returning({ id: schema.role.id });
+    if (!ownerRole || !adminRole || !systemRole || !customRole) {
+      throw new Error('expected role setup to return every role');
+    }
+
+    const admin = appWithActor(r['roles'], orgId, ['manage'], humanActorId, null, adminRole.id);
+    const owner = appWithActor(r['roles'], orgId, ['manage'], humanActorId, null, ownerRole.id);
+
+    expect(
+      (
+        await admin.request(`/${systemRole.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ name: 'Members' }),
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await admin.request(`/${customRole.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ name: 'Coordinators' }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await owner.request(`/${systemRole.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ name: 'Members' }),
+        })
+      ).status,
+    ).toBe(200);
   });
 });
 
@@ -731,8 +979,8 @@ describe('activity router + writeAudit', () => {
     await writeAudit({
       organizationId: orgId,
       actorId: humanActorId,
-      subjectType: 'task',
-      subjectId: MISSING,
+      subjectType: 'organization',
+      subjectId: orgId,
       type: 'created',
     });
     const w = appWithActor(r['activity'], orgId, ['view'], humanActorId);

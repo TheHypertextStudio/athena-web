@@ -1,8 +1,11 @@
+# ci-gate-policy: advisory
 name: E2E
 
-# Its own workflow, and not a gate on the production deploy. The browser suite is a slower, more
+# An advisory browser signal, not a production deploy gate. The browser suite is a slower, more
 # fragile signal than the rest of CI, and a deploy held behind it stops shipping the moment it goes
-# red. It reports here on every push and PR instead.
+# red. The header directive is checked by `ci:gate-policy`, so this exception is visible in its
+# report and cannot be mistaken for a deploy gate without changing GitHub's existing check context.
+# It reports here on every push and PR instead.
 #
 # Move it back into ci.yml's `deploy-production.needs` once it has been green for long enough to
 # trust as a release gate.

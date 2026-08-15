@@ -2,11 +2,11 @@
  * `@docket/types` — Organization slice DTOs.
  */
 import { z } from 'zod';
+import { VocabularyPreset, VocabularySkin } from '@docket/work/vocabulary';
 
 import { ActorId, OrganizationId, TeamId } from './primitives';
 import { SettingsImageValue } from './settings-image';
 import { PublicSlug } from './slug';
-import { VocabularyPreset, VocabularySkin } from './vocabulary';
 
 /**
  * Body for creating an Organization (the single un-nested create).

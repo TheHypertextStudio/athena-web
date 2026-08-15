@@ -10,7 +10,7 @@
  * `docs/engineering/specs/automations.md`.
  */
 import { actor, attachment, db, emailSuggestion, notification, task, taskLabel } from '@docket/db';
-import { Priority } from '@docket/types';
+import { Priority } from '@docket/work/task-contract';
 import type { MailAction } from '@docket/integrations';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -146,16 +146,18 @@ async function userIdOfActor(orgId: string, actorId: string): Promise<string | u
  * Build the action-handler registry.
  *
  * @remarks
- * Every handler validates its params with a colocated Zod schema and no-ops (returns
- * without effect) on a wrong subject type or invalid params — a rule can misfire, never
- * throw domain errors. Mutating handlers reuse the shared lib mutations (`setTaskState`,
- * `acceptSuggestion`) so route and automation behavior can't diverge; events they emit are
- * recorded but don't cascade (the runtime's depth-1 cap). See
+ * Parameterized handlers validate their supported fields—normally with colocated Zod schemas;
+ * mail label actions use a small local type check—then no-op (return without effect) on a wrong
+ * subject type or invalid params. Zero-parameter actions ignore unused params, so a rule can
+ * misfire without throwing domain errors. Task-state and suggestion handlers reuse shared lib mutations
+ * (`setTaskState`, `acceptSuggestion`); assignment, priority, process materialization, and
+ * notification handlers use their own validated write paths. Events they emit are recorded but
+ * don't cascade (the runtime's depth-1 cap). See
  * `docs/engineering/specs/automations.md` §4 for the catalog.
  *
  * @param deps - Injected services (the mail applier).
- * @returns a registry with the `mail.*`, `suggestion.*`, `task.*`, and `notification.*`
- *   strategies registered.
+ * @returns a registry with `mail.*`, `process.*`, `suggestion.*`, `task.*`, and
+ *   `notification.*` strategies registered.
  */
 export function buildAutomationRegistry(deps: HandlerDeps): Registry {
   const registry = createRegistry();

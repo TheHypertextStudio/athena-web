@@ -35,7 +35,7 @@
  *
  * @see {@link ../../../../docs/engineering/specs/voice-and-phone.md}
  */
-import type { TurnMessage } from '@docket/agent-runtime';
+import type { TurnMessage } from '@docket/athena/turn-protocol';
 import type {
   VoiceActionOut,
   VoiceChannel,
@@ -45,7 +45,7 @@ import type {
   VoiceSessionState,
   VoiceTraceEntry,
   VoiceTurnOut,
-} from '@docket/types';
+} from '@docket/athena/voice';
 
 /** Identity of the one session being driven. */
 export interface VoiceSessionContext {

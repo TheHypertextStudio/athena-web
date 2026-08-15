@@ -11,7 +11,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { MirrorValue } from '@docket/integrations';
+import type { MirrorValue } from '@docket/connections/notion/mirror-values';
 
 import type {
   adoptEntity as AdoptEntity,

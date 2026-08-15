@@ -19,12 +19,13 @@ import { labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
-import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import {
+  assertTaskCapability,
   assertMilestoneInOrg,
   assertRefInOrg,
+  buildTaskViewFilter,
   depParam,
   idParam,
   loadTask,
@@ -46,28 +47,30 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await loadTask(orgId, id);
+      const parent = await loadTask(orgId, id);
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      if (!canView(parent)) throw new NotFoundError('Task not found');
       const rows = await db
         .select()
         .from(task)
         .where(
           and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
         );
+      const visibleRows = rows.filter(canView);
       const labelsByTask = await labelsForSubjects(
         'task',
         orgId,
-        rows.map((t) => t.id),
+        visibleRows.map((t) => t.id),
       );
       return ok(c, pageOf(TaskOut), {
-        items: rows.map((t) => toOut(t, labelsByTask.get(t.id) ?? [])),
+        items: visibleRows.map((t) => toOut(t, labelsByTask.get(t.id) ?? [])),
       });
     },
   )
   .post(
     '/:id/subtasks',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Tasks',
       summary: 'Create a subtask',
@@ -84,6 +87,7 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
       const parent = await loadTask(orgId, id);
+      await assertTaskCapability(orgId, actorId, parent, 'contribute');
 
       // Tenant isolation: body-provided references must live in the caller's org.
       // Values inherited from the in-org parent (`teamId`, `projectId`) need no check.
@@ -144,35 +148,62 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await loadTask(orgId, id);
+      const pathTask = await loadTask(orgId, id);
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      if (!canView(pathTask)) throw new NotFoundError('Task not found');
 
       // `blocking`: tasks THIS task blocks (this is the blocking side of the edge).
       const blocking = await db
-        .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+        .select({
+          id: task.id,
+          title: task.title,
+          state: task.state,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+        })
         .from(taskDependency)
         .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
         .where(
-          and(eq(taskDependency.blockingTaskId, id), eq(taskDependency.organizationId, orgId)),
+          and(
+            eq(taskDependency.blockingTaskId, id),
+            eq(taskDependency.organizationId, orgId),
+            isNull(task.archivedAt),
+          ),
         );
       // `blockedBy`: tasks blocking THIS task (this is the blocked side of the edge).
       const blockedBy = await db
-        .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+        .select({
+          id: task.id,
+          title: task.title,
+          state: task.state,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+        })
         .from(taskDependency)
         .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
-        .where(and(eq(taskDependency.blockedTaskId, id), eq(taskDependency.organizationId, orgId)));
+        .where(
+          and(
+            eq(taskDependency.blockedTaskId, id),
+            eq(taskDependency.organizationId, orgId),
+            isNull(task.archivedAt),
+          ),
+        );
 
       const payload: z.input<typeof TaskDependencyOut> = {
-        blocking: blocking.map(toRef),
-        blockedBy: blockedBy.map(toRef),
+        blocking: blocking.filter(canView).map(toRef),
+        blockedBy: blockedBy.filter(canView).map(toRef),
       };
       return ok(c, TaskDependencyOut, payload);
     },
   )
   .post(
     '/:id/dependencies',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Tasks',
       summary: 'Add a task dependency',
@@ -185,7 +216,7 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
     zParam(idParam),
     zJson(TaskDependencyCreate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
 
@@ -195,6 +226,12 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
       const otherId = body.blockingTaskId ?? body.blockedTaskId;
       /* v8 ignore next -- @preserve defensive: the DTO refine guarantees exactly one side is set */
       if (otherId === undefined) throw new NotFoundError('Task not found');
+
+      // Both endpoints must be active tasks in this org, and a dependency changes the graph from
+      // both sides. A grant to one private task must not let a caller attach it to another task
+      // they cannot address.
+      const pathTask = await loadTask(orgId, id);
+      await assertTaskCapability(orgId, actorId, pathTask, 'contribute');
 
       if (blockingTaskId === blockedTaskId) {
         throw new ValidationError(
@@ -209,9 +246,8 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
         );
       }
 
-      // Both endpoints must be active tasks in this org.
-      await loadTask(orgId, id);
-      await loadTask(orgId, otherId);
+      const otherTask = await loadTask(orgId, otherId);
+      await assertTaskCapability(orgId, actorId, otherTask, 'contribute');
 
       // The duplicate-check, acyclic reachability check, and the insert run in one
       // SERIALIZABLE transaction (data-model §7.4): READ COMMITTED lets two concurrent
@@ -244,7 +280,6 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
   )
   .delete(
     '/:id/dependencies/:depId',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Tasks',
       summary: 'Remove a task dependency',
@@ -254,9 +289,12 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
     }),
     zParam(depParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id, depId } = c.req.valid('param');
-      await loadTask(orgId, id);
+      const pathTask = await loadTask(orgId, id);
+      await assertTaskCapability(orgId, actorId, pathTask, 'contribute');
+      const otherTask = await loadTask(orgId, depId);
+      await assertTaskCapability(orgId, actorId, otherTask, 'contribute');
 
       // The edge is removable from either endpoint: (id→depId) or (depId→id).
       const deleted = await db

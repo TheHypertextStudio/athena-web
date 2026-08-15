@@ -6,6 +6,8 @@
 
 > Generated from the specs + the frozen `DECISIONS.md`. The foundation (P0–P5) is **sequential**; **P6** is the parallel fan-out. Each ticket lists the files it owns, the governing spec section, what to build, and the acceptance gate that must pass before it's accepted.
 
+> **Superseded (2026-08-14).** The historical `@docket/types/api` RPC-path guidance below is superseded by [ARCH-001](../WORKLOG.md#arch-001-domain-first-repository-reorganization): use the API-owned `@docket/api/rpc-contract` transport contract.
+
 ## Summary
 
 - **172 tickets** across 6 domains; **118 parallelizable**, 54 sequential.

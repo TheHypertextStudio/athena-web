@@ -33,12 +33,16 @@ import type { z } from 'zod';
 
 import { canReadTimeContext, resolveTimeHubId } from './access';
 import { resolveAnchorSuggestion } from './anchor-suggestion';
+import { resourceAccessKey, resolveResourceAccess } from '../permissions/resource-access';
 
 type TimeRecordRow = typeof timeRecord.$inferSelect;
 type TimeIntervalRow = typeof timeInterval.$inferSelect;
 type TimeRecordInput = z.input<typeof TimeRecordOut>;
 type TimeCategoryInput = z.input<typeof TimeCategoryOut>;
 type TimeMeasuresInput = TimeRecordInput['measures'];
+
+/** A neutral label that preserves the duration fact without preserving a revoked task's title. */
+const REDACTED_TASK_TITLE = 'Restricted work';
 
 /** Convert a persisted typed context back into its shared entity-reference contract. */
 function toEntityRef(row: typeof timeContext.$inferSelect): EntityRef {
@@ -62,6 +66,33 @@ function redactEntityRef(row: typeof timeContext.$inferSelect): EntityRef {
     url: null,
     docketEntityId: null,
   };
+}
+
+/** Return the task a stored Docket work-item context points to, if it has one. */
+function taskIdFromContext(context: typeof timeContext.$inferSelect): string | null {
+  return context.sourceSystem === 'docket' && context.entityKind === 'work_item'
+    ? (context.docketEntityId ?? context.externalId)
+    : null;
+}
+
+/**
+ * Whether a Docket context reveals where a task sits in the work hierarchy.
+ *
+ * @remarks
+ * A record can outlive the caller's task access, so these durable snapshots cannot reveal the
+ * hidden anchor's workspace, project, program, initiative, or cycle. A Docket calendar event is
+ * intentionally excluded: its separate personal-calendar access check remains authoritative.
+ */
+function isDocketTaskPlacementContext(context: typeof timeContext.$inferSelect): boolean {
+  if (context.sourceSystem !== 'docket') return false;
+  return (
+    context.entityKind === 'work_item' ||
+    context.entityKind === 'project' ||
+    context.entityKind === 'program' ||
+    context.entityKind === 'initiative' ||
+    context.entityKind === 'cycle' ||
+    context.entityKind === 'organization'
+  );
 }
 
 /** Compute exact, separately-labelled measures for one record's complete interval set. */
@@ -201,32 +232,69 @@ export async function hydrateTimeRecords(
   const allocationsByRecord = groupByRecord(allocations);
   const contextVisibility = new Map(
     await Promise.all(
-      contexts.map(
-        async (context) => [context.id, await canReadTimeContext(viewerUserId, context)] as const,
-      ),
+      contexts
+        .filter((context) => taskIdFromContext(context) === null)
+        .map(
+          async (context) => [context.id, await canReadTimeContext(viewerUserId, context)] as const,
+        ),
     ),
   );
-  // The anchor's workspace is read once for the whole page rather than per record: it is what
-  // every timer surface labels the session with, so making it an N+1 would put a query per row
-  // behind the shell's own always-on tracker read.
-  const taskIds = [...new Set(records.map((record) => record.taskId).filter(isPresent))];
-  const anchorRows = taskIds.length
+  // A ledger record keeps durable duration facts, but its links remain live authorization facts.
+  // Resolve every stored task reference in one batch rather than turning the shell's always-on
+  // tracker read into one grant query per record, interval, context, or allocation.
+  const taskIds = [
+    ...records.flatMap((record) => (record.taskId ? [record.taskId] : [])),
+    ...intervals.flatMap((interval) => (interval.taskId ? [interval.taskId] : [])),
+    ...contexts.flatMap((context) => {
+      const taskId = taskIdFromContext(context);
+      return taskId ? [taskId] : [];
+    }),
+    ...allocations.flatMap((allocation) =>
+      allocation.targetKind === 'task' ? [allocation.targetId] : [],
+    ),
+  ];
+  const referencedTaskIds = [...new Set(taskIds)];
+  const taskRows = referencedTaskIds.length
     ? await db
         .select({ id: task.id, organizationId: task.organizationId })
         .from(task)
-        .where(inArray(task.id, taskIds))
+        .where(inArray(task.id, referencedTaskIds))
     : [];
-  const organizationByTask = new Map(anchorRows.map((row) => [row.id, row.organizationId]));
+  const organizationByTask = new Map(taskRows.map((row) => [row.id, row.organizationId]));
+  const taskAccess = await resolveResourceAccess(
+    viewerUserId,
+    taskRows.map((row) => ({
+      organizationId: row.organizationId,
+      kind: 'task' as const,
+      id: row.id,
+    })),
+  );
+  const canViewTask = (taskId: string | null): boolean => {
+    if (!taskId) return false;
+    const organizationId = organizationByTask.get(taskId);
+    return Boolean(
+      organizationId &&
+      taskAccess.get(resourceAccessKey({ organizationId, kind: 'task', id: taskId }))?.canView,
+    );
+  };
+  const canViewContext = (context: typeof timeContext.$inferSelect): boolean => {
+    const contextTaskId = taskIdFromContext(context);
+    return contextTaskId
+      ? canViewTask(contextTaskId)
+      : (contextVisibility.get(context.id) ?? false);
+  };
   return records.map((record) => {
     const recordIntervals = intervalsByRecord.get(record.id) ?? [];
     const recordContexts = contextsByRecord.get(record.id) ?? [];
     const recordAllocations = allocationsByRecord.get(record.id) ?? [];
+    const recordTaskVisible = record.taskId === null || canViewTask(record.taskId);
     return {
       id: record.id,
       hubId: record.hubId,
-      taskId: record.taskId,
-      organizationId: record.taskId ? (organizationByTask.get(record.taskId) ?? null) : null,
-      title: record.title,
+      taskId: recordTaskVisible ? record.taskId : null,
+      organizationId:
+        record.taskId && recordTaskVisible ? (organizationByTask.get(record.taskId) ?? null) : null,
+      title: recordTaskVisible ? record.title : REDACTED_TASK_TITLE,
       outcomeNote: record.outcomeNote,
       status: record.status,
       categoryId: record.categoryId,
@@ -239,7 +307,7 @@ export async function hydrateTimeRecords(
       intervals: recordIntervals.map((interval) => ({
         id: interval.id,
         timeRecordId: interval.timeRecordId,
-        taskId: interval.taskId,
+        taskId: interval.taskId && !canViewTask(interval.taskId) ? null : interval.taskId,
         actorKind: interval.actorKind,
         userId: interval.userId,
         agentExecutionId: interval.agentExecutionId,
@@ -251,26 +319,45 @@ export async function hydrateTimeRecords(
         createdAt: interval.createdAt.toISOString(),
         closedAt: interval.closedAt?.toISOString() ?? null,
       })),
-      contexts: recordContexts.map((context) => ({
-        id: context.id,
-        timeRecordId: context.timeRecordId,
-        role: context.role,
-        entityRef: contextVisibility.get(context.id)
-          ? toEntityRef(context)
-          : redactEntityRef(context),
-        organizationId: contextVisibility.get(context.id) ? context.organizationId : null,
-        createdAt: context.createdAt.toISOString(),
-      })),
-      allocations: recordAllocations.map((allocation) => ({
-        id: allocation.id,
-        timeRecordId: allocation.timeRecordId,
-        targetKind: allocation.targetKind,
-        targetId: allocation.targetId,
-        organizationId: allocation.organizationId,
-        basisPoints: allocation.basisPoints,
-        createdAt: allocation.createdAt.toISOString(),
-        updatedAt: allocation.updatedAt.toISOString(),
-      })),
+      contexts: recordContexts.map((context) => {
+        // The anchor's hierarchy is task-derived context, not merely organization-owned history.
+        // Once task access is revoked, redact every Docket placement snapshot. Personal calendar
+        // and external contexts retain their independent visibility policy. A personal Docket
+        // calendar event can still be read, but not with the hidden anchor's workspace scope.
+        const hiddenTaskPlacement = !recordTaskVisible && isDocketTaskPlacementContext(context);
+        const visible = !hiddenTaskPlacement && canViewContext(context);
+        const organizationId =
+          visible && (recordTaskVisible || context.sourceSystem !== 'docket')
+            ? context.organizationId
+            : null;
+        return {
+          id: context.id,
+          timeRecordId: context.timeRecordId,
+          role: context.role,
+          entityRef: visible ? toEntityRef(context) : redactEntityRef(context),
+          organizationId,
+          createdAt: context.createdAt.toISOString(),
+        };
+      }),
+      allocations: recordAllocations
+        .filter(
+          (allocation) =>
+            // A hidden anchor cannot carry an organization/project placement into a personal
+            // history response. Personal categories remain safe because they have no workspace
+            // or task identity. A visible record still filters any separately-targeted task.
+            (recordTaskVisible || allocation.targetKind === 'category') &&
+            (allocation.targetKind !== 'task' || canViewTask(allocation.targetId)),
+        )
+        .map((allocation) => ({
+          id: allocation.id,
+          timeRecordId: allocation.timeRecordId,
+          targetKind: allocation.targetKind,
+          targetId: allocation.targetId,
+          organizationId: allocation.organizationId,
+          basisPoints: allocation.basisPoints,
+          createdAt: allocation.createdAt.toISOString(),
+          updatedAt: allocation.updatedAt.toISOString(),
+        })),
       measures: measureIntervals(recordIntervals, now),
     };
   });

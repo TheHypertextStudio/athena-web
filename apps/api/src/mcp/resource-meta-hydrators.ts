@@ -16,6 +16,7 @@ import {
 import { and, asc, eq, isNull } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
+import type { TaskViewFilter } from './resource-work-hydrators';
 
 /** Org summary + entity counts. */
 export async function hydrateOrg(orgId: string, id: string): Promise<unknown> {
@@ -93,7 +94,11 @@ export async function hydrateUpdate(orgId: string, id: string): Promise<unknown>
 }
 
 /** Comment: author, subject ref, body, thread parent. */
-export async function hydrateComment(orgId: string, id: string): Promise<unknown> {
+export async function hydrateComment(
+  orgId: string,
+  id: string,
+  canViewTask: TaskViewFilter,
+): Promise<unknown> {
   const rows = await db
     .select()
     .from(comment)
@@ -101,6 +106,22 @@ export async function hydrateComment(orgId: string, id: string): Promise<unknown
     .limit(1);
   const c = rows[0];
   if (!c) throw new NotFoundError();
+  if (c.subjectType === 'task') {
+    // Keep the hydrator self-defending: callers can never accidentally serialize a task comment
+    // merely because they remembered the generic comment gate but skipped the owning task gate.
+    const [subject] = await db
+      .select({
+        id: task.id,
+        teamId: task.teamId,
+        projectId: task.projectId,
+        programId: task.programId,
+        visibility: task.visibility,
+      })
+      .from(task)
+      .where(and(eq(task.id, c.subjectId), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+      .limit(1);
+    if (!subject || !canViewTask(subject)) throw new NotFoundError();
+  }
   const authorRows = c.authorId
     ? await db
         .select({ id: actor.id, displayName: actor.displayName })
@@ -123,7 +144,11 @@ export async function hydrateComment(orgId: string, id: string): Promise<unknown
 }
 
 /** Agent Session: status, agent, task ref, trigger, accountability, activity stream. */
-export async function hydrateSession(orgId: string, id: string): Promise<unknown> {
+export async function hydrateSession(
+  orgId: string,
+  id: string,
+  canViewTask: TaskViewFilter,
+): Promise<unknown> {
   const rows = await db
     .select()
     .from(agentSession)
@@ -148,25 +173,41 @@ export async function hydrateSession(orgId: string, id: string): Promise<unknown
       : Promise.resolve([]),
     s.taskId
       ? db
-          .select({ id: task.id, title: task.title, state: task.state })
+          .select({
+            id: task.id,
+            title: task.title,
+            state: task.state,
+            teamId: task.teamId,
+            projectId: task.projectId,
+            programId: task.programId,
+            visibility: task.visibility,
+          })
           .from(task)
-          .where(and(eq(task.id, s.taskId), eq(task.organizationId, orgId)))
+          .where(
+            and(eq(task.id, s.taskId), eq(task.organizationId, orgId), isNull(task.archivedAt)),
+          )
           .limit(1)
       : Promise.resolve([]),
   ]);
+  const visibleTask = taskRows[0] && canViewTask(taskRows[0]) ? taskRows[0] : null;
+  // Session activities often quote the task title or a tool summary. Once the task reference is
+  // hidden, retaining its transcript would recreate the same disclosure through a side channel.
+  const visibleActivities = s.taskId && !visibleTask ? [] : activities;
 
   return {
     id: s.id,
     agentId: s.agentId,
-    taskId: s.taskId,
+    taskId: visibleTask?.id ?? null,
     agent: agentRows[0] ?? null,
-    task: taskRows[0] ?? null,
+    task: visibleTask
+      ? { id: visibleTask.id, title: visibleTask.title, state: visibleTask.state }
+      : null,
     trigger: s.trigger,
     status: s.status,
     accountability: { initiatorId: s.initiatorId },
     startedAt: s.startedAt?.toISOString() ?? null,
     endedAt: s.endedAt?.toISOString() ?? null,
-    activities: activities.map((a) => ({
+    activities: visibleActivities.map((a) => ({
       id: a.id,
       type: a.type,
       body: a.body,

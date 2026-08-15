@@ -1,4 +1,4 @@
-import type { AppType } from '@docket/api';
+import type { AppType } from '@docket/api/rpc-contract';
 import { hc } from 'hono/client';
 
 import { withOfflineOutbox } from '@/components/pwa/offline-write';
@@ -7,7 +7,7 @@ import { withOfflineOutbox } from '@/components/pwa/offline-write';
  * The typed Hono RPC client for the Docket API.
  *
  * @remarks
- * Built from the `@docket/api` {@link AppType} contract, so every call is fully typed
+ * Built from the `@docket/api/rpc-contract` {@link AppType} contract, so every call is fully typed
  * end-to-end (e.g. `api.v1.orgs.$get()`, `api.v1.orgs[':orgId'].tasks.$post(...)`).
  *
  * The base URL is empty (same-origin): requests resolve to relative paths (`/v1/*`,

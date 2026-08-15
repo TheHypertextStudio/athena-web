@@ -10,7 +10,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { MIRROR_ENTITY_ORDER } from '@docket/integrations';
+import { MIRROR_ENTITY_ORDER } from '@docket/connections/notion/mirror-schema';
 
 import { ConflictError, NotFoundError } from '../../src/error';
 import {

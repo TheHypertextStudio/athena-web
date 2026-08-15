@@ -1,4 +1,4 @@
-import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AgentRuntimeModule from '@docket/athena/turn';
 import type * as AuthzModule from '@docket/authz';
 import type * as DbModule from '@docket/db';
 import { and, eq } from 'drizzle-orm';
@@ -45,7 +45,7 @@ interface Seed {
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  agentRuntime = await import('@docket/agent-runtime');
+  agentRuntime = await import('@docket/athena/turn');
   authz = await import('@docket/authz');
   meAthena = (await import('../../src/routes/me-athena')).default;
   ({ getContainer } = await import('../../src/container'));

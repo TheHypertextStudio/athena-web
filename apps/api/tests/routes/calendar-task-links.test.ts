@@ -339,6 +339,58 @@ describe('calendar item <-> task links', () => {
     expect(res.status).toBe(403);
   });
 
+  it('does not let a suspended member create a link or detach one made while active', async () => {
+    const schema = await getDb();
+    const base = await seedBaseOrg(schema.db, schema);
+    const ownerUserId = await seedUserWithHub(schema.db, schema, 'SuspendedOwner');
+    const { actorId } = await addMemberWithCapabilities(schema, base.orgId, ownerUserId, [
+      'contribute',
+    ]);
+    const app = appWithSession(calendarRouter, fakeSession(ownerUserId));
+
+    const item = await createItem(app, {
+      title: 'Suspend calendar access',
+      startsAt: '2026-07-01T10:00:00.000Z',
+      endsAt: '2026-07-01T11:00:00.000Z',
+    });
+    const task = await seedTask(schema, base.orgId, base.teamId, 'Existing link');
+    expect(
+      (
+        await linkTask(app, item.body.id, {
+          mode: 'link',
+          organizationId: base.orgId,
+          taskId: task.id,
+        })
+      ).status,
+    ).toBe(200);
+
+    await schema.db
+      .update(schema.actor)
+      .set({ status: 'suspended' })
+      .where(eq(schema.actor.id, actorId));
+
+    const createAttempt = await linkTask(app, item.body.id, {
+      mode: 'create',
+      organizationId: base.orgId,
+      title: 'Must not be created',
+    });
+    expect(createAttempt.status).toBe(404);
+
+    const detachAttempt = await detachTask(app, item.body.id, task.id);
+    expect(detachAttempt.status).toBe(404);
+    expect(
+      await schema.db
+        .select({ taskId: schema.calendarItemTaskLink.taskId })
+        .from(schema.calendarItemTaskLink)
+        .where(
+          and(
+            eq(schema.calendarItemTaskLink.calendarItemId, item.body.id),
+            eq(schema.calendarItemTaskLink.taskId, task.id),
+          ),
+        ),
+    ).toEqual([{ taskId: task.id }]);
+  });
+
   it('detach removes the link and leaves the task intact; repeat detach 404s', async () => {
     const schema = await getDb();
     const base = await seedBaseOrg(schema.db, schema);

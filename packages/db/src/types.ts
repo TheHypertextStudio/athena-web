@@ -12,6 +12,8 @@ import {
   type WorkflowState as WorkflowStateShape,
   type WorkStatusCategory,
 } from '@docket/types';
+import type { Capability } from '@docket/identity-access/capabilities';
+import type { VocabularyPreset, VocabularySkin, VocabularyTerm } from '@docket/work/vocabulary';
 
 export type { WorkStatusCategory };
 
@@ -36,27 +38,10 @@ export type WorkflowState = WorkflowStateShape;
 /** Default per-team workflow; the first state's key (`backlog`) is the new-task default. */
 export const defaultWorkflowStates: readonly WorkflowState[] = DEFAULT_WORKFLOW_STATES;
 
-/** The vocabulary preset bundles selectable per org. */
-export type VocabularyPreset = 'startup' | 'nonprofit' | 'agency';
-
-/** A singular/plural label pair for one vocabulary key. */
-export interface VocabularyTerm {
-  /** Singular form (e.g. "Project"). */
-  readonly singular: string;
-  /** Plural form (e.g. "Projects"). */
-  readonly plural: string;
-}
-
-/** An org's vocabulary skin: a preset plus optional per-key overrides. */
-export interface VocabularySkin {
-  /** The base preset. */
-  readonly preset: VocabularyPreset;
-  /** Per-key overrides (key ∈ initiative/program/project/task/cycle/team). */
-  readonly overrides?: Record<string, VocabularyTerm> | undefined;
-}
-
-/** The default vocabulary skin for new organizations. */
-export const presetStartup: VocabularySkin = { preset: 'startup' };
+/** Work owns the vocabulary grammar the database persists. */
+export type { VocabularyPreset, VocabularySkin, VocabularyTerm };
+/** Legacy database export for Work's compact default organization skin. */
+export { defaultVocabularySkin as presetStartup } from '@docket/work/vocabulary';
 
 /** Where the Hub lands on open: the Hub, the last-used context, or a specific org. */
 export type HubLanding = 'hub' | 'last' | { readonly orgId: string };
@@ -436,6 +421,6 @@ export interface ViewSort {
 }
 
 /** A single capability literal. */
-export type GrantCapability = 'view' | 'comment' | 'contribute' | 'assign' | 'manage';
+export type GrantCapability = Capability;
 /** A list of capability literals (a grant's `capabilities` column). */
 export type GrantCapabilityList = readonly GrantCapability[];

@@ -1,0 +1,39 @@
+{
+  "name": "@docket/identity-access",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Portable capability and explicit-grant policy for Docket identity and access decisions.",
+  "exports": {
+    "./capabilities": {
+      "types": "./src/capabilities.ts",
+      "default": "./src/capabilities.ts"
+    },
+    "./grants": {
+      "types": "./src/grants.ts",
+      "default": "./src/grants.ts"
+    },
+    "./authorization": {
+      "types": "./src/authorization.ts",
+      "default": "./src/authorization.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

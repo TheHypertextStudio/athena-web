@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import type { BillingEvent, BillingGateway } from '@docket/billing';
+import type { BillingEvent, BillingGateway } from '@docket/billing/contracts';
 
 import { getDb, seedBaseOrg } from '../support/routes-harness';
 import * as container from '../../src/container';

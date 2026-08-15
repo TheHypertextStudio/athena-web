@@ -1,6 +1,7 @@
 'use client';
 
-import type { OrgSummary, TeamOut, VocabularySkin } from '@docket/types';
+import type { OrgSummary, TeamOut } from '@docket/types';
+import type { VocabularySkin } from '@docket/work/vocabulary';
 import { createContext, type JSX, type ReactNode, useContext, useMemo } from 'react';
 
 import { api } from '@/lib/api';

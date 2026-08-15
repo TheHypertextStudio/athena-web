@@ -21,7 +21,7 @@ import {
   PhoneNumberListOut,
   PhoneNumberOut,
   PhoneVerifyBody,
-} from '@docket/types';
+} from '@docket/athena/phone';
 import { and, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';

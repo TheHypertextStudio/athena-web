@@ -13,8 +13,9 @@
  * `session_activity` read, so the screen makes one bounded read instead of `1 + N + M`.
  *
  * Mounted under the same `/:orgId/projects` prefix as the projects router, so it inherits the
- * `orgContextMiddleware` actor context; like the other project *reads* it needs no capability
- * guard (those gate writes only).
+ * `orgContextMiddleware` actor context. Project membership exposes the project, while every
+ * task-derived output below uses canonical task visibility; this route needs no additional
+ * capability guard (those gate writes only).
  */
 import {
   agentSession,
@@ -37,6 +38,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam } from '../lib/validate';
 import { toActivityOut } from './agent-session-helpers';
+import { buildTaskViewFilter } from './task-helpers';
 
 /** Path-param schema for the single-project roll-up route. */
 const idParam = z.object({ id: z.string() });
@@ -51,11 +53,11 @@ const projectRollup = new Hono<AppEnv>().get(
     tag: 'Projects',
     summary: 'Get project roll-up',
     response: ProjectRollupOut,
-    description: `The project-detail screen's waterfall-collapsing read: task-to-milestone membership, every Initiative linked through \`initiative_project\`, and recent agent activity, served in one bounded round-trip. Initiative identifiers are returned in deterministic order because one Project may support several Initiatives. The project must exist in the caller's organization; organization membership is sufficient for this read. Returns {@link ProjectRollupOut}.`,
+    description: `The project-detail screen's waterfall-collapsing read: task-to-milestone membership and recent agent activity for Tasks the caller can view, plus every Initiative linked through \`initiative_project\`, served in one bounded round-trip. Initiative identifiers are returned in deterministic order because one Project may support several Initiatives. The project must exist in the caller's organization; organization membership accesses the Project while task-derived fields use canonical task visibility. Returns {@link ProjectRollupOut}.`,
   }),
   zParam(idParam),
   async (c) => {
-    const { orgId } = c.get('actorCtx');
+    const { orgId, actorId } = c.get('actorCtx');
     const { id } = c.req.valid('param');
 
     // Existence + tenant check (mirrors `GET /:id/progress`): the project must live in the org.
@@ -69,9 +71,26 @@ const projectRollup = new Hono<AppEnv>().get(
     // Task → milestone map: one org-scoped query over the project's tasks (the `milestoneId`
     // column the detail screen otherwise reads per-task via `tasks/:id`).
     const taskRows = await db
-      .select({ taskId: task.id, milestoneId: task.milestoneId })
+      .select({
+        taskId: task.id,
+        milestoneId: task.milestoneId,
+        teamId: task.teamId,
+        projectId: task.projectId,
+        programId: task.programId,
+        visibility: task.visibility,
+      })
       .from(task)
       .where(and(eq(task.projectId, id), eq(task.organizationId, orgId)));
+    const canView = await buildTaskViewFilter(orgId, actorId);
+    const visibleTaskRows = taskRows.filter((row) =>
+      canView({
+        id: row.taskId,
+        teamId: row.teamId,
+        projectId: row.projectId,
+        programId: row.programId,
+        visibility: row.visibility,
+      }),
+    );
 
     // Initiative membership is genuinely many-to-many. Return every link deterministically so
     // consumers never manufacture a primary Initiative that the domain does not define.
@@ -94,11 +113,19 @@ const projectRollup = new Hono<AppEnv>().get(
     // Recent agent activity on the project: the sessions on its tasks (one join), then their newest
     // activities in one ordered read — collapsing the screen's per-session `sessions/:id` fan-out.
     // Each row carries its session's `agentId` so the client resolves the actor without a re-read.
-    const sessionRows = await db
-      .select({ id: agentSession.id, agentId: agentSession.agentId })
-      .from(agentSession)
-      .innerJoin(task, eq(agentSession.taskId, task.id))
-      .where(and(eq(task.projectId, id), eq(agentSession.organizationId, orgId)));
+    const visibleTaskIds = visibleTaskRows.map((row) => row.taskId);
+    const sessionRows =
+      visibleTaskIds.length > 0
+        ? await db
+            .select({ id: agentSession.id, agentId: agentSession.agentId })
+            .from(agentSession)
+            .where(
+              and(
+                eq(agentSession.organizationId, orgId),
+                inArray(agentSession.taskId, visibleTaskIds),
+              ),
+            )
+        : [];
     const agentBySession = new Map(sessionRows.map((s) => [s.id, s.agentId]));
     const sessionIds = sessionRows.map((s) => s.id);
     const activityRows =
@@ -121,7 +148,10 @@ const projectRollup = new Hono<AppEnv>().get(
     });
 
     return ok(c, ProjectRollupOut, {
-      taskMilestones: taskRows.map((r) => ({ taskId: r.taskId, milestoneId: r.milestoneId })),
+      taskMilestones: visibleTaskRows.map((r) => ({
+        taskId: r.taskId,
+        milestoneId: r.milestoneId,
+      })),
       initiativeIds: initRows.map((row) => row.initiativeId),
       labels: labelRows.map(({ label: row }) => ({
         id: row.id,

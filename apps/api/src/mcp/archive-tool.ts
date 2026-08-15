@@ -16,11 +16,18 @@ import type { PgTable } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
 import { ApiError, ValidationError } from '../error';
+import { buildTaskViewFilter } from '../routes/task-helpers';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { recordChangeSet, trackedFields, type ChangeRecord } from './change-set';
-import { listWork, listWorkFilters, WORK_ENTITIES, type WorkEntity } from './list-work';
+import {
+  isTaskRowVisible,
+  listWork,
+  listWorkFilters,
+  WORK_ENTITIES,
+  type WorkEntity,
+} from './list-work';
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
@@ -124,6 +131,7 @@ export function registerArchiveTool(
             : (
                 await listWork(
                   input.orgId,
+                  actorCtx.actorId,
                   entity,
                   { ...filters, archived: restore },
                   MAX_TARGETS,
@@ -150,12 +158,17 @@ export function registerArchiveTool(
                 .select()
                 .from(table)
                 .where(and(inArray(table.id, selected), eq(table.organizationId, input.orgId)));
+        const canViewTask =
+          entity === 'task' ? await buildTaskViewFilter(input.orgId, actorCtx.actorId) : undefined;
+        const visibleRows = canViewTask
+          ? rows.filter((row) => isTaskRowVisible(row, canViewTask))
+          : rows;
 
         const changes: ChangeRecord[] = [];
         const items: { id: string; title: string }[] = [];
         const skipped: { id: string; title: string; reason: string }[] = [];
 
-        for (const row of rows) {
+        for (const row of visibleRows) {
           const id = String(row['id']);
           const named = row['title'] ?? row['name'];
           const title = typeof named === 'string' && named.length > 0 ? named : id;
@@ -208,7 +221,7 @@ export function registerArchiveTool(
         });
 
         return jsonResult({
-          matched: rows.length,
+          matched: visibleRows.length,
           changed: items.length,
           entity,
           items,

@@ -1,6 +1,7 @@
 'use client';
 
-import type { OrgOut, OrgUpdate, VocabularyPreset } from '@docket/types';
+import type { OrgOut, OrgUpdate } from '@docket/types';
+import type { VocabularyPreset } from '@docket/work/vocabulary';
 import { Input, Select, Skeleton } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 

@@ -30,8 +30,9 @@ import {
   task,
 } from '@docket/db';
 import type { Database } from '@docket/db';
-import { describeParentResolution, resolveWorkParent } from '@docket/agent-runtime';
-import type { ParentCandidate, ParentResolution } from '@docket/agent-runtime';
+import { describeParentResolution, resolveWorkParent } from '@docket/work/parent-resolution';
+import type { ParentCandidate, ParentResolution } from '@docket/work/parent-resolution';
+import { truncateTitle } from '@docket/work/task-titles';
 import { and, desc, eq, inArray, isNull, notInArray } from 'drizzle-orm';
 
 import { resolveLandingTarget } from '../lib/task-landing';
@@ -204,15 +205,11 @@ export interface DispatchWorkResult {
   readonly linkageNote: string | null;
 }
 
-/** The longest task title Athena derives from a freeform request. */
-const TASK_TITLE_MAX = 120;
-
 /** Derive a task title from the first line of a request. */
 function deriveTaskTitle(prompt: string): string {
   const line = prompt.trim().split(/\r?\n/)[0]?.trim() ?? '';
   const raw = line.length > 0 ? line : prompt.trim();
-  if (raw.length === 0) return 'Untitled work';
-  return raw.length <= TASK_TITLE_MAX ? raw : `${raw.slice(0, TASK_TITLE_MAX - 1).trimEnd()}…`;
+  return raw.length === 0 ? 'Untitled work' : truncateTitle(raw);
 }
 
 /**

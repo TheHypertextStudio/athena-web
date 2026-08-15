@@ -9,26 +9,13 @@
  */
 import { z } from 'zod';
 
+import { GrantResourceKind, GrantSubjectKind } from '@docket/identity-access/grants';
+
 import { GrantCapability, Visibility } from './capability';
 import { GrantId, OrganizationId } from './primitives';
 
-/** A grant's subject discriminator (an Actor or a Role). */
-export const GrantSubjectKind = z
-  .enum(['actor', 'role'])
-  .describe(
-    "What the grant's `subjectId` points at: 'actor' (an individual human or agent Actor — an override/addition for one identity) or 'role' (every holder of that org role — how a role's org-wide baseline is stored).",
-  );
-/** Grant subject-kind value. */
-export type GrantSubjectKind = z.infer<typeof GrantSubjectKind>;
-
-/** A containment node kind a grant can target. */
-export const GrantResourceKind = z
-  .enum(['organization', 'team', 'initiative', 'program', 'project', 'cycle', 'task'])
-  .describe(
-    "The kind of resource node the grant targets in the containment tree — one of 'organization' | 'team' | 'initiative' | 'program' | 'project' | 'cycle' | 'task'. Authorization cascades down containment edges (Org › Team/Program › Project › Task); a grant at a node can apply to its whole subtree (see `cascades`).",
-  );
-/** Grant resource-kind value. */
-export type GrantResourceKind = z.infer<typeof GrantResourceKind>;
+/** Compatibility re-exports for Identity & Access-owned explicit-grant vocabulary. */
+export { GrantResourceKind, GrantSubjectKind };
 
 /** Body for upserting a Grant (organizationId comes from the path; effect is `allow`). */
 export const GrantUpsert = z

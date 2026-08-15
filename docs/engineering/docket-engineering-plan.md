@@ -6,6 +6,14 @@
 
 > **Companion to** `docs/core/mvp-plan.md` (the product plan). This document is the _how_: stack, architecture, auth/identity, billing, the MCP server, the data model, and infrastructure. Grounded against current documentation (workflow research, 2026‑06‑04/05); pin versions and re‑verify before upgrading.
 
+> **Historical-plan note (2026-08-14).** This is the pre-ARCH-001 greenfield plan, retained for
+> decision history. It predates the domain-first repository structure, the consolidation of
+> marketing routes into `apps/web`, the Cloudflare Runner, and the named
+> `@docket/api/rpc-contract` boundary. Do not use its package paths or deployment assumptions for
+> new work; start with [ARCH-001](../WORKLOG.md#arch-001-domain-first-repository-reorganization),
+> the [domain-first specification](./specs/domain-first-reorganization.md), and the
+> [deployment runbook](./deployment.md).
+
 ---
 
 ## 0. Hard Constraints

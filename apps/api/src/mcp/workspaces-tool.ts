@@ -14,7 +14,7 @@ import { actor, db, organization, team } from '@docket/db';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { OPERATING_LIFECYCLE_STATES } from '../billing/lifecycle';
+import { OPERATING_LIFECYCLE_STATES } from '@docket/billing/application/lifecycle';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { jsonResult, runTool } from './result';

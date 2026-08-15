@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "domains": [
+    {
+      "id": "athena",
+      "packageName": "@docket/athena",
+      "productOwner": "Athena",
+      "description": "Guided agent work, durable execution, and structured human elicitation.",
+      "publicExports": [
+        "./execution-protocol",
+        "./elicitation",
+        "./elicitation-api",
+        "./turn-protocol",
+        "./agent-session",
+        "./agent-bus",
+        "./conversation",
+        "./voice",
+        "./phone",
+        "./digest",
+        "./anthropic",
+        "./turn",
+        "./turn/translate",
+        "./turn/adapters/anthropic",
+        "./turn/adapters/lattice",
+        "./turn/model-backend",
+        "./task-drafting/adapters/anthropic",
+        "./task-drafting/adapters/deterministic"
+      ],
+      "allowedRuntimeDependencies": ["@anthropic-ai/sdk", "@docket/work", "zod"],
+      "supportedDeployableRuntimes": ["api", "web", "runner", "desktop"]
+    },
+    {
+      "id": "automation",
+      "packageName": "@docket/automation",
+      "productOwner": "Automation",
+      "description": "Portable Automation Rules grammar and pure evaluation.",
+      "publicExports": ["./contracts", "./evaluation"],
+      "allowedRuntimeDependencies": ["zod"],
+      "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]
+    },
+    {
+      "id": "billing",
+      "packageName": "@docket/billing",
+      "productOwner": "Billing",
+      "description": "Server-side billing lifecycle and provider behavior.",
+      "publicExports": [
+        "./contracts",
+        "./adapters/in-memory",
+        "./adapters/stripe",
+        "./application/lifecycle",
+        "./application/entitlement"
+      ],
+      "allowedRuntimeDependencies": ["@docket/db", "drizzle-orm", "stripe"],
+      "supportedDeployableRuntimes": ["api"]
+    },
+    {
+      "id": "connections",
+      "packageName": "@docket/connections",
+      "productOwner": "Connections",
+      "description": "External-service connection contracts and rules, beginning with the Docket-designed Notion mirror.",
+      "publicExports": [
+        "./provider-error",
+        "./notion/protocol",
+        "./notion/mirror-contract",
+        "./notion/mirror-schema",
+        "./notion/mirror-values",
+        "./notion/mirror-port",
+        "./notion/adapters/notion-sdk",
+        "./notion/adapters/in-memory"
+      ],
+      "allowedRuntimeDependencies": ["@docket/work", "@notionhq/client", "zod"],
+      "supportedDeployableRuntimes": ["api", "web", "desktop"]
+    },
+    {
+      "id": "identity-access",
+      "packageName": "@docket/identity-access",
+      "productOwner": "Identity & Access",
+      "description": "Portable capability vocabulary and explicit-grant authorization policy.",
+      "publicExports": ["./capabilities", "./grants", "./authorization"],
+      "allowedRuntimeDependencies": ["zod"],
+      "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]
+    },
+    {
+      "id": "work",
+      "packageName": "@docket/work",
+      "productOwner": "Work",
+      "description": "The actionable-work hierarchy: initiatives, programs, projects, milestones, cycles, tasks, dependencies, labels, comments, templates, saved views, and recurrence.",
+      "publicExports": [
+        "./task-contract",
+        "./task-drafting",
+        "./task-titles",
+        "./parent-resolution",
+        "./vocabulary"
+      ],
+      "allowedRuntimeDependencies": ["zod"],
+      "supportedDeployableRuntimes": ["api", "web", "admin", "runner", "desktop"]
+    }
+  ]
+}

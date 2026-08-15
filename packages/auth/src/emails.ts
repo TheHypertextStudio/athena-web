@@ -104,9 +104,9 @@ export function changeEmailConfirmationEmail(params: {
  * The security notice sent when a recovery code is used to sign in.
  *
  * @remarks
- * The one gap this closes: regenerating recovery codes already sends a security notice
- * ({@link import('@docket/api/account/emails').recoveryCodesRegeneratedEmail} — actually USING a
- * code to get in did not, so a stolen/leaked code let someone in silently. Fires unconditionally
+ * The one gap this closes: regenerating recovery codes already sends a security notice, while
+ * actually USING a code to get in did not. A stolen/leaked code could therefore let someone in
+ * silently. This fires unconditionally
  * (not just "this looks suspicious") since a recovery-code sign-in is inherently the account's
  * secondary/break-glass path — the account holder should always know it was used, whether or not
  * it was really them, since it bypasses their normal passkey.

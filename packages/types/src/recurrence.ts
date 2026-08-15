@@ -8,6 +8,8 @@
  */
 import { z } from 'zod';
 
+import { AutomationEventMatch } from '@docket/automation/contracts';
+
 import {
   ActorId,
   CalendarItemId,
@@ -27,7 +29,6 @@ import {
   TaskId,
   TeamId,
 } from './primitives';
-import { AutomationEventMatch } from './automation';
 import { Health, Priority } from './capability';
 import { ProjectStatus } from './project';
 import { TaskCreate, TaskOut } from './task';

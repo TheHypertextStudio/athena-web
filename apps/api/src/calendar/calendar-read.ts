@@ -73,7 +73,7 @@ async function hydrateLinkedTasks(
 
   const orgIds = [...new Set(linkRows.map((row) => row.link.organizationId))];
   const actorRows = await db
-    .select({ id: actor.id, organizationId: actor.organizationId, roleId: actor.roleId })
+    .select({ id: actor.id, organizationId: actor.organizationId })
     .from(actor)
     .where(and(eq(actor.userId, userId), inArray(actor.organizationId, orgIds)));
   const actorByOrg = new Map(actorRows.map((row) => [row.organizationId, row]));
@@ -89,10 +89,7 @@ async function hydrateLinkedTasks(
   for (const orgId of orgIds) {
     const viewerActor = actorByOrg.get(orgId);
     if (viewerActor === undefined) continue;
-    viewFilterByOrg.set(
-      orgId,
-      await buildTaskViewFilter(orgId, viewerActor.id, viewerActor.roleId),
-    );
+    viewFilterByOrg.set(orgId, await buildTaskViewFilter(orgId, viewerActor.id));
   }
 
   for (const row of linkRows) {

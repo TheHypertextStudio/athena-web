@@ -18,7 +18,7 @@
  *   question into view and rings it, so arriving from a banner puts you on the question, in the
  *   context of its task, rather than at the top of a list.
  */
-import type { ElicitationOut } from '@docket/types';
+import type { ElicitationOut } from '@docket/athena/elicitation-api';
 import { Inbox } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Skeleton, Text } from '@docket/ui/primitives';

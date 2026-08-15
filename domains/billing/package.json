@@ -1,0 +1,49 @@
+{
+  "name": "@docket/billing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Server-side billing lifecycle and provider behavior.",
+  "exports": {
+    "./contracts": {
+      "types": "./src/contracts.ts",
+      "default": "./src/contracts.ts"
+    },
+    "./adapters/in-memory": {
+      "types": "./src/adapters/in-memory.ts",
+      "default": "./src/adapters/in-memory.ts"
+    },
+    "./adapters/stripe": {
+      "types": "./src/adapters/stripe.ts",
+      "default": "./src/adapters/stripe.ts"
+    },
+    "./application/lifecycle": {
+      "types": "./src/application/lifecycle.ts",
+      "default": "./src/application/lifecycle.ts"
+    },
+    "./application/entitlement": {
+      "types": "./src/application/entitlement.ts",
+      "default": "./src/application/entitlement.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf .turbo *.tsbuildinfo",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@docket/db": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "stripe": "catalog:"
+  },
+  "devDependencies": {
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

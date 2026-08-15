@@ -6,13 +6,11 @@ import type * as DbModule from '@docket/db';
 
 import type * as DigestModule from '../../src/routes/daily-digest';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
-import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let sweepDailyDigests!: typeof DigestModule.sweepDailyDigests;
 let markdownToHtml!: typeof DigestModule.markdownToHtml;
-let assembleHighlightsMarkdown!: typeof DigestModule.assembleHighlightsMarkdown;
 let outbox!: CaptureMailer['outbox'];
 
 /** A fixed reference time: 20:00 UTC, past an 18:00 send time. */
@@ -25,7 +23,6 @@ beforeAll(async () => {
   db = schema.db;
   const mod = await import('../../src/routes/daily-digest');
   sweepDailyDigests = mod.sweepDailyDigests;
-  assembleHighlightsMarkdown = mod.assembleHighlightsMarkdown;
   markdownToHtml = mod.markdownToHtml;
   // The container's mailer is the in-memory CaptureMailer under APP_MODE=test.
   const { getContainer } = await import('../../src/container');
@@ -49,13 +46,13 @@ async function seedDigestUser(opts: {
     .values({ name: `User ${String(seq)}`, email })
     .returning({ id: schema.user.id });
   await db.insert(schema.hub).values({
-    userId: assertDefined(u).id,
+    userId: u!.id,
     preferences: {
       timezone: opts.tz ?? 'UTC',
       digest: { enabled: opts.enabled, sendAtLocalTime: opts.sendAt ?? '18:00' },
     },
   });
-  return { userId: assertDefined(u).id, email };
+  return { userId: u!.id, email };
 }
 
 /** Seed one event attributed to `userId`, occurring earlier on the reference day. */
@@ -85,12 +82,12 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .select()
       .from(schema.dailyDigest)
       .where(eq(schema.dailyDigest.userId, userId));
-    expect(assertDefined(digest).status).toBe('sent');
-    expect(assertDefined(digest).digestDate).toBe('2026-06-28');
-    expect(assertDefined(digest).eventCount).toBe(2);
-    expect(assertDefined(digest).summaryMarkdown).toBeTruthy();
-    expect(assertDefined(digest).summaryHtml).toBeTruthy();
-    expect(assertDefined(digest).stats?.total).toBe(2);
+    expect(digest!.status).toBe('sent');
+    expect(digest!.digestDate).toBe('2026-06-28');
+    expect(digest!.eventCount).toBe(2);
+    expect(digest!.summaryMarkdown).toBeTruthy();
+    expect(digest!.summaryHtml).toBeTruthy();
+    expect(digest!.stats?.total).toBe(2);
 
     expect(outbox.some((m) => m.to === email && m.subject.includes('digest'))).toBe(true);
     const sent = outbox.find((m) => m.to === email && m.subject.includes('digest'));
@@ -123,8 +120,8 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .select()
       .from(schema.dailyDigest)
       .where(eq(schema.dailyDigest.userId, userId));
-    expect(assertDefined(digest).status).toBe('skipped_empty');
-    expect(assertDefined(digest).eventCount).toBe(0);
+    expect(digest!.status).toBe('skipped_empty');
+    expect(digest!.eventCount).toBe(0);
     expect(outbox.some((m) => m.to === email)).toBe(false);
   });
 
@@ -180,16 +177,16 @@ describe('sweepDailyDigests (the hero feature)', () => {
     // No `timezone`, no `digest.sendAtLocalTime` — only the flag the sweep's own WHERE clause reads.
     await db
       .insert(schema.hub)
-      .values({ userId: assertDefined(u).id, preferences: { digest: { enabled: true } } });
-    await seedEvent(orgId, assertDefined(u).id, 'Bare-preferences event');
+      .values({ userId: u!.id, preferences: { digest: { enabled: true } } });
+    await seedEvent(orgId, u!.id, 'Bare-preferences event');
 
     await sweepDailyDigests(NOW); // 20:00 UTC — past the 18:00 default in UTC.
 
     const [digest] = await db
       .select()
       .from(schema.dailyDigest)
-      .where(eq(schema.dailyDigest.userId, assertDefined(u).id));
-    expect(assertDefined(digest).status).toBe('sent');
+      .where(eq(schema.dailyDigest.userId, u!.id));
+    expect(digest!.status).toBe('sent');
   });
 
   it('omits the greeting name when the user has no name on file', async () => {
@@ -201,22 +198,22 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .values({ name: '', email })
       .returning({ id: schema.user.id });
     await db.insert(schema.hub).values({
-      userId: assertDefined(u).id,
+      userId: u!.id,
       preferences: { timezone: 'UTC', digest: { enabled: true, sendAtLocalTime: '18:00' } },
     });
-    await seedEvent(orgId, assertDefined(u).id, 'Nameless-user event');
+    await seedEvent(orgId, u!.id, 'Nameless-user event');
 
     await sweepDailyDigests(NOW);
 
     const [digest] = await db
       .select()
       .from(schema.dailyDigest)
-      .where(eq(schema.dailyDigest.userId, assertDefined(u).id));
-    expect(assertDefined(digest).summaryMarkdown).toContain("Here's what you did");
-    expect(assertDefined(digest).summaryMarkdown).not.toContain('Hi ');
+      .where(eq(schema.dailyDigest.userId, u!.id));
+    expect(digest!.summaryMarkdown).toContain("Here's what you did");
+    expect(digest!.summaryMarkdown).not.toContain('Hi ');
   });
 
-  it('passes an event’s summary, actor display name, and entity title through to the summarizer', async () => {
+  it('groups one subject-day episode and delivers only its trusted narrated highlight', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
     seq += 1;
@@ -241,30 +238,158 @@ describe('sweepDailyDigests (the hero feature)', () => {
         externalId: 'ext_entity_1',
         title: 'Ship the thing',
         url: null,
-        docketEntityId: null,
+        docketEntityId: 'task_digest',
       },
+      entityKind: 'work_item',
+      entityAssociation: 'matched',
+      docketEntityId: 'task_digest',
+      dedupeKey: `obs-${String(seq)}`,
+    });
+    seq += 1;
+    await db.insert(schema.event).values({
+      organizationId: orgId,
+      userId,
+      sourceSystem: 'github',
+      kind: 'comment',
+      occurredAt: new Date('2026-06-28T16:00:00.000Z'),
+      title: 'Reviewed the implementation',
+      entity: {
+        kind: 'work_item',
+        source: 'github',
+        externalId: 'pr_42',
+        title: 'Ship the thing',
+        url: null,
+        docketEntityId: 'task_digest',
+      },
+      entityKind: 'work_item',
+      entityAssociation: 'matched',
+      docketEntityId: 'task_digest',
+      dedupeKey: `obs-${String(seq)}`,
+    });
+    seq += 1;
+    await db.insert(schema.event).values({
+      organizationId: orgId,
+      userId,
+      sourceSystem: 'linear',
+      kind: 'reaction',
+      occurredAt: new Date('2026-06-28T10:00:00.000Z'),
+      title: 'Reacted to the implementation',
+      entity: {
+        kind: 'work_item',
+        source: 'linear',
+        externalId: 'ext_entity_1',
+        title: 'Ship the thing',
+        url: null,
+        docketEntityId: 'task_digest',
+      },
+      entityKind: 'work_item',
+      entityAssociation: 'matched',
+      docketEntityId: 'task_digest',
       dedupeKey: `obs-${String(seq)}`,
     });
 
     const { getContainer } = await import('../../src/container');
     const summarizer = getContainer().summarizer;
-    const spy = vi.spyOn(summarizer, 'narrateDay');
+    const spy = vi.spyOn(summarizer, 'narrateDay').mockImplementation(async (input) => ({
+      highlights: input.episodes.map((episode) => ({
+        key: episode.key,
+        sentence: `I trusted the narration for ${episode.subject ?? 'this activity'}.`,
+      })),
+    }));
 
-    await sweepDailyDigests(NOW);
+    try {
+      await sweepDailyDigests(NOW);
 
-    expect(spy).toHaveBeenCalled();
-    // The event's own detail has to survive grouping and reach the prompt: an episode narrated from
-    // titles alone cannot say what actually changed.
-    const narrated = spy.mock.calls
-      .flatMap((args) => args[0].episodes)
-      .flatMap((ep) => ep.events.map((event) => ({ subject: ep.subject, ...event })))
-      .find((event) => event.title === 'Rich event');
-    expect(narrated).toMatchObject({
-      summary: 'A one-line summary of the change',
-      actor: 'Jane Doe',
-      subject: 'Ship the thing',
-    });
-    spy.mockRestore();
+      expect(spy).toHaveBeenCalledTimes(1);
+      const [input] = spy.mock.calls[0] ?? [];
+      expect(input?.episodes).toMatchObject([
+        {
+          key: `day:2026-06-28:${orgId}:docket:task_digest`,
+          provider: 'linear',
+          subject: 'Ship the thing',
+          startedAt: '2026-06-28T09:00:00.000Z',
+          endedAt: '2026-06-28T16:00:00.000Z',
+          events: [
+            {
+              kind: 'created',
+              title: 'Rich event',
+              summary: 'A one-line summary of the change',
+              actor: 'Jane Doe',
+            },
+            { kind: 'comment', title: 'Reviewed the implementation' },
+          ],
+        },
+      ]);
+
+      const [digest] = await db
+        .select()
+        .from(schema.dailyDigest)
+        .where(eq(schema.dailyDigest.userId, userId));
+      expect(digest!.summaryMarkdown).toContain('I trusted the narration for Ship the thing.');
+      expect(digest!.summaryMarkdown).not.toContain('Rich event');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('passes all-minor activity to narration when an episode has no visible event', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
+    const records = [
+      {
+        kind: 'reaction' as const,
+        occurredAt: new Date('2026-06-28T09:00:00.000Z'),
+        title: 'Reacted to the timer',
+      },
+      {
+        kind: 'timer_started' as const,
+        occurredAt: new Date('2026-06-28T09:05:00.000Z'),
+        title: 'Started focus time',
+      },
+    ];
+    for (const record of records) {
+      seq += 1;
+      await db.insert(schema.event).values({
+        organizationId: orgId,
+        userId,
+        sourceSystem: 'linear',
+        ...record,
+        entity: {
+          kind: 'work_item',
+          source: 'linear',
+          externalId: 'minor_entity',
+          title: 'Minor-only work',
+          url: null,
+          docketEntityId: 'task_minor',
+        },
+        entityKind: 'work_item',
+        entityAssociation: 'matched',
+        docketEntityId: 'task_minor',
+        dedupeKey: `minor-${String(seq)}`,
+      });
+    }
+
+    const { getContainer } = await import('../../src/container');
+    const spy = vi
+      .spyOn(getContainer().summarizer, 'narrateDay')
+      .mockImplementation(async (input) => ({
+        highlights: input.episodes.map((episode) => ({
+          key: episode.key,
+          sentence: 'I kept the minor activity visible.',
+        })),
+      }));
+
+    try {
+      await sweepDailyDigests(NOW);
+
+      const [input] = spy.mock.calls[0] ?? [];
+      expect(input?.episodes[0]?.events.map((event) => event.kind)).toEqual([
+        'reaction',
+        'timer_started',
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('marks the digest failed (not thrown) when the notification fails to send', async () => {
@@ -285,163 +410,43 @@ describe('sweepDailyDigests (the hero feature)', () => {
         .select()
         .from(schema.dailyDigest)
         .where(eq(schema.dailyDigest.userId, userId));
-      expect(assertDefined(digest).status).toBe('failed');
-      expect(assertDefined(digest).lastError).toBe('digest notification delivery failed');
+      expect(digest!.status).toBe('failed');
+      expect(digest!.lastError).toBe('digest notification delivery failed');
     } finally {
       sendSpy.mockRestore();
     }
   });
 
-  it('does not deliver a day it could not narrate, and says why', async () => {
-    // Narration failing no longer fails the *record* — that separation is deliberate. But an email is
-    // a one-shot artifact: sending "no tracked activity" for a day that had plenty would be false, so
-    // the delivery is the thing that fails while the day itself stands.
+  it('records a generic error message when generation throws something other than an Error', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
-    await seedEvent(orgId, userId, 'Real work that went unnarrated');
+    await seedEvent(orgId, userId, 'Non-Error throw');
 
     const { getContainer } = await import('../../src/container');
+    const summarizer = getContainer().summarizer;
+    // Deliberately a non-Error rejection, to exercise the `err instanceof Error` false arm of the
+    // digest's own catch block.
     const spy = vi
-      .spyOn(getContainer().summarizer, 'narrateDay')
+      .spyOn(summarizer, 'narrateDay')
       .mockRejectedValueOnce('a plain string rejection');
 
     try {
-      await sweepDailyDigests(NOW);
+      const result = await sweepDailyDigests(NOW);
+      expect(result.failed).toBe(1);
 
-      // Asserted on this user's row rather than on the sweep's tally. The tally counts every user in
-      // the database, and a failed digest is now retried by a later tick — so an earlier test's
-      // failure being delivered on retry legitimately moves the global numbers without saying
-      // anything about this day.
       const [digest] = await db
         .select()
         .from(schema.dailyDigest)
         .where(eq(schema.dailyDigest.userId, userId));
-      expect(assertDefined(digest).status).toBe('failed');
-      expect(assertDefined(digest).sentAt).toBeNull();
-      expect(assertDefined(digest).lastError).toContain('narrated');
-
-      // The day's record survives the narration failure — that is the whole point of the split.
-      const [day] = await db
-        .select()
-        .from(schema.activityDay)
-        .where(eq(schema.activityDay.userId, userId));
-      expect(assertDefined(day).eventCount).toBeGreaterThan(0);
-      const highlights = await db
-        .select()
-        .from(schema.activityHighlight)
-        .where(eq(schema.activityHighlight.activityDayId, assertDefined(day).id));
-      expect(highlights).toHaveLength(1);
-      expect(assertDefined(highlights[0]).narrationState).toBe('failed');
+      expect(digest!.status).toBe('failed');
+      expect(digest!.lastError).toBe('digest generation error');
     } finally {
       spy.mockRestore();
     }
   });
-
-  it('tries again on a later tick after a delivery failure', async () => {
-    // A `failed` digest used to be terminal: the row existed, so every later tick's insert conflicted
-    // and returned "skipped", and one transient mail or model error meant that day's email was never
-    // sent at all — while the events and highlights sat there intact.
-    const { orgId } = await seedBaseOrg(db, schema);
-    const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
-    await seedEvent(orgId, userId, 'Work worth reporting');
-
-    const { getContainer } = await import('../../src/container');
-    const failing = vi
-      .spyOn(getContainer().mailer, 'send')
-      .mockRejectedValueOnce(new Error('mail provider unavailable'));
-    await sweepDailyDigests(NOW);
-    failing.mockRestore();
-
-    const [afterFailure] = await db
-      .select()
-      .from(schema.dailyDigest)
-      .where(eq(schema.dailyDigest.userId, userId));
-    expect(assertDefined(afterFailure).status).toBe('failed');
-
-    // The same day, a later tick. Nothing about the day changed — only that the transient failure is
-    // over.
-    await sweepDailyDigests(NOW);
-
-    const [afterRetry] = await db
-      .select()
-      .from(schema.dailyDigest)
-      .where(eq(schema.dailyDigest.userId, userId));
-    expect(assertDefined(afterRetry).status).toBe('sent');
-    expect(assertDefined(afterRetry).sentAt).not.toBeNull();
-    // Still one row: the retry takes the existing claim back rather than creating a second digest.
-    const all = await db
-      .select()
-      .from(schema.dailyDigest)
-      .where(eq(schema.dailyDigest.userId, userId));
-    expect(all).toHaveLength(1);
-  });
-
-  it('stays silent for a day the person curated away', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
-    const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
-    await seedEvent(orgId, userId, 'Something they chose not to report');
-
-    // Narrate first, then drop everything — dropping every line is a decision, not a failure, and
-    // the right response to it is silence rather than an empty email.
-    const { reconcileDay } = await import('../../src/services/highlights/reconcile');
-    const reconciled = await reconcileDay(userId, '2026-06-28', NOW);
-    await db
-      .update(schema.activityHighlight)
-      .set({ kept: false, curatedAt: NOW })
-      .where(eq(schema.activityHighlight.activityDayId, reconciled.activityDayId));
-
-    const result = await sweepDailyDigests(NOW);
-
-    expect(result.sent).toBe(0);
-    expect(result.skippedEmpty).toBe(1);
-    const [digest] = await db
-      .select()
-      .from(schema.dailyDigest)
-      .where(eq(schema.dailyDigest.userId, userId));
-    expect(assertDefined(digest).status).toBe('skipped_empty');
-    expect(assertDefined(digest).sentAt).toBeNull();
-  });
 });
 
 describe('markdownToHtml', () => {
-  it('says the day is partial when a source could not be read', () => {
-    // The connector-reliability invariant on the email. An email is read once and believed, so a day
-    // assembled from sources that could not all be reached has to say so — otherwise an outage and a
-    // day with nothing in it produce the same message and the reader cannot tell which they got.
-    const one = assembleHighlightsMarkdown({
-      dateLabel: 'Wednesday, August 12, 2026',
-      highlights: [{ sentence: 'I shipped the beta.' }],
-      unreadSources: ['github'],
-    });
-    expect(one).toContain('I shipped the beta.');
-    expect(one).toContain('GitHub');
-    // App-owned copy naming the source, never a provider's own diagnostic.
-    expect(one).not.toContain('github');
-
-    const several = assembleHighlightsMarkdown({
-      dateLabel: 'Wednesday, August 12, 2026',
-      highlights: [{ sentence: 'I shipped the beta.' }],
-      unreadSources: ['github', 'google_calendar'],
-    });
-    expect(several).toContain('GitHub and Calendar');
-  });
-
-  it('adds no caveat to a day whose sources were all reachable', () => {
-    // The counterpart: a complete day must read as complete, or the notice means nothing.
-    const complete = assembleHighlightsMarkdown({
-      dateLabel: 'Wednesday, August 12, 2026',
-      highlights: [{ sentence: 'I shipped the beta.' }],
-      unreadSources: [],
-    });
-    expect(complete).not.toContain('could not be read');
-    expect(
-      assembleHighlightsMarkdown({
-        dateLabel: 'Wednesday, August 12, 2026',
-        highlights: [{ sentence: 'I shipped the beta.' }],
-      }),
-    ).not.toContain('could not be read');
-  });
-
   it('closes a bullet list mid-document when a heading follows it, not only at the end', () => {
     const html = markdownToHtml('- first\n- second\n# A heading\nA paragraph.');
     expect(html).toBe(

@@ -15,8 +15,7 @@ import {
   appWithActor,
   getDb,
   one,
-  seedBaseOrg,
-  type StatusIdLookup,
+  seedTaskAccessOrg as seedBaseOrg,
 } from '../support/routes-harness';
 import type tasksRouter from '../../src/routes/tasks';
 
@@ -33,17 +32,11 @@ beforeAll(async () => {
 const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 /** Insert a task row directly and return its (branded) id. */
-async function seedTask(statusId: StatusIdLookup, orgId: string, teamId: string, title: string) {
+async function seedTask(orgId: string, teamId: string, title: string) {
   return one(
     await db
       .insert(schema.task)
-      .values({
-        organizationId: orgId,
-        title,
-        teamId,
-        state: 'todo',
-        statusId: statusId('task', 'todo'),
-      })
+      .values({ organizationId: orgId, title, teamId, state: 'todo' })
       .returning({ id: schema.task.id }),
   ).id;
 }
@@ -72,10 +65,10 @@ async function parentOf(orgId: string, id: string): Promise<string | null> {
 
 describe('task reparenting', () => {
   it('nests a task under a new parent and detaches back to top-level', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
-    const a = await seedTask(statusId, orgId, teamId, 'A');
-    const b = await seedTask(statusId, orgId, teamId, 'B');
+    const a = await seedTask(orgId, teamId, 'A');
+    const b = await seedTask(orgId, teamId, 'B');
 
     expect((await reparent(app, b, a)).status).toBe(200);
     expect(await parentOf(orgId, b)).toBe(a);
@@ -85,17 +78,17 @@ describe('task reparenting', () => {
   });
 
   it('rejects self-parenting (422)', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
-    const a = await seedTask(statusId, orgId, teamId, 'A');
+    const a = await seedTask(orgId, teamId, 'A');
     expect((await reparent(app, a, a)).status).toBe(422);
   });
 
   it('rejects a move that would create a subtask cycle (409)', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
-    const a = await seedTask(statusId, orgId, teamId, 'A');
-    const b = await seedTask(statusId, orgId, teamId, 'B');
+    const a = await seedTask(orgId, teamId, 'A');
+    const b = await seedTask(orgId, teamId, 'B');
 
     // A under B (B is now A's ancestor).
     expect((await reparent(app, a, b)).status).toBe(200);
@@ -106,11 +99,11 @@ describe('task reparenting', () => {
   });
 
   it('404s when the new parent is missing / cross-org', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const other = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
-    const a = await seedTask(statusId, orgId, teamId, 'A');
-    const foreign = await seedTask(other.statusId, other.orgId, other.teamId, 'Foreign');
+    const a = await seedTask(orgId, teamId, 'A');
+    const foreign = await seedTask(other.orgId, other.teamId, 'Foreign');
 
     expect((await reparent(app, a, MISSING_ULID)).status).toBe(404);
     expect((await reparent(app, a, foreign)).status).toBe(404);

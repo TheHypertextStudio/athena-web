@@ -25,7 +25,7 @@ and API contracts without sharing framework-bound implementation code.
 5. Preserve observable API, persistence, authorization, audit, and user-facing behavior in every
    migration slice unless a separate change explicitly approves a behavior change.
 
-## Target structure
+## Working structure
 
 ```text
 apps/                         Delivery and composition
@@ -35,13 +35,12 @@ apps/                         Delivery and composition
   runner/
 
 domains/                      Business-owned runtime code
+  athena/
+  automation/
+  billing/
+  connections/
   identity-access/
   work/
-  planning/
-  athena/
-  connections/
-  notifications/
-  billing/
 
 packages/                     Narrow technical capabilities
   db/
@@ -54,22 +53,110 @@ packages/                     Narrow technical capabilities
   test-utils/
 ```
 
+Only create a domain workspace once it owns real product behavior. Athena, Automation, Billing,
+Connections, Identity & Access, and Work are active domain workspaces; empty folders and technical-layer
+packages are not placeholders for architecture. Future work may establish notifications or
+planning boundaries when it has a similarly concrete ownership boundary.
+
+Connections owns the Docket-designed Notion mirror's contracts, rules, port, and Notion
+SDK/in-memory adapters at
+`@docket/connections/notion/{mirror-contract,mirror-schema,mirror-values,mirror-port,adapters/notion-sdk,adapters/in-memory}`.
+The API still owns credential lookup, leased sync/reconciliation, application workflows, and
+delivery composition; the generic linked-database connector remains in Integrations. This is a
+real ownership milestone, not a claim that the broader Connections vertical slice is complete.
+
 `work` means the product's actionable-work hierarchy: initiatives, programs, projects,
 milestones, cycles, tasks, dependencies, labels, comments, templates, saved views, and recurrence.
 It is a domain name, not a route name or a generic utility bucket.
 
-Each domain has deliberate exports only:
+Each domain has deliberate exports only. The machine-readable source of truth is
+[`domains/registry.json`](../../../domains/registry.json), which records the owner, public entry
+points, allowed runtime dependencies, and supported runtimes. The registry and each package
+manifest are checked together.
+
+Representative public entry points are:
 
 ```text
-@docket/work/contract
-@docket/work/application
-@docket/work/ports
-@docket/work/testing
+@docket/work/task-contract
+@docket/work/task-drafting
+@docket/athena/turn
+@docket/athena/turn/adapters/lattice
+@docket/automation/contracts
+@docket/automation/evaluation
+@docket/billing/application/entitlement
+@docket/connections/notion/mirror-contract
+@docket/connections/notion/mirror-port
+@docket/connections/notion/adapters/notion-sdk
+@docket/identity-access/capabilities
+@docket/identity-access/grants
+@docket/identity-access/authorization
 ```
 
 No root wildcard barrel can expose implementation details, mocks, or provider adapters. Production
 code cannot import another domain's private paths, app routes, UI components, environment
 singletons, or testing exports.
+
+## Current public domain boundaries
+
+The table groups public entry points by capability; the registry is the complete list.
+
+| Domain            | Owns                                                                                                                 | Public capability groups                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Athena            | Guided agent work, durable execution, elicitation, conversation, turns, voice, and phone                             | execution; elicitation; session/bus; conversation/digest; turns; voice; phone |
+| Automation        | Declarative Automation Rules grammar and side-effect-free predicate/event evaluation                                 | contracts; evaluation                                                         |
+| Billing           | Subscription state, entitlement policy, and provider adapters                                                        | contracts; adapters; lifecycle; entitlement                                   |
+| Connections       | Docket-designed Notion mirror contracts, rules, port, and adapters; generic linked connector remains in Integrations | mirror contract/schema/values; port; SDK/in-memory adapters                   |
+| Identity & Access | Capability vocabulary, explicit-grant applicability, and pure maximum-allow evaluation                               | capabilities; grants; authorization                                           |
+| Work              | Actionable-work vocabulary, priority/task contracts, and task rules                                                  | vocabulary; priority/task contract; drafting port; titles; parent resolution  |
+
+`@docket/work/task-drafting` owns the `TaskSynthesizer` port. Athena's Anthropic and deterministic
+implementations live under its own explicit `task-drafting/adapters/*` entry points and depend
+one-way on Work. This keeps provider code out of the work domain and gives another runtime a clear
+place to supply a different implementation.
+
+Work owns the canonical product vocabulary, `Priority`, task contracts, the task-drafting port,
+title normalization, and parent resolution. Those are product concepts, not a generic type layer.
+
+Automation owns the portable Automation Rules language: the `on → when → then` grammar and its
+side-effect-free predicate and event-match evaluation. It does not persist rules, project events,
+register or run action handlers, log failures, enforce re-entrancy, or expose API DTO envelopes;
+those delivery concerns remain in API. `@docket/types` retains branded create/update/read DTOs and
+an explicit temporary compatibility re-export of the grammar while consumers migrate.
+
+Identity & Access is intentionally a pure, portable kernel. It accepts normalized actor/role,
+grant, and target-chain facts and evaluates explicit `allow` grants only. It does not query
+Drizzle, discover resource ancestry, decide a public-visibility baseline, or expose HTTP DTOs.
+`@docket/authz` remains the named DB-backed adapter: it validates caller state, loads the
+authoritative in-org role and grants, builds the containment chain, then delegates the normalized
+facts to `@docket/identity-access/authorization`. `@docket/types` retains role/grant transport
+schemas and re-exports the moved capability/grant-kind objects only as a temporary facade.
+
+`@docket/types` is a temporary, deprecated compatibility facade while callers migrate. It may
+re-export an already-owned contract for a bounded transition, but new domain contracts and runtime
+behavior must originate in the owning domain. Do not add new generic exports there.
+
+Billing is API-only: desktop clients access billing through the API/OpenAPI boundary, not through
+Stripe or Drizzle implementation exports.
+
+## Enforced debt-prevention guardrails
+
+- The domain registry policy makes `domains/registry.json`, each domain manifest, public exports,
+  runtime dependencies, and supported deployable runtimes agree.
+- The AST-backed domain-import policy rejects production imports from delivery apps, UI,
+  environment singletons, test-only code, another domain's private paths, and generic type
+  packages. It scans both `src` and production build/configuration entrypoints, and recognizes
+  static imports, re-exports, dynamic imports, and CommonJS `require`.
+- The retired-package policy prevents `@docket/agent-runtime` from returning in workspace manifests
+  or shipped source.
+- The workspace-lock integrity policy keeps every declared `workspace:*` relationship synchronized
+  with `pnpm-lock.yaml`, including service workspaces.
+- The migrated-contract policy keeps `Priority`, capability/grant vocabulary, Automation grammar,
+  and migrated Athena/Connections contracts out of production imports from `@docket/types`; it scans `src` and
+  production build/configuration entrypoints and rejects opaque dynamic/CommonJS loader paths that
+  could bypass a named public contract. The temporary facade itself remains the allowed
+  compatibility edge.
+- The literal-NUL source policy rejects embedded NUL bytes in checked source while allowing readable
+  escaped delimiters, so source remains searchable and reviewable.
 
 ## Dependency direction
 
@@ -108,8 +195,21 @@ models.
 ### 2. Migrate vertical domain slices
 
 Move contract, domain rule, application service, persistence adapter, delivery handler, UI client,
-and tests together. Begin with connections/provider catalog, notifications, billing, and a full
-work/task vertical slice. Follow with identity-access, remaining work, planning, and Athena.
+and tests together. Connections has completed that vertical move for the Docket-designed Notion
+mirror: its contracts, rules, port, and provider adapters are domain-owned, while credential
+lookup, leased reconciliation, and the generic linked connector deliberately remain outside it.
+Automation Rules now owns its portable grammar and pure evaluation under explicit domain paths;
+API retains persistence and action execution. Continue with notifications, remaining work,
+planning, and Athena slices as their ownership boundaries become concrete.
+
+Identity & Access now owns pure capability and explicit-grant policy behind named subpaths. The
+next Identity & Access slice must introduce a named DB adapter only after characterizing its
+existing Authz behavior. It must not make the pure domain depend on `@docket/db` or
+`@docket/types`: that would recreate the cycle the migration eliminated. Task visibility,
+generic-resource visibility, role DTOs and administration, and human/agent delivery differences
+remain outside the pure evaluator because they depend on persistence and delivery policy. Global
+resource visibility also requires a separately approved, subject-independent policy record; the
+existing subject-scoped `grant.visibilityOverride` is not an implementation-ready global policy.
 
 ### 3. Remove compatibility surfaces
 
@@ -141,3 +241,14 @@ Each slice must:
 - Physical database migration churn for code organization alone.
 - A generic replacement for `@docket/types`.
 - Shared TypeScript source between the web application and the native desktop application.
+
+## Current verification and governance gaps
+
+- The repaired browser journeys still need a canonical CI-topology run; an isolated fresh local
+  stack reached unrelated offline/page-unavailable states before it could validate the assertions.
+- The `E2E` workflow is advisory and non-gating today. It must not be described as a required
+  deploy or merge check until a reliable, required execution is configured.
+- Remote branch protection still needs a repository administrator to configure required checks and
+  review/admin enforcement. Local repository policies cannot make that remote setting true.
+- Focused package and policy checks support the completed slices. This document makes no claim that
+  a full root lint, typecheck, test, or build run has passed for the migration.

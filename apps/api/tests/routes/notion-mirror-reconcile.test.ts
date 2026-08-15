@@ -7,26 +7,30 @@
  * records that make the reconciler safe.
  */
 import { and, eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { MockNotionMirror } from '@docket/connections/notion/adapters/in-memory';
+import type {
+  MirrorChange,
+  MirrorDatabaseSpec,
+  MirrorExternalPerson,
+  MirrorParentPage,
+  MirrorParentPageList,
+  MirrorRowOp,
+  MirrorRowResult,
+  NotionMirrorPort,
+  ProvisionedMirrorDatabase,
+} from '@docket/connections/notion/mirror-port';
+import { ConnectorError } from '@docket/integrations';
+import { MIRROR_ENTITY_ORDER, orderedColumns } from '@docket/connections/notion/mirror-schema';
 import {
-  MIRROR_ENTITY_ORDER,
-  orderedColumns,
   projectRow,
   resolveMirrorValues,
   type MirrorReferences,
-  type MirrorChange,
-  type MirrorDatabaseSpec,
-  type MirrorExternalPerson,
-  type MirrorParentPage,
-  type MirrorParentPageList,
-  type MirrorRowOp,
-  type MirrorRowResult,
-  type NotionMirrorPort,
-  type ProvisionedMirrorDatabase,
-} from '@docket/integrations';
+} from '@docket/connections/notion/mirror-values';
 
+import * as container from '../../src/container';
 import { loadEntityRows } from '../../src/routes/notion-mirror-entities';
 import { ensureDesigns, type MirrorDatabaseRow } from '../../src/routes/notion-mirror-design';
 import {
@@ -318,6 +322,74 @@ describe('Notion mirror reconciliation', () => {
       .from(schema.notionMirrorRow)
       .where(eq(schema.notionMirrorRow.integrationId, integration.id));
     expect(mirrored).toHaveLength(2);
+  });
+
+  it('paces sequential Notion creates by 350ms before issuing the next one', async () => {
+    const { orgId, teamId, designs, mirror, ctx } = await seedMirror();
+    const seeded = findDesign(designs, 'task');
+    await db
+      .update(schema.notionMirrorDatabase)
+      .set({ externalDataSourceId: 'ds-task' })
+      .where(eq(schema.notionMirrorDatabase.id, seeded.id));
+    const design = one(
+      await db
+        .select()
+        .from(schema.notionMirrorDatabase)
+        .where(eq(schema.notionMirrorDatabase.id, seeded.id)),
+    );
+    await db.insert(schema.task).values([
+      { organizationId: orgId, teamId, title: 'First', state: 'backlog' },
+      { organizationId: orgId, teamId, title: 'Second', state: 'backlog' },
+    ]);
+
+    const deferred = (): { readonly promise: Promise<void>; readonly resolve: () => void } => {
+      let resolve: () => void = () => {
+        throw new Error('deferred resolver was not initialized');
+      };
+      const promise = new Promise<void>((complete) => {
+        resolve = complete;
+      });
+      return { promise, resolve };
+    };
+    const firstWrite = deferred();
+    const secondWrite = deferred();
+    const firstPace = deferred();
+    const originalWrite = mirror.writeRow.bind(mirror);
+    const writeRow = vi.spyOn(mirror, 'writeRow').mockImplementation((op) => {
+      const result = originalWrite(op);
+      if (mirror.writes.length === 1) firstWrite.resolve();
+      if (mirror.writes.length === 2) secondWrite.resolve();
+      return result;
+    });
+
+    vi.useFakeTimers();
+    const originalSetTimeout = globalThis.setTimeout;
+    const recordTimer = (...args: Parameters<typeof setTimeout>): ReturnType<typeof setTimeout> => {
+      const [, delay] = args;
+      if (delay === 350 && mirror.writes.length === 1) firstPace.resolve();
+      return Reflect.apply(originalSetTimeout, globalThis, args);
+    };
+    const timer = vi.spyOn(globalThis, 'setTimeout').mockImplementation(recordTimer);
+    try {
+      const pass = projectEntity(ctx, design, 2, NO_PAGES);
+      await firstWrite.promise;
+      await firstPace.promise;
+      expect(timer).toHaveBeenCalledWith(expect.any(Function), 350);
+
+      await vi.advanceTimersByTimeAsync(349);
+      expect(mirror.writes).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await secondWrite.promise;
+      expect(mirror.writes).toHaveLength(2);
+
+      await vi.advanceTimersByTimeAsync(350);
+      await expect(pass).resolves.toMatchObject({ written: 2, complete: true });
+    } finally {
+      timer.mockRestore();
+      writeRow.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it('counts provider no-op responses without claiming provider ids were returned', async () => {
@@ -977,6 +1049,56 @@ describe('Notion mirror reconciliation', () => {
       { actorId: ctx.actorId, trigger: 'manual' },
     );
     expect(malformed).toMatchObject({ status: 'failed', purpose: 'notion_mirror' });
+  });
+
+  it('turns a rejected Notion credential into a reauthorization state', async () => {
+    // This is intentionally the whole path, not only ConnectorError classification: the provider
+    // reports auth, the leased sync records failure, and the owner gets the reconnect state rather
+    // than an opaque background failure.
+    const { integration, ctx } = await seedMirror();
+    const [owner] = await db
+      .insert(schema.user)
+      .values({
+        name: 'Notion owner',
+        email: `notion-owner-${Math.random().toString(36).slice(2)}@example.test`,
+      })
+      .returning({ id: schema.user.id });
+    if (!owner) throw new Error('owner user was not created');
+    await db.update(schema.actor).set({ userId: owner.id }).where(eq(schema.actor.id, ctx.actorId));
+    const mirror = new MockNotionMirror();
+    vi.spyOn(mirror, 'listWorkspaceUsers').mockRejectedValue(
+      new ConnectorError('Notion access token was rejected', { provider: 'notion', kind: 'auth' }),
+    );
+    const buildMirror = vi.spyOn(container, 'buildNotionMirror').mockReturnValue(mirror);
+
+    try {
+      const run = await runNotionMirrorSync(integration, {
+        actorId: ctx.actorId,
+        trigger: 'manual',
+      });
+      expect(run).toMatchObject({
+        status: 'failed',
+        error: 'Notion access token was rejected',
+        purpose: 'notion_mirror',
+      });
+
+      const [stored] = await db
+        .select({ status: schema.integration.status, lastError: schema.integration.lastError })
+        .from(schema.integration)
+        .where(eq(schema.integration.id, integration.id));
+      expect(stored).toMatchObject({
+        status: 'error',
+        lastError: 'Notion access token was rejected',
+      });
+
+      const notifications = await db
+        .select({ type: schema.notification.type, userId: schema.notification.userId })
+        .from(schema.notification)
+        .where(eq(schema.notification.organizationId, ctx.orgId));
+      expect(notifications).toEqual([{ type: 'connector_needs_reauth', userId: owner.id }]);
+    } finally {
+      buildMirror.mockRestore();
+    }
   });
 
   it('sweeps only due configured mirrors and respects an existing lease', async () => {

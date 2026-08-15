@@ -7,6 +7,15 @@
 
 ---
 
+## Current package map
+
+The measurements below are an **August 2 snapshot**, not a current coverage assignment. Do not
+carry the retired `@docket/agent-runtime` percentages forward to another package: its behavior now
+lives across `@docket/athena` runtime entry points and `@docket/work` contracts, and each domain
+must be measured again on its own. `@docket/billing` keeps its package name, but its source now
+lives in `domains/billing`. New coverage work should use the current domain package and its
+deliberate public entry points.
+
 ## The gate
 
 ```bash

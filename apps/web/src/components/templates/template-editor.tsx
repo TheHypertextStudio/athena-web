@@ -20,7 +20,6 @@ import type {
   InitiativePriority,
   InitiativeStatus,
   InitiativeUpdateCadence,
-  Priority,
   ProgramStatus,
   ProjectStatus,
   TemplateDraft,
@@ -28,6 +27,7 @@ import type {
   TemplateTargetType,
   Visibility,
 } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import { EnumPicker } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Input } from '@docket/ui/primitives';

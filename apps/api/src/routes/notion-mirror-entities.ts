@@ -4,7 +4,7 @@
  * @remarks
  * The one place that knows how each of the nine projected entities maps onto the catalog's field
  * keys. Kept apart from the reconciler so that file stays about ordering and pacing, and apart
- * from `notion-mirror-values` so *that* file stays free of the database.
+ * from `@docket/connections/notion/mirror-values` so that module stays free of the database.
  *
  * Every loader is org-scoped and skips archived records. The task loader additionally withholds
  * tasks already linked to a database on the same integration — projecting those would put the
@@ -30,9 +30,9 @@ import {
   teamMember,
   user,
 } from '@docket/db';
-import type { NotionMirrorEntity } from '@docket/types';
-import { personCompanionKey } from '@docket/integrations';
-import type { MirrorSourceValue, MirrorValue } from '@docket/integrations';
+import type { NotionMirrorEntity } from '@docket/connections/notion/mirror-contract';
+import { personCompanionKey } from '@docket/connections/notion/mirror-schema';
+import type { MirrorSourceValue, MirrorValue } from '@docket/connections/notion/mirror-values';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { setTaskState } from '../lib/task-state';

@@ -15,8 +15,12 @@ import { defaultCycleName } from '@docket/types';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
+import type { ViewableTaskParts } from '../routes/task-helpers';
 import { originOf } from './change-set';
 import { stateOptionsOf, stateTypeOf, teamWorkflows } from './workflow-states';
+
+/** The canonical predicate for task references included in a hydrated MCP resource. */
+export type TaskViewFilter = (task: ViewableTaskParts) => boolean;
 
 /** A lightweight task ref shared by hydrated DTOs (dependencies, subtasks). */
 export function taskRef(t: {
@@ -57,7 +61,11 @@ export async function latestUpdateFor(
 }
 
 /** Full task: state, refs, dependencies (blocking + blocked-by), subtasks. */
-export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
+export async function hydrateTask(
+  orgId: string,
+  id: string,
+  canViewTask: TaskViewFilter,
+): Promise<unknown> {
   const rows = await db
     .select()
     .from(task)
@@ -66,7 +74,15 @@ export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
   const t = rows[0];
   if (!t) throw new NotFoundError();
 
-  const cols = { id: task.id, title: task.title, state: task.state, projectId: task.projectId };
+  const cols = {
+    id: task.id,
+    title: task.title,
+    state: task.state,
+    teamId: task.teamId,
+    projectId: task.projectId,
+    programId: task.programId,
+    visibility: task.visibility,
+  };
   const [blocking, blockedBy, subtasks, origin, workflows] = await Promise.all([
     db
       .select(cols)
@@ -135,15 +151,19 @@ export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
           at: origin.at.toISOString(),
         }
       : null,
-    blocking: blocking.map(taskRef),
-    blockedBy: blockedBy.map(taskRef),
-    subtasks: subtasks.map(taskRef),
+    blocking: blocking.filter(canViewTask).map(taskRef),
+    blockedBy: blockedBy.filter(canViewTask).map(taskRef),
+    subtasks: subtasks.filter(canViewTask).map(taskRef),
     createdAt: t.createdAt.toISOString(),
   };
 }
 
 /** Project: overview, health, milestones, linked initiatives, latest update. */
-export async function hydrateProject(orgId: string, id: string): Promise<unknown> {
+export async function hydrateProject(
+  orgId: string,
+  id: string,
+  canViewTask: TaskViewFilter,
+): Promise<unknown> {
   const rows = await db
     .select()
     .from(project)
@@ -152,22 +172,25 @@ export async function hydrateProject(orgId: string, id: string): Promise<unknown
   const p = rows[0];
   if (!p) throw new NotFoundError();
 
-  const [milestones, taskCountRows, taskRows, initiativeRows, latestUpdate] = await Promise.all([
+  const [milestones, taskRows, initiativeRows, latestUpdate] = await Promise.all([
     db
       .select({ id: milestone.id, name: milestone.name, targetDate: milestone.targetDate })
       .from(milestone)
       .where(eq(milestone.projectId, id))
       .orderBy(asc(milestone.sort)),
     db
-      .select({ id: task.id })
-      .from(task)
-      .where(and(eq(task.projectId, id), isNull(task.archivedAt))),
-    db
-      .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+      .select({
+        id: task.id,
+        title: task.title,
+        state: task.state,
+        teamId: task.teamId,
+        projectId: task.projectId,
+        programId: task.programId,
+        visibility: task.visibility,
+      })
       .from(task)
       .where(and(eq(task.projectId, id), isNull(task.archivedAt)))
-      .orderBy(asc(task.dueDate), asc(task.createdAt))
-      .limit(4),
+      .orderBy(asc(task.dueDate), asc(task.createdAt)),
     db
       .select({ id: initiative.id, name: initiative.name })
       .from(initiativeProject)
@@ -175,6 +198,8 @@ export async function hydrateProject(orgId: string, id: string): Promise<unknown
       .where(and(eq(initiativeProject.projectId, id), eq(initiativeProject.organizationId, orgId))),
     latestUpdateFor(orgId, 'project', id),
   ]);
+
+  const visibleTasks = taskRows.filter(canViewTask);
 
   return {
     id: p.id,
@@ -188,8 +213,8 @@ export async function hydrateProject(orgId: string, id: string): Promise<unknown
     teamId: p.teamId,
     startDate: p.startDate?.toISOString() ?? null,
     targetDate: p.targetDate?.toISOString() ?? null,
-    taskCount: taskCountRows.length,
-    tasks: taskRows.map(taskRef),
+    taskCount: visibleTasks.length,
+    tasks: visibleTasks.slice(0, 4).map(taskRef),
     milestones: milestones.map((m) => ({
       id: m.id,
       name: m.name,
@@ -202,7 +227,11 @@ export async function hydrateProject(orgId: string, id: string): Promise<unknown
 }
 
 /** Program: health, child rollup (projects + tasks), linked initiatives. No percent bar. */
-export async function hydrateProgram(orgId: string, id: string): Promise<unknown> {
+export async function hydrateProgram(
+  orgId: string,
+  id: string,
+  canViewTask: TaskViewFilter,
+): Promise<unknown> {
   const rows = await db
     .select()
     .from(program)
@@ -219,7 +248,13 @@ export async function hydrateProgram(orgId: string, id: string): Promise<unknown
 
   const [taskRows, initiativeRows, latestUpdate] = await Promise.all([
     db
-      .select({ id: task.id })
+      .select({
+        id: task.id,
+        teamId: task.teamId,
+        projectId: task.projectId,
+        programId: task.programId,
+        visibility: task.visibility,
+      })
       .from(task)
       .where(
         and(
@@ -236,6 +271,8 @@ export async function hydrateProgram(orgId: string, id: string): Promise<unknown
     latestUpdateFor(orgId, 'program', id),
   ]);
 
+  const visibleTasks = taskRows.filter(canViewTask);
+
   return {
     id: p.id,
     name: p.name,
@@ -245,7 +282,7 @@ export async function hydrateProgram(orgId: string, id: string): Promise<unknown
     health: p.health,
     ownerId: p.ownerId,
     projects: projectRows,
-    rollup: { projects: projectRows.length, tasks: taskRows.length },
+    rollup: { projects: projectRows.length, tasks: visibleTasks.length },
     initiatives: initiativeRows,
     latestUpdate,
     createdAt: p.createdAt.toISOString(),
@@ -301,7 +338,11 @@ export async function hydrateInitiative(orgId: string, id: string): Promise<unkn
 }
 
 /** Cycle: window, status, and the tasks grouped within it. */
-export async function hydrateCycle(orgId: string, id: string): Promise<unknown> {
+export async function hydrateCycle(
+  orgId: string,
+  id: string,
+  canViewTask: TaskViewFilter,
+): Promise<unknown> {
   const rows = await db
     .select()
     .from(cycle)
@@ -311,7 +352,15 @@ export async function hydrateCycle(orgId: string, id: string): Promise<unknown> 
   if (!cy) throw new NotFoundError();
 
   const taskRows = await db
-    .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+    .select({
+      id: task.id,
+      title: task.title,
+      state: task.state,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+    })
     .from(task)
     .where(and(eq(task.cycleId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)));
 
@@ -329,6 +378,6 @@ export async function hydrateCycle(orgId: string, id: string): Promise<unknown> 
     status: cy.status,
     startsAt: cy.startsAt.toISOString(),
     endsAt: cy.endsAt.toISOString(),
-    tasks: taskRows.map(taskRef),
+    tasks: taskRows.filter(canViewTask).map(taskRef),
   };
 }

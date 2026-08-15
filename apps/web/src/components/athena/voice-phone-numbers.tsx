@@ -23,8 +23,8 @@
  * the real limits (how long the code lasts, how many tries remain) rather than letting a person
  * discover them by being locked out.
  */
-import type { PhoneChallengeOut, PhoneNumberOut } from '@docket/types';
-import { DIAL_CODES, DEFAULT_DIAL_CODE } from '@docket/types';
+import { DIAL_CODES, DEFAULT_DIAL_CODE } from '@docket/athena/phone';
+import type { PhoneChallengeOut, PhoneNumberOut } from '@docket/athena/phone';
 import { Check, Phone, PhoneOff, Trash2 } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup, Field, Input, Select, Text } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';

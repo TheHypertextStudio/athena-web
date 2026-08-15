@@ -1,9 +1,10 @@
 # Automations
 
 > **Status**: Engine + wiring shipped (M1); generic action handlers, enablement, and rule
-> seeding-on-toggle shipped (M5); inbound-item routing (`task.route`, §4.1) shipped (C6).
+> seeding-on-toggle shipped (M5); inbound-item routing (`task.route`, §4.1) shipped (C6); and
+> the portable Automation Rules grammar/evaluator are domain-owned.
 > A visual rule builder is a later milestone.
-> **Last Updated**: 2026-08-08
+> **Last Updated**: 2026-08-14
 > **Owners**: Platform
 > **Supersedes**: `email-to-task.md` §7, which described the engine when it was email-only.
 > This spec is canonical for the app-wide system.
@@ -17,10 +18,10 @@ the engine.
 ## 1. Architecture at a glance
 
 ```
- emitEvent (internal)  ──┐                          ┌─→ matches(on)      [engine.ts]
-                         ├─→ projection  ──→ rules ─┼─→ evaluate(when)   [predicate.ts]
- sweepInboundEvents ─────┘   [runtime.ts]           └─→ dispatch(then)   [registry.ts]
- (external drain)                                        └─→ action handlers [handlers.ts]
+ emitEvent (internal)  ──┐                          ┌─→ match / evaluate  [@docket/automation/evaluation]
+                         ├─→ projection  ──→ rules ─┼─→ dispatch(then)   [engine.ts / registry.ts]
+ sweepInboundEvents ─────┘   [runtime.ts]           └─→ action handlers  [handlers.ts]
+ (external drain)
 ```
 
 - **Observer** — both event write paths call `runAutomationsForEvent` immediately after the
@@ -29,8 +30,9 @@ the engine.
   once-per-committed-event: duplicate inserts (dedupe-key conflicts) never fire.
 - **Projection** — the engine never reads raw emit inputs or DB rows; each write path
   projects into one canonical `AutomationEvent` shape (`apps/api/src/lib/automation/event.ts`).
-- **Interpreter** — `when` is a Composite predicate tree evaluated over the projected event
-  (`predicate.ts`).
+- **Interpreter** — `when` is a Composite predicate tree evaluated over the projected event by
+  `@docket/automation/evaluation`; API's `predicate.ts` remains a compatibility alias for existing
+  callers.
 - **Strategy registry** — `then` actions are Commands dispatched by `type` to registered
   handlers (`registry.ts`, `handlers.ts`). An unregistered action is a logged no-op, never a
   throw.
@@ -64,8 +66,10 @@ resolves against this shape — it is the **only** contract rule authors program
 
 ## 3. Rule grammar
 
-Rules are stored per-org in `automation_rule` (columns `eventMatch`/`condition`/`actions`)
-and evaluated as `{ on, when, then }` (`packages/types/src/automation.ts`). CRUD is
+Rules are stored per-org in `automation_rule` (columns `eventMatch`/`condition`/`actions`) and
+evaluated as `{ on, when, then }` through `@docket/automation/contracts` and
+`@docket/automation/evaluation`. `@docket/types` retains only the branded API DTO envelopes and a
+temporary compatibility facade for that grammar. CRUD is
 `/v1/orgs/:orgId/automation-rules` (`apps/api/src/routes/automation-rules.ts`,
 capability-guarded `manage`).
 
@@ -111,37 +115,39 @@ at the rule level (the whole run is best-effort — see §5).
 
 ## 4. Action catalog
 
-Registered in `buildAutomationRegistry` (`apps/api/src/lib/automation/handlers.ts`). Every
-handler validates its params and **no-ops loudly** (returns without effect) on a wrong
-subject type or invalid params — rules can never throw domain errors.
+Registered in `buildAutomationRegistry` (`apps/api/src/lib/automation/handlers.ts`).
+Parameterized handlers validate their supported fields—normally with colocated Zod schemas;
+mail label actions use a small local type check—and **no-op loudly** (return without effect) on
+a wrong subject type or invalid params. Zero-parameter actions ignore unused params, so rules
+can never throw domain errors.
 
-| Type                                   | Params              | Subject            | Behavior                                                                                                                                                                                                                                       | Idempotency                                                  |
-| -------------------------------------- | ------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `mail.archive`                         | `{}`                | `task`             | Archives the source email of the task's email attachment(s) via the integration's mail capability. **Org-scoped**: the resolved integration must belong to the firing event's org — never trusts the attachment's `sourceIntegrationId` alone. | `attachment.lastEmailStateAction` ledger (last-action-wins). |
-| `mail.markRead` / `mail.markUnread`    | `{}`                | `task`             | Read-state on the source thread.                                                                                                                                                                                                               | ledger                                                       |
-| `mail.trash`                           | `{}`                | `task`             | Trashes the source thread.                                                                                                                                                                                                                     | ledger                                                       |
-| `mail.applyLabel` / `mail.removeLabel` | `{ label: string }` | `task`             | Provider label/category on the source thread; no-op without `label`.                                                                                                                                                                           | ledger                                                       |
-| `suggestion.dismiss`                   | `{}`                | `email_suggestion` | Sets the firing suggestion `pending → dismissed`.                                                                                                                                                                                              | status guard (`pending` only)                                |
+| Type                                   | Params                                                                  | Subject                                                          | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Idempotency                                                                                    |
+| -------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `mail.archive`                         | `{}`                                                                    | `task`                                                           | Archives the source email of the task's email attachment(s) via the integration's mail capability. **Org-scoped**: the resolved integration must belong to the firing event's org — never trusts the attachment's `sourceIntegrationId` alone.                                                                                                                                                                                                                               | `attachment.lastEmailStateAction` ledger (last-action-wins).                                   |
+| `mail.markRead` / `mail.markUnread`    | `{}`                                                                    | `task`                                                           | Read-state on the source thread.                                                                                                                                                                                                                                                                                                                                                                                                                                             | ledger                                                                                         |
+| `mail.trash`                           | `{}`                                                                    | `task`                                                           | Trashes the source thread.                                                                                                                                                                                                                                                                                                                                                                                                                                                   | ledger                                                                                         |
+| `mail.applyLabel` / `mail.removeLabel` | `{ label: string }`                                                     | `task`                                                           | Provider label/category on the source thread; no-op without `label`.                                                                                                                                                                                                                                                                                                                                                                                                         | ledger                                                                                         |
+| `suggestion.dismiss`                   | `{}`                                                                    | `email_suggestion`                                               | Sets the firing suggestion `pending → dismissed`.                                                                                                                                                                                                                                                                                                                                                                                                                            | status guard (`pending` only)                                                                  |
+| `task.setStatus`                       | `{ state: string }`                                                     | `task`                                                           | Moves the task to the workflow state via the shared transition lib (`lib/task-state.ts` — the same implementation as `POST /tasks/:id/status`; terminal states derive `completedAt`/`canceledAt`). Unknown state key → logged no-op.                                                                                                                                                                                                                                         | shared lib; emitted event doesn't cascade (depth-1 cap)                                        |
+| `task.assign`                          | `{ assigneeId: string }`                                                | `task`                                                           | Assigns to an **org** actor (cross-tenant ids are refused); emits `assignment`.                                                                                                                                                                                                                                                                                                                                                                                              | org-scope check                                                                                |
+| `task.setPriority`                     | `{ priority: Priority }`                                                | `task`                                                           | Sets priority; params validated against the `Priority` enum.                                                                                                                                                                                                                                                                                                                                                                                                                 | last-write-wins                                                                                |
+| `task.applyLabel`                      | `{ labelId: string }`                                                   | `task`                                                           | Attaches a label through the shared `attachLabels` write path, so a rule obeys label-group exclusivity exactly as a person does: applying `Type: Bug` to a task already carrying `Type: Feature` **swaps** rather than stacking. A rule is the caller most likely to violate that invariant at scale, and an invariant only the picker honours is decorative. Resolves against the task's own team, so a team-limited label applies and a cross-tenant id is a silent no-op. | union collapses, so re-applying is a no-op                                                     |
+| `process.start`                        | `{ seriesId: string }`                                                  | any matching event                                               | Materializes the revision active on the event's day for an active manual/event process series in the firing org. Calendar and after-completion series are ignored.                                                                                                                                                                                                                                                                                                           | event-derived occurrence key; retries converge while distinct events create distinct instances |
+| `notification.send`                    | `{ to: 'actor'\|'taskAssignee', title, summary? }`                      | any (task for `taskAssignee`)                                    | Writes an `automation`-type inbox notification to the resolved user; links to the task when the subject is one. Agent actors (no user) → no-op.                                                                                                                                                                                                                                                                                                                              | inbox row per firing                                                                           |
+| `suggestion.autoAccept`                | `{}`                                                                    | `email_suggestion`                                               | Materializes the pending suggestion through the shared accept lib (`lib/email-to-task/accept.ts` — the same path as the accept route: landing, email attachment, event). Non-pending → logged no-op.                                                                                                                                                                                                                                                                         | `pending`-status guard                                                                         |
+| `task.route`                           | `{ organizationId?, teamId?, projectId?, state?, priority?, labelId? }` | `email_suggestion`, or any external event (`source != 'docket'`) | Turns one **inbound item** into exactly one task in the workspace the rule names (`lib/automation/route-task.ts`). See §4.1.                                                                                                                                                                                                                                                                                                                                                 | `inbound_task_route` ledger, keyed on the item's stable external identity                      |
 
-| `task.setStatus` | `{ state: string }` | `task` | Moves the task to the workflow state via the shared transition lib (`lib/task-state.ts` — the same implementation as `POST /tasks/:id/status`; terminal states derive `completedAt`/`canceledAt`). Unknown state key → logged no-op. | shared lib; emitted event doesn't cascade (depth-1 cap) |
-| `task.assign` | `{ assigneeId: string }` | `task` | Assigns to an **org** actor (cross-tenant ids are refused); emits `assignment`. | org-scope check |
-| `task.assignToCycle` | `{}` | `task` | Files the task into its team's **current** cycle (`resolveCurrentCycleId`, `lib/current-cycle.ts` — the same lookup `resolveLandingTarget` uses at capture time). Only fills the gap: a task that already has a `cycleId` is left untouched, and no cycle covering today leaves the task in triage. Registered from its own module, `lib/automation/handlers-cycle.ts`. | never overwrites an existing `cycleId` |
-| `task.setPriority` | `{ priority: Priority }` | `task` | Sets priority; params validated against the `Priority` enum. | last-write-wins |
-| `task.applyLabel` | `{ labelId: string }` | `task` | Attaches a label through the shared `attachLabels` write path, so a rule obeys label-group exclusivity exactly as a person does: applying `Type: Bug` to a task already carrying `Type: Feature` **swaps** rather than stacking. A rule is the caller most likely to violate that invariant at scale, and an invariant only the picker honours is decorative. Resolves against the task's own team, so a team-limited label applies and a cross-tenant id is a silent no-op. | union collapses, so re-applying is a no-op |
-| `notification.send` | `{ to: 'actor'\|'taskAssignee', title, summary? }` | any (task for `taskAssignee`) | Writes an `automation`-type inbox notification to the resolved user; links to the task when the subject is one. Agent actors (no user) → no-op. | inbox row per firing |
-| `suggestion.autoAccept` | `{}` | `email_suggestion` | Materializes the pending suggestion through the shared accept lib (`lib/email-to-task/accept.ts` — the same path as the accept route: landing, email attachment, event). Non-pending → logged no-op. | `pending`-status guard |
-| `task.route` | `{ organizationId?, teamId?, projectId?, state?, priority?, labelId? }` | `email_suggestion`, or any external event (`source != 'docket'`) | Turns one **inbound item** into exactly one task in the workspace the rule names (`lib/automation/route-task.ts`). See §4.1. | `inbound_task_route` ledger, keyed on the item's stable external identity |
-
-All mutating handlers reuse the **shared lib mutations** (`setTaskState`, `acceptSuggestion`)
-so route behavior and automation behavior cannot diverge; events they emit are recorded and
-fanned out but never trigger another rule pass (§5's depth-1 cap). `comment.create` remains
-deliberately unimplemented — no shipped rule needs it, and polymorphic comment creation
-(mention parsing, subject fan-out) adds surface without a driver.
+Handlers reuse shared invariant-preserving mutations where they exist: state transitions,
+suggestion acceptance, label attachment, and inbound routing. Assignment, priority, process
+materialization, and notification handlers perform their own validated, org-scoped writes. Events
+those handlers emit are recorded and fanned out but never trigger another rule pass (§5's depth-1
+cap). `comment.create` remains deliberately unimplemented — no shipped rule needs it, and
+polymorphic comment creation (mention parsing, subject fan-out) adds surface without a driver.
 
 ### 4.1 `task.route` — stream monitoring becomes task creation
 
 The action that closes the loop between ambient ingestion and work. Gmail sweeps, GitHub
-webhooks and Linear webhooks all already end at a committed observation the engine sees;
+webhooks and Linear webhooks all already end at a committed event projected for the engine;
 `task.route` is what a rule dispatches when the answer is "there should be a task for this,
 over there".
 
@@ -272,9 +278,9 @@ External (via drain): `source ∈ {linear, github, gmail, google_calendar}` with
 ## 8. How to add an action
 
 1. Implement a handler `{ type, run(ctx, params) }` in
-   `apps/api/src/lib/automation/handlers.ts` (or a sibling module) — validate `params` with a
-   colocated Zod schema; read the event via `ctx.event`; guard the subject type; no-op on
-   anything invalid.
+   `apps/api/src/lib/automation/handlers.ts` (or a sibling module) — for parameterized
+   actions, validate supported fields (normally with a colocated Zod schema); read the event via
+   `ctx.event`; guard the subject type; no-op on anything invalid.
 2. Register it in `buildAutomationRegistry`. That's it — the engine, grammar, and storage
    never change.
 3. Give it idempotency appropriate to its side effect (ledger stamp, status guard,
@@ -284,8 +290,10 @@ External (via drain): `source ∈ {linear, github, gmail, google_calendar}` with
 
 ## 9. Testing
 
-- Pure: `apps/api/tests/lib/automation/{engine,predicate}.test.ts` (matcher + grammar),
-  projection tests.
+- Portable domain: `domains/automation/tests/{contracts,evaluation}.test.ts` proves grammar,
+  metadata, predicate semantics, and event matching through public domain entrypoints.
+- API composition: `apps/api/tests/lib/automation/{engine,predicate}.test.ts` proves dispatch,
+  error isolation, and the compatibility aliases; projection tests cover API event mapping.
 - DB: `apps/api/tests/routes/automation-engine-db.test.ts` (handlers against PGlite with a
   recording mail applier).
 - Wiring: `event-emit`/`event-sync` tests assert a seeded rule's side effect fires from each

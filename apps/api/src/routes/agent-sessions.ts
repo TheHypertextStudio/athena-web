@@ -33,7 +33,9 @@ import { enqueueSearchUpsert } from '../search/write-through';
 
 import {
   activityParam,
+  canContinueSessionDelivery,
   idParam,
+  loadSessionDeliveryAccess,
   listSessionAccess,
   listQuery,
   loadSessionAccess,
@@ -287,7 +289,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
     zParam(idParam),
     async (c) => {
       const { id } = c.req.valid('param');
-      const { session: row } = await loadSessionAccess(c, id);
+      const { session: row } = await loadSessionDeliveryAccess(c, id);
       const activities = await db
         .select()
         .from(sessionActivity)
@@ -338,7 +340,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     zParam(idParam),
     async (c) => {
       const { id } = c.req.valid('param');
-      const { session } = await loadSessionAccess(c, id);
+      const { session } = await loadSessionDeliveryAccess(c, id);
       const activities = await db
         .select()
         .from(sessionActivity)
@@ -354,6 +356,10 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
         let lastSeen = lastEventId ?? '';
         const replay = activities.filter((activity) => !lastSeen || activity.id > lastSeen);
         if (replay.length > 0) {
+          if (!(await canContinueSessionDelivery(c, session))) {
+            await stream.close();
+            return;
+          }
           // A finite replay is one atomic stream write. This prevents an in-memory/test reader
           // from observing EOF between queued frames when a terminal session is under load.
           await stream.write(
@@ -376,6 +382,10 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
             .where(and(eq(sessionActivity.sessionId, id), gt(sessionActivity.id, lastSeen)))
             .orderBy(asc(sessionActivity.id));
           for (const activity of fresh) {
+            if (!(await canContinueSessionDelivery(c, session))) {
+              await stream.close();
+              return;
+            }
             await stream.writeSSE({
               id: activity.id,
               event: activity.type,
@@ -413,7 +423,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     zParam(idParam),
     async (c) => {
       const { id } = c.req.valid('param');
-      await loadSessionAccess(c, id);
+      await loadSessionDeliveryAccess(c, id);
       const groups = await listProposalGroups(id);
       return ok(c, z.array(ProposalGroupOut), groups);
     },
@@ -523,7 +533,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     zParam(idParam),
     async (c) => {
       const { id } = c.req.valid('param');
-      await loadSessionAccess(c, id);
+      await loadSessionDeliveryAccess(c, id);
       const activities = await db
         .select()
         .from(sessionActivity)

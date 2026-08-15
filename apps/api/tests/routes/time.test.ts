@@ -49,6 +49,16 @@ describe('Time Ledger routes', () => {
         })
         .returning({ id: schema.team.id }),
     ).id;
+    await schema.db.insert(schema.grant).values({
+      organizationId,
+      subjectKind: 'actor',
+      subjectId: actorId,
+      resourceKind: 'organization',
+      resourceId: organizationId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+      cascades: true,
+    });
     app = appWithSession(time, fakeSession(userId));
   });
 

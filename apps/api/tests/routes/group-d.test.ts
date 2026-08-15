@@ -11,6 +11,7 @@ import {
   appWithSession,
   fakeSession,
   getDb,
+  one,
   seedBaseOrg,
   seedStatuses,
 } from '../support/routes-harness';
@@ -89,6 +90,71 @@ async function seedUserWithHub(): Promise<{ userId: string; hubId: string }> {
     .values({ userId: assertDefined(user).id })
     .returning({ id: schema.hub.id });
   return { userId: assertDefined(user).id, hubId: assertDefined(h).id };
+}
+
+interface DailyPlanAccessFixtureOptions {
+  readonly actorStatus?: 'active' | 'suspended';
+  readonly archived?: boolean;
+  readonly guest?: boolean;
+  readonly taskVisibility?: 'public' | 'private';
+  readonly grantTaskView?: boolean;
+}
+
+/** Seed a task reference candidate and the session actor that will try to plan it. */
+async function seedDailyPlanAccessFixture(options: DailyPlanAccessFixtureOptions = {}) {
+  const { userId, hubId } = await seedUserWithHub();
+  const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+  const role = one(
+    await db
+      .insert(schema.role)
+      .values({
+        organizationId: orgId,
+        key: options.guest ? 'guest' : 'member',
+        name: options.guest ? 'Guest' : 'Member',
+      })
+      .returning({ id: schema.role.id }),
+  );
+  await db
+    .update(schema.actor)
+    .set({
+      userId,
+      roleId: role.id,
+      status: options.actorStatus ?? 'active',
+      archivedAt: options.archived ? new Date('2026-08-14T00:00:00.000Z') : null,
+    })
+    .where(eq(schema.actor.id, humanActorId));
+  const taskRow = one(
+    await db
+      .insert(schema.task)
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Daily-plan access task',
+        state: 'todo',
+        priority: 'high',
+        visibility: options.taskVisibility ?? 'public',
+      })
+      .returning({ id: schema.task.id }),
+  );
+  if (options.grantTaskView) {
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'actor',
+      subjectId: humanActorId,
+      resourceKind: 'task',
+      resourceId: taskRow.id,
+      capabilities: ['view'],
+      effect: 'allow',
+      cascades: false,
+    });
+  }
+
+  return {
+    app: appWithSession(dailyPlan, fakeSession(userId)),
+    hubId,
+    orgId,
+    taskId: taskRow.id,
+  };
 }
 
 describe('orgs router', () => {
@@ -542,6 +608,66 @@ describe('daily-plan router', () => {
 
     // Delete.
     expect((await app.request(`/${itemId}`, { method: 'DELETE' })).status).toBe(200);
+  });
+
+  it.each([
+    ['an active Guest without a task grant', { guest: true }],
+    ['a suspended human member', { actorStatus: 'suspended' }],
+    ['an archived human member', { archived: true }],
+    ['an active member without a private-task grant', { taskVisibility: 'private' }],
+  ] as const)('does not create a daily-plan pointer for %s', async (_label, options) => {
+    const fixture = await seedDailyPlanAccessFixture(options);
+
+    const response = await fixture.app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        refOrganizationId: fixture.orgId,
+        refTaskId: fixture.taskId,
+        date: '2026-08-14',
+      }),
+    });
+
+    expect(response.status).toBe(404);
+    const artifacts = await db
+      .select({ id: schema.dailyPlanItem.id })
+      .from(schema.dailyPlanItem)
+      .where(
+        and(
+          eq(schema.dailyPlanItem.hubId, fixture.hubId),
+          eq(schema.dailyPlanItem.refTaskId, fixture.taskId),
+        ),
+      );
+    expect(artifacts).toEqual([]);
+  });
+
+  it('creates a daily-plan pointer for an active member with a private-task view grant', async () => {
+    const fixture = await seedDailyPlanAccessFixture({
+      taskVisibility: 'private',
+      grantTaskView: true,
+    });
+
+    const response = await fixture.app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        refOrganizationId: fixture.orgId,
+        refTaskId: fixture.taskId,
+        date: '2026-08-14',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const artifacts = await db
+      .select({ id: schema.dailyPlanItem.id })
+      .from(schema.dailyPlanItem)
+      .where(
+        and(
+          eq(schema.dailyPlanItem.hubId, fixture.hubId),
+          eq(schema.dailyPlanItem.refTaskId, fixture.taskId),
+        ),
+      );
+    expect(artifacts).toHaveLength(1);
   });
 
   it('create: 404 when the org is not in the caller scope, and when the task is missing', async () => {

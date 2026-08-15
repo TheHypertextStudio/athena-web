@@ -15,15 +15,15 @@
  *
  * Components must NEVER hardcode entity labels — always route them through this hook.
  */
-import type { VocabularySkin, VocabularyTerm } from '@docket/types';
-import * as React from 'react';
-
 import {
   type VocabularyKey,
   type VocabularyPresetMap,
+  type VocabularySkin,
+  type VocabularyTerm,
   VOCABULARY_PRESETS,
   presetStartup,
-} from '../vocabulary/presets';
+} from '@docket/work/vocabulary';
+import * as React from 'react';
 
 /** The resolved-vocabulary value exposed by the provider. */
 export interface VocabularyContextValue {

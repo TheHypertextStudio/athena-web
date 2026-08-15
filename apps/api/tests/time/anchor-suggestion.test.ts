@@ -133,6 +133,20 @@ async function seedBlock(options: {
   return itemId;
 }
 
+/** Give the caller a direct view grant for a private task. */
+async function grantTaskView(taskId: string): Promise<void> {
+  await db.insert(schema.grant).values({
+    organizationId,
+    subjectKind: 'actor',
+    subjectId: actorId,
+    resourceKind: 'task',
+    resourceId: taskId,
+    capabilities: ['view'],
+    effect: 'allow',
+    cascades: false,
+  });
+}
+
 describe('resolveAnchorSuggestion', () => {
   it('suggests nothing when the day names nothing', async () => {
     expect(await resolveAnchorSuggestion(userId, hubId, NOW)).toBeNull();
@@ -217,6 +231,33 @@ describe('resolveAnchorSuggestion', () => {
     expect(await resolveAnchorSuggestion(userId, hubId, NOW)).toBeNull();
   });
 
+  it('falls through an ungranted private calendar task to a directly granted daily-plan task', async () => {
+    const calendarTaskId = await seedTask('Private calendar task', { visibility: 'private' });
+    const dailyPlanTaskId = await seedTask('Directly granted daily plan task', {
+      visibility: 'private',
+    });
+    await seedBlock({
+      startsAt: new Date(NOW.getTime() - 10 * 60_000),
+      endsAt: new Date(NOW.getTime() + 10 * 60_000),
+      taskId: calendarTaskId,
+    });
+    await db.insert(schema.dailyPlanItem).values({
+      hubId,
+      refOrganizationId: organizationId,
+      refTaskId: dailyPlanTaskId,
+      date: '2026-08-05',
+      timeboxStartsAt: new Date(NOW.getTime() - 5 * 60_000),
+      timeboxEndsAt: new Date(NOW.getTime() + 25 * 60_000),
+    });
+    await grantTaskView(dailyPlanTaskId);
+
+    expect(await resolveAnchorSuggestion(userId, hubId, NOW)).toMatchObject({
+      taskId: dailyPlanTaskId,
+      title: 'Directly granted daily plan task',
+      source: 'daily_plan_timebox',
+    });
+  });
+
   it('falls back to a daily-plan timebox when no calendar block covers now', async () => {
     const taskId = await seedTask('Planned work');
     await db.insert(schema.dailyPlanItem).values({
@@ -276,6 +317,50 @@ describe('resolveAnchorSuggestion', () => {
       taskId,
       source: 'day_directive',
     });
+  });
+
+  it('does not expose a directive task to an archived member', async () => {
+    const taskId = await seedTask('Archived member directive');
+    await db.insert(schema.dayDirective).values({
+      hubId,
+      date: '2026-08-05',
+      timezone: 'UTC',
+      directiveId: 'archived_member_dir',
+      recommendedTaskId: taskId,
+      computedAt: new Date(NOW.getTime() - 60 * 60_000),
+    });
+    await db
+      .update(schema.actor)
+      .set({ archivedAt: new Date('2026-08-05T13:00:00.000Z') })
+      .where(eq(schema.actor.id, actorId));
+
+    expect(await resolveAnchorSuggestion(userId, hubId, NOW)).toBeNull();
+  });
+
+  it('does not expose an ungranted private task from recent tracking', async () => {
+    const taskId = await seedTask('Private recent task', {
+      state: 'in_progress',
+      visibility: 'private',
+    });
+    await db
+      .update(schema.team)
+      .set({
+        workflowStates: [{ key: 'in_progress', name: 'In progress', type: 'started', position: 0 }],
+      })
+      .where(eq(schema.team.id, teamId));
+    const endedAt = new Date(NOW.getTime() - 5 * 60_000);
+    await db.insert(schema.timeRecord).values({
+      hubId,
+      createdByUserId: userId,
+      taskId,
+      title: 'Private recent task',
+      status: 'closed',
+      startedAt: new Date(NOW.getTime() - 30 * 60_000),
+      endedAt,
+      closedAt: endedAt,
+    });
+
+    expect(await resolveAnchorSuggestion(userId, hubId, NOW)).toBeNull();
   });
 
   // A directive nobody has recomputed since yesterday morning does not speak for this minute.

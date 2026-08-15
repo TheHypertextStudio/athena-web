@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Predicate } from '@docket/types';
+import type { Predicate } from '@docket/automation/contracts';
+import { evaluatePredicate } from '@docket/automation/evaluation';
 
 import { evaluate } from '../../../src/lib/automation/predicate';
 
@@ -12,6 +13,10 @@ const event = {
 };
 
 describe('evaluate (predicate interpreter)', () => {
+  it('remains a direct compatibility export of the portable evaluator', () => {
+    expect(evaluate).toBe(evaluatePredicate);
+  });
+
   it('eq matches a top-level path and fails on mismatch', () => {
     expect(evaluate({ op: 'eq', path: 'kind', value: 'task.completed' }, event)).toBe(true);
     expect(evaluate({ op: 'eq', path: 'kind', value: 'task.created' }, event)).toBe(false);

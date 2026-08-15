@@ -276,9 +276,9 @@ export async function notifyLog(
  * `subscriptions/listen` (`apps/api/src/mcp/task-protocol.ts`).
  *
  * @remarks
- * Listener registrations live in `mcp_subscription` under the synthetic URI
- * {@link "@docket/api".task-store.taskListenerUri} — the exact same "who wants to hear about
- * this" table `notifications/resources/updated` already uses, rather than a second table, since
+ * Listener registrations live in `mcp_subscription` under {@link taskListenerUri} — the exact
+ * same "who wants to hear about this" table `notifications/resources/updated` already uses,
+ * rather than a second table, since
  * both are "a session subscribed to an addressable thing" with identical session-cascade cleanup.
  *
  * @param taskId - The task whose status changed.

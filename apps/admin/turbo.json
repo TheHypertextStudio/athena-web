@@ -7,7 +7,11 @@
       "env": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_APP_URL"]
     },
     "dev": {
+      "dependsOn": ["^db:migrate", "@docket/api#build"],
       "env": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_APP_URL"]
+    },
+    "typecheck": {
+      "dependsOn": ["@docket/api#build"]
     }
   }
 }

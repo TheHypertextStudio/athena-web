@@ -28,7 +28,7 @@ import {
   VoiceSessionOut,
   VoiceSessionStartBody,
   VoiceTurnOut,
-} from '@docket/types';
+} from '@docket/athena/voice';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';

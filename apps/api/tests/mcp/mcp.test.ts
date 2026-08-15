@@ -249,11 +249,33 @@ describe('docket:// entity resource', () => {
     expect(entity.title).toBe('Ship the Hub');
   });
 
-  it('is denied for an actor without the view capability', async () => {
+  it('is denied from a private task without a grant', async () => {
     const s = await seedOrg([]);
+    await db.update(task).set({ visibility: 'private' }).where(eq(task.id, s.taskId));
     const { client } = await harnessFor(s.ctx);
 
-    // No effective capability ⇒ existence-hiding 404, surfaced as a JSON-RPC error.
+    // No direct or cascading grant ⇒ existence-hiding 404, surfaced as a JSON-RPC error.
+    await expect(
+      client.readResource({ uri: `docket://${s.orgId}/task/${s.taskId}` }),
+    ).rejects.toThrow(/not_found|Not found/i);
+  });
+
+  it('does not read a private task through a non-cascading team grant', async () => {
+    const s = await seedOrg([]);
+    await db.update(task).set({ visibility: 'private' }).where(eq(task.id, s.taskId));
+    await db.insert(grant).values({
+      organizationId: s.orgId,
+      subjectKind: 'actor',
+      subjectId: s.actorId,
+      resourceKind: 'team',
+      resourceId: s.teamId,
+      capabilities: ['view'],
+      effect: 'allow',
+      cascades: false,
+    });
+    const { client } = await harnessFor(s.ctx);
+
+    // The team grant lets this actor see that team, but must not disclose its private descendant.
     await expect(
       client.readResource({ uri: `docket://${s.orgId}/task/${s.taskId}` }),
     ).rejects.toThrow(/not_found|Not found/i);

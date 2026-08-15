@@ -19,7 +19,7 @@
  *
  * @see `docs/engineering/specs/notion-sync.md`
  */
-import type { NotionPropertyMap } from '@docket/types';
+import type { NotionPropertyMap } from '@docket/connections/notion/mirror-contract';
 import {
   boolean,
   index,
@@ -44,7 +44,7 @@ import { auditColumns, organization } from './identity';
  * import('./publishing').publicationSubject}: a fresh `CREATE TYPE` in a new migration carries
  * none of the `ALTER TYPE … ADD VALUE`-then-use-in-the-same-transaction hazard (Postgres `55P04`)
  * that adding a value to a shared enum does. Must stay in agreement with `NotionMirrorEntity` in
- * `@docket/types`; a boundary test enforces it.
+ * `@docket/connections/notion/mirror-contract`; a boundary test enforces it.
  */
 export const notionMirrorEntity = pgEnum('notion_mirror_entity', [
   'task',
@@ -95,7 +95,8 @@ export const notionMirrorDatabase = pgTable(
     externalDataSourceId: text('external_data_source_id'),
     externalUrl: text('external_url'),
     /**
-     * The designed columns, keyed by Docket field key (see `NotionPropertyMap` in `@docket/types`).
+     * The designed columns, keyed by Docket field key (see `NotionPropertyMap` in
+     * `@docket/connections/notion/mirror-contract`).
      *
      * @remarks
      * Each binding addresses its Notion property by **id**, not title. Titles are user-chosen here

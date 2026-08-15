@@ -7,9 +7,9 @@ import type { api, productApi } from '@/lib/api';
  *
  * @remarks
  * Derived from the typed RPC client rather than importing the API's internal DTO modules:
- * `@docket/api` publicly exposes only the `AdminAppType` contract, so every admin shape is
- * inferred from the corresponding route's success response. This keeps the admin types in
- * lockstep with the server contract at compile time.
+ * `@docket/api/rpc-contract` exposes the `AdminAppType` transport contract, so every admin
+ * shape is inferred from the corresponding route's success response. This keeps the admin types
+ * in lockstep with the server contract at compile time.
  */
 export type AdminMetrics = InferResponseType<typeof api.admin.metrics.$get>;
 

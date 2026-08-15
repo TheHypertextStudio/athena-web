@@ -339,6 +339,238 @@ describe('plan_day', () => {
       .where(eq(schema.dailyPlanItem.hubId, mine.hubId));
     expect(rows).toEqual([]);
   });
+
+  it('filters revoked and cross-org private legacy pointers while retaining an explicit task grant', async () => {
+    const s = await seedOrg();
+    // The caller can open the organization itself, but the grant does not cascade to its tasks.
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, s.orgId));
+
+    const granted = await seedTask(s, 'Explicitly shared private task', { visibility: 'private' });
+    const revoked = await seedTask(s, 'Revoked private task', { visibility: 'private' });
+    await db.insert(schema.grant).values([
+      {
+        organizationId: s.orgId,
+        subjectKind: 'actor',
+        subjectId: s.actorId,
+        resourceKind: 'task',
+        resourceId: granted,
+        capabilities: ['contribute'],
+        effect: 'allow',
+      },
+      {
+        organizationId: s.orgId,
+        subjectKind: 'actor',
+        subjectId: s.actorId,
+        resourceKind: 'task',
+        resourceId: revoked,
+        capabilities: ['view'],
+        effect: 'allow',
+      },
+    ]);
+    // The daily-plan pointer survives access changes; the former grant must not keep exposing it.
+    await db
+      .delete(schema.grant)
+      .where(
+        and(
+          eq(schema.grant.organizationId, s.orgId),
+          eq(schema.grant.subjectId, s.actorId),
+          eq(schema.grant.resourceId, revoked),
+        ),
+      );
+
+    const foreign = await seedOrg();
+    const [foreignGuest] = await db
+      .insert(schema.role)
+      .values({ organizationId: foreign.orgId, key: 'guest', name: 'Guest' })
+      .returning({ id: schema.role.id });
+    // The caller still has a human membership in the foreign org, so this verifies that each
+    // pointer is checked against its own current grants rather than merely the requested org.
+    await db.insert(schema.actor).values({
+      organizationId: foreign.orgId,
+      kind: 'human',
+      displayName: 'Ada elsewhere',
+      userId: s.userId,
+      roleId: foreignGuest!.id,
+    });
+    const crossOrg = await seedTask(foreign, 'Cross-org private task', { visibility: 'private' });
+
+    await db.insert(schema.dailyPlanItem).values([
+      {
+        hubId: s.hubId,
+        refOrganizationId: s.orgId,
+        refTaskId: granted,
+        date: DATE,
+        sort: 1,
+      },
+      {
+        hubId: s.hubId,
+        refOrganizationId: s.orgId,
+        refTaskId: revoked,
+        date: DATE,
+        sort: 2,
+      },
+      {
+        hubId: s.hubId,
+        refOrganizationId: foreign.orgId,
+        refTaskId: crossOrg,
+        date: DATE,
+        sort: 3,
+      },
+    ]);
+
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'plan_day',
+      arguments: { orgId: s.orgId, date: DATE },
+    })) as CallToolResult;
+
+    expect(res.isError).toBeFalsy();
+    const out = payload(res) as unknown as Day;
+    expect(out.items.map((item) => item.title)).toEqual(['Explicitly shared private task']);
+    expect(JSON.stringify(out.items)).not.toContain('Revoked private task');
+    expect(JSON.stringify(out.items)).not.toContain('Cross-org private task');
+  });
+
+  it('does not mutate a private pointer after its task grant is revoked', async () => {
+    const s = await seedOrg();
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, s.orgId));
+    const privateTask = await seedTask(s, 'No longer shared', { visibility: 'private' });
+    await db.insert(schema.grant).values({
+      organizationId: s.orgId,
+      subjectKind: 'actor',
+      subjectId: s.actorId,
+      resourceKind: 'task',
+      resourceId: privateTask,
+      capabilities: ['contribute'],
+      effect: 'allow',
+    });
+    await db.insert(schema.dailyPlanItem).values({
+      hubId: s.hubId,
+      refOrganizationId: s.orgId,
+      refTaskId: privateTask,
+      date: DATE,
+      status: 'planned',
+    });
+    await db
+      .delete(schema.grant)
+      .where(
+        and(
+          eq(schema.grant.organizationId, s.orgId),
+          eq(schema.grant.subjectId, s.actorId),
+          eq(schema.grant.resourceId, privateTask),
+        ),
+      );
+
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'plan_day',
+      arguments: {
+        orgId: s.orgId,
+        date: DATE,
+        edits: [{ action: 'complete', taskId: privateTask }],
+      },
+    })) as CallToolResult;
+
+    expect(res.isError).toBe(true);
+    const [pointer] = await db
+      .select({ status: schema.dailyPlanItem.status })
+      .from(schema.dailyPlanItem)
+      .where(eq(schema.dailyPlanItem.refTaskId, privateTask));
+    expect(pointer?.status).toBe('planned');
+  });
+
+  it('does not let a view-only task grant mutate a private plan item', async () => {
+    const s = await seedOrg();
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, s.orgId));
+    const privateTask = await seedTask(s, 'Visible but not editable', { visibility: 'private' });
+    await db.insert(schema.grant).values({
+      organizationId: s.orgId,
+      subjectKind: 'actor',
+      subjectId: s.actorId,
+      resourceKind: 'task',
+      resourceId: privateTask,
+      capabilities: ['view'],
+      effect: 'allow',
+    });
+    await db.insert(schema.dailyPlanItem).values({
+      hubId: s.hubId,
+      refOrganizationId: s.orgId,
+      refTaskId: privateTask,
+      date: DATE,
+      status: 'planned',
+    });
+
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'plan_day',
+      arguments: {
+        orgId: s.orgId,
+        date: DATE,
+        edits: [{ action: 'complete', taskId: privateTask }],
+      },
+    })) as CallToolResult;
+
+    expect(res.isError).toBe(true);
+    const [pointer] = await db
+      .select({ status: schema.dailyPlanItem.status })
+      .from(schema.dailyPlanItem)
+      .where(eq(schema.dailyPlanItem.refTaskId, privateTask));
+    expect(pointer?.status).toBe('planned');
+  });
+
+  it('allows a current explicit contribute grant to update a private plan item', async () => {
+    const s = await seedOrg();
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, s.orgId));
+    const privateTask = await seedTask(s, 'Current explicit grant', { visibility: 'private' });
+    await db.insert(schema.grant).values({
+      organizationId: s.orgId,
+      subjectKind: 'actor',
+      subjectId: s.actorId,
+      resourceKind: 'task',
+      resourceId: privateTask,
+      capabilities: ['contribute'],
+      effect: 'allow',
+    });
+    await db.insert(schema.dailyPlanItem).values({
+      hubId: s.hubId,
+      refOrganizationId: s.orgId,
+      refTaskId: privateTask,
+      date: DATE,
+      status: 'planned',
+    });
+
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'plan_day',
+      arguments: {
+        orgId: s.orgId,
+        date: DATE,
+        edits: [{ action: 'complete', taskId: privateTask }],
+      },
+    })) as CallToolResult;
+
+    expect(res.isError).toBeFalsy();
+    const out = payload(res) as unknown as Day;
+    expect(out.items).toEqual([
+      expect.objectContaining({
+        taskId: privateTask,
+        title: 'Current explicit grant',
+        status: 'done',
+      }),
+    ]);
+  });
 });
 
 /**
@@ -388,6 +620,35 @@ describe('plan_day — autoPlan', () => {
     // open at 09:00, and with no timezone set that is 09:00 UTC.
     expect(out.items[0]?.startsAt).toBe(`${PLAN_DATE}T09:00:00.000Z`);
     expect(out.items[0]?.endsAt).toBe(`${PLAN_DATE}T10:00:00.000Z`);
+  });
+
+  it('does not auto-plan a private task through a non-cascading organization grant', async () => {
+    const s = await seedOrg();
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, s.orgId));
+    const privateTask = await seedPlannedTask(s, 'Private auto-plan task', {
+      visibility: 'private',
+      estimateMinutes: 60,
+    });
+
+    const client = await connect(s.ctx);
+    const out = await autoPlan(client, s.orgId);
+
+    expect(out.autoPlanned).toBe(0);
+    expect(out.items).toEqual([]);
+    const rows = await db
+      .select({ id: schema.dailyPlanItem.id })
+      .from(schema.dailyPlanItem)
+      .where(
+        and(
+          eq(schema.dailyPlanItem.hubId, s.hubId),
+          eq(schema.dailyPlanItem.refTaskId, privateTask),
+          eq(schema.dailyPlanItem.date, PLAN_DATE),
+        ),
+      );
+    expect(rows).toEqual([]);
   });
 
   it('never puts a blocked task before its blocker, however urgent the blocked one is', async () => {
@@ -590,6 +851,40 @@ describe('brief', () => {
       (await client.callTool({ name: 'brief', arguments: { date: DATE } })) as CallToolResult,
     ) as { needsAttention: { dueToday: { title?: string }[] } };
     expect(out.needsAttention.dueToday.map((row) => row.title)).toContain('Due today');
+  });
+
+  it('does not disclose a private legacy plan pointer through brief without a task grant', async () => {
+    const s = await seedOrg();
+    const [guest] = await db
+      .insert(schema.role)
+      .values({ organizationId: s.orgId, key: 'guest', name: 'Guest' })
+      .returning({ id: schema.role.id });
+    await db.update(schema.actor).set({ roleId: guest!.id }).where(eq(schema.actor.id, s.actorId));
+    const privateTaskId = await seedTask(s, 'Private brief task', {
+      visibility: 'private',
+      dueDate: new Date(`${DATE}T12:00:00.000Z`),
+    });
+    await db.insert(schema.dailyPlanItem).values({
+      hubId: s.hubId,
+      refOrganizationId: s.orgId,
+      refTaskId: privateTaskId,
+      date: DATE,
+      timeboxStartsAt: new Date(`${DATE}T09:00:00.000Z`),
+      timeboxEndsAt: new Date(`${DATE}T10:00:00.000Z`),
+    });
+
+    const client = await connect(s.ctx);
+    const out = payload(
+      (await client.callTool({ name: 'brief', arguments: { date: DATE } })) as CallToolResult,
+    ) as {
+      plan: { id: string; title: string }[];
+      calendar: { taskId: string }[];
+      needsAttention: { dueToday: { id: string; title: string }[] };
+    };
+
+    expect(out.plan).toEqual([]);
+    expect(out.calendar).toEqual([]);
+    expect(out.needsAttention.dueToday).toEqual([]);
   });
 
   it('is not something an agent principal can ask for', async () => {

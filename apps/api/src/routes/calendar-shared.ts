@@ -1,4 +1,5 @@
 import {
+  actor,
   calendarConnection,
   calendarList,
   dailyPlanItem,
@@ -15,13 +16,14 @@ import type {
   CalendarListOut,
   CalendarSettingsOut,
 } from '@docket/types';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import type { Context } from 'hono';
 import type { z } from 'zod';
 
 import { readCalendarItemsInRange, readCalendarLayers } from '../calendar/calendar-read';
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
+import { buildTaskViewFilter } from './task-helpers';
 
 type CalendarConnectionRow = typeof calendarConnection.$inferSelect;
 type CalendarListRow = typeof calendarList.$inferSelect;
@@ -154,21 +156,69 @@ export async function buildAgendaPayload(
   const planRows = hubRows[0]
     ? await db
         .select({
+          id: task.id,
           taskId: task.id,
           organizationId: task.organizationId,
           title: task.title,
           state: task.state,
           priority: task.priority,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
           startsAt: dailyPlanItem.timeboxStartsAt,
           endsAt: dailyPlanItem.timeboxEndsAt,
         })
         .from(dailyPlanItem)
-        .innerJoin(task, eq(task.id, dailyPlanItem.refTaskId))
-        .where(and(eq(dailyPlanItem.hubId, hubRows[0].id), eq(dailyPlanItem.date, options.date)))
+        .innerJoin(
+          task,
+          and(
+            eq(task.id, dailyPlanItem.refTaskId),
+            eq(task.organizationId, dailyPlanItem.refOrganizationId),
+          ),
+        )
+        .where(
+          and(
+            eq(dailyPlanItem.hubId, hubRows[0].id),
+            eq(dailyPlanItem.date, options.date),
+            isNull(task.archivedAt),
+          ),
+        )
     : [];
 
+  // A daily-plan row is a durable personal pointer, not a durable read grant. Reauthorize each
+  // referenced task so legacy rows cannot disclose work after membership or grants change.
+  const organizationIds = [...new Set(planRows.map((row) => row.organizationId))];
+  const actorRows =
+    organizationIds.length > 0
+      ? await db
+          .select({ id: actor.id, organizationId: actor.organizationId })
+          .from(actor)
+          .where(
+            and(
+              eq(actor.userId, userId),
+              inArray(actor.organizationId, organizationIds),
+              eq(actor.kind, 'human'),
+              eq(actor.status, 'active'),
+              isNull(actor.archivedAt),
+            ),
+          )
+      : [];
+  const taskViewFilters = new Map(
+    await Promise.all(
+      actorRows.map(
+        async (actorRow) =>
+          [
+            actorRow.organizationId,
+            await buildTaskViewFilter(actorRow.organizationId, actorRow.id),
+          ] as const,
+      ),
+    ),
+  );
+
   const taskEntries = planRows.flatMap((row) => {
-    if (!row.startsAt || !row.endsAt) return [];
+    const canView = taskViewFilters.get(row.organizationId);
+    if (!row.startsAt || !row.endsAt || !canView?.(row)) return [];
     return [
       {
         kind: 'task_timebox' as const,

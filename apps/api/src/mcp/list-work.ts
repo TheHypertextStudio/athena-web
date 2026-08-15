@@ -11,11 +11,8 @@
  * not apply to the requested entity — the failure mode most likely to make an agent trust a wrong
  * answer — an inapplicable filter is rejected with the list of filters that entity does support.
  *
- * **Visibility:** rows are scoped to the organization and gated by the caller's `view` on the org
- * root, matching `GET /v1/orgs/:orgId/tasks`. Per-row `task.visibility` is deliberately NOT
- * applied here, because no list endpoint in the product applies it; only search does. That
- * inconsistency is real and product-wide, and narrowing it in the MCP surface alone would make an
- * agent see less than the web app shows the same user.
+ * **Visibility:** task rows are additionally filtered through the canonical task-view predicate.
+ * The MCP surface must never disclose a private task merely because its caller can open the org.
  */
 import {
   db,
@@ -49,9 +46,11 @@ import type { SQL } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
-import { Priority, WorkflowStateType } from '@docket/types';
+import { WorkflowStateType } from '@docket/types';
+import { Priority } from '@docket/work/task-contract';
 
 import { ValidationError } from '../error';
+import { buildTaskViewFilter, type ViewableTaskParts } from '../routes/task-helpers';
 import { DESCRIPTOR_HINT, resolveDescriptor, resolveOptional } from './descriptors';
 import type { WorkCursor } from './tools-shared-queries';
 import { stateTypeOf, teamWorkflows } from './workflow-states';
@@ -215,6 +214,39 @@ type FilterName = keyof typeof listWorkFilters;
 export type ListWorkInput = z.infer<z.ZodObject<typeof listWorkFilters>>;
 
 /**
+ * Check a raw task row before a bulk MCP helper serializes its id or title.
+ *
+ * @remarks
+ * `update` and `archive` fetch polymorphic work rows after a direct-id scope. Their task branch
+ * must apply the same predicate as `list_work` before building a report; otherwise a denied task
+ * becomes an id/title oracle in `skipped`.
+ *
+ * @param row - A raw row selected from the task table.
+ * @param canViewTask - The canonical task-view predicate for the authenticated caller.
+ * @returns Whether this row is a well-formed, visible task.
+ */
+export function isTaskRowVisible(
+  row: Record<string, unknown>,
+  canViewTask: (task: ViewableTaskParts) => boolean,
+): boolean {
+  const id = row['id'];
+  const teamId = row['teamId'];
+  const projectId = row['projectId'];
+  const programId = row['programId'];
+  const visibility = row['visibility'];
+  if (
+    typeof id !== 'string' ||
+    typeof teamId !== 'string' ||
+    (projectId !== null && typeof projectId !== 'string') ||
+    (programId !== null && typeof programId !== 'string') ||
+    (visibility !== 'public' && visibility !== 'private')
+  ) {
+    return false;
+  }
+  return canViewTask({ id, teamId, projectId, programId, visibility });
+}
+
+/**
  * Reject a filter the requested entity has no column for.
  *
  * @param entity - What was being listed.
@@ -308,6 +340,7 @@ function anyValue(column: AnyPgColumn, values: readonly string[]): SQL | undefin
  * Build and run the task query.
  *
  * @param orgId - The organization to list within.
+ * @param actorId - The authenticated actor whose task visibility applies.
  * @param input - The caller's filters, already checked for applicability.
  * @param limit - Page size.
  * @param after - The keyset position from the cursor, when paging.
@@ -315,14 +348,12 @@ function anyValue(column: AnyPgColumn, values: readonly string[]): SQL | undefin
  */
 async function listTasks(
   orgId: string,
+  actorId: string,
   input: ListWorkInput,
   limit: number,
   after: WorkCursor | undefined,
 ): Promise<(WorkRow & { createdAt: Date })[]> {
-  const where: (SQL | undefined)[] = [
-    eq(task.organizationId, orgId),
-    seekAfter(task.createdAt, task.id, after),
-  ];
+  const where: (SQL | undefined)[] = [eq(task.organizationId, orgId)];
   where.push(input.archived === true ? isNotNull(task.archivedAt) : isNull(task.archivedAt));
 
   // Every descriptor here is independent of the others, so they resolve concurrently: a
@@ -384,31 +415,63 @@ async function listTasks(
     where.push(gte(task.updatedAt, new Date(input.updatedAfter)));
   }
 
-  const rows = await db
-    .select({
-      id: task.id,
-      title: task.title,
-      state: task.state,
-      teamId: task.teamId,
-      assigneeId: task.assigneeId,
-      projectId: task.projectId,
-      createdAt: task.createdAt,
-    })
-    .from(task)
-    .where(and(...where))
-    .orderBy(desc(task.createdAt), desc(task.id))
-    .limit(limit + 1);
+  const canView = await buildTaskViewFilter(orgId, actorId);
+  const visibleRows: {
+    id: string;
+    title: string;
+    state: string;
+    teamId: string;
+    assigneeId: string | null;
+    projectId: string | null;
+    programId: string | null;
+    visibility: 'public' | 'private';
+    createdAt: Date;
+  }[] = [];
+  let pageAfter = after;
+
+  // The shared task predicate is intentionally data-backed rather than restated as SQL here.
+  // Continue keyset-scanning until we have one visible row beyond the requested page, so a run of
+  // hidden rows cannot make a later visible row disappear from pagination.
+  while (visibleRows.length <= limit) {
+    const rows = await db
+      .select({
+        id: task.id,
+        title: task.title,
+        state: task.state,
+        teamId: task.teamId,
+        assigneeId: task.assigneeId,
+        projectId: task.projectId,
+        programId: task.programId,
+        visibility: task.visibility,
+        createdAt: task.createdAt,
+      })
+      .from(task)
+      .where(and(...where, seekAfter(task.createdAt, task.id, pageAfter)))
+      .orderBy(desc(task.createdAt), desc(task.id))
+      .limit(limit + 1);
+
+    for (const row of rows) {
+      if (!canView(row)) continue;
+      visibleRows.push(row);
+      if (visibleRows.length > limit) break;
+    }
+
+    if (visibleRows.length > limit || rows.length <= limit) break;
+    const last = rows[rows.length - 1];
+    if (!last) break;
+    pageAfter = { createdAt: last.createdAt, id: last.id };
+  }
 
   // One lookup for the whole page, not one per row: a page can span every team in the org, and
   // resolving each row separately would make a 50-row read cost 51 queries.
   const workflows = await teamWorkflows(
     orgId,
-    rows.map((row) => row.teamId),
+    visibleRows.map((row) => row.teamId),
   );
 
   // `teamId` is read to resolve the state type and then dropped. It is not part of the row
   // contract, and adding it here would widen the wire on the way past rather than on purpose.
-  return rows.map((row) => {
+  return visibleRows.map((row) => {
     const stateType = stateTypeOf(workflows, row.teamId, row.state);
     return {
       id: row.id,
@@ -546,6 +609,7 @@ async function listContainers(
  * List work matching a filter set.
  *
  * @param orgId - The organization to list within.
+ * @param actorId - The authenticated actor whose task visibility applies.
  * @param entity - What to enumerate.
  * @param input - The caller's filters.
  * @param limit - Page size.
@@ -555,6 +619,7 @@ async function listContainers(
  */
 export async function listWork(
   orgId: string,
+  actorId: string,
   entity: WorkEntity,
   input: ListWorkInput,
   limit: number,
@@ -562,6 +627,6 @@ export async function listWork(
 ): Promise<(WorkRow & { createdAt: Date })[]> {
   assertApplicable(entity, input);
   return entity === 'task'
-    ? listTasks(orgId, input, limit, after)
+    ? listTasks(orgId, actorId, input, limit, after)
     : listContainers(orgId, entity, input, limit, after);
 }

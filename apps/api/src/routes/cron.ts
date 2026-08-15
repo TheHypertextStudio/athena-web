@@ -16,7 +16,7 @@ import { Hono } from 'hono';
 import { sweepAccountDeletions } from '../account/lifecycle';
 import { sweepAccountExports } from '../account/export';
 import { env } from '../env';
-import { sweepLifecycle } from '../billing/lifecycle';
+import { sweepLifecycle } from '@docket/billing/application/lifecycle';
 import { sweepEmailSuggestions } from '../lib/email-to-task/sweep';
 import { sweepNotionMirror } from './notion-mirror-reconcile';
 import { sweepEmailSuggestionLifecycle } from '../lib/email-to-task/lifecycle';

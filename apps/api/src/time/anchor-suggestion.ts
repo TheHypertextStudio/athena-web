@@ -34,6 +34,8 @@ import type { TimeAnchorSuggestion } from '@docket/types';
 import { and, desc, eq, gt, gte, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
 import type { z } from 'zod';
 
+import { buildTaskViewFilter, type ViewableTaskParts } from '../routes/task-helpers';
+
 /**
  * The suggestion as this module produces it.
  *
@@ -68,32 +70,105 @@ const DIRECTIVE_FRESHNESS_MS = 12 * 60 * 60 * 1_000;
 const RECENT_WINDOW_MS = 2 * 60 * 60 * 1_000;
 
 /**
- * Restrict a task join to tasks the caller can actually act on.
+ * The selected task columns needed for visibility and suggestion serialization.
  *
  * @remarks
- * Expressed as a join onto `actor` rather than a separate visibility pass because a suggestion the
- * caller cannot start is worse than no suggestion — it has to be filtered inside the same query
- * that ranks candidates, or the top-ranked hit gets discarded and the runner-up is never seen.
+ * Keep this projection deliberately small: the tracker polls this resolver, and a candidate only
+ * needs its identity, containment parents, visibility, and title. The parents are the exact
+ * columns {@link buildTaskViewFilter} needs to reproduce the task containment cascade.
  */
-function visibleToCaller(userId: string) {
-  return and(
-    eq(actor.organizationId, task.organizationId),
-    eq(actor.userId, userId),
-    eq(actor.kind, 'human'),
-    eq(actor.status, 'active'),
+const TASK_SUGGESTION_COLUMNS = {
+  taskId: task.id,
+  organizationId: task.organizationId,
+  title: task.title,
+  teamId: task.teamId,
+  projectId: task.projectId,
+  programId: task.programId,
+  visibility: task.visibility,
+} as const;
+
+/** One candidate task with the columns necessary for canonical visibility resolution. */
+interface TaskSuggestionCandidate {
+  readonly taskId: string;
+  readonly organizationId: string;
+  readonly teamId: string;
+  readonly projectId: string | null;
+  readonly programId: string | null;
+  readonly visibility: ViewableTaskParts['visibility'];
+}
+
+/** The canonical per-task visibility predicate for one active organization membership. */
+type TaskViewFilter = (candidate: ViewableTaskParts) => boolean;
+
+/**
+ * Build task-visibility predicates for every active, unarchived human membership of `userId`.
+ *
+ * @remarks
+ * A task title is content, so a user-level calendar or Hub pointer is never enough authority to
+ * return it. Each predicate comes from {@link buildTaskViewFilter}, the current canonical task
+ * visibility resolver for public baselines and direct/role grants. Keeping these filters keyed by
+ * organization lets one Hub safely contain plans for several workspaces without treating a
+ * membership in one as access to another.
+ */
+async function taskViewFiltersForCaller(userId: string): Promise<Map<string, TaskViewFilter>> {
+  const memberships = await db
+    .select({ actorId: actor.id, organizationId: actor.organizationId })
+    .from(actor)
+    .where(
+      and(
+        eq(actor.userId, userId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    );
+  return new Map(
+    await Promise.all(
+      memberships.map(
+        async (membership) =>
+          [
+            membership.organizationId,
+            await buildTaskViewFilter(membership.organizationId, membership.actorId),
+          ] as const,
+      ),
+    ),
   );
+}
+
+/** Whether a candidate task is visible through the caller's active membership in its organization. */
+function canViewSuggestionTask(
+  candidate: TaskSuggestionCandidate,
+  filtersByOrganization: ReadonlyMap<string, TaskViewFilter>,
+): boolean {
+  const canView = filtersByOrganization.get(candidate.organizationId);
+  return (
+    canView?.({
+      id: candidate.taskId,
+      teamId: candidate.teamId,
+      projectId: candidate.projectId,
+      programId: candidate.programId,
+      visibility: candidate.visibility,
+    }) ?? false
+  );
+}
+
+/** Return the first ranked candidate whose task title the caller is allowed to see. */
+function firstVisibleTask<T extends TaskSuggestionCandidate>(
+  candidates: readonly T[],
+  filtersByOrganization: ReadonlyMap<string, TaskViewFilter>,
+): T | undefined {
+  return candidates.find((candidate) => canViewSuggestionTask(candidate, filtersByOrganization));
 }
 
 /** The calendar block covering `now`, when one is linked to a task. */
 async function fromCalendarTimebox(
   userId: string,
   now: Date,
+  filtersByOrganization: ReadonlyMap<string, TaskViewFilter>,
 ): Promise<AnchorSuggestionInput | null> {
   const rows = await db
     .select({
-      taskId: task.id,
-      organizationId: task.organizationId,
-      title: task.title,
+      ...TASK_SUGGESTION_COLUMNS,
       calendarItemId: calendarItem.id,
       startsAt: calendarItem.startsAt,
       endsAt: calendarItem.endsAt,
@@ -101,7 +176,6 @@ async function fromCalendarTimebox(
     .from(calendarItem)
     .innerJoin(calendarItemTaskLink, eq(calendarItemTaskLink.calendarItemId, calendarItem.id))
     .innerJoin(task, eq(task.id, calendarItemTaskLink.taskId))
-    .innerJoin(actor, visibleToCaller(userId))
     .where(
       and(
         eq(calendarItem.userId, userId),
@@ -112,9 +186,8 @@ async function fromCalendarTimebox(
       ),
     )
     // Blocks overlap. The one that began most recently is the one the caller just walked into.
-    .orderBy(desc(calendarItem.startsAt))
-    .limit(1);
-  const row = rows[0];
+    .orderBy(desc(calendarItem.startsAt));
+  const row = firstVisibleTask(rows, filtersByOrganization);
   if (!row) return null;
   return {
     taskId: row.taskId,
@@ -138,21 +211,18 @@ async function fromCalendarTimebox(
  * `daily_plan_item.ref_task_id` carries no FK.
  */
 async function fromDailyPlanTimebox(
-  userId: string,
   hubId: string,
   now: Date,
+  filtersByOrganization: ReadonlyMap<string, TaskViewFilter>,
 ): Promise<AnchorSuggestionInput | null> {
   const rows = await db
     .select({
-      taskId: task.id,
-      organizationId: task.organizationId,
-      title: task.title,
+      ...TASK_SUGGESTION_COLUMNS,
       startsAt: dailyPlanItem.timeboxStartsAt,
       endsAt: dailyPlanItem.timeboxEndsAt,
     })
     .from(dailyPlanItem)
     .innerJoin(task, eq(task.id, dailyPlanItem.refTaskId))
-    .innerJoin(actor, visibleToCaller(userId))
     .where(
       and(
         eq(dailyPlanItem.hubId, hubId),
@@ -162,9 +232,8 @@ async function fromDailyPlanTimebox(
         isNull(task.archivedAt),
       ),
     )
-    .orderBy(desc(dailyPlanItem.timeboxStartsAt))
-    .limit(1);
-  const row = rows[0];
+    .orderBy(desc(dailyPlanItem.timeboxStartsAt));
+  const row = firstVisibleTask(rows, filtersByOrganization);
   if (!row) return null;
   return {
     taskId: row.taskId,
@@ -179,20 +248,17 @@ async function fromDailyPlanTimebox(
 
 /** The day loop's own recommendation, while it is still fresh enough to speak for now. */
 async function fromDayDirective(
-  userId: string,
   hubId: string,
   now: Date,
+  filtersByOrganization: ReadonlyMap<string, TaskViewFilter>,
 ): Promise<AnchorSuggestionInput | null> {
   const rows = await db
     .select({
-      taskId: task.id,
-      organizationId: task.organizationId,
-      title: task.title,
+      ...TASK_SUGGESTION_COLUMNS,
       calendarItemId: dayDirective.recommendedCalendarItemId,
     })
     .from(dayDirective)
     .innerJoin(task, eq(task.id, dayDirective.recommendedTaskId))
-    .innerJoin(actor, visibleToCaller(userId))
     .where(
       and(
         eq(dayDirective.hubId, hubId),
@@ -201,9 +267,8 @@ async function fromDayDirective(
         isNull(task.archivedAt),
       ),
     )
-    .orderBy(desc(dayDirective.computedAt))
-    .limit(1);
-  const row = rows[0];
+    .orderBy(desc(dayDirective.computedAt));
+  const row = firstVisibleTask(rows, filtersByOrganization);
   if (!row) return null;
   return {
     taskId: row.taskId,
@@ -229,22 +294,19 @@ async function fromDayDirective(
  * `team.workflow_states`, not a column with a comparable value.
  */
 async function fromRecentTracking(
-  userId: string,
   hubId: string,
   now: Date,
+  filtersByOrganization: ReadonlyMap<string, TaskViewFilter>,
 ): Promise<AnchorSuggestionInput | null> {
   const rows = await db
     .select({
-      taskId: task.id,
-      organizationId: task.organizationId,
-      title: task.title,
+      ...TASK_SUGGESTION_COLUMNS,
       state: task.state,
       workflowStates: team.workflowStates,
     })
     .from(timeRecord)
     .innerJoin(task, eq(task.id, timeRecord.taskId))
     .innerJoin(team, eq(team.id, task.teamId))
-    .innerJoin(actor, visibleToCaller(userId))
     .where(
       and(
         eq(timeRecord.hubId, hubId),
@@ -258,6 +320,7 @@ async function fromRecentTracking(
     .limit(5);
   const row = rows.find(
     (candidate) =>
+      canViewSuggestionTask(candidate, filtersByOrganization) &&
       candidate.workflowStates.find((state) => state.key === candidate.state)?.type === 'started',
   );
   if (!row) return null;
@@ -290,10 +353,12 @@ export async function resolveAnchorSuggestion(
   hubId: string,
   now: Date,
 ): Promise<AnchorSuggestionInput | null> {
+  const filtersByOrganization = await taskViewFiltersForCaller(userId);
+  if (filtersByOrganization.size === 0) return null;
   return (
-    (await fromCalendarTimebox(userId, now)) ??
-    (await fromDailyPlanTimebox(userId, hubId, now)) ??
-    (await fromDayDirective(userId, hubId, now)) ??
-    (await fromRecentTracking(userId, hubId, now))
+    (await fromCalendarTimebox(userId, now, filtersByOrganization)) ??
+    (await fromDailyPlanTimebox(hubId, now, filtersByOrganization)) ??
+    (await fromDayDirective(hubId, now, filtersByOrganization)) ??
+    (await fromRecentTracking(hubId, now, filtersByOrganization))
   );
 }

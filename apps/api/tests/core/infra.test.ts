@@ -1,8 +1,86 @@
 import { Hono } from 'hono';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { afterAll, beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import ts from 'typescript';
 
+import type { AdminAppType as SourceAdminAppType, AppType as SourceAppType } from '../../src/app';
 import type { AppEnv } from '../../src/context';
 import type { server as ApiServer } from '../../src/server';
+import type {
+  AdminAppType as RpcContractAdminAppType,
+  AppType as RpcContractAppType,
+} from '@docket/api/rpc-contract';
+
+/* eslint-disable @typescript-eslint/no-unused-vars -- Compiler-only package-export assertion. */
+// @ts-expect-error The API package root is not exported.
+import type * as ApiRootModule from '@docket/api';
+/* eslint-enable @typescript-eslint/no-unused-vars */
+
+const requireFromTest = createRequire(import.meta.url);
+const apiRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const appsRoot = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
+const compiledContractPath = `${apiRoot}/dist/rpc-contract.d.ts`;
+
+/** Read the direct command lifecycle for one workspace package. */
+function packageScripts(packageRoot: string): Record<string, string | undefined> {
+  const manifest = JSON.parse(readFileSync(`${packageRoot}/package.json`, 'utf8')) as {
+    scripts?: Record<string, string>;
+  };
+  return manifest.scripts ?? {};
+}
+
+/** Read one task's explicit dependency edges from a delivery application's Turbo config. */
+function turboDependencies(packageRoot: string, task: string): readonly string[] {
+  const configPath = `${packageRoot}/turbo.json`;
+  const parsed = ts.parseConfigFileTextToJson(configPath, readFileSync(configPath, 'utf8'));
+  if (parsed.error) {
+    throw new Error(
+      ts.formatDiagnostic(parsed.error, {
+        getCanonicalFileName: (fileName) => fileName,
+        getCurrentDirectory: () => packageRoot,
+        getNewLine: () => '\n',
+      }),
+    );
+  }
+
+  const config = parsed.config as {
+    tasks?: Record<string, { dependsOn?: string[] }>;
+  };
+  return config.tasks?.[task]?.dependsOn ?? [];
+}
+
+/** Resolve the contract exactly as a delivery application's TypeScript project does. */
+function resolveContractFromDeliveryApp(app: 'admin' | 'web'): string | undefined {
+  const appRoot = `${appsRoot}/${app}`;
+  const configPath = `${appRoot}/tsconfig.json`;
+  const config = ts.readConfigFile(configPath, (path) => ts.sys.readFile(path));
+  if (config.error) {
+    throw new Error(
+      ts.formatDiagnostic(config.error, {
+        getCanonicalFileName: (fileName) => fileName,
+        getCurrentDirectory: () => appRoot,
+        getNewLine: () => '\n',
+      }),
+    );
+  }
+
+  const parsed = ts.parseJsonConfigFileContent(
+    config.config,
+    ts.sys,
+    appRoot,
+    undefined,
+    configPath,
+  );
+  return ts.resolveModuleName(
+    '@docket/api/rpc-contract',
+    `${appRoot}/src/lib/api.ts`,
+    parsed.options,
+    ts.sys,
+  ).resolvedModule?.resolvedFileName;
+}
 
 // Mock the node server `serve` so importing `server.ts` does not bind a real port,
 // while the shared auth mock keeps the heavy ESM chain out of the test graph.
@@ -11,16 +89,49 @@ import { authHandler, fakeAsMetadata } from '../support/auth-mock';
 const serve = vi.fn();
 vi.mock('@hono/node-server', () => ({ serve }));
 
-describe('env + index re-exports', () => {
+describe('env + RPC transport contract', () => {
   it('env is the validated API env object', async () => {
     const { env } = await import('../../src/env');
     expect(env.APP_MODE).toBe('test');
   });
 
-  it('index re-exports the app + AppType', async () => {
-    const mod = await import('../../src/index');
-    expect(typeof mod.app.request).toBe('function');
-    expect(typeof mod.app.route).toBe('function');
+  it('publishes only the named RPC transport subpath', () => {
+    let rootResolutionError: unknown;
+    try {
+      requireFromTest.resolve('@docket/api');
+    } catch (error) {
+      rootResolutionError = error;
+    }
+
+    expect(rootResolutionError).toMatchObject({ code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
+    expect(requireFromTest.resolve('@docket/api/rpc-contract')).toMatch(/rpc-contract\.ts$/);
+  });
+
+  it('resolves the type contract from API declarations, not route source', () => {
+    for (const app of ['admin', 'web'] as const) {
+      expect(resolveContractFromDeliveryApp(app)).toBe(compiledContractPath);
+    }
+  });
+
+  it('builds declarations before direct API and delivery-app workflows', () => {
+    expect(packageScripts(apiRoot)['pretest']).toBe('tsc -p tsconfig.build.json');
+
+    for (const app of ['admin', 'web']) {
+      const scripts = packageScripts(`${appsRoot}/${app}`);
+      for (const workflow of ['build', 'dev', 'lint', 'typecheck']) {
+        expect(scripts[`pre${workflow}`]).toBe('pnpm --filter @docket/api build');
+      }
+
+      expect(turboDependencies(`${appsRoot}/${app}`, 'dev')).toContain('@docket/api#build');
+      expect(turboDependencies(`${appsRoot}/${app}`, 'typecheck')).toContain('@docket/api#build');
+    }
+  });
+
+  it('exposes API-owned RPC types through a side-effect-free named subpath', async () => {
+    expectTypeOf<RpcContractAppType>().toEqualTypeOf<SourceAppType>();
+    expectTypeOf<RpcContractAdminAppType>().toEqualTypeOf<SourceAdminAppType>();
+
+    expect(Object.keys(await import('@docket/api/rpc-contract'))).toEqual([]);
   });
 });
 

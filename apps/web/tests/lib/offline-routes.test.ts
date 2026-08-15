@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 
+import { format, resolveConfig } from 'prettier';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -21,11 +22,18 @@ import { ROUTE_PATTERNS } from '@/lib/offline-routes.generated';
  * "does the table look plausible" but "does regenerating it produce exactly what is committed".
  */
 describe('the generated offline route table', () => {
-  it('matches what the generator would write for the current route tree', () => {
-    const expected = renderRouteModule(resolveAllRoutes());
+  it('matches what the generator would write for the current route tree', async () => {
+    const expected = await renderRouteModule(resolveAllRoutes());
     const committed = readFileSync(GENERATED_PATH, 'utf8');
 
     expect(committed).toBe(expected);
+  });
+
+  it('renders source that already satisfies the repository formatter', async () => {
+    const source = await renderRouteModule(resolveAllRoutes());
+    const options = await resolveConfig(GENERATED_PATH);
+
+    expect(await format(source, { ...options, filepath: GENERATED_PATH })).toBe(source);
   });
 
   it('accounts for every page under the authenticated route group', () => {

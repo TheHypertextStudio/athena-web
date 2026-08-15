@@ -54,6 +54,13 @@ verifierArtifacts:
 verification: 'pnpm --filter @docket/test-utils test — 15 files / 104 passed; pnpm --filter @docket/api test — 183 files / 1608 tests, 1607 passed (1 pre-existing failure in tests/mcp/mcp-auth.test.ts, another lane); pnpm --filter @docket/web exec playwright test --list — Total: 41 tests in 24 files (identical to pre-move)'
 ---
 
+> **Current architecture note (2026-08-13):** This launch record preserves the old
+> `packages/agent-runtime` boundary and its August test output as historical evidence. Do not use
+> that path or the former `athena-boundary-policy` as current guidance. Athena runtime source now
+> lives in `domains/athena/src/**`; Work contracts live in `domains/work/src/**`. Current enforcement
+> is the domain registry/import policy and the retired-package policy in
+> `packages/test-utils/tests/workspace-policies/`.
+
 ## Lane collisions to know about before reading this
 
 Three of the files this slice was assigned were concurrently rewritten by other workers while it

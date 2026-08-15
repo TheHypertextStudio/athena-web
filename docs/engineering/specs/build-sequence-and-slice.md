@@ -6,6 +6,12 @@
 >
 > **Greenfield note.** The existing tree (`@athena/*`, Better Auth 1.4, Next 15, old `pending/in_progress/completed/cancelled` task model, hand-rolled `fetch` `api-client.ts`) is reference-only per engineering plan §0.1. The build sequence below scaffolds a fresh `@docket/*` workspace. Do **not** reuse `apps/api/src/lib/auth.ts`, `apps/web/src/lib/api-client.ts`, or the old Drizzle schema verbatim — they encode a superseded model. They are useful as shape references only.
 
+> **Historical-plan note (2026-08-14).** The greenfield sequence below is retained as a record of
+> its original construction assumptions. It predates the current domain-first workspace,
+> marketing-route consolidation into `apps/web`, `apps/runner`, and the named
+> `@docket/api/rpc-contract` type boundary. Use [ARCH-001](../../WORKLOG.md#arch-001-domain-first-repository-reorganization)
+> and [domain-first reorganization](./domain-first-reorganization.md) for current structure.
+
 ---
 
 ## Part 0 — Verified library facts that drive this plan
@@ -75,12 +81,12 @@ P4 apps/api (RPC + auth mount) ─► P4.5 permissions core ─► P5 @docket/ui
 
 #### Phase 4 — `apps/api` _(sequential; the RPC contract + auth mount)_
 
-- **Do:** Hono 4.x service. Order inside `apps/api/src/index.ts` matters:
+- **Do:** Hono 4.x service. Order inside `apps/api/src/server.ts` matters:
   1. `cors({ origin: [env corsOrigins], credentials: true, allowHeaders: ['Content-Type','Authorization'], exposeHeaders: ['Authorization','WWW-Authenticate'] })` — **first**.
   2. Session middleware: `app.use('*', sessionMiddleware)` setting typed `c.var.user`/`c.var.session` via `auth.api.getSession`.
   3. Auth mount: `app.on(['POST','GET'], '/api/auth/*', (c) => auth.handler(c.req.raw))`.
   4. Feature routers mounted via **method chaining** to preserve RPC types.
-- **RPC discipline (engineering plan §1):** routes defined with chained `.get().post()` and split across files (`routes/organizations.ts`, `routes/projects.ts`, `routes/tasks.ts`, …); `index.ts` chains them: `const routes = app.route('/organizations', orgs).route('/projects', projects).route('/tasks', tasks); export type AppType = typeof routes;`. Build to `dist` so consumers import a compiled `.d.ts` (not raw TS) — this is what keeps `tsserver` fast.
+- **RPC discipline (engineering plan §1):** routes defined with chained `.get().post()` and split across files (`routes/organizations.ts`, `routes/projects.ts`, `routes/tasks.ts`, …); `app.ts` chains them: `const routes = app.route('/organizations', orgs).route('/projects', projects).route('/tasks', tasks); export type AppType = typeof routes;`. Build to `dist` so consumers import a compiled `.d.ts` (not raw TS) — this is what keeps `tsserver` fast.
 - **Zod in and out**: request bodies validated with `@hono/zod-validator` against schemas from `@docket/types`; responses also typed via `@docket/types` so the RPC client and UI share one definition.
 - **Exit gate:** `hc<AppType>` in a scratch consumer autocompletes `client.tasks.$post({...})` with correct body/response types; `/health` returns ok; an authed request to a protected route succeeds with a cookie and 401s without.
 
@@ -173,7 +179,7 @@ All under `apps/api`, all behind the session middleware + `requireOrgMember` (ex
 | `POST /tasks`                           | `createTaskInput { organizationId, title, projectId?, teamId, state?, priority? }` | insert `task` (state default first workflow state) after `requireOrgMember`                                | `{ data: Task }`                |
 | `GET /tasks?organizationId=&projectId=` | query                                                                              | tasks in org/project for grouping                                                                          | `{ data: Task[] }`              |
 
-Routers are method-chained and composed in `index.ts` as `app.route('/organizations', organizations).route('/projects', projects).route('/tasks', tasks)`; `export type AppType = typeof routes`.
+Routers are method-chained and composed in `apps/api/src/app.ts` as `app.route('/organizations', organizations).route('/projects', projects).route('/tasks', tasks)`; `export type AppType = typeof routes`.
 
 ### 2.4 UI components / screens this slice touches _(Next 16, App Router)_
 
@@ -289,7 +295,8 @@ docket/
 │  └─ test-utils/src/{tenant,session-seed,db-read}.ts
 ├─ apps/
 │  ├─ api/
-│  │  ├─ src/index.ts                           # CORS → session mw → /api/auth/* → chained routers → AppType
+│  │  ├─ src/server.ts                          # CORS → session mw → /api/auth/* → mounts `app.ts`
+│  │  ├─ src/app.ts                             # chained routers → AppType
 │  │  ├─ src/auth/session-middleware.ts
 │  │  ├─ src/permissions/require-org-member.ts  # P4.5
 │  │  └─ src/routes/{organizations,projects,tasks}.ts   # chained for RPC

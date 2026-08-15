@@ -32,7 +32,7 @@ import type {
   VoiceProviderCredential,
   VoiceSessionState,
   VoiceTurnOut,
-} from '@docket/types';
+} from '@docket/athena/voice';
 
 /** How often the input meter samples microphone energy. */
 const METER_INTERVAL_MS = 80;

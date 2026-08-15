@@ -29,7 +29,7 @@ import type {
   VoiceSessionOut,
   VoiceSessionState,
   VoiceTurnOut,
-} from '@docket/types';
+} from '@docket/athena/voice';
 import { Mic, MicOff, PhoneOff, Sparkles, SoundWave } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {

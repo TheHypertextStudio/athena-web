@@ -7,8 +7,8 @@
  * `/admin` staff app → the `/v1` public app → health/openapi/docs → the Problem `onError`.
  * Three typed surfaces are kept apart: the public `/v1` app (`AppType`), the staff `/admin`
  * app (`AdminAppType`), and the un-typed `/internal/*` machine edges.
- * Importing `@docket/api` (the package entry) does NOT run this; only `node dist/server.js`
- * / `tsx watch src/server.ts` does.
+ * Loading the empty `@docket/api/rpc-contract` facade does not start this server; only
+ * `node dist/server.js` / `tsx watch src/server.ts` does.
  */
 import { serve } from '@hono/node-server';
 import { auth } from '@docket/auth';

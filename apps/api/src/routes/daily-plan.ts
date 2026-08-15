@@ -4,13 +4,14 @@
  * @remarks
  * A cross-org, personal surface: it reads `c.get('session')` directly (NOT `actorCtx`)
  * and resolves the caller's {@link hub} via `hub.userId = session.user.id`. Items
- * reference a Task in any org the caller is a human Actor in; on create the referenced
- * `(refOrganizationId, refTaskId)` is verified to belong to the caller's orgs and to
- * exist, else a 404 (existence-hiding). A null session throws {@link AuthError}.
+ * reference a Task in any org where the caller is an active, unarchived human Actor. On create,
+ * the referenced `(refOrganizationId, refTaskId)` must be currently viewable through the canonical
+ * task grant/visibility resolver, else a 404 (existence-hiding). A null session throws
+ * {@link AuthError}.
  */
 import { actor, db, dailyPlanItem, hub, task } from '@docket/db';
 import { DailyPlanItemCreate, DailyPlanItemOut, DailyPlanItemUpdate, pageOf } from '@docket/types';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -19,6 +20,7 @@ import { AuthError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { buildTaskViewFilter } from './task-helpers';
 
 type DailyPlanItemRow = typeof dailyPlanItem.$inferSelect;
 
@@ -44,13 +46,51 @@ async function resolveHubId(userId: string): Promise<string> {
   return row.id;
 }
 
-/** The org ids the user is a human Actor in (their cross-org scope). */
-async function callerOrgIds(userId: string): Promise<string[]> {
-  const rows = await db
-    .select({ organizationId: actor.organizationId })
+/**
+ * Assert that the session user is an active human viewer of this current, in-org Task.
+ *
+ * A daily-plan row is only a personal pointer, so creating one cannot grant access to the
+ * referenced work. Reuse the task visibility resolver rather than reproducing grant semantics.
+ */
+async function requireViewableTask(
+  userId: string,
+  organizationId: string,
+  taskId: string,
+): Promise<void> {
+  const callerRows = await db
+    .select({ id: actor.id })
     .from(actor)
-    .where(and(eq(actor.userId, userId), eq(actor.kind, 'human')));
-  return rows.map((r) => r.organizationId);
+    .where(
+      and(
+        eq(actor.userId, userId),
+        eq(actor.organizationId, organizationId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    )
+    .limit(1);
+  const caller = callerRows[0];
+  if (!caller) throw new NotFoundError('Task not found');
+
+  const taskRows = await db
+    .select({
+      id: task.id,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+    })
+    .from(task)
+    .where(
+      and(eq(task.id, taskId), eq(task.organizationId, organizationId), isNull(task.archivedAt)),
+    )
+    .limit(1);
+  const taskRow = taskRows[0];
+  if (!taskRow) throw new NotFoundError('Task not found');
+
+  const canView = await buildTaskViewFilter(organizationId, caller.id);
+  if (!canView(taskRow)) throw new NotFoundError('Task not found');
 }
 
 const listQuery = z.object({ date: z.iso.date() });
@@ -88,7 +128,7 @@ Session-only, no capability. 401 when unauthenticated; **404 (Hub not found)** i
       tag: 'DailyPlan',
       summary: 'Add a daily-plan item',
       response: DailyPlanItemOut,
-      description: `Pull a Task into the caller's daily plan for a date, creating a new daily-plan item. The body supplies the task reference \`(refOrganizationId, refTaskId)\`, the \`date\`, and optional \`sort\` position and timebox window. **The Task reference is validated in two steps before insert:** (1) \`refOrganizationId\` must be one of the orgs the caller is a human Actor in, and (2) the Task must actually exist in that org. A failure of either check returns **404 (Task not found)** — a single existence-hiding error that never reveals whether the org or the task was the problem, and never lets the caller reference a Task outside their own membership.
+      description: `Pull a Task into the caller's daily plan for a date, creating a new daily-plan item. The body supplies the task reference \`(refOrganizationId, refTaskId)\`, the \`date\`, and optional \`sort\` position and timebox window. **The Task reference is authorized before insert:** the caller must be an active, unarchived human Actor in \`refOrganizationId\`, and the current Task must pass the canonical task grant/visibility resolver for that Actor. A failure returns **404 (Task not found)** — a single existence-hiding error that never reveals whether the membership, task, or grant was the problem, and never lets the caller create a pointer to work they cannot view.
 
 The owning \`hubId\` is resolved server-side from the session user and is never accepted from the body. **Side effect:** inserts a \`dailyPlanItem\` row (status defaults to \`planned\`); the new item then appears in \`GET /daily-plan\` and the Hub Today cockpit. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub. Related: \`PATCH /:id\`, \`DELETE /:id\`.`,
     }),
@@ -99,14 +139,7 @@ The owning \`hubId\` is resolved server-side from the session user and is never 
       const body = c.req.valid('json');
       const hubId = await resolveHubId(session.user.id);
 
-      const orgIds = await callerOrgIds(session.user.id);
-      if (!orgIds.includes(body.refOrganizationId)) throw new NotFoundError('Task not found');
-      const taskRows = await db
-        .select({ id: task.id })
-        .from(task)
-        .where(and(eq(task.id, body.refTaskId), eq(task.organizationId, body.refOrganizationId)))
-        .limit(1);
-      if (!taskRows[0]) throw new NotFoundError('Task not found');
+      await requireViewableTask(session.user.id, body.refOrganizationId, body.refTaskId);
 
       const inserted = await db
         .insert(dailyPlanItem)

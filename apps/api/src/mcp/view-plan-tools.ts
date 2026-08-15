@@ -261,7 +261,14 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
       });
 
       const { entity, limit, cursor, orgId, ...filters } = input;
-      const rows = await listWork(orgId, entity, filters, limit, decodeWorkCursor(cursor));
+      const rows = await listWork(
+        orgId,
+        actorCtx.actorId,
+        entity,
+        filters,
+        limit,
+        decodeWorkCursor(cursor),
+      );
       const { items, nextCursor } = pageWorkRows(rows, limit);
       return jsonResult({ entity, items, ...(nextCursor ? { nextCursor } : {}) });
     });

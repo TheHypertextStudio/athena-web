@@ -38,8 +38,8 @@ import type {
   NotionMirrorFieldOut,
   NotionMirrorPreviewRow,
   NotionPropertyMap,
-  VocabularySkin,
-} from '@docket/types';
+} from '@docket/connections/notion/mirror-contract';
+import type { VocabularySkin } from '@docket/work/vocabulary';
 import {
   MIRROR_ENTITY_ORDER,
   MIRROR_ENTITY_SPECS,
@@ -48,7 +48,7 @@ import {
   defaultPropertyMap,
   personCompanionKey,
   provisionedKind,
-} from '@docket/integrations';
+} from '@docket/connections/notion/mirror-schema';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../error';

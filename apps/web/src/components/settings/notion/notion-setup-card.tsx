@@ -19,7 +19,7 @@
  * - **A run that failed.** The provision route answers 200 carrying a failed run, so the
  *   controller surfaces that as an error instead of letting it read as success.
  */
-import type { NotionParentPageOut } from '@docket/types';
+import type { NotionParentPageOut } from '@docket/connections/notion/mirror-contract';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useState } from 'react';

@@ -24,6 +24,16 @@ describe('Time Ledger agent execution bridge', () => {
     const orgId = await seedOrg(schema.db, schema);
     const statusId = await seedStatuses(schema.db, schema, orgId);
     const humanActorId = await addMember(schema.db, schema, orgId, userId);
+    await schema.db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'actor',
+      subjectId: humanActorId,
+      resourceKind: 'organization',
+      resourceId: orgId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+      cascades: true,
+    });
     const agentActor = one(
       await schema.db
         .insert(schema.actor)

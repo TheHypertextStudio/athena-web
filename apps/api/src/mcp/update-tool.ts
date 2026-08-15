@@ -21,23 +21,36 @@
  *   quietly rewrote every task in an organization is not a recoverable mistake, even with undo.
  */
 import { db, initiative, program, project, task } from '@docket/db';
-import { Health, InitiativePriority, Priority } from '@docket/types';
+import {
+  Health,
+  InitiativePriority,
+  InitiativeStatus,
+  ProgramStatus,
+  ProjectStatus,
+} from '@docket/types';
+import { Priority } from '@docket/work/task-contract';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
 import { ApiError, ValidationError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
+import { buildTaskViewFilter } from '../routes/task-helpers';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { recordChangeSet, trackedFields, type ChangeRecord } from './change-set';
 import { DESCRIPTOR_HINT, resolveOptional } from './descriptors';
-import { listWork, listWorkFilters, WORK_ENTITIES, type WorkEntity } from './list-work';
+import {
+  isTaskRowVisible,
+  listWork,
+  listWorkFilters,
+  WORK_ENTITIES,
+  type WorkEntity,
+} from './list-work';
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
-import { resolveContainerStatus } from '../lib/work-status';
 
 /**
  * The most rows one call will touch.
@@ -154,6 +167,13 @@ const SETTABLE: Record<WorkEntity, readonly SetName[]> = {
   initiative: ['title', 'description', 'status', 'health', 'priority', 'owner', 'targetDate'],
 };
 
+/** The enum each entity's `status` must belong to. */
+const STATUS_ENUM = {
+  project: ProjectStatus,
+  program: ProgramStatus,
+  initiative: InitiativeStatus,
+} as const;
+
 /**
  * Raise a field error carrying the legal alternatives.
  *
@@ -191,6 +211,12 @@ function assertSettable(entity: WorkEntity, set: UpdateSet): void {
  * initiative status. Checking here instead means the rejection names the entity's own values.
  */
 function assertEnums(entity: WorkEntity, set: UpdateSet): void {
+  if (set.status !== undefined && entity !== 'task') {
+    const schema = STATUS_ENUM[entity];
+    if (!schema.safeParse(set.status).success) {
+      reject('set.status', set.status, `Not a ${entity} status.`, schema.options);
+    }
+  }
   if (set.priority !== undefined) {
     const schema = entity === 'initiative' ? InitiativePriority : Priority;
     if (!schema.safeParse(set.priority).success) {
@@ -271,17 +297,12 @@ async function buildPatch(
   row: Record<string, unknown>,
   set: UpdateSet,
   refs: ResolvedRefs,
-  containerStatus?: { statusId: string; status: string },
 ): Promise<Record<string, unknown>> {
   const patch: Record<string, unknown> = {
     // `title` is the caller's word for it; the column is `name` on everything but a task.
     ...(set.title !== undefined ? { [entity === 'task' ? 'title' : 'name']: set.title } : {}),
     ...clearableTextPatch('description', set.description),
-    // Resolved once by the caller, before the scope query, so a status this workspace does not
-    // have is refused even when the scope matches nothing.
-    ...(containerStatus === undefined
-      ? {}
-      : { status: containerStatus.status, statusId: containerStatus.statusId }),
+    ...(set.status !== undefined ? { status: set.status } : {}),
     ...(set.priority !== undefined ? { priority: set.priority } : {}),
     ...(set.health !== undefined ? { health: set.health } : {}),
     ...(refs.assignee !== undefined ? { assigneeId: refs.assignee } : {}),
@@ -296,9 +317,6 @@ async function buildPatch(
   };
   if (set.state !== undefined) {
     const transition = await resolveStateTransition(orgId, String(row['teamId']), set.state);
-    // The key and the status it names move together; the composite foreign key refuses a row
-    // where they disagree.
-    patch['statusId'] = transition.statusId;
     patch['state'] = transition.state;
     patch['completedAt'] = transition.completedAt;
     patch['canceledAt'] = transition.canceledAt;
@@ -467,12 +485,6 @@ export function registerUpdateTool(
         const set = input.set;
         assertSettable(entity, set);
         assertEnums(entity, set);
-        // Resolved here rather than per row: a status this workspace does not have is a bad
-        // request, and it has to be refused even when the scope matches nothing at all.
-        const containerStatus =
-          set.status !== undefined && entity !== 'task'
-            ? await resolveContainerStatus(input.orgId, entity, set.status, 'set.status')
-            : undefined;
         if (Object.keys(set).length === 0) {
           reject('set', '', 'Nothing to change — name at least one field.', SETTABLE[entity]);
         }
@@ -495,9 +507,16 @@ export function registerUpdateTool(
         const selected =
           ids !== undefined && ids.length > 0
             ? ids
-            : (await listWork(input.orgId, entity, filters, MAX_TARGETS, undefined)).map(
-                (row) => row.id,
-              );
+            : (
+                await listWork(
+                  input.orgId,
+                  actorCtx.actorId,
+                  entity,
+                  filters,
+                  MAX_TARGETS,
+                  undefined,
+                )
+              ).map((row) => row.id);
         if (selected.length > MAX_TARGETS) {
           reject(
             'scope',
@@ -518,6 +537,11 @@ export function registerUpdateTool(
                 .select()
                 .from(table)
                 .where(and(inArray(table.id, selected), eq(table.organizationId, input.orgId)));
+        const canViewTask =
+          entity === 'task' ? await buildTaskViewFilter(input.orgId, actorCtx.actorId) : undefined;
+        const visibleRows = canViewTask
+          ? rows.filter((row) => isTaskRowVisible(row, canViewTask))
+          : rows;
 
         const refs = await resolveReferences(input.orgId, set);
         // Changing who is accountable is an `assign`-level act, exactly as the tasks router
@@ -529,7 +553,7 @@ export function registerUpdateTool(
         const report: { id: string; title: string; fields: ReturnType<typeof diff> }[] = [];
         const skipped: { id: string; title: string; reason: string }[] = [];
 
-        for (const row of rows) {
+        for (const row of visibleRows) {
           const id = String(row['id']);
           const title = titleOf(row, id);
           try {
@@ -545,7 +569,7 @@ export function registerUpdateTool(
             continue;
           }
 
-          const patch = await buildPatch(entity, input.orgId, row, set, refs, containerStatus);
+          const patch = await buildPatch(entity, input.orgId, row, set, refs);
           const before = trackedFields(entity, row);
           const updated = await db
             .update(table)
@@ -581,7 +605,7 @@ export function registerUpdateTool(
         });
 
         return jsonResult({
-          matched: rows.length,
+          matched: visibleRows.length,
           changed: changes.length,
           entity,
           changes: report,

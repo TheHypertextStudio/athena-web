@@ -3,10 +3,10 @@
  *
  * @remarks
  * The last link in ambient ingestion. Gmail sweeps, GitHub webhooks and Linear webhooks all
- * already end at a committed observation that the automation engine sees; until now the only
+ * already end at a committed event that the automation engine sees; until now the only
  * thing a rule could do with one was act on a Docket entity that *already* existed. This module
  * is what a rule dispatches when the answer is "there should be a task for this, over there":
- * it resolves the observation back to the inbound item behind it, decides which task that item
+ * it resolves the event back to the inbound item behind it, decides which task that item
  * belongs to, and creates or updates exactly one.
  *
  * Three properties matter more than the feature itself, because an automation that gets any of
@@ -44,11 +44,11 @@ import {
 } from '@docket/db';
 import {
   EmailSuggestionMeta,
-  Priority,
   SourceSystemKind,
   providerSourceSystem,
   type DirectoryProviderId,
 } from '@docket/types';
+import { Priority } from '@docket/work/task-contract';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -360,7 +360,7 @@ async function taskExistsIn(taskId: string, targetOrgId: string): Promise<boolea
  * Route one inbound item to a task in the target workspace: create it, or update the task the
  * item is already linked to. Never throws for a routing-configuration problem.
  *
- * @param event - The firing observation, projected into the engine's shape.
+ * @param event - The firing committed event, projected into the engine's shape.
  * @param params - The rule's routing target.
  * @returns what happened, as data — the caller (the action handler) logs it.
  */

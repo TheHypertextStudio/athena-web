@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import type { VocabularySkin } from '@docket/types';
+import type { VocabularySkin } from '@docket/work/vocabulary';
 import { render, renderHook, screen } from '@testing-library/react';
 import * as React from 'react';
 import { describe, expect, it } from 'vitest';

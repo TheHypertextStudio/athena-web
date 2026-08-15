@@ -40,7 +40,7 @@ import type {
   ElicitationSpec,
   ElicitationStatus,
   ElicitationTimeoutPolicy,
-} from '@docket/types';
+} from '@docket/athena/elicitation';
 
 import { genId } from '../id';
 import { agentSession, sessionActivity } from './agents';

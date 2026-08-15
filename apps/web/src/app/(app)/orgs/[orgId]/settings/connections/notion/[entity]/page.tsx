@@ -12,7 +12,7 @@
  * An unknown `entity` segment renders a plain not-found rather than throwing, so a stale
  * bookmark from before an entity was renamed is a dead end the user can read, not a crash.
  */
-import { NotionMirrorEntity } from '@docket/types';
+import { NotionMirrorEntity } from '@docket/connections/notion/mirror-contract';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
 

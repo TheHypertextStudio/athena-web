@@ -7,7 +7,7 @@
  * records what was actually heard (ACH-07), and no reply is ever assembled before being spoken
  * (ACH-03).
  */
-import type { VoiceActionOut, VoiceEndReason, VoiceTurnOut } from '@docket/types';
+import type { VoiceActionOut, VoiceEndReason, VoiceTurnOut } from '@docket/athena/voice';
 import { describe, expect, it } from 'vitest';
 
 import {

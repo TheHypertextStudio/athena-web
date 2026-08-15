@@ -20,13 +20,16 @@
  * trusted for access.
  */
 import type { ResourceKind } from '@docket/authz';
+import { comment, db, task } from '@docket/db';
 import type { McpRegistrar } from './catalog';
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
+import { buildTaskViewFilter } from '../routes/task-helpers';
 import { registerApps } from './apps';
-import type { McpContext } from './auth';
+import type { McpActor, McpContext } from './auth';
 import {
   hydrateAgent,
   hydrateComment,
@@ -49,6 +52,7 @@ import {
   hydrateProgram,
   hydrateProject,
   hydrateTask,
+  type TaskViewFilter,
 } from './resource-work-hydrators';
 import { authorize, scopedActor } from './result';
 import { RESOURCE_READ_SCOPE, requireScope } from './scope';
@@ -144,12 +148,30 @@ function authTargetId(type: ReadableType, orgId: string, id: string): string {
   return resourceKindOf(type) === 'organization' && type !== 'org' ? orgId : id;
 }
 
+/** Require canonical current-task visibility before projecting a task-bound resource. */
+async function assertTaskVisible(orgId: string, actorId: string, taskId: string): Promise<void> {
+  const [target] = await db
+    .select({
+      id: task.id,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+    })
+    .from(task)
+    .where(and(eq(task.id, taskId), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+    .limit(1);
+  const canViewTask = await buildTaskViewFilter(orgId, actorId);
+  if (!target || !canViewTask(target)) throw new NotFoundError();
+}
+
 /**
  * The `view` gate every entity read passes, whatever addressed it.
  *
  * @remarks
  * The single place the two-layer check lives: the `work:read` scope, then the per-org `view`
- * cascade against the right resource kind. The resource template, the `get` tool, and
+ * cascade against the right resource kind — except tasks, whose public baseline and direct sharing
+ * are resolved by the canonical task-view predicate. The resource template, the `get` tool, and
  * `resources/subscribe` all route through here, because three copies of this block is exactly how
  * subscribe silently becomes an oracle for entities a caller cannot read.
  *
@@ -164,14 +186,39 @@ export async function authorizeEntity(
   orgId: string,
   type: string,
   id: string,
-): Promise<void> {
+): Promise<McpActor> {
   if (!isReadableType(type)) throw new NotFoundError();
   const actorCtx = await scopedActor(ctx, orgId, RESOURCE_READ_SCOPE);
+
+  if (type === 'task') {
+    // Tasks have a deliberately richer read rule than the generic grant cascade: a public task
+    // is visible to non-guests, and private tasks can be shared directly.
+    await assertTaskVisible(orgId, actorCtx.actorId, id);
+    return actorCtx;
+  }
+
+  if (type === 'comment') {
+    // A task comment is a task projection, not an organization-level note. Resolve only its
+    // subject pointer before the generic comment gate so neither the resource URI nor a semantic
+    // batch read can expose its body, ids, or href when the owning task is hidden.
+    const [target] = await db
+      .select({ subjectType: comment.subjectType, subjectId: comment.subjectId })
+      .from(comment)
+      .where(and(eq(comment.id, id), eq(comment.organizationId, orgId)))
+      .limit(1);
+    if (!target) throw new NotFoundError();
+    if (target.subjectType === 'task') {
+      await assertTaskVisible(orgId, actorCtx.actorId, target.subjectId);
+      return actorCtx;
+    }
+  }
+
   await authorize(actorCtx, 'view', {
     kind: resourceKindOf(type),
     id: authTargetId(type, orgId, id),
     orgId,
   });
+  return actorCtx;
 }
 
 /**
@@ -225,10 +272,10 @@ export async function readEntity(
   type: string,
   id: string,
 ): Promise<unknown> {
-  await authorizeEntity(ctx, orgId, type, id);
+  const actorCtx = await authorizeEntity(ctx, orgId, type, id);
   /* v8 ignore next -- @preserve authorizeEntity rejects an unknown type before this runs */
   if (!isReadableType(type)) throw new NotFoundError();
-  return hydrate(type, orgId, id);
+  return hydrate(type, orgId, id, await buildTaskViewFilter(orgId, actorCtx.actorId));
 }
 
 /**
@@ -245,28 +292,33 @@ export async function readEntity(
  * @returns the hydrated DTO.
  * @throws {NotFoundError} When the entity does not exist in the org.
  */
-async function hydrate(type: ReadableType, orgId: string, id: string): Promise<unknown> {
+async function hydrate(
+  type: ReadableType,
+  orgId: string,
+  id: string,
+  canViewTask: TaskViewFilter,
+): Promise<unknown> {
   switch (type) {
     case 'org':
       return hydrateOrg(orgId, id);
     case 'task':
-      return hydrateTask(orgId, id);
+      return hydrateTask(orgId, id, canViewTask);
     case 'project':
-      return hydrateProject(orgId, id);
+      return hydrateProject(orgId, id, canViewTask);
     case 'program':
-      return hydrateProgram(orgId, id);
+      return hydrateProgram(orgId, id, canViewTask);
     case 'initiative':
       return hydrateInitiative(orgId, id);
     case 'cycle':
-      return hydrateCycle(orgId, id);
+      return hydrateCycle(orgId, id, canViewTask);
     case 'team':
       return hydrateTeam(orgId, id);
     case 'update':
       return hydrateUpdate(orgId, id);
     case 'comment':
-      return hydrateComment(orgId, id);
+      return hydrateComment(orgId, id, canViewTask);
     case 'session':
-      return hydrateSession(orgId, id);
+      return hydrateSession(orgId, id, canViewTask);
     case 'agent':
       return hydrateAgent(orgId, id);
     /* v8 ignore next 2 -- @preserve exhaustive: the only remaining case is `view` */
@@ -279,8 +331,9 @@ async function hydrate(type: ReadableType, orgId: string, id: string): Promise<u
  * Register the Docket read resources on `server`, bound to the calling user.
  *
  * @remarks
- * The entity template resolves the caller's per-org actor and authorizes `view` before
- * returning the HYDRATED DTO. Static Hub resources are delegated to
+ * The entity template resolves the caller's per-org actor and authorizes before returning the
+ * HYDRATED DTO; task comments follow their owning task's canonical visibility. Static Hub
+ * resources are delegated to
  * {@link registerStaticResources}. The `{org}` and `{id}` template variables complete
  * against the caller's visible orgs / recent entities.
  *
@@ -303,7 +356,7 @@ export function registerResources(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Docket entity',
       description:
-        'Read a hydrated task/project/program/initiative/cycle/team/update/comment/session/agent/view/org by id (gated by the view capability).',
+        'Read a hydrated task/project/program/initiative/cycle/team/update/comment/session/agent/view/org by id. Task comments follow current task visibility; other entities use their documented view gate.',
       mimeType: 'application/json',
     },
     async (uri, variables): Promise<ReadResourceResult> => {

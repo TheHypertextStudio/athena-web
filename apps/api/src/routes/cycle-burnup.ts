@@ -2,17 +2,26 @@ import type { CycleBurnupOut } from '@docket/types';
 import type { z } from 'zod';
 
 import { committedTasks, computeStats, effort, loadCycle } from './cycle-helpers';
+import { buildTaskViewFilter } from './task-helpers';
 
 /**
  * Build the burnup payload for a cycle (without the HTTP envelope).
+ *
+ * @param orgId - The cycle's organization.
+ * @param id - The cycle id.
+ * @param actorId - The active caller whose visible task set defines the roll-up.
+ * @returns The caller-visible cycle burnup payload.
+ *
  * The route handler calls `ok(c, CycleBurnupOut, ...)` inline to preserve Hono's RPC types.
  */
 export async function buildCycleBurnupPayload(
   orgId: string,
   id: string,
+  actorId: string,
 ): Promise<z.input<typeof CycleBurnupOut>> {
   const cy = await loadCycle(orgId, id);
-  const tasks = await committedTasks(orgId, id);
+  const canView = await buildTaskViewFilter(orgId, actorId);
+  const tasks = (await committedTasks(orgId, id)).filter(canView);
   const stats = computeStats(cy, tasks);
 
   // Itemize scope that crept in after the window opened (sorted by when it joined).

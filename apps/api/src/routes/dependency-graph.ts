@@ -79,10 +79,10 @@ Edges are pre-pruned to the viewable set so there are no dangling endpoints: a \
   }),
   zQuery(GraphQuery),
   async (c) => {
-    const { orgId, actorId, roleId } = c.get('actorCtx');
+    const { orgId, actorId } = c.get('actorCtx');
     const { projectId, rootTaskId, depth } = c.req.valid('query');
 
-    const canView = await buildTaskViewFilter(orgId, actorId, roleId);
+    const canView = await buildTaskViewFilter(orgId, actorId);
 
     // 1. Candidate node set by scope, before access filtering.
     const candidates =

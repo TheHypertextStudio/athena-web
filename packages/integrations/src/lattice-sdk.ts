@@ -122,7 +122,7 @@ export interface PersonalLatticeRuntimeResource {
  * Upstream `OpenAiChatMessage` from `@lovelace-ai/compute`. Note what is NOT here: there is no
  * `tool_calls` array, no `tool` role, and no `tools` request field. The gateway's compatibility
  * surface carries plain text only, which is why Athena's tool calling over Lattice runs through
- * the documented text protocol in `@docket/agent-runtime`'s `lattice-tool-protocol`.
+ * the documented text protocol exposed by `@docket/athena/turn/adapters/lattice`.
  */
 export interface OpenAiChatMessage {
   /** Who authored the message. */

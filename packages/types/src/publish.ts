@@ -24,12 +24,12 @@
  * would put user-facing copy outside the application layer that owns it.
  */
 import { z } from 'zod';
+import { VocabularySkin } from '@docket/work/vocabulary';
 
 import { Health } from './capability';
 import { Id, OrganizationId } from './primitives';
 import type { ActorId } from './primitives';
 import { PublicSlug } from './slug';
-import { VocabularySkin } from './vocabulary';
 
 export { PublicSlug, RESERVED_PUBLIC_SLUGS, suggestSlug as suggestPublicSlug } from './slug';
 

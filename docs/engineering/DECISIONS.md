@@ -6,6 +6,8 @@
 
 > Supplements `RECONCILIATION.md`. Every previously-open question/gap/flag in the specs now has a **concrete frozen choice**. Builders and agents follow these verbatim — no further judgment required.
 
+> **Superseded (2026-08-14).** The historical `@docket/types/api` RPC-path guidance below is superseded by [ARCH-001](../WORKLOG.md#arch-001-domain-first-repository-reorganization): use the API-owned `@docket/api/rpc-contract` transport contract.
+
 _Resolved 105 open items across 7 areas._
 
 ## data-model

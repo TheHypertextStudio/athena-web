@@ -5,9 +5,9 @@
  * `calendar-agenda.test.ts`, `calendar-items.test.ts`, `calendar-write-back.test.ts`,
  * `calendar-task-links.test.ts`, and `calendar-collaboration.test.ts` already exercise this
  * router's happy paths. This file closes the branches those leave untouched: the two
- * visibility-PATCH 404s, `resolveTaskTarget`'s workspace/team-not-found 404s and its
- * `workflowStates[0]?.key ?? 'backlog'` fallback, and the create-task dual-write's silent skip
- * when no matching `calendar_item` row exists yet.
+ * visibility-PATCH 404s, `resolveTaskTarget`'s workspace/team-not-found and membership/capability
+ * boundaries, its `workflowStates[0]?.key ?? 'backlog'` fallback, and the create-task dual-write's
+ * silent skip when no matching `calendar_item` row exists yet.
  */
 import { genId } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
@@ -74,9 +74,20 @@ describe('POST /events/:id/create-task — resolveTaskTarget branches', () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, label);
     const base = await seedBaseOrg(schema.db, schema);
+    const contributorRole = one(
+      await schema.db
+        .insert(schema.role)
+        .values({
+          organizationId: base.orgId,
+          key: 'calendar-contributor',
+          name: 'Calendar contributor',
+          capabilities: ['contribute'],
+        })
+        .returning({ id: schema.role.id }),
+    );
     await schema.db
       .update(schema.actor)
-      .set({ userId })
+      .set({ userId, roleId: contributorRole.id })
       .where(eq(schema.actor.id, base.humanActorId));
     await seedGoogleAccount(schema.db, schema, userId, `${label}-sub`);
     const connection = one(
@@ -120,6 +131,25 @@ describe('POST /events/:id/create-task — resolveTaskTarget branches', () => {
     return { schema, userId, base, event };
   }
 
+  async function expectNoCreatedTaskOrAttachment(
+    schema: Awaited<ReturnType<typeof getDb>>,
+    organizationId: string,
+  ) {
+    const [tasks, attachments] = await Promise.all([
+      schema.db
+        .select({ id: schema.task.id })
+        .from(schema.task)
+        .where(eq(schema.task.organizationId, organizationId)),
+      schema.db
+        .select({ id: schema.attachment.id })
+        .from(schema.attachment)
+        .where(eq(schema.attachment.organizationId, organizationId)),
+    ]);
+
+    expect(tasks).toEqual([]);
+    expect(attachments).toEqual([]);
+  }
+
   it('404s when the caller has no actor in the requested organization', async () => {
     const { schema, userId, event } = await seedEvent('NoWorkspace');
     const otherOrg = await seedBaseOrg(schema.db, schema);
@@ -133,6 +163,62 @@ describe('POST /events/:id/create-task — resolveTaskTarget branches', () => {
     expect(res.status).toBe(404);
     const body = await json<{ code: string }>(res);
     expect(body.code).toBe('not_found');
+  });
+
+  it('404s without creating a task or attachment for a suspended member', async () => {
+    const { schema, userId, base, event } = await seedEvent('SuspendedMembership');
+    await schema.db
+      .update(schema.actor)
+      .set({ status: 'suspended' })
+      .where(eq(schema.actor.id, base.humanActorId));
+    const app = appWithSession(calendarRouter, fakeSession(userId));
+
+    const res = await app.request(`/events/${event.id}/create-task`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ organizationId: base.orgId, teamId: base.teamId }),
+    });
+
+    expect(res.status).toBe(404);
+    await expectNoCreatedTaskOrAttachment(schema, base.orgId);
+  });
+
+  it('requires contribute from active Guest and roleless members before creating task artifacts', async () => {
+    for (const membership of ['guest', 'roleless'] as const) {
+      const { schema, userId, base, event } = await seedEvent(`NoContribute${membership}`);
+      if (membership === 'guest') {
+        const guestRole = one(
+          await schema.db
+            .insert(schema.role)
+            .values({
+              organizationId: base.orgId,
+              key: 'guest',
+              name: 'Guest',
+              capabilities: [],
+            })
+            .returning({ id: schema.role.id }),
+        );
+        await schema.db
+          .update(schema.actor)
+          .set({ roleId: guestRole.id })
+          .where(eq(schema.actor.id, base.humanActorId));
+      } else {
+        await schema.db
+          .update(schema.actor)
+          .set({ roleId: null })
+          .where(eq(schema.actor.id, base.humanActorId));
+      }
+      const app = appWithSession(calendarRouter, fakeSession(userId));
+
+      const res = await app.request(`/events/${event.id}/create-task`, {
+        method: 'POST',
+        headers: jsonHeaders(),
+        body: JSON.stringify({ organizationId: base.orgId, teamId: base.teamId }),
+      });
+
+      expect(res.status, `${membership} member status`).toBe(403);
+      await expectNoCreatedTaskOrAttachment(schema, base.orgId);
+    }
   });
 
   it('404s when the requested team does not belong to the resolved workspace', async () => {

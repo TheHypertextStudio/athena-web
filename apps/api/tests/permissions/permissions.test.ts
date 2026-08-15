@@ -168,6 +168,50 @@ describe('orgContextMiddleware', () => {
     expect(res.status).toBe(404);
   });
 
+  it('does not let a suspended human reach a capability-guarded org mutation', async () => {
+    const slug = `mw-suspended-${Math.random().toString(36).slice(2, 10)}`;
+    const [org] = await db
+      .insert(schema.organization)
+      .values({ name: slug, slug, lifecycleState: 'active' })
+      .returning({ id: schema.organization.id });
+    const orgId = org!.id;
+    const [user] = await db
+      .insert(schema.user)
+      .values({ name: 'Suspended Ada', email: `${slug}@e.com` })
+      .returning({ id: schema.user.id });
+    const userId = user!.id;
+    const [role] = await db
+      .insert(schema.role)
+      .values({
+        organizationId: orgId,
+        key: 'owner',
+        name: 'Owner',
+        isSystem: true,
+        capabilities: ['manage'],
+      })
+      .returning({ id: schema.role.id });
+    await db.insert(schema.actor).values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Suspended Ada',
+      userId,
+      roleId: role!.id,
+      status: 'suspended',
+    });
+
+    let mutationCount = 0;
+    const app = ctxApp(fakeSession(userId));
+    app.patch(`/:orgId/mutation`, capabilityGuard('manage'), (c) => {
+      mutationCount += 1;
+      return c.json({ ok: true });
+    });
+
+    const res = await app.request(`/${orgId}/mutation`, { method: 'PATCH' });
+
+    expect(res.status).toBe(404);
+    expect(mutationCount).toBe(0);
+  });
+
   it('404s when no orgId param is present', async () => {
     // Mount the middleware on a wildcard with no `:orgId` segment so the param is absent.
     const app = new Hono<AppEnv>();

@@ -28,7 +28,7 @@ import {
   toMcpElicitResult,
   type ElicitationSpec,
   type McpElicitResult,
-} from '@docket/types';
+} from '@docket/athena/elicitation';
 import { agentElicitation, db } from '@docket/db';
 import { eq } from 'drizzle-orm';
 

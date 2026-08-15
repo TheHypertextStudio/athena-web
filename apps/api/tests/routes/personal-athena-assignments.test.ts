@@ -13,7 +13,7 @@ vi.hoisted(() => {
 });
 
 import type * as DbModule from '@docket/db';
-import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AgentRuntimeModule from '@docket/athena/turn';
 import type * as AsyncRunnerModule from '../../src/agent/async-runner';
 
 const runnerMocks = vi.hoisted(() => ({ admit: vi.fn() }));

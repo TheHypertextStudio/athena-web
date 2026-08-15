@@ -37,10 +37,10 @@ import {
   parseElicitationAnswer,
   type ElicitationField,
   type ElicitationFieldError,
-  type ElicitationOut,
   type ElicitationRequest,
   type ElicitationSpec,
-} from '@docket/types';
+} from '@docket/athena/elicitation';
+import type { ElicitationOut } from '@docket/athena/elicitation-api';
 import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm';
 
 import {

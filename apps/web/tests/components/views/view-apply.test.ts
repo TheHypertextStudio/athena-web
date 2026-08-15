@@ -237,6 +237,10 @@ describe('sortRows', () => {
 });
 
 describe('applyView', () => {
+  it('uses a non-user-supplied sentinel for the empty group bucket', () => {
+    expect(EMPTY_GROUP_ID).toBe('\0__none__');
+  });
+
   it('returns a flat sorted list with no groups when grouping is off', () => {
     const result = applyView(rows, viewState({ sort: [{ field: 'name', dir: 'asc' }] }), catalog);
     expect(result.groups).toBeNull();

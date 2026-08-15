@@ -18,6 +18,7 @@
  * {@link ../time/commands.stopTimeRecord} is where the caller is asked, and
  * {@link anchorExistingRecord} is what turns their answer into the anchor.
  */
+import { canActor } from '@docket/authz';
 import {
   actor,
   db,
@@ -28,10 +29,11 @@ import {
   timeInterval,
   timeRecord,
 } from '@docket/db';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 
-import { ConflictError, NotFoundError, ValidationError } from '../error';
+import { CapabilityError, ConflictError, NotFoundError, ValidationError } from '../error';
 import { landingStatus } from '../lib/work-status';
+import { resourceAccessKey, resolveResourceAccess } from '../permissions/resource-access';
 
 /**
  * A transaction handle, or the pooled connection when there is no transaction in play.
@@ -97,7 +99,7 @@ export function requireTrackingName(
   return trimmed;
 }
 
-/** Resolve the caller's active human Actor in a workspace, or null when they have none. */
+/** Resolve the caller's active, unarchived human Actor in a live workspace. */
 async function actorIdFor(
   executor: Executor,
   userId: string,
@@ -106,20 +108,23 @@ async function actorIdFor(
   const rows = await executor
     .select({ id: actor.id })
     .from(actor)
+    .innerJoin(organization, eq(organization.id, actor.organizationId))
     .where(
       and(
         eq(actor.userId, userId),
         eq(actor.organizationId, organizationId),
         eq(actor.kind, 'human'),
         eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+        isNull(organization.archivedAt),
       ),
     )
     .limit(1);
   return rows[0]?.id ?? null;
 }
 
-/** Load an existing task the caller may track, hiding cross-tenant rows as not found. */
-async function anchorToExistingTask(
+/** Resolve the active caller and canonical current view access for one existing task. */
+async function resolveViewableTaskAnchor(
   executor: Executor,
   userId: string,
   taskId: string,
@@ -127,12 +132,18 @@ async function anchorToExistingTask(
   const rows = await executor
     .select({ id: task.id, title: task.title, organizationId: task.organizationId })
     .from(task)
-    .where(eq(task.id, taskId))
+    .where(and(eq(task.id, taskId), isNull(task.archivedAt)))
     .limit(1);
   const row = rows[0];
   if (!row) throw new NotFoundError('Task not found');
+
   const actorId = await actorIdFor(executor, userId, row.organizationId);
   if (!actorId) throw new NotFoundError('Task not found');
+
+  const taskRef = { organizationId: row.organizationId, kind: 'task' as const, id: row.id };
+  const access = await resolveResourceAccess(userId, [taskRef]);
+  if (!access.get(resourceAccessKey(taskRef))?.canView) throw new NotFoundError('Task not found');
+
   return {
     taskId: row.id,
     organizationId: row.organizationId,
@@ -142,14 +153,46 @@ async function anchorToExistingTask(
   };
 }
 
+/** Assert that a persisted time anchor remains visible to the current caller. */
+export async function assertTaskAnchorReadable(userId: string, taskId: string): Promise<void> {
+  await resolveViewableTaskAnchor(db, userId, taskId);
+}
+
+/** Require current contribution authority before creating a task in the resolved landing team. */
+async function assertLandingTeamContribution(
+  executor: Executor,
+  actorId: string,
+  organizationId: string,
+  teamId: string,
+): Promise<void> {
+  const target = { kind: 'team' as const, id: teamId, orgId: organizationId };
+  if ((await canActor(actorId, 'contribute', target, executor)).allow) return;
+
+  // A label creates a new task rather than naming an existing hidden resource. The caller already
+  // chose this workspace, so a capability denial communicates the missing write authority without
+  // echoing a task or team identity. Keeping the query on `executor` also makes unnamed-stop
+  // anchoring safe inside its surrounding transaction.
+  throw new CapabilityError();
+}
+
+/** Load an existing task the caller may track, hiding cross-tenant rows as not found. */
+async function anchorToExistingTask(
+  executor: Executor,
+  userId: string,
+  taskId: string,
+): Promise<TaskAnchor> {
+  return resolveViewableTaskAnchor(executor, userId, taskId);
+}
+
 /**
  * Pick the workspace a freeform tracking session lands in.
  *
  * @remarks
  * The caller's personal workspace is the default because tracking is personal by nature and a
  * quick "start a timer, I'll say what it was" should never require choosing an audience first.
- * An explicit `organizationId` always wins, so starting from inside a team workspace keeps the
- * created task where the work actually lives.
+ * An explicit `organizationId` wins only when the caller has an active, unarchived membership
+ * and contribution authority in its resolved landing team, so permitted team work stays where it
+ * lives without turning an arbitrary workspace ID into write access.
  *
  * Exported because an unanchored session has no task to read a workspace from, and its lifecycle
  * events still have to be attributed somewhere. Attributing them here means the event lands in the
@@ -169,7 +212,15 @@ export async function resolveTargetOrganization(
     .select({ id: organization.id })
     .from(actor)
     .innerJoin(organization, eq(organization.id, actor.organizationId))
-    .where(and(eq(actor.userId, userId), eq(actor.kind, 'human'), eq(actor.status, 'active')))
+    .where(
+      and(
+        eq(actor.userId, userId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+        isNull(organization.archivedAt),
+      ),
+    )
     // `desc` on a boolean puts `true` first, so the personal space wins whenever one exists.
     .orderBy(desc(organization.isPersonal), asc(organization.createdAt));
   const chosen = memberships[0];
@@ -187,16 +238,16 @@ async function anchorToNewTask(
   const title = requireTrackingName(label);
   const organizationId = await resolveTargetOrganization(executor, userId, requestedOrganizationId);
   const actorId = await actorIdFor(executor, userId, organizationId);
+  if (!actorId) throw new NotFoundError('Workspace not found');
   const teamRows = await executor
-    .select({ id: team.id })
+    .select({ id: team.id, workflowStates: team.workflowStates })
     .from(team)
-    .where(eq(team.organizationId, organizationId))
+    .where(and(eq(team.organizationId, organizationId), isNull(team.archivedAt)))
     .orderBy(asc(team.createdAt))
     .limit(1);
   const teamRow = teamRows[0];
   if (!teamRow) throw new ConflictError('Create a team before tracking time');
-  // Read through whatever the caller is using: this runs inside a transaction on the timer path,
-  // and the module-level client would stall on a connection that transaction already holds.
+  await assertLandingTeamContribution(executor, actorId, organizationId, teamRow.id);
   const landing = await landingStatus(organizationId, 'task', teamRow.id, executor);
   const inserted = await executor
     .insert(task)

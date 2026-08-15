@@ -10,7 +10,8 @@
  * stable `view-transition-name` (`task-node-<id>`) so that filtering, relayout, or expanding
  * the canvas morphs the same node between arrangements rather than hard-swapping it.
  */
-import type { Priority, WorkStatusCategory } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import { type ActorKind, ActorAvatar, StatusIcon } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import { Handle, type NodeProps, NodeToolbar, Position } from '@xyflow/react';

@@ -23,6 +23,7 @@ const TOOLCHAIN_CATALOG_DEPENDENCIES = new Set([
   'typescript-eslint',
   'vite',
   'vitest',
+  'stripe',
 ]);
 
 describe('dependency catalog policy', () => {

@@ -16,7 +16,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import type { OrgLifecycleState } from '../../src/billing/lifecycle';
+import type { OrgLifecycleState } from '@docket/billing/application/lifecycle';
 import type { McpContext } from '../../src/mcp/auth';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { processSearchIndexJobs as ProcessSearchIndexJobs } from '../../src/search/process-jobs';

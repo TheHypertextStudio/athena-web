@@ -43,6 +43,7 @@ import { zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEvent } from './event-emit';
 import { projectDependencyRoutes } from './project-dependency-routes';
+import { buildTaskViewFilter } from './task-helpers';
 
 type ProjectRow = typeof project.$inferSelect;
 
@@ -315,10 +316,10 @@ const projects = new Hono<AppEnv>()
       summary: 'Get Project portfolio overview',
       response: ProjectOverviewOut,
       description:
-        'Returns every visible Project with its decoupled display metadata, direct task completion counts, and Project dependency edges in one bounded read. The same aggregate powers list, dependency, and timeline lenses so switching views never changes the underlying portfolio scope.',
+        'Returns every visible Project with its decoupled display metadata, task completion counts drawn only from Tasks the caller can view, and Project dependency edges in one bounded read. The same caller-visible aggregate powers list, dependency, and timeline lenses so switching views never changes the underlying portfolio scope.',
     }),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const [projectRows, taskRows, dependencyRows, displayRows, milestoneRows] = await Promise.all(
         [
           db
@@ -327,7 +328,14 @@ const projects = new Hono<AppEnv>()
             .where(eq(project.organizationId, orgId))
             .orderBy(desc(project.createdAt), desc(project.id)),
           db
-            .select({ projectId: task.projectId, completedAt: task.completedAt })
+            .select({
+              id: task.id,
+              teamId: task.teamId,
+              projectId: task.projectId,
+              programId: task.programId,
+              visibility: task.visibility,
+              completedAt: task.completedAt,
+            })
             .from(task)
             .where(eq(task.organizationId, orgId)),
           db
@@ -359,8 +367,9 @@ const projects = new Hono<AppEnv>()
         ],
       );
 
+      const canView = await buildTaskViewFilter(orgId, actorId);
       const taskCounts = new Map<string, { total: number; completed: number }>();
-      for (const row of taskRows) {
+      for (const row of taskRows.filter(canView)) {
         if (!row.projectId) continue;
         const current = taskCounts.get(row.projectId) ?? { total: 0, completed: 0 };
         current.total += 1;
@@ -587,11 +596,11 @@ const projects = new Hono<AppEnv>()
       tag: 'Projects',
       summary: 'Get project progress',
       response: ProjectProgress,
-      description: `Compute a project's weighted completion roll-up across its Tasks. A Task counts as completed when its \`completedAt\` timestamp is set. Weighting is estimate-based when ANY task in the project carries a positive \`estimate\` (bigger tasks count for more; a missing estimate is treated as 0); when no task is estimated it falls back to a plain count where each task weighs 1. \`percent\` is \`completedWeight / totalWeight\`, or exactly \`0\` for an empty project (never NaN). \`taskCount\`/\`completedCount\` are always the raw row counts regardless of which weighting mode applied, so a client can show both "N of M tasks" and the weighted bar. The project must exist in the caller's org (404 \`Project not found\`); tasks are read org-scoped as defense in depth. Read-only; org membership suffices. Returns {@link ProjectProgress}.`,
+      description: `Compute a project's weighted completion roll-up across the Tasks the caller can view. A Task counts as completed when its \`completedAt\` timestamp is set. Weighting is estimate-based when ANY visible task in the project carries a positive \`estimate\` (bigger tasks count for more; a missing estimate is treated as 0); when no visible task is estimated it falls back to a plain count where each task weighs 1. \`percent\` is \`completedWeight / totalWeight\`, or exactly \`0\` for an empty visible set (never NaN). \`taskCount\`/\`completedCount\` are always the raw visible-row counts regardless of which weighting mode applied, so a client can show both "N of M tasks" and the weighted bar. The project must exist in the caller's org (404 \`Project not found\`); tasks are read org-scoped as defense in depth. Read-only; organization membership accesses the Project while roll-up data uses canonical task visibility. Returns {@link ProjectProgress}.`,
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
 
       // Existence + tenant check: the project must live in the caller's org.
@@ -604,11 +613,20 @@ const projects = new Hono<AppEnv>()
 
       // Pull this project's tasks, scoped to the same org as a defense-in-depth check.
       const taskRows = await db
-        .select({ estimate: task.estimate, completedAt: task.completedAt })
+        .select({
+          id: task.id,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+          estimate: task.estimate,
+          completedAt: task.completedAt,
+        })
         .from(task)
         .where(and(eq(task.projectId, id), eq(task.organizationId, orgId)));
 
-      return ok(c, ProjectProgress, computeProgress(taskRows));
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      return ok(c, ProjectProgress, computeProgress(taskRows.filter(canView)));
     },
   )
   .route('/', projectDependencyRoutes);

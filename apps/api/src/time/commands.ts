@@ -40,6 +40,7 @@ import {
 import { resolveAnchorSuggestion } from './anchor-suggestion';
 import { hydrateTimeRecords, toTimeCategoryOut } from './read-models';
 import {
+  assertTaskAnchorReadable,
   anchorExistingRecord,
   readTaskAnchor,
   requireTrackingName,
@@ -521,6 +522,9 @@ export async function startTimeRecord(userId: string, id: string): Promise<TimeR
   if (record.status === 'submitted' || record.status === 'superseded') {
     throw new ConflictError('This time record can no longer be changed');
   }
+  // A personal duration fact survives a revoked grant, but starting new work on the linked task
+  // does not. Check before looking for a join candidate or closing another active timer.
+  if (record.taskId) await assertTaskAnchorReadable(userId, record.taskId);
   const now = new Date();
   const alreadyActive = await db
     .select({ id: timeInterval.id })

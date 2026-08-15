@@ -14,7 +14,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { MirrorSourceValue } from '@docket/integrations';
+import type { MirrorSourceValue } from '@docket/connections/notion/mirror-values';
 
 import type { loadEntityRows as LoadEntityRows } from '../../src/routes/notion-mirror-entities';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';

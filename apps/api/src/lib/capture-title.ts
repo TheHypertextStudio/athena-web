@@ -1,4 +1,4 @@
-import { truncateTitle } from '@docket/agent-runtime';
+import { truncateTitle } from '@docket/work/task-titles';
 
 /**
  * Derive a task title from freeform captured text.

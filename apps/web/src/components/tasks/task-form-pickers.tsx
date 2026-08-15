@@ -1,6 +1,7 @@
 'use client';
 
-import type { EstimationScale, Priority } from '@docket/types';
+import type { EstimationScale } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import {
   ActorPicker,
   DatePicker,

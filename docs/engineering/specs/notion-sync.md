@@ -5,8 +5,12 @@
 > **Docket-designed databases** provision, project, pull Notion edits back onto Task/Project
 > (including `task.state`, via `setTaskState`), and adopt Notion-created rows as new tasks/projects
 > — all under the shared sync lease, driven by webhooks with polling as the safety net.
-> **Owner surface**: `packages/integrations/src/notion*.ts`, `apps/api/src/routes/notion-mirror*.ts`,
-> `apps/api/src/routes/sync-notion.ts`
+> **Ownership**: The generic linked-database connector remains in
+> `@docket/integrations` (`packages/integrations/src/notion*.ts`). The Docket-designed mirror's
+> contracts, rules, port, and adapters live under
+> `@docket/connections/notion/{mirror-contract,mirror-schema,mirror-values,mirror-port,adapters/notion-sdk,adapters/in-memory}`.
+> The API retains credential lookup, leased sync/reconciliation, application workflows, and
+> delivery at `apps/api/src/routes/notion-mirror*.ts` and `apps/api/src/routes/sync-notion.ts`.
 > **Related**: [`integration-sync.md`](./integration-sync.md) (the shared sync spine),
 > [`../../migration/sunsama-to-docket.md`](../../migration/sunsama-to-docket.md)
 
@@ -608,8 +612,9 @@ workspace (pages stored, `last_edited_time` advancing, `since` honoured, trash s
 by the container in `local`/`test` mode exactly as `MockConnector` is.
 
 **`pull` is applied** for Task and Project (`applyPulledValues`, `notion-mirror-entities.ts`), via
-`readMirrorProperties` (`notion-mirror-values.ts`) matching by property id, the same rename-safety
-rule everything else in this file follows. Deliberately narrower than the full projection catalog:
+`readMirrorProperties` (`@docket/connections/notion/mirror-values`) matching by property id, the
+same rename-safety rule everything else in this file follows. Deliberately narrower than the full
+projection catalog:
 
 - **Person fields** (`assignee`/`lead`) are excluded — but no longer because the ids are ambiguous.
   A `people` or `relation` value carries an unambiguous id that resolves through `external_actor`

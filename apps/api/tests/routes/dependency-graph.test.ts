@@ -135,6 +135,29 @@ describe('dependency graph — org scope', () => {
 
     expect((await fetchGraph(orgId, humanActorId)).nodes.some((n) => n.id === secret)).toBe(true);
   });
+
+  it('does not return a private node through a non-cascading team grant', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const secret = await seedTask(orgId, teamId, {
+      title: 'Classified dependency node',
+      visibility: 'private',
+    });
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'actor',
+      subjectId: humanActorId,
+      resourceKind: 'team',
+      resourceId: teamId,
+      capabilities: ['view'],
+      effect: 'allow',
+      cascades: false,
+    });
+
+    const out = await fetchGraph(orgId, humanActorId);
+
+    expect(out.nodes.some((node) => node.id === secret)).toBe(false);
+    expect(JSON.stringify(out)).not.toContain('Classified dependency node');
+  });
 });
 
 describe('dependency graph — project scope', () => {

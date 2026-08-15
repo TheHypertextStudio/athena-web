@@ -18,7 +18,11 @@
  *   Playwright's `networkidle` never settles, which breaks this repo's own screenshot and e2e
  *   tooling on every page that mounts the surface. Measured: 25s and still not idle.
  */
-import type { AthenaPresenceOut, ElicitationListOut, ElicitationOut } from '@docket/types';
+import type {
+  AthenaPresenceOut,
+  ElicitationListOut,
+  ElicitationOut,
+} from '@docket/athena/elicitation-api';
 import { useEffect, useRef } from 'react';
 
 import { api } from '@/lib/api';

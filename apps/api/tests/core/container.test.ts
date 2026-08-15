@@ -10,6 +10,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import { MockNotionMirror } from '@docket/connections/notion/adapters/in-memory';
+import { NotionMirrorClient } from '@docket/connections/notion/adapters/notion-sdk';
 import {
   CapturePushSender,
   CaptureSmsSender,
@@ -29,6 +31,7 @@ import {
   buildAppContainer,
   buildConnector,
   buildLinearAgentClient,
+  buildNotionMirror,
   buildObserver,
   toModelBackendEnv,
   type AppRuntimeEnv,
@@ -36,6 +39,7 @@ import {
 import { MockRealtimeProvider, OpenAiRealtimeProvider } from '../../src/routes/voice-provider';
 
 const LOCAL: AppRuntimeEnv = { APP_MODE: 'local' };
+const TEST: AppRuntimeEnv = { APP_MODE: 'test' };
 const PROD_BASE: AppRuntimeEnv = { APP_MODE: 'production' };
 
 describe('toModelBackendEnv', () => {
@@ -159,6 +163,25 @@ describe('buildLinearAgentClient', () => {
   it('refuses in production without an access token', () => {
     expect(() => buildLinearAgentClient(undefined, PROD_BASE)).toThrow(
       'Missing required production config: LINEAR_AGENT_ACCESS_TOKEN',
+    );
+  });
+});
+
+describe('buildNotionMirror', () => {
+  it.each([LOCAL, TEST])(
+    'returns the Connections in-memory adapter in local/test mode',
+    (runtimeEnv) => {
+      expect(buildNotionMirror(undefined, runtimeEnv)).toBeInstanceOf(MockNotionMirror);
+    },
+  );
+
+  it('returns the Connections SDK adapter in production with an access token', () => {
+    expect(buildNotionMirror('notion-token', PROD_BASE)).toBeInstanceOf(NotionMirrorClient);
+  });
+
+  it('refuses a production mirror without an access token', () => {
+    expect(() => buildNotionMirror(undefined, PROD_BASE)).toThrow(
+      'Missing required production config: NOTION_ACCESS_TOKEN',
     );
   });
 });

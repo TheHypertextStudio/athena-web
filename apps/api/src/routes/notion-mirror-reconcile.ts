@@ -19,21 +19,25 @@
  * @see `docs/engineering/specs/notion-sync.md`
  */
 import { db, integration, notionMirrorDatabase, notionMirrorRow } from '@docket/db';
-import type { NotionColumnBinding, NotionMirrorEntity } from '@docket/types';
+import type {
+  NotionColumnBinding,
+  NotionMirrorEntity,
+} from '@docket/connections/notion/mirror-contract';
 import {
   MIRROR_ENTITY_SPECS,
   MIRROR_PROJECTION_ORDER,
-  type MirrorColumnSpec,
+  orderedColumns,
+  provisionedKind,
+} from '@docket/connections/notion/mirror-schema';
+import type { MirrorColumnSpec, NotionMirrorPort } from '@docket/connections/notion/mirror-port';
+import {
   type MirrorEntityPages,
   type MirrorReferences,
   type MirrorValue,
-  type NotionMirrorPort,
-  orderedColumns,
   projectRow,
-  provisionedKind,
   readMirrorProperties,
   resolveMirrorValues,
-} from '@docket/integrations';
+} from '@docket/connections/notion/mirror-values';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import { ConnectorConfig } from '@docket/types';

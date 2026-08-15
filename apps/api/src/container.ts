@@ -1,23 +1,21 @@
-import {
-  MockAgentRuntime,
-  MockSummarizer,
-  MockTaskSynthesizer,
-  RealProviderRuntime,
-  RealSummarizer,
-  RealTaskSynthesizer,
-} from '@docket/agent-runtime';
-import { resolveModelBackend } from '@docket/agent-runtime';
-import type { AnthropicClientConfig, ModelBackendEnv } from '@docket/agent-runtime';
-import type {
-  AgentRuntime,
-  AgentTurnRuntime,
-  Summarizer,
-  TaskSynthesizer,
-} from '@docket/agent-runtime';
-import { InMemoryBillingGateway, RealStripeGateway } from '@docket/billing';
-import type { BillingGateway } from '@docket/billing';
+import { MockAgentRuntime, RealProviderRuntime } from '@docket/athena/agent-session';
+import type { AgentRuntime } from '@docket/athena/agent-session';
+import type { AnthropicClientConfig } from '@docket/athena/anthropic';
+import { MockSummarizer, RealSummarizer } from '@docket/athena/digest';
+import type { Summarizer } from '@docket/athena/digest';
+import { MockTaskSynthesizer } from '@docket/athena/task-drafting/adapters/deterministic';
+import { RealTaskSynthesizer } from '@docket/athena/task-drafting/adapters/anthropic';
+import type { AgentTurnRuntime } from '@docket/athena/turn';
+import { resolveModelBackend } from '@docket/athena/turn/model-backend';
+import type { ModelBackendEnv } from '@docket/athena/turn/model-backend';
+import { InMemoryBillingGateway } from '@docket/billing/adapters/in-memory';
+import { RealStripeGateway } from '@docket/billing/adapters/stripe';
+import type { BillingGateway } from '@docket/billing/contracts';
 import { LocalDiskBlob, RealBlob } from '@docket/blob-store';
 import type { BlobStore } from '@docket/blob-store';
+import { MockNotionMirror } from '@docket/connections/notion/adapters/in-memory';
+import { NotionMirrorClient } from '@docket/connections/notion/adapters/notion-sdk';
+import type { NotionMirrorPort } from '@docket/connections/notion/mirror-port';
 import { isRealValue } from '@docket/env';
 import {
   CapturePushSender,
@@ -32,9 +30,6 @@ import {
   RealMcpConnector,
   RealPushSender,
   RealConnector,
-  MockNotionMirror,
-  NotionMirrorClient,
-  type NotionMirrorPort,
   RealGitHubObserver,
   RealNotionObserver,
   RealLinearObserver,
@@ -57,6 +52,7 @@ import type {
 import { buildInboundReceiverFromEnv, buildMailerFromEnv } from '@docket/mail';
 import type { InboundMailReceiver, Mailer } from '@docket/mail';
 import { configureNotificationTransports } from '@docket/notifications/dispatch';
+import type { TaskSynthesizer } from '@docket/work/task-drafting';
 
 import { env } from './env';
 import { resolveVoiceProvider, type VoiceRealtimeProvider } from './routes/voice-provider';

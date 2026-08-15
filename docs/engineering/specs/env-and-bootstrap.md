@@ -8,6 +8,12 @@
 
 > **Note on §3 (bootstrap flow):** This spec was written targeting Vercel as the deployment platform. The production deployment now uses **GCP Cloud Run** — see [`docs/engineering/deployment.md`](../deployment.md) for the actual deployment reference, GitHub Actions variables, GCP resource inventory, and first-deploy walkthrough. Sections §0–§2 (env-var contract and `@docket/env` package design) remain accurate. Section §3 reflects the intended full provisioning flow; steps §3.8–§3.9 (Vercel CLI env writes, `vercel link`) do not apply to the current implementation.
 
+> **Current-topology note (2026-08-14).** There is no standalone `apps/marketing` deployable:
+> marketing routes live in `apps/web`. `apps/runner` is an additive Cloudflare Queue/Workflows
+> Worker and is feature-flagged off in production. The `mkt` rows below are legacy planning
+> material, not a deployment instruction; use the [deployment runbook](../deployment.md) and
+> current app manifests for operational configuration.
+
 This spec defines (1) the complete environment-variable contract for every app/package, (2) the `@docket/env` validation package design (t3-oss/env `extends` composition), and (3) the `pnpm bootstrap` interactive provisioning flow that makes the service "just work" from env vars in both dev and prod, where **dev mirrors prod** (same env contract, same validation, only values differ).
 
 ---
@@ -367,7 +373,7 @@ export const env = createEnv({
 ### 2.5 Validation entry points
 
 - **Next apps:** import the app's `env` in `next.config.ts` (forces validation at build) **and** re-export through `@docket/env` consumed in server code.
-- **Hono api:** `import { env } from "@docket/env/api"` at the top of `apps/api/src/index.ts` so the process refuses to start with a bad contract.
+- **Hono api:** re-export `env` from `apps/api/src/env.ts` and import that module at the top of `apps/api/src/server.ts` so the process refuses to start with a bad contract.
 - A repo script `pnpm env:check` runs each app's `createEnv` against the loaded env and prints the first failing variable with its "where to obtain" hint (the same hint strings the bootstrap uses).
 
 ---

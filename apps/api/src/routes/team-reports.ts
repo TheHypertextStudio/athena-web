@@ -21,6 +21,8 @@ import type {
 } from '@docket/types';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
+import { buildTaskViewFilter } from './task-helpers';
+
 /** How many days of history the throughput series covers. */
 export const THROUGHPUT_WINDOW_DAYS = 30;
 
@@ -55,9 +57,14 @@ export function stateTypeByKey(
  *
  * @param orgId - The tenant.
  * @param teamId - The team whose roster is wanted.
+ * @param viewerActorId - The current actor, whose task visibility gates load counts.
  * @returns The members, ordered by name.
  */
-export async function loadTeamMembers(orgId: string, teamId: string): Promise<TeamMemberOut[]> {
+export async function loadTeamMembers(
+  orgId: string,
+  teamId: string,
+  viewerActorId: string,
+): Promise<TeamMemberOut[]> {
   const rows = await db
     .select({
       actorId: actor.id,
@@ -85,7 +92,7 @@ export async function loadTeamMembers(orgId: string, teamId: string): Promise<Te
   const loadByActor =
     openStates.length === 0
       ? new Map<string, number>()
-      : await openTaskCountsByAssignee(orgId, teamId, openStates);
+      : await openTaskCountsByAssignee(orgId, teamId, viewerActorId, openStates);
 
   return rows.map((row) => ({
     actorId: row.actorId,
@@ -143,10 +150,19 @@ async function openStateKeys(orgId: string, teamId: string): Promise<string[]> {
 async function openTaskCountsByAssignee(
   orgId: string,
   teamId: string,
+  viewerActorId: string,
   openStates: readonly string[],
 ): Promise<Map<string, number>> {
+  const taskVisibility = await buildTaskViewFilter(orgId, viewerActorId);
   const rows = await db
-    .select({ assigneeId: task.assigneeId, count: sql<number>`count(*)::int` })
+    .select({
+      id: task.id,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+      assigneeId: task.assigneeId,
+    })
     .from(task)
     .where(
       and(
@@ -155,13 +171,15 @@ async function openTaskCountsByAssignee(
         isNull(task.archivedAt),
         inArray(task.state, [...openStates]),
       ),
-    )
-    .groupBy(task.assigneeId);
+    );
   // Unassigned open work groups under a null assignee. It is real load on the team, but it is not
   // load on any person, so it is dropped here rather than attributed to someone.
-  return new Map(
-    rows.flatMap((row) => (row.assigneeId === null ? [] : [[row.assigneeId, row.count] as const])),
-  );
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    if (row.assigneeId === null || !taskVisibility(row)) continue;
+    counts.set(row.assigneeId, (counts.get(row.assigneeId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /**
@@ -178,12 +196,14 @@ async function openTaskCountsByAssignee(
  *
  * @param orgId - The tenant.
  * @param teamId - The team to report on.
+ * @param viewerActorId - The current actor, whose task visibility gates report calculations.
  * @param now - The instant the rolling window ends at.
  * @returns The activity report.
  */
 export async function loadTeamActivity(
   orgId: string,
   teamId: string,
+  viewerActorId: string,
   now: Date,
 ): Promise<TeamActivityOut> {
   const teamRows = await db
@@ -196,9 +216,15 @@ export async function loadTeamActivity(
   const windowStart = new Date(now);
   windowStart.setUTCDate(windowStart.getUTCDate() - (THROUGHPUT_WINDOW_DAYS - 1));
   windowStart.setUTCHours(0, 0, 0, 0);
+  const taskVisibility = await buildTaskViewFilter(orgId, viewerActorId);
 
   const rows = await db
     .select({
+      id: task.id,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
       state: task.state,
       estimate: task.estimate,
       createdAt: task.createdAt,
@@ -208,8 +234,9 @@ export async function loadTeamActivity(
     .from(task)
     .where(and(eq(task.teamId, teamId), eq(task.organizationId, orgId), isNull(task.archivedAt)));
 
-  const capacity = bucketCapacity(rows, typeByKey);
-  const throughput = buildThroughput(rows, windowStart, now);
+  const visibleTasks = rows.filter(taskVisibility);
+  const capacity = bucketCapacity(visibleTasks, typeByKey);
+  const throughput = buildThroughput(visibleTasks, windowStart, now);
 
   return {
     teamId: teamId as TeamActivityOut['teamId'],

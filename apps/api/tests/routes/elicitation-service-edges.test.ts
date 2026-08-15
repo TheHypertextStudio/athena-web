@@ -12,7 +12,7 @@ import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type { ElicitationRequest } from '@docket/types';
+import type { ElicitationRequest } from '@docket/athena/elicitation';
 
 import type * as EventEmitModule from '../../src/routes/event-emit';
 import type {

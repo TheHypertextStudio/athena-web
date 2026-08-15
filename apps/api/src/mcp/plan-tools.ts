@@ -22,16 +22,19 @@
  * capability rather than a replaced one: the planner proposes, and a hand edit in the same call
  * still wins.
  */
-import { dailyPlanItem, db, hub, task } from '@docket/db';
-import { and, asc, eq, inArray, max } from 'drizzle-orm';
+import { satisfies } from '@docket/authz';
+import { actor, dailyPlanItem, db, hub, task } from '@docket/db';
+import { and, asc, eq, inArray, isNull, max } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
+import { resourceAccessKey, resolveResourceAccess } from '../permissions/resource-access';
 import { buildHubTodayPayload } from '../routes/hub-today';
+import { buildTaskViewFilter, type ViewableTaskParts } from '../routes/task-helpers';
 import { loadDayCandidates, loadDependencyEdges } from '../services/scheduling/day-plan-repository';
 import { planDay } from '../services/scheduling/day-planner';
 import { loadDayBlocks, loadSchedulingPreferences } from '../services/scheduling/repository';
-import type { McpContext } from './auth';
+import type { McpActor, McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
@@ -207,12 +210,17 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
             : { autoPlanned: 0, unplaced: [] };
 
         let applied = 0;
-        for (const edit of input.edits ?? []) {
-          if (await applyEdit(hubId, input.orgId, input.date, edit)) applied += 1;
+        if (input.edits !== undefined && input.edits.length > 0) {
+          const canViewEditedTask = await buildTaskViewFilter(input.orgId, actorCtx.actorId);
+          for (const edit of input.edits) {
+            if (await applyEdit(hubId, actorCtx, input.date, edit, canViewEditedTask)) {
+              applied += 1;
+            }
+          }
         }
         return jsonResult({
           date: input.date,
-          items: await readDay(hubId, input.date),
+          items: await readDay(hubId, userId, input.date),
           applied,
           autoPlanned: auto.autoPlanned,
           unplaced: auto.unplaced,
@@ -251,12 +259,37 @@ async function autoPlanDay(input: {
   date: string;
 }): Promise<{ autoPlanned: number; unplaced: z.infer<typeof PlanUnplaced>[] }> {
   const preferences = await loadSchedulingPreferences(db, input.hubId);
-  const candidates = await loadDayCandidates(db, {
+  const candidateRows = await loadDayCandidates(db, {
     orgId: input.orgId,
     actorId: input.actorId,
     hubId: input.hubId,
     date: input.date,
     timezone: preferences.timezone,
+  });
+  if (candidateRows.length === 0) return { autoPlanned: 0, unplaced: [] };
+  // `loadDayCandidates` intentionally answers a scheduling question, not an authorization one.
+  // Before it becomes a mutation input, resolve all candidates in one batch: a plan row is still
+  // a task edit, so an active human needs current task-level `contribute`, not merely a write
+  // token or a non-cascading grant on the organization root.
+  const candidateAccess = await resolveResourceAccess(
+    input.userId,
+    candidateRows.map((candidate) => ({
+      organizationId: candidate.organizationId,
+      kind: 'task' as const,
+      id: candidate.taskId,
+    })),
+  );
+  const candidates = candidateRows.filter((candidate) => {
+    const effectiveCapability = candidateAccess.get(
+      resourceAccessKey({
+        organizationId: candidate.organizationId,
+        kind: 'task',
+        id: candidate.taskId,
+      }),
+    )?.effectiveCapability;
+    return effectiveCapability !== null && effectiveCapability !== undefined
+      ? satisfies(effectiveCapability, 'contribute')
+      : false;
   });
   if (candidates.length === 0) return { autoPlanned: 0, unplaced: [] };
 
@@ -332,26 +365,38 @@ async function autoPlanDay(input: {
  * Apply one edit to a day.
  *
  * @param hubId - The caller's Hub.
- * @param orgId - The organization the task belongs to.
+ * @param actorCtx - The caller's authenticated actor in the task's organization.
  * @param date - The day being planned.
  * @param edit - The edit.
+ * @param canViewTask - The caller's current bulk visibility predicate for this organization.
  * @returns whether anything actually changed.
  */
 async function applyEdit(
   hubId: string,
-  orgId: string,
+  actorCtx: McpActor,
   date: string,
   edit: PlanEdit,
+  canViewTask: (task: ViewableTaskParts) => boolean,
 ): Promise<boolean> {
+  const orgId = actorCtx.orgId;
   const taskRows = await db
-    .select({ id: task.id })
+    .select({
+      id: task.id,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+    })
     .from(task)
-    .where(and(eq(task.id, edit.taskId), eq(task.organizationId, orgId)))
+    .where(and(eq(task.id, edit.taskId), eq(task.organizationId, orgId), isNull(task.archivedAt)))
     .limit(1);
-  if (!taskRows[0]) throw new NotFoundError('Task not found');
+  const taskRow = taskRows[0];
+  if (!taskRow || !canViewTask(taskRow)) throw new NotFoundError('Task not found');
+  await authorize(actorCtx, 'contribute', { kind: 'task', id: taskRow.id, orgId });
 
   const where = and(
     eq(dailyPlanItem.hubId, hubId),
+    eq(dailyPlanItem.refOrganizationId, orgId),
     eq(dailyPlanItem.refTaskId, edit.taskId),
     eq(dailyPlanItem.date, date),
   );
@@ -425,10 +470,15 @@ async function applyEdit(
  * the same way every time — an unstable plan is worse than a wrong one.
  *
  * @param hubId - The caller's Hub.
+ * @param userId - The caller whose active organization memberships authorize each plan row.
  * @param date - The day.
  * @returns the plan lines, with titles resolved.
  */
-async function readDay(hubId: string, date: string): Promise<z.infer<typeof PlanItem>[]> {
+async function readDay(
+  hubId: string,
+  userId: string,
+  date: string,
+): Promise<z.infer<typeof PlanItem>[]> {
   const rows = await db
     .select()
     .from(dailyPlanItem)
@@ -436,26 +486,76 @@ async function readDay(hubId: string, date: string): Promise<z.infer<typeof Plan
     .orderBy(asc(dailyPlanItem.sort), asc(dailyPlanItem.createdAt));
   if (rows.length === 0) return [];
 
-  const titles = new Map(
-    (
-      await db
-        .select({ id: task.id, title: task.title })
-        .from(task)
-        .where(
-          inArray(
-            task.id,
-            rows.map((row) => row.refTaskId),
-          ),
-        )
-    ).map((row) => [row.id, row.title]),
+  const taskIds = [...new Set(rows.map((row) => row.refTaskId))];
+  const organizationIds = [...new Set(rows.map((row) => row.refOrganizationId))];
+  const tasks = await db
+    .select({
+      id: task.id,
+      organizationId: task.organizationId,
+      title: task.title,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+    })
+    .from(task)
+    .where(
+      and(
+        inArray(task.id, taskIds),
+        inArray(task.organizationId, organizationIds),
+        isNull(task.archivedAt),
+      ),
+    );
+  const tasksByOrganization = new Map<string, Map<string, (typeof tasks)[number]>>();
+  for (const taskRow of tasks) {
+    let tasksInOrganization = tasksByOrganization.get(taskRow.organizationId);
+    if (!tasksInOrganization) {
+      tasksInOrganization = new Map();
+      tasksByOrganization.set(taskRow.organizationId, tasksInOrganization);
+    }
+    tasksInOrganization.set(taskRow.id, taskRow);
+  }
+
+  // A Hub is cross-organization, so one target-org authorization at the tool boundary cannot
+  // authorize every retained pointer. Build one canonical visibility predicate per active human
+  // membership and use the pointer's stored organization as the lookup boundary.
+  const callerActors = await db
+    .select({ organizationId: actor.organizationId, actorId: actor.id })
+    .from(actor)
+    .where(
+      and(
+        eq(actor.userId, userId),
+        inArray(actor.organizationId, organizationIds),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    );
+  const canViewByOrganization = new Map(
+    await Promise.all(
+      callerActors.map(
+        async (caller) =>
+          [
+            caller.organizationId,
+            await buildTaskViewFilter(caller.organizationId, caller.actorId),
+          ] as const,
+      ),
+    ),
   );
 
-  return rows.map((row) => ({
-    taskId: row.refTaskId,
-    title: titles.get(row.refTaskId) ?? row.refTaskId,
-    status: row.status,
-    sort: row.sort,
-    ...(row.timeboxStartsAt ? { startsAt: row.timeboxStartsAt.toISOString() } : {}),
-    ...(row.timeboxEndsAt ? { endsAt: row.timeboxEndsAt.toISOString() } : {}),
-  }));
+  return rows.flatMap((row) => {
+    const taskRow = tasksByOrganization.get(row.refOrganizationId)?.get(row.refTaskId);
+    const canViewTask = canViewByOrganization.get(row.refOrganizationId);
+    if (!taskRow || canViewTask?.(taskRow) !== true) return [];
+    return [
+      {
+        taskId: row.refTaskId,
+        title: taskRow.title,
+        status: row.status,
+        sort: row.sort,
+        ...(row.timeboxStartsAt ? { startsAt: row.timeboxStartsAt.toISOString() } : {}),
+        ...(row.timeboxEndsAt ? { endsAt: row.timeboxEndsAt.toISOString() } : {}),
+      },
+    ];
+  });
 }

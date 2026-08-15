@@ -21,11 +21,12 @@ import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam } from '../lib/validate';
 
-import { idParam, loadTask } from './task-helpers';
+import { buildTaskViewFilter, idParam, loadTask } from './task-helpers';
 
 /** Task activity-log route, mounted on the tasks router at `/`. */
 export const taskActivityRoutes = new Hono<AppEnv>().get(
@@ -44,11 +45,13 @@ This is the audit ledger, not the activity Stream. The Stream (\`GET /v1/orgs/:o
   }),
   zParam(idParam),
   async (c) => {
-    const { orgId } = c.get('actorCtx');
+    const { orgId, actorId } = c.get('actorCtx');
     const { id } = c.req.valid('param');
     // Existence-hiding: 404 before touching the ledger if the task isn't the caller's. The row is
     // also what the creation entry is projected from, so this read is not spent only on the guard.
     const taskRow = await loadTask(orgId, id);
+    const canView = await buildTaskViewFilter(orgId, actorId);
+    if (!canView(taskRow)) throw new NotFoundError('Task not found');
 
     // The creator's display name, resolved server-side for the same reason every other value on
     // this log is: a reader must never have to resolve an id, and `createdBy` is nulled out when

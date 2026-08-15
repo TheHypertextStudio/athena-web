@@ -17,10 +17,10 @@
  * durable, because every turn was persisted as it happened rather than at hang-up.
  */
 import { actor, db, organization, sessionActivity, user, voiceSession } from '@docket/db';
-import type { VoiceChannel, VoiceEndReason, VoiceTurnOut } from '@docket/types';
+import type { VoiceChannel, VoiceEndReason, VoiceTurnOut } from '@docket/athena/voice';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 
-import { assertAgentSessionsEntitled } from '../billing/entitlement';
+import { assertAgentSessionsEntitled } from '../agent/entitlement';
 import { AgentPlanRequiredError, NotFoundError } from '../error';
 
 import { markProvenanceInline } from '../agent/provenance';
@@ -81,6 +81,12 @@ export interface OpenedVoiceSession extends LiveVoiceSession {
   readonly speakerName: string;
 }
 
+/** The active human membership that authorizes one voice workspace focus. */
+interface VoiceWorkspaceActor {
+  readonly organizationId: string;
+  readonly actorId: string;
+}
+
 /**
  * Resolve the workspace a person's voice session acts in.
  *
@@ -88,7 +94,8 @@ export interface OpenedVoiceSession extends LiveVoiceSession {
  * Voice has no workspace switcher — you cannot see one while driving — so the channel needs a
  * defensible default. It is the person's personal workspace, which is the one workspace every
  * account has and the one whose contents are unambiguously theirs. An explicit
- * `organizationId` (the browser passes the workspace the person is looking at) always wins.
+ * `organizationId` (the browser passes the workspace the person is looking at) wins only when
+ * it names an active, unarchived human membership for that person.
  *
  * @param userId - The account.
  * @param preferred - An explicitly chosen workspace, if any.
@@ -98,22 +105,34 @@ export async function resolveVoiceWorkspace(
   userId: string,
   preferred?: string | null,
 ): Promise<string | null> {
-  if (preferred) return preferred;
-  // The membership actor is the edge that says "this account belongs to this workspace"; a
-  // person always has one in their personal workspace, so one join answers the question.
+  const workspace = await resolveVoiceWorkspaceActor(userId, preferred);
+  return workspace?.organizationId ?? null;
+}
+
+/** Resolve the active human actor that makes a workspace usable for this voice session. */
+async function resolveVoiceWorkspaceActor(
+  userId: string,
+  preferred?: string | null,
+): Promise<VoiceWorkspaceActor | null> {
+  // The membership actor is the authorization edge, not just a convenient way to find an org.
+  // Keeping this lookup shared by explicit browser focus and the phone's personal-workspace
+  // fallback prevents either channel from minting a session for a departed or suspended person.
   const rows = await db
-    .select({ id: organization.id })
-    .from(organization)
-    .innerJoin(actor, eq(actor.organizationId, organization.id))
+    .select({ organizationId: organization.id, actorId: actor.id })
+    .from(actor)
+    .innerJoin(organization, eq(actor.organizationId, organization.id))
     .where(
       and(
         eq(actor.userId, userId),
-        eq(organization.isPersonal, true),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
         isNull(organization.archivedAt),
+        preferred ? eq(organization.id, preferred) : eq(organization.isPersonal, true),
       ),
     )
     .limit(1);
-  return rows[0]?.id ?? null;
+  return rows[0] ?? null;
 }
 
 /**
@@ -152,8 +171,10 @@ export async function isAthenaEntitled(organizationId: string | null): Promise<b
  * @throws {AgentPlanRequiredError} When the workspace's plan does not entitle Athena.
  */
 export async function openVoiceSession(input: OpenVoiceSessionInput): Promise<OpenedVoiceSession> {
-  const organizationId = await resolveVoiceWorkspace(input.userId, input.organizationId);
-  await assertAgentSessionsEntitled(requireWorkspace(organizationId));
+  const workspace = await resolveVoiceWorkspaceActor(input.userId, input.organizationId);
+  if (!workspace) throw new NotFoundError('No workspace to talk about');
+  const { organizationId, actorId } = workspace;
+  await assertAgentSessionsEntitled(organizationId);
 
   const conversation = await resolveCanonicalConversation(input.userId, organizationId);
   const [row] = await db
@@ -177,7 +198,9 @@ export async function openVoiceSession(input: OpenVoiceSessionInput): Promise<Op
     userId: input.userId,
     organizationId,
     channel: input.channel,
-    initiatorActorId: conversation.initiatorId,
+    // A conversation can predate this call or have been started from a different workspace. The
+    // membership actor we just verified is the only authority this voice session may use.
+    initiatorActorId: actorId,
   };
   // A responder generates Athena's words on any channel whose provider does not. The telephone is
   // one (Twilio does speech-to-text and text-to-speech and no language model); the fixture
@@ -378,9 +401,4 @@ export async function recentTurns(
 async function displayName(userId: string): Promise<string> {
   const rows = await db.select({ name: user.name }).from(user).where(eq(user.id, userId)).limit(1);
   return rows[0]?.name ?? '';
-}
-
-function requireWorkspace(organizationId: string | null): string {
-  if (!organizationId) throw new NotFoundError('No workspace to talk about');
-  return organizationId;
 }

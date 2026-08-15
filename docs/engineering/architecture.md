@@ -4,7 +4,18 @@
 > Production answers on `docket.hypertext.studio` / `docket-api.hypertext.studio` /
 > `docket-admin.hypertext.studio` today — see [`domains.md` §0](./domains.md).
 
-> **Companion** to `docs/engineering/docket-engineering-plan.md` (the written overview) and `docs/engineering/specs/*` (build-ready specs; `RECONCILIATION.md` is the decision tie-breaker). These diagrams reflect the **Docket** design — a Turborepo of Next.js apps + a Hono API on **Vercel**, backed by **Neon** Postgres, **Better Auth**, **Stripe**, and a remote **MCP** server. _(Supersedes the archived "Project Athena" architecture under `docs/_archive/`.)_
+> **Historical companion** to `docs/engineering/docket-engineering-plan.md` (the written overview)
+> and `docs/engineering/specs/*`. These diagrams preserve the earlier **Docket** design. Current
+> operational ownership is documented below. _(Supersedes the archived "Project Athena"
+> architecture under `docs/_archive/`.)_
+
+> **Current-topology note (2026-08-14).** The detailed design narrative below preserves earlier
+> architecture decisions and is not the package-ownership authority for new work. The current
+> workspace has `apps/web` (including the marketing routes), `apps/admin`, `apps/api`, and the
+> feature-flagged Cloudflare `apps/runner`; Web deploys on Vercel, Admin/API on GCP Cloud Run.
+> For current ownership use [ARCH-001](../WORKLOG.md#arch-001-domain-first-repository-reorganization)
+> and the [domain-first specification](./specs/domain-first-reorganization.md); for operations use
+> the [deployment runbook](./deployment.md).
 
 ## Overview
 
@@ -12,7 +23,7 @@ Docket is a multi-tenant, AI-native **work command center**. Several Next.js app
 
 ## High-Level System Architecture
 
-The shape of this system follows from a single early decision: keep one backend. Docket runs three Next.js 16 apps (`web`, `marketing`, `admin`) and one Hono 4.x service (`apps/api`) as four independent Vercel projects, but only `apps/api` holds business logic, secrets, and the database connection. The Next apps are pure clients — they consume the API exclusively through a type-only `hc<AppType>` import and carry nothing more sensitive than `NEXT_PUBLIC_*` values. We deliberately resisted the obvious alternative of letting each Next app own its own route handlers and a slice of the data layer. A single Hono service gives the MCP server and the OAuth provider a natural, framework-agnostic home, lets the API deploy on its own cadence, and keeps the 12-factor env contract clean: there is exactly one place that holds `DATABASE_URL`, `BETTER_AUTH_SECRET`, and the Stripe/OAuth/agent credentials, and exactly one surface to audit for tenant-isolation bugs.
+The shape of this system follows from a single early decision: keep one backend. Docket runs two Next.js 16 apps (`web`, `admin`), one Hono 4.x service (`apps/api`), and `apps/runner`, a Cloudflare Queue and Workflows bridge for durable Athena execution. Web deploys on Vercel; Admin and API deploy on GCP Cloud Run. Runner is an additive Cloudflare deployment that accepts opaque execution messages and advances them through signed internal API edges when its production feature flag is enabled. The Next apps are pure clients — they consume the API exclusively through a type-only `hc<AppType>` import and carry nothing more sensitive than `NEXT_PUBLIC_*` values. We deliberately resisted the obvious alternative of letting each Next app own its own route handlers and a slice of the data layer. A single Hono service gives the MCP server and the OAuth provider a natural, framework-agnostic home, lets the API deploy on its own cadence, and keeps the 12-factor env contract clean: there is exactly one place that holds `DATABASE_URL`, `BETTER_AUTH_SECRET`, and the Stripe/OAuth/agent credentials, and exactly one surface to audit for tenant-isolation bugs.
 
 That single backend sits behind a Vercel rewrite rather than being called cross-origin, and the reason is cookies. Better Auth issues a first-party session cookie, and `apps/web` is configured so that `/api/*` rewrites to `apps/api` (`app.docket.app` → `api.docket.app`) at the platform edge. Because the browser believes it is talking to its own origin, the cookie stays first-party — no `SameSite=None`, no third-party-cookie problems, no CORS preflight on every mutation, and the `/api/auth/*` OAuth flows and the `/mcp` endpoint all share that same origin. The same-origin posture is not a convenience; it is what makes passkey-first auth, the OIDC provider, and the MCP resource server able to coexist on one deploy without the session story fragmenting. Development mirrors this exactly — identical topology and `@docket/env` validation, only the values differ (a dev Neon branch, `sk_test_` keys) — so the rewrite-and-cookie behavior is never something that only works in production.
 
@@ -25,14 +36,15 @@ The layer boundaries fall where they do because each owns exactly one concern an
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ CLIENTS                                                                      │
-│   apps/web    apps/marketing    apps/admin     (Next.js 16 · React 19)       │
+│   apps/web    apps/admin                     (Next.js 16 · React 19)         │
+│   apps/runner                                (Cloudflare Queue + Workflows)  │
 │   3rd-party MCP clients:  Claude · Codex · any MCP agent                     │
 │   browser (/api/*) and MCP (/mcp) both reach apps/api via Vercel             │
 └──────────────────────────────────────────────────────────────────────────────┘
                                         ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ VERCEL   —   hosting + routing                                               │
-│   4 Vercel projects · 12-factor env-var deploy                               │
+│ VERCEL + GCP CLOUD RUN   —   hosting + routing                                │
+│   Web on Vercel · Admin/API on Cloud Run · 12-factor env-var deploy          │
 │   apps/web rewrites /api/* → apps/api   (keeps auth cookies first-party)     │
 └──────────────────────────────────────────────────────────────────────────────┘
                                         ▼
@@ -60,51 +72,53 @@ The layer boundaries fall where they do because each owns exactly one concern an
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Three Next.js 16 apps (web, marketing, admin) and any third-party MCP client sit
-above Vercel, which rewrites the product app's `/api/*` to the same-origin Hono
-`apps/api` so auth cookies stay first-party. `apps/api` is the single backend —
+Two Next.js 16 apps (web, admin) and any third-party MCP client sit above the
+browser/API deployment plane. Web's Vercel rewrite sends `/api/*` to the same-origin
+Hono `apps/api` so auth cookies stay first-party. `apps/api` is the single backend —
 it serves the REST+RPC `/v1` surface (org-nested routes plus cross-org `/hub`),
 the `/mcp` Streamable-HTTP server (OAuth 2.1 Resource Server), Stripe webhooks,
 and is itself the OAuth2.1/OIDC provider (Better Auth = Authorization Server). Its
 RPC handlers and MCP tools share one service layer over the cross-cutting concerns
 (auth, grants, work, agent/sessions, billing, integrations) owned by the
 `@docket/*` packages, persisting to Neon Postgres and reaching out to Stripe, the
-social/data providers, and the agent providers that own session compute.
+social/data providers, and the agent providers that own session compute. The separate
+Cloudflare `apps/runner` consumes opaque Athena execution messages and calls only the
+API's signed internal execution endpoints; it is not an RPC client.
 
 ## Monorepo Structure
 
-Docket lives in a single Turborepo on pnpm workspaces because the product is not one app but a federation of them — `apps/web` (the product), `apps/marketing`, `apps/admin`, and `apps/api` (Hono) — that must share one database schema, one auth instance, one set of Zod contracts, and one design system without those things drifting out of sync. pnpm gives us a content-addressed store and strict, non-hoisted `node_modules` so a package can only import what it actually declares (which is what lets us pin Hono to a single identical version everywhere — a hard requirement for RPC type inference to work, discussed below). Turbo 2.9.x sits on top as the task runner and cache: the root `turbo.json` uses the 2.x `tasks` key (the removed 1.x `pipeline` key is a non-starter per Hard Constraint 2) and declares `env`/`globalEnv` explicitly so the build cache invalidates when a relevant environment value changes rather than silently serving a stale artifact. The choice is deliberately modeled on `create-t3-turbo`, adapted from tRPC to Hono RPC; we are reusing a proven monorepo shape, not inventing one.
+Docket lives in a single Turborepo on pnpm workspaces because the product is not one app but a federation of them — `apps/web` (the product), `apps/admin`, `apps/api` (Hono), and `apps/runner` (Cloudflare execution) — that must share one database schema, one auth instance, one set of Zod contracts, and one design system without those things drifting out of sync. pnpm gives us a content-addressed store and strict, non-hoisted `node_modules` so a package can only import what it actually declares (which is what lets us pin Hono to a single identical version everywhere — a hard requirement for RPC type inference to work, discussed below). Turbo 2.9.x sits on top as the task runner and cache: the root `turbo.json` uses the 2.x `tasks` key (the removed 1.x `pipeline` key is a non-starter per Hard Constraint 2) and declares `env`/`globalEnv` explicitly so the build cache invalidates when a relevant environment value changes rather than silently serving a stale artifact. The choice is deliberately modeled on `create-t3-turbo`, adapted from tRPC to Hono RPC; we are reusing a proven monorepo shape, not inventing one.
 
 The non-negotiable rule of this repo is that `@docket/db` is the single owner of all SQL. Every table — the work-domain tables (`organization`, `actor`, `team`, `project`, `task`) and the Better Auth tables (`user`, `session`, `account`, `verification`, `passkey`) alike — is defined, migrated, and exported from this one package. Better Auth does not get its own schema island: its supported model shape is captured with the CLI into a scratch file and reconciled into the hand-maintained `packages/db/src/schema/auth.ts`, where Docket-owned ULID defaults, constraints, and columns remain explicit; `drizzle-kit migrate` applies the resulting migration from `@docket/db`. This single-owner discipline is what makes the ULID decision from RECONCILIATION enforceable. Every primary key is `text("id").primaryKey().$defaultFn(genId)` driven by one generator in `@docket/db/src/id.ts`, and Better Auth's `advanced.database.generateId` is wired to that same generator so that `user.id` is `text` and lines up with every foreign key — including the `actor.user_id` link that folds membership into the human Actor. If auth owned its own tables, `user.id` would default to whatever Better Auth picks and the FK graph would fracture; centralizing SQL is the precondition for one ID primitive across the whole graph and for `ON DELETE CASCADE` to flow cleanly from `organization` through every `organization_id` column.
 
-The packages split into two compilation regimes, and the split is mandatory rather than stylistic. `@docket/db`, `@docket/auth`, and `apps/api` are **compiled** ahead of time (`tsc → dist`, with `main`/`types` pointed at the build output) so consumers import a finished `.d.ts`; everything else — `@docket/ui`, `@docket/types`, `@docket/env` — is consumed just-in-time as raw TypeScript through Next's `transpilePackages`. The reason the compiled side exists at all is the Hono RPC contract. RPC type inference only survives if the router is method-chained (`app.route(...).route(...)`) and exported as `type AppType = typeof routes`, and that inferred type is enormous: if `apps/web` imported the API's router source directly, `tsserver` would re-infer the entire chained-router type on every keystroke and grind to a halt. Splitting the router across `routes/organizations.ts`, `routes/projects.ts`, `routes/tasks.ts`, and friends, then compiling `apps/api` to a flattened `.d.ts`, means the editor reads a pre-computed type instead of recomputing it live. That is the whole point of the compiled/JIT line in the diagram — it is a `tsserver` performance decision, not a packaging preference.
+The packages split into two compilation regimes, and the split is mandatory rather than stylistic. `@docket/db`, `@docket/auth`, and `apps/api` are **compiled** ahead of time (`tsc → dist`, with explicit public subpaths pointed at the build output) so consumers import a finished `.d.ts`; everything else — `@docket/ui`, `@docket/types`, `@docket/env` — is consumed just-in-time as raw TypeScript through Next's `transpilePackages`. The reason the compiled side exists at all is the Hono RPC contract. RPC type inference only survives if the router is method-chained (`app.route(...).route(...)`) and exported as `type AppType = typeof routes`, and that inferred type is enormous: if `apps/web` imported the API's router source directly, `tsserver` would re-infer the entire chained-router type on every keystroke and grind to a halt. Splitting the router across `routes/organizations.ts`, `routes/projects.ts`, `routes/tasks.ts`, and friends, then compiling `apps/api` to a flattened `.d.ts`, means the editor reads a pre-computed type instead of recomputing it live. That is the whole point of the compiled/JIT line in the diagram — it is a `tsserver` performance decision, not a packaging preference.
 
-What actually crosses from `apps/api` to the three Next apps is _only_ the `AppType` — a type-only import. The Next apps never import the Hono service's runtime; they construct an `hc<AppType>(NEXT_PUBLIC_API_URL, { init: { credentials: 'include' } })` client and get fully-typed `client.organizations.$post`, `client.projects.$post`, `client.tasks.$post` calls with the request and response shapes inferred end to end. Both the API tsconfig and every consumer tsconfig must have `"strict": true` or the inference silently collapses to `any`. The runtime requests, by contrast, do not go cross-origin: `apps/web` rewrites `/api/*` to the Hono service via Vercel rewrites so the call is same-origin, which keeps the Better Auth session cookie first-party (CORS-with-credentials is the fallback only if the deployables must be split). `@docket/types` is the shared seam underneath this — it exports the Zod schemas (`OrgCreate`, `ProjectCreate`, `TaskCreate`) that `apps/api` validates both request _and_ response against, and the single branded `Id` primitive that both the REST routes and the MCP tool schemas consume, so the RPC client, the API handlers, and the UI all reference one definition.
+What crosses from `apps/api` to Web and Admin is _only_ the `AppType` — a type-only import from `@docket/api/rpc-contract`. The Next apps never import the Hono service's runtime; they construct an `hc<AppType>(NEXT_PUBLIC_API_URL, { init: { credentials: 'include' } })` client and get fully-typed `client.organizations.$post`, `client.projects.$post`, `client.tasks.$post` calls with request and response shapes inferred end to end. Both the API tsconfig and every consumer tsconfig must have `"strict": true` or the inference silently collapses to `any`. The runtime requests, by contrast, do not go cross-origin: `apps/web` rewrites `/api/*` to the Hono service via Vercel rewrites so the call is same-origin, which keeps the Better Auth session cookie first-party (CORS-with-credentials is the fallback only if the deployables must be split). `@docket/types` is the shared schema seam underneath this — it exports the Zod schemas (`OrgCreate`, `ProjectCreate`, `TaskCreate`) that `apps/api` validates both request _and_ response against, and the single branded `Id` primitive that both the REST routes and the MCP tool schemas consume, so the RPC client, the API handlers, and the UI all reference one definition.
 
 Environment configuration is centralized in `@docket/env`, which every package and app imports. It is built on `@t3-oss/env-core` as one shared base contract (server vars like `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `STRIPE_SECRET_KEY`, the OAuth client pairs, plus the `NEXT_PUBLIC_API_URL` client var) that each deployable _extends_ so it inherits exactly the variables it needs and no more. Validation runs at boot: importing `@docket/env` with a required variable missing throws immediately in dev rather than failing mysteriously deep in a request — the 12-factor contract is enforced, not advisory. Critically, `.env` files live per-app, not at the repo root, and `turbo.json` runs in strict env mode so a task can only see the variables it has declared; combined with the `env`/`globalEnv` declarations this keeps the build cache correct when values change.
 
 The thread tying the structure together is Hard Constraint 3: dev mirrors prod. The same `@docket/env` schema and the same validation run in both environments; only the values differ. The same `apps/api` Hono service that runs as a Vercel deployment is the one `pnpm dev` brings up locally; the same Neon Postgres-targeted `@docket/db` migrations apply against a local or Neon database; the same same-origin rewrite path that keeps cookies first-party in production is exercised in development. There is no separate "dev mode" code path that could pass locally and break on deploy — the env-var-only deploy story and the local story are the same story, which is exactly why `scripts/bootstrap.ts` (`pnpm bootstrap`) provisions real Neon, real auth secrets, and real migrations on a fresh checkout rather than stubbing them. `tooling/` rounds this out with shared tsconfig, ESLint, and Tailwind presets that carry no runtime code and exist purely to keep strictness and style identical across every member of the workspace.
 
 Docket is a single **Turborepo** (pnpm workspaces, turbo 2.9.x, `@docket/*`
-namespace). Four deployables in `apps/`, six shared packages in `packages/`,
-build presets in `tooling/`, all on Vercel. The tree and the package
+namespace). Four deployables in `apps/` across Vercel, GCP Cloud Run, and Cloudflare, shared packages in
+`packages/`, and build presets in `tooling/`. The tree and the package
 dependency / type-flow:
 
 ```
 docket/                          Turborepo · pnpm workspaces · turbo 2.9.x (tasks key)
 │
-├─ apps/                         ── 4 DEPLOYABLES (each its own Vercel project) ──
+├─ apps/                         ── 4 DEPLOYABLES (Vercel + Cloud Run + Cloudflare) ─
 │   ├─ web/         Next.js 16 · React 19 — the product app (consumes @docket/ui)
-│   ├─ marketing/   Next.js 16 — Linear-grade landing → sign-up (consumes @docket/ui)
 │   ├─ admin/       Next.js 16 — service-operator back-office (separate app)
-│   └─ api/         Hono 4.x — work API · /api/auth/* mount · /mcp · OIDC provider
+│   ├─ api/         Hono 4.x — work API · /api/auth/* mount · /mcp · OIDC provider
+│   └─ runner/      Cloudflare — Queue + Workflows bridge for Athena execution
 │
 ├─ packages/                     ── 6 SHARED PACKAGES (@docket/*) ──
 │   ├─ db/          Drizzle + Neon Postgres — SINGLE owner of ALL SQL
 │   │                            (incl. Better Auth-backed tables); ULID genId
 │   ├─ auth/        Better Auth betterAuth() instance + framework handlers
 │   ├─ ui/          shared shadcn/ui + Tailwind components
-│   ├─ types/       Zod schemas + the Hono RPC AppType contract (one branded Id)
+│   ├─ types/       Zod schemas + branded primitives (one branded Id)
 │   ├─ env/         @t3-oss/env validation (extends-composed per deployable)
 │   └─ test-utils/  per-worker tenant · session-seed · db-read helpers
 │
@@ -122,17 +136,15 @@ docket/                          Turborepo · pnpm workspaces · turbo 2.9.x (ta
 ║                                                                                  ║
 ║   @docket/env ─► @docket/db ─► @docket/auth ─► apps/api                          ║
 ║   (validated      (Drizzle      (betterAuth(),    (Hono router, method-chained)  ║
-║    env, all        schema +      drizzle          │                              ║
-║    packages        Better Auth   adapter)         │ exports                      ║
-║    import it)      tables)                         ▼                              ║
-║                                            export type AppType  ── TYPE-ONLY ──┐ ║
-║                                            (Hono RPC contract)                 │ ║
-║                                                                               ▼ ║
-║   @docket/types (Zod ⇄ AppType) ──────────────────────────────►  apps/web      ║
-║   @docket/ui    (shadcn components) ──────────────────────────►  apps/marketing ║
-║                                                                  apps/admin     ║
-║   Next apps consume apps/api ONLY via the type-only AppType (hc<AppType>);      ║
-║   runtime calls go same-origin over Vercel rewrites (/api/* → apps/api).        ║
+║    env, all        schema +      drizzle          │ named public type facade     ║
+║    packages        Better Auth   adapter)         ▼                              ║
+║    import it)      tables)              @docket/api/rpc-contract                 ║
+║                                         AppType · AdminAppType                    ║
+║                                             ├─ type-only ─► apps/web              ║
+║                                             └─ type-only ─► apps/admin            ║
+║   Future desktop clients ── OpenAPI ─────────────────────────► apps/api          ║
+║   @docket/types: Zod schemas + branded Id · @docket/ui: shared components       ║
+║   Runtime calls go same-origin over Vercel rewrites (/api/* → apps/api).        ║
 ║                                                                                  ║
 ║   ┌─ COMPILED (tsc → dist; .d.ts consumed) ─┐   ┌─ JIT (raw TS · transpilePackages) ─┐ ║
 ║   │  @docket/db   @docket/auth   apps/api    │   │  @docket/ui  @docket/types  @docket/env │ ║
@@ -141,9 +153,9 @@ docket/                          Turborepo · pnpm workspaces · turbo 2.9.x (ta
 ```
 
 The strictly-sequential build spine is `env → db → auth → api → ui`: each link
-consumes the previous link's output, and `apps/api` exports its Hono router as a
-**type-only** `AppType` that the three Next apps import for fully-typed
-`hc<AppType>` RPC calls (actual requests travel same-origin via Vercel rewrites,
+consumes the previous link's output, and `apps/api` exposes its Hono router's
+**type-only** `AppType` through `@docket/api/rpc-contract` for Web and Admin's
+fully-typed `hc<AppType>` RPC calls (actual requests travel same-origin via Vercel rewrites,
 keeping auth cookies first-party). `@docket/db`, `@docket/auth`, and `apps/api`
 are **compiled** to `dist` so RPC type inference doesn't cripple `tsserver`,
 while `@docket/ui`, `@docket/types`, and `@docket/env` stay **JIT** (raw TS via
@@ -267,7 +279,7 @@ The defining choice in this surface is that the tenant key lives in the URL path
 
 Cross-org work needs a different shape, and that is why the Hub surfaces (`/v1/hub/today`, `/hub/portfolio`, `/hub/search`, `/hub/inbox`, `/hub/activity`) plus `/notifications` and `/dailyplan` sit at the top level rather than under `/orgs`. These endpoints answer "what should one person, who runs several organizations, look at right now?" — a question that spans tenants by definition. The critical engineering constraint is how they span them: aggregation is a server-side fan-out, one query per membership where the caller has an active human Actor, merged in application code. There is deliberately no cross-tenant SQL join. Each returned item carries its own `organizationId` (the "org chip") and is individually run through the §7.2 query-scoping predicate for that org, so the aggregated view is the union of per-org permission decisions, not a privileged bypass of them. A guest in org B who appears in the caller's Hub still sees only what a `view` grant in org B exposes; the cockpit cannot leak hidden work just because it renders several orgs side by side. This is why Hub routes require only `authenticated` in the capability column — the per-resource gate has already been applied to each constituent row before merge.
 
-The contract that the three Next apps consume is the Hono RPC `AppType` — the `typeof` the fully `.route()`-chained composition root, re-exported from `@docket/types/api` and consumed type-only via `hc<AppType>`. No business logic lives in `web`, `marketing`, or `admin`; they are typed clients. Two non-obvious rules keep this working. First, every resource router must be built as an unbroken method chain (`.get().post().get(...)`) — assigning a `Hono` instance to a `const` mid-route silently destroys RPC inference, and the router files are split one-per-resource-group specifically so `tsserver` doesn't collapse under the inferred type. Second, the Hono version must be byte-identical (pinned in the root catalog) across `apps/api` and every consumer, and `apps/api`, `@docket/db`, and `@docket/auth` are compiled to `dist` rather than transpiled JIT, both to protect inference and to keep editor performance tolerable.
+The Hono RPC `AppType` is consumed by Web and Admin — it is the `typeof` the fully `.route()`-chained composition root, exported only through the API-owned `@docket/api/rpc-contract` subpath (not `@docket/types`) and consumed type-only via `hc<AppType>`. Its `types` export resolves to `apps/api/dist/rpc-contract.d.ts`; Web and Admin build that declaration before their own dev, typecheck, and build commands, while the runtime subpath remains an empty development facade. No business logic lives in `web` or `admin`; they are typed clients. Two non-obvious rules keep this working. First, every resource router must be built as an unbroken method chain (`.get().post().get(...)`) — assigning a `Hono` instance to a `const` mid-route silently destroys RPC inference, and the router files are split one-per-resource-group specifically so `tsserver` doesn't collapse under the inferred type. Second, the Hono version must be byte-identical (pinned in the root catalog) across `apps/api` and every consumer, and `apps/api`, `@docket/db`, and `@docket/auth` are compiled to `dist` rather than transpiled JIT, both to protect inference and to keep editor performance tolerable.
 
 Validation runs in both directions through `hono-openapi`, and the choice of library is load-bearing rather than incidental. The alternative — `@hono/zod-openapi`'s `OpenAPIHono` + `createRoute` — breaks the `.route()` chaining that `AppType` depends on, so it is banned. Instead each handler attaches `validator("json"|"query"|"param", Schema)` for input, reads it back via `c.req.valid(...)`, and returns through a shared `ok(c, OutSchema, data)` helper that `schema.parse()`es the payload (always in dev/test, sampled in prod) before serializing. The same output schema is wired into `describeRoute` via `resolver(schema)`, so the documented response and the runtime response are physically the same Zod object and cannot drift. Those schemas live once in `@docket/types` and are reused as MCP tool `inputSchema`/`outputSchema` and as the types for Next server actions. The `x-docket-capability` annotation on each route is the third thing the schema layer carries: it is both an OpenAPI extension that renders in the Scalar docs at `/v1/docs` and the literal capability (`view < comment < contribute < assign < manage`) that `capabilityGuard` asserts at runtime, so the published contract and the enforced contract are the same string.
 
@@ -281,8 +293,8 @@ handler carries a Zod schema **in** (`validator`) and **out** (`resolver` +
 `ok()`), plus an `x-docket-capability` annotation (right column).
 
 ```
- apps/api (Hono 4.x)  ──  hc<AppType>  ──►  web · marketing · admin
-                                                  (type-only RPC)
+ apps/api (Hono 4.x)  ──  hc<AppType>  ──►  web · admin
+                                           (type-only RPC)
 ══════════════════════════════════════════════════════════════════════
  NON-VERSIONED MOUNTS  (outside /v1, NOT in AppType)
 ──────────────────────────────────────────────────────────────────────
@@ -550,30 +562,33 @@ logging, completions, experimental tasks), and **elicitation** — form-mode for
 in-session prompts and URL-mode to hand off connector OAuth without passing any
 Docket token downstream.
 
-## Deployment Architecture (Vercel)
+## Deployment Architecture (Vercel + GCP Cloud Run + Cloudflare)
 
-Docket follows 12-factor strictly: every deployable reads its configuration only from environment variables, and the _exact same_ topology runs in development and production, where the single permitted difference is values. There are four Vercel projects — `docket-mkt` (marketing, `docket.app`), `docket-web` (the product app, `app.docket.app`), `docket-admin` (operator back-office, `admin.docket.app`), and `docket-api` (the Hono work API that also mounts auth, the OIDC provider, and `/mcp`, at `api.docket.app`). Each project validates _only the variables it actually consumes_ through its own `@docket/env` composition (`env.web.ts`, `env.api.ts`, etc.), so the marketing app never carries Stripe secrets and the API never carries a `NEXT_PUBLIC_` publishable key. Dev parity is mechanical, not aspirational: there are no `DEV_`/`PROD_`-prefixed variants and no `if (NODE_ENV === 'development')` branching of _which_ service is wired — `apps/api/.env` and the Vercel prod env hold the same variable names, and only the resolved value flips (a `dev` Neon branch vs the `production` branch, `sk_test_…` vs `sk_live_…`, `localhost` vs the apex). The same `createEnv` runs at boot in all three places (dev, CI, prod) and fails identically on a missing or malformed var, which is what makes the parity guarantee enforceable rather than a convention.
+Docket follows 12-factor strictly: every deployable reads its configuration only from environment variables, and the _exact same_ topology runs in development and production, where the single permitted difference is values. The browser/API plane uses Vercel for `docket-web` (the product app, `app.docket.app`) and GCP Cloud Run for `docket-admin` (operator back-office, `admin.docket.app`) and `docket-api` (the Hono work API that also mounts auth, the OIDC provider, and `/mcp`, at `api.docket.app`). Durable Athena execution is an additive Cloudflare `apps/runner` Worker using Queues and Workflows; it calls only signed internal API endpoints and remains disabled in production until its explicit feature-flag rollout. Browser/API deployables validate _only the variables they actually consume_ through their `@docket/env` compositions (`env.web.ts`, `env.api.ts`, etc.); Runner's bindings are declared through Wrangler. Dev parity is mechanical, not aspirational: there are no `DEV_`/`PROD_`-prefixed variants and no `if (NODE_ENV === 'development')` branching of _which_ service is wired — `apps/api/.env` and the production deployment env hold the same variable names, and only the resolved value flips (a `dev` Neon branch vs the `production` branch, `sk_test_…` vs `sk_live_…`, `localhost` vs the apex). The same `createEnv` runs at boot in all three places (dev, CI, prod) and fails identically on a missing or malformed var, which is what makes the parity guarantee enforceable rather than a convention.
 
 The most consequential deployment decision is that `docket-web` serves auth on its own origin via a Vercel rewrite: `apps/web` rewrites `/api/*` to `docket-api`. The reconciliation file pins this — web and api are same-origin via rewrites specifically so the Better Auth session cookie stays first-party, which sidesteps SameSite/third-party-cookie breakage and the CORS-plus-credentials dance that splitting origins would force (CORS+credentials remains only the documented fallback). It also means the auth base URL _is_ the API origin: `BETTER_AUTH_URL` must equal `API_URL`, the OIDC issuer (`MCP_ISSUER_URL`) equals `API_URL`, and the MCP resource (`MCP_RESOURCE_URL`) is `${API_URL}/mcp`. Diverging these is the classic failure mode — a `BETTER_AUTH_URL` that doesn't match the mount produces `redirect_uri_mismatch` on every OAuth callback and breaks the RFC 8414/9728 discovery documents — so bootstrap _derives_ all of them from a single API-origin answer rather than collecting them independently.
 
 The Neon layer is split deliberately into two connection strings because the two access patterns have incompatible requirements. `DATABASE_URL` is the pooled PgBouncer endpoint and is what the runtime uses for all SQL, including the Better Auth tables (single SQL owner in `@docket/db`); pooling is mandatory because Vercel's serverless/Fluid functions fan out to many short-lived connections that would otherwise exhaust Postgres backends. `DATABASE_URL_UNPOOLED` is the direct connection, and it exists solely so `drizzle-kit migrate` can run DDL — migrations must not go through the pooler, since PgBouncer in transaction-pooling mode doesn't reliably support the session-level state and advisory locks that schema changes need. Because the entire schema (work tables _and_ Better Auth tables) lives in `@docket/db`, a single `db:migrate` against the unpooled string materializes the whole database; bootstrap deliberately stops there and never seeds tenant data, since per-org roles are created at runtime on org creation.
 
-Provisioning is the job of `scripts/bootstrap.ts` (`pnpm bootstrap`), an idempotent, interactive flow that turns the env contract into real cloud resources. It is built to _list before it creates_ and reuse on match (by Neon project name, Stripe `lookup_key`, or webhook URL), so re-running is safe; secrets like `BETTER_AUTH_SECRET` are generated once per target and never silently regenerated, because rotating that secret invalidates every live session. The flow walks: preflight (CLIs installed and authed), target selection (dev writes `apps/*/.env`, prod writes Vercel env), domain confirmation (from which it derives all the `*_URL`/`BETTER_AUTH_*`/`MCP_*` values), secret generation, Neon branch + connection-string capture + migrate, OAuth app setup (the provider consoles have no creation API, so bootstrap prints the _exact_ dev and prod redirect URIs — `…/api/auth/callback/google`, `…/api/auth/callback/github`, and native Linear `…/api/auth/callback/linear` — and collects ids/secrets via masked prompts), Stripe setup, then the Vercel `env add` per app/target, and finally a verification pass that re-runs `@docket/env` plus connection smoke checks. Prod secret values are piped to `vercel env add … --sensitive` over stdin rather than argv, so they never land in shell history or logs.
+Provisioning is the job of `scripts/bootstrap.ts` (`pnpm bootstrap`), an idempotent, interactive flow that turns the browser/API env contract into real cloud resources. It is built to _list before it creates_ and reuse on match (by Neon project name, Stripe `lookup_key`, or webhook URL), so re-running is safe; secrets like `BETTER_AUTH_SECRET` are generated once per target and never silently regenerated, because rotating that secret invalidates every live session. The flow walks: preflight (CLIs installed and authed), target selection, domain confirmation (from which it derives all the `*_URL`/`BETTER_AUTH_*`/`MCP_*` values), secret generation, Neon branch + connection-string capture + migrate, OAuth app setup (the provider consoles have no creation API, so bootstrap prints the _exact_ dev and prod redirect URIs — `…/api/auth/callback/google`, `…/api/auth/callback/github`, and native Linear `…/api/auth/callback/linear` — and collects ids/secrets via masked prompts), Stripe setup, then the GCP/Cloud Run and Vercel browser deployment configuration, and finally a verification pass that re-runs `@docket/env` plus connection smoke checks. Runner secrets and bindings are provisioned separately through Wrangler, never copied into the browser/API deployment flow. Production secret values reach Cloud Run through Secret Manager bindings rather than shell arguments.
 
 Stripe is where the data-lifecycle cron lives, and it reflects the engineering plan's split of responsibilities. The `@better-auth/stripe` plugin owns the billing subject (per-Organization, `referenceId = organization.id`), the subscription mirror table, and the core webhooks at `${API_URL}/api/auth/stripe/webhook`; webhook secrets are per-endpoint and per-mode (dev uses the `whsec_…` from `stripe listen --forward-to …/api/auth/stripe/webhook`, prod uses the registered endpoint's secret). What Stripe does _not_ do is delete data, so Docket builds the lifecycle itself on three `organization` columns — `lifecycle_state`, `export_ready_at`, `delete_after_at`. On a trial-end or payment-terminal transition the org moves to `export_window` with `delete_after_at = now + 14d` and an export artifact is generated; a Vercel Cron then hits `/lifecycle/sweep` to perform the actual deletion. That cron endpoint is guarded by `CRON_SECRET` sent as `Authorization: Bearer` (the same secret bootstrap generates and writes to Vercel), the sweep is idempotent, and reactivation cancels a pending deletion. Critically, the handler always reconciles against Stripe because webhooks are neither guaranteed nor ordered — the sweep treats Stripe as the source of truth rather than trusting that the right events arrived.
 
-Secrets ownership falls out cleanly from the project split and is the property the diagram traces. `docket-api` is the sole holder of every server-only secret — `DATABASE_URL`/`DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET`, the OAuth client secrets, `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`, the agent credentials, and `CRON_SECRET` — none of which is ever bundled to a browser. Stripe's browser-safe publishable key is also runtime-owned by the API and returned through the public `/v1/config` contract, avoiding a parallel Vercel build-time value. The Next apps carry only their required `NEXT_PUBLIC_*` origin/passkey values. The `@docket/env` slices encode this boundary, and bootstrap's `API_SECRET_BINDINGS` manifest mounts only configured provider secrets into Cloud Run.
+Secrets ownership falls out cleanly from the project split and is the property the diagram traces. `docket-api` is the sole holder of every server-only API secret — `DATABASE_URL`/`DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET`, the OAuth client secrets, `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`, the agent credentials, and `CRON_SECRET` — none of which is ever bundled to a browser. Stripe's browser-safe publishable key is also runtime-owned by the API and returned through the public `/v1/config` contract, avoiding a parallel Vercel build-time value. The Next apps carry only their required `NEXT_PUBLIC_*` origin/passkey values. Runner has its own narrow Cloudflare bindings for signed execution handoff; neither deployment platform inherits the other's secret set.
 
-Docket is a 12-factor, env-var-only deploy: four Vercel projects (three Next.js 16 apps + one Hono API) in front of Neon serverless Postgres, wired to external services entirely through `@docket/env`-validated variables. `apps/web` rewrites `/api/*` to `apps/api` so auth cookies, the OIDC provider, and the `/mcp` endpoint stay same-origin. Dev mirrors prod: identical topology and validation, only values differ (dev Neon branch vs prod branch, `sk_test_` vs `sk_live_`).
+Docket is a 12-factor, env-var-only deploy: Vercel Web plus Cloud Run Admin/API in front of Neon serverless Postgres, with an additive Cloudflare Runner for durable Athena execution. `apps/web` rewrites `/api/*` to `apps/api` so auth cookies, the OIDC provider, and the `/mcp` endpoint stay same-origin. Dev mirrors prod: identical topology and validation, only values differ (dev Neon branch vs prod branch, `sk_test_` vs `sk_live_`).
 
 ```
-┌─ VERCEL  ·  4 projects · 12-factor env-var-only deploy ──────────────────────┐
-│ docket-mkt   marketing      docket.app                                       │
-│ docket-web   product app    app.docket.app                                   │
-│ docket-admin operator BO    admin.docket.app                                 │
-│ docket-api   work API+auth+MCP   api.docket.app   (Hono 4.x)                 │
+┌─ VERCEL + GCP CLOUD RUN  ·  browser/API deploy ──────────────────────────────┐
+│ docket-web   product app    app.docket.app      (Vercel)                     │
+│ docket-admin operator BO    admin.docket.app    (Cloud Run)                  │
+│ docket-api   work API+auth+MCP   api.docket.app  (Cloud Run · Hono 4.x)      │
 │ docket-web rewrites /api/* → docket-api  (same-origin · first-party cookies) │
 │ Vercel Cron → Bearer CRON_SECRET → api /lifecycle/sweep                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                        │
+┌─ CLOUDFLARE  ·  additive runner (feature-flagged off in production) ─────────┐
+│ apps/runner  Queue + Workflows → signed internal Athena execution endpoints  │
 └──────────────────────────────────────────────────────────────────────────────┘
                                         ▼
     DATABASE_URL (pooled, runtime) · DATABASE_URL_UNPOOLED (migrate)
@@ -587,19 +602,19 @@ Docket is a 12-factor, env-var-only deploy: four Vercel projects (three Next.js 
 │ Stripe   billing per Organization · webhook /api/auth/stripe/webhook         │
 │ OAuth    Google · GitHub · Linear   (login + linking + connector tokens)     │
 │ Agents   Athena · Claude · Codex    (open Session + activity stream)         │
-│ Sentry   NEXT_PUBLIC_SENTRY_DSN across all 4 projects                        │
+│ Sentry   deployment-specific monitoring configuration                         │
 └──────────────────────────────────────────────────────────────────────────────┘
 
 ┌─ pnpm bootstrap   (scripts/bootstrap.ts · idempotent) ───────────────────────┐
 │ neonctl → branches + DATABASE_URL[_UNPOOLED] → drizzle migrate               │
 │ stripe  → products/prices (lookup_key) + webhook secret                      │
 │ OAuth   → prints exact redirect URIs → collect client id/secret              │
-│ vercel env add (per app/target)   ·   dev → apps/*/.env                      │
+│ GCP/Vercel configuration · Wrangler binds runner secrets                      │
 │ └─ @docket/env (t3-oss) validates every var at boot, in dev AND prod         │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The diagram traces every secret to its owner: `apps/api` is the sole holder of server-only secrets (`DATABASE_URL`, `BETTER_AUTH_SECRET`, Stripe/OAuth/agent credentials, `CRON_SECRET`), while the three Next apps carry only `NEXT_PUBLIC_*` values. There is no GCP/Cloud Run, no native mobile, no Redis-as-primary, and no vector store — the entire runtime is Vercel + Neon plus external SaaS reached over env-configured URLs. `pnpm bootstrap` provisions Neon branches, Stripe products, OAuth redirect URIs, and Vercel env vars, then `@docket/env` (t3-oss) fail-fast validates the identical contract in dev and prod so the only difference between environments is values, never topology.
+The diagram traces every secret to its owner: `apps/api` is the sole holder of server-only API secrets (`DATABASE_URL`, `BETTER_AUTH_SECRET`, Stripe/OAuth/agent credentials, `CRON_SECRET`), while the two Next apps carry only `NEXT_PUBLIC_*` values and Runner holds only its signed-execution bindings. There is no native mobile, no Redis-as-primary, and no vector store — the runtime is Vercel + GCP Cloud Run + optional Cloudflare Runner + Neon plus external SaaS reached over env-configured URLs. `pnpm bootstrap` provisions Neon branches, Stripe products, OAuth redirect URIs, and browser/API deployment configuration, while Wrangler provisions Runner bindings; `@docket/env` (t3-oss) fail-fast validates the browser/API application contract in dev and prod so the only difference between environments is values, never topology.
 
 ## Runtime & Lifecycle Flows
 

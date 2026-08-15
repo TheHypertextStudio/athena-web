@@ -58,7 +58,7 @@ are mounted in `server.ts` under a single non-versioned `/internal/*` umbrella â
 contracts and the public spec â€” each self-authenticated by a signature or `CRON_SECRET`. Only
 the user-facing SSE stream and the binary export download stay on `/v1` outside `AppType`.
 
-- The compiled `apps/api` package exports **`type AppType`** only (no runtime) for consumers. `@docket/types` re-exports it as the canonical contract import: `import type { AppType } from "@docket/types/api"`.
+- The compiled `apps/api` package exposes **`type AppType`** and **`type AdminAppType`** through its API-owned `@docket/api/rpc-contract` subpath. Its `types` export is `dist/rpc-contract.d.ts`, which Web and Admin build ahead of their dev, typecheck, and build workflows; delivery clients import it type-only.
 - Client: `const api = hc<AppType>(env.NEXT_PUBLIC_API_URL + "/v1", { headers, fetch })`. `strict: true` in **both** client and server `tsconfig` (RPC inference requirement).
 - **Nesting convention:** org-scoped resources are mounted **under `/orgs/:orgId`** so the org tenant key is always a path param. The `orgs` router chains its children: `orgs.route("/:orgId/teams", teams).route("/:orgId/tasks", tasks)...`. This keeps `organization_id` derivation uniform and the URL self-documenting.
 
@@ -470,7 +470,7 @@ Authored in `@docket/types`, consumed by API handlers, MCP tools, and Next serve
 - **Primitives:** `OrganizationId`, `TeamId`, `InitiativeId`, `ProgramId`, `ProjectId`, `CycleId`, `TaskId`, `MilestoneId`, `UpdateId`, `CommentId`, `AgentId`, `SessionId`, `IntegrationId`, `NotificationId`, `ActorId`, `RoleId`, `GrantId`, `LabelId` (branded `z.string().brand()`); `DateString` (`z.iso.date()`); `Capability` (`z.enum(["view","comment","contribute","assign","manage"])`); `Health`, `Priority`, `WorkflowState`, `Visibility`.
 - **Query/page:** `ListQuery`, `Page<T>` (factory `page(schema)`), `IdParam` factory.
 - **Per-resource:** `<Resource>Out`, `<Resource>Create`, `<Resource>Update` for each entity above; `Problem` (error); `TaskFilter`, `TaskGroup`, `CapabilityGrid`.
-- **Contract:** `export type { AppType } from "@docket/api/app"` re-exported as `@docket/types/api`.
+- **Contract:** `@docket/api/rpc-contract` is the API-owned public transport subpath for `type AppType` and `type AdminAppType`; `@docket/types` does not re-export either contract.
 
 ---
 

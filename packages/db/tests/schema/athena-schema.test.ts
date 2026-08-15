@@ -5,7 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
-import type { TurnMessage } from '@docket/types';
+import type { TurnMessage } from '@docket/athena/turn-protocol';
 
 import {
   actor,

@@ -2,13 +2,15 @@ import { actor, agentSession, db, organization, program, project, task } from '@
 import { DirectiveOut } from '@docket/types';
 import type { McpRegistrar } from './catalog';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
-import { and, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNull, lt, or } from 'drizzle-orm';
 
+import { resourceAccessKey, resolveResourceAccess } from '../permissions/resource-access';
 import { buildHubTodayPayload } from '../routes/hub-today';
+import { buildTaskViewFilter } from '../routes/task-helpers';
 import { computeDirective, loadDayContext } from '../services/scheduling/directive-service';
 import { loadSchedulingPreferences } from '../services/scheduling/repository';
 import { localDateString } from '../services/scheduling/zoned-time';
-import type { McpContext } from './auth';
+import { resolveActor, type McpContext } from './auth';
 import { callerHub } from './plan-tools';
 import { RESOURCE_READ_SCOPE, requireScope } from './scope';
 
@@ -19,7 +21,29 @@ export function jsonRead(uri: URL, dto: unknown): ReadResourceResult {
   };
 }
 
-/** The orgs (id/name/slug) the caller belongs to: a user's memberships, or an agent's one org. */
+interface ActiveHumanMembership {
+  readonly actorId: string;
+  readonly org: { id: string; name: string; slug: string };
+}
+
+/** Load the caller's currently active human memberships, including their per-org actor ids. */
+async function activeHumanMemberships(userId: string): Promise<ActiveHumanMembership[]> {
+  const rows = await db
+    .select({ org: organization, actorId: actor.id })
+    .from(actor)
+    .innerJoin(organization, eq(actor.organizationId, organization.id))
+    .where(
+      and(
+        eq(actor.userId, userId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    );
+  return rows;
+}
+
+/** The caller's current orgs: active human memberships, or an agent's one org. */
 export async function callerOrgs(
   ctx: McpContext,
 ): Promise<{ id: string; name: string; slug: string }[]> {
@@ -30,16 +54,13 @@ export async function callerOrgs(
       .where(eq(organization.id, ctx.principal.orgId));
     return rows.map((r) => ({ id: r.org.id, name: r.org.name, slug: r.org.slug }));
   }
-  const rows = await db
-    .select({ org: organization })
-    .from(actor)
-    .innerJoin(organization, eq(actor.organizationId, organization.id))
-    .where(and(eq(actor.userId, ctx.principal.userId), eq(actor.kind, 'human')));
-  return rows.map((r) => ({ id: r.org.id, name: r.org.name, slug: r.org.slug }));
+  const rows = await activeHumanMemberships(ctx.principal.userId);
+  return rows.map((r) => r.org);
 }
 
 /** Complete the `{org}` template var: the caller's org ids matching the prefix. */
 export async function completeOrg(ctx: McpContext, value: string): Promise<string[]> {
+  requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
   const orgs = await callerOrgs(ctx);
   const v = value.toLowerCase();
   return orgs
@@ -66,33 +87,54 @@ export async function completeId(
   value: string,
   args: Record<string, string> | undefined,
 ): Promise<string[]> {
+  requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
   const orgId = args?.['org'];
   if (!orgId) return [];
-  if (ctx.principal.kind === 'agent') {
-    if (ctx.principal.orgId !== orgId) return [];
-  } else {
-    const member = await db
-      .select({ id: actor.id })
-      .from(actor)
+  let actorId: string;
+  try {
+    actorId = (await resolveActor(ctx, orgId)).actorId;
+  } catch {
+    return [];
+  }
+  const canViewTask = await buildTaskViewFilter(orgId, actorId);
+  const ids: string[] = [];
+  let after: { createdAt: Date; id: string } | undefined;
+
+  // Completion has no cursor, so scan only until it has its twenty visible suggestions. A hidden
+  // recent task must not crowd out a directly granted one that comes immediately after it.
+  while (ids.length < 20) {
+    const rows = await db
+      .select({
+        id: task.id,
+        teamId: task.teamId,
+        projectId: task.projectId,
+        programId: task.programId,
+        visibility: task.visibility,
+        createdAt: task.createdAt,
+      })
+      .from(task)
       .where(
         and(
-          eq(actor.userId, ctx.principal.userId),
-          eq(actor.organizationId, orgId),
-          eq(actor.kind, 'human'),
+          eq(task.organizationId, orgId),
+          isNull(task.archivedAt),
+          ilike(task.id, `${value}%`),
+          after
+            ? or(
+                lt(task.createdAt, after.createdAt),
+                and(eq(task.createdAt, after.createdAt), lt(task.id, after.id)),
+              )
+            : undefined,
         ),
       )
-      .limit(1);
-    if (!member[0]) return [];
+      .orderBy(desc(task.createdAt), desc(task.id))
+      .limit(20);
+    ids.push(...rows.filter(canViewTask).map((row) => row.id));
+    if (rows.length < 20) break;
+    const last = rows[rows.length - 1];
+    if (!last) break;
+    after = { createdAt: last.createdAt, id: last.id };
   }
-  const rows = await db
-    .select({ id: task.id })
-    .from(task)
-    .where(
-      and(eq(task.organizationId, orgId), isNull(task.archivedAt), ilike(task.id, `${value}%`)),
-    )
-    .orderBy(desc(task.createdAt))
-    .limit(20);
-  return rows.map((r) => r.id);
+  return ids.slice(0, 20);
 }
 
 /** Read a single URI-template variable value (templates may bind a string or array). */
@@ -117,6 +159,7 @@ export function registerStaticResources(server: McpRegistrar, ctx: McpContext): 
       mimeType: 'application/json',
     },
     async (uri): Promise<ReadResourceResult> => {
+      requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
       const rows = await callerOrgs(ctx);
       return jsonRead(uri, rows);
     },
@@ -131,6 +174,7 @@ export function registerStaticResources(server: McpRegistrar, ctx: McpContext): 
       mimeType: 'application/json',
     },
     async (uri): Promise<ReadResourceResult> => {
+      requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
       const date = new Date().toISOString().slice(0, 10);
       // Built by the same function behind the `brief` tool and the Hub Today screen. This used to
       // run its own query with no date filter and no assignee filter at all — it announced
@@ -160,13 +204,23 @@ export function registerStaticResources(server: McpRegistrar, ctx: McpContext): 
       mimeType: 'application/json',
     },
     async (uri): Promise<ReadResourceResult> => {
+      requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
       // The Inbox surfaces what needs the caller's attention across orgs; here we project
       // the agent sessions awaiting the caller's approval (the highest-value inbox item).
-      const orgIds = (await callerOrgs(ctx)).map((o) => o.id);
+      if (ctx.principal.kind === 'agent') return jsonRead(uri, { approvals: [] });
+      const memberships = await activeHumanMemberships(ctx.principal.userId);
+      const membershipByOrg = new Map(
+        memberships.map((membership) => [membership.org.id, membership]),
+      );
+      const orgIds = [...membershipByOrg.keys()];
       const awaiting =
         orgIds.length > 0
           ? await db
-              .select({ id: agentSession.id, taskId: agentSession.taskId })
+              .select({
+                id: agentSession.id,
+                organizationId: agentSession.organizationId,
+                taskId: agentSession.taskId,
+              })
               .from(agentSession)
               .where(
                 and(
@@ -175,8 +229,54 @@ export function registerStaticResources(server: McpRegistrar, ctx: McpContext): 
                 ),
               )
           : [];
+      const taskIds = awaiting.flatMap((session) => (session.taskId ? [session.taskId] : []));
+      const taskRows =
+        taskIds.length > 0
+          ? await db
+              .select({
+                id: task.id,
+                organizationId: task.organizationId,
+                teamId: task.teamId,
+                projectId: task.projectId,
+                programId: task.programId,
+                visibility: task.visibility,
+              })
+              .from(task)
+              .where(
+                and(
+                  inArray(task.organizationId, orgIds),
+                  inArray(task.id, taskIds),
+                  isNull(task.archivedAt),
+                ),
+              )
+          : [];
+      const taskFilters = new Map(
+        await Promise.all(
+          memberships.map(
+            async (membership) =>
+              [
+                membership.org.id,
+                await buildTaskViewFilter(membership.org.id, membership.actorId),
+              ] as const,
+          ),
+        ),
+      );
+      const visibleTaskKeys = new Set(
+        taskRows
+          .filter((row) => taskFilters.get(row.organizationId)?.(row))
+          .map((row) => `${row.organizationId}:${row.id}`),
+      );
       return jsonRead(uri, {
-        approvals: awaiting.map((a) => ({ sessionId: a.id, taskId: a.taskId })),
+        // A taskless session has no task identity to authorize and remains visible in the caller's
+        // Hub. Omit a hidden task-bound session entirely so neither its task nor session id becomes
+        // an approval-existence oracle.
+        approvals: awaiting
+          .filter(
+            (session) =>
+              session.taskId === null ||
+              visibleTaskKeys.has(`${session.organizationId}:${session.taskId}`),
+          )
+          .map((session) => ({ sessionId: session.id, taskId: session.taskId })),
       });
     },
   );
@@ -219,6 +319,8 @@ export function registerStaticResources(server: McpRegistrar, ctx: McpContext): 
       mimeType: 'application/json',
     },
     async (uri): Promise<ReadResourceResult> => {
+      requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
+      if (ctx.principal.kind === 'agent') return jsonRead(uri, { programs: [], projects: [] });
       const orgIds = (await callerOrgs(ctx)).map((o) => o.id);
       const [programs, projects] =
         orgIds.length > 0
@@ -244,7 +346,40 @@ export function registerStaticResources(server: McpRegistrar, ctx: McpContext): 
                 .where(inArray(project.organizationId, orgIds)),
             ])
           : [[], []];
-      return jsonRead(uri, { programs, projects });
+      const access = await resolveResourceAccess(ctx.principal.userId, [
+        ...programs.map((row) => ({
+          organizationId: row.organizationId,
+          kind: 'program',
+          id: row.id,
+        })),
+        ...projects.map((row) => ({
+          organizationId: row.organizationId,
+          kind: 'project',
+          id: row.id,
+        })),
+      ]);
+      return jsonRead(uri, {
+        programs: programs.filter(
+          (row) =>
+            access.get(
+              resourceAccessKey({
+                organizationId: row.organizationId,
+                kind: 'program',
+                id: row.id,
+              }),
+            )?.canView,
+        ),
+        projects: projects.filter(
+          (row) =>
+            access.get(
+              resourceAccessKey({
+                organizationId: row.organizationId,
+                kind: 'project',
+                id: row.id,
+              }),
+            )?.canView,
+        ),
+      });
     },
   );
 }

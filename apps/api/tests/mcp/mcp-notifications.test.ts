@@ -8,8 +8,7 @@ import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import type { resetNotifications as ResetNotifications } from '../../src/mcp/notify';
 import { getSession, resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-import { seedStatuses } from '../support/routes-harness';
-import { assertDefined } from '@docket/test-utils';
+import { appWithActor } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -39,27 +38,26 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = assertDefined(org).id;
-  const statusId = await seedStatuses(db, schema, orgId);
+  const orgId = org!.id;
 
   const [role] = await db
     .insert(schema.role)
     .values({ organizationId: orgId, key: 'seeded', name: 'Seeded', capabilities: ['view'] })
     .returning({ id: schema.role.id });
-  const roleId = assertDefined(role).id;
+  const roleId = role!.id;
 
   const [user] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
     .returning({ id: schema.user.id });
-  const userId = assertDefined(user).id;
+  const userId = user!.id;
   await db.insert(schema.hub).values({ userId });
 
   const [actor] = await db
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId, roleId })
     .returning({ id: schema.actor.id });
-  const actorId = assertDefined(actor).id;
+  const actorId = actor!.id;
 
   await db.insert(schema.grant).values({
     organizationId: orgId,
@@ -79,21 +77,14 @@ async function seedOrg(): Promise<Seed> {
       key: `C${Math.random().toString(36).slice(2, 6)}`,
     })
     .returning({ id: schema.team.id });
-  const teamId = assertDefined(team).id;
+  const teamId = team!.id;
 
   const [task] = await db
     .insert(schema.task)
-    .values({
-      organizationId: orgId,
-      title: 'Ship',
-      teamId,
-      state: 'todo',
-      statusId: statusId('task', 'todo'),
-      createdBy: actorId,
-    })
+    .values({ organizationId: orgId, title: 'Ship', teamId, state: 'todo', createdBy: actorId })
     .returning({ id: schema.task.id });
 
-  return { userId, orgId, teamId, actorId, roleId, taskId: assertDefined(task).id };
+  return { userId, orgId, teamId, actorId, roleId, taskId: task!.id };
 }
 
 function app(): Hono {
@@ -126,7 +117,7 @@ async function openSession(seed: Seed): Promise<string> {
   });
   const sessionId = res.headers.get('Mcp-Session-Id');
   expect(sessionId).toEqual(expect.any(String));
-  return assertDefined(sessionId);
+  return sessionId!;
 }
 
 /** One JSON-RPC reply, as returned by {@link rpc}. */
@@ -191,7 +182,7 @@ async function openStream(
     signal: controller.signal,
   });
   expect(res.status).toBe(200);
-  const reader = assertDefined(res.body).getReader();
+  const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buffered = '';
 
@@ -218,6 +209,25 @@ async function openStream(
       controller.abort();
     },
   };
+}
+
+/** Resolve the next live notification promptly, failing clearly if a mutation fails to announce it. */
+async function nextFrameWithin(nextFrame: () => Promise<unknown>): Promise<unknown> {
+  return new Promise<unknown>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('role-base mutation did not announce a changed tools list'));
+    }, 1_000);
+    void nextFrame().then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error instanceof Error ? error : new Error('notification stream failed'));
+      },
+    );
+  });
 }
 
 afterEach(async () => {
@@ -361,6 +371,45 @@ describe('MCP notification channel', () => {
       // principal key before it can find the session.
       await notifyGrantsChanged(seed.orgId, 'role', seed.roleId);
       await expect(stream.nextFrame()).resolves.toMatchObject({
+        method: 'notifications/tools/list_changed',
+      });
+    } finally {
+      stream.close();
+    }
+  });
+
+  it('tells affected sessions when a role baseline changes', async () => {
+    const seed = await seedOrg();
+    const sessionId = await openSession(seed);
+    const stream = await openStream(seed, sessionId);
+    try {
+      const roles = (await import('../../src/routes/roles')).default;
+      const rolesApp = appWithActor(roles, seed.orgId, ['manage'], seed.actorId, null, seed.roleId);
+      const changed = await rolesApp.request(`/${seed.roleId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ baseCapability: 'contribute' }),
+      });
+
+      expect(changed.status).toBe(200);
+      const frame = await nextFrameWithin(stream.nextFrame);
+      expect(frame).toMatchObject({ method: 'notifications/tools/list_changed' });
+    } finally {
+      stream.close();
+    }
+  });
+
+  it('tells affected sessions when deleting a role baseline', async () => {
+    const seed = await seedOrg();
+    const sessionId = await openSession(seed);
+    const stream = await openStream(seed, sessionId);
+    try {
+      const roles = (await import('../../src/routes/roles')).default;
+      const rolesApp = appWithActor(roles, seed.orgId, ['manage'], seed.actorId, null, seed.roleId);
+      const deleted = await rolesApp.request(`/${seed.roleId}`, { method: 'DELETE' });
+
+      expect(deleted.status).toBe(200);
+      await expect(nextFrameWithin(stream.nextFrame)).resolves.toMatchObject({
         method: 'notifications/tools/list_changed',
       });
     } finally {

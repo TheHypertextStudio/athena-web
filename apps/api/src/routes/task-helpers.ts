@@ -1,13 +1,15 @@
-import type { actor, cycle, program } from '@docket/db';
-import { db, grant, milestone, project, task } from '@docket/db';
-import type { GrantResourceKind, TaskOut, TaskRef } from '@docket/types';
+import { canActor, type Capability } from '@docket/authz';
+import type { cycle, program } from '@docket/db';
+import { actor, db, grant, milestone, project, role, task, team } from '@docket/db';
+import type { GrantResourceKind } from '@docket/identity-access/grants';
+import type { TaskOut, TaskRef } from '@docket/types';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { NotFoundError, ValidationError } from '../error';
-import { resolveTaskStatus, type TaskStatusTransition } from '../lib/work-status';
+import { CapabilityError, NotFoundError, ValidationError } from '../error';
 import type { LabelRefRow } from '../lib/labels';
 import { rawResultRowCount, rawResultRows } from '../lib/raw-result';
+import { resolveTaskStatus, type TaskStatusTransition } from '../lib/work-status';
 
 /** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
@@ -140,33 +142,60 @@ export type ViewableTaskParts = Pick<
  * @remarks
  * `task.ancestor_path` is not materialized yet, so the containment chain is derived from
  * the task's own FK columns — the same chain {@link "@docket/authz"#ancestorChain} walks.
- * A task is viewable when it is `public`, or the actor (or its role) holds a non-expired
- * `allow` grant on the task, its team, its project, its program, or the organization root.
- * This is the first list-time use of the visibility cascade; `GET /tasks` can adopt it later.
+ * A task is viewable when an active, unarchived human actor has access. `public` tasks supply a
+ * baseline only to non-guests; otherwise the actor (or its authoritative in-org role) needs a
+ * non-expired `allow` grant with at least one capability on the task, or a cascading grant on its
+ * team, its project, its program, or the organization root.
+ * This predicate is the task delivery boundary for both `GET /tasks` and the nested task reads
+ * that project related task metadata.
  *
  * @param orgId - The caller's organization.
  * @param actorId - The caller's human actor id.
- * @param roleId - The actor's role id (a role-level grant also confers access), or null.
  * @returns a predicate over the minimal task columns.
  */
 export async function buildTaskViewFilter(
   orgId: string,
   actorId: string,
-  roleId: string | null,
 ): Promise<(t: ViewableTaskParts) => boolean> {
-  const subjects = [actorId, roleId].filter((x): x is string => Boolean(x));
+  const actorRows = await db
+    .select({
+      id: actor.id,
+      roleId: role.id,
+      roleKey: role.key,
+      roleDefaultVisibility: role.defaultVisibility,
+    })
+    .from(actor)
+    .leftJoin(role, and(eq(actor.roleId, role.id), eq(actor.organizationId, role.organizationId)))
+    .where(
+      and(
+        eq(actor.id, actorId),
+        eq(actor.organizationId, orgId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    )
+    .limit(1);
+  const caller = actorRows[0];
+  if (caller === undefined) return () => false;
+
+  const subjects = [caller.id, caller.roleId].filter((x): x is string => Boolean(x));
   const grants = await db
     .select({
+      subjectKind: grant.subjectKind,
+      subjectId: grant.subjectId,
       resourceKind: grant.resourceKind,
       resourceId: grant.resourceId,
+      capabilities: grant.capabilities,
       effect: grant.effect,
+      cascades: grant.cascades,
       expiresAt: grant.expiresAt,
     })
     .from(grant)
     .where(and(eq(grant.organizationId, orgId), inArray(grant.subjectId, subjects)));
 
   const now = Date.now();
-  const granted = {
+  const cascadingGrants = {
     organization: new Set<string>(),
     team: new Set<string>(),
     initiative: new Set<string>(),
@@ -175,20 +204,31 @@ export async function buildTaskViewFilter(
     cycle: new Set<string>(),
     task: new Set<string>(),
   } satisfies Record<GrantResourceKind, Set<string>>;
+  const exactTaskGrants = new Set<string>();
   for (const g of grants) {
+    const matchesCaller =
+      (g.subjectKind === 'actor' && g.subjectId === caller.id) ||
+      (g.subjectKind === 'role' && caller.roleId !== null && g.subjectId === caller.roleId);
+    if (!matchesCaller) continue;
     if (g.effect !== 'allow') continue;
+    if (g.capabilities.length === 0) continue;
     if (g.expiresAt && g.expiresAt.getTime() < now) continue;
-    granted[g.resourceKind].add(g.resourceId);
+    if (g.resourceKind === 'task') {
+      exactTaskGrants.add(g.resourceId);
+    } else if (g.cascades) {
+      cascadingGrants[g.resourceKind].add(g.resourceId);
+    }
   }
-  const orgRootView = granted.organization.has(orgId);
+  const orgRootView = cascadingGrants.organization.has(orgId);
+  const isGuest = caller.roleKey === 'guest' || caller.roleDefaultVisibility === 'private';
 
   return (t) =>
-    t.visibility === 'public' ||
+    (t.visibility === 'public' && !isGuest) ||
     orgRootView ||
-    granted.task.has(t.id) ||
-    granted.team.has(t.teamId) ||
-    (t.projectId !== null && granted.project.has(t.projectId)) ||
-    (t.programId !== null && granted.program.has(t.programId));
+    exactTaskGrants.has(t.id) ||
+    cascadingGrants.team.has(t.teamId) ||
+    (t.projectId !== null && cascadingGrants.project.has(t.projectId)) ||
+    (t.programId !== null && cascadingGrants.program.has(t.programId));
 }
 
 /**
@@ -253,26 +293,86 @@ export async function loadTask(orgId: string, id: string): Promise<TaskRow> {
 }
 
 /**
- * Resolve a workflow-state transition against the workspace's Task statuses.
+ * Require a canonical capability grant for an already-confirmed task.
  *
  * @remarks
- * Kept as the name `POST /:id/state` and `PATCH /:id` already call; the implementation is
- * {@link resolveTaskStatus}, which is shared with the MCP tools and the automation engine so a
- * transition means the same thing whichever door it came through.
+ * Route handlers first call {@link loadTask} so an unknown, archived, or cross-org id stays a
+ * plain 404. This function then delegates the authorization decision itself to
+ * {@link canActor}; it does not recreate grant matching or cascade rules locally. A caller with
+ * no effective capability cannot distinguish a private task from a missing task, while a caller
+ * that can view it but lacks the requested write capability receives the normal 403.
  *
- * @param orgId - The workspace.
- * @param teamId - The task's team, which decides whether a forked set applies.
- * @param state - The target status, by key or display name.
- * @returns the status id, its key, and the terminal timestamps entering it implies.
- * @throws {NotFoundError} When the workspace has no task statuses.
- * @throws {ValidationError} When `state` names no status in the set.
+ * @param orgId - The task's owning organization.
+ * @param actorId - The human actor attempting the operation.
+ * @param target - The active in-org task previously loaded by the caller.
+ * @param required - The capability required by the operation.
+ * @throws {NotFoundError} When the caller has no effective access to the task.
+ * @throws {CapabilityError} When the caller can view the task but cannot perform the operation.
+ */
+export async function assertTaskCapability(
+  orgId: string,
+  actorId: string,
+  target: ViewableTaskParts,
+  required: Capability,
+): Promise<void> {
+  const result = await canActor(actorId, required, { kind: 'task', id: target.id, orgId }, db);
+  if (result.allow) return;
+  if (result.effectiveCapability === null) {
+    // `canActor` intentionally resolves explicit grants only, while task reads also include the
+    // documented public, non-guest view baseline. Preserve that distinction in the error shape:
+    // a visible public task with no write grant is forbidden, not hidden; a private/unviewable
+    // task remains indistinguishable from a missing one.
+    const canView = await buildTaskViewFilter(orgId, actorId);
+    if (!canView(target)) throw new NotFoundError('Task not found');
+  }
+  throw new CapabilityError();
+}
+
+/**
+ * Resolve a workflow-state transition: validate `state` against the team's
+ * `workflow_states` and derive `completedAt`/`canceledAt`.
+ *
+ * @remarks
+ * Single source of truth for state mutation, shared by `POST /:id/state` and
+ * `PATCH /:id`. Setting a `completed`/`canceled`-typed state stamps the matching
+ * terminal timestamp and clears the other; any non-terminal state clears both.
+ *
+ * @throws {NotFoundError} When the team is missing.
+ * @throws {ValidationError} When `state` is not one of the team's workflow states.
  */
 export async function resolveStateTransition(
   orgId: string,
   teamId: string,
   state: string,
-): Promise<TaskStatusTransition> {
-  return resolveTaskStatus(orgId, teamId, state);
+): Promise<{ state: string; completedAt: Date | null; canceledAt: Date | null }> {
+  const teamRows = await db
+    .select()
+    .from(team)
+    .where(and(eq(team.id, teamId), eq(team.organizationId, orgId)))
+    .limit(1);
+  const teamRow = teamRows[0];
+  /* v8 ignore next -- @preserve defensive: a task always references an in-org team (FK + cascade) */
+  if (!teamRow) throw new NotFoundError('Team not found');
+
+  const target = teamRow.workflowStates.find((s) => s.key === state);
+  if (!target) {
+    throw new ValidationError(
+      new z.ZodError([
+        {
+          code: 'custom',
+          path: ['state'],
+          message: `Unknown workflow state '${state}' for this team`,
+          input: state,
+        },
+      ]),
+    );
+  }
+
+  return {
+    state,
+    completedAt: target.type === 'completed' ? new Date() : null,
+    canceledAt: target.type === 'canceled' ? new Date() : null,
+  };
 }
 
 /**

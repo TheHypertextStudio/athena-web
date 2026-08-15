@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import type { TurnMessage } from '@docket/types';
+import type { TurnMessage } from '@docket/athena/turn-protocol';
 import { and, asc, eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -10,7 +10,7 @@ const getSession = vi.fn(async () => null);
 vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 
 import type * as DbModule from '@docket/db';
-import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AgentRuntimeModule from '@docket/athena/turn';
 
 import type {
   driveSession as DriveSession,
@@ -45,7 +45,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
-  agentRuntime = await import('@docket/agent-runtime');
+  agentRuntime = await import('@docket/athena/turn');
   ({ driveSession, approveAndResume, resumeSessionExecution } =
     await import('../../src/agent/loop'));
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));

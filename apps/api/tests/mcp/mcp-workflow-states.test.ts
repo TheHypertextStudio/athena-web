@@ -222,7 +222,7 @@ describe('teamWorkflows', () => {
       },
     ]);
 
-    const rows = await listWork(orgId, 'task', {}, 50, undefined);
+    const rows = await listWork(orgId, actorId, 'task', {}, 50, undefined);
     const byTitle = new Map(rows.map((row) => [row.title, row]));
 
     // Two different keys, one type: this is the comparison the free-form key cannot support.

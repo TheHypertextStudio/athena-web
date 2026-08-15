@@ -1,6 +1,6 @@
 'use client';
 
-import type { Priority } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import type { PickerOption } from '@docket/ui/components';
 import { Ellipsis, Trash2 } from '@docket/ui/icons';
 import {

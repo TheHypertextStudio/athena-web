@@ -23,9 +23,8 @@ import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zForm, zJson, zParam } from '../lib/validate';
-import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
-import { loadTask } from './task-helpers';
+import { assertTaskCapability, buildTaskViewFilter, loadTask } from './task-helpers';
 
 type AttachmentRow = typeof attachment.$inferSelect;
 
@@ -112,9 +111,11 @@ export const attachmentRoutes = new Hono<AppEnv>()
     }),
     zParam(taskParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await loadTask(orgId, id);
+      const target = await loadTask(orgId, id);
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      if (!canView(target)) throw new NotFoundError('Task not found');
       const rows = await db
         .select()
         .from(attachment)
@@ -132,7 +133,6 @@ export const attachmentRoutes = new Hono<AppEnv>()
   )
   .post(
     '/:id/attachments',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Tasks',
       summary: 'Add a task attachment',
@@ -148,7 +148,8 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const inputBody = c.req.valid('json');
-      await loadTask(orgId, id);
+      const target = await loadTask(orgId, id);
+      await assertTaskCapability(orgId, actorId, target, 'contribute');
 
       // An `email` attachment's sourceIntegrationId is caller-supplied — without this check a
       // task in this org could point at another org's integration, and a later mail.* automation
@@ -192,7 +193,6 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
   )
   .post(
     '/:id/attachments/upload',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Tasks',
       summary: 'Upload a file attachment',
@@ -206,7 +206,8 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { file, title } = c.req.valid('form');
-      await loadTask(orgId, id);
+      const target = await loadTask(orgId, id);
+      await assertTaskCapability(orgId, actorId, target, 'contribute');
 
       // Deterministic, id-scoped key (no filename in the path → no traversal surface).
       const attachmentId = genId();
@@ -255,9 +256,11 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
     }),
     zParam(attParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id, attachmentId } = c.req.valid('param');
-      await loadTask(orgId, id);
+      const target = await loadTask(orgId, id);
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      if (!canView(target)) throw new NotFoundError('Task not found');
 
       const rows = await db
         .select()
@@ -292,7 +295,6 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
   )
   .delete(
     '/:id/attachments/:attachmentId',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Tasks',
       summary: 'Remove a task attachment',
@@ -302,11 +304,12 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
     }),
     zParam(attParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id, attachmentId } = c.req.valid('param');
       // Load the host task first so a cross-org/unknown task id 404s before the attachment
       // is addressable — the attachment id alone never leaks across tenants.
-      await loadTask(orgId, id);
+      const target = await loadTask(orgId, id);
+      await assertTaskCapability(orgId, actorId, target, 'contribute');
 
       const removed = await db
         .delete(attachment)

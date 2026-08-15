@@ -1,0 +1,47 @@
+{
+  "name": "@docket/work",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Actionable-work contracts and application rules shared by Docket delivery runtimes.",
+  "exports": {
+    "./task-contract": {
+      "types": "./src/task-contract.ts",
+      "default": "./src/task-contract.ts"
+    },
+    "./task-drafting": {
+      "types": "./src/task-drafting.ts",
+      "default": "./src/task-drafting.ts"
+    },
+    "./task-titles": {
+      "types": "./src/task-titles.ts",
+      "default": "./src/task-titles.ts"
+    },
+    "./parent-resolution": {
+      "types": "./src/parent-resolution.ts",
+      "default": "./src/parent-resolution.ts"
+    },
+    "./vocabulary": {
+      "types": "./src/vocabulary.ts",
+      "default": "./src/vocabulary.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf .turbo *.tsbuildinfo"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

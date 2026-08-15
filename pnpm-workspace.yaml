@@ -88,7 +88,7 @@ catalog:
   '@modelcontextprotocol/sdk': ^1.29.0
 
   # Billing
-  stripe: ^22.2.0
+  stripe: 22.3.0
 
   # Env validation
   '@t3-oss/env-core': ^0.13.11

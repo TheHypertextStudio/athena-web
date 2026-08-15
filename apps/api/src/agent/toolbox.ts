@@ -16,7 +16,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { TurnToolDef } from '@docket/agent-runtime';
+import type { TurnToolDef } from '@docket/athena/turn';
 import {
   db,
   integration,

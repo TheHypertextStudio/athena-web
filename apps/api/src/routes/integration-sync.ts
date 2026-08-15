@@ -16,8 +16,9 @@ import {
   type SyncRunPurpose,
   type SyncTrigger,
 } from '@docket/types';
+import { isProviderAuthError } from '@docket/connections/provider-error';
 import type { ConnectorProvider } from '@docket/integrations';
-import { MAIL_CAPABLE_PROVIDERS, type ImportedItem, isConnectorError } from '@docket/integrations';
+import { MAIL_CAPABLE_PROVIDERS, type ImportedItem } from '@docket/integrations';
 import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -244,9 +245,11 @@ export interface LeasedSyncContext {
  * One purpose's pull, run under the spine's lease with a resolved token.
  *
  * @remarks
- * Throwing is the failure channel: a thrown {@link import('@docket/integrations').ConnectorError}
- * with `kind: 'auth'` records the run as a reauth failure (status flip + owner notification);
- * anything else records a plain failure. Returning records success with the given tallies.
+ * Throwing is the failure channel. Connections-owned structural {@link isProviderAuthError}
+ * selects the reauthorization path (status flip + owner notification), so existing
+ * `ConnectorError` failures with `kind: 'auth'` remain compatible without coupling this delivery
+ * spine to a concrete Integrations-owned error class. Anything else records a plain failure; returning
+ * records success with the given tallies.
  */
 export type LeasedSyncExecutor = (ctx: LeasedSyncContext) => Promise<{
   readonly processed: number;
@@ -322,7 +325,7 @@ export async function runLeasedSync(
     });
     return await finishSuccess(run, row, processed, total, now, { stampFullSync });
   } catch (err) {
-    const needsReauth = isConnectorError(err) && err.kind === 'auth';
+    const needsReauth = isProviderAuthError(err);
     const message = err instanceof Error ? err.message : 'Connector error';
     return finishFailure(run, row, message, { needsReauth, now });
   }

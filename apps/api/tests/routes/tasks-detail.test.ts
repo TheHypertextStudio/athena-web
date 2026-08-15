@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedTaskAccessOrg as seedBaseOrg } from '../support/routes-harness';
 import type tasksRouter from '../../src/routes/tasks';
 import { assertDefined } from '@docket/test-utils';
 
@@ -502,7 +502,7 @@ describe('tasks patch (PATCH /:id)', () => {
   });
 
   it('allows an assign-capable actor to set the assignee', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema, 'assign');
     const writer = appWithActor(tasks, orgId, ['assign'], humanActorId);
     const id = await createTask(writer, teamId);
     const patched = await writer.request(`/${id}`, {
@@ -526,7 +526,7 @@ describe('tasks patch (PATCH /:id)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('403s for a view-only actor and 404s on a missing id', async () => {
+  it('404s on a missing id before resolving mutation capability', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const viewer = appWithActor(tasks, orgId, ['view'], humanActorId);
     expect(
@@ -537,7 +537,7 @@ describe('tasks patch (PATCH /:id)', () => {
           body: JSON.stringify({ title: 'x' }),
         })
       ).status,
-    ).toBe(403);
+    ).toBe(404);
 
     const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     expect(
@@ -583,10 +583,10 @@ describe('tasks archive (DELETE /:id)', () => {
     );
   });
 
-  it('403s for a view-only actor and 404s on a missing/already-archived id', async () => {
+  it('404s on a missing or already-archived id', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const viewer = appWithActor(tasks, orgId, ['view'], humanActorId);
-    expect((await viewer.request(`/${MISSING_ULID}`, { method: 'DELETE' })).status).toBe(403);
+    expect((await viewer.request(`/${MISSING_ULID}`, { method: 'DELETE' })).status).toBe(404);
 
     const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     expect((await writer.request(`/${MISSING_ULID}`, { method: 'DELETE' })).status).toBe(404);
@@ -668,7 +668,7 @@ describe('tasks state transition (POST /:id/state)', () => {
     expect(res.status).toBe(422);
   });
 
-  it('403s for a view-only actor and 404s on a missing id', async () => {
+  it('404s on a missing state-transition target before resolving capability', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const viewer = appWithActor(tasks, orgId, ['view'], humanActorId);
     expect(
@@ -679,7 +679,7 @@ describe('tasks state transition (POST /:id/state)', () => {
           body: JSON.stringify({ state: 'done' }),
         })
       ).status,
-    ).toBe(403);
+    ).toBe(404);
 
     const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     expect(
@@ -772,7 +772,7 @@ describe('tasks subtasks (GET + POST /:id/subtasks)', () => {
     );
   });
 
-  it('403s for a view-only actor and 404s on a missing parent', async () => {
+  it('404s on a missing subtask parent before resolving capability', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const viewer = appWithActor(tasks, orgId, ['view'], humanActorId);
     expect(
@@ -783,7 +783,7 @@ describe('tasks subtasks (GET + POST /:id/subtasks)', () => {
           body: JSON.stringify({ title: 'x' }),
         })
       ).status,
-    ).toBe(403);
+    ).toBe(404);
     // GET subtasks is org:view; a missing parent 404s.
     expect((await viewer.request(`/${MISSING_ULID}/subtasks`, { method: 'GET' })).status).toBe(404);
 

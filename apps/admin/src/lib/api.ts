@@ -1,4 +1,4 @@
-import type { AdminAppType, AppType } from '@docket/api';
+import type { AdminAppType, AppType } from '@docket/api/rpc-contract';
 import { hc } from 'hono/client';
 
 /**
@@ -6,7 +6,8 @@ import { hc } from 'hono/client';
  * staff-gated `/admin/*` routes.
  *
  * @remarks
- * Built from the `@docket/api` {@link AdminAppType} contract, so every call is fully typed
+ * Built from the `@docket/api/rpc-contract` {@link AdminAppType} contract, so every call is fully
+ * typed
  * end-to-end (e.g. `api.admin.users.$get(...)`,
  * `api.admin.orgs[':id'].lifecycle.$post(...)`).
  *

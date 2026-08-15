@@ -560,7 +560,7 @@ describe('MCP tool metadata and task execution', () => {
 
 describe('comment tool', () => {
   it('comments, threads a reply, rejects cross-subject/2-level/parent-404', async () => {
-    const s = await seedOrg(['comment']);
+    const s = await seedOrg(['contribute']);
     const client = await connect(s.ctx);
     const root = (await client.callTool({
       name: 'comment',
@@ -928,6 +928,19 @@ describe('list_work / find tools', () => {
     }
 
     const client = await connect(s.ctx);
+    const list = (await client.callTool({
+      name: 'list_work',
+      arguments: { orgId: s.orgId, entity: 'task' },
+    })) as CallToolResult;
+    const listed = payload(list)['items'] as { id: string; title: string }[];
+    const listedIds = listed.map((item) => item.id);
+
+    // `list_work` reads live task rows rather than the search index, so it needs the same
+    // canonical per-task visibility predicate as every other task projection.
+    expect(listedIds).toContain(grantedId);
+    expect(listedIds).not.toContain(secretId);
+    expect(JSON.stringify(listed)).not.toContain('Ship secret');
+
     const res = (await client.callTool({
       name: 'find',
       arguments: { orgId: s.orgId, query: 'Ship' },
@@ -1013,6 +1026,37 @@ describe('list_work / find tools', () => {
   });
 });
 
+describe('MCP task mutation reports', () => {
+  it('omits an unreadable private task from update and archive reports', async () => {
+    const s = await seedOrg(['view']);
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, s.orgId));
+    await db.update(schema.task).set({ visibility: 'private' }).where(eq(schema.task.id, s.taskId));
+
+    const client = await connect(s.ctx);
+    const update = (await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: s.orgId,
+        entity: 'task',
+        scope: { ids: [s.taskId] },
+        set: { priority: 'high' },
+      },
+    })) as CallToolResult;
+    const archive = (await client.callTool({
+      name: 'archive',
+      arguments: { orgId: s.orgId, entity: 'task', scope: { ids: [s.taskId] } },
+    })) as CallToolResult;
+
+    expect(payload(update)).toMatchObject({ matched: 0, changed: 0, skipped: [] });
+    expect(payload(archive)).toMatchObject({ matched: 0, changed: 0, skipped: [] });
+    expect(JSON.stringify({ update, archive })).not.toContain(s.taskId);
+    expect(JSON.stringify({ update, archive })).not.toContain('Ship');
+  });
+});
+
 describe('MCP list pagination', () => {
   it('paginates tools, resources, templates, and prompts without duplicates', async () => {
     const s = await seedOrg(['view']);
@@ -1051,6 +1095,157 @@ describe('MCP list pagination', () => {
 });
 
 describe('hydrated resources', () => {
+  it('uses canonical public task visibility for individual task resources', async () => {
+    const s = await seedOrg(['view']);
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, s.orgId));
+
+    const client = await connect(s.ctx);
+    const task = readJson(
+      (await client.readResource({ uri: `docket://${s.orgId}/task/${s.taskId}` })).contents,
+    );
+
+    expect(task['id']).toBe(s.taskId);
+  });
+
+  it('omits ungranted private tasks from hydrated refs, rollups, sessions, and completion', async () => {
+    const s = await seedOrg(['view']);
+
+    // The root grant lets this caller address the workspace, but deliberately does not flow into
+    // its work. The first private task is explicitly shared; the second is a control that must
+    // stay absent from every projection that starts at an otherwise-readable parent.
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, s.orgId));
+    await db
+      .update(schema.task)
+      .set({ visibility: 'private', projectId: s.projectId, cycleId: s.cycleId })
+      .where(eq(schema.task.organizationId, s.orgId));
+    await db.insert(schema.grant).values([
+      {
+        organizationId: s.orgId,
+        subjectKind: 'actor',
+        subjectId: s.actorId,
+        resourceKind: 'task',
+        resourceId: s.taskId,
+        capabilities: ['view'],
+        effect: 'allow',
+        cascades: false,
+      },
+      {
+        organizationId: s.orgId,
+        subjectKind: 'actor',
+        subjectId: s.actorId,
+        resourceKind: 'project',
+        resourceId: s.projectId,
+        capabilities: ['view'],
+        effect: 'allow',
+        cascades: false,
+      },
+      {
+        organizationId: s.orgId,
+        subjectKind: 'actor',
+        subjectId: s.actorId,
+        resourceKind: 'cycle',
+        resourceId: s.cycleId,
+        capabilities: ['view'],
+        effect: 'allow',
+        cascades: false,
+      },
+    ]);
+    await db.insert(schema.taskDependency).values({
+      organizationId: s.orgId,
+      blockingTaskId: s.taskId,
+      blockedTaskId: s.task2Id,
+    });
+    await db
+      .update(schema.task)
+      .set({ parentTaskId: s.taskId })
+      .where(eq(schema.task.id, s.task2Id));
+    const [session] = await db
+      .insert(schema.agentSession)
+      .values({
+        organizationId: s.orgId,
+        agentId: s.agentId,
+        taskId: s.task2Id,
+        trigger: 'delegation',
+        status: 'running',
+        initiatorId: s.actorId,
+      })
+      .returning({ id: schema.agentSession.id });
+    await db.insert(schema.sessionActivity).values({
+      sessionId: session!.id,
+      organizationId: s.orgId,
+      type: 'thought',
+      body: { text: 'Ship 2 private task summary' },
+    });
+    const [tasklessSession] = await db
+      .insert(schema.agentSession)
+      .values({
+        organizationId: s.orgId,
+        agentId: s.agentId,
+        trigger: 'delegation',
+        status: 'running',
+        initiatorId: s.actorId,
+      })
+      .returning({ id: schema.agentSession.id });
+    await db.insert(schema.sessionActivity).values({
+      sessionId: tasklessSession!.id,
+      organizationId: s.orgId,
+      type: 'thought',
+      body: { text: 'Taskless session activity remains visible' },
+    });
+
+    const client = await connect(s.ctx);
+    const visibleTask = readJson(
+      (await client.readResource({ uri: `docket://${s.orgId}/task/${s.taskId}` })).contents,
+    );
+    const project = readJson(
+      (await client.readResource({ uri: `docket://${s.orgId}/project/${s.projectId}` })).contents,
+    );
+    const cycle = readJson(
+      (await client.readResource({ uri: `docket://${s.orgId}/cycle/${s.cycleId}` })).contents,
+    );
+    const sessionDto = readJson(
+      (await client.readResource({ uri: `docket://${s.orgId}/session/${session!.id}` })).contents,
+    );
+    const tasklessSessionDto = readJson(
+      (
+        await client.readResource({
+          uri: `docket://${s.orgId}/session/${tasklessSession!.id}`,
+        })
+      ).contents,
+    );
+    const completion = await client.complete({
+      ref: { type: 'ref/resource', uri: 'docket://{org}/{type}/{id}' },
+      argument: { name: 'id', value: '' },
+      context: { arguments: { org: s.orgId } },
+    });
+
+    expect(visibleTask['id']).toBe(s.taskId);
+    expect(visibleTask['blocking']).toEqual([]);
+    expect(visibleTask['subtasks']).toEqual([]);
+    expect(project['taskCount']).toBe(1);
+    expect((project['tasks'] as { id: string }[]).map((item) => item.id)).toEqual([s.taskId]);
+    expect((cycle['tasks'] as { id: string }[]).map((item) => item.id)).toEqual([s.taskId]);
+    expect(sessionDto['taskId']).toBeNull();
+    expect(sessionDto['task']).toBeNull();
+    expect(sessionDto['activities']).toEqual([]);
+    expect(tasklessSessionDto['taskId']).toBeNull();
+    expect(tasklessSessionDto['activities']).toMatchObject([
+      { body: { text: 'Taskless session activity remains visible' } },
+    ]);
+    expect(completion.completion.values).toContain(s.taskId);
+
+    const serialized = JSON.stringify({ visibleTask, project, cycle, sessionDto, completion });
+    expect(serialized).not.toContain(s.task2Id);
+    expect(serialized).not.toContain('Ship 2');
+    expect(serialized).not.toContain('private task summary');
+  });
+
   it('reads hydrated DTOs for every type', async () => {
     const s = await seedOrg(['view', 'contribute']);
     // Wire up related data so the hydration fields are exercised.
@@ -1316,6 +1511,42 @@ describe('hub resources', () => {
     );
   });
 
+  it('does not expose a private legacy plan pointer through the static Hub resource', async () => {
+    const s = await seedOrg([]);
+    const [guest] = await db
+      .insert(schema.role)
+      .values({ organizationId: s.orgId, key: 'guest', name: 'Guest' })
+      .returning({ id: schema.role.id });
+    await db.update(schema.actor).set({ roleId: guest!.id }).where(eq(schema.actor.id, s.actorId));
+    const date = new Date().toISOString().slice(0, 10);
+    const [privateTask] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: s.orgId,
+        teamId: s.teamId,
+        title: 'Private static resource task',
+        state: 'todo',
+        visibility: 'private',
+        createdBy: s.actorId,
+      })
+      .returning({ id: schema.task.id });
+    const [hub] = await db
+      .select({ id: schema.hub.id })
+      .from(schema.hub)
+      .where(eq(schema.hub.userId, s.userId));
+    await db.insert(schema.dailyPlanItem).values({
+      hubId: hub!.id,
+      refOrganizationId: s.orgId,
+      refTaskId: privateTask!.id,
+      date,
+    });
+
+    const client = await connect(s.ctx);
+    const today = readJson((await client.readResource({ uri: 'docket://hub/today' })).contents);
+
+    expect(today['tasks']).toEqual([]);
+  });
+
   it('returns empty hub surfaces for a user with no memberships', async () => {
     const ctx: McpContext = {
       principal: { kind: 'user', userId: MISSING, userName: null, userEmail: 'ghost@e.com' },
@@ -1333,6 +1564,219 @@ describe('hub resources', () => {
     );
     expect(portfolio['programs']).toEqual([]);
     expect(portfolio['projects']).toEqual([]);
+  });
+
+  it('hides a private task-bound approval from a Guest until it is directly shared', async () => {
+    const s = await seedOrg([]);
+    const [guest] = await db
+      .insert(schema.role)
+      .values({
+        organizationId: s.orgId,
+        key: 'guest',
+        name: 'Guest',
+        defaultVisibility: 'private',
+      })
+      .returning({ id: schema.role.id });
+    await db.update(schema.actor).set({ roleId: guest!.id }).where(eq(schema.actor.id, s.actorId));
+    await db.update(schema.task).set({ visibility: 'private' }).where(eq(schema.task.id, s.taskId));
+    const [bound, taskless] = await db
+      .insert(schema.agentSession)
+      .values([
+        {
+          organizationId: s.orgId,
+          agentId: s.agentId,
+          taskId: s.taskId,
+          trigger: 'delegation',
+          status: 'awaiting_approval',
+          initiatorId: s.actorId,
+        },
+        {
+          organizationId: s.orgId,
+          agentId: s.agentId,
+          trigger: 'delegation',
+          status: 'awaiting_approval',
+          initiatorId: s.actorId,
+        },
+      ])
+      .returning({ id: schema.agentSession.id, taskId: schema.agentSession.taskId });
+    const client = await connect(s.ctx);
+
+    const hidden = readJson((await client.readResource({ uri: 'docket://hub/inbox' })).contents);
+    expect(hidden['approvals']).toContainEqual({ sessionId: taskless!.id, taskId: null });
+    expect(JSON.stringify(hidden)).not.toContain(bound!.id);
+    expect(JSON.stringify(hidden)).not.toContain(s.taskId);
+
+    await db.insert(schema.grant).values({
+      organizationId: s.orgId,
+      subjectKind: 'actor',
+      subjectId: s.actorId,
+      resourceKind: 'task',
+      resourceId: s.taskId,
+      capabilities: ['view'],
+      effect: 'allow',
+      cascades: false,
+    });
+
+    const shared = readJson((await client.readResource({ uri: 'docket://hub/inbox' })).contents);
+    expect(shared['approvals']).toContainEqual({ sessionId: bound!.id, taskId: s.taskId });
+  });
+
+  it('filters Hub Portfolio through each project and program visibility decision', async () => {
+    const s = await seedOrg([]);
+    await Promise.all([
+      db
+        .update(schema.project)
+        .set({ visibility: 'private' })
+        .where(eq(schema.project.id, s.projectId)),
+      db
+        .update(schema.program)
+        .set({ visibility: 'private' })
+        .where(eq(schema.program.id, s.programId)),
+    ]);
+    const client = await connect(s.ctx);
+
+    const hidden = readJson(
+      (await client.readResource({ uri: 'docket://hub/portfolio' })).contents,
+    );
+    expect(hidden['projects']).toEqual([]);
+    expect(hidden['programs']).toEqual([]);
+
+    const [projectGrant, programGrant] = await db
+      .insert(schema.grant)
+      .values([
+        {
+          organizationId: s.orgId,
+          subjectKind: 'actor',
+          subjectId: s.actorId,
+          resourceKind: 'project',
+          resourceId: s.projectId,
+          capabilities: ['view'],
+          effect: 'allow',
+          cascades: false,
+        },
+        {
+          organizationId: s.orgId,
+          subjectKind: 'actor',
+          subjectId: s.actorId,
+          resourceKind: 'program',
+          resourceId: s.programId,
+          capabilities: ['view'],
+          effect: 'allow',
+          cascades: false,
+        },
+      ])
+      .returning({ id: schema.grant.id });
+    const directlyShared = readJson(
+      (await client.readResource({ uri: 'docket://hub/portfolio' })).contents,
+    );
+    expect((directlyShared['projects'] as { id: string }[]).map((project) => project.id)).toContain(
+      s.projectId,
+    );
+    expect((directlyShared['programs'] as { id: string }[]).map((program) => program.id)).toContain(
+      s.programId,
+    );
+
+    await Promise.all([
+      db.delete(schema.grant).where(eq(schema.grant.id, projectGrant!.id)),
+      db.delete(schema.grant).where(eq(schema.grant.id, programGrant!.id)),
+      db
+        .update(schema.project)
+        .set({ visibility: 'public' })
+        .where(eq(schema.project.id, s.projectId)),
+      db
+        .update(schema.program)
+        .set({ visibility: 'public' })
+        .where(eq(schema.program.id, s.programId)),
+    ]);
+    const publiclyVisible = readJson(
+      (await client.readResource({ uri: 'docket://hub/portfolio' })).contents,
+    );
+    expect(
+      (publiclyVisible['projects'] as { id: string }[]).map((project) => project.id),
+    ).toContain(s.projectId);
+    expect(
+      (publiclyVisible['programs'] as { id: string }[]).map((program) => program.id),
+    ).toContain(s.programId);
+  });
+
+  it('removes suspended and archived members from every static Hub surface', async () => {
+    const s = await seedOrg(['view']);
+    const [session] = await db
+      .insert(schema.agentSession)
+      .values({
+        organizationId: s.orgId,
+        agentId: s.agentId,
+        taskId: s.taskId,
+        trigger: 'delegation',
+        status: 'awaiting_approval',
+        initiatorId: s.actorId,
+      })
+      .returning({ id: schema.agentSession.id });
+    const client = await connect(s.ctx);
+
+    const assertNoFormerMembershipData = async () => {
+      const orgs = readJson((await client.readResource({ uri: 'docket://orgs' })).contents);
+      const today = readJson((await client.readResource({ uri: 'docket://hub/today' })).contents);
+      const inbox = readJson((await client.readResource({ uri: 'docket://hub/inbox' })).contents);
+      const portfolio = readJson(
+        (await client.readResource({ uri: 'docket://hub/portfolio' })).contents,
+      );
+      const completion = await client.complete({
+        ref: { type: 'ref/resource', uri: 'docket://{org}/{type}/{id}' },
+        argument: { name: 'org', value: s.orgId.slice(0, 6) },
+      });
+
+      expect(orgs).toEqual([]);
+      expect(today['tasks']).toEqual([]);
+      expect(inbox['approvals']).toEqual([]);
+      expect(portfolio['projects']).toEqual([]);
+      expect(portfolio['programs']).toEqual([]);
+      expect(completion.completion.values).toEqual([]);
+      expect(JSON.stringify({ orgs, today, inbox, portfolio, completion })).not.toContain(s.orgId);
+      expect(JSON.stringify({ orgs, today, inbox, portfolio, completion })).not.toContain(
+        session!.id,
+      );
+    };
+
+    await db
+      .update(schema.actor)
+      .set({ status: 'suspended' })
+      .where(eq(schema.actor.id, s.actorId));
+    await assertNoFormerMembershipData();
+
+    await db
+      .update(schema.actor)
+      .set({ status: 'active', archivedAt: new Date() })
+      .where(eq(schema.actor.id, s.actorId));
+    await assertNoFormerMembershipData();
+  });
+
+  it('requires work:read for every static resource read', async () => {
+    const s = await seedOrg(['view']);
+    const client = await connect({ ...s.ctx, scopes: ['work:write'] });
+
+    for (const uri of [
+      'docket://orgs',
+      'docket://hub/today',
+      'docket://hub/inbox',
+      'docket://hub/directive',
+      'docket://hub/portfolio',
+    ]) {
+      await expect(client.readResource({ uri })).rejects.toThrow(/work:read/);
+    }
+    await expect(
+      client.complete({
+        ref: { type: 'ref/resource', uri: 'docket://{org}/{type}/{id}' },
+        argument: { name: 'org', value: s.orgId.slice(0, 6) },
+      }),
+    ).rejects.toThrow(/work:read/);
+    await expect(
+      client.complete({
+        ref: { type: 'ref/resource', uri: 'docket://{org}/{type}/{id}' },
+        argument: { name: 'id', value: s.taskId.slice(0, 6) },
+        context: { arguments: { org: s.orgId } },
+      }),
+    ).rejects.toThrow(/work:read/);
   });
 });
 

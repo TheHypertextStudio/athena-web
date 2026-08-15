@@ -21,5 +21,5 @@ import { writeFileSync } from 'node:fs';
 import { GENERATED_PATH, renderRouteModule, resolveAllRoutes } from './offline-route-policy';
 
 const routes = resolveAllRoutes();
-writeFileSync(GENERATED_PATH, renderRouteModule(routes), 'utf8');
+writeFileSync(GENERATED_PATH, await renderRouteModule(routes), 'utf8');
 process.stdout.write(`src/lib/offline-routes.generated.ts — ${String(routes.length)} routes\n`);

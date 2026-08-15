@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  Capability as IdentityAccessCapability,
+  CAPABILITY_RANK as IDENTITY_ACCESS_CAPABILITY_RANK,
+  GrantCapability as IdentityAccessGrantCapability,
+  satisfies as identityAccessSatisfies,
+} from '@docket/identity-access/capabilities';
+import {
+  GrantResourceKind as IdentityAccessGrantResourceKind,
+  GrantSubjectKind as IdentityAccessGrantSubjectKind,
+} from '@docket/identity-access/grants';
+
+import {
   Capability,
   CAPABILITY_RANK,
   GrantCapability,
@@ -9,6 +20,18 @@ import {
   satisfies,
   Visibility,
 } from '../../src/capability';
+import { GrantResourceKind, GrantSubjectKind } from '../../src/grant';
+
+describe('@docket/types Identity & Access compatibility facade', () => {
+  it('re-exports the owned capability and grant-kind runtime vocabulary unchanged', () => {
+    expect(Capability).toBe(IdentityAccessCapability);
+    expect(GrantCapability).toBe(IdentityAccessGrantCapability);
+    expect(CAPABILITY_RANK).toBe(IDENTITY_ACCESS_CAPABILITY_RANK);
+    expect(satisfies).toBe(identityAccessSatisfies);
+    expect(GrantSubjectKind).toBe(IdentityAccessGrantSubjectKind);
+    expect(GrantResourceKind).toBe(IdentityAccessGrantResourceKind);
+  });
+});
 
 describe('Capability', () => {
   it('accepts every capability literal', () => {

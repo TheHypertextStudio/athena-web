@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ActionSpec } from '@docket/types';
+import type { ActionSpec } from '@docket/automation/contracts';
+import { matchesAutomationEvent } from '@docket/automation/evaluation';
 
 import { type EngineRule, matches, runAutomations } from '../../../src/lib/automation/engine';
 import { type ActionHandler, createRegistry } from '../../../src/lib/automation/registry';
@@ -27,6 +28,10 @@ function rule(over: Partial<EngineRule>): EngineRule {
 }
 
 describe('matches (event-match)', () => {
+  it('remains a direct compatibility export of the portable event matcher', () => {
+    expect(matches).toBe(matchesAutomationEvent);
+  });
+
   it('matches on kind and subjectType, and treats an absent field as a wildcard', () => {
     expect(matches({ kind: 'task.completed' }, event)).toBe(true);
     expect(matches({ kind: 'task.created' }, event)).toBe(false);

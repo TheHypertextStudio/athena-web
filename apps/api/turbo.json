@@ -40,6 +40,9 @@
         "MAIL_FROM",
         "STAFF_BOOTSTRAP_EMAILS"
       ]
+    },
+    "test": {
+      "dependsOn": ["build"]
     }
   }
 }

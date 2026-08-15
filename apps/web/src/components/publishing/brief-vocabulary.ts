@@ -11,16 +11,13 @@
  * calling the thing what the workspace calls it ("Campaign", "Engagement") is the difference
  * between a document that reads as theirs and one that reads as a tool's export.
  */
-import type {
-  BriefFact,
-  BriefSection,
-  Health,
-  PublicationSubjectKind,
-  VocabularySkin,
-  VocabularyTerm,
-} from '@docket/types';
-import { VOCABULARY_PRESETS } from '@docket/ui/vocabulary';
-import type { VocabularyKey } from '@docket/ui/vocabulary';
+import type { BriefFact, BriefSection, Health, PublicationSubjectKind } from '@docket/types';
+import {
+  VOCABULARY_PRESETS,
+  type VocabularyKey,
+  type VocabularySkin,
+  type VocabularyTerm,
+} from '@docket/work/vocabulary';
 
 /**
  * Resolve one vocabulary term against a workspace's skin.

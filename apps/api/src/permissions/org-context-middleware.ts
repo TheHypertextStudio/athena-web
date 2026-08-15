@@ -3,12 +3,12 @@
  *
  * @remarks
  * Applied via `orgs.use('/:orgId/*', orgContextMiddleware)` before the child route
- * chains. Loads the caller's human Actor for `(session.user.id, :orgId)`; a missing
- * membership 404s (existence-hiding — a non-member must not learn the org exists).
+ * chains. Loads the caller's active, unarchived human Actor for `(session.user.id, :orgId)`;
+ * a missing membership 404s (existence-hiding — a non-member must not learn the org exists).
  * Sets `c.var.actorCtx` for downstream handlers + the capability guard (P4.5).
  */
 import { actor, db, role } from '@docket/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';
 
 import type { AppEnv } from '../context';
@@ -31,7 +31,17 @@ export const orgContextMiddleware: MiddlewareHandler<AppEnv> = async (c, next) =
     .select({ actor, role })
     .from(actor)
     .leftJoin(role, and(eq(actor.roleId, role.id), eq(role.organizationId, orgId)))
-    .where(and(eq(actor.userId, session.user.id), eq(actor.organizationId, orgId)))
+    // An actor context is an authorization grant, not merely an identity lookup. Keep inactive,
+    // non-human, and archived records out so downstream handlers never receive usable context.
+    .where(
+      and(
+        eq(actor.userId, session.user.id),
+        eq(actor.organizationId, orgId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    )
     .limit(1);
 
   const row = rows[0];

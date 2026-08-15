@@ -196,7 +196,7 @@ describe('GET /:id/activity', () => {
       approvalStatus: 'proposed',
     });
 
-    const app = appFor(s.orgId, ['view']);
+    const app = appFor(s.orgId, ['view'], s.humanActorId);
     const res = await app.request(`/${sessionId}/activity`, { method: 'GET' });
     expect(res.status).toBe(200);
     const json = (await res.json()) as { items: { type: string; approvalStatus: unknown }[] };

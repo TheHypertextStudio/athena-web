@@ -10,7 +10,7 @@
  */
 import { agentSessionTranscript } from '@docket/db';
 import type { db } from '@docket/db';
-import type { TurnMessage } from '@docket/types';
+import type { TurnMessage } from '@docket/athena/turn-protocol';
 import { eq, sql } from 'drizzle-orm';
 
 /** The transaction (or root db) handle the helpers run on. */

@@ -10,11 +10,15 @@
     "script": "dev:app"
   },
   "scripts": {
+    "prebuild": "pnpm --filter @docket/api build",
     "build": "next build",
+    "predev": "pnpm --filter @docket/api build",
     "dev": "portless run --force",
     "dev:app": "tsx ../../scripts/portless-env.ts next dev",
     "start": "next start",
+    "pretypecheck": "pnpm --filter @docket/api build",
     "typecheck": "tsc --noEmit",
+    "prelint": "pnpm --filter @docket/api build",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",

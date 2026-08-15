@@ -10,12 +10,27 @@ import {
   task,
   team,
 } from '@docket/db';
+import { ancestorChain as dbAncestorChain } from '@docket/db/identity-access';
+import { evaluateExplicitAllow } from '@docket/identity-access/authorization';
+import {
+  CAPABILITY_RANK as identityAccessCapabilityRank,
+  satisfies as identityAccessSatisfies,
+} from '@docket/identity-access/capabilities';
+import type {
+  ExplicitGrant,
+  GrantPrincipal,
+  GrantResourceChain,
+} from '@docket/identity-access/grants';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ancestorChain, type ResourceRef } from '../../src/ancestor-chain';
 import { canActor } from '../../src/can-actor';
+import {
+  CAPABILITY_RANK as authzCapabilityRank,
+  satisfies as authzSatisfies,
+} from '../../src/index';
 import { effectiveVisibility, visibilityGrantsView } from '../../src/visibility';
 import {
   lastOwnerGuard,
@@ -46,6 +61,74 @@ let projectFutureId!: string;
 let taskFullId!: string;
 let taskBareId!: string;
 let client: PGlite | undefined;
+
+interface ExplicitGrantParityCase {
+  readonly capabilities: readonly ('view' | 'contribute' | 'manage')[];
+  readonly cascades: boolean;
+  readonly effect: 'allow';
+  readonly expected: {
+    readonly allow: boolean;
+    readonly effectiveCapability: 'view' | 'contribute' | null;
+    readonly reason: 'allow' | 'no_grant';
+  };
+  readonly expiresAt: Date | null;
+  readonly label: string;
+  readonly resourceKind: 'task' | 'team';
+  readonly subjectKind: 'actor' | 'role';
+}
+
+const explicitGrantParityCases: readonly ExplicitGrantParityCase[] = [
+  {
+    label: 'a direct actor grant',
+    subjectKind: 'actor',
+    resourceKind: 'task',
+    capabilities: ['view'],
+    effect: 'allow',
+    cascades: true,
+    expiresAt: null,
+    expected: { allow: true, effectiveCapability: 'view', reason: 'allow' },
+  },
+  {
+    label: 'an authoritative role grant',
+    subjectKind: 'role',
+    resourceKind: 'task',
+    capabilities: ['contribute'],
+    effect: 'allow',
+    cascades: true,
+    expiresAt: null,
+    expected: { allow: true, effectiveCapability: 'contribute', reason: 'allow' },
+  },
+  {
+    label: 'an expired grant',
+    subjectKind: 'actor',
+    resourceKind: 'task',
+    capabilities: ['manage'],
+    effect: 'allow',
+    cascades: true,
+    expiresAt: new Date('2000-01-01T00:00:00.000Z'),
+    expected: { allow: false, effectiveCapability: null, reason: 'no_grant' },
+  },
+  {
+    label: 'an exact non-cascading target grant',
+    subjectKind: 'actor',
+    resourceKind: 'task',
+    capabilities: ['view'],
+    effect: 'allow',
+    cascades: false,
+    expiresAt: null,
+    expected: { allow: true, effectiveCapability: 'view', reason: 'allow' },
+  },
+  {
+    label: 'a non-cascading ancestor grant',
+    subjectKind: 'actor',
+    resourceKind: 'team',
+    capabilities: ['view'],
+    effect: 'allow',
+    cascades: false,
+    expiresAt: null,
+    expected: { allow: false, effectiveCapability: null, reason: 'no_grant' },
+  },
+];
 
 async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
   await client.exec(`
@@ -567,6 +650,29 @@ describe('canActor', () => {
     expect(r.effectiveCapability).toBeNull();
   });
 
+  it('an active but archived actor is denied (actor_archived)', async () => {
+    const archivedActorId = (
+      await db
+        .insert(actor)
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Archived member',
+          roleId: memberRoleId,
+          archivedAt: new Date('2026-08-14T00:00:00.000Z'),
+        })
+        .returning({ id: actor.id })
+    )[0]!.id;
+
+    const result = await canActor(archivedActorId, 'contribute', orgTarget(), db);
+
+    expect(result).toEqual({
+      allow: false,
+      reason: 'actor_archived',
+      effectiveCapability: null,
+    });
+  });
+
   it('resolves a direct actor-subject grant on the target', async () => {
     const teamTarget: ResourceRef = { kind: 'team', id: teamId, orgId };
     // No grant yet: guest sees nothing on the team.
@@ -585,10 +691,231 @@ describe('canActor', () => {
     expect(r.effectiveCapability).toBe('view');
   });
 
+  it('does not treat an actor grant addressed to a role id as a role grant', async () => {
+    const subjectRoleId = (
+      await db
+        .insert(role)
+        .values({
+          organizationId: orgId,
+          key: 'actor-grant-role-id',
+          name: 'Actor grant role id',
+          capabilities: [],
+        })
+        .returning({ id: role.id })
+    )[0]!.id;
+    const subjectActorId = (
+      await db
+        .insert(actor)
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Actor grant role id holder',
+          roleId: subjectRoleId,
+        })
+        .returning({ id: actor.id })
+    )[0]!.id;
+
+    await db.insert(grant).values({
+      organizationId: orgId,
+      subjectKind: 'actor',
+      subjectId: subjectRoleId,
+      resourceKind: 'organization',
+      resourceId: orgId,
+      capabilities: ['manage'],
+      effect: 'allow',
+    });
+
+    await expect(canActor(subjectActorId, 'view', orgTarget(), db)).resolves.toEqual({
+      allow: false,
+      reason: 'no_grant',
+      effectiveCapability: null,
+    });
+  });
+
+  it('resolves a role grant for the actor’s authoritative in-org role', async () => {
+    const subjectRoleId = (
+      await db
+        .insert(role)
+        .values({
+          organizationId: orgId,
+          key: 'exact-role-grant',
+          name: 'Exact role grant',
+          capabilities: [],
+        })
+        .returning({ id: role.id })
+    )[0]!.id;
+    const subjectActorId = (
+      await db
+        .insert(actor)
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Exact role grant holder',
+          roleId: subjectRoleId,
+        })
+        .returning({ id: actor.id })
+    )[0]!.id;
+
+    await db.insert(grant).values({
+      organizationId: orgId,
+      subjectKind: 'role',
+      subjectId: subjectRoleId,
+      resourceKind: 'organization',
+      resourceId: orgId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+    });
+
+    await expect(canActor(subjectActorId, 'contribute', orgTarget(), db)).resolves.toEqual({
+      allow: true,
+      reason: 'allow',
+      effectiveCapability: 'contribute',
+    });
+  });
+
+  it('does not resolve a role grant through a cross-org actor role id', async () => {
+    const foreignOrgId = (
+      await db
+        .insert(organization)
+        .values({ name: 'Foreign org', slug: 'foreign-org' })
+        .returning({ id: organization.id })
+    )[0]!.id;
+    const foreignRoleId = (
+      await db
+        .insert(role)
+        .values({
+          organizationId: foreignOrgId,
+          key: 'foreign-role',
+          name: 'Foreign role',
+          capabilities: [],
+        })
+        .returning({ id: role.id })
+    )[0]!.id;
+    const subjectActorId = (
+      await db
+        .insert(actor)
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: 'Cross-org role holder',
+          roleId: foreignRoleId,
+        })
+        .returning({ id: actor.id })
+    )[0]!.id;
+
+    await db.insert(grant).values({
+      organizationId: orgId,
+      subjectKind: 'role',
+      subjectId: foreignRoleId,
+      resourceKind: 'organization',
+      resourceId: orgId,
+      capabilities: ['manage'],
+      effect: 'allow',
+    });
+
+    await expect(canActor(subjectActorId, 'view', orgTarget(), db)).resolves.toEqual({
+      allow: false,
+      reason: 'no_grant',
+      effectiveCapability: null,
+    });
+  });
+
   it('cascades a grant down the ancestor chain (team grant covers a task)', async () => {
     const r = await canActor(guestActorId, 'view', { kind: 'task', id: taskFullId, orgId }, db);
     expect(r.allow).toBe(true);
     expect(r.effectiveCapability).toBe('view');
+  });
+
+  it('applies non-cascading grants only to their exact target', async () => {
+    const [directActor, cascadingActor, nonCascadingActor] = await db
+      .insert(actor)
+      .values([
+        { organizationId: orgId, kind: 'human', displayName: 'Direct target' },
+        { organizationId: orgId, kind: 'human', displayName: 'Cascading ancestor' },
+        { organizationId: orgId, kind: 'human', displayName: 'Non-cascading ancestor' },
+      ])
+      .returning();
+    const [directTask, cascadingTask, nonCascadingTask] = await db
+      .insert(task)
+      .values([
+        {
+          organizationId: orgId,
+          title: 'Direct target task',
+          teamId: isolatedTeamId,
+          state: 'todo',
+        },
+        {
+          organizationId: orgId,
+          title: 'Cascading descendant task',
+          teamId: isolatedTeamId,
+          state: 'todo',
+        },
+        {
+          organizationId: orgId,
+          title: 'Non-cascading descendant task',
+          teamId: isolatedTeamId,
+          state: 'todo',
+        },
+      ])
+      .returning();
+
+    await db.insert(grant).values([
+      {
+        organizationId: orgId,
+        subjectKind: 'actor',
+        subjectId: directActor!.id,
+        resourceKind: 'task',
+        resourceId: directTask!.id,
+        capabilities: ['view'],
+        effect: 'allow',
+        cascades: false,
+      },
+      {
+        organizationId: orgId,
+        subjectKind: 'actor',
+        subjectId: cascadingActor!.id,
+        resourceKind: 'team',
+        resourceId: isolatedTeamId,
+        capabilities: ['view'],
+        effect: 'allow',
+        cascades: true,
+      },
+      {
+        organizationId: orgId,
+        subjectKind: 'actor',
+        subjectId: nonCascadingActor!.id,
+        resourceKind: 'team',
+        resourceId: isolatedTeamId,
+        capabilities: ['view'],
+        effect: 'allow',
+        cascades: false,
+      },
+    ]);
+
+    expect(
+      (await canActor(directActor!.id, 'view', { kind: 'task', id: directTask!.id, orgId }, db))
+        .allow,
+    ).toBe(true);
+    expect(
+      (
+        await canActor(
+          cascadingActor!.id,
+          'view',
+          { kind: 'task', id: cascadingTask!.id, orgId },
+          db,
+        )
+      ).allow,
+    ).toBe(true);
+    expect(
+      (
+        await canActor(
+          nonCascadingActor!.id,
+          'view',
+          { kind: 'task', id: nonCascadingTask!.id, orgId },
+          db,
+        )
+      ).allow,
+    ).toBe(false);
   });
 
   it('resolves a grant attached to a project ancestor of a task, taking the highest rank', async () => {
@@ -750,7 +1077,110 @@ describe('canActor', () => {
   });
 });
 
+describe('Identity & Access explicit-grant delegation', () => {
+  it('re-exports the owned capability vocabulary unchanged', () => {
+    expect(authzCapabilityRank).toBe(identityAccessCapabilityRank);
+    expect(authzSatisfies).toBe(identityAccessSatisfies);
+  });
+
+  it.each(explicitGrantParityCases)('matches the pure evaluator for $label', async (testCase) => {
+    const parityRole =
+      testCase.subjectKind === 'role'
+        ? (
+            await db
+              .insert(role)
+              .values({
+                organizationId: orgId,
+                key: `delegation-${testCase.label.replaceAll(' ', '-')}`,
+                name: `Delegation ${testCase.label}`,
+                capabilities: [],
+              })
+              .returning({ id: role.id })
+          )[0]!
+        : null;
+    const parityActor = (
+      await db
+        .insert(actor)
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: `Delegation ${testCase.label}`,
+          roleId: parityRole?.id ?? null,
+        })
+        .returning({ id: actor.id })
+    )[0]!;
+    const parityTeam = (
+      await db
+        .insert(team)
+        .values({
+          organizationId: orgId,
+          name: `Delegation ${testCase.label}`,
+          key: `DELEGATION-${testCase.label.replaceAll(' ', '-').toUpperCase()}`,
+        })
+        .returning({ id: team.id })
+    )[0]!;
+    const parityTask = (
+      await db
+        .insert(task)
+        .values({
+          organizationId: orgId,
+          title: `Delegation ${testCase.label}`,
+          teamId: parityTeam.id,
+          state: 'todo',
+        })
+        .returning({ id: task.id })
+    )[0]!;
+
+    const subjectId = testCase.subjectKind === 'role' ? parityRole!.id : parityActor.id;
+    const resourceId = testCase.resourceKind === 'task' ? parityTask.id : parityTeam.id;
+    const grants = [
+      {
+        organizationId: orgId,
+        subjectKind: testCase.subjectKind,
+        subjectId,
+        resourceKind: testCase.resourceKind,
+        resourceId,
+        capabilities: [...testCase.capabilities],
+        effect: testCase.effect,
+        cascades: testCase.cascades,
+        expiresAt: testCase.expiresAt,
+      },
+    ] satisfies ExplicitGrant[];
+    await db.insert(grant).values(grants);
+
+    const principal: GrantPrincipal = {
+      organizationId: orgId,
+      actorId: parityActor.id,
+      roleId: parityRole?.id ?? null,
+    };
+    const resourceChain: GrantResourceChain = {
+      organizationId: orgId,
+      resources: [
+        { kind: 'task', id: parityTask.id },
+        { kind: 'team', id: parityTeam.id },
+        { kind: 'organization', id: orgId },
+      ],
+    };
+
+    const expected = evaluateExplicitAllow({
+      principal,
+      resourceChain,
+      grants,
+      required: 'view',
+    });
+
+    expect(expected).toEqual(testCase.expected);
+    await expect(
+      canActor(parityActor.id, 'view', { kind: 'task', id: parityTask.id, orgId }, db),
+    ).resolves.toEqual(expected);
+  });
+});
+
 describe('ancestorChain', () => {
+  it('re-exports the DB-owned containment loader', () => {
+    expect(ancestorChain).toBe(dbAncestorChain);
+  });
+
   it('short-circuits for an organization target', async () => {
     const chain = await ancestorChain(orgTarget(), db);
     expect(chain).toEqual([{ kind: 'organization', id: orgId, orgId }]);
@@ -872,6 +1302,50 @@ describe('lastOwnerGuard', () => {
     await expect(lastOwnerGuard(db, orgId, ownerActorId)).resolves.toBeUndefined();
     // And removing the second is fine too: the original remains.
     await expect(lastOwnerGuard(db, orgId, secondOwnerId)).resolves.toBeUndefined();
+  });
+
+  it('does not count an archived owner as a surviving owner', async () => {
+    const guardedOrg = (
+      await db
+        .insert(organization)
+        .values({ name: 'Archived owner guard', slug: 'archived-owner-guard' })
+        .returning({ id: organization.id })
+    )[0]!.id;
+    const guardedOwnerRoleId = (
+      await db
+        .insert(role)
+        .values({
+          organizationId: guardedOrg,
+          key: 'owner',
+          name: 'Owner',
+          isSystem: true,
+          capabilities: ['manage'],
+        })
+        .returning({ id: role.id })
+    )[0]!.id;
+    const [targetOwner, archivedOwner] = await db
+      .insert(actor)
+      .values([
+        {
+          organizationId: guardedOrg,
+          kind: 'human',
+          displayName: 'Current owner',
+          roleId: guardedOwnerRoleId,
+        },
+        {
+          organizationId: guardedOrg,
+          kind: 'human',
+          displayName: 'Archived owner',
+          roleId: guardedOwnerRoleId,
+          archivedAt: new Date('2026-08-14T00:00:00.000Z'),
+        },
+      ])
+      .returning({ id: actor.id });
+
+    expect(archivedOwner).toBeDefined();
+    await expect(lastOwnerGuard(db, guardedOrg, targetOwner!.id)).rejects.toBeInstanceOf(
+      LastOwnerError,
+    );
   });
 
   it('throws when removing/downgrading the sole active owner', async () => {

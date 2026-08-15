@@ -64,11 +64,14 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/initiatives/[initiativeId]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client'))
+        .default,
   },
   {
     pattern: '/orgs/[orgId]/initiatives',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/initiatives/initiatives-client')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/initiatives/initiatives-client')).default,
   },
   {
     pattern: '/orgs/[orgId]/library',
@@ -88,7 +91,8 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/programs/[programId]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client')).default,
   },
   {
     pattern: '/orgs/[orgId]/programs',
@@ -96,7 +100,8 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/projects/[projectId]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client')).default,
   },
   {
     pattern: '/orgs/[orgId]/projects',
@@ -104,7 +109,8 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/recurrence-series/[seriesId]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/search',
@@ -120,19 +126,23 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/settings/connections/google-calendar',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/connections/google-calendar/page')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/connections/google-calendar/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/settings/connections/notion/[entity]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/connections/notion/[entity]/page')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/connections/notion/[entity]/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/settings/connections/notion',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/connections/notion/page')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/connections/notion/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/settings/connections/notion/people',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/connections/notion/people/page')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/connections/notion/people/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/settings/connections',
@@ -172,7 +182,8 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/settings/work-structure',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/work-structure/page')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/settings/work-structure/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/stream',
@@ -180,7 +191,8 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/tasks/[taskId]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client')).default,
   },
   {
     pattern: '/orgs/[orgId]/tasks',
@@ -188,7 +200,8 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/teams/[teamId]',
-    load: async () => (await import('@/app/(app)/orgs/[orgId]/teams/[teamId]/team-detail-client')).default,
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/teams/[teamId]/team-detail-client')).default,
   },
   {
     pattern: '/orgs/[orgId]/teams',
@@ -232,7 +245,8 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/settings/connections/google-calendar',
-    load: async () => (await import('@/app/(app)/settings/connections/google-calendar/page')).default,
+    load: async () =>
+      (await import('@/app/(app)/settings/connections/google-calendar/page')).default,
   },
   {
     pattern: '/settings/connections',
@@ -240,7 +254,8 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/settings/data-privacy',
-    load: async () => (await import('@/app/(app)/settings/data-privacy/data-privacy-client')).default,
+    load: async () =>
+      (await import('@/app/(app)/settings/data-privacy/data-privacy-client')).default,
   },
   {
     pattern: '/settings/notifications',

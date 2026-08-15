@@ -14,7 +14,7 @@
  *
  * @see `docs/engineering/specs/notion-sync.md`
  */
-import type { NotionMirrorDirection } from '@docket/types';
+import type { NotionMirrorDirection } from '@docket/connections/notion/mirror-contract';
 
 /** What Docket knows about one projected row, going into a sync. */
 export interface MirrorLocalRow {

@@ -32,6 +32,7 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import { emitEvent } from './event-emit';
+import { buildTaskViewFilter } from './task-helpers';
 
 type ProgramRow = typeof program.$inferSelect;
 type TaskRow = typeof task.$inferSelect;
@@ -185,11 +186,11 @@ const programs = new Hono<AppEnv>()
       tag: 'Programs',
       summary: 'Get program detail',
       response: ProgramDetail,
-      description: `Fetch a single program plus a roll-up of its child work. Beyond the flat {@link ProgramOut} fields, the response carries \`rollup: { projects, tasks }\`: \`projects\` counts the Projects whose \`program_id\` is this program, and \`tasks\` counts every active (non-archived) Task under the program — meaning a Task attached directly via \`task.program_id\` OR belonging to one of those Projects (the union is de-duplicated by the query). This lets a detail card show the program's scope at a glance without a second round-trip. 404 (\`Program not found\`) when the id is absent or cross-tenant. Read-only; org membership suffices. Returns {@link ProgramDetail}. See \`GET /:id/work\` for the actual tasks grouped by cycle and project.`,
+      description: `Fetch a single program plus a roll-up of its child work. Beyond the flat {@link ProgramOut} fields, the response carries \`rollup: { projects, tasks }\`: \`projects\` counts the Projects whose \`program_id\` is this program, and \`tasks\` counts every active (non-archived) Task the caller can view under the program — meaning a Task attached directly via \`task.program_id\` OR belonging to one of those Projects (the union is de-duplicated by the query). This lets a detail card show the caller's accessible scope at a glance without a second round-trip. 404 (\`Program not found\`) when the id is absent or cross-tenant. Read-only; organization membership accesses the Program while task-derived fields use canonical task visibility. Returns {@link ProgramDetail}. See \`GET /:id/work\` for the actual tasks grouped by cycle and project.`,
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await loadProgram(orgId, id);
 
@@ -202,7 +203,13 @@ const programs = new Hono<AppEnv>()
       const projectIds = projectRows.map((p) => p.id);
 
       const taskRows = await db
-        .select({ id: task.id })
+        .select({
+          id: task.id,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+        })
         .from(task)
         .where(
           and(
@@ -214,9 +221,10 @@ const programs = new Hono<AppEnv>()
           ),
         );
 
+      const canView = await buildTaskViewFilter(orgId, actorId);
       return ok(c, ProgramDetail, {
         ...toOut(row),
-        rollup: { projects: projectIds.length, tasks: taskRows.length },
+        rollup: { projects: projectIds.length, tasks: taskRows.filter(canView).length },
       });
     },
   )
@@ -301,12 +309,12 @@ const programs = new Hono<AppEnv>()
       tag: 'Programs',
       summary: 'Get program work',
       response: ProgramWorkOut,
-      description: `The work under a program, grouped by Cycle and then segmented by Project — the program's two-level work board. "Work under the program" is every active (non-archived) Task that either carries the program's \`program_id\` directly or belongs to a Project whose \`program_id\` is the program. Tasks are first bucketed by their \`cycle_id\` (the \`null\`-keyed "no cycle" group holds unscheduled tasks), then within each group segmented by \`project_id\` (the \`null\`-keyed "no project" segment holds tasks attached straight to the program). Group/segment ordering is deterministic — tasks are read \`createdAt\` descending, so first-seen order is stable. Each cycle group carries a lightweight cycle ref (id, name, number, resolved from the real cycles referenced); each segment carries a project ref (id, name). Optional \`cycleId\` and/or \`projectId\` query filters narrow the board to a single cadence and/or project. The program must exist in the caller's org (404 \`Program not found\`). Read-only. Returns {@link ProgramWorkOut}.`,
+      description: `The work under a program, grouped by Cycle and then segmented by Project — the program's two-level work board. "Work under the program" is every active (non-archived) Task the caller can view that either carries the program's \`program_id\` directly or belongs to a Project whose \`program_id\` is the program. Tasks are first bucketed by their \`cycle_id\` (the \`null\`-keyed "no cycle" group holds unscheduled tasks), then within each group segmented by \`project_id\` (the \`null\`-keyed "no project" segment holds tasks attached straight to the program). Group/segment ordering is deterministic — tasks are read \`createdAt\` descending, so first-seen order is stable. Each cycle group carries a lightweight cycle ref (id, name, number, resolved from the real cycles referenced); each segment carries a project ref (id, name). Optional \`cycleId\` and/or \`projectId\` query filters narrow the board to a single cadence and/or project. The program must exist in the caller's org (404 \`Program not found\`). Read-only; task delivery uses canonical task visibility. Returns {@link ProgramWorkOut}.`,
     }),
     zParam(idParam),
     zQuery(ProgramWorkQuery),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { cycleId, projectId } = c.req.valid('query');
       await loadProgram(orgId, id);
@@ -339,12 +347,16 @@ const programs = new Hono<AppEnv>()
           ),
         )
         .orderBy(desc(task.createdAt));
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      const visibleTaskRows = taskRows.filter(canView);
 
       // Names of any real cycles referenced, for the cycle-group labels. The window is selected
       // alongside the name because an unnamed cycle is named by its dates — the same `displayName`
       // derivation `cycle-helpers.toOut` applies, so a cycle reads identically on this board and on
       // the Cycles roster.
-      const cycleIds = [...new Set(taskRows.map((t) => t.cycleId).filter((v): v is string => !!v))];
+      const cycleIds = [
+        ...new Set(visibleTaskRows.map((t) => t.cycleId).filter((v): v is string => !!v)),
+      ];
       const cycleRows =
         cycleIds.length > 0
           ? await db
@@ -368,7 +380,7 @@ const programs = new Hono<AppEnv>()
       // character made this file test as binary, so grep and every other text tool silently
       // skipped it — which is how a wrong claim about this file's search hooks got made.
       const groups = new Map<string, Map<string, TaskRow[]>>();
-      for (const t of taskRows) {
+      for (const t of visibleTaskRows) {
         const cycleKey = t.cycleId ?? '\0';
         const projectKey = t.projectId ?? '\0';
         const byProject = groups.get(cycleKey) ?? new Map<string, TaskRow[]>();
@@ -382,7 +394,7 @@ const programs = new Hono<AppEnv>()
       const labelsByTask = await labelsForSubjects(
         'task',
         orgId,
-        taskRows.map((t) => t.id),
+        visibleTaskRows.map((t) => t.id),
       );
 
       const payload: z.input<typeof ProgramWorkOut> = {

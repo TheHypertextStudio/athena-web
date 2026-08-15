@@ -1,6 +1,6 @@
 /**
  * `@docket/types` — shared branded primitives, the capability/problem model, and the
- * slice DTO schemas. The Hono RPC `AppType` is re-exported from the `./api` subpath.
+ * slice DTO schemas. API transport types belong to `@docket/api/rpc-contract`.
  */
 export * from './primitives';
 export * from './capability';

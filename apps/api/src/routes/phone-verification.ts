@@ -33,7 +33,7 @@ import {
   PHONE_VERIFICATION_RESEND_INTERVAL_MS,
   PHONE_VERIFICATION_SEND_WINDOW_MS,
   PHONE_VERIFICATION_TTL_MS,
-} from '@docket/types';
+} from '@docket/athena/phone';
 import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../error';

@@ -1,14 +1,16 @@
-import { agentSession, agentSessionRun, db, sessionActivity } from '@docket/db';
+import { agentSession, agentSessionRun, db, sessionActivity, task } from '@docket/db';
 import { type Capability, satisfies } from '@docket/authz';
 import type { AgentSessionDetailOut, AgentSessionOut } from '@docket/types';
 import { SessionStatus } from '@docket/types';
-import { and, desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { persistWaitingAthenaWake } from '../agent/async-runner';
 import { AuthError, CapabilityError, ConflictError, NotFoundError } from '../error';
+
+import { buildTaskViewFilter } from './task-helpers';
 
 /** SessionRow is the selected database row shape consumed by these API route serializers. */
 export type SessionRow = typeof agentSession.$inferSelect;
@@ -69,22 +71,115 @@ export async function loadSessionAccess(
   return { session, userId };
 }
 
+/**
+ * Filter registered sessions whose linked task is not visible to the active human caller.
+ *
+ * @remarks
+ * Taskless registered sessions deliberately preserve their existing organization-membership
+ * delivery policy. Athena sessions keep their owner-only policy. Only registered sessions with a
+ * task link are reduced through the canonical task visibility predicate, in bulk, so the list
+ * endpoint does not perform one grant lookup per session.
+ */
+async function filterRegisteredTaskSessionDelivery(
+  orgId: string,
+  actorId: string,
+  sessions: readonly SessionRow[],
+): Promise<SessionRow[]> {
+  const taskIds = [
+    ...new Set(
+      sessions.flatMap((session) =>
+        session.executorKind === 'registered_agent' && session.taskId !== null
+          ? [session.taskId]
+          : [],
+      ),
+    ),
+  ];
+  if (taskIds.length === 0) return [...sessions];
+
+  const canViewTask = await buildTaskViewFilter(orgId, actorId);
+  const taskRows = await db
+    .select({
+      id: task.id,
+      teamId: task.teamId,
+      projectId: task.projectId,
+      programId: task.programId,
+      visibility: task.visibility,
+    })
+    .from(task)
+    .where(and(eq(task.organizationId, orgId), inArray(task.id, taskIds)));
+  const visibleTaskIds = new Set(taskRows.filter(canViewTask).map((row) => row.id));
+  return sessions.filter(
+    (session) =>
+      session.executorKind !== 'registered_agent' ||
+      session.taskId === null ||
+      visibleTaskIds.has(session.taskId),
+  );
+}
+
+/**
+ * Load a session that may be delivered to the caller.
+ *
+ * @remarks
+ * This keeps transcript-bearing registered sessions on the same task boundary as normal task
+ * delivery while preserving {@link loadSessionAccess}'s existing mutation compatibility policy.
+ * A task-bound registered session without current task visibility is existence-hidden.
+ *
+ * @param c - The authenticated organization-route request context.
+ * @param sessionId - The session being delivered.
+ * @returns The visible session and authenticated user id.
+ */
+export async function loadSessionDeliveryAccess(
+  c: Context<AppEnv>,
+  sessionId: string,
+): Promise<SessionAccess> {
+  const access = await loadSessionAccess(c, sessionId);
+  if (!(await canContinueSessionDelivery(c, access.session))) {
+    throw new NotFoundError('Session not found');
+  }
+  return access;
+}
+
+/**
+ * Re-evaluate whether an already-authorized session can still deliver activity payloads.
+ *
+ * @remarks
+ * SSE is long-lived, so its initial authorization is not enough when a task grant can be
+ * revoked mid-stream. Callers that already passed {@link loadSessionAccess} use this immediately
+ * before an activity write. Athena ownership and taskless registered-session membership remain
+ * established by that initial check; only task-bound registered sessions need the current
+ * canonical task predicate.
+ *
+ * @param c - The authenticated organization-route request context.
+ * @param session - The session originally authorized for delivery.
+ * @returns Whether activity delivery remains allowed at this instant.
+ */
+export async function canContinueSessionDelivery(
+  c: Context<AppEnv>,
+  session: SessionRow,
+): Promise<boolean> {
+  if (session.executorKind !== 'registered_agent' || session.taskId === null) return true;
+  const { orgId, actorId } = c.get('actorCtx');
+  const visible = await filterRegisteredTaskSessionDelivery(orgId, actorId, [session]);
+  return visible.length === 1;
+}
+
 /** List caller-visible personal Athena and shared registered-agent sessions. */
 export async function listSessionAccess(
   c: Context<AppEnv>,
   status?: z.infer<typeof SessionStatus>,
 ): Promise<SessionRow[]> {
   const userId = requestUserId(c);
-  const { orgId } = c.get('actorCtx');
+  const { orgId, actorId } = c.get('actorCtx');
   const ownership = or(
     and(eq(agentSession.executorKind, 'athena'), eq(agentSession.ownerUserId, userId)),
     and(eq(agentSession.executorKind, 'registered_agent'), eq(agentSession.organizationId, orgId)),
   );
-  return db
+  const sessions = await db
     .select()
     .from(agentSession)
     .where(status ? and(ownership, eq(agentSession.status, status)) : ownership)
     .orderBy(desc(agentSession.createdAt));
+  return filterRegisteredTaskSessionDelivery(orgId, actorId, sessions);
 }
 
 /** toSessionOut converts internal API route data into the public API response shape. */

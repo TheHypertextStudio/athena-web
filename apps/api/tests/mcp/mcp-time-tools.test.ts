@@ -12,7 +12,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -21,8 +21,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
-import { assertDefined } from '@docket/test-utils';
+import { one } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -39,7 +38,6 @@ interface Seed {
   teamId: string;
   userId: string;
   actorId: string;
-  statusId: StatusIdLookup;
   ctx: McpContext;
 }
 
@@ -50,8 +48,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
-  const orgId = assertDefined(org).id;
-  const statusId = await seedStatuses(db, schema, orgId);
+  const orgId = org!.id;
   const email = `${slug}@e.com`;
   const [user] = await db
     .insert(schema.user)
@@ -59,12 +56,7 @@ async function seedOrg(): Promise<Seed> {
     .returning({ id: schema.user.id });
   const [human] = await db
     .insert(schema.actor)
-    .values({
-      organizationId: orgId,
-      kind: 'human',
-      displayName: 'Ada',
-      userId: assertDefined(user).id,
-    })
+    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: user!.id })
     .returning({ id: schema.actor.id });
   const [team] = await db
     .insert(schema.team)
@@ -74,26 +66,24 @@ async function seedOrg(): Promise<Seed> {
       key: `C${Math.random().toString(36).slice(2, 6)}`,
     })
     .returning({ id: schema.team.id });
-  await db.insert(schema.hub).values({ userId: assertDefined(user).id });
+  await db.insert(schema.hub).values({ userId: user!.id });
   return {
     orgId,
-    teamId: assertDefined(team).id,
-    userId: assertDefined(user).id,
-    actorId: assertDefined(human).id,
-    statusId,
+    teamId: team!.id,
+    userId: user!.id,
+    actorId: human!.id,
     ctx: {
-      principal: {
-        kind: 'user',
-        userId: assertDefined(user).id,
-        userName: 'Ada',
-        userEmail: email,
-      },
+      principal: { kind: 'user', userId: user!.id, userName: 'Ada', userEmail: email },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
     },
   };
 }
 
-async function seedTask(s: Seed, title: string): Promise<string> {
+async function seedTask(
+  s: Seed,
+  title: string,
+  visibility: 'public' | 'private' = 'public',
+): Promise<string> {
   const [row] = await db
     .insert(schema.task)
     .values({
@@ -101,11 +91,92 @@ async function seedTask(s: Seed, title: string): Promise<string> {
       title,
       teamId: s.teamId,
       state: 'backlog',
-      statusId: s.statusId('task', 'backlog'),
       createdBy: s.actorId,
+      visibility,
     })
     .returning({ id: schema.task.id });
-  return assertDefined(row).id;
+  return row!.id;
+}
+
+/** Grant the caller one explicit capability at the resource under test. */
+async function grantCapability(
+  s: Seed,
+  resourceKind: 'organization' | 'team' | 'task',
+  resourceId: string,
+  capabilities: readonly ('view' | 'contribute')[],
+): Promise<string> {
+  const [row] = await db
+    .insert(schema.grant)
+    .values({
+      organizationId: s.orgId,
+      subjectKind: 'actor',
+      subjectId: s.actorId,
+      resourceKind,
+      resourceId,
+      capabilities: [...capabilities],
+      effect: 'allow',
+      cascades: resourceKind === 'organization',
+    })
+    .returning({ id: schema.grant.id });
+  if (!row) throw new Error('grant insert returned no row');
+  return row.id;
+}
+
+/** Return all side effects a denied timer action must leave untouched. */
+async function timerArtifacts(s: Seed): Promise<{
+  readonly records: number;
+  readonly intervals: number;
+  readonly events: number;
+  readonly tasks: number;
+}> {
+  const [records, intervals, events, tasks] = await Promise.all([
+    db
+      .select({ id: schema.timeRecord.id })
+      .from(schema.timeRecord)
+      .where(eq(schema.timeRecord.createdByUserId, s.userId)),
+    db
+      .select({ id: schema.timeInterval.id })
+      .from(schema.timeInterval)
+      .where(eq(schema.timeInterval.userId, s.userId)),
+    db
+      .select({ id: schema.event.id })
+      .from(schema.event)
+      .where(and(eq(schema.event.userId, s.userId), eq(schema.event.organizationId, s.orgId))),
+    db
+      .select({ id: schema.task.id })
+      .from(schema.task)
+      .where(eq(schema.task.organizationId, s.orgId)),
+  ]);
+  return {
+    records: records.length,
+    intervals: intervals.length,
+    events: events.length,
+    tasks: tasks.length,
+  };
+}
+
+/** Give the seeded active member the canonical Guest role, with no implicit task access. */
+async function makeGuest(s: Seed): Promise<void> {
+  const [guest] = await db
+    .insert(schema.role)
+    .values({
+      organizationId: s.orgId,
+      key: 'guest',
+      name: 'Guest',
+      defaultVisibility: 'private',
+    })
+    .returning({ id: schema.role.id });
+  if (!guest) throw new Error('guest role insert returned no row');
+  await db.update(schema.actor).set({ roleId: guest.id }).where(eq(schema.actor.id, s.actorId));
+}
+
+/** Assert an MCP denial hides the target rather than echoing the task identity. */
+function expectHiddenTaskDenial(result: CallToolResult, taskId: string, title: string): void {
+  expect(result.isError).toBe(true);
+  const text = (result.content[0] as { text: string }).text;
+  expect(text).toContain('not_found');
+  expect(text).not.toContain(taskId);
+  expect(text).not.toContain(title);
 }
 
 const harnesses: { close(): Promise<void> }[] = [];
@@ -129,7 +200,7 @@ async function connect(ctx: McpContext): Promise<Client> {
 }
 
 afterEach(async () => {
-  while (harnesses.length > 0) await assertDefined(harnesses.pop()).close();
+  while (harnesses.length > 0) await harnesses.pop()!.close();
   resetAuthMocks();
 });
 
@@ -217,6 +288,7 @@ describe('track', () => {
 
   it('creates an ordinary task when asked to track a bare label', async () => {
     const s = await seedOrg();
+    await grantCapability(s, 'team', s.teamId, ['contribute']);
     const client = await connect(s.ctx);
     const started = payload(
       await track(client, { action: 'start', label: 'Untangle the deploy', orgId: s.orgId }),
@@ -225,7 +297,7 @@ describe('track', () => {
     const rows = await db
       .select({ title: schema.task.title, organizationId: schema.task.organizationId })
       .from(schema.task)
-      .where(eq(schema.task.id, assertDefined(started.tracking.taskId)));
+      .where(eq(schema.task.id, started.tracking.taskId!));
     expect(rows[0]).toEqual({ title: 'Untangle the deploy', organizationId: s.orgId });
   });
 
@@ -234,6 +306,7 @@ describe('track', () => {
   // put words in the ledger that nobody said.
   it('starts an unnamed session when neither a task nor a label is given', async () => {
     const s = await seedOrg();
+    await grantCapability(s, 'team', s.teamId, ['contribute']);
     const client = await connect(s.ctx);
     const started = payload(await track(client, { action: 'start' }));
     expect(started.tracking.state).toBe('running');
@@ -266,6 +339,182 @@ describe('track', () => {
     ]);
   });
 
+  it('redacts a revoked private task from status and segments', async () => {
+    const s = await seedOrg();
+    const taskTitle = 'Board compensation review';
+    const taskId = await seedTask(s, taskTitle, 'private');
+    const grant = one(
+      await db
+        .insert(schema.grant)
+        .values({
+          organizationId: s.orgId,
+          subjectKind: 'actor',
+          subjectId: s.actorId,
+          resourceKind: 'task',
+          resourceId: taskId,
+          capabilities: ['view'],
+          effect: 'allow',
+          cascades: false,
+        })
+        .returning({ id: schema.grant.id }),
+    );
+    const client = await connect(s.ctx);
+
+    const started = payload(await track(client, { action: 'start', taskId }));
+    expect(started.tracking).toMatchObject({ taskId, taskTitle });
+
+    await db.delete(schema.grant).where(eq(schema.grant.id, grant.id));
+
+    const status = payload(await track(client, { action: 'status' }));
+    const segments = payload(
+      await track(client, {
+        action: 'segments',
+        start: '2020-01-01T00:00:00.000Z',
+        end: '2040-01-01T00:00:00.000Z',
+      }),
+    );
+    expect(status.tracking).toMatchObject({ taskId: null, taskTitle: 'Restricted work' });
+    expect(segments.segments).toEqual([
+      expect.objectContaining({ taskId: null, taskTitle: 'Restricted work', running: true }),
+    ]);
+
+    const serialized = JSON.stringify({ status, segments });
+    expect(serialized).not.toContain(taskId);
+    expect(serialized).not.toContain(s.orgId);
+    expect(serialized).not.toContain(taskTitle);
+  });
+
+  it('hides an unviewable task before MCP start writes timer or event artifacts', async () => {
+    const s = await seedOrg();
+    const taskTitle = 'Board compensation review';
+    const taskId = await seedTask(s, taskTitle, 'private');
+    const client = await connect(s.ctx);
+    const before = await timerArtifacts(s);
+
+    const denied = await track(client, { action: 'start', taskId });
+
+    expectHiddenTaskDenial(denied, taskId, taskTitle);
+    expect(await timerArtifacts(s)).toEqual(before);
+  });
+
+  it('hides an unviewable switch target without changing the active timer', async () => {
+    const s = await seedOrg();
+    const taskTitle = 'Executive succession plan';
+    const taskId = await seedTask(s, taskTitle, 'private');
+    const client = await connect(s.ctx);
+    const current = payload(await track(client, { action: 'start' }));
+    const before = await timerArtifacts(s);
+
+    const denied = await track(client, { action: 'switch', taskId });
+
+    expectHiddenTaskDenial(denied, taskId, taskTitle);
+    expect(await timerArtifacts(s)).toEqual(before);
+    expect(payload(await track(client, { action: 'status' })).tracking).toMatchObject({
+      state: 'running',
+      timeRecordId: current.tracking.timeRecordId,
+      taskId: null,
+    });
+  });
+
+  it('refuses to resume a private task after its direct view grant is revoked', async () => {
+    const s = await seedOrg();
+    const taskTitle = 'Compensation deliberation';
+    const taskId = await seedTask(s, taskTitle, 'private');
+    const grantId = await grantCapability(s, 'task', taskId, ['view']);
+    const client = await connect(s.ctx);
+    const started = payload(await track(client, { action: 'start', taskId }));
+    const paused = payload(
+      await track(client, { action: 'pause', timeRecordId: started.tracking.timeRecordId }),
+    );
+    expect(paused.tracking.state).toBe('paused');
+    await db.delete(schema.grant).where(eq(schema.grant.id, grantId));
+    const before = await timerArtifacts(s);
+
+    const denied = await track(client, {
+      action: 'resume',
+      timeRecordId: started.tracking.timeRecordId,
+    });
+
+    expectHiddenTaskDenial(denied, taskId, taskTitle);
+    expect(await timerArtifacts(s)).toEqual(before);
+    const [record] = await db
+      .select({ status: schema.timeRecord.status })
+      .from(schema.timeRecord)
+      .where(eq(schema.timeRecord.id, started.tracking.timeRecordId!));
+    expect(record?.status).toBe('paused');
+  });
+
+  it('does not create label work for a Guest, including when an unnamed timer is stopped', async () => {
+    const s = await seedOrg();
+    await makeGuest(s);
+    const client = await connect(s.ctx);
+    const beforeStart = await timerArtifacts(s);
+
+    const deniedStart = await track(client, {
+      action: 'start',
+      label: 'Prepare the board packet',
+      orgId: s.orgId,
+    });
+
+    expect(deniedStart.isError).toBe(true);
+    expect((deniedStart.content[0] as { text: string }).text).toContain('forbidden');
+    expect(await timerArtifacts(s)).toEqual(beforeStart);
+
+    const unnamed = payload(await track(client, { action: 'start' }));
+    const beforeStop = await timerArtifacts(s);
+    const deniedStop = await track(client, {
+      action: 'stop',
+      timeRecordId: unnamed.tracking.timeRecordId,
+      label: 'Still not allowed to create this',
+    });
+
+    expect(deniedStop.isError).toBe(true);
+    expect((deniedStop.content[0] as { text: string }).text).toContain('forbidden');
+    expect(await timerArtifacts(s)).toEqual(beforeStop);
+    const [record] = await db
+      .select({ status: schema.timeRecord.status, taskId: schema.timeRecord.taskId })
+      .from(schema.timeRecord)
+      .where(eq(schema.timeRecord.id, unnamed.tracking.timeRecordId!));
+    expect(record).toMatchObject({ status: 'open', taskId: null });
+  });
+
+  it('does not create label work for an archived actor', async () => {
+    const s = await seedOrg();
+    await db
+      .update(schema.actor)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.actor.id, s.actorId));
+    const client = await connect(s.ctx);
+    const before = await timerArtifacts(s);
+
+    const denied = await track(client, {
+      action: 'start',
+      label: 'Archived member task',
+      orgId: s.orgId,
+    });
+
+    expect(denied.isError).toBe(true);
+    expect((denied.content[0] as { text: string }).text).toContain('not_found');
+    expect(await timerArtifacts(s)).toEqual(before);
+  });
+
+  it('reports a visible landing team without contribute as forbidden and leaves no artifacts', async () => {
+    const s = await seedOrg();
+    await grantCapability(s, 'team', s.teamId, ['view']);
+    const client = await connect(s.ctx);
+    const before = await timerArtifacts(s);
+
+    const denied = await track(client, {
+      action: 'start',
+      label: 'Needs write access',
+      orgId: s.orgId,
+    });
+
+    expect(denied.isError).toBe(true);
+    expect((denied.content[0] as { text: string }).text).toContain('forbidden');
+    expect(await timerArtifacts(s)).toEqual(before);
+  });
+
   // CORE-42: the naming guard is the SERVER's, not a client affordance — it must hold over MCP
   // exactly as it does over REST (see `tests/routes/time.test.ts`'s matching REST case).
   it('refuses to stop over MCP when the tracked task has no name, and leaves it running', async () => {
@@ -273,7 +522,7 @@ describe('track', () => {
     const taskId = await seedTask(s, 'Nameable work');
     const client = await connect(s.ctx);
     const started = payload(await track(client, { action: 'start', taskId }));
-    const recordId = assertDefined(started.tracking.timeRecordId);
+    const recordId = started.tracking.timeRecordId!;
 
     // Bypass every client and every validator, exactly as the REST case does: blank the record's
     // own label directly in storage so the stop-time guard is the only thing left to catch it.

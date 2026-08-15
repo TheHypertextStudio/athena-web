@@ -12,13 +12,13 @@
  * as a direct task create).
  */
 import { db, task } from '@docket/db';
-import { truncateTitle } from '@docket/agent-runtime';
 import { CaptureBody, TaskOut } from '@docket/types';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
+import { deriveCaptureTitle } from '../lib/capture-title';
 import { resolveLandingTarget } from '../lib/task-landing';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
@@ -27,22 +27,6 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 type TaskRow = typeof task.$inferSelect;
-
-/**
- * Derive a task title from freeform capture text.
- *
- * @remarks
- * Uses the first non-empty line (so a multi-line paste keeps a clean title) with collapsed
- * inner whitespace, then delegates the length cap + ellipsis to the shared {@link truncateTitle}.
- * The full text remains available as the task description for longer captures.
- *
- * @param text - The raw captured text (already validated non-empty).
- * @returns a trimmed, length-capped single-line title.
- */
-function deriveTitle(text: string): string {
-  const firstLine = text.split('\n').find((line) => line.trim().length > 0) ?? text;
-  return truncateTitle(firstLine.trim().replace(/\s+/g, ' '));
-}
 
 /** Project an active task row into the {@link TaskOut} wire shape. */
 function toOut(t: TaskRow): z.input<typeof TaskOut> {
@@ -103,7 +87,7 @@ Errors: 404 (\`No team to capture into\`) when the org has no team to land in. R
       .insert(task)
       .values({
         organizationId: orgId,
-        title: deriveTitle(text),
+        title: deriveCaptureTitle(text),
         description: text,
         teamId: landing.teamId,
         statusId: landing.statusId,

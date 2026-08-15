@@ -9,7 +9,7 @@
  * or lazily materializes one — its agent Actor (`kind='agent'`) plus the `agent` row —
  * so {@link import('../routes/agent-sessions')} and the `run_agent` MCP tool can bind
  * a session to it on first use. The runtime that actually executes the session stays the
- * {@link import('@docket/agent-runtime').AgentRuntime} selected by the API container;
+ * {@link import('@docket/athena/agent-session').AgentRuntime} selected by the API container;
  * this only guarantees a persistent org-scoped agent exists.
  */
 import { actor, agent, db, grant } from '@docket/db';

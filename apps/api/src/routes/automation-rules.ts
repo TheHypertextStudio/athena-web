@@ -4,9 +4,9 @@
  * @remarks
  * CRUD over the `automation_rule` table — rules are user-owned data (`on → when → then`).
  * The DB stores them as `eventMatch`/`condition`/`actions`; the wire shape uses `on`/`when`/
- * `then`. Default rules ship as `isSeed` rows surfaced here. The engine reads these rows when
- * an observation fires (see `lib/automation`). Mutations require `manage` (org configuration);
- * reads require org membership. See `docs/engineering/specs/email-to-task.md` §7/§8.
+ * `then`. Default rules ship as `isSeed` rows surfaced here. The engine reads these rows when a
+ * committed event is projected (see `lib/automation`). Mutations require `manage` (org
+ * configuration); reads require org membership. See `docs/engineering/specs/automations.md`.
  */
 import { automationRule, db } from '@docket/db';
 import {

@@ -4,7 +4,8 @@
  * @remarks
  * ## The problem this solves
  *
- * `resolveModelBackend` in `@docket/agent-runtime` picks a backend from the *process* environment.
+ * `resolveModelBackend` in `@docket/athena/turn/model-backend` picks a backend from the *process*
+ * environment.
  * That is right for the tiers Docket operates — the Cloudflare model router on Docket's own key,
  * or direct provider access — because those are properties of the deployment. It cannot express
  * Lattice, because Lattice is a property of a *person*: their grant, their device. Two users on
@@ -21,11 +22,11 @@
  * whole reason a person chooses local inference is to know where their data went, and a silent
  * fallback would make that unknowable from inside Docket.
  */
+import type { AgentTurnRuntime } from '@docket/athena/turn';
 import {
   LatticeAgentTurnRuntime,
-  type AgentTurnRuntime,
   type LatticeChatPort,
-} from '@docket/agent-runtime';
+} from '@docket/athena/turn/adapters/lattice';
 import {
   LatticeUnavailableError,
   runLatticeChat,
@@ -58,7 +59,8 @@ export interface ResolvedOwnerBackend {
  *
  * @remarks
  * This is the only place the gateway call is bound to a device id. Keeping it here rather than in
- * `@docket/agent-runtime` is what lets that package stay free of OAuth and HTTP.
+ * `@docket/athena/turn/adapters/lattice` is what lets Athena's domain adapter stay free of OAuth
+ * and HTTP.
  *
  * @param gateway - How to reach the gateway as that person.
  * @param deviceId - The device to run on.

@@ -61,8 +61,8 @@ async function seedPerson() {
     .update(schema.organization)
     .set({ lifecycleState: 'active' })
     .where(eq(schema.organization.id, orgId));
-  await addMember(db, schema, orgId, userId, 'owner');
-  return { userId, orgId };
+  const actorId = await addMember(db, schema, orgId, userId, 'owner');
+  return { userId, orgId, actorId };
 }
 
 describe('isAthenaEntitled', () => {
@@ -93,6 +93,23 @@ describe('resolveVoiceWorkspace and the no-workspace refusal', () => {
 });
 
 describe('openVoiceSession on a channel whose provider generates its own reply', () => {
+  it('binds the active workspace membership actor into the voice context', async () => {
+    const person = await seedPerson();
+    const opened = await openVoiceSession({
+      userId: person.userId,
+      channel: 'web',
+      provider: 'mock',
+      organizationId: person.orgId,
+    });
+    try {
+      // The conversation may have been opened by a different surface (or have no initiator at
+      // all); voice actions must instead carry the actor verified for this workspace focus.
+      expect(opened.ctx.initiatorActorId).toBe(person.actorId);
+    } finally {
+      await closeVoiceSession(opened.voiceSessionId, 'user_ended');
+    }
+  });
+
   it('configures no responder for a real speech-to-speech web session', async () => {
     const person = await seedPerson();
     const opened = await openVoiceSession({

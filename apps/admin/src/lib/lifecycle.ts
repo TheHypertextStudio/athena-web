@@ -4,7 +4,7 @@ import type { BadgeProps } from '@docket/ui/primitives';
  * The org data-lifecycle states, in pipeline order.
  *
  * @remarks
- * Mirrors `LifecycleState` from the admin API DTOs (`@docket/api`'s `admin-dto`). The order
+ * Mirrors `LifecycleState` from the API's internal `admin-dto` module. The order
  * is the operational pipeline: a trialing org converts to `active`, lapses to `past_due`,
  * enters its read-only `export_window`, is scheduled for `pending_deletion`, and finally
  * becomes `deleted`. Used to lay out the lifecycle board columns and the metrics buckets.

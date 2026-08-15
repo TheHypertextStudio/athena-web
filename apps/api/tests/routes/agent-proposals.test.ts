@@ -6,7 +6,7 @@ import { asc, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AgentRuntimeModule from '@docket/athena/turn';
 import type { ProposalGroupOut } from '@docket/types';
 
 import type { ActorCtx, AppEnv } from '../../src/context';
@@ -36,7 +36,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
-  agentRuntime = await import('@docket/agent-runtime');
+  agentRuntime = await import('@docket/athena/turn');
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   ({ getContainer } = await import('../../src/container'));
 });

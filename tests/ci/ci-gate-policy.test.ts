@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkGatePolicy,
   formatReport,
+  isAdvisoryWorkflow,
   isCheckJob,
   isGatingCommand,
   isReportingStep,
@@ -146,6 +147,44 @@ describe('gating-command detection', () => {
 });
 
 describe('SCR-19 — every check job must gate the deploy', () => {
+  it('rejects a standalone check workflow unless it is explicitly advisory', () => {
+    const workflow = parseWorkflow(
+      'browser-tests.yml',
+      [
+        'name: Browser tests',
+        'jobs:',
+        '  e2e:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: pnpm --filter @docket/web test:e2e',
+      ].join('\n'),
+    );
+
+    const findings = checkGatePolicy([workflow]);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ rule: 'SCR-19', job: 'e2e', step: null });
+    expect(findings[0]?.message).toContain('explicitly advisory');
+  });
+
+  it('allows a standalone check workflow only when it carries the advisory source directive', () => {
+    const workflow = parseWorkflow(
+      'browser-tests.yml',
+      [
+        '# ci-gate-policy: advisory',
+        'name: Browser tests',
+        'jobs:',
+        '  e2e:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - run: pnpm --filter @docket/web test:e2e',
+      ].join('\n'),
+    );
+
+    expect(isAdvisoryWorkflow(workflow)).toBe(true);
+    expect(checkGatePolicy([workflow])).toEqual([]);
+  });
+
   it('reports a new test job that was never added to deploy-production.needs', () => {
     const findings = check(
       [
@@ -339,6 +378,15 @@ describe('the real workflows', () => {
     const findings = checkGatePolicy(workflows);
     expect(formatReport(workflows, findings)).toContain('PASS');
     expect(findings).toEqual([]);
+  });
+
+  it('marks the non-gating browser suite as advisory without renaming its GitHub check', () => {
+    const e2e = workflows.find((workflow) => workflow.path === '.github/workflows/e2e.yml');
+    const report = formatReport(workflows, checkGatePolicy(workflows));
+
+    expect(e2e?.name).toBe('E2E');
+    expect(isAdvisoryWorkflow(e2e!)).toBe(true);
+    expect(report).toContain('advisory check workflow(s): .github/workflows/e2e.yml');
   });
 
   it('gates the production deploy on every check job ci.yml declares', () => {

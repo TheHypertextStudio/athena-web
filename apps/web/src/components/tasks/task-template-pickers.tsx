@@ -13,7 +13,7 @@
  * What is left is priority, and that is the honest answer rather than a thin one. Where a task
  * template earns its keep is the body outline, not the properties.
  */
-import type { Priority } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import { EnumPicker } from '@docket/ui/components';
 import type { JSX } from 'react';
 

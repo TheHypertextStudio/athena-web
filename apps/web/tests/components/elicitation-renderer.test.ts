@@ -7,7 +7,7 @@
  * behaviour is total over the control grammar, and asserting it as data covers every kind rather
  * than the two a rendering test would reach.
  */
-import type { ElicitationControl } from '@docket/types';
+import { ElicitationControlSchema, type ElicitationControl } from '@docket/athena/elicitation';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -38,6 +38,12 @@ const DATETIME: ElicitationControl = {
   max: null,
 };
 const FILE: ElicitationControl = { kind: 'file', accept: [], maxBytes: 100, multiple: false };
+
+describe('Athena elicitation contract', () => {
+  it('parses the renderer control grammar from the Athena domain', () => {
+    expect(ElicitationControlSchema.parse(TEXT)).toEqual(TEXT);
+  });
+});
 
 describe('empty values', () => {
   it('starts every control kind in a coherent state', () => {

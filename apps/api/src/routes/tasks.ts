@@ -1,5 +1,4 @@
 /** `@docket/api` — tasks router (mounted at `/v1/orgs/:orgId/tasks`). */
-import { type Capability, satisfies } from '@docket/authz';
 import {
   actor,
   cycle,
@@ -21,20 +20,20 @@ import {
   TaskStateUpdate,
   TaskUpdate,
 } from '@docket/types';
-import { and, desc, eq, exists, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { CapabilityError, CycleError, NotFoundError, ValidationError } from '../error';
+import { CycleError, NotFoundError, ValidationError } from '../error';
 import { deferAfterResponse } from '../lib/after-response';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { labelsForSubject, labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../lib/task-audit';
 import { setTaskState } from '../lib/task-state';
+import { encodeListCursor, pageResult, seekAfter } from '../lib/list-cursor';
 import { landingStatus, terminalStampsFor } from '../lib/work-status';
-import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
 import { advanceCompletedProcessTask } from '../lib/recurrence/advance';
@@ -44,8 +43,10 @@ import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-throug
 
 import { emitEvent } from './event-emit';
 import {
+  assertTaskCapability,
   assertMilestoneInOrg,
   assertRefInOrg,
+  buildTaskViewFilter,
   idParam,
   loadTask,
   resolveStateTransition,
@@ -146,13 +147,18 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       // Tenant isolation: every body-provided reference must live in the caller's org. These are
       // independent reads, so they go out together instead of as five serial round trips;
       // `guardsInOrder` keeps the reported failure the earliest-listed one regardless of timing.
+      const parentTaskRead =
+        body.parentTaskId === undefined ? undefined : loadTask(orgId, body.parentTaskId);
       await guardsInOrder([
         assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found'),
         assertRefInOrg(project, orgId, body.projectId, 'Project not found'),
         assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found'),
         assertMilestoneInOrg(orgId, body.milestoneId, body.projectId),
-        ...(body.parentTaskId !== undefined ? [loadTask(orgId, body.parentTaskId)] : []),
+        ...(parentTaskRead ? [parentTaskRead] : []),
       ]);
+      if (parentTaskRead) {
+        await assertTaskCapability(orgId, actorId, await parentTaskRead, 'contribute');
+      }
 
       // resolveStateTransition validates the state key and derives terminal timestamps so
       // a task created directly in a `completed`/`canceled` state lands with correct fields.
@@ -163,17 +169,17 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       // lost the race, so a body carrying an invalid state *and* an unknown label would report a
       // different error from run to run. Settled in declaration order for the same reason the
       // tenant guards above are.
-      const transitionRead =
-        body.state === undefined
-          ? landingStatus(orgId, 'task', body.teamId).then((status) => ({
-              statusId: status.id,
-              state: status.key,
-              ...terminalStampsFor(status.category),
-            }))
-          : resolveStateTransition(orgId, body.teamId, body.state);
+      const firstState = teamRow.workflowStates[0];
+      const transitionRead = firstState
+        ? resolveStateTransition(orgId, body.teamId, body.state ?? firstState.key)
+        : Promise.resolve({
+            state: body.state ?? 'backlog',
+            completedAt: null,
+            canceledAt: null,
+          });
       const labelsRead = resolveLabelSet(orgId, body.labels, { teamId: body.teamId });
       await guardsInOrder([transitionRead, labelsRead]);
-      const [{ statusId, state, completedAt, canceledAt }, resolvedLabels] = await Promise.all([
+      const [{ state, completedAt, canceledAt }, resolvedLabels] = await Promise.all([
         transitionRead,
         labelsRead,
       ]);
@@ -185,7 +191,6 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
           title: body.title,
           description: body.description,
           teamId: body.teamId,
-          statusId,
           state,
           completedAt,
           canceledAt,
@@ -260,7 +265,7 @@ Pagination is opt-in via the cursor query: omit \`limit\` to receive the full ac
     }),
     zQuery(TaskListQuery),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { cursor, limit, programId, labelId } = c.req.valid('query');
 
       // Label filter: an EXISTS against the join, so a task carrying the label once is returned
@@ -283,7 +288,7 @@ Pagination is opt-in via the cursor query: omit \`limit\` to receive the full ac
 
       // Same "under the Program" union the Program's own work view applies: a task carrying the
       // Program directly, or belonging to one of the Program's Projects.
-      let programFilter;
+      let programFilter: SQL | undefined;
       if (programId !== undefined) {
         const projectRows = await db
           .select({ id: project.id })
@@ -296,22 +301,46 @@ Pagination is opt-in via the cursor query: omit \`limit\` to receive the full ac
             : eq(task.programId, programId);
       }
 
-      // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
-      // the full active-task list as before; supplied returns a bounded page + `nextCursor`.
-      const base = db
-        .select()
-        .from(task)
-        .where(
-          and(
-            eq(task.organizationId, orgId),
-            isNull(task.archivedAt),
-            seekAfter(task.createdAt, task.id, cursor),
-            ...(programFilter ? [programFilter] : []),
-            ...(labelFilter ? [labelFilter] : []),
-          ),
-        )
-        .orderBy(desc(task.createdAt), desc(task.id));
-      const rows = await (limit === undefined ? base : base.limit(limit + 1));
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      const queryAfter = (after: string | undefined) =>
+        db
+          .select()
+          .from(task)
+          .where(
+            and(
+              eq(task.organizationId, orgId),
+              isNull(task.archivedAt),
+              seekAfter(task.createdAt, task.id, after),
+              ...(programFilter ? [programFilter] : []),
+              ...(labelFilter ? [labelFilter] : []),
+            ),
+          )
+          .orderBy(desc(task.createdAt), desc(task.id));
+
+      // Access is a predicate rather than a SQL join because the grant cascade spans several
+      // optional ancestors. Do not filter a `limit + 1` database page after the fact: a hidden
+      // row between two visible rows would then become the cursor boundary and make the latter
+      // unreachable. The bounded path scans raw keyset batches until it has one extra *visible*
+      // row, so `pageResult` still encodes the last returned visible task.
+      let rows: (typeof task.$inferSelect)[];
+      if (limit === undefined) {
+        rows = (await queryAfter(cursor)).filter(canView);
+      } else {
+        const visible: (typeof task.$inferSelect)[] = [];
+        let scanCursor = cursor;
+        const scanBatchSize = Math.max(limit + 1, 100);
+        while (visible.length <= limit) {
+          const batch = await queryAfter(scanCursor).limit(scanBatchSize);
+          if (batch.length === 0) break;
+          visible.push(...batch.filter(canView));
+          if (visible.length > limit || batch.length < scanBatchSize) break;
+          const lastScanned = batch[batch.length - 1];
+          /* v8 ignore next -- @preserve non-empty batch above guarantees a last row */
+          if (!lastScanned) break;
+          scanCursor = encodeListCursor(lastScanned.createdAt, lastScanned.id);
+        }
+        rows = visible;
+      }
       const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
       // One extra query for the whole page rather than one per row.
       const labelsByTask = await labelsForSubjects(
@@ -337,26 +366,87 @@ A cross-org or unknown id 404s (existence-hiding: another tenant's task is indis
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await loadTask(orgId, id);
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      if (!canView(row)) throw new NotFoundError('Task not found');
+
+      // A direct grant can expose a child without exposing its parent. Do not return the stored
+      // parent id unless it independently passes the same view predicate; otherwise the detail
+      // payload becomes a pointer oracle for a private task outside the caller's grant.
+      const parentRows =
+        row.parentTaskId === null
+          ? []
+          : await db
+              .select({
+                id: task.id,
+                teamId: task.teamId,
+                projectId: task.projectId,
+                programId: task.programId,
+                visibility: task.visibility,
+              })
+              .from(task)
+              .where(
+                and(
+                  eq(task.id, row.parentTaskId),
+                  eq(task.organizationId, orgId),
+                  isNull(task.archivedAt),
+                ),
+              )
+              .limit(1);
+      const visibleParentId = parentRows[0] && canView(parentRows[0]) ? parentRows[0].id : null;
 
       // Tasks blocking THIS one (blockers): edges where this task is the blocked side.
       const blockedByRows = await db
-        .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+        .select({
+          id: task.id,
+          title: task.title,
+          state: task.state,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+        })
         .from(taskDependency)
         .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
-        .where(and(eq(taskDependency.blockedTaskId, id), eq(taskDependency.organizationId, orgId)));
+        .where(
+          and(
+            eq(taskDependency.blockedTaskId, id),
+            eq(taskDependency.organizationId, orgId),
+            isNull(task.archivedAt),
+          ),
+        );
       // Tasks THIS one blocks: edges where this task is the blocking side.
       const blockingRows = await db
-        .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+        .select({
+          id: task.id,
+          title: task.title,
+          state: task.state,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+        })
         .from(taskDependency)
         .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
         .where(
-          and(eq(taskDependency.blockingTaskId, id), eq(taskDependency.organizationId, orgId)),
+          and(
+            eq(taskDependency.blockingTaskId, id),
+            eq(taskDependency.organizationId, orgId),
+            isNull(task.archivedAt),
+          ),
         );
       const subtaskRows = await db
-        .select({ id: task.id, title: task.title, state: task.state, projectId: task.projectId })
+        .select({
+          id: task.id,
+          title: task.title,
+          state: task.state,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+        })
         .from(task)
         .where(
           and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
@@ -366,21 +456,20 @@ A cross-org or unknown id 404s (existence-hiding: another tenant's task is indis
         ...toOut(row, await labelsForSubject('task', orgId, row.id)),
         milestoneId: row.milestoneId,
         cycleId: row.cycleId,
-        parentTaskId: row.parentTaskId,
+        parentTaskId: visibleParentId,
         estimate: row.estimate,
         estimateMinutes: row.estimateMinutes,
         completedAt: row.completedAt?.toISOString() ?? null,
         canceledAt: row.canceledAt?.toISOString() ?? null,
-        blocking: blockingRows.map(toRef),
-        blockedBy: blockedByRows.map(toRef),
-        subtasks: subtaskRows.map(toRef),
+        blocking: blockingRows.filter(canView).map(toRef),
+        blockedBy: blockedByRows.filter(canView).map(toRef),
+        subtasks: subtaskRows.filter(canView).map(toRef),
       };
       return ok(c, TaskDetail, detail);
     },
   )
   .patch(
     '/:id',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Tasks',
       summary: 'Update a task',
@@ -400,10 +489,15 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
 
+      // Load and authorize the target before resolving any mutation references. The grant cascade
+      // is the authority for an existing task; `actorCtx.capabilities` remains only for
+      // org-scoped creation, where there is no task target yet.
+      const before = await loadTask(orgId, id);
+      await assertTaskCapability(orgId, ctx.actorId, before, 'contribute');
+
       // Changing assignee/delegate requires `assign` capability (permissions §2).
       if (body.assigneeId !== undefined || body.delegateId !== undefined) {
-        const held = ctx.capabilities as Capability[];
-        if (!held.some((cap) => satisfies(cap, 'assign'))) throw new CapabilityError();
+        await assertTaskCapability(orgId, ctx.actorId, before, 'assign');
       }
 
       // Tenant isolation: every re-pointed reference must live in the caller's org.
@@ -421,7 +515,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
           ? undefined
           : body.projectId !== undefined
             ? body.projectId
-            : (await loadTask(orgId, id)).projectId;
+            : before.projectId;
       await assertMilestoneInOrg(orgId, body.milestoneId, effectiveProjectId);
 
       // Reparent (RESTful: `parentTaskId` is a property of the task). Validate the new parent is a
@@ -433,13 +527,12 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
             { message: 'A task cannot be its own parent', path: ['parentTaskId'] },
           ]);
         }
-        await loadTask(orgId, newParentId);
+        const parent = await loadTask(orgId, newParentId);
+        await assertTaskCapability(orgId, ctx.actorId, parent, 'contribute');
       }
 
       // The pre-image, read exactly once: it feeds both the state-transition resolve below and
       // the activity ledger's before/after diff, so recording history costs no extra read.
-      const before = await loadTask(orgId, id);
-
       // resolveStateTransition validates + derives timestamps; bypassing it would corrupt progress.
       const statePatch =
         body.state !== undefined
@@ -451,9 +544,6 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(statePatch !== undefined
           ? {
-              // The key and the status it names move together; the composite foreign key refuses
-              // a row where they disagree, so writing `state` alone is not an option.
-              statusId: statePatch.statusId,
               state: statePatch.state,
               completedAt: statePatch.completedAt,
               canceledAt: statePatch.canceledAt,
@@ -558,7 +648,6 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
   )
   .delete(
     '/:id',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Tasks',
       summary: 'Archive a task',
@@ -570,8 +659,10 @@ The write only matches a currently-active task in the caller's org (\`archivedAt
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const target = await loadTask(orgId, id);
+      await assertTaskCapability(orgId, actorId, target, 'contribute');
       const archivedAt = new Date();
       const updated = await db
         .update(task)
@@ -590,7 +681,6 @@ The write only matches a currently-active task in the caller's org (\`archivedAt
   )
   .post(
     '/:id/state',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Tasks',
       summary: 'Change task state',
@@ -606,6 +696,8 @@ The transition is resolved server-side: entering a terminal state derives \`comp
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { state } = c.req.valid('json');
+      const target = await loadTask(orgId, id);
+      await assertTaskCapability(orgId, actorId, target, 'contribute');
       // Shared with the task.setStatus automation action — one transition implementation.
       const next = await setTaskState({ organizationId: orgId, taskId: id, state, actorId });
       if (!next) throw new NotFoundError('Task not found');

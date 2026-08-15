@@ -35,6 +35,7 @@ describe('Time Ledger command edge cases', () => {
   let db!: Awaited<ReturnType<typeof getDb>>['db'];
   let userId!: string;
   let organizationId!: string;
+  let actorId!: string;
   let app!: ReturnType<typeof appWithSession>;
 
   beforeEach(async () => {
@@ -42,12 +43,22 @@ describe('Time Ledger command edge cases', () => {
     db = schema.db;
     userId = await seedUserWithHub(db, schema, 'TimeEdge');
     organizationId = await seedOrg(db, schema);
-    await addMember(db, schema, organizationId, userId);
+    actorId = await addMember(db, schema, organizationId, userId);
     // A team must exist so the timer's default task-landing resolution has somewhere to file work.
     await db.insert(schema.team).values({
       organizationId,
       name: 'Core',
       key: `K${Math.random().toString(36).slice(2, 6)}`,
+    });
+    await db.insert(schema.grant).values({
+      organizationId,
+      subjectKind: 'actor',
+      subjectId: actorId,
+      resourceKind: 'organization',
+      resourceId: organizationId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+      cascades: true,
     });
     app = appWithSession(time, fakeSession(userId));
   });

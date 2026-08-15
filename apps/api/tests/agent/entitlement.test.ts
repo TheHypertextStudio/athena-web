@@ -10,10 +10,11 @@ const getSession = vi.fn(async () => null);
 vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 
 import type * as DbModule from '@docket/db';
-import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AgentRuntimeModule from '@docket/athena/turn';
+import type { resolveAgentSessionEntitlement as ResolveAgentSessionEntitlement } from '@docket/billing/application/entitlement';
 
 import type { driveSession as DriveSession } from '../../src/agent/loop';
-import type { assertAgentSessionsEntitled as Assert } from '../../src/billing/entitlement';
+import type { assertAgentSessionsEntitled as Assert } from '../../src/agent/entitlement';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import { assertDefined } from '@docket/test-utils';
 
@@ -33,14 +34,16 @@ let agentRuntime!: typeof AgentRuntimeModule;
 let driveSession!: typeof DriveSession;
 let assertAgentSessionsEntitled!: typeof Assert;
 let ensureDefaultAgent!: typeof EnsureDefaultAgent;
+let resolveAgentSessionEntitlement!: typeof ResolveAgentSessionEntitlement;
 
 beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
-  agentRuntime = await import('@docket/agent-runtime');
+  agentRuntime = await import('@docket/athena/turn');
+  ({ resolveAgentSessionEntitlement } = await import('@docket/billing/application/entitlement'));
   ({ driveSession } = await import('../../src/agent/loop'));
-  ({ assertAgentSessionsEntitled } = await import('../../src/billing/entitlement'));
+  ({ assertAgentSessionsEntitled } = await import('../../src/agent/entitlement'));
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
 });
 
@@ -91,6 +94,38 @@ const TEXT_ONLY: readonly AgentRuntimeModule.ScriptedTurn[] = [
     stopReason: 'end_turn',
   },
 ];
+
+describe('resolveAgentSessionEntitlement', () => {
+  it('returns portable subscription, plan-required, and missing-workspace outcomes', async () => {
+    const trialing = await seedOrg('trialing');
+    await expect(resolveAgentSessionEntitlement(db, trialing.orgId)).resolves.toEqual({
+      kind: 'entitled',
+      source: 'subscription',
+    });
+
+    const lapsed = await seedOrg('past_due');
+    await expect(resolveAgentSessionEntitlement(db, lapsed.orgId)).resolves.toEqual({
+      kind: 'plan-required',
+    });
+
+    await expect(resolveAgentSessionEntitlement(db, 'org_does_not_exist')).resolves.toEqual({
+      kind: 'organization-not-found',
+    });
+  });
+
+  it('reports an active staff exemption without an HTTP-specific error', async () => {
+    const lapsed = await seedOrg('export_window');
+    await db.insert(billingExemption).values({
+      organizationId: lapsed.orgId,
+      reason: 'internal free use',
+    });
+
+    await expect(resolveAgentSessionEntitlement(db, lapsed.orgId)).resolves.toEqual({
+      kind: 'entitled',
+      source: 'exemption',
+    });
+  });
+});
 
 describe('assertAgentSessionsEntitled', () => {
   it('allows trialing and active; refuses everything else with the typed 402', async () => {

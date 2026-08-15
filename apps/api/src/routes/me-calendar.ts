@@ -16,9 +16,11 @@ import {
   calendarLayer,
   calendarList,
   db,
+  role,
   task,
   team,
 } from '@docket/db';
+import { type Capability, satisfies } from '@docket/authz';
 import {
   CalendarEventCreateTask,
   CalendarItemCreate,
@@ -37,7 +39,7 @@ import {
   CalendarSyncResultOut,
   TaskOut,
 } from '@docket/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -63,7 +65,7 @@ import {
   updateCalendarItem,
 } from '../calendar/calendar-write';
 import type { AppEnv } from '../context';
-import { NotFoundError, ValidationError } from '../error';
+import { CapabilityError, NotFoundError, ValidationError } from '../error';
 import { labelsForSubject } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
@@ -76,7 +78,6 @@ import { readCalendarSettings, requireUserId } from './calendar-shared';
 import { syncCalendarConnections } from './calendar-sync-engine';
 import { createDefaultCalendarSyncModules } from './calendar-sync-modules';
 import { toOut } from './task-helpers';
-import { landingStatus } from '../lib/work-status';
 
 const idParam = z.object({ id: z.string() });
 const itemTaskParam = z.object({ id: z.string(), taskId: z.string() });
@@ -109,48 +110,57 @@ function toVisibilityPatch(body: {
   return patch;
 }
 
+/**
+ * Resolve an authorized workspace, team, and creator for the legacy event-to-task flow.
+ *
+ * @remarks
+ * This user-scoped route must still enforce the same active-human membership and `contribute`
+ * boundary as calendar item task links before it can create an org-scoped task or attachment.
+ */
 async function resolveTaskTarget(
   userId: string,
   body: z.infer<typeof CalendarEventCreateTask>,
-): Promise<{
-  organizationId: string;
-  teamId: string;
-  actorId: string;
-  state: string;
-  statusId: string;
-}> {
+): Promise<{ organizationId: string; teamId: string; actorId: string; state: string }> {
   const actorRows = await db
-    .select({ id: actor.id, organizationId: actor.organizationId })
+    .select({ actor, role })
     .from(actor)
+    .leftJoin(role, and(eq(actor.roleId, role.id), eq(role.organizationId, actor.organizationId)))
     .where(
-      body.organizationId
-        ? and(eq(actor.userId, userId), eq(actor.organizationId, body.organizationId))
-        : eq(actor.userId, userId),
+      and(
+        body.organizationId
+          ? and(eq(actor.userId, userId), eq(actor.organizationId, body.organizationId))
+          : eq(actor.userId, userId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
     )
     .limit(1);
   const member = actorRows[0];
   if (!member) throw new NotFoundError('Target workspace not found');
+
+  const capabilities = (member.role?.capabilities ?? []) as Capability[];
+  if (!capabilities.some((capability) => satisfies(capability, 'contribute'))) {
+    throw new CapabilityError();
+  }
 
   const teamRows = await db
     .select()
     .from(team)
     .where(
       body.teamId
-        ? and(eq(team.id, body.teamId), eq(team.organizationId, member.organizationId))
-        : eq(team.organizationId, member.organizationId),
+        ? and(eq(team.id, body.teamId), eq(team.organizationId, member.actor.organizationId))
+        : eq(team.organizationId, member.actor.organizationId),
     )
     .limit(1);
   const targetTeam = teamRows[0];
   if (!targetTeam) throw new NotFoundError('Target team not found');
 
   return {
-    organizationId: member.organizationId,
+    organizationId: member.actor.organizationId,
     teamId: targetTeam.id,
-    actorId: member.id,
-    ...(await landingStatus(member.organizationId, 'task', targetTeam.id).then((status) => ({
-      state: status.key,
-      statusId: status.id,
-    }))),
+    actorId: member.actor.id,
+    state: targetTeam.workflowStates[0]?.key ?? 'backlog',
   };
 }
 
@@ -341,7 +351,6 @@ const meCalendar = new Hono<AppEnv>()
             createdBy: target.actorId,
             title: body.title ?? row.event.title,
             description: body.note ?? row.event.description,
-            statusId: target.statusId,
             state: target.state,
             priority: 'none',
             externalUrl: row.event.htmlLink,

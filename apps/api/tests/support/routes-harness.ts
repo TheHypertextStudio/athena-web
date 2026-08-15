@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import type * as DbModule from '@docket/db';
 import { CaptureMailer } from '@docket/mail';
+import type { Capability } from '@docket/identity-access/capabilities';
 import type { WorkStatusEntityType } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 
@@ -61,11 +62,12 @@ export function appWithActor(
   capabilities: readonly string[],
   actorId = 'actor_test',
   session: AuthSession = null,
+  roleId: string | null = 'role_test',
 ) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
     if (session) c.set('session', session);
-    const ctx: ActorCtx = { orgId, actorId, roleId: 'role_test', capabilities };
+    const ctx: ActorCtx = { orgId, actorId, roleId, capabilities };
     c.set('actorCtx', ctx);
     await next();
   });
@@ -228,6 +230,26 @@ export async function seedBaseOrg(
  * @param rows - The query/insert result array.
  * @returns the first row.
  */
+/** Seed a base organization with a persisted org-root task capability. */
+export async function seedTaskAccessOrg(
+  db: Db,
+  schema: typeof DbModule,
+  capability: Capability = 'contribute',
+): Promise<{ orgId: string; teamId: string; humanActorId: string }> {
+  const base = await seedBaseOrg(db, schema);
+  await db.insert(schema.grant).values({
+    organizationId: base.orgId,
+    subjectKind: 'actor',
+    subjectId: base.humanActorId,
+    resourceKind: 'organization',
+    resourceId: base.orgId,
+    capabilities: [capability],
+    effect: 'allow',
+    cascades: true,
+  });
+  return base;
+}
+
 export function one<T>(rows: readonly T[]): T {
   const row = rows[0];
   if (!row) throw new Error('expected at least one row, got none');

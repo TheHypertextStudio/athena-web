@@ -1,9 +1,4 @@
-import { InMemoryBillingGateway } from '@docket/billing';
-import { type Database, organization } from '@docket/db';
-import type { PGlite } from '@electric-sql/pglite';
-import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-
+import { InMemoryBillingGateway } from '@docket/billing/adapters/in-memory';
 import {
   applyBillingEvent,
   EXPORT_WINDOW_DAYS,
@@ -11,7 +6,12 @@ import {
   onReactivated,
   onTrialOrPaymentTerminal,
   sweepLifecycle,
-} from '../../src/billing/lifecycle';
+} from '@docket/billing/application/lifecycle';
+import { type Database, organization } from '@docket/db';
+import type { PGlite } from '@electric-sql/pglite';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { createBillingLifecycleDb } from './test-db';
 import { assertDefined } from '@docket/test-utils';
 

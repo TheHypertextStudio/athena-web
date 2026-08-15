@@ -11,7 +11,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedTaskAccessOrg as seedBaseOrg } from '../support/routes-harness';
 import type tasksRouter from '../../src/routes/tasks';
 import { assertDefined } from '@docket/test-utils';
 
@@ -244,7 +244,7 @@ describe('task dependencies validation + isolation', () => {
     expect((await addEdge(appA, a, foreign)).status).toBe(404);
   });
 
-  it('403s for a view-only actor on create + delete', async () => {
+  it('404s on a missing dependency endpoint before resolving capability', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const viewer = appWithActor(tasks, orgId, ['view'], humanActorId);
     expect(
@@ -255,11 +255,11 @@ describe('task dependencies validation + isolation', () => {
           body: JSON.stringify({ blockingTaskId: MISSING_ULID }),
         })
       ).status,
-    ).toBe(403);
+    ).toBe(404);
     expect(
       (await viewer.request(`/${MISSING_ULID}/dependencies/${MISSING_ULID}`, { method: 'DELETE' }))
         .status,
-    ).toBe(403);
+    ).toBe(404);
   });
 });
 

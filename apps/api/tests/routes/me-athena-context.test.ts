@@ -49,6 +49,7 @@ interface Fixture {
   readonly teamId: string;
   readonly userId: string;
   readonly actorId: string;
+  readonly roleId: string;
   readonly taskId: string;
   readonly projectId: string;
   readonly initiativeId: string;
@@ -206,6 +207,7 @@ async function seed(): Promise<Fixture> {
     teamId: team.id,
     userId: user.id,
     actorId: actor.id,
+    roleId: role.id,
     taskId: task.id,
     projectId: project.id,
     initiativeId: initiative.id,
@@ -921,6 +923,77 @@ describe('resolveAthenaDisplays', () => {
     expect(results[0]?.context).toEqual({
       workspaceId: fixture.orgId,
       source: { type: 'program', id: fixture.programId, label: 'Program' },
+    });
+  });
+
+  it('does not inherit a non-cascading organization grant into a batched task display', async () => {
+    const fixture = await seed();
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, fixture.orgId));
+
+    const results = await resolveAthenaDisplays(fixture.userId, [
+      { workspaceId: fixture.orgId, source: { type: 'task', id: fixture.taskId } },
+    ]);
+
+    expect(results[0]).toEqual({
+      context: {
+        workspaceId: fixture.orgId,
+        source: { type: 'task', id: fixture.taskId, label: 'Task' },
+      },
+      workspace: null,
+    });
+  });
+
+  it('honors a non-cascading grant on the batched task itself', async () => {
+    const fixture = await seed();
+    await db.delete(schema.grant).where(eq(schema.grant.organizationId, fixture.orgId));
+    await db.insert(schema.grant).values({
+      organizationId: fixture.orgId,
+      subjectKind: 'role',
+      subjectId: fixture.roleId,
+      resourceKind: 'task',
+      resourceId: fixture.taskId,
+      capabilities: ['view', 'contribute'],
+      effect: 'allow',
+      cascades: false,
+    });
+
+    const results = await resolveAthenaDisplays(fixture.userId, [
+      { workspaceId: fixture.orgId, source: { type: 'task', id: fixture.taskId } },
+    ]);
+
+    expect(results[0]?.workspace).toMatchObject({ id: fixture.orgId });
+    expect(results[0]?.context).toEqual({
+      workspaceId: fixture.orgId,
+      source: { type: 'task', id: fixture.taskId, label: 'Ship the release' },
+    });
+  });
+
+  it('does not treat a role id as an actor grant subject in a batched task display', async () => {
+    const fixture = await seed();
+    await db.delete(schema.grant).where(eq(schema.grant.organizationId, fixture.orgId));
+    await db.insert(schema.grant).values({
+      organizationId: fixture.orgId,
+      subjectKind: 'actor',
+      subjectId: fixture.roleId,
+      resourceKind: 'organization',
+      resourceId: fixture.orgId,
+      capabilities: ['view', 'contribute'],
+      effect: 'allow',
+    });
+
+    const results = await resolveAthenaDisplays(fixture.userId, [
+      { workspaceId: fixture.orgId, source: { type: 'task', id: fixture.taskId } },
+    ]);
+
+    expect(results[0]).toEqual({
+      context: {
+        workspaceId: fixture.orgId,
+        source: { type: 'task', id: fixture.taskId, label: 'Task' },
+      },
+      workspace: null,
     });
   });
 

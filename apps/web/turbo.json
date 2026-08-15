@@ -16,7 +16,11 @@
       "outputs": [".next/**", "!.next/cache/**", "public/sw.js"]
     },
     "dev": {
+      "dependsOn": ["^db:migrate", "@docket/api#build"],
       "env": ["NEXT_PUBLIC_*", "BETTER_AUTH_SECRET"]
+    },
+    "typecheck": {
+      "dependsOn": ["@docket/api#build"]
     },
     "test": {
       "env": ["NEXT_PUBLIC_*"]

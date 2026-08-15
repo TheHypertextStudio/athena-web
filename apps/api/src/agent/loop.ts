@@ -29,12 +29,13 @@ import {
   task,
 } from '@docket/db';
 import type { SessionActivityBody } from '@docket/db';
-import type { AgentTurnRuntime, TurnMessage } from '@docket/agent-runtime';
+import type { AgentTurnRuntime } from '@docket/athena/turn';
+import type { TurnContentBlock, TurnMessage } from '@docket/athena/turn-protocol';
 import { HubPreferences } from '@docket/types';
-import type { AthenaApprovalMode, SessionApprovalDecision, TurnContentBlock } from '@docket/types';
+import type { AthenaApprovalMode, SessionApprovalDecision } from '@docket/types';
 import { and, asc, desc, eq } from 'drizzle-orm';
 
-import { assertAgentSessionsEntitled } from '../billing/entitlement';
+import { assertAgentSessionsEntitled } from './entitlement';
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
 import { internalUserContext } from '../mcp/internal-session';

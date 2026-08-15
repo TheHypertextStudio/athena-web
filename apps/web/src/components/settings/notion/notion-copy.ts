@@ -9,7 +9,10 @@
  * Nothing here is derived from a provider response. A Notion error message never reaches the
  * screen; the UI branches on the error's type or status and renders one of these.
  */
-import type { NotionMirrorEntity, NotionPersonRepresentation } from '@docket/types';
+import type {
+  NotionMirrorEntity,
+  NotionPersonRepresentation,
+} from '@docket/connections/notion/mirror-contract';
 
 /** Shown inside the preview disclosure when the databases have been designed but not created. */
 export const EMPTY_DATABASE_HINT =

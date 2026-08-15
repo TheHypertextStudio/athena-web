@@ -4,9 +4,10 @@
  * @remarks
  * Snapshots every org-scoped work-layer table for one organization into a flat
  * `tableName → rows[]` map, strictly filtered by `organization_id` so no cross-org rows
- * can leak. Shared by the org-facing export (`POST /orgs/:orgId/billing/export`) and the
- * account-level personal-data export (which snapshots one such layer per org the user
- * belongs to).
+ * can leak. {@link collectWorkLayer} is the complete, manage-gated org-facing snapshot
+ * (`POST /orgs/:orgId/billing/export`). Personal account exports use
+ * {@link collectVisibleWorkLayerForActor} instead: membership is not permission to download
+ * every row in an organization.
  */
 import type { Database } from '@docket/db';
 import {
@@ -23,7 +24,9 @@ import {
   team,
   update,
 } from '@docket/db';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
+
+import { buildTaskViewFilter } from '../routes/task-helpers';
 
 /**
  * Collect every org-scoped work-layer table for an org into a single export document.
@@ -73,5 +76,78 @@ export async function collectWorkLayer(
     comment: comments,
     update: updates,
     savedView: savedViews,
+  };
+}
+
+/** The task-filtered portion of an org work layer that a personal export may serialize. */
+export interface VisibleWorkLayer {
+  /** The stable work-layer shape written into a workspace JSON file. */
+  readonly work: Record<string, unknown[]>;
+  /** Visible task ids, used to screen task-addressed personal rows such as daily-plan items. */
+  readonly visibleTaskIds: ReadonlySet<string>;
+}
+
+/**
+ * Collect the work rows that a specific active human actor may safely receive in a personal
+ * account export.
+ *
+ * @remarks
+ * This intentionally differs from {@link collectWorkLayer}: a personal export is a caller's
+ * view, not an organization administrator's backup. Tasks use the canonical bulk visibility
+ * predicate, and comments are included only when they are directly anchored to one of those
+ * visible tasks. The remaining work-layer tables deliberately remain empty: their current
+ * schemas do not provide a trustworthy task association, so treating organization membership as
+ * permission to export them could disclose a private project, update, label, or saved view.
+ * `update` is specifically project/program/initiative-scoped rather than task-scoped.
+ *
+ * @param orgId - The organization whose visible work layer is being collected.
+ * @param actorId - The active human actor receiving the personal export.
+ * @param db - The database client (defaults to the shared singleton).
+ * @returns visible tasks and task comments plus the ids needed to screen personal task pointers.
+ */
+export async function collectVisibleWorkLayerForActor(
+  orgId: string,
+  actorId: string,
+  db: Database = defaultDb,
+): Promise<VisibleWorkLayer> {
+  const [canViewTask, activeTasks] = await Promise.all([
+    buildTaskViewFilter(orgId, actorId),
+    db
+      .select()
+      .from(task)
+      .where(and(eq(task.organizationId, orgId), isNull(task.archivedAt))),
+  ]);
+  const visibleTasks = activeTasks.filter(canViewTask);
+  const visibleTaskIds = new Set(visibleTasks.map((row) => row.id));
+  const visibleComments =
+    visibleTaskIds.size === 0
+      ? []
+      : await db
+          .select()
+          .from(comment)
+          .where(
+            and(
+              eq(comment.organizationId, orgId),
+              eq(comment.subjectType, 'task'),
+              isNull(comment.archivedAt),
+              inArray(comment.subjectId, [...visibleTaskIds]),
+            ),
+          );
+
+  return {
+    work: {
+      team: [],
+      initiative: [],
+      program: [],
+      project: [],
+      milestone: [],
+      cycle: [],
+      task: visibleTasks,
+      label: [],
+      comment: visibleComments,
+      update: [],
+      savedView: [],
+    },
+    visibleTaskIds,
   };
 }

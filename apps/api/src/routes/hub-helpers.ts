@@ -16,10 +16,12 @@ import type {
   NotificationOut,
   OrgChip,
 } from '@docket/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { WorkStatusCategory } from '@docket/types';
 import { loadStatusSets } from '../lib/work-status';
+
+import { buildTaskViewFilter, type ViewableTaskParts } from './task-helpers';
 
 /** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
@@ -35,6 +37,15 @@ export type OrgRow = typeof organization.$inferSelect;
 export type NotificationRow = typeof notification.$inferSelect;
 /** AuditEventRow is the selected database row shape consumed by these API route serializers. */
 export type AuditEventRow = typeof auditEvent.$inferSelect;
+
+/** A current human membership used to make Hub-wide task visibility decisions. */
+export interface ActiveCallerActor {
+  readonly id: string;
+  readonly organizationId: string;
+}
+
+/** One canonical task-view predicate for each organization in a Hub aggregation. */
+export type HubTaskViewFilters = ReadonlyMap<string, (task: ViewableTaskParts) => boolean>;
 
 /** IN_FLIGHT_PROJECT_STATES lists the statuses treated specially by this API route helper. */
 export const IN_FLIGHT_PROJECT_STATES = ['planned', 'active'] as const;
@@ -155,22 +166,59 @@ export function toSearchHit(
   return { organizationId, type, id, title };
 }
 
-/** The org ids the user is an active human Actor in (their cross-org scope). */
-export async function callerOrgIds(userId: string): Promise<string[]> {
-  const rows = await db
-    .select({ organizationId: actor.organizationId })
+/** Resolve the user's active, unarchived human memberships for Hub aggregations. */
+export async function activeCallerActors(userId: string): Promise<ActiveCallerActor[]> {
+  return db
+    .select({ id: actor.id, organizationId: actor.organizationId })
     .from(actor)
-    .where(and(eq(actor.userId, userId), eq(actor.kind, 'human'), eq(actor.status, 'active')));
-  return [...new Set(rows.map((r) => r.organizationId))];
+    .where(
+      and(
+        eq(actor.userId, userId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    );
 }
 
-/** The caller's active human Actor ids (one per org), for "assigned to me" filters. */
+/** The org ids the user is an active, unarchived human Actor in (their cross-org scope). */
+export async function callerOrgIds(userId: string): Promise<string[]> {
+  return (await activeCallerActors(userId)).map((actor) => actor.organizationId);
+}
+
+/** The caller's active, unarchived human Actor ids (one per org), for assigned-to-me filters. */
 export async function callerActorIds(userId: string): Promise<string[]> {
-  const rows = await db
-    .select({ id: actor.id })
-    .from(actor)
-    .where(and(eq(actor.userId, userId), eq(actor.kind, 'human'), eq(actor.status, 'active')));
-  return rows.map((r) => r.id);
+  return (await activeCallerActors(userId)).map((actor) => actor.id);
+}
+
+/**
+ * Build one canonical task-view predicate per active Hub membership.
+ *
+ * The predicates are intentionally shared across whole result sets: resolving grants once per
+ * org prevents task-by-task authorization queries while keeping every Hub pane on the same rule.
+ */
+export async function buildHubTaskViewFilters(
+  actors: readonly ActiveCallerActor[],
+): Promise<HubTaskViewFilters> {
+  return new Map(
+    await Promise.all(
+      actors.map(
+        async (actor) =>
+          [
+            actor.organizationId,
+            await buildTaskViewFilter(actor.organizationId, actor.id),
+          ] as const,
+      ),
+    ),
+  );
+}
+
+/** Keep only task rows that pass their owning organization's prebuilt Hub view predicate. */
+export function filterViewableHubTasks<T extends ViewableTaskParts & { organizationId: string }>(
+  tasks: readonly T[],
+  filters: HubTaskViewFilters,
+): T[] {
+  return tasks.filter((task) => filters.get(task.organizationId)?.(task) ?? false);
 }
 
 /** Whether an ISO timestamp string falls on the given `YYYY-MM-DD` UTC date. */

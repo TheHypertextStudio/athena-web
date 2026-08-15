@@ -13,7 +13,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { taskCreationEntryId } from '@docket/types';
 
-import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import {
+  appWithActor,
+  getDb,
+  one,
+  seedTaskAccessOrg as seedBaseOrg,
+} from '../support/routes-harness';
 import type * as TaskAuditModule from '../../src/lib/task-audit';
 import type tasksRouter from '../../src/routes/tasks';
 
@@ -107,7 +112,7 @@ describe('task activity log — what is written', () => {
   });
 
   it('gives a task inserted by any other writer the same creation entry', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     // Athena's capture path, the subtask route, connector import and the email-to-task accept
     // path all insert straight into `task`. None of them writes a ledger row, and neither did
@@ -121,7 +126,6 @@ describe('task activity log — what is written', () => {
           title: 'Captured by Athena',
           teamId,
           state: 'backlog',
-          statusId: statusId('task', 'backlog'),
           createdBy: humanActorId,
         })
         .returning({ id: schema.task.id }),
@@ -133,20 +137,14 @@ describe('task activity log — what is written', () => {
   });
 
   it('reports an unattributed creation rather than inventing a creator', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     // `createdBy` is null for a system import, and is nulled out when the creating actor is
     // deleted. Either way the log must say "no actor", never a dangling id.
     const systemTask = one(
       await db
         .insert(schema.task)
-        .values({
-          organizationId: orgId,
-          title: 'Imported',
-          teamId,
-          state: 'backlog',
-          statusId: statusId('task', 'backlog'),
-        })
+        .values({ organizationId: orgId, title: 'Imported', teamId, state: 'backlog' })
         .returning({ id: schema.task.id }),
     );
 
@@ -177,7 +175,7 @@ describe('task activity log — what is written', () => {
   });
 
   it('records every one of the eight fields ENT-29 names, in the order applied', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema, 'assign');
     const app = appWithActor(tasks, orgId, ['contribute', 'assign'], humanActorId);
     const assignee = one(
       await db
@@ -188,12 +186,7 @@ describe('task activity log — what is written', () => {
     const proj = one(
       await db
         .insert(schema.project)
-        .values({
-          organizationId: orgId,
-          name: 'Website redesign',
-          status: 'planned',
-          statusId: statusId('project', 'planned'),
-        })
+        .values({ organizationId: orgId, name: 'Website redesign' })
         .returning({ id: schema.project.id }),
     );
     const id = await createTask(app, teamId, { title: 'Original' });
@@ -231,17 +224,12 @@ describe('task activity log — what is written', () => {
   });
 
   it('resolves reference ids to the names they had when the change was made', async () => {
-    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const prog = one(
       await db
         .insert(schema.program)
-        .values({
-          organizationId: orgId,
-          name: 'Platform',
-          status: 'active',
-          statusId: statusId('program', 'active'),
-        })
+        .values({ organizationId: orgId, name: 'Platform' })
         .returning({ id: schema.program.id }),
     );
     const cyc = one(
@@ -410,32 +398,54 @@ describe('task activity log — reading it back', () => {
   });
 });
 
-describe('task activity log — the ledger never breaks the mutation', () => {
-  it('still applies (and returns) a patch when the ledger write fails', async () => {
+describe('task activity log — authorization and ledger failure boundaries', () => {
+  it('does not let a nonexistent actor mutate a task before the ledger can fail', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const seeder = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const id = await createTask(seeder, teamId, { title: 'Before' });
 
-    // `actor_test` is not a real actor row, so every ledger insert this app makes violates the
-    // `audit_event.actor_id` foreign key. The mutation must still succeed.
+    // A route context cannot stand in for a persisted actor: target authorization runs before
+    // the best-effort activity write, so a fabricated id cannot edit a task it does not own.
     const brokenLedger = appWithActor(tasks, orgId, ['contribute'], 'actor_test');
     const res = await brokenLedger.request(`/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'After' }),
     });
-    expect(res.status).toBe(200);
-    expect(((await res.json()) as { title: string }).title).toBe('After');
+    expect(res.status).toBe(404);
+    const detail = (await (await seeder.request(`/${id}`)).json()) as { title: string };
+    expect(detail.title).toBe('Before');
 
-    // The change is simply absent from history — never a 500, never a rolled-back edit.
-    const changes = (await activity(seeder, id)).filter((entry) => entry.type === 'updated');
-    expect(changes).toHaveLength(0);
-
-    // …and the task still reads back with its creation entry, because that one is derived from
-    // the row rather than from the ledger that just failed.
     const items = await activity(seeder, id);
     expect(items).toHaveLength(1);
     expect(items[0]?.type).toBe('created');
+  });
+
+  it('swallows an unavailable audit actor rather than failing the best-effort ledger write', async () => {
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const id = one(
+      await db
+        .insert(schema.task)
+        .values({ organizationId: orgId, title: 'Audit boundary', teamId, state: 'backlog' })
+        .returning({ id: schema.task.id }),
+    ).id;
+
+    await expect(
+      taskAudit.recordTaskChanges({
+        organizationId: orgId,
+        taskId: id,
+        title: 'Audit boundary',
+        actorId: 'actor_test',
+        changes: [{ field: 'title', label: 'Title', from: 'Before', to: 'After' }],
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(
+      await db
+        .select()
+        .from(schema.auditEvent)
+        .where(eq(schema.auditEvent.subjectId, id)),
+    ).toEqual([]);
   });
 });
 

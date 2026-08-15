@@ -26,12 +26,12 @@ import type {
   InitiativeOut,
   LabelOut,
   MemberOut,
-  Priority,
   ProgramOut,
   ProjectOut,
   Visibility,
   WorkflowState,
 } from '@docket/types';
+import type { Priority } from '@docket/work/task-contract';
 import { ActorAvatar, type PickerOption, StatusIcon } from '@docket/ui/components';
 import { Globe, Shield } from '@docket/ui/icons';
 import type { ReactNode } from 'react';

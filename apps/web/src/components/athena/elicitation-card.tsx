@@ -13,7 +13,7 @@
  * says so). A settled card stays in place rather than disappearing — the conversation is a record,
  * and a question that vanishes once answered takes its own context with it.
  */
-import type { ElicitationOut } from '@docket/types';
+import type { ElicitationOut } from '@docket/athena/elicitation-api';
 import { AlarmClock, CircleAlert, HelpCircle, ListChecks, Sparkles } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Button, Chip, ControlGroup, Text } from '@docket/ui/primitives';

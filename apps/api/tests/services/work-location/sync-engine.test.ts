@@ -33,17 +33,22 @@ import {
 import type { GoogleWorkingLocationEvent } from '../../../src/services/work-location/google';
 import { GoogleWorkLocationApiError } from '../../../src/services/work-location/google-transport';
 
+function requireValue<T>(value: T | null | undefined, description: string): T {
+  if (value == null) throw new Error(`Expected ${description}`);
+  return value;
+}
+
 class FakeGoogleWorkLocationTransport implements GoogleWorkLocationTransport {
   readonly events = new Map<string, Map<string, GoogleWorkingLocationEvent>>();
   failUpserts = 0;
   private revision = 0;
 
   seed(connectionId: string, event: GoogleWorkingLocationEvent): void {
-    this.account(connectionId).set(event.id!, event);
+    this.account(connectionId).set(requireValue(event.id, 'seed event id'), event);
   }
 
   edit(connectionId: string, eventId: string, patch: Partial<GoogleWorkingLocationEvent>): void {
-    const existing = this.account(connectionId).get(eventId)!;
+    const existing = requireValue(this.account(connectionId).get(eventId), 'event to edit');
     this.revision += 1;
     this.account(connectionId).set(eventId, {
       ...existing,
@@ -90,8 +95,12 @@ class FakeGoogleWorkLocationTransport implements GoogleWorkLocationTransport {
     this.revision += 1;
     this.account(input.connectionId).set(input.externalEventId, {
       id: input.externalEventId,
-      recurringEventId: existing?.recurringEventId,
-      originalStartTime: existing?.originalStartTime,
+      ...(existing?.recurringEventId === undefined
+        ? {}
+        : { recurringEventId: existing.recurringEventId }),
+      ...(existing?.originalStartTime === undefined
+        ? {}
+        : { originalStartTime: existing.originalStartTime }),
       status: 'cancelled',
       updated: new Date(Date.UTC(2026, 7, 14, 20, this.revision)).toISOString(),
       etag: `etag-${String(this.revision)}`,
@@ -115,16 +124,16 @@ class FakeGoogleWorkLocationTransport implements GoogleWorkLocationTransport {
     if (!master) return null;
     const nextDate = new Date(`${input.occurrenceDate}T00:00:00.000Z`);
     nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    const { recurrence: _omittedRecurrence, ...instanceBase } = master;
     const created: GoogleWorkingLocationEvent = {
-      ...master,
+      ...instanceBase,
       id: `${input.masterExternalEventId}-${input.occurrenceDate}`,
-      recurrence: undefined,
       recurringEventId: input.masterExternalEventId,
       originalStartTime: { date: input.occurrenceDate },
       start: { date: input.occurrenceDate },
       end: { date: nextDate.toISOString().slice(0, 10) },
     };
-    events.set(created.id!, created);
+    events.set(requireValue(created.id, 'created instance id'), created);
     return created;
   }
 
@@ -152,18 +161,22 @@ describe('two-account work-location convergence', () => {
       migrationsFolder: resolve(import.meta.dirname, '../../../../../packages/db/drizzle'),
     });
     database = migrated;
-    userId = (
+    userId = requireValue(
       await database
         .insert(user)
         .values({ name: 'Ada', email: `work-location-sync-${Date.now()}@example.com` })
         .returning()
-    )[0]!.id;
-    hubId = (
+        .then((rows) => rows[0]),
+      'inserted user',
+    ).id;
+    hubId = requireValue(
       await database
         .insert(hub)
         .values({ userId, preferences: { timezone: 'America/Los_Angeles' } })
         .returning()
-    )[0]!.id;
+        .then((rows) => rows[0]),
+      'inserted hub',
+    ).id;
     await database.insert(account).values([
       { accountId: 'google-a', providerId: 'google', userId },
       { accountId: 'google-b', providerId: 'google', userId },
@@ -198,8 +211,14 @@ describe('two-account work-location convergence', () => {
         id: calendarConnection.id,
         externalAccountId: calendarConnection.externalAccountId,
       });
-    connectionA = connections.find((connection) => connection.externalAccountId === 'google-a')!.id;
-    connectionB = connections.find((connection) => connection.externalAccountId === 'google-b')!.id;
+    connectionA = requireValue(
+      connections.find((connection) => connection.externalAccountId === 'google-a'),
+      'Google A connection',
+    ).id;
+    connectionB = requireValue(
+      connections.find((connection) => connection.externalAccountId === 'google-b'),
+      'Google B connection',
+    ).id;
   });
 
   afterAll(async () => {
@@ -223,14 +242,17 @@ describe('two-account work-location convergence', () => {
 
     await syncUserWorkLocations(database, { userId, transport });
     await drainWorkLocationWrites(database, { userId, transport });
-    const projectedToB = [...transport.events.get(connectionB)!.values()].find(
-      (event) => event.status !== 'cancelled',
-    )!;
+    const projectedToB = requireValue(
+      [...requireValue(transport.events.get(connectionB), 'Google B events').values()].find(
+        (event) => event.status !== 'cancelled',
+      ),
+      'event projected to Google B',
+    );
     expect(projectedToB.workingLocationProperties).toMatchObject({
       customLocation: { label: 'Main library' },
     });
 
-    transport.edit(connectionB, projectedToB.id!, {
+    transport.edit(connectionB, requireValue(projectedToB.id, 'projected event id'), {
       workingLocationProperties: {
         type: 'customLocation',
         customLocation: { label: 'Editing studio' },
@@ -238,34 +260,45 @@ describe('two-account work-location convergence', () => {
     });
     await syncUserWorkLocations(database, { userId, transport });
     await drainWorkLocationWrites(database, { userId, transport });
-    const canonical = (
-      await database
-        .select()
-        .from(workLocationAssertion)
-        .where(eq(workLocationAssertion.hubId, hubId))
-    ).find((assertion) => assertion.archivedAt === null)!;
+    const canonical = requireValue(
+      (
+        await database
+          .select()
+          .from(workLocationAssertion)
+          .where(eq(workLocationAssertion.hubId, hubId))
+      ).find((assertion) => assertion.archivedAt === null),
+      'active canonical assertion',
+    );
     const places = await database
       .select()
       .from(fullSchema.workPlace)
       .where(eq(fullSchema.workPlace.hubId, hubId));
     expect(places.find((place) => place.id === canonical.placeId)?.name).toBe('Editing studio');
     expect(
-      transport.events.get(connectionA)!.get('event-a')?.workingLocationProperties,
+      requireValue(transport.events.get(connectionA), 'Google A events').get('event-a')
+        ?.workingLocationProperties,
     ).toMatchObject({
       customLocation: { label: 'Editing studio' },
     });
 
-    await transport.delete({ connectionId: connectionB, externalEventId: projectedToB.id! });
+    await transport.delete({
+      connectionId: connectionB,
+      externalEventId: requireValue(projectedToB.id, 'projected event id'),
+    });
     await syncUserWorkLocations(database, { userId, transport });
     await drainWorkLocationWrites(database, { userId, transport });
-    const deletedCanonical = (
+    const deletedCanonical = requireValue(
       await database
         .select()
         .from(workLocationAssertion)
         .where(eq(workLocationAssertion.id, canonical.id))
-    )[0]!;
+        .then((rows) => rows[0]),
+      'deleted canonical assertion',
+    );
     expect(deletedCanonical.archivedAt).not.toBeNull();
-    expect(transport.events.get(connectionA)!.get('event-a')?.status).toBe('cancelled');
+    expect(
+      requireValue(transport.events.get(connectionA), 'Google A events').get('event-a')?.status,
+    ).toBe('cancelled');
   });
 
   it('projects cancellation, replacement, and restoration to recurring provider instances', async () => {
@@ -307,7 +340,7 @@ describe('two-account work-location convergence', () => {
     await drainWorkLocationWrites(database, { userId, transport });
     for (const connectionId of [connectionA, connectionB]) {
       expect(
-        [...transport.events.get(connectionId)!.values()].find(
+        [...requireValue(transport.events.get(connectionId), 'provider events').values()].find(
           (event) => event.originalStartTime?.date === '2026-08-17',
         )?.status,
       ).toBe('cancelled');
@@ -326,7 +359,7 @@ describe('two-account work-location convergence', () => {
     await enqueueWorkLocationProjection(database, hubId, assertion, 'update', '2026-08-17');
     await drainWorkLocationWrites(database, { userId, transport });
     expect(
-      [...transport.events.get(connectionA)!.values()].find(
+      [...requireValue(transport.events.get(connectionA), 'Google A events').values()].find(
         (event) => event.originalStartTime?.date === '2026-08-17',
       ),
     ).toMatchObject({
@@ -338,7 +371,7 @@ describe('two-account work-location convergence', () => {
     await enqueueWorkLocationProjection(database, hubId, assertion, 'update', '2026-08-17');
     await drainWorkLocationWrites(database, { userId, transport });
     expect(
-      [...transport.events.get(connectionA)!.values()].find(
+      [...requireValue(transport.events.get(connectionA), 'Google A events').values()].find(
         (event) => event.originalStartTime?.date === '2026-08-17',
       ),
     ).toMatchObject({
@@ -358,14 +391,23 @@ describe('two-account work-location convergence', () => {
     });
     await enqueueWorkLocationProjection(database, hubId, assertion, 'update', '2026-08-17');
     await drainWorkLocationWrites(database, { userId, transport });
-    const remoteInstance = [...transport.events.get(connectionB)!.values()].find(
-      (event) => event.originalStartTime?.date === '2026-08-17',
-    )!;
-    await transport.delete({ connectionId: connectionB, externalEventId: remoteInstance.id! });
+    const remoteInstance = requireValue(
+      [...requireValue(transport.events.get(connectionB), 'Google B events').values()].find(
+        (event) => event.originalStartTime?.date === '2026-08-17',
+      ),
+      'Google B recurring instance',
+    );
+    await transport.delete({
+      connectionId: connectionB,
+      externalEventId: requireValue(remoteInstance.id, 'remote instance id'),
+    });
     await syncUserWorkLocations(database, { userId, transport });
-    assertion = (await listWorkLocationAssertions(database, hubId)).items.find(
-      (candidate) => candidate.id === assertion.id,
-    )!;
+    assertion = requireValue(
+      (await listWorkLocationAssertions(database, hubId)).items.find(
+        (candidate) => candidate.id === assertion.id,
+      ),
+      'updated assertion',
+    );
     expect(assertion.exceptions).toEqual([]);
     await drainWorkLocationWrites(database, { userId, transport });
   });
@@ -399,19 +441,22 @@ describe('two-account work-location convergence', () => {
     });
 
     await syncUserWorkLocations(database, { userId, transport });
-    const imported = (await listWorkLocationAssertions(database, hubId)).items.find(
-      (candidate) =>
-        candidate.originConnectionId === connectionA &&
-        candidate.schedule.type === 'weekly_all_day' &&
-        candidate.schedule.effectiveFrom === '2026-09-07',
-    )!;
+    const imported = requireValue(
+      (await listWorkLocationAssertions(database, hubId)).items.find(
+        (candidate) =>
+          candidate.originConnectionId === connectionA &&
+          candidate.schedule.type === 'weekly_all_day' &&
+          candidate.schedule.effectiveFrom === '2026-09-07',
+      ),
+      'imported recurring assertion',
+    );
     expect(imported.exceptions).toEqual([
       expect.objectContaining({ action: 'cancel', date: '2026-09-14' }),
     ]);
 
     await drainWorkLocationWrites(database, { userId, transport });
     expect(
-      [...transport.events.get(connectionB)!.values()].find(
+      [...requireValue(transport.events.get(connectionB), 'Google B events').values()].find(
         (event) => event.originalStartTime?.date === '2026-09-14',
       )?.status,
     ).toBe('cancelled');
@@ -444,12 +489,15 @@ describe('two-account work-location convergence', () => {
     expect(await drainWorkLocationWrites(database, { userId, transport, now })).toMatchObject({
       retried: 1,
     });
-    const retrying = (
-      await database
-        .select()
-        .from(workLocationSyncAccount)
-        .where(eq(workLocationSyncAccount.hubId, hubId))
-    ).find((accountState) => accountState.state === 'retrying')!;
+    const retrying = requireValue(
+      (
+        await database
+          .select()
+          .from(workLocationSyncAccount)
+          .where(eq(workLocationSyncAccount.hubId, hubId))
+      ).find((accountState) => accountState.state === 'retrying'),
+      'retrying account state',
+    );
 
     expect(
       await drainWorkLocationWrites(database, {
@@ -496,12 +544,14 @@ describe('two-account work-location convergence', () => {
       };
 
       await syncUserWorkLocations(database, { userId, transport: failing });
-      const accountState = (
+      const accountState = requireValue(
         await database
           .select()
           .from(workLocationSyncAccount)
           .where(eq(workLocationSyncAccount.connectionId, connectionA))
-      )[0]!;
+          .then((rows) => rows[0]),
+        'Google A sync state',
+      );
       expect(accountState).toMatchObject({ state, reason });
     },
   );

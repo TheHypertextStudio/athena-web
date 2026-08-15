@@ -5,6 +5,11 @@ import {
   type GoogleWorkLocationFetch,
 } from '../../../src/services/work-location/google-transport';
 
+function requireValue<T>(value: T | null | undefined, description: string): T {
+  if (value == null) throw new Error(`Expected ${description}`);
+  return value;
+}
+
 describe('Google primary-calendar work-location transport', () => {
   it('bootstraps unbounded masters/exceptions with the dedicated event type filter', async () => {
     const requests: string[] = [];
@@ -25,7 +30,7 @@ describe('Google primary-calendar work-location transport', () => {
     });
 
     expect(result.nextCursor).toBe('next-cursor');
-    const url = new URL(requests[0]!);
+    const url = new URL(requireValue(requests[0], 'bootstrap request'));
     expect(url.pathname).toBe('/calendar/v3/calendars/primary/events');
     expect(url.searchParams.get('eventTypes')).toBe('workingLocation');
     expect(url.searchParams.get('singleEvents')).toBe('false');
@@ -61,7 +66,8 @@ describe('Google primary-calendar work-location transport', () => {
       externalEtag: null,
       body: { id: 'event-1', eventType: 'workingLocation' },
     });
-    await transport.startWatch!({
+    if (!transport.startWatch) throw new Error('Expected watch transport');
+    await transport.startWatch({
       connectionId: 'connection-a',
       userId: 'user-a',
       externalAccountId: 'account-a',
@@ -71,7 +77,9 @@ describe('Google primary-calendar work-location transport', () => {
     });
 
     expect(requests[0]).toMatchObject({ method: 'POST' });
-    expect(requests[0]!.url).toContain('/calendars/primary/events');
+    expect(requireValue(requests[0], 'event write request').url).toContain(
+      '/calendars/primary/events',
+    );
     expect(requests[1]).toMatchObject({
       method: 'POST',
       body: expect.objectContaining({
@@ -81,7 +89,9 @@ describe('Google primary-calendar work-location transport', () => {
         token: 'secret-token',
       }),
     });
-    expect(requests[1]!.url).toContain('/calendars/primary/events/watch');
+    expect(requireValue(requests[1], 'watch request').url).toContain(
+      '/calendars/primary/events/watch',
+    );
   });
 
   it('finds one recurring instance inside the occurrence local day', async () => {
@@ -114,7 +124,7 @@ describe('Google primary-calendar work-location transport', () => {
     });
 
     expect(instance?.id).toBe('instance-1');
-    const url = new URL(requests[0]!);
+    const url = new URL(requireValue(requests[0], 'instance request'));
     expect(url.pathname).toContain('/events/master-1/instances');
     expect(url.searchParams.get('timeMin')).toBe('2026-03-08T08:00:00.000Z');
     expect(url.searchParams.get('timeMax')).toBe('2026-03-09T07:00:00.000Z');

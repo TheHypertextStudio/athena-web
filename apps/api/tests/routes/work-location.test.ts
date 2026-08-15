@@ -120,8 +120,8 @@ describe('/v1/me/work-location routes', () => {
         placeId: place.id,
         schedule: {
           type: 'one_off_timed',
-          startsAt: '2026-08-14T16:00:00.000Z',
-          endsAt: '2026-08-14T20:00:00.000Z',
+          startsAt: '2036-08-14T16:00:00.000Z',
+          endsAt: '2036-08-14T20:00:00.000Z',
           timezone: 'America/Los_Angeles',
         },
       }),
@@ -133,7 +133,7 @@ describe('/v1/me/work-location routes', () => {
     };
     expect(assertionBody.projections).toEqual([expect.objectContaining({ state: 'pending' })]);
 
-    const point = await app.request('/?at=2026-08-14T17%3A00%3A00.000Z');
+    const point = await app.request('/?at=2036-08-14T17%3A00%3A00.000Z');
     expect(await point.json()).toMatchObject({
       expected: { place: { id: place.id }, source: 'assertion' },
       current: { place: { id: place.id }, source: 'inferred_from_expected' },
@@ -221,9 +221,8 @@ describe('/v1/me/work-location routes', () => {
       .select()
       .from(schema.workLocationObservation)
       .where(eq(schema.workLocationObservation.hubId, hubId));
-    const override = manualRows.find((row) => row.source === 'manual');
-    expect(override).toBeDefined();
-    expect(override!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    const override = one(manualRows.filter((row) => row.source === 'manual'));
+    expect(override.expiresAt.getTime()).toBeGreaterThan(Date.now());
     expect((await app.request('/current', { method: 'DELETE' })).status).toBe(204);
   });
 });

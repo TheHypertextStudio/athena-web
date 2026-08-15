@@ -492,7 +492,10 @@ export async function updateWorkLocationAssertion(
   database: Database,
   hubId: string,
   assertionId: string,
-  input: { readonly placeId?: string; readonly schedule?: WorkLocationSchedule },
+  input: {
+    readonly placeId?: string | undefined;
+    readonly schedule?: WorkLocationSchedule | undefined;
+  },
 ): Promise<WorkLocationAssertionOut> {
   const existing = await requireAssertion(database, hubId, assertionId);
   if (input.placeId) await requirePlace(database, hubId, input.placeId);

@@ -255,4 +255,95 @@ describe('phone verification', () => {
 
     await expect(service.submit(verified.number, CODE)).rejects.toThrow();
   });
+
+  it('refuses to verify a number that has been blocked', async () => {
+    const sms = new CaptureSmsSender();
+    const service = new PhoneVerificationService({ sms: () => sms, generateCode: () => CODE });
+    const { row } = await seedNumber('VerifyBlocked');
+    await db
+      .update(schema.phoneNumber)
+      .set({ status: 'blocked' })
+      .where(eq(schema.phoneNumber.id, row.id));
+
+    await expect(service.submit({ ...row, status: 'blocked' }, CODE)).rejects.toThrow(
+      'This number cannot be used.',
+    );
+  });
+
+  it('destroys the challenge on the wrong code that spends the last attempt', async () => {
+    // Exercises the branch `submit` takes only when this guess brings remaining tries to zero:
+    // the challenge is invalidated immediately rather than left to expire on its own.
+    const sms = new CaptureSmsSender();
+    const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
+    const service = new PhoneVerificationService({
+      sms: () => sms,
+      now: clock.now,
+      generateCode: () => CODE,
+    });
+    const { row } = await seedNumber('VerifyLastAttempt');
+    await service.issueChallenge(row);
+
+    for (let attempt = 0; attempt < PHONE_VERIFICATION_MAX_ATTEMPTS - 1; attempt++) {
+      const wrong = await service.submit(row, '000000');
+      expect(wrong.ok).toBe(false);
+    }
+    const last = await service.submit(row, '000000');
+    expect(last).toMatchObject({ ok: false, refusal: 'wrong-code', attemptsRemaining: 0 });
+
+    // The challenge is gone, not merely spent: submitting the real code now finds none at all.
+    const after = await service.submit(row, CODE);
+    expect(after).toMatchObject({ ok: false, refusal: 'no-challenge' });
+  });
+
+  it('refuses a code once the attempt budget was already spent by an earlier submit', async () => {
+    // Distinct from the previous case: this is the *next* submit after the budget already hit
+    // zero, which `submit` short-circuits before it ever compares the code.
+    const sms = new CaptureSmsSender();
+    const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
+    const service = new PhoneVerificationService({
+      sms: () => sms,
+      now: clock.now,
+      generateCode: () => CODE,
+    });
+    const { row } = await seedNumber('VerifyPostExhaustion');
+    const issued = await service.issueChallenge(row);
+    if (!issued.ok) throw new Error('expected a challenge');
+    await db
+      .update(schema.phoneVerification)
+      .set({ attempts: PHONE_VERIFICATION_MAX_ATTEMPTS })
+      .where(eq(schema.phoneVerification.id, issued.challenge.id));
+
+    const result = await service.submit(row, CODE);
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: 'attempts-exhausted',
+      attemptsRemaining: 0,
+    });
+  });
+
+  it('uses the real clock and a random code when neither is injected', async () => {
+    // Every other test pins both for determinism. Production never does — this is the branch
+    // that path actually exercises.
+    const sms = new CaptureSmsSender();
+    const service = new PhoneVerificationService({ sms: () => sms });
+    const { row } = await seedNumber('VerifyDefaults');
+
+    const issued = await service.issueChallenge(row);
+    expect(issued.ok).toBe(true);
+    expect(sms.outbox).toHaveLength(1);
+    expect(sms.outbox[0]?.body).toMatch(/\b\d{6}\b/);
+  });
+});
+
+describe('attemptsRemaining and resendAvailableAt with no challenge', () => {
+  it('reports zero attempts remaining when there is no outstanding challenge', async () => {
+    const { attemptsRemaining } = await import('../../src/routes/phone-verification');
+    expect(attemptsRemaining(null)).toBe(0);
+  });
+
+  it('reports resend as available right now when there is no outstanding challenge', async () => {
+    const { resendAvailableAt } = await import('../../src/routes/phone-verification');
+    const now = new Date('2026-08-02T09:00:00.000Z');
+    expect(resendAvailableAt(null, now)).toBe(now);
+  });
 });

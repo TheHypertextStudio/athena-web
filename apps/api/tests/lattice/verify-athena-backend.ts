@@ -158,12 +158,17 @@ function refuse(why: string): never {
 /** The verification. */
 async function main(): Promise<void> {
   const traces: Trace[] = [];
+  const appMode = process.env['APP_MODE'] as 'local' | 'test' | 'production' | undefined;
+  const anthropicApiKey = process.env['ANTHROPIC_API_KEY'];
+  const gatewayBaseUrl = process.env['CLOUDFLARE_AI_GATEWAY_BASE_URL'];
+  const gatewayToken = process.env['CLOUDFLARE_AI_GATEWAY_TOKEN'];
+  const athenaModel = process.env['ATHENA_MODEL'];
   const env = {
-    APP_MODE: process.env['APP_MODE'] as 'local' | 'test' | 'production' | undefined,
-    ANTHROPIC_API_KEY: process.env['ANTHROPIC_API_KEY'],
-    CLOUDFLARE_AI_GATEWAY_BASE_URL: process.env['CLOUDFLARE_AI_GATEWAY_BASE_URL'],
-    CLOUDFLARE_AI_GATEWAY_TOKEN: process.env['CLOUDFLARE_AI_GATEWAY_TOKEN'],
-    ATHENA_MODEL: process.env['ATHENA_MODEL'],
+    ...(appMode === undefined ? {} : { APP_MODE: appMode }),
+    ...(anthropicApiKey === undefined ? {} : { ANTHROPIC_API_KEY: anthropicApiKey }),
+    ...(gatewayBaseUrl === undefined ? {} : { CLOUDFLARE_AI_GATEWAY_BASE_URL: gatewayBaseUrl }),
+    ...(gatewayToken === undefined ? {} : { CLOUDFLARE_AI_GATEWAY_TOKEN: gatewayToken }),
+    ...(athenaModel === undefined ? {} : { ATHENA_MODEL: athenaModel }),
   };
 
   // `resolveModelBackend` throws when the tier it selected is half-configured, which is the

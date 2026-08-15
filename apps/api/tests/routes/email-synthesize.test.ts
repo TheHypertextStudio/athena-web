@@ -19,9 +19,10 @@ import { assertDefined } from '@docket/test-utils';
 const synthesizer: TaskSynthesizer = {
   async synthesize(input) {
     const dueDate = /\b(\d{4}-\d{2}-\d{2})\b/.exec(input.snippet)?.[1];
+    const description = input.snippet.trim();
     return {
       title: input.subject.trim() || 'Follow up on an email',
-      description: input.snippet.trim() || undefined,
+      ...(description === '' ? {} : { description }),
       priority: 'medium',
       ...(dueDate !== undefined ? { dueDate } : {}),
     };

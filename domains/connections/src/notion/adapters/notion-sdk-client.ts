@@ -8,7 +8,7 @@ import {
   type CreateDatabaseResponse,
   type DataSourceObjectResponse,
   type PartialDataSourceObjectResponse,
-  type QueryDataSourceParameters,
+  type QueryDataSourceResponse,
   type UpdateDataSourceParameters,
 } from '@notionhq/client';
 
@@ -265,24 +265,39 @@ export class NotionMirrorClient implements NotionMirrorPort {
     return this.notion.pages.update({ page_id: pageId, properties });
   }
 
-  /** Read live and trashed pages, letting a live copy win if a page races between partitions. */
+  /**
+   * Read live and trashed pages, letting a live copy win if a page races between partitions.
+   *
+   * @remarks
+   * Issued through `request` rather than `dataSources.query`. The typed method accepts only the
+   * body params the SDK knows — `archived` and `in_trash` — and drops anything else with a console
+   * warning. The live API rejects `in_trash` (`body.in_trash should be not present`) and documents
+   * `is_archived`, so the typed method cannot express the archived read at all: it would strip the
+   * parameter and return the live rows a second time, hiding every Notion deletion.
+   */
   async queryChanges(dataSourceId: string, since?: string): Promise<MirrorChange[]> {
     const filter =
       since === undefined
         ? undefined
         : ({ timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } } as const);
     const read = async (archived: boolean): Promise<MirrorChange[]> => {
-      const parameters = {
-        data_source_id: dataSourceId,
-        page_size: NOTION_PAGE_SIZE,
-        ...(filter ? { filter } : {}),
-        // The SDK types name this `in_trash`; the live API rejects that with
-        // `body.in_trash should be not present`. `in_trash` is the page-update spelling, used in
-        // `writeRow`'s delete branch.
-        ...(archived ? { is_archived: true } : {}),
-      } as unknown as QueryDataSourceParameters;
-      const results = await collectPaginatedAPI(this.notion.dataSources.query, parameters);
-      return fullPages(results).map((page) => toMirrorChange(page, archived));
+      const pages: QueryDataSourceResponse['results'] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await this.notion.request<QueryDataSourceResponse>({
+          path: `data_sources/${dataSourceId}/query`,
+          method: 'post',
+          body: {
+            page_size: NOTION_PAGE_SIZE,
+            ...(filter ? { filter } : {}),
+            ...(archived ? { is_archived: true } : {}),
+            ...(cursor !== undefined ? { start_cursor: cursor } : {}),
+          },
+        });
+        pages.push(...page.results);
+        cursor = page.next_cursor ?? undefined;
+      } while (cursor !== undefined);
+      return fullPages(pages).map((page) => toMirrorChange(page, archived));
     };
 
     try {

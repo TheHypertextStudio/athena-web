@@ -333,14 +333,14 @@ describe('NotionMirrorClient.queryChanges', () => {
     let call = 0;
     const fetchImpl = ((_url: string, init?: { body?: string }) => {
       call += 1;
-      const archived = JSON.parse(init?.body ?? '{}') as { in_trash?: boolean };
+      const archived = JSON.parse(init?.body ?? '{}') as { is_archived?: boolean };
       return Promise.resolve(
         new Response(
           JSON.stringify({
             object: 'list',
             next_cursor: null,
             has_more: false,
-            results: [page({ id: archived.in_trash === true ? 'page_1' : 'page_1' })],
+            results: [page({ id: archived.is_archived === true ? 'page_1' : 'page_1' })],
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         ),
@@ -365,7 +365,11 @@ describe('NotionMirrorClient.queryChanges', () => {
         last_edited_time: { on_or_after: '2026-01-01T00:00:00.000Z' },
       },
     });
-    expect(calls[1]?.body).toMatchObject({ in_trash: true });
+    // `is_archived`, never `in_trash`: the live API rejects the latter on this endpoint, and the
+    // SDK's typed `dataSources.query` drops the former as an unknown parameter — which is why the
+    // request is issued through `request` instead.
+    expect(calls[1]?.body).toMatchObject({ is_archived: true });
+    expect(calls[1]?.body).not.toHaveProperty('in_trash');
   });
 
   it('reports a failed query as a provider error', async () => {

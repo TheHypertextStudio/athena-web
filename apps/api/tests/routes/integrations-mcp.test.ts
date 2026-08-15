@@ -503,7 +503,7 @@ describe('the union toolbox: remote read + local writes in one session', () => {
     const [settledRead] = await db
       .select({ status: schema.sessionActivity.approvalStatus })
       .from(schema.sessionActivity)
-      .where(eq(schema.sessionActivity.id, read!.id));
+      .where(eq(schema.sessionActivity.id, assertDefined(read).id));
     expect(settledRead?.status).toBe('applied');
 
     const tasks = await db

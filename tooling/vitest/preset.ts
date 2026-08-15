@@ -46,6 +46,16 @@ export interface DocketVitestOptions {
   hookTimeout?: number;
   /** Whether separate test files may run concurrently. Defaults to Vitest's parallel behavior. */
   fileParallelism?: boolean;
+  /**
+   * Worker isolation model. Defaults to `threads`.
+   *
+   * A package whose tests load a WASM module — PGlite, above all — passes `forks`. V8 keeps one
+   * JIT page registry per process and asserts on it while a thread tears down its WASM
+   * allocations, so a suite that passes every assertion can still abort the run with
+   * `Check failed: jit_page_->allocations_.erase(addr) == 1` and SIGILL. A process per worker
+   * gives each PGlite instance its own registry and nothing to race over.
+   */
+  pool?: 'threads' | 'forks';
 }
 
 /**
@@ -70,6 +80,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
     testTimeout = 30_000,
     hookTimeout = 180_000,
     fileParallelism = true,
+    pool = 'threads',
   } = options;
   return defineConfig({
     plugins: useReact ? [react()] : [],
@@ -80,8 +91,9 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       env,
       unstubEnvs: true,
       // Keep Vitest file parallelism, but avoid fork-worker startup starvation when
-      // Turbo is already running package tests concurrently.
-      pool: 'threads',
+      // Turbo is already running package tests concurrently. A package whose tests load
+      // PGlite overrides this to `forks`; see DocketVitestOptions.pool.
+      pool,
       fileParallelism,
       include: ['tests/**/*.{test,spec}.{ts,tsx}'],
       // Turbo runs every package's vitest concurrently, so the machine is heavily

@@ -12,4 +12,14 @@ import { API_TEST_ENV } from './tests/support/env';
 // 90 are in `account/assignments.ts` (83.33%), `search/task-links.ts` (84.37%),
 // `account/blockers.ts` (85%) and `account/export.ts` (89.58%) — test work, not a config change.
 // Raise this line the moment it lands.
-export default docketVitest({ env: API_TEST_ENV, testTimeout: 60_000, coverageThreshold: 89 });
+// `forks`, not the preset's `threads`: every suite here boots PGlite, which is WASM, and V8 keeps
+// one JIT page registry per process. Tearing several PGlite instances down on sibling threads
+// trips its `jit_page_->allocations_.erase(addr) == 1` check and aborts the run with SIGILL
+// *after* the last test passes — which is what has been failing CI's `Test (api)` job while every
+// assertion in it succeeded. One process per worker gives each instance its own registry.
+export default docketVitest({
+  env: API_TEST_ENV,
+  testTimeout: 60_000,
+  coverageThreshold: 89,
+  pool: 'forks',
+});

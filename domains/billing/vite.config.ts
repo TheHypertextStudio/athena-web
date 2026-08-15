@@ -10,4 +10,8 @@ import { docketVitest } from '../../tooling/vitest/preset';
  */
 export default docketVitest({
   env: { DATABASE_URL: 'pglite://memory://', SKIP_ENV_VALIDATION: '1' },
+  // PGlite is WASM, and V8 aborts the process when sibling worker threads unregister their WASM
+  // allocations against one shared JIT page registry. `forks` gives each its own; see
+  // DocketVitestOptions.pool.
+  pool: 'forks',
 });

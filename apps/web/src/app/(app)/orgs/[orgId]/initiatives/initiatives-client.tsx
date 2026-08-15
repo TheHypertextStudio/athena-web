@@ -33,11 +33,10 @@ import {
   initiativeDragObjectFromRef,
   resolveInitiativeHierarchyMutation,
 } from '@/components/initiatives/initiative-hierarchy-mutations';
-import {
-  buildInitiativeCatalog,
-  HEALTH_LABEL,
-  STATUS_LABEL,
-} from '@/components/initiatives/initiative-catalog';
+import { buildInitiativeCatalog, HEALTH_LABEL } from '@/components/initiatives/initiative-catalog';
+import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
+import { WorkStatusIcon } from '@/components/entity-display/work-status';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { filterRows, sortRows } from '@/components/views/apply-view';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { readObjectPayload } from '@/components/dnd/drag-payload';
@@ -263,7 +262,12 @@ export default function InitiativesListClient(): JSX.Element {
   const initiativePlural = useVocabulary('initiative', { plural: true });
   const [attentionIndex, setAttentionIndex] = useState(0);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
-  const catalog = useMemo(() => buildInitiativeCatalog(), []);
+  const statuses = useStatusRegistry();
+  const statusOf = useWorkStatusResolver('initiative');
+  const catalog = useMemo(
+    () => buildInitiativeCatalog({ statuses: statuses.statusesFor('initiative') }),
+    [statuses],
+  );
   // The initiative currently being dragged, and the row it is hovering as a drop (nest) target.
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -835,8 +839,15 @@ export default function InitiativesListClient(): JSX.Element {
                             </div>
                           </div>
                         </div>
-                        <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
-                          {STATUS_LABEL[item.status]}
+                        <div
+                          role="gridcell"
+                          className="flex items-center gap-2 px-3 whitespace-nowrap"
+                        >
+                          <WorkStatusIcon
+                            name={statusOf(item.status).name}
+                            category={statusOf(item.status).category}
+                          />
+                          {statusOf(item.status).name}
                         </div>
                         <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
                           {item.health ? (

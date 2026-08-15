@@ -26,12 +26,15 @@
 - **Subtasks**:
   - [x] Agree the product decisions and write the implementation plan
   - [x] Types foundation: one declaration of the category union, the DTOs, and the seeded defaults
-  - [ ] Schema, migration, and the seed that backfills every existing workspace
-  - [ ] The resolver, and unifying the two duplicate state-transition implementations
-  - [ ] Status routes: create, update, reorder, delete with remap, team fork and reset
-  - [ ] Carry `stateType` on every work DTO and retire the hardcoded key mapping in the web app
-  - [ ] Settings surface, including the first drag-to-reorder list in the codebase
-  - [ ] Amend the specs that state a Program cannot complete
+  - [x] Schema, migration, and the seed that backfills every existing workspace
+  - [x] The resolver, and unifying the two duplicate state-transition implementations
+  - [x] Status routes: create, update, reorder, delete with remap, team fork and reset
+  - [x] Carry `stateType` where a reader has no workspace to resolve a key in (the Hub)
+  - [x] Settings surface, including the first drag-to-reorder list in the codebase
+  - [x] Amend the specs that state a Program cannot complete
+  - [x] Retire the hardcoded key mapping across the web app's remaining call sites
+  - [x] Capture the surface at two widths in both themes and score it against the Craft Rubric
+  - [ ] Migrate the API test suite onto the seeded status sets
 - **Blockers**: None.
 - **Notes**: Product amendment agreed with the owner: a Program **can** complete, though it is still
   generally an ongoing concern, and Programs gain a `Proposed` status mirroring Initiatives. This
@@ -40,6 +43,23 @@
   the final slice rather than left to contradict the code.
   Per-status colour is deliberately absent: the category owns the colour, which keeps
   `DECISIONS.md:375` intact and lets a status be compared across teams at a glance.
+  An independent review of the branch found seven defects, all in this work's own new code and all
+  fixed: completing a Today item resolved the workspace's Done rather than a forked team's; the
+  resolver answered for a team it had never loaded instead of failing; the web registry could not
+  resolve a forked team at all; the create route accepted a team from another workspace and would
+  let one row become a team's whole set; a container remap left the search facet stale; and the
+  team menu could only ever mark one team as customized. The resolver now refuses a team it was not
+  asked to load, which is what turns that whole class from silent to loud.
+  The costliest defect was invisible in the diff and only showed as a hung test suite: the status
+  resolver always read through the module-level client, and five callers invoked it from inside an
+  open transaction. That does not read stale rows — it issues a query on a connection the
+  transaction already holds and stalls forever, which is exactly the hazard `organize-tool.ts`
+  documents in a comment directly above the code that broke it. The resolver now takes a reader
+  that defaults to the client, every in-transaction caller passes its handle, and one earlier
+  "92 failures" reading was really one wedged connection cascading through the suite.
+  The design review changed four things: the category header duplicated its own rows, the editor
+  title took a plural vocabulary word, the page needed `min-w-0` throughout, and the Labels page
+  still described statuses as Docket's opinions — true until this shipped.
 
 ### [TODAY-001] Today becomes an Athena-guided daily operating surface
 

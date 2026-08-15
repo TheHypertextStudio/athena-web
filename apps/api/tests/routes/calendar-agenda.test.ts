@@ -45,6 +45,7 @@ async function seedCalendarFixture() {
         teamId: base.teamId,
         title: 'Plan the calendar rollout',
         state: 'todo',
+        statusId: base.statusId('task', 'todo'),
         priority: 'high',
       })
       .returning({ id: schema.task.id }),

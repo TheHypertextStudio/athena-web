@@ -163,6 +163,10 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
     load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/publishing/page')).default,
   },
   {
+    pattern: '/orgs/[orgId]/settings/statuses',
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/statuses/page')).default,
+  },
+  {
     pattern: '/orgs/[orgId]/settings/templates',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/templates/page')).default,
   },

@@ -62,6 +62,7 @@ async function seedAthenaSession(
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  await schema.seedWorkspaceStatuses(db, assertDefined(org).id);
   const [role] = await db
     .insert(schema.role)
     .values({

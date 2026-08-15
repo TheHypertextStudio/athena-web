@@ -13,6 +13,7 @@ import { entityDragSource } from '@/lib/entity-drag';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { AgentTaskRow } from '@/components/my-work/agent-task-row';
 import { SplitTabs } from '@/components/my-work/split-tabs';
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { useMyWork } from '@/lib/use-my-work';
 
 type WorkTab = 'mine' | 'delegated';
@@ -38,6 +39,7 @@ export default function MyWorkClient(): JSX.Element {
   const projectNoun = useVocabulary('project');
 
   const [tab, setTab] = useState<WorkTab>('mine');
+  const categoryOf = useCategoryOf('task');
 
   const {
     setTasks,
@@ -52,7 +54,7 @@ export default function MyWorkClient(): JSX.Element {
     subGroupBy,
     canEdit,
     rename,
-  } = useMyWork(orgId, userId);
+  } = useMyWork(orgId, userId, categoryOf);
 
   const visible = visibleTasks(tab);
 

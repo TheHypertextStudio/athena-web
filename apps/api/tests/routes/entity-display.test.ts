@@ -18,10 +18,16 @@ beforeAll(async () => {
 
 describe('entity display routes', () => {
   it('upserts and resets Initiative display metadata outside the Initiative row', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [initiative] = await db
       .insert(schema.initiative)
-      .values({ organizationId: orgId, name: 'Transit brand', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Transit brand',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
       .returning();
     expect(initiative).toBeDefined();
     const app = appWithActor(entityDisplay, orgId, ['contribute'], humanActorId);
@@ -58,7 +64,13 @@ describe('entity display routes', () => {
     const other = await seedBaseOrg(db, schema);
     const [project] = await db
       .insert(schema.project)
-      .values({ organizationId: owner.orgId, name: 'Bus Buddies', createdBy: owner.humanActorId })
+      .values({
+        organizationId: owner.orgId,
+        name: 'Bus Buddies',
+        createdBy: owner.humanActorId,
+        status: 'planned',
+        statusId: owner.statusId('project', 'planned'),
+      })
       .returning();
     expect(project).toBeDefined();
 
@@ -80,10 +92,16 @@ describe('entity display routes', () => {
   });
 
   it('requires contribute capability for display writes', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [initiative] = await db
       .insert(schema.initiative)
-      .values({ organizationId: orgId, name: 'Read only', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Read only',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
       .returning();
     const viewer = appWithActor(entityDisplay, orgId, ['view'], humanActorId);
     const response = await viewer.request(`/initiative/${assertDefined(initiative).id}`, {

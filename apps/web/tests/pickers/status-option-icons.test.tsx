@@ -1,58 +1,92 @@
 import '@testing-library/jest-dom/vitest';
 
+import type { WorkStatusCategory } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
-import { statusGlyphType as cycleStatusGlyphType } from '@/components/cycles/cycle-status';
-import {
-  CYCLE_STATUS_OPTIONS,
-  INITIATIVE_STATUS_OPTIONS,
-  PROGRAM_STATUS_OPTIONS,
-  PROJECT_STATUS_OPTIONS,
-} from '@/components/pickers/options';
-import { statusGlyphType as programStatusGlyphType } from '@/components/programs/program-status';
-import { statusGlyphType as projectStatusGlyphType } from '@/components/projects/project-status';
+import { CYCLE_STATUS, CYCLE_STATUS_ORDER } from '@/components/cycles/cycle-status';
+import { CYCLE_STATUS_OPTIONS, statusOptions } from '@/components/pickers/options';
+import type { StatusLike } from '@/components/statuses/status-registry';
 
 /** Read the `type` prop off a `<StatusIcon type={…} />` element without rendering it. */
 function glyphType(icon: unknown): unknown {
   return (icon as { props?: { type?: unknown } }).props?.type;
 }
 
+/** A workspace status, named however this workspace chose to name it. */
+function status(
+  key: string,
+  name: string,
+  category: WorkStatusCategory,
+  description = '',
+): StatusLike {
+  return {
+    id: '' as StatusLike['id'],
+    key,
+    name,
+    description,
+    category,
+    position: 0,
+    isDefault: false,
+  };
+}
+
 /**
- * Every status picker whose lifecycle already has a leading glyph elsewhere in the product
- * (a Projects/Programs/Cycles list row) reuses that exact glyph on its picker rows, rather than
- * shipping a bare-text pill next to option rows that do carry one.
+ * Every status picker row carries the same glyph its list row renders, and that glyph comes from
+ * the status's *category* rather than from its key.
  *
  * @remarks
- * Initiative status is the deliberate exception: no `components/initiatives/*-status.tsx` glyph
- * mapping exists anywhere else in the app, so there is no icon to reuse without inventing one.
- * That test locks in the *absence* of an icon so a future glyph addition is a conscious choice,
- * not a silent gap.
+ * The pickers used to map four fixed keys per entity onto a glyph. A workspace that renamed a
+ * stage got a picker row with the wrong glyph and, for Initiatives, no glyph at all. These lock in
+ * the replacement: the option order, label, and glyph are all read straight off the set, so a
+ * workspace calling its in-progress stage "Building" gets the in-progress glyph beside it.
  */
-describe('status picker options reuse the row glyph, not a bare label', () => {
-  it('gives every project status option the same StatusIcon its list row renders', () => {
-    for (const option of PROJECT_STATUS_OPTIONS) {
+describe('status picker options', () => {
+  const set: readonly StatusLike[] = [
+    status('planned', 'Queued', 'backlog', 'Captured, waiting to be picked up.'),
+    status('building', 'Building', 'started'),
+    status('shipped', 'Shipped', 'completed'),
+  ];
+
+  it('offers one option per status, in the order the set arrives', () => {
+    expect(statusOptions(set).map((option) => option.value)).toEqual([
+      'planned',
+      'building',
+      'shipped',
+    ]);
+  });
+
+  it('labels each option with the name the workspace chose', () => {
+    expect(statusOptions(set).map((option) => option.label)).toEqual([
+      'Queued',
+      'Building',
+      'Shipped',
+    ]);
+  });
+
+  it('draws each option glyph from the status category, whatever the key is called', () => {
+    for (const option of statusOptions(set)) {
+      const source = set.find((candidate) => candidate.key === option.value);
       expect(option.icon, option.label).toBeTruthy();
-      expect(glyphType(option.icon), option.label).toBe(projectStatusGlyphType(option.value));
+      expect(glyphType(option.icon), option.label).toBe(source?.category);
     }
   });
 
-  it('gives every program status option the same StatusIcon its list row renders', () => {
-    for (const option of PROGRAM_STATUS_OPTIONS) {
-      expect(option.icon, option.label).toBeTruthy();
-      expect(glyphType(option.icon), option.label).toBe(programStatusGlyphType(option.value));
-    }
+  it('carries a status description as the supporting line, and omits it when there is none', () => {
+    const [queued, building] = statusOptions(set);
+    expect(queued?.supporting).toBe('Captured, waiting to be picked up.');
+    expect(building?.supporting).toBeUndefined();
   });
 
-  it('gives every cycle status option the same StatusIcon a cycle row renders', () => {
+  it('gives every cycle status option the glyph a cycle row renders', () => {
     for (const option of CYCLE_STATUS_OPTIONS) {
       expect(option.icon, option.label).toBeTruthy();
-      expect(glyphType(option.icon), option.label).toBe(cycleStatusGlyphType(option.value));
+      expect(glyphType(option.icon), option.label).toBe(CYCLE_STATUS[option.value].category);
     }
   });
 
-  it('leaves initiative status options icon-less — no reusable glyph exists yet', () => {
-    for (const option of INITIATIVE_STATUS_OPTIONS) {
-      expect(option.icon, option.label).toBeUndefined();
-    }
+  it('offers every declared cycle status', () => {
+    expect([...CYCLE_STATUS_OPTIONS].map((option) => option.value).sort()).toEqual(
+      [...CYCLE_STATUS_ORDER].map((cycleStatus) => cycleStatus.key).sort(),
+    );
   });
 });

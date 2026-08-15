@@ -22,6 +22,7 @@ import {
   waitForTaskInputResponse,
 } from '../../src/mcp/task-store';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -362,6 +363,7 @@ describe('taskStoreForContext', () => {
         .values({ name: slug, slug, lifecycleState: 'active' })
         .returning({ id: schema.organization.id });
       const orgId = assertDefined(org).id;
+      const statusId = await seedStatuses(schema.db, schema, orgId);
       const [team] = await schema.db
         .insert(schema.team)
         .values({ organizationId: orgId, name: 'General', key: 'GEN' })
@@ -379,6 +381,7 @@ describe('taskStoreForContext', () => {
           teamId,
           title: 'Completed work',
           state: 'done',
+          statusId: statusId('task', 'done'),
           completedAt: new Date(),
         },
         {
@@ -386,9 +389,16 @@ describe('taskStoreForContext', () => {
           teamId,
           title: 'Cancelled work',
           state: 'canceled',
+          statusId: statusId('task', 'canceled'),
           canceledAt: new Date(),
         },
-        { organizationId: orgId, teamId, title: 'Backlog work', state: 'backlog' },
+        {
+          organizationId: orgId,
+          teamId,
+          title: 'Backlog work',
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        },
       ]);
 
       // The one thing that SHOULD show up: a running MCP task for this same principal.

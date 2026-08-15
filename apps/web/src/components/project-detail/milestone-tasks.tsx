@@ -23,13 +23,16 @@ import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
+
 import type { ActorDirectory } from './actor-directory';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { formatCalendarDate } from '@/lib/format-date';
 import { usePrefetchApi } from '@/lib/query';
 import { taskDetailDef } from '@/lib/use-task-detail';
-import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
+import { categoryRank } from '@/lib/work-category';
 
 /** A task enriched with its resolved milestone association. */
 export interface MilestoneTask {
@@ -90,6 +93,9 @@ export function MilestoneTasks({
   orgId,
 }: MilestoneTasksProps): JSX.Element {
   const prefetch = usePrefetchApi();
+  const registry = useStatusRegistry();
+  const statuses = registry.statusesFor('task');
+  const categoryOf = useCategoryOf('task');
 
   /** Milestone display order: declared milestones in `sort` order, then Unscheduled last. */
   const milestoneRank = useMemo(() => {
@@ -112,6 +118,7 @@ export function MilestoneTasks({
   /** The shared aligned-column spec, derived from the task catalog (labels stay consistent). */
   const columns = useMemo(() => {
     const catalog = buildTaskCatalog({
+      statuses,
       projectLabel: 'Project',
       programLabel: 'Program',
       resolveProject: (id) => id,
@@ -130,13 +137,12 @@ export function MilestoneTasks({
         onOpenTask(task.id);
       },
     });
-  }, [resolveActor, canEdit, onRename, onOpenTask]);
+  }, [statuses, resolveActor, canEdit, onRename, onOpenTask]);
 
   /** Tasks bucketed into milestone sections, ordered by milestone then canonical workflow state. */
   const groups = useMemo<EntityTableGroup<TaskOut>[]>(() => {
     const milestoneOf = (t: MilestoneTask): string => t.milestoneId ?? UNSCHEDULED_ID;
-    const stateRank = (t: MilestoneTask): number =>
-      STATE_GROUP_ORDER.indexOf(stateTypeOf(t.task.state));
+    const stateRank = (t: MilestoneTask): number => categoryRank(categoryOf(t.task.state));
     const ordered = [...tasks].sort((a, b) => {
       const ma = milestoneRank.get(milestoneOf(a)) ?? Number.MAX_SAFE_INTEGER;
       const mb = milestoneRank.get(milestoneOf(b)) ?? Number.MAX_SAFE_INTEGER;
@@ -163,7 +169,7 @@ export function MilestoneTasks({
       label: id === UNSCHEDULED_ID ? 'Unscheduled' : milestoneLabel(id),
       rows: byId.get(id) ?? [],
     }));
-  }, [tasks, milestoneRank, milestoneLabel]);
+  }, [tasks, milestoneRank, milestoneLabel, categoryOf]);
 
   return (
     <div className="flex flex-col gap-3">

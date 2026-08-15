@@ -7,14 +7,37 @@ import { Health, Visibility } from './capability';
 import { CycleId, OrganizationId, ProjectId, ActorId, ProgramId } from './primitives';
 import { TaskOut } from './task';
 
-/** Program status — Programs are ongoing, so there is intentionally NO `completed`. */
+/**
+ * The key of a Program status in this workspace.
+ *
+ * @remarks
+ * A workspace names its own Program statuses, so this is a key into that set rather than one of a
+ * fixed list. A new workspace starts with `proposed`, `active`, `paused`, `completed`, and `archived`. The accompanying `statusCategory` is the
+ * field that carries meaning across workspaces.
+ */
 export const ProgramStatus = z
-  .enum(['active', 'paused', 'archived'])
+  .string()
+  .min(1)
   .describe(
-    'Program lifecycle status. `active` = running operation; `paused` = temporarily on hold; `archived` = retired but retained for history. There is intentionally NO `completed` — operational programs never "finish".',
+    'The key of a Program status in this workspace. A workspace defines its own Program statuses, so this is a key into that set rather than a fixed value; new workspaces start with `proposed`, `active`, `paused`, `completed`, and `archived`. The accompanying `statusCategory` is what carries meaning across workspaces.',
   );
-/** Program status value. */
+/** A Program status key. */
 export type ProgramStatus = z.infer<typeof ProgramStatus>;
+
+/**
+ * The Program statuses a new workspace starts with.
+ *
+ * @remarks
+ * A Program is generally an ongoing concern, and it can also reach an end, so the set carries
+ * both `completed` and `archived` — the second meaning retired and kept for history.
+ */
+export const DEFAULT_PROGRAM_STATUS_KEYS = [
+  'proposed',
+  'active',
+  'paused',
+  'completed',
+  'archived',
+] as const;
 
 /** Body for creating a Program (organizationId comes from the path, never the body). */
 export const ProgramCreate = z

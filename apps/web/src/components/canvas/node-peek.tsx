@@ -7,16 +7,18 @@
  * When a node is selected (single-click), the host renders this in a `<Panel>` so the user can
  * read the task's blockers / blocked-by / subtasks and take a quick action **without leaving the
  * canvas** (double-click navigates instead). The blocker lists are derived from the in-memory
- * edge set — no extra fetch. "Mark done / Reopen" mirrors the subtask toggle pattern
- * (`POST …/state` with the default `done`/`todo` keys); the full state picker stays on the task page.
+ * edge set — no extra fetch. "Mark done / Reopen" moves the task between the workspace's own
+ * completed and default statuses, resolved by the host; the full status picker stays on the task
+ * page.
  */
 import { type ActorKind, ActorAvatar, StatusIcon } from '@docket/ui/components';
 import { ArrowRight, X } from '@docket/ui/icons';
 import { Button, Surface } from '@docket/ui/primitives';
 import type { Edge, Node } from '@xyflow/react';
 
+import type { WorkStatusCategory } from '@docket/types';
+
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
-import { stateTypeOf } from '@/lib/work-state';
 
 import type { TaskNodeData } from './task-node';
 
@@ -32,8 +34,8 @@ export interface NodePeekProps {
   canEdit: boolean;
   /** Navigate to a task's detail page. */
   onNavigate: (id: string) => void;
-  /** Set a task's workflow state. */
-  onSetState: (id: string, state: string) => void;
+  /** Move a task into or out of its workspace's completed status. */
+  onSetComplete: (id: string, complete: boolean) => void;
   /** Dismiss the peek. */
   onClose: () => void;
 }
@@ -42,7 +44,8 @@ export interface NodePeekProps {
 interface Ref {
   id: string;
   title: string;
-  state: string;
+  statusName: string | undefined;
+  stateType: WorkStatusCategory;
 }
 
 /** A compact list of related tasks with status glyphs. */
@@ -68,7 +71,7 @@ function RefList({
           }}
           className="hover:bg-surface-container-high flex items-center gap-1.5 rounded px-1 py-0.5 text-left"
         >
-          <StatusIcon type={stateTypeOf(r.state)} />
+          <StatusIcon type={r.stateType} label={r.statusName} />
           <span className="text-on-surface text-body-medium truncate">{r.title}</span>
         </button>
       ))}
@@ -83,14 +86,19 @@ export default function NodePeek({
   edges,
   canEdit,
   onNavigate,
-  onSetState,
+  onSetComplete,
   onClose,
 }: NodePeekProps): React.JSX.Element {
   const data = node.data as TaskNodeData;
   const byId = new Map(nodes.map((n) => [n.id, n.data as TaskNodeData]));
   const toRef = (id: string): Ref => {
     const d = byId.get(id);
-    return { id, title: d?.title ?? 'Task', state: d?.state ?? 'backlog' };
+    return {
+      id,
+      title: d?.title ?? 'Task',
+      statusName: d?.statusName,
+      stateType: d?.stateType ?? 'backlog',
+    };
   };
 
   const blockedBy = edges
@@ -103,14 +111,14 @@ export default function NodePeek({
     .filter((e) => (e.data as { kind?: string }).kind === 'subtask' && e.source === node.id)
     .map((e) => toRef(e.target));
 
-  const isDone = stateTypeOf(data.state) === 'completed';
+  const isDone = data.stateType === 'completed';
   const assignee: { name: string; kind: ActorKind; avatarUrl?: string | null } | null =
     data.assignee;
 
   return (
     <Surface tone="raised" pad="comfortable" className="flex w-72 flex-col gap-3">
       <div className="flex items-start gap-2">
-        <StatusIcon type={stateTypeOf(data.state)} className="mt-0.5" />
+        <StatusIcon type={data.stateType} label={data.statusName} className="mt-0.5" />
         <span className="text-on-surface text-body-medium flex-1 font-medium">{data.title}</span>
         <button
           type="button"
@@ -167,7 +175,7 @@ export default function NodePeek({
             variant="outline"
             className="ml-auto"
             onClick={() => {
-              onSetState(node.id, isDone ? 'todo' : 'done');
+              onSetComplete(node.id, !isDone);
             }}
           >
             {isDone ? 'Reopen' : 'Mark done'}

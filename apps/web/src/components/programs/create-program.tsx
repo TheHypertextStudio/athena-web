@@ -45,6 +45,7 @@ import {
 } from '@/components/create-object/create-object-provider';
 import { useCreationContext } from '@/components/create-object/creation-context';
 import { WorkspacePicker } from '@/components/create-object/workspace-picker';
+import { useDefaultedStatus } from '@/components/entity-display/use-work-status';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
@@ -135,6 +136,10 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
     status: 'active',
     health: null,
     visibility: 'public',
+  });
+
+  useDefaultedStatus('program', draft.status, (key) => {
+    setField('status', key);
   });
 
   const [creating, setCreating] = useState(false);

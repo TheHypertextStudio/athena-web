@@ -200,7 +200,7 @@ describe('planTaskReconcile', () => {
  */
 describe('reconcileTasks — the Notion connector (WIL-12: Docket wins, the loss is logged)', () => {
   it('pushes Docket’s value to Notion and records Notion’s losing value under provider: notion', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const integration = one(
       await db
         .insert(schema.integration)
@@ -222,6 +222,7 @@ describe('reconcileTasks — the Notion connector (WIL-12: Docket wins, the loss
           teamId,
           title: 'Docket’s title wins',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           source: 'linked',
           sourceIntegrationId: integration.id,
           sourceSyncMode: 'mirror',
@@ -421,7 +422,7 @@ describe('reconcileTasks — startDate, estimateMinutes, and parent linkage on t
   });
 
   it('a pull without the fields leaves local startDate/estimateMinutes alone; an explicit null clears', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const integration = await seedIntegration(orgId, humanActorId);
     const localRow = one(
       await db
@@ -431,6 +432,7 @@ describe('reconcileTasks — startDate, estimateMinutes, and parent linkage on t
           teamId,
           title: 'Locally planned',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           startDate: new Date('2026-08-10T00:00:00.000Z'),
           estimateMinutes: 25,
           source: 'linked',
@@ -576,7 +578,7 @@ describe('reconcileTasks — startDate, estimateMinutes, and parent linkage on t
   });
 
   it('a pull can update the fields and re-parent under another linked task', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const integration = await seedIntegration(orgId, humanActorId);
     const parentRow = one(
       await db
@@ -586,6 +588,7 @@ describe('reconcileTasks — startDate, estimateMinutes, and parent linkage on t
           teamId,
           title: 'The parent',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           source: 'linked',
           sourceIntegrationId: integration.id,
           sourceSyncMode: 'mirror',
@@ -603,6 +606,7 @@ describe('reconcileTasks — startDate, estimateMinutes, and parent linkage on t
           teamId,
           title: 'Was top-level',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           source: 'linked',
           sourceIntegrationId: integration.id,
           sourceSyncMode: 'mirror',

@@ -26,6 +26,7 @@ import type { CalendarItemTaskLinkCreate, CalendarItemTaskRole } from '@docket/t
 
 import { buildTaskViewFilter } from '../routes/task-helpers';
 import { CapabilityError, ConflictError, NotFoundError } from '../error';
+import { landingStatus } from '../lib/work-status';
 
 type CalendarItemRow = typeof calendarItem.$inferSelect;
 type CalendarItemTaskLinkRow = typeof calendarItemTaskLink.$inferSelect;
@@ -250,8 +251,7 @@ export async function linkTaskToItem(
   // Documented default, not a hidden fallback: the DTO declares `title` as "omitted derives
   // from the calendar item title" — the same derivation the legacy create-task route uses.
   const title = body.title ?? item.title;
-  const firstState = targetTeam.workflowStates[0];
-  const state = firstState !== undefined ? firstState.key : 'backlog';
+  const landing = await landingStatus(body.organizationId, 'task', targetTeam.id);
 
   const createdRows = await db
     .insert(task)
@@ -261,7 +261,8 @@ export async function linkTaskToItem(
       createdBy: actingActor.id,
       title,
       ...(body.note !== undefined ? { description: body.note } : {}),
-      state,
+      statusId: landing.id,
+      state: landing.key,
       priority: 'none',
     })
     .returning();

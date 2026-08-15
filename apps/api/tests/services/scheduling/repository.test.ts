@@ -256,7 +256,7 @@ describe('loadBusyItems', () => {
 
 describe('loadActuals', () => {
   it('sums closed sessions per task and rolls them up by the task’s most recent work shape', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const { userId, hubId } = await seedHub('ActualsHub');
     const layerId = await seedLayer(userId);
 
@@ -264,7 +264,14 @@ describe('loadActuals', () => {
       one(
         await db
           .insert(schema.task)
-          .values({ organizationId: orgId, teamId, title, state: 'todo', createdBy: humanActorId })
+          .values({
+            organizationId: orgId,
+            teamId,
+            title,
+            state: 'todo',
+            statusId: statusId('task', 'todo'),
+            createdBy: humanActorId,
+          })
           .returning({ id: schema.task.id }),
       ).id;
     const filmingTask = await mkTask('Filming task');

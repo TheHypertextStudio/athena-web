@@ -27,7 +27,8 @@ import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/projects/health';
-import { ProjectStatusBadge } from '@/components/projects/project-status';
+import { useWorkStatus, useWorkStatusResolver } from '@/components/entity-display/use-work-status';
+import { WorkStatusBadge } from '@/components/entity-display/work-status';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** One neighbouring project in the dependency lists. */
@@ -82,33 +83,38 @@ function NeighborList({
   neighbors: readonly ProjectPeekNeighbor[];
   onSelect: (id: string) => void;
 }): JSX.Element {
+  const statusOf = useWorkStatusResolver('project');
+
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="text-on-surface-variant text-label-medium">{label}</span>
       {neighbors.length === 0 ? (
         <span className="text-on-surface-variant text-body-small">None</span>
       ) : (
-        neighbors.map((neighbor) => (
-          <button
-            key={neighbor.id}
-            type="button"
-            disabled={!neighbor.onCanvas}
-            onClick={() => {
-              onSelect(neighbor.id);
-            }}
-            className={cn(
-              'flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left',
-              neighbor.onCanvas
-                ? 'hover:bg-surface-container-high cursor-pointer'
-                : 'cursor-default opacity-60',
-            )}
-          >
-            <ProjectStatusBadge status={neighbor.status} />
-            <span className="text-on-surface text-body-small min-w-0 truncate">
-              {neighbor.name}
-            </span>
-          </button>
-        ))
+        neighbors.map((neighbor) => {
+          const status = statusOf(neighbor.status);
+          return (
+            <button
+              key={neighbor.id}
+              type="button"
+              disabled={!neighbor.onCanvas}
+              onClick={() => {
+                onSelect(neighbor.id);
+              }}
+              className={cn(
+                'flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left',
+                neighbor.onCanvas
+                  ? 'hover:bg-surface-container-high cursor-pointer'
+                  : 'cursor-default opacity-60',
+              )}
+            >
+              <WorkStatusBadge name={status.name} category={status.category} />
+              <span className="text-on-surface text-body-small min-w-0 truncate">
+                {neighbor.name}
+              </span>
+            </button>
+          );
+        })
       )}
     </div>
   );
@@ -129,6 +135,7 @@ export default function ProjectPeek({
   onSelect,
   onClose,
 }: ProjectPeekProps): JSX.Element {
+  const projectStatus = useWorkStatus('project', project.status);
   const health: Health | null = project.health ?? null;
   const percent =
     project.taskCount === 0
@@ -157,7 +164,7 @@ export default function ProjectPeek({
 
       <div className="flex flex-col gap-1.5">
         <Property label="Status">
-          <ProjectStatusBadge status={project.status} />
+          <WorkStatusBadge name={projectStatus.name} category={projectStatus.category} />
         </Property>
         <Property label="Health">
           {health === null ? (

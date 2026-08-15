@@ -115,6 +115,7 @@ describe('shared workspace sections', () => {
     expect(orgSections.map((section) => section.key)).toEqual([
       'general',
       'members',
+      'statuses',
       'work-structure',
       'labels',
       'templates',
@@ -163,6 +164,7 @@ describe('personal workspace sections', () => {
   it('keeps the rest of the shared work-configuration set', () => {
     expect(keys).toEqual([
       'general',
+      'statuses',
       'work-structure',
       'labels',
       'templates',

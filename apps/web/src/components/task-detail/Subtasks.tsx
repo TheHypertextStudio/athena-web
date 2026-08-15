@@ -8,7 +8,7 @@ import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useMemo, useState } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
-import { stateTypeOf } from '@/lib/work-state';
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
 
 /** Props for {@link Subtasks}. */
 interface SubtasksProps {
@@ -35,8 +35,8 @@ interface SubtasksProps {
  *
  * @remarks
  * Each subtask renders as a toggle row: its {@link StatusIcon} doubles as a checkbox
- * that flips the subtask's workflow state between `done` and `todo` (through the API's
- * `POST /:id/state`), with the title linking to that subtask's own detail. A progress
+ * that moves the subtask between the workspace's completed and starting statuses (through the
+ * API's `POST /:id/state`), with the title linking to that subtask's own detail. A progress
  * count (`done / total`) heads the list and a composer at the foot adds new subtasks by
  * title. Optimism is owned by the parent screen, which re-reads after each mutation.
  */
@@ -51,10 +51,11 @@ export function Subtasks({
   const [title, setTitle] = useState('');
   const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const categoryOf = useCategoryOf('task');
 
   const doneCount = useMemo(
-    () => subtasks.filter((s) => stateTypeOf(s.state) === 'completed').length,
-    [subtasks],
+    () => subtasks.filter((s) => categoryOf(s.state) === 'completed').length,
+    [subtasks, categoryOf],
   );
 
   async function add(): Promise<void> {
@@ -70,7 +71,7 @@ export function Subtasks({
   }
 
   async function toggle(subtask: TaskRef): Promise<void> {
-    const isDone = stateTypeOf(subtask.state) === 'completed';
+    const isDone = categoryOf(subtask.state) === 'completed';
     setBusyId(subtask.id);
     try {
       await onToggle(subtask, !isDone);
@@ -97,7 +98,7 @@ export function Subtasks({
       ) : (
         <ul className="flex flex-col">
           {subtasks.map((subtask) => {
-            const type = stateTypeOf(subtask.state);
+            const type = categoryOf(subtask.state);
             const done = type === 'completed';
             return (
               <li

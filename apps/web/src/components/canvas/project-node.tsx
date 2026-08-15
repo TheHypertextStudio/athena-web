@@ -7,9 +7,9 @@
  * A card mirroring {@link "./task-node"#default | TaskNode}'s shell — the same left/right
  * `Handle` placement, per-density size tokens, and selected treatment — but framed for a *bounded
  * effort* rather than a single task. It leads with the shared
- * {@link "@docket/ui/components"#StatusIcon} glyph for the project lifecycle (via
- * {@link statusGlyphType}), the project name (line-clamped), and a
- * {@link "../projects/project-status"#ProjectStatusBadge | ProjectStatusBadge}; at full density it
+ * {@link "../entity-display/work-status"#WorkStatusIcon | WorkStatusIcon} glyph for the project's
+ * status category, the project name (line-clamped), and a
+ * {@link "../entity-display/work-status"#WorkStatusBadge | WorkStatusBadge}; at full density it
  * adds a *labelled* task-completion bar and the target date. The node is purely presentational and
  * read-only — it carries no toolbar and never depends on the canvas actions context.
  *
@@ -27,7 +27,6 @@
  * or expanding the canvas morphs the same node between arrangements rather than hard-swapping it.
  */
 import type { Health, ProjectStatus } from '@docket/types';
-import { StatusIcon } from '@docket/ui/components';
 import { ArrowRight } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
@@ -35,7 +34,8 @@ import Link from 'next/link';
 import { memo } from 'react';
 
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/projects/health';
-import { ProjectStatusBadge, statusGlyphType } from '@/components/projects/project-status';
+import { useWorkStatus } from '@/components/entity-display/use-work-status';
+import { WorkStatusBadge, WorkStatusIcon } from '@/components/entity-display/work-status';
 import { formatCalendarDate } from '@/lib/format-date';
 
 import { projectNodeTransitionName } from './transition-name';
@@ -94,6 +94,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
     isRoot,
   } = data as ProjectNodeData;
   const compact = density === 'compact';
+  const resolved = useWorkStatus('project', status);
   // Low-detail (zoomed out): show just the glyph + name, dropping the badge row and progress.
   const lod = useLod();
   const showDetail = !compact && !lod;
@@ -143,7 +144,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
       </Link>
 
       <div className="flex min-w-0 items-center gap-2">
-        <StatusIcon type={statusGlyphType(status)} />
+        <WorkStatusIcon name={resolved.name} category={resolved.category} />
         <span className="text-on-surface text-label-large min-w-0 flex-1 truncate">{name}</span>
         {health !== null ? (
           <span
@@ -157,7 +158,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
       {showDetail ? (
         <>
           <div className="flex min-w-0 items-center gap-2">
-            <ProjectStatusBadge status={status} />
+            <WorkStatusBadge name={resolved.name} category={resolved.category} />
             {waiting ? (
               <span className="text-state-started text-label-small shrink-0">
                 {waitingCount} waiting

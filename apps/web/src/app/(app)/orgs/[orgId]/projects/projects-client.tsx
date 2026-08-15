@@ -27,7 +27,9 @@ import { EditableTitle } from '@/components/editor/editable-title';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import { buildProjectCatalog } from '@/components/projects/project-catalog';
 import { buildProjectTimelineCatalog } from '@/components/projects/project-timeline-catalog';
-import { ProjectStatusBadge } from '@/components/projects/project-status';
+import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
+import { WorkStatusBadge } from '@/components/entity-display/work-status';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import TimelineCanvas from '@/components/timeline/timeline-canvas';
 import TimelineDisplaySections from '@/components/timeline/timeline-display-sections';
 import { useTimelineViewport } from '@/components/timeline/use-timeline-viewport';
@@ -218,9 +220,12 @@ function ListLens({
   onRename: (projectId: string, name: string) => void;
   onOpen: (projectId: string) => void;
 }): JSX.Element {
+  const statusOf = useWorkStatusResolver('project');
+
   // Render one project row. Shared by the flat and grouped renders so a group band never diverges
   // from an ungrouped row.
   const renderRow = (item: ProjectOverviewItem): JSX.Element => {
+    const status = statusOf(item.status);
     const percent = progressPercent(item);
     // The row is the drag source for the whole Project: pressing anywhere inside it — the icon,
     // the title, any metadata cell — starts the same drag.
@@ -259,7 +264,7 @@ function ListLens({
           />
         </div>
         <div role="gridcell" className="px-3">
-          <ProjectStatusBadge status={item.status} />
+          <WorkStatusBadge name={status.name} category={status.category} />
         </div>
         <div role="gridcell" className="px-3 whitespace-nowrap">
           {item.health ? (
@@ -395,6 +400,7 @@ export default function ProjectsListClient(): JSX.Element {
   // A Project PATCH requires `contribute` server-side, so the inline-rename affordance is gated on
   // that same capability (the server still enforces it regardless).
   const canRename = useOrgCapability(members, roles, 'contribute');
+  const statuses = useStatusRegistry().statusesFor('project');
   const leadNameById = useMemo(
     () => new Map<string, string>(members.map((member) => [member.actorId, member.displayName])),
     [members],
@@ -406,6 +412,7 @@ export default function ProjectsListClient(): JSX.Element {
   const catalog = useMemo(
     () =>
       buildProjectCatalog({
+        statuses,
         leadLabel: 'Person',
         teamLabel: teamNoun,
         leadOptions: (): readonly FieldOption[] =>
@@ -416,7 +423,16 @@ export default function ProjectsListClient(): JSX.Element {
           teams.map((team) => ({ value: team.id, label: team.name })),
         resolveTeam: (id) => resolveRelationLabel(id, teamsLoading, (i) => teamNameById.get(i)),
       }),
-    [leadNameById, members, membersQ.isPending, teamNameById, teamNoun, teams, teamsLoading],
+    [
+      statuses,
+      leadNameById,
+      members,
+      membersQ.isPending,
+      teamNameById,
+      teamNoun,
+      teams,
+      teamsLoading,
+    ],
   );
   const applied = useMemo(() => applyView(projects, state, catalog), [catalog, projects, state]);
   // The dependency canvas is inherently flat (it lays out a graph, not a list), so it takes the

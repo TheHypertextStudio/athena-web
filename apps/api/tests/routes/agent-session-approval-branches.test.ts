@@ -17,7 +17,7 @@ import type {
   replyToElicitation as ReplyToElicitation,
   resolveAction as ResolveAction,
 } from '../../src/routes/agent-session-approval';
-import { getDb, one } from '../support/routes-harness';
+import { getDb, one, seedStatuses } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -49,6 +49,7 @@ async function seedFixture(label: string): Promise<Fixture> {
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id }),
   ).id;
+  const statusId = await seedStatuses(db, schema, orgId);
   const teamId = one(
     await db
       .insert(schema.team)
@@ -76,7 +77,13 @@ async function seedFixture(label: string): Promise<Fixture> {
   const taskId = one(
     await db
       .insert(schema.task)
-      .values({ organizationId: orgId, title: 'Ship it', teamId, state: 'todo' })
+      .values({
+        organizationId: orgId,
+        title: 'Ship it',
+        teamId,
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+      })
       .returning({ id: schema.task.id }),
   ).id;
   return { orgId, humanActorId, agentId, agentActorId, taskId };

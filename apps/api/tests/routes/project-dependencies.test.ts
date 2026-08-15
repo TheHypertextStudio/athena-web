@@ -10,8 +10,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import type projectsRouter from '../../src/routes/projects';
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
-import { assertDefined } from '@docket/test-utils';
+import type { StatusIdLookup } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, seedProject } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -25,16 +25,14 @@ beforeAll(async () => {
 
 /** Create a Project directly so the test can concentrate on its dependency edges. */
 async function createProject(
+  statusId: StatusIdLookup,
   organizationId: string,
   teamId: string,
   createdBy: string,
   name: string,
 ): Promise<string> {
-  const [row] = await db
-    .insert(schema.project)
-    .values({ organizationId, teamId, createdBy, name })
-    .returning({ id: schema.project.id });
-  return assertDefined(row).id;
+  const row = await seedProject(db, schema, statusId, { organizationId, teamId, createdBy, name });
+  return row.id;
 }
 
 /** Add `blocking → blocked` by calling the blocked Project's relative dependency route. */
@@ -52,10 +50,10 @@ async function addEdge(
 
 describe('project dependencies', () => {
   it('lists a directed edge from both Project perspectives', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const app = appWithActor(projects, orgId, ['contribute'], humanActorId);
-    const blocker = await createProject(orgId, teamId, humanActorId, 'Platform work');
-    const blocked = await createProject(orgId, teamId, humanActorId, 'Launch work');
+    const blocker = await createProject(statusId, orgId, teamId, humanActorId, 'Platform work');
+    const blocked = await createProject(statusId, orgId, teamId, humanActorId, 'Launch work');
 
     expect((await addEdge(app, blocked, blocker)).status).toBe(200);
 
@@ -75,11 +73,11 @@ describe('project dependencies', () => {
   });
 
   it('rejects a cycle-closing Project dependency', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const app = appWithActor(projects, orgId, ['contribute'], humanActorId);
-    const a = await createProject(orgId, teamId, humanActorId, 'A');
-    const b = await createProject(orgId, teamId, humanActorId, 'B');
-    const c = await createProject(orgId, teamId, humanActorId, 'C');
+    const a = await createProject(statusId, orgId, teamId, humanActorId, 'A');
+    const b = await createProject(statusId, orgId, teamId, humanActorId, 'B');
+    const c = await createProject(statusId, orgId, teamId, humanActorId, 'C');
 
     expect((await addEdge(app, b, a)).status).toBe(200);
     expect((await addEdge(app, c, b)).status).toBe(200);

@@ -18,7 +18,8 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { buildProgramCatalog } from '@/components/programs/program-catalog';
-import { statusGlyphType } from '@/components/programs/program-status';
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
 import { resolveRelationLabel, type FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
@@ -36,7 +37,7 @@ import { useOrgCapability } from '@/lib/use-org-capability';
  * A Client Component reached at `/orgs/[orgId]/programs`. Programs are *ongoing*, so each
  * {@link EntityListRow} leads with a liveness status glyph and surfaces the program's owner,
  * its child-work scope ("N projects" + "M tasks"), and — in the trailing slot — its
- * {@link HealthDot | health} and lifecycle {@link ProgramStatusBadge}. The roster renders as one
+ * {@link HealthDot | health} and its lifecycle status badge. The roster renders as one
  * tonal list of rows (`EntityList` `tone="tonal"`), matching the Projects/Initiatives treatment —
  * surface-step separation over borders (design-system §5.1).
  *
@@ -183,17 +184,21 @@ export default function ProgramsListClient(): JSX.Element {
     return counts;
   }, [tasks, programByProjectId]);
 
+  const statuses = useStatusRegistry().statusesFor('program');
+  const categoryOf = useCategoryOf('program');
+
   /** The program field catalog driving the toolbar + the apply engine. */
   const catalog = useMemo(
     () =>
       buildProgramCatalog({
+        statuses,
         ownerLabel: 'Owner',
         ownerOptions: (): readonly FieldOption[] =>
           members.map((m) => ({ value: m.actorId, label: m.displayName })),
         resolveOwner: (id) =>
           resolveRelationLabel(id, membersQ.isPending, (i) => ownerNameById.get(i)),
       }),
-    [members, membersQ.isPending, ownerNameById],
+    [statuses, members, membersQ.isPending, ownerNameById],
   );
 
   /** Filter + sort + group the loaded roster client-side per the active view state. */
@@ -296,10 +301,7 @@ export default function ProgramsListClient(): JSX.Element {
             <section key={group.id} className="flex flex-col gap-2">
               <h2 className="text-on-surface-variant flex items-center gap-2 px-1 text-xs font-medium">
                 {state.groupBy?.field === 'status' && group.id !== EMPTY_GROUP_ID ? (
-                  <StatusIcon
-                    type={statusGlyphType(group.id as ProgramOut['status'])}
-                    label={group.label}
-                  />
+                  <StatusIcon type={categoryOf(group.id)} label={group.label} />
                 ) : null}
                 <span>{group.label}</span>
                 <span className="text-on-surface-variant/70 tabular-nums">{group.rows.length}</span>

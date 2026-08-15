@@ -107,9 +107,11 @@ async function seedTwoWorkspaces() {
     userId,
     personalOrgId: personal.orgId,
     personalActorId,
+    personalStatusId: personal.statusId,
     lvbtOrgId: lvbt.orgId,
     lvbtTeamId: lvbt.teamId,
     lvbtActorId,
+    lvbtStatusId: lvbt.statusId,
     integrationId,
   };
 }
@@ -279,6 +281,8 @@ describe('an email matching a rule becomes a task in the workspace the rule name
           teamId: w.lvbtTeamId,
           name: 'LVBT Partnerships',
           createdBy: w.lvbtActorId,
+          status: 'planned',
+          statusId: w.lvbtStatusId('project', 'planned'),
         })
         .returning({ id: schema.project.id }),
     ).id;
@@ -474,6 +478,7 @@ describe('a later event about the same item updates the linked task', () => {
           teamId: (await seedTeamlessLookup(w.personalOrgId)).teamId,
           title: 'Mirrored: Ship the booking form',
           state: 'todo',
+          statusId: w.personalStatusId('task', 'todo'),
           createdBy: w.personalActorId,
         })
         .returning(),
@@ -587,6 +592,8 @@ describe('routing declines rather than guesses', () => {
           teamId: foreign.teamId,
           name: 'Someone else’s project',
           createdBy: foreign.humanActorId,
+          status: 'planned',
+          statusId: foreign.statusId('project', 'planned'),
         })
         .returning({ id: schema.project.id }),
     ).id;

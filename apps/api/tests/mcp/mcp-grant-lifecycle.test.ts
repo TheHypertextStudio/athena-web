@@ -112,6 +112,8 @@ async function seedWorkspace(capabilities: readonly Capability[]): Promise<Works
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id }),
   ).id;
+  // The tools under test create work in this workspace, and work needs its status set to exist.
+  await harness.seedStatuses(db, schema, orgId);
 
   const roleId = harness.one(
     await db

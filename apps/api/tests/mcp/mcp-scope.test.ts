@@ -24,6 +24,7 @@ import {
 } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 import { seedConsentedClient, seedSkipConsentClient } from '../support/oauth-grant';
+import type { seedStatuses as SeedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -33,6 +34,10 @@ let registerResources!: typeof RegisterResources;
 let scopeMod!: typeof ScopeModule;
 let serverMod!: typeof ServerModule;
 let authMod!: typeof AuthModule;
+// Imported lazily, like the MCP modules below: `routes-harness` pulls in the API's env slice,
+// which reads `MCP_RESOURCE_URL`/`WEB_URL` once at module load — before `vi.stubEnv` has run if
+// this were a top-level import.
+let seedStatuses!: typeof SeedStatuses;
 
 beforeAll(async () => {
   // Configure OAuth before importing MCP modules that read the API env slice.
@@ -46,6 +51,7 @@ beforeAll(async () => {
   scopeMod = await import('../../src/mcp/scope');
   serverMod = await import('../../src/mcp/server');
   authMod = await import('../../src/mcp/auth');
+  ({ seedStatuses } = await import('../support/routes-harness'));
 });
 
 afterEach(() => {
@@ -68,6 +74,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [r] = await db
     .insert(schema.role)
@@ -118,7 +125,14 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
 
   const [tk] = await db
     .insert(schema.task)
-    .values({ organizationId: orgId, title: 'Ship', teamId, state: 'todo', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      title: 'Ship',
+      teamId,
+      state: 'todo',
+      statusId: statusId('task', 'todo'),
+      createdBy: actorId,
+    })
     .returning({ id: schema.task.id });
   return { userId, orgId, teamId, taskId: assertDefined(tk).id, email };
 }

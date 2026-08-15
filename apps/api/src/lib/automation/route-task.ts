@@ -56,6 +56,7 @@ import { emitEvent } from '../../routes/event-emit';
 import { enqueueSearchUpsert } from '../../search/write-through';
 import { resolveLandingTarget } from '../task-landing';
 import type { AutomationEvent } from './event';
+import { resolveTaskStatus } from '../work-status';
 
 /**
  * `task.route` params — the routing target, as stored on the rule.
@@ -252,8 +253,22 @@ async function applyParamsToTask(
   targetOrgId: string,
   params: RouteTaskParams,
 ): Promise<void> {
+  // The status has to be resolved against the task's own team, and its key and id written
+  // together — the composite foreign key refuses a row where the two disagree.
+  let statusPatch: { statusId: string; state: string } | undefined;
+  if (params.state !== undefined) {
+    const [owner] = await db
+      .select({ teamId: task.teamId })
+      .from(task)
+      .where(and(eq(task.id, taskId), eq(task.organizationId, targetOrgId)))
+      .limit(1);
+    if (owner) {
+      const resolved = await resolveTaskStatus(targetOrgId, owner.teamId, params.state);
+      statusPatch = { statusId: resolved.statusId, state: resolved.state };
+    }
+  }
   const patch = {
-    ...(params.state !== undefined ? { state: params.state } : {}),
+    ...(statusPatch ?? {}),
     ...(params.priority !== undefined ? { priority: params.priority } : {}),
   };
   if (Object.keys(patch).length > 0) {
@@ -407,6 +422,12 @@ export async function routeInboundItemToTask(
       ? params.projectId
       : null;
 
+  // A rule may name the status to file into; otherwise the work lands where new work lands.
+  const routedStatus =
+    params.state === undefined
+      ? { statusId: landing.statusId, state: landing.state }
+      : await resolveTaskStatus(targetOrgId, params.teamId ?? landing.teamId, params.state);
+
   const created = await db
     .transaction(async (tx) => {
       const [taskRow] = await tx
@@ -417,7 +438,8 @@ export async function routeInboundItemToTask(
           description: item.description,
           teamId: params.teamId ?? landing.teamId,
           projectId,
-          state: params.state ?? landing.state,
+          statusId: routedStatus.statusId,
+          state: routedStatus.state,
           priority: params.priority ?? item.priority ?? 'none',
           assigneeId: landing.assigneeId,
           cycleId: landing.cycleId,

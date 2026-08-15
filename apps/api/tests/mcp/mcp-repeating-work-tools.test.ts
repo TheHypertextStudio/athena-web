@@ -45,6 +45,8 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id }),
   );
+  // The tools under test create work in this workspace, and work needs its status set to exist.
+  await schema.seedWorkspaceStatuses(db, org.id);
   const role = first(
     await db
       .insert(schema.role)

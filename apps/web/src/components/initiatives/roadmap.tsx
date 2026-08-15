@@ -27,30 +27,16 @@ import { Flag, FolderKanban } from '@docket/ui/icons';
 import { dragSourceProps } from '@docket/ui/lib/draggable';
 import type { JSX } from 'react';
 
+import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { entityDragSource } from '@/lib/entity-drag';
 
 import { formatAxisTick, formatDate, toMillis } from './format-date';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL, HEALTH_UNKNOWN_FILL_CLASS } from './health';
 import { computeWindow, pct, placeBars } from './roadmap-math';
 
-/** Human label for a Project/Program lifecycle status. */
-const STATUS_LABEL: Record<string, string> = {
-  planned: 'Planned',
-  active: 'Active',
-  paused: 'Paused',
-  archived: 'Archived',
-  completed: 'Completed',
-  canceled: 'Canceled',
-};
-
 /** The health-keyed fill class for a bar/swatch, defaulting to the neutral no-verdict fill. */
 function fillFor(health: Health | null): string {
   return health ? HEALTH_FILL_CLASS[health] : HEALTH_UNKNOWN_FILL_CLASS;
-}
-
-/** Resolve a status string to its display label, falling back to the raw value. */
-function statusLabel(status: string): string {
-  return STATUS_LABEL[status] ?? status;
 }
 
 /** Props for {@link Roadmap}. */
@@ -96,6 +82,10 @@ export function Roadmap({
   projectNounPlural,
   onOpenProject,
 }: RoadmapProps): JSX.Element {
+  // A lane is a Program and a bar is a Project, and each names its stage from its own workspace
+  // set — so the two resolve through different sets rather than one shared label table.
+  const programStatusOf = useWorkStatusResolver('program');
+  const projectStatusOf = useWorkStatusResolver('project');
   const { placed, unscheduled } = placeBars(bars);
   const window = computeWindow(placed);
   // The Initiative's own target date is drawn as a milestone marker when it falls inside the
@@ -141,7 +131,7 @@ export function Roadmap({
                   {lane.name}
                 </span>
                 <span className="text-on-surface-variant shrink-0 text-xs">
-                  {statusLabel(lane.status)}
+                  {programStatusOf(lane.status).name}
                 </span>
                 <span className="text-on-surface-variant shrink-0 text-xs">
                   {lane.health ? HEALTH_LABEL[lane.health] : 'No verdict'}
@@ -230,7 +220,7 @@ export function Roadmap({
                       onClick={() => {
                         onOpenProject(bar.id);
                       }}
-                      aria-label={`${bar.name} — ${statusLabel(bar.status)}, ${spanCopy}${
+                      aria-label={`${bar.name} — ${projectStatusOf(bar.status).name}, ${spanCopy}${
                         bar.health ? `, ${HEALTH_LABEL[bar.health]}` : ''
                       }`}
                       {...dragProps}
@@ -272,7 +262,7 @@ export function Roadmap({
                       onClick={() => {
                         onOpenProject(bar.id);
                       }}
-                      aria-label={`${bar.name} — ${statusLabel(bar.status)}, unscheduled${
+                      aria-label={`${bar.name} — ${projectStatusOf(bar.status).name}, unscheduled${
                         bar.health ? `, ${HEALTH_LABEL[bar.health]}` : ''
                       }`}
                       {...dragProps}
@@ -286,7 +276,9 @@ export function Roadmap({
                         className={cn('size-2 rounded-full', fillFor(bar.health))}
                       />
                       <span className="text-on-surface truncate">{bar.name}</span>
-                      <span className="text-on-surface-variant">{statusLabel(bar.status)}</span>
+                      <span className="text-on-surface-variant">
+                        {projectStatusOf(bar.status).name}
+                      </span>
                     </button>
                   </li>
                 );

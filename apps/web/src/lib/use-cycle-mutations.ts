@@ -12,11 +12,12 @@ import { useCallback, useMemo, useState } from 'react';
 
 import type { CarryoverItem, CarryoverTarget } from '@/components/cycles/carryover-row';
 import { formatWindow } from '@/components/cycles/format-window';
-import { stateTypeOf } from '@/lib/work-state';
+
 import { api } from './api';
 import type { CycleDetailData } from './fetch-cycle-detail';
 import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
+import type { CategoryOfState } from './work-category';
 
 /** CycleMutations describes the use cycle mutations data contract shared by the hook or component. */
 export interface CycleMutations {
@@ -45,7 +46,18 @@ export interface CycleMutations {
   backfillError: string | null;
 }
 
-/** useCycleMutations coordinates use cycle mutations state, loading, and mutations for its screen. */
+/**
+ * useCycleMutations coordinates use cycle mutations state, loading, and mutations for its screen.
+ *
+ * @param orgId - The workspace in view.
+ * @param cycleId - The cycle being closed or edited.
+ * @param cycleNounLower - The workspace's word for a cycle, lower-cased, for copy.
+ * @param tasks - The cycle's tasks.
+ * @param otherCycles - The cycles unfinished work can be carried into.
+ * @param detailKey - The query key for the cycle detail read.
+ * @param categoryOf - Resolves a task's status key to its category, from the status registry.
+ * @returns the screen's mutation contract.
+ */
 export function useCycleMutations(
   orgId: string,
   cycleId: string,
@@ -53,6 +65,7 @@ export function useCycleMutations(
   tasks: readonly TaskOut[],
   otherCycles: readonly CycleOut[],
   detailKey: readonly string[],
+  categoryOf: CategoryOfState,
 ): CycleMutations {
   const queryClient = useQueryClient();
   const cyclesKey = useMemo(() => queryKeys.cycles(orgId), [orgId]);
@@ -64,8 +77,8 @@ export function useCycleMutations(
   const [backfillError, setBackfillError] = useState<string | null>(null);
 
   const incompleteTasks = useMemo(
-    () => tasks.filter((task) => stateTypeOf(task.state) !== 'completed'),
-    [tasks],
+    () => tasks.filter((task) => categoryOf(task.state) !== 'completed'),
+    [tasks, categoryOf],
   );
 
   // A destination is identified by what a reader recognizes: the author's name when there is one,
@@ -89,14 +102,14 @@ export function useCycleMutations(
         taskId: task.id,
         organizationId: task.organizationId,
         title: task.title,
-        stateType: stateTypeOf(task.state),
+        stateType: categoryOf(task.state),
         action: defaultAction,
         targetCycleId: defaultAction === 'move' ? defaultTarget : null,
       })),
     );
     setCloseError(null);
     setDialogOpen(true);
-  }, [incompleteTasks, moveTargets]);
+  }, [incompleteTasks, moveTargets, categoryOf]);
 
   const onActionChange = useCallback(
     (taskId: string, action: CycleCarryoverAction) => {

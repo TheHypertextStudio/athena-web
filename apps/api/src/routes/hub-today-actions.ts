@@ -8,6 +8,7 @@ import { CapabilityError, ConflictError, NotFoundError } from '../error';
 import { finishTaskStateTransition, writeTaskStateTransition } from '../lib/task-state';
 import { resolveResourceAccess, resourceAccessKey } from '../permissions/resource-access';
 import { toTaskItem } from './hub-helpers';
+import { loadStatusSets } from '../lib/work-status';
 
 /**
  * Complete one caller-owned Today row and its Task workflow in one transaction.
@@ -61,7 +62,7 @@ export async function completeTodayItem(
 
   const result = await db.transaction(async (tx) => {
     const rows = await tx
-      .select({ plan: dailyPlanItem, work: task, workflowStates: team.workflowStates })
+      .select({ plan: dailyPlanItem, work: task })
       .from(dailyPlanItem)
       .innerJoin(task, eq(task.id, dailyPlanItem.refTaskId))
       .innerJoin(team, eq(team.id, task.teamId))
@@ -79,14 +80,23 @@ export async function completeTodayItem(
       .for('update');
     const row = rows[0];
     if (!row) throw new NotFoundError('Today item not found');
-    const completedState = [...row.workflowStates]
-      .filter((state) => state.type === 'completed')
-      .sort((left, right) => left.position - right.position)[0];
-    if (!completedState) throw new ConflictError('This workflow has no completed state');
+    // Resolved against the task's own team, because a team that keeps its own statuses completes
+    // work into its own Done rather than the workspace's.
+    const sets = await loadStatusSets(
+      ref.organizationId,
+      { entityTypes: ['task'], teamIds: [row.work.teamId] },
+      // Read through the open transaction: the module-level client would stall on a connection
+      // this transaction already holds.
+      tx,
+    );
+    const completedState = sets.firstOfCategory('task', 'completed', row.work.teamId);
+    /* v8 ignore next -- @preserve every set is required to keep a way to finish */
+    if (!completedState) throw new ConflictError('This workspace has no completed status');
 
     const now = new Date();
     const mutation = await writeTaskStateTransition(tx, {
       before: row.work,
+      statusId: completedState.id,
       state: completedState.key,
       completedAt: now,
       canceledAt: null,
@@ -96,10 +106,14 @@ export async function completeTodayItem(
       .update(dailyPlanItem)
       .set({ status: 'done' })
       .where(and(eq(dailyPlanItem.id, row.plan.id), eq(dailyPlanItem.hubId, owned.hubId)));
-    return mutation;
+    return { ...mutation, completedCategory: completedState.category };
   });
 
   await finishTaskStateTransition({ actorId: membership.actor.id }, result);
 
-  return { task: toTaskItem(result.after), planItemId, planStatus: 'done' };
+  return {
+    task: toTaskItem(result.after, result.completedCategory),
+    planItemId,
+    planStatus: 'done',
+  };
 }

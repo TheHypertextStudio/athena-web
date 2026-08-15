@@ -25,7 +25,7 @@ describe('POST /cron/search-index', () => {
 
   it('processes pending search-index jobs when authorized', async () => {
     const { db, schema, cron } = await setup();
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const taskRow = one(
       await db
         .insert(schema.task)
@@ -35,6 +35,7 @@ describe('POST /cron/search-index', () => {
           title: 'Cron indexed task',
           description: 'Cron search body',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
         })
         .returning(),

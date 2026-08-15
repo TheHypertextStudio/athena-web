@@ -24,6 +24,7 @@ import {
   SelfEscalationError,
 } from '../../src/write-guards';
 import { assertDefined } from '@docket/test-utils';
+import { seedWorkspaceStatuses, statusLookupKey } from '@docket/db';
 
 let db!: Database;
 let orgId!: string;
@@ -58,8 +59,14 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       'pending_deletion',
       'deleted'
     );
-    create type program_status as enum ('active', 'paused', 'archived');
-    create type project_status as enum ('planned', 'active', 'completed', 'canceled');
+    create type work_status_entity as enum ('task', 'project', 'program', 'initiative');
+    create type work_status_category as enum (
+      'backlog',
+      'unstarted',
+      'started',
+      'completed',
+      'canceled'
+    );
     create type health as enum ('on_track', 'at_risk', 'off_track');
     create type task_priority as enum ('none', 'urgent', 'high', 'medium', 'low');
     create type provenance_source as enum ('native', 'linked');
@@ -147,6 +154,26 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       archived_at timestamp
     );
 
+    create table "work_status" (
+      id text primary key,
+      organization_id text not null,
+      created_by text,
+      created_at timestamp not null default now(),
+      updated_at timestamp not null default now(),
+      archived_at timestamp,
+      entity_type work_status_entity not null,
+      team_id text,
+      key text not null,
+      name text not null,
+      description text,
+      category work_status_category not null,
+      position integer not null,
+      is_default boolean not null default false
+    );
+
+    create unique index "work_status_id_key_org_uq"
+      on "work_status" (id, key, organization_id);
+
     create table "program" (
       id text primary key,
       organization_id text not null,
@@ -158,7 +185,8 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       summary text,
       description text,
       owner_id text,
-      status program_status not null default 'active',
+      status text not null default 'active',
+      status_id text not null,
       health health,
       visibility visibility not null default 'public',
       ancestor_path text[] not null default '{}'::text[]
@@ -177,7 +205,8 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       lead_id text,
       program_id text,
       team_id text,
-      status project_status not null default 'planned',
+      status text not null default 'planned',
+      status_id text not null,
       health health,
       start_date timestamp,
       target_date timestamp,
@@ -201,6 +230,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       description text,
       team_id text not null,
       state text not null,
+      status_id text not null,
       priority task_priority not null default 'none',
       assignee_id text,
       delegate_id text,
@@ -338,19 +368,36 @@ beforeAll(async () => {
       await db.insert(team).values({ organizationId: orgId, name: 'Core', key: 'CORE' }).returning()
     )[0],
   ).id;
+  const statuses = await seedWorkspaceStatuses(db, orgId);
+  const statusId = (entityType: 'task' | 'project' | 'program' | 'initiative', key: string) => {
+    const id = statuses.get(statusLookupKey(entityType, key));
+    if (id === undefined) throw new Error(`no seeded ${entityType} status ${key}`);
+    return id;
+  };
   isolatedTeamId = assertDefined(
     (
       await db.insert(team).values({ organizationId: orgId, name: 'Iso', key: 'ISO' }).returning()
     )[0],
   ).id;
   programId = assertDefined(
-    (await db.insert(program).values({ organizationId: orgId, name: 'Ops' }).returning())[0],
+    (
+      await db
+        .insert(program)
+        .values({ organizationId: orgId, name: 'Ops', statusId: statusId('program', 'active') })
+        .returning()
+    )[0],
   ).id;
   projectId = assertDefined(
     (
       await db
         .insert(project)
-        .values({ organizationId: orgId, name: 'Proj', teamId, programId })
+        .values({
+          organizationId: orgId,
+          name: 'Proj',
+          teamId,
+          programId,
+          statusId: statusId('project', 'planned'),
+        })
         .returning()
     )[0],
   ).id;
@@ -358,7 +405,12 @@ beforeAll(async () => {
     (
       await db
         .insert(project)
-        .values({ organizationId: orgId, name: 'TeamOnlyProj', teamId })
+        .values({
+          organizationId: orgId,
+          name: 'TeamOnlyProj',
+          teamId,
+          statusId: statusId('project', 'planned'),
+        })
         .returning()
     )[0],
   ).id;
@@ -366,7 +418,12 @@ beforeAll(async () => {
     (
       await db
         .insert(project)
-        .values({ organizationId: orgId, name: 'ProgramOnlyProj', programId })
+        .values({
+          organizationId: orgId,
+          name: 'ProgramOnlyProj',
+          programId,
+          statusId: statusId('project', 'planned'),
+        })
         .returning()
     )[0],
   ).id;
@@ -374,7 +431,12 @@ beforeAll(async () => {
     (
       await db
         .insert(project)
-        .values({ organizationId: orgId, name: 'ExpiredProj', teamId: isolatedTeamId })
+        .values({
+          organizationId: orgId,
+          name: 'ExpiredProj',
+          teamId: isolatedTeamId,
+          statusId: statusId('project', 'planned'),
+        })
         .returning()
     )[0],
   ).id;
@@ -382,7 +444,12 @@ beforeAll(async () => {
     (
       await db
         .insert(project)
-        .values({ organizationId: orgId, name: 'FutureProj', teamId: isolatedTeamId })
+        .values({
+          organizationId: orgId,
+          name: 'FutureProj',
+          teamId: isolatedTeamId,
+          statusId: statusId('project', 'planned'),
+        })
         .returning()
     )[0],
   ).id;
@@ -395,6 +462,7 @@ beforeAll(async () => {
           title: 'Full task',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           projectId,
           programId,
         })
@@ -405,7 +473,13 @@ beforeAll(async () => {
     (
       await db
         .insert(task)
-        .values({ organizationId: orgId, title: 'Bare task', teamId, state: 'todo' })
+        .values({
+          organizationId: orgId,
+          title: 'Bare task',
+          teamId,
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+        })
         .returning()
     )[0],
   ).id;

@@ -14,7 +14,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import { sweepLegacyMentions } from '../../src/content/legacy-mention-sweep';
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { getDb, one, seedBaseOrg, type StatusIdLookup } from '../support/routes-harness';
 
 let schema: typeof DbModule;
 let db: typeof DbModule.db;
@@ -25,21 +25,44 @@ beforeAll(async () => {
 });
 
 /** Create a task carrying `description`, and hand back its id. */
-async function seedTask(orgId: string, teamId: string, description: string): Promise<string> {
+async function seedTask(
+  statusId: StatusIdLookup,
+  orgId: string,
+  teamId: string,
+  description: string,
+): Promise<string> {
   return one(
     await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'Carrier', description, state: 'todo' })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Carrier',
+        description,
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+      })
       .returning({ id: schema.task.id }),
   ).id;
 }
 
 /** Create a task with a specific `title` and no description, and hand back its id. */
-async function seedTaskTitled(orgId: string, teamId: string, title: string): Promise<string> {
+async function seedTaskTitled(
+  statusId: StatusIdLookup,
+  orgId: string,
+  teamId: string,
+  title: string,
+): Promise<string> {
   return one(
     await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title, state: 'todo' })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title,
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+      })
       .returning({ id: schema.task.id }),
   ).id;
 }
@@ -55,9 +78,10 @@ async function readTask(id: string): Promise<string> {
 
 describe('sweepLegacyMentions', () => {
   it('rewrites a shortcode into the link form and leaves the rest of the prose alone', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const target = await seedTask(orgId, teamId, 'Ship it');
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
+    const target = await seedTask(statusId, orgId, teamId, 'Ship it');
     const carrier = await seedTask(
+      statusId,
       orgId,
       teamId,
       `Blocked by [mention kind="task" id="${target}" label="Ship it"] until Friday.`,
@@ -75,9 +99,10 @@ describe('sweepLegacyMentions', () => {
   });
 
   it('looks up the real name for a shortcode with no captured label, not a placeholder', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const target = await seedTaskTitled(orgId, teamId, 'Renovate the loading dock');
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
+    const target = await seedTaskTitled(statusId, orgId, teamId, 'Renovate the loading dock');
     const carrier = await seedTask(
+      statusId,
       orgId,
       teamId,
       `Blocked by [mention kind="task" id="${target}"] until Friday.`,
@@ -92,23 +117,35 @@ describe('sweepLegacyMentions', () => {
   });
 
   it('looks up the real name for every other mentionable kind, not only task', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Platform rebuild' })
+        .values({
+          organizationId: orgId,
+          name: 'Platform rebuild',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const programId = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'Growth initiatives' })
+        .values({
+          organizationId: orgId,
+          name: 'Growth initiatives',
+          statusId: statusId('program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     ).id;
     const initiativeId = one(
       await db
         .insert(schema.initiative)
-        .values({ organizationId: orgId, name: 'Q3 expansion' })
+        .values({
+          organizationId: orgId,
+          name: 'Q3 expansion',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning({ id: schema.initiative.id }),
     ).id;
     const cycleId = one(
@@ -126,6 +163,7 @@ describe('sweepLegacyMentions', () => {
     ).id;
 
     const carrier = await seedTask(
+      statusId,
       orgId,
       teamId,
       [
@@ -148,7 +186,7 @@ describe('sweepLegacyMentions', () => {
   });
 
   it('treats a cycle with no name as unresolved, not a lookup failure', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const cycleId = one(
       await db
         .insert(schema.cycle)
@@ -162,7 +200,12 @@ describe('sweepLegacyMentions', () => {
         })
         .returning({ id: schema.cycle.id }),
     ).id;
-    const carrier = await seedTask(orgId, teamId, `See [mention kind="cycle" id="${cycleId}"].`);
+    const carrier = await seedTask(
+      statusId,
+      orgId,
+      teamId,
+      `See [mention kind="cycle" id="${cycleId}"].`,
+    );
 
     await sweepLegacyMentions(db);
 
@@ -171,10 +214,20 @@ describe('sweepLegacyMentions', () => {
 
   it('never resolves a name across orgs, even when the id belongs to a real task elsewhere', async () => {
     const other = await seedBaseOrg(db, schema);
-    const foreign = await seedTaskTitled(other.orgId, other.teamId, 'Confidential renovation plan');
+    const foreign = await seedTaskTitled(
+      other.statusId,
+      other.orgId,
+      other.teamId,
+      'Confidential renovation plan',
+    );
 
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const carrier = await seedTask(orgId, teamId, `See [mention kind="task" id="${foreign}"].`);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
+    const carrier = await seedTask(
+      statusId,
+      orgId,
+      teamId,
+      `See [mention kind="task" id="${foreign}"].`,
+    );
 
     await sweepLegacyMentions(db);
 
@@ -185,10 +238,15 @@ describe('sweepLegacyMentions', () => {
   });
 
   it('falls back to a kind-based label only when the referenced entity is gone', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const target = await seedTask(orgId, teamId, 'Temporary');
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
+    const target = await seedTask(statusId, orgId, teamId, 'Temporary');
     await db.delete(schema.task).where(eq(schema.task.id, target));
-    const carrier = await seedTask(orgId, teamId, `See [mention kind="task" id="${target}"].`);
+    const carrier = await seedTask(
+      statusId,
+      orgId,
+      teamId,
+      `See [mention kind="task" id="${target}"].`,
+    );
 
     await sweepLegacyMentions(db);
 
@@ -196,8 +254,8 @@ describe('sweepLegacyMentions', () => {
   });
 
   it('finds prose in a `body` column too, not only `description`', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const target = await seedTask(orgId, teamId, 'Referenced');
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
+    const target = await seedTask(statusId, orgId, teamId, 'Referenced');
     const commentId = one(
       await db
         .insert(schema.comment)
@@ -220,10 +278,10 @@ describe('sweepLegacyMentions', () => {
   });
 
   it('leaves a row it cannot convert exactly as it found it, and counts it', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     // A shortcode naming a kind with no route. Rewriting it would invent a destination.
     const prose = 'Ref [mention kind="unicorn" id="u1" label="Nope"]';
-    const carrier = await seedTask(orgId, teamId, prose);
+    const carrier = await seedTask(statusId, orgId, teamId, prose);
 
     const result = await sweepLegacyMentions(db);
     expect(result.unchanged).toBeGreaterThanOrEqual(1);
@@ -231,9 +289,10 @@ describe('sweepLegacyMentions', () => {
   });
 
   it('is idempotent, so a sweep that dies halfway can simply run again', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const target = await seedTask(orgId, teamId, 'Twice');
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
+    const target = await seedTask(statusId, orgId, teamId, 'Twice');
     const carrier = await seedTask(
+      statusId,
       orgId,
       teamId,
       `[mention kind="task" id="${target}" label="Twice"]`,
@@ -248,9 +307,9 @@ describe('sweepLegacyMentions', () => {
   });
 
   it('does not touch prose that never held a shortcode', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const prose = 'Plain words with a [link](https://example.com) and nothing else.';
-    const carrier = await seedTask(orgId, teamId, prose);
+    const carrier = await seedTask(statusId, orgId, teamId, prose);
 
     await sweepLegacyMentions(db);
     expect(await readTask(carrier)).toBe(prose);

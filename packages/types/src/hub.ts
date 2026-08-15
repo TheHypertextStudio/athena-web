@@ -26,6 +26,7 @@ import {
   TaskId,
 } from './primitives';
 import { SearchDocumentKind, SearchOut } from './search';
+import { WorkStatusCategory } from './work-status';
 
 /**
  * An organization "chip" — the minimal org identity stamped onto every aggregated Hub
@@ -59,8 +60,11 @@ export const HubTaskItem = z
     state: z
       .string()
       .describe(
-        "The Task's current workflow state in its org (e.g. `todo`, `in_progress`, `done`). Free-form because each org can define its own states.",
+        "The key of the Task's current status in its own workspace (e.g. `todo`, `in_progress`, `done`). A workspace names its own statuses, so this key means something only inside that workspace.",
       ),
+    stateType: WorkStatusCategory.describe(
+      'The category the status behaves as. The Hub gathers work from several workspaces at once, each with its own status names, so this is what a status glyph and any grouping across them read.',
+    ),
     priority: Priority.describe("The Task's priority level."),
     assigneeId: ActorId.nullable()
       .optional()

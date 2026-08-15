@@ -20,19 +20,14 @@
  * chain visible while its non-matching ancestors are hidden is tree-specific behavior the page
  * itself implements (it needs the parent/child index the catalog has no reason to hold).
  */
-import type { Health, InitiativeOverviewItem, InitiativeStatus } from '@docket/types';
+import type { Health, InitiativeOverviewItem } from '@docket/types';
 
+import {
+  type WorkStatusDisplay,
+  statusFieldOptions,
+  statusRankOf,
+} from '@/components/entity-display/work-status';
 import { type FieldCatalog, type FieldOption } from '@/components/views/field-catalog';
-
-import { statusGlyphType } from '../projects/project-status';
-
-/** Human label for each Initiative lifecycle status. */
-export const STATUS_LABEL: Record<InitiativeStatus, string> = {
-  proposed: 'Proposed',
-  active: 'Active',
-  completed: 'Completed',
-  canceled: 'Canceled',
-};
 
 /** Human label for each health verdict. */
 export const HEALTH_LABEL: Record<Health, string> = {
@@ -40,30 +35,6 @@ export const HEALTH_LABEL: Record<Health, string> = {
   at_risk: 'At risk',
   off_track: 'Off track',
 };
-
-/**
- * The initiative lifecycle statuses, in workflow order, with their glyph hints.
- *
- * @remarks
- * An Initiative's status is manually owned (unlike a Project's derived status), so the glyph
- * borrows the shared project-status glyph vocabulary purely for the shared dot/check family —
- * `proposed` reads as the not-yet-started glyph since it has no dedicated mapping.
- */
-const STATUS_OPTIONS: readonly FieldOption[] = (
-  ['proposed', 'active', 'completed', 'canceled'] as const satisfies readonly InitiativeStatus[]
-).map((status) => ({
-  value: status,
-  label: STATUS_LABEL[status],
-  hint: statusGlyphType(status),
-}));
-
-/** Lifecycle order rank for a status (proposed → active → completed → canceled; unknown last). */
-function statusRank(value: string | number | null): number {
-  const order = ['proposed', 'active', 'completed', 'canceled'];
-  if (value === null) return order.length;
-  const index = order.indexOf(String(value));
-  return index === -1 ? order.length : index;
-}
 
 /** The health verdicts, ordered by severity, with their labels + glyph hints. */
 const HEALTH_OPTIONS: readonly FieldOption[] = (
@@ -78,6 +49,12 @@ function healthRank(value: string | number | null): number {
   return index === -1 ? order.length : index;
 }
 
+/** The workspace data a page supplies so the catalog can offer the statuses it actually has. */
+export interface InitiativeCatalogDeps {
+  /** The workspace's Initiative statuses, in board order, from the status registry. */
+  statuses: readonly WorkStatusDisplay[];
+}
+
 /**
  * Build the initiative {@link FieldCatalog} the Initiatives toolbar drives.
  *
@@ -85,18 +62,21 @@ function healthRank(value: string | number | null): number {
  * No field declares `groupable: true` — see the module remarks for why the tree roster does not
  * offer a grouping affordance the way every flat entity roster does.
  *
+ * @param deps - The workspace's Initiative statuses.
  * @returns the catalog over {@link InitiativeOverviewItem}.
  */
-export function buildInitiativeCatalog(): FieldCatalog<InitiativeOverviewItem> {
+export function buildInitiativeCatalog(
+  deps: InitiativeCatalogDeps,
+): FieldCatalog<InitiativeOverviewItem> {
   return [
     {
       key: 'status',
       label: 'Status',
       type: 'enum',
       accessor: (initiative) => initiative.status,
-      options: STATUS_OPTIONS,
+      options: statusFieldOptions(deps.statuses),
       sortable: true,
-      rank: statusRank,
+      rank: statusRankOf(deps.statuses),
     },
     {
       key: 'health',

@@ -11,6 +11,7 @@ import { Hono } from 'hono';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import type * as DbModule from '@docket/db';
 import type {
   db as DbType,
   organization as OrgTable,
@@ -27,6 +28,7 @@ import { getMigratedDb } from '../support/db';
 import { assertDefined } from '@docket/test-utils';
 
 let db!: typeof DbType;
+let schema!: typeof DbModule;
 let organization!: typeof OrgTable;
 let team!: typeof TeamTable;
 let actor!: typeof ActorTable;
@@ -50,6 +52,7 @@ function appFor(orgId: string, capabilities: readonly string[], actorId = 'actor
 beforeAll(async () => {
   const dbmod = await getMigratedDb();
   db = dbmod.db;
+  schema = dbmod;
   organization = dbmod.organization;
   team = dbmod.team;
   actor = dbmod.actor;
@@ -72,6 +75,9 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
   const orgId = assertDefined(org).id;
+  // Statuses come before any work: the captured task stores both its state key and the id of
+  // the workspace status carrying it.
+  await schema.seedWorkspaceStatuses(db, orgId);
 
   const [t] = await db
     .insert(team)

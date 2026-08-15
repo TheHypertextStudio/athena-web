@@ -11,6 +11,7 @@ import { type JSX } from 'react';
 import SuggestionsLane from '@/components/triage/suggestions-lane';
 import { TriageRow } from '@/components/triage/triage-row';
 import { entityDragSource } from '@/lib/entity-drag';
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { useTriage } from '@/lib/use-triage';
 
 /** TriagePage renders the authenticated triage page. */
@@ -22,6 +23,7 @@ export default function TriagePage(): JSX.Element {
   const projectNoun = useVocabulary('project');
   const programNoun = useVocabulary('program');
   const taskNounPlural = useVocabulary('task', { plural: true });
+  const categoryOf = useCategoryOf('task');
 
   const {
     queue,
@@ -39,7 +41,7 @@ export default function TriagePage(): JSX.Element {
     sortToProject,
     sortToProgram,
     dismiss,
-  } = useTriage(orgId);
+  } = useTriage(orgId, categoryOf);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">

@@ -32,6 +32,7 @@ import {
   toRef,
   wouldCreateCycle,
 } from './task-helpers';
+import { resolveTaskStatus } from '../lib/work-status';
 
 /** Subtask + dependency routes, mounted on the tasks router at `/`. */
 export const taskDependencyRoutes = new Hono<AppEnv>()
@@ -91,7 +92,10 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
       await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
       await assertMilestoneInOrg(orgId, body.milestoneId, body.projectId ?? parent.projectId);
 
-      const state = body.state ?? parent.state;
+      const inherited =
+        body.state === undefined
+          ? { statusId: parent.statusId, state: parent.state }
+          : await resolveTaskStatus(orgId, parent.teamId, body.state);
       // `SubtaskCreate.labels` was accepted and discarded here for the same reason
       // `TaskCreate.labels` was: nothing ever wrote the join. Resolve against the parent's team,
       // which the subtask inherits.
@@ -104,7 +108,8 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
           title: body.title,
           description: body.description,
           teamId: parent.teamId,
-          state,
+          statusId: inherited.statusId,
+          state: inherited.state,
           priority: body.priority ?? 'none',
           assigneeId: body.assigneeId,
           projectId: body.projectId ?? parent.projectId,

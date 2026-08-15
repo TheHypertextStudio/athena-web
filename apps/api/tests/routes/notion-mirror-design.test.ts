@@ -356,7 +356,7 @@ describe('Notion mirror designs', () => {
   });
 
   it('uses real task values and reports rows excluded by this integration', async () => {
-    const { orgId, teamId, humanActorId, integration } = await seedDesigner();
+    const { orgId, teamId, humanActorId, integration, statusId } = await seedDesigner();
     const taskDesign = (await ensureDesigns(orgId, integration.id, humanActorId)).find(
       (candidate) => candidate.entityType === 'task',
     );
@@ -367,6 +367,7 @@ describe('Notion mirror designs', () => {
         teamId,
         title: 'Visible task',
         state: 'backlog',
+        statusId: statusId('task', 'backlog'),
         estimateMinutes: 45,
         dueDate: new Date('2026-09-04T00:00:00.000Z'),
       },
@@ -375,6 +376,7 @@ describe('Notion mirror designs', () => {
         teamId,
         title: 'Already linked here',
         state: 'backlog',
+        statusId: statusId('task', 'backlog'),
         source: 'linked',
         sourceIntegrationId: integration.id,
         externalId: 'notion-linked-1',

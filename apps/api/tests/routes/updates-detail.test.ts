@@ -13,7 +13,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import type { StatusIdLookup } from '../support/routes-harness';
+import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
 import type updatesRouter from '../../src/routes/updates';
 import { assertDefined } from '@docket/test-utils';
 
@@ -37,12 +38,25 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 /** Seed a project in the org and return its id (a valid Update subject). */
-async function seedProject(orgId: string, teamId: string, authorId: string): Promise<string> {
-  const [proj] = await db
-    .insert(schema.project)
-    .values({ organizationId: orgId, name: 'P', teamId, createdBy: authorId })
-    .returning({ id: schema.project.id });
-  return assertDefined(proj).id;
+async function seedProject(
+  statusId: StatusIdLookup,
+  orgId: string,
+  teamId: string,
+  authorId: string,
+): Promise<string> {
+  return one(
+    await db
+      .insert(schema.project)
+      .values({
+        organizationId: orgId,
+        name: 'P',
+        teamId,
+        createdBy: authorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
+      .returning({ id: schema.project.id }),
+  ).id;
 }
 
 /** Post an update via the router; asserts 200 and returns the created update id. */
@@ -57,9 +71,9 @@ async function postUpdate(
 
 describe('updates detail (GET /:id)', () => {
   it('returns a single update scoped to the org', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
-    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const subjectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
     const id = await postUpdate(w, {
       subjectType: 'project',
@@ -102,7 +116,7 @@ describe('updates detail (GET /:id)', () => {
     const a = await seedBaseOrg(db, schema);
     const b = await seedBaseOrg(db, schema);
     const writerA = appWithActor(updates, a.orgId, ['contribute'], a.humanActorId);
-    const subjectId = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const subjectId = await seedProject(a.statusId, a.orgId, a.teamId, a.humanActorId);
     const id = await postUpdate(writerA, { subjectType: 'project', subjectId, body: 'a-only' });
 
     // Org B cannot read org A's update.
@@ -116,10 +130,10 @@ describe('updates detail (GET /:id)', () => {
 
 describe('updates list-by-subject (GET /)', () => {
   it('returns only the queried subject feed, newest-first, isolated per subject', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
-    const subjectId = await seedProject(orgId, teamId, humanActorId);
-    const otherSubjectId = await seedProject(orgId, teamId, humanActorId);
+    const subjectId = await seedProject(statusId, orgId, teamId, humanActorId);
+    const otherSubjectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
     const empty = await w.request(`/?subjectType=project&subjectId=${subjectId}`);
     expect((await json<{ items: unknown[] }>(empty)).items).toHaveLength(0);
@@ -156,11 +170,11 @@ describe('updates list-by-subject (GET /)', () => {
 
 describe('updates post -> latest health propagates to the subject', () => {
   it('writes the latest update health onto a project / program / initiative', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
 
     // project
-    const projectId = await seedProject(orgId, teamId, humanActorId);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
     await postUpdate(w, {
       subjectType: 'project',
       subjectId: projectId,
@@ -177,7 +191,13 @@ describe('updates post -> latest health propagates to the subject', () => {
     // program
     const [prog] = await db
       .insert(schema.program)
-      .values({ organizationId: orgId, name: 'PG', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'PG',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('program', 'active'),
+      })
       .returning({ id: schema.program.id });
     const programId = assertDefined(prog).id;
     await postUpdate(w, {
@@ -196,7 +216,13 @@ describe('updates post -> latest health propagates to the subject', () => {
     // initiative
     const [init] = await db
       .insert(schema.initiative)
-      .values({ organizationId: orgId, name: 'I', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'I',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id });
     const initiativeId = assertDefined(init).id;
     await postUpdate(w, {
@@ -214,9 +240,9 @@ describe('updates post -> latest health propagates to the subject', () => {
   });
 
   it('only the newest health wins after successive posts', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
-    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const subjectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
     await postUpdate(w, { subjectType: 'project', subjectId, health: 'off_track', body: 'one' });
     await postUpdate(w, { subjectType: 'project', subjectId, health: 'on_track', body: 'two' });
@@ -230,9 +256,9 @@ describe('updates post -> latest health propagates to the subject', () => {
   });
 
   it('a post without health leaves the subject health unchanged', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
-    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const subjectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
     await postUpdate(w, { subjectType: 'project', subjectId, health: 'at_risk', body: 'with' });
     await postUpdate(w, { subjectType: 'project', subjectId, body: 'without' });
@@ -250,7 +276,7 @@ describe('updates post -> latest health propagates to the subject', () => {
     const a = await seedBaseOrg(db, schema);
     const b = await seedBaseOrg(db, schema);
     // A project owned by org B.
-    const bSubjectId = await seedProject(b.orgId, b.teamId, b.humanActorId);
+    const bSubjectId = await seedProject(b.statusId, b.orgId, b.teamId, b.humanActorId);
 
     const writerA = appWithActor(updates, a.orgId, ['contribute'], a.humanActorId);
     const response = await writerA.request('/', {
@@ -293,9 +319,9 @@ describe('updates delete (DELETE /:id)', () => {
   }
 
   it('lets the author delete their update and recomputes the subject health to the prior post', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
-    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const subjectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
     // Two posts; the latest (on_track) is the current health.
     await postUpdate(w, { subjectType: 'project', subjectId, health: 'at_risk', body: 'first' });
@@ -333,9 +359,9 @@ describe('updates delete (DELETE /:id)', () => {
   });
 
   it('clears the subject health to null when the last update is deleted', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
-    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const subjectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
     const only = await postUpdate(w, {
       subjectType: 'project',
@@ -354,9 +380,9 @@ describe('updates delete (DELETE /:id)', () => {
   });
 
   it('skips healthless posts when recomputing — falls back to the newest update that set a health', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(updates, orgId, ['contribute'], humanActorId);
-    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const subjectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
     await postUpdate(w, { subjectType: 'project', subjectId, health: 'at_risk', body: 'h1' });
     await postUpdate(w, { subjectType: 'project', subjectId, body: 'no-health' });
@@ -379,9 +405,9 @@ describe('updates delete (DELETE /:id)', () => {
   });
 
   it('403s when a non-author member (without manage) deletes another actor’s update', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const author = appWithActor(updates, orgId, ['contribute'], humanActorId);
-    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const subjectId = await seedProject(statusId, orgId, teamId, humanActorId);
     const id = await postUpdate(author, { subjectType: 'project', subjectId, body: 'mine' });
 
     const otherActorId = await seedActor(orgId);
@@ -393,9 +419,9 @@ describe('updates delete (DELETE /:id)', () => {
   });
 
   it('lets a manage holder delete an update they did not author', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const author = appWithActor(updates, orgId, ['contribute'], humanActorId);
-    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const subjectId = await seedProject(statusId, orgId, teamId, humanActorId);
     const id = await postUpdate(author, { subjectType: 'project', subjectId, body: 'authored' });
 
     const modId = await seedActor(orgId, 'Mod');
@@ -404,9 +430,9 @@ describe('updates delete (DELETE /:id)', () => {
   });
 
   it('403s when the actor lacks contribute (view-only) on DELETE', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const author = appWithActor(updates, orgId, ['contribute'], humanActorId);
-    const subjectId = await seedProject(orgId, teamId, humanActorId);
+    const subjectId = await seedProject(statusId, orgId, teamId, humanActorId);
     const id = await postUpdate(author, { subjectType: 'project', subjectId, body: 'x' });
 
     const viewer = appWithActor(updates, orgId, ['view'], humanActorId);
@@ -417,7 +443,7 @@ describe('updates delete (DELETE /:id)', () => {
     const a = await seedBaseOrg(db, schema);
     const b = await seedBaseOrg(db, schema);
     const writerA = appWithActor(updates, a.orgId, ['contribute'], a.humanActorId);
-    const subjectId = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const subjectId = await seedProject(a.statusId, a.orgId, a.teamId, a.humanActorId);
     const id = await postUpdate(writerA, { subjectType: 'project', subjectId, body: 'a-only' });
 
     expect((await writerA.request(`/${MISSING_ULID}`, { method: 'DELETE' })).status).toBe(404);

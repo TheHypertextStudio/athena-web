@@ -16,6 +16,7 @@ import {
   role,
   team,
   teamMember,
+  seedWorkspaceStatuses,
 } from '@docket/db';
 import type { DefaultTeamOut } from '@docket/types';
 import {
@@ -85,6 +86,7 @@ import search from './search';
 import tasks from './tasks';
 import teams from './teams';
 import updates from './updates';
+import workStatuses, { teamStatusFork } from './work-statuses';
 
 /** Organizations router (memberships, create-org transaction, nested project/task routers). */
 const orgs = new Hono<AppEnv>()
@@ -243,6 +245,11 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
           .returning();
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!ownerActor) throw new Error('owner actor insert returned no row');
+
+        // A workspace's statuses exist before any of its work can, because every task, project,
+        // program, and initiative points at one. Seeded inside the same transaction so a
+        // half-built workspace is impossible.
+        await seedWorkspaceStatuses(tx, org.id, ownerActor.id);
 
         const [defaultTeam] = await tx
           .insert(team)
@@ -463,6 +470,8 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/programs', programs)
   .route('/:orgId/cycles', cycles)
   .route('/:orgId/milestones', milestones)
+  .route('/:orgId/statuses', workStatuses)
+  .route('/:orgId/teams', teamStatusFork)
   .route('/:orgId/labels', labels)
   .route('/:orgId/comments', comments)
   .route('/:orgId/images', documentImages)

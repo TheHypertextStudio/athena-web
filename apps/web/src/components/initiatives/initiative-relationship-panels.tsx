@@ -6,7 +6,7 @@ import { Plus } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
-import { INITIATIVE_STATUS_LABEL } from '@/components/initiatives/properties-panel';
+import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { ObjectListRow } from '@/components/objects/object-list-row';
 
 /** Relationship tabs this component owns. Other tabs render nothing here. */
@@ -33,6 +33,8 @@ export function InitiativeRelationshipPanels({
   projectNoun,
   onAddSubinitiative,
 }: InitiativeRelationshipPanelsProps): JSX.Element | null {
+  const statusOf = useWorkStatusResolver('initiative');
+
   if (tab === 'subinitiatives') {
     return (
       <div
@@ -64,7 +66,7 @@ export function InitiativeRelationshipPanels({
                 }}
                 href={`/orgs/${child.organizationId}/initiatives/${child.id}`}
                 description={child.crossWorkspace ? child.organizationName : undefined}
-                trailing={INITIATIVE_STATUS_LABEL[child.status]}
+                trailing={statusOf(child.status).name}
                 dragDisabled={child.crossWorkspace}
                 surfaceId="initiative-subinitiatives"
               />

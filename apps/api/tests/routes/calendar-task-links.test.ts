@@ -15,6 +15,7 @@ import {
   one,
   seedBaseOrg,
   seedGoogleAccount,
+  seedStatuses,
   seedUserWithHub,
 } from '../support/routes-harness';
 
@@ -114,10 +115,20 @@ async function seedTask(
   teamId: string,
   title = 'A task',
 ): Promise<{ id: string }> {
+  // The workspace's status set already exists (its seeding is idempotent); this reads back the id
+  // of the `todo` status the row must point at alongside the `state` it stores.
+  const statusId = await seedStatuses(schema.db, schema, orgId);
   return one(
     await schema.db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title, state: 'todo', priority: 'none' })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title,
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        priority: 'none',
+      })
       .returning({ id: schema.task.id }),
   );
 }

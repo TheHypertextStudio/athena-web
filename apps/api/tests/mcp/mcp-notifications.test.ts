@@ -8,6 +8,7 @@ import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import type { resetNotifications as ResetNotifications } from '../../src/mcp/notify';
 import { getSession, resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -39,6 +40,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [role] = await db
     .insert(schema.role)
@@ -81,7 +83,14 @@ async function seedOrg(): Promise<Seed> {
 
   const [task] = await db
     .insert(schema.task)
-    .values({ organizationId: orgId, title: 'Ship', teamId, state: 'todo', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      title: 'Ship',
+      teamId,
+      state: 'todo',
+      statusId: statusId('task', 'todo'),
+      createdBy: actorId,
+    })
     .returning({ id: schema.task.id });
 
   return { userId, orgId, teamId, actorId, roleId, taskId: assertDefined(task).id };

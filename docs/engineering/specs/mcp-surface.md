@@ -253,13 +253,20 @@ Notes on the less obvious entries:
 - **Every write records a change set** and returns a `changeSetId` for `undo`. Undo is a reverse
   replay with conflict detection, not a rollback — anything edited by someone else since is
   reported as skipped rather than clobbered.
-- **A task's `state` is not comparable across teams; its `stateType` is.** `state` holds a key
-  scoped to one team's `workflow_states`, which that team can rename at will, so two teams can call
+- **A task's `state` is comparable across teams through its `stateType`.** `state` holds a key from
+  one status set, which the workspace or a forked team can rename at will, so two teams can call
   the same stage `doing` and `in_flight`. `list_work` and `get` therefore return `stateType`
   alongside it — the canonical `backlog | unstarted | started | completed | canceled` category —
-  and that is what a status glyph, a cross-team comparison, or any grouping must key off. It is
-  absent, rather than guessed, when the owning team no longer lists the stored key.
-  `workflow-states.ts` resolves it once per distinct team per page, never once per row.
+  and that is what a status glyph, a cross-team comparison, or any grouping must key off. Statuses
+  are now workspace-defined (`statuses.md`), so the set of keys a client may meet is genuinely
+  open and `stateType` is the one field every status is guaranteed to carry. `stateType` always
+  resolves: `task.status_id` names the status row and a composite FK over
+  `(status_id, state, organization_id)` holds the stored key equal to that row's key, so the
+  category is always there to read. **Superseded:** the caveat that `stateType` is "absent, rather
+  than guessed, when the owning team no longer lists the stored key" — a task whose key names
+  nothing can no longer be written, and `0087_sour_post.sql` repaired the rows that predated the
+  constraint. `workflow-states.ts` resolves the set once per distinct team per page, never once per
+  row.
 
 **Authoritative definitions live in the code, not here.** Every tool carries a `.describe()` on
 every field and an `outputSchema`, so restating them in prose guarantees drift. See

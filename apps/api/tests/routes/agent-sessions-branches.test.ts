@@ -17,7 +17,7 @@ import type * as DbModule from '@docket/db';
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
-import { fakeSession, getDb, one, seedUserWithHub } from '../support/routes-harness';
+import { fakeSession, getDb, one, seedStatuses, seedUserWithHub } from '../support/routes-harness';
 
 let db!: typeof DbModule.db;
 let schema!: typeof DbModule;
@@ -66,6 +66,7 @@ async function seedOrg(): Promise<Seed> {
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id }),
   ).id;
+  const statusId = await seedStatuses(db, schema, orgId);
   const teamId = one(
     await db
       .insert(schema.team)
@@ -93,7 +94,13 @@ async function seedOrg(): Promise<Seed> {
   const taskId = one(
     await db
       .insert(schema.task)
-      .values({ organizationId: orgId, title: 'Ship the Hub', teamId, state: 'todo' })
+      .values({
+        organizationId: orgId,
+        title: 'Ship the Hub',
+        teamId,
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+      })
       .returning({ id: schema.task.id }),
   ).id;
   return { orgId, teamId, humanActorId, agentId, taskId };

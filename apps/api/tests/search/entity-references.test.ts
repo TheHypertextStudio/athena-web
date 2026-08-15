@@ -9,7 +9,14 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  getDb,
+  addMember,
+  one,
+  seedOrg,
+  seedStatuses,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 import { loadInboundReferences } from '../../src/content/entity-references';
 
@@ -19,6 +26,7 @@ describe('inbound references', () => {
     const { db } = schema;
     const userId = await seedUserWithHub(db, schema, 'BacklinkUser');
     const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
     const actorId = await addMember(db, schema, orgId, userId);
 
     const teamId = one(
@@ -39,6 +47,7 @@ describe('inbound references', () => {
           title: 'Freeze the response shapes',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
         })
         .returning({ id: schema.task.id }),

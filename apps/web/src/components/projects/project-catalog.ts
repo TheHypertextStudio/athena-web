@@ -11,17 +11,26 @@
  * **lead**, and **team**; grouped by status / lead / team; and sorted by status, target date, or
  * name — all through one Linear-style bar.
  *
- * Status declares a custom {@link FieldDescriptor.rank} so it orders by lifecycle rather than
- * alphabetically, and carries a glyph `hint` so a grouped header can show the
- * field's domain glyph. Lead and team are `relation` fields whose options + label resolution are
+ * Status is whatever the workspace named its Project stages, so its options and its
+ * {@link FieldDescriptor.rank} come from the status registry rather than from a list written here:
+ * the roster orders by the board order someone chose in settings, and each option carries its
+ * category as a glyph `hint` so a grouped header can draw the field's domain glyph. Lead and team are `relation` fields whose options + label resolution are
  * injected from the page's already-loaded members/teams (Phase B data), so the value chooser
  * needs no extra fetch.
  */
 import type { ProjectOut } from '@docket/types';
-import { ActorAvatar, type Column, StatusIcon } from '@docket/ui/components';
+import { ActorAvatar, type Column } from '@docket/ui/components';
 import { Calendar, ListChecks } from '@docket/ui/icons';
 import { createElement, type ReactNode } from 'react';
 
+import {
+  type WorkStatusDisplay,
+  statusFieldOptions,
+  statusRankOf,
+  unknownStatus,
+  WorkStatusBadge,
+  WorkStatusIcon,
+} from '@/components/entity-display/work-status';
 import {
   type FieldCatalog,
   type FieldOption,
@@ -29,23 +38,10 @@ import {
   labelForValue,
 } from '@/components/views/field-catalog';
 
-import { ProjectStatusBadge, STATUS_LABEL, statusGlyphType, statusLabel } from './project-status';
-
-/** The project lifecycle statuses, in workflow order, with their glyph hints. */
-const STATUS_OPTIONS: readonly FieldOption[] = (
-  ['planned', 'active', 'completed', 'canceled'] as const
-).map((status) => ({ value: status, label: STATUS_LABEL[status], hint: statusGlyphType(status) }));
-
-/** Lifecycle order rank for a status (planned → active → completed → canceled; unknown last). */
-function statusRank(value: string | number | null): number {
-  const order = ['planned', 'active', 'completed', 'canceled'];
-  if (value === null) return order.length;
-  const index = order.indexOf(String(value));
-  return index === -1 ? order.length : index;
-}
-
 /** Injected resolvers a page supplies so the project catalog can skin relation fields. */
 export interface ProjectCatalogDeps {
+  /** The workspace's Project statuses, in board order, from the status registry. */
+  statuses: readonly WorkStatusDisplay[];
   /** Vocabulary label for the project "Lead" relation (kept neutral as "Lead"). */
   leadLabel: string;
   /** Vocabulary label for the "Team" relation. */
@@ -73,10 +69,10 @@ export function buildProjectCatalog(deps: ProjectCatalogDeps): FieldCatalog<Proj
       label: 'Status',
       type: 'enum',
       accessor: (project) => project.status,
-      options: STATUS_OPTIONS,
+      options: statusFieldOptions(deps.statuses),
       groupable: true,
       sortable: true,
-      rank: statusRank,
+      rank: statusRankOf(deps.statuses),
     },
     {
       key: 'leadId',
@@ -126,6 +122,8 @@ function formatTargetDate(targetDate: string | null | undefined): string | null 
 
 /** Page-supplied roll-ups the table cells need beyond the project row itself (task scope). */
 export interface ProjectColumnDeps {
+  /** The workspace's Project statuses, in board order, so a row can name and draw its own. */
+  statuses: readonly WorkStatusDisplay[];
   /** The number of tasks scoped to a project (rolled up client-side from the tasks slice). */
   taskCountFor: (project: ProjectOut) => number;
   /** Singular task noun (vocabulary-resolved, lower-cased). */
@@ -162,6 +160,9 @@ export function projectColumns(
   const status = findField(catalog, 'status');
   const lead = findField(catalog, 'leadId');
   const targetDate = findField(catalog, 'targetDate');
+  const statusOf = (project: ProjectOut): WorkStatusDisplay =>
+    deps.statuses.find((candidate) => candidate.key === project.status) ??
+    unknownStatus(project.status);
 
   return [
     // Leading lifecycle glyph — the shared, always-kept leading column.
@@ -170,11 +171,10 @@ export function projectColumns(
       header: '',
       width: '1.25rem',
       priority: 'always',
-      render: (project) =>
-        createElement(StatusIcon, {
-          type: statusGlyphType(project.status),
-          label: statusLabel(project.status),
-        }),
+      render: (project) => {
+        const { name, category } = statusOf(project);
+        return createElement(WorkStatusIcon, { name, category });
+      },
     },
     // TITLE — the one flexing, truncating column (never hidden).
     {
@@ -190,7 +190,10 @@ export function projectColumns(
       header: status?.label ?? 'Status',
       width: '7rem',
       priority: 1,
-      render: (project) => createElement(ProjectStatusBadge, { status: project.status }),
+      render: (project) => {
+        const { name, category } = statusOf(project);
+        return createElement(WorkStatusBadge, { name, category });
+      },
     },
     // LEAD/OWNER avatar — relation field; resolveLabel turns the id into a display name.
     {

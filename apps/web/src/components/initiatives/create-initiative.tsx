@@ -8,7 +8,8 @@
  * many-to-many with Projects + Programs (those links come later on the detail screen). The
  * composer captures the framing fields: a title + description body, and an inline strip of
  * compact pickers — its owner, its status, its target date, and its health verdict. Sensible
- * defaults keep it fast: only a name is required; status defaults to "Active".
+ * defaults keep it fast: only a name is required; status defaults to wherever the workspace starts
+ * an Initiative.
  *
  * The dialog is *controlled* by the host page so its header "New {initiative}" button and
  * empty-state CTA open the *same* dialog. Its fields live in one {@link useComposerDraft} value,
@@ -49,6 +50,7 @@ import {
 } from '@/components/create-object/create-object-provider';
 import { useCreationContext } from '@/components/create-object/creation-context';
 import { WorkspacePicker } from '@/components/create-object/workspace-picker';
+import { useDefaultedStatus } from '@/components/entity-display/use-work-status';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
@@ -148,6 +150,10 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
   const { draft, setField, updateDraft } =
     useComposerDraft<InitiativeDraft>(EMPTY_INITIATIVE_DRAFT);
+
+  useDefaultedStatus('initiative', draft.status, (key) => {
+    setField('status', key);
+  });
 
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);

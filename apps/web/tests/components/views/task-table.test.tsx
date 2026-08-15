@@ -23,7 +23,15 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { ActorId, LabelId, OrganizationId, TaskId, TeamId, type TaskOut } from '@docket/types';
+import {
+  ActorId,
+  DEFAULT_WORK_STATUSES,
+  LabelId,
+  OrganizationId,
+  TaskId,
+  TeamId,
+  type TaskOut,
+} from '@docket/types';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -121,6 +129,7 @@ function resolveActor(id: string): TaskTableActor {
 }
 
 const catalog = buildTaskCatalog({
+  statuses: DEFAULT_WORK_STATUSES.task,
   projectLabel: 'Project',
   programLabel: 'Program',
   resolveProject: (id) => id,
@@ -131,7 +140,7 @@ const catalog = buildTaskCatalog({
   programOptions: () => [],
 });
 
-const columns = buildTaskColumns({ catalog, resolveActor });
+const columns = buildTaskColumns({ catalog, statuses: DEFAULT_WORK_STATUSES.task, resolveActor });
 
 /** The plain (unbranded) fields a fixture supplies; ids are branded once when assembled. */
 interface TaskFixture {
@@ -221,8 +230,12 @@ describe('TaskTable', () => {
 
     const row = screen.getByText('Wire the table').closest('a') as HTMLElement;
     expect(row).not.toBeNull();
-    // The leading status glyph reads as the canonical "started" type for an in-progress task.
-    expect(within(row).getByRole('img', { name: 'Status' })).toHaveClass('text-state-started');
+    // The leading status glyph reads as the `started` category for an in-progress task, and names
+    // itself with the workspace's own word for that status rather than the field's header.
+    const glyph = row.querySelector('[data-state-type]');
+    expect(glyph).toHaveAttribute('data-state-type', 'started');
+    expect(glyph).toHaveClass('text-state-started');
+    expect(glyph).toHaveAccessibleName(DEFAULT_WORK_STATUSES.task[2]?.name ?? '');
     expect(within(row).getByLabelText('Ada Lovelace')).toBeInTheDocument();
     // estimateMinutes is rendered as the compact duration, not raw minutes.
     expect(within(row).getByText('1h 30m')).toBeInTheDocument();

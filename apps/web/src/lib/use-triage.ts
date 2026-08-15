@@ -22,7 +22,7 @@ import { userErrorMessage, readProblemError } from './problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
 import { useOrgCapability } from './use-org-capability';
 import { useRenameTask } from './use-rename-task';
-import { stateTypeOf } from './work-state';
+import type { CategoryOfState } from './work-category';
 
 function isUnsorted(task: TaskOut): boolean {
   return (task.projectId ?? null) === null && (task.programId ?? null) === null;
@@ -58,8 +58,12 @@ export interface TriageState {
  * `tasks(orgId)`, which refreshes the queue here too) and every slice auto-refetches on window
  * focus — no manual Refresh control. Sorting / dismissing a task invalidates `tasks(orgId)` so the
  * server-side state (the task is no longer unsorted, or is gone) drops it from the queue.
+ *
+ * @param orgId - The workspace in view.
+ * @param categoryOf - Resolves a task's status key to its category, from the status registry.
+ * @returns the screen's data contract.
  */
-export function useTriage(orgId: string): TriageState {
+export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageState {
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [actionError, setActionError] = useState<string | null>(null);
@@ -196,13 +200,13 @@ export function useTriage(orgId: string): TriageState {
       return {
         id: task.id,
         title: task.title,
-        stateType: stateTypeOf(task.state),
+        stateType: categoryOf(task.state),
         provenance: task.provenance,
         assigneeName: member?.displayName ?? null,
         assigneeAvatarUrl: member?.avatar ?? null,
       };
     },
-    [memberByActor],
+    [memberByActor, categoryOf],
   );
 
   const groupBy = useCallback(

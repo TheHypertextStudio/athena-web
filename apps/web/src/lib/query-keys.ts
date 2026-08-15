@@ -114,6 +114,13 @@ export const queryKeys = {
   // Two reads, deliberately keyed apart. Pickers want the bare list and read it constantly; the
   // settings page wants the same list plus usage counts, which cost five aggregate queries. A
   // shared key would make every picker open pay for counts nobody is looking at.
+  // A workspace's status sets, read by the shell once per session and by the settings page. The
+  // team scope is part of the key because a team that keeps its own task statuses resolves to a
+  // different set, and both have to be cacheable at the same time.
+  statusSets: (orgId: string, teamId?: string) =>
+    (teamId === undefined
+      ? (['org', orgId, 'status-sets'] as const)
+      : (['org', orgId, 'status-sets', teamId] as const)) as readonly unknown[],
   labels: (orgId: string) => ['org', orgId, 'labels'] as const,
   labelsWithCounts: (orgId: string) => ['org', orgId, 'labels', 'counts'] as const,
   labelGroups: (orgId: string) => ['org', orgId, 'label-groups'] as const,

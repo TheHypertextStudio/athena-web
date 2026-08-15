@@ -26,6 +26,7 @@ import { EditableFreeformText } from '@/components/editor/freeform-text';
 import { EditableTitle } from '@/components/editor/editable-title';
 import type { MilestoneTask } from '@/components/project-detail/milestone-tasks';
 import { formatCalendarDate } from '@/lib/format-date';
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { countTasksByMilestone } from '@/lib/milestone-progress';
 import { useProjectMilestones } from '@/lib/use-project-milestones';
 
@@ -64,9 +65,10 @@ export function ProjectMilestonesPanel({
     projectDetailKey,
   );
 
+  const categoryOf = useCategoryOf('task');
   const progressByMilestone = useMemo(
-    () => countTasksByMilestone(milestoneTasks, UNSCHEDULED_KEY),
-    [milestoneTasks],
+    () => countTasksByMilestone(milestoneTasks, UNSCHEDULED_KEY, categoryOf),
+    [milestoneTasks, categoryOf],
   );
 
   const ordered = useMemo(() => [...milestones].sort((a, b) => a.sort - b.sort), [milestones]);

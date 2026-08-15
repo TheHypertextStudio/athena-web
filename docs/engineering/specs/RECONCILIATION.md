@@ -13,7 +13,7 @@
 7. **Shared `Id` schema:** `@docket/types` exports one branded `Id` (ULID-shaped) consumed by **both** the API and MCP tool schemas. MCP must **not** use `z.string().uuid()`. Addressing differs intentionally — REST `/orgs/{id}`, MCP `docket://{slug}` — but the id primitive is identical.
 8. **Routes:** `/v1/orgs/:orgId/...` nesting is canonical (tenant key in the path). The slice's top-level `/organizations`,`/projects`,`/tasks` are rewritten to the nested form.
 9. **Input schemas:** PascalCase `*Create` (`OrgCreate`, `ProjectCreate`, `TaskCreate`) is canonical; the slice's `create*Input` names are renamed.
-10. **Task default state:** app sets `state = team.workflow_states[0].key`; the default team's first state is `backlog`. No DB default column.
+10. **Task default state:** app sets `state` (and `status_id`) from the `isDefault` status of the Task status set the team resolves to — its own forked set when it has one, otherwise the workspace's. The seeded Task set marks `backlog` as the default. No DB default column, and exactly one default per set is enforced by a partial unique index, so the answer is never ambiguous. **Superseded:** this rule previously read `state = team.workflow_states[0].key` — position and default are now separate facts, so a workspace can put its default anywhere in the board order.
 
 ## Decisions (open issues resolved)
 
@@ -23,7 +23,7 @@
 - **Org deletion:** `ON DELETE CASCADE` from `organization` through all `organization_id` FKs, plus an application purge job for external/Stripe artifacts.
 - **Polymorphic subjects** (Update/Comment/Notification/audit_event/Impersonation): `(subject_type enum, subject_id text)`, app-enforced integrity, indexed `(organization_id, subject_type, subject_id)`.
 - **`task_dependency` acyclicity:** app-level recursive-CTE cycle check in a `SERIALIZABLE` tx + `UNIQUE(blocking_task_id, blocked_task_id)` + `CHECK(blocking <> blocked)`.
-- **Workflow states:** jsonb-embedded on `team`; `task.state` is a text key into that set.
+- **Workflow states:** rows in `work_status`, owned by the workspace, with a team free to fork the Task set. `task.state` remains a text key and is now held to the status it names by a composite FK over `(status_id, state, organization_id)`. **Superseded:** the jsonb-embedded-on-`team` shape this line described. `team.workflow_states` still exists and the team routes still accept it; it no longer governs what a Task may be set to. See `statuses.md`.
 - **DENY grants:** the `effect` column exists (default `allow`), but **deny is deferred from v1** (allow-only resolver path) — forward-compatible.
 - **Idempotency-Key:** a Postgres `idempotency_key` table (24h TTL) for v1 — no Redis.
 - **Session live transport:** **SSE** (`GET /v1/orgs/:orgId/sessions/:id/stream`) for v1; one mechanism.

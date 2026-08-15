@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import type * as EmitModule from '../../src/routes/event-emit';
-import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { getDb, seedBaseOrg, seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -50,6 +50,7 @@ async function seedTask(
   assigneeId: string,
   createdBy: string,
 ): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const [t] = await db
     .insert(schema.task)
     .values({
@@ -57,6 +58,7 @@ async function seedTask(
       title: 'Ship the beta',
       teamId,
       state: 'in_progress',
+      statusId: statusId('task', 'in_progress'),
       assigneeId,
       createdBy,
     })

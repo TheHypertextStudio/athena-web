@@ -11,6 +11,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -29,6 +30,7 @@ interface Seed {
   userId: string;
   actorId: string;
   hubId: string;
+  statusId: StatusIdLookup;
   ctx: McpContext;
 }
 
@@ -40,6 +42,7 @@ async function seedOrg(withHub = true): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [role] = await db
     .insert(schema.role)
@@ -99,6 +102,7 @@ async function seedOrg(withHub = true): Promise<Seed> {
     userId: assertDefined(user).id,
     actorId: assertDefined(human).id,
     hubId,
+    statusId,
     ctx: {
       principal: {
         kind: 'user',
@@ -116,16 +120,17 @@ async function seedTask(
   title: string,
   over: Partial<typeof schema.task.$inferInsert> = {},
 ): Promise<string> {
+  const values = {
+    organizationId: s.orgId,
+    title,
+    teamId: s.teamId,
+    state: 'backlog',
+    createdBy: s.actorId,
+    ...over,
+  };
   const [row] = await db
     .insert(schema.task)
-    .values({
-      organizationId: s.orgId,
-      title,
-      teamId: s.teamId,
-      state: 'backlog',
-      createdBy: s.actorId,
-      ...over,
-    })
+    .values({ ...values, statusId: s.statusId('task', values.state) })
     .returning({ id: schema.task.id });
   return assertDefined(row).id;
 }
@@ -574,6 +579,7 @@ describe('brief', () => {
       title: 'Due today',
       teamId: s.teamId,
       state: 'backlog',
+      statusId: s.statusId('task', 'backlog'),
       assigneeId: s.actorId,
       dueDate: new Date(`${DATE}T12:00:00.000Z`),
       createdBy: s.actorId,
@@ -653,6 +659,8 @@ describe('comment and report_status accept names', () => {
         name: 'Platform Migration',
         teamId: s.teamId,
         createdBy: s.actorId,
+        status: 'planned',
+        statusId: s.statusId('project', 'planned'),
       })
       .returning({ id: schema.project.id });
 
@@ -673,7 +681,13 @@ describe('comment and report_status accept names', () => {
     const s = await seedOrg();
     const [initiative] = await db
       .insert(schema.initiative)
-      .values({ organizationId: s.orgId, name: 'Q3 Platform', createdBy: s.actorId })
+      .values({
+        organizationId: s.orgId,
+        name: 'Q3 Platform',
+        createdBy: s.actorId,
+        status: 'active',
+        statusId: s.statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id });
 
     const client = await connect(s.ctx);

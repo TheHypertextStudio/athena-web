@@ -88,6 +88,7 @@ export function registerWriteTools(
             title: deriveCaptureTitle(input.text),
             description: input.text,
             teamId: landing.teamId,
+            statusId: landing.statusId,
             state: landing.state,
             assigneeId: landing.assigneeId,
             cycleId: landing.cycleId,

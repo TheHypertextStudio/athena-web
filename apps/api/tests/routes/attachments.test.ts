@@ -39,7 +39,7 @@ async function seedOrgWithTask(): Promise<{
   humanActorId: string;
   taskId: string;
 }> {
-  const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+  const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
   const task = one(
     await db
       .insert(schema.task)
@@ -48,6 +48,7 @@ async function seedOrgWithTask(): Promise<{
         teamId,
         title: 'Host task',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         createdBy: humanActorId,
       })
       .returning({ id: schema.task.id }),

@@ -1,11 +1,12 @@
 import type { actor } from '@docket/db';
-import { db, initiative, program, project, task, team } from '@docket/db';
+import { db, initiative, program, project, task } from '@docket/db';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { OrganizationId } from '@docket/types';
 
 import { NotFoundError, ValidationError } from '../error';
+import { resolveTaskStatus, type TaskStatusTransition } from '../lib/work-status';
 import { rawResultRowCount } from '../lib/raw-result';
 import { createCursorCodec } from './cursors';
 
@@ -49,39 +50,8 @@ export async function resolveStateTransition(
   teamId: string,
   state: string,
   field = 'state',
-): Promise<{ state: string; completedAt: Date | null; canceledAt: Date | null }> {
-  const teamRows = await db
-    .select({ workflowStates: team.workflowStates })
-    .from(team)
-    .where(and(eq(team.id, teamId), eq(team.organizationId, orgId)))
-    .limit(1);
-  const teamRow = teamRows[0];
-  /* v8 ignore next -- @preserve defensive: a task always references an in-org team (FK + cascade) */
-  if (!teamRow) throw new NotFoundError('Team not found');
-
-  const needle = state.trim().toLowerCase();
-  const target = teamRow.workflowStates.find(
-    (candidate) =>
-      candidate.key.toLowerCase() === needle || candidate.name.toLowerCase() === needle,
-  );
-  if (!target) {
-    throw new ValidationError(
-      new z.ZodError([
-        {
-          code: 'invalid_value',
-          path: [field],
-          message: `"${state}" is not a workflow state on this team.`,
-          values: teamRow.workflowStates.map((candidate) => candidate.key),
-          input: state,
-        },
-      ]),
-    );
-  }
-  return {
-    state: target.key,
-    completedAt: target.type === 'completed' ? new Date() : null,
-    canceledAt: target.type === 'canceled' ? new Date() : null,
-  };
+): Promise<TaskStatusTransition> {
+  return resolveTaskStatus(orgId, teamId, state, field);
 }
 
 /** Load an active, org-scoped task row, or throw {@link NotFoundError}. */

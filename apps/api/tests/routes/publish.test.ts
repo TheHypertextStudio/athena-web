@@ -16,7 +16,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
-import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import {
+  appWithActor,
+  getDb,
+  one,
+  seedBaseOrg,
+  type StatusIdLookup,
+} from '../support/routes-harness';
 
 type Db = typeof DbModule.db;
 
@@ -64,9 +70,12 @@ async function publicApp() {
  * moment it exists. This helper just overwrites that slug with a caller-chosen value so tests can
  * assert against a readable name instead of `seedBaseOrg`'s `org-xxxxxxxx`.
  */
-async function seedPublishingOrg(
-  name: string,
-): Promise<{ orgId: string; teamId: string; humanActorId: string }> {
+async function seedPublishingOrg(name: string): Promise<{
+  orgId: string;
+  teamId: string;
+  humanActorId: string;
+  statusId: StatusIdLookup;
+}> {
   const seeded = await seedBaseOrg(db, schema);
   await db
     .update(schema.organization)
@@ -83,26 +92,43 @@ beforeAll(async () => {
 describe('CORE-26 · publishing each of the three entity types', () => {
   it('serves a brief for an initiative, a program, and a project, and 404s once withdrawn', async () => {
     const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    const { orgId, teamId, humanActorId } = await seedPublishingOrg(workspace);
+    const { orgId, teamId, humanActorId, statusId } = await seedPublishingOrg(workspace);
     const app = await publishApp(orgId, ['contribute'], humanActorId);
     const anon = await publicApp();
 
     const initiativeId = one(
       await db
         .insert(schema.initiative)
-        .values({ organizationId: orgId, name: 'Reliability', summary: 'Keep the lights on' })
+        .values({
+          organizationId: orgId,
+          name: 'Reliability',
+          summary: 'Keep the lights on',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning({ id: schema.initiative.id }),
     ).id;
     const programId = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'Platform Ops' })
+        .values({
+          organizationId: orgId,
+          name: 'Platform Ops',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     ).id;
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Payments Hardening', programId })
+        .values({
+          organizationId: orgId,
+          name: 'Payments Hardening',
+          programId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     // A task under the project, so the project brief has a body to render.
@@ -111,6 +137,7 @@ describe('CORE-26 · publishing each of the three entity types', () => {
       teamId,
       title: 'Add idempotency keys',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       projectId,
     });
 
@@ -167,7 +194,12 @@ describe('CORE-26 · publishing each of the three entity types', () => {
     const foreignProject = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: other.orgId, name: 'Not yours' })
+        .values({
+          organizationId: other.orgId,
+          name: 'Not yours',
+          status: 'planned',
+          statusId: other.statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
 
@@ -193,13 +225,18 @@ describe('CORE-26 · publishing each of the three entity types', () => {
   });
 
   it('requires contribute to publish', async () => {
-    const { orgId, humanActorId } = await seedPublishingOrg(
+    const { orgId, humanActorId, statusId } = await seedPublishingOrg(
       `ws-${Math.random().toString(36).slice(2, 8)}`,
     );
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Gated' })
+        .values({
+          organizationId: orgId,
+          name: 'Gated',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const viewer = await publishApp(orgId, ['view'], humanActorId);
@@ -212,13 +249,18 @@ describe('CORE-26 · publishing each of the three entity types', () => {
   });
 
   it('refuses to publish a record whose title yields no sluggable characters', async () => {
-    const { orgId, humanActorId } = await seedPublishingOrg(
+    const { orgId, humanActorId, statusId } = await seedPublishingOrg(
       `ws-${Math.random().toString(36).slice(2, 8)}`,
     );
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: '🎉🎉🎉' })
+        .values({
+          organizationId: orgId,
+          name: '🎉🎉🎉',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const app = await publishApp(orgId, ['contribute'], humanActorId);
@@ -236,12 +278,17 @@ describe('CORE-26 · publishing each of the three entity types', () => {
 describe('reading publication state (GET /, GET /:subjectKind/:subjectId)', () => {
   it('lists every publication in the workspace, newest first, including withdrawn rows', async () => {
     const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    const { orgId, humanActorId } = await seedPublishingOrg(workspace);
+    const { orgId, humanActorId, statusId } = await seedPublishingOrg(workspace);
     const app = await publishApp(orgId, ['contribute'], humanActorId);
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Listed' })
+        .values({
+          organizationId: orgId,
+          name: 'Listed',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const created = (await (
@@ -264,13 +311,18 @@ describe('reading publication state (GET /, GET /:subjectKind/:subjectId)', () =
   });
 
   it('reports publication: null for a record that has never been published', async () => {
-    const { orgId, humanActorId } = await seedPublishingOrg(
+    const { orgId, humanActorId, statusId } = await seedPublishingOrg(
       `ws-${Math.random().toString(36).slice(2, 8)}`,
     );
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Never published' })
+        .values({
+          organizationId: orgId,
+          name: 'Never published',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const app = await publishApp(orgId, ['contribute'], humanActorId);
@@ -281,11 +333,16 @@ describe('reading publication state (GET /, GET /:subjectKind/:subjectId)', () =
 
   it('reports the full publication state for a published record', async () => {
     const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    const { orgId, humanActorId } = await seedPublishingOrg(workspace);
+    const { orgId, humanActorId, statusId } = await seedPublishingOrg(workspace);
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Has state' })
+        .values({
+          organizationId: orgId,
+          name: 'Has state',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const app = await publishApp(orgId, ['contribute'], humanActorId);
@@ -331,18 +388,24 @@ describe('PATCH /:id · moving and withdrawing a brief in place', () => {
     anon: Awaited<ReturnType<typeof publicApp>>;
     orgId: string;
     humanActorId: string;
+    statusId: StatusIdLookup;
     workspace: string;
     publicationId: string;
     slug: string;
   }> {
     const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    const { orgId, humanActorId } = await seedPublishingOrg(workspace);
+    const { orgId, humanActorId, statusId } = await seedPublishingOrg(workspace);
     const app = await publishApp(orgId, ['contribute'], humanActorId);
     const anon = await publicApp();
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Patchable' })
+        .values({
+          organizationId: orgId,
+          name: 'Patchable',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const created = (await (
@@ -357,6 +420,7 @@ describe('PATCH /:id · moving and withdrawing a brief in place', () => {
       anon,
       orgId,
       humanActorId,
+      statusId,
       workspace,
       publicationId: created.id,
       slug: created.slug,
@@ -390,11 +454,16 @@ describe('PATCH /:id · moving and withdrawing a brief in place', () => {
   });
 
   it('409s a PATCH that names another brief’s address, and changes nothing', async () => {
-    const { app, orgId, publicationId, slug } = await publishedFixture();
+    const { app, orgId, statusId, publicationId, slug } = await publishedFixture();
     const otherProjectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Other patchable' })
+        .values({
+          organizationId: orgId,
+          name: 'Other patchable',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     await app.request('/', {
@@ -473,7 +542,7 @@ describe('PATCH /:id · moving and withdrawing a brief in place', () => {
 describe('CORE-27 · a brief reads the live record, not a snapshot', () => {
   it('reflects an edit to the title, status, dates, description, and child list', async () => {
     const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    const { orgId, teamId, humanActorId } = await seedPublishingOrg(workspace);
+    const { orgId, teamId, humanActorId, statusId } = await seedPublishingOrg(workspace);
     const app = await publishApp(orgId, ['contribute'], humanActorId);
     const anon = await publicApp();
 
@@ -485,6 +554,7 @@ describe('CORE-27 · a brief reads the live record, not a snapshot', () => {
           name: 'Before',
           description: 'Old body',
           status: 'planned',
+          statusId: statusId('project', 'planned'),
         })
         .returning({ id: schema.project.id }),
     ).id;
@@ -512,6 +582,7 @@ describe('CORE-27 · a brief reads the live record, not a snapshot', () => {
         name: 'After',
         description: 'New body',
         status: 'active',
+        statusId: statusId('project', 'active'),
         targetDate: new Date('2026-09-30T00:00:00.000Z'),
       })
       .where(eq(schema.project.id, projectId));
@@ -520,6 +591,7 @@ describe('CORE-27 · a brief reads the live record, not a snapshot', () => {
       teamId,
       title: 'Freshly added',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       projectId,
     });
 
@@ -699,11 +771,16 @@ describe('CORE-30 · a domain belongs to exactly one workspace', () => {
 describe('CORE-31 · DNS ownership before serving', () => {
   it('persists unverified, shows the exact record, and refuses to serve until the token matches', async () => {
     const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    const { orgId, humanActorId } = await seedPublishingOrg(workspace);
+    const { orgId, humanActorId, statusId } = await seedPublishingOrg(workspace);
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Gated by DNS' })
+        .values({
+          organizationId: orgId,
+          name: 'Gated by DNS',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     await (
@@ -793,7 +870,7 @@ describe('CORE-32 · the workspace slug fallback', () => {
     // seedBaseOrg alone, deliberately: no seedPublishingOrg, no address-router call of any kind.
     // The org's own slug (auto-derived at creation) is its brief address from the moment it
     // exists — there is no "unclaimed" state left to put it in.
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [org] = await db
       .select({ slug: schema.organization.slug })
       .from(schema.organization)
@@ -805,7 +882,12 @@ describe('CORE-32 · the workspace slug fallback', () => {
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Slug-served' })
+        .values({
+          organizationId: orgId,
+          name: 'Slug-served',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const published = (await (
@@ -825,18 +907,28 @@ describe('CORE-32 · the workspace slug fallback', () => {
 
   it('rejects a brief slug that collides with another brief in the same workspace', async () => {
     const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
-    const { orgId, humanActorId } = await seedPublishingOrg(workspace);
+    const { orgId, humanActorId, statusId } = await seedPublishingOrg(workspace);
     const app = await publishApp(orgId, ['contribute'], humanActorId);
     const first = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'One' })
+        .values({
+          organizationId: orgId,
+          name: 'One',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const second = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Two' })
+        .values({
+          organizationId: orgId,
+          name: 'Two',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
 
@@ -865,13 +957,23 @@ describe('MISS-04 · a verified domain serves its own workspace only', () => {
     const mine = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: tenant.orgId, name: 'Mine' })
+        .values({
+          organizationId: tenant.orgId,
+          name: 'Mine',
+          status: 'planned',
+          statusId: tenant.statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const theirs = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: other.orgId, name: 'Theirs' })
+        .values({
+          organizationId: other.orgId,
+          name: 'Theirs',
+          status: 'planned',
+          statusId: other.statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     await (

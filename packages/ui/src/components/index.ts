@@ -9,6 +9,7 @@
 export { AppBar, type AppBarProps } from './shell/AppBar';
 export { ActorAvatar, type ActorAvatarProps, type ActorKind } from './atoms/ActorAvatar';
 export { AuthLayout, type AuthLayoutProps } from './auth/AuthLayout';
+export { DragHandle, type DragHandleProps } from './atoms/DragHandle';
 export {
   EmptyState,
   type EmptyStateCta,

@@ -5,7 +5,7 @@ import type * as DbModule from '@docket/db';
 import type { ExternalWriteResult, ImportedItem, WritableConnector } from '@docket/integrations';
 
 import type * as ReconcileModule from '../../src/routes/integration-reconcile';
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { getDb, one, seedBaseOrg, seedStatus, seedStatuses } from '../support/routes-harness';
 
 /**
  * `reconcileTasks` orchestration tests — the DB-backed sibling of
@@ -58,6 +58,8 @@ async function seedLinkedTask(
   integrationId: string,
   overrides: Partial<typeof schema.task.$inferInsert> = {},
 ): Promise<typeof schema.task.$inferSelect> {
+  const statusId = await seedStatuses(db, schema, orgId);
+  const state = overrides.state ?? 'todo';
   return one(
     await db
       .insert(schema.task)
@@ -65,7 +67,6 @@ async function seedLinkedTask(
         organizationId: orgId,
         teamId,
         title: 'Linked task',
-        state: 'todo',
         source: 'linked',
         sourceIntegrationId: integrationId,
         sourceSyncMode: 'mirror',
@@ -73,6 +74,8 @@ async function seedLinkedTask(
         externalUpdatedAt: new Date(OLD_ISO),
         updatedAt: new Date(OLD_ISO),
         ...overrides,
+        state,
+        statusId: statusId('task', state),
       })
       .returning(),
   );
@@ -84,6 +87,8 @@ async function seedNativeTask(
   teamId: string,
   overrides: Partial<typeof schema.task.$inferInsert> = {},
 ): Promise<typeof schema.task.$inferSelect> {
+  const statusId = await seedStatuses(db, schema, orgId);
+  const state = overrides.state ?? 'todo';
   return one(
     await db
       .insert(schema.task)
@@ -91,9 +96,10 @@ async function seedNativeTask(
         organizationId: orgId,
         teamId,
         title: 'Native task',
-        state: 'todo',
         source: 'native',
         ...overrides,
+        state,
+        statusId: statusId('task', state),
       })
       .returning(),
   );
@@ -700,6 +706,20 @@ describe('resolveStateKeys — fallback chains on a team with an incomplete work
         .values({ organizationId: orgId, name: 'Odd', key: 'ODD', workflowStates: oddStates })
         .returning(),
     );
+    // The team keeps its own Task statuses, and its set is the incomplete one above: a single
+    // 'started' status, with no unstarted/completed/canceled entry for the resolver to land on.
+    for (const seed of oddStates) {
+      await seedStatus(db, schema, {
+        organizationId: orgId,
+        entityType: 'task',
+        teamId: oddTeam.id,
+        key: seed.key,
+        name: seed.name,
+        description: null,
+        category: 'started',
+        position: seed.position,
+      });
+    }
     return { orgId, teamId: oddTeam.id, humanActorId };
   }
 
@@ -729,10 +749,20 @@ describe('resolveStateKeys — fallback chains on a team with an incomplete work
   it("typeOf falls back to 'backlog' for a task state key the team no longer defines", async () => {
     const { orgId, teamId, humanActorId } = await seedOddTeam();
     const integration = await seedIntegration(orgId, humanActorId, { writeBack: true });
-    // A dirty task whose `state` predates a workflow-state rename — no longer a real key. A
-    // remote counterpart (unchanged since the anchor) keeps the action a plain 'push', not
-    // 'pushDelete' or 'noop', so `pushUpdate`'s `stateType === 'completed'` check is what's
-    // actually exercised by the `typeOf(...) ?? 'backlog'` fallback.
+    // A dirty task whose `state` predates a workflow-state rename — no longer a key in this
+    // team's own set. A remote counterpart (unchanged since the anchor) keeps the action a plain
+    // 'push', not 'pushDelete' or 'noop', so `pushUpdate`'s `stateType === 'completed'` check is
+    // what's actually exercised by the `typeOf(...) ?? 'backlog'` fallback.
+    await seedStatus(db, schema, {
+      organizationId: orgId,
+      entityType: 'task',
+      teamId: null,
+      key: 'a-deleted-state-key',
+      name: 'A Deleted State Key',
+      description: null,
+      category: 'started',
+      position: 1,
+    });
     await seedLinkedTask(orgId, teamId, integration.id, {
       externalId: 'ext-stale-key',
       state: 'a-deleted-state-key',
@@ -768,6 +798,18 @@ describe('resolveStateKeys — fallback chains on a team with an incomplete work
         .values({ organizationId: orgId, name: 'Empty', key: 'EMPTY', workflowStates: [] })
         .returning(),
     );
+    // The team's own set is as degenerate as a set can be: one status, in the category new work
+    // starts in, and nothing else for the resolver to prefer.
+    await seedStatus(db, schema, {
+      organizationId: orgId,
+      entityType: 'task',
+      teamId: emptyTeam.id,
+      key: 'backlog',
+      name: 'Backlog',
+      description: null,
+      category: 'backlog',
+      position: 0,
+    });
     const integration = await seedIntegration(orgId, humanActorId);
     const item = remoteItem({
       id: 'ext-empty-states',
@@ -785,7 +827,8 @@ describe('resolveStateKeys — fallback chains on a team with an incomplete work
         .from(schema.task)
         .where(eq(schema.task.sourceIntegrationId, integration.id)),
     );
-    // states[0]?.key is also undefined on an empty array -> the final 'backlog' literal.
+    // No unstarted status to land on, and none in the same half either, so the fallback settles
+    // on the only status the set has.
     expect(created.state).toBe('backlog');
   });
 });

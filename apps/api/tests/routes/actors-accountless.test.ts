@@ -22,7 +22,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, fakeSession, getDb } from '../support/routes-harness';
+import { appWithActor, fakeSession, getDb, seedStatuses } from '../support/routes-harness';
 import type membersRouter from '../../src/routes/members';
 import type tasksRouter from '../../src/routes/tasks';
 import type projectsRouter from '../../src/routes/projects';
@@ -67,6 +67,9 @@ async function seedOrg(opts: { personal?: boolean } = {}): Promise<SeededOrg> {
     .values({ name: slug, slug, lifecycleState: 'active', isPersonal: opts.personal ?? false })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  // The routes under test create work in this workspace, and work points at one of the
+  // workspace's statuses — so the status set has to exist before the first POST.
+  await seedStatuses(db, schema, orgId);
   const [ownerRole] = await db
     .insert(schema.role)
     .values({

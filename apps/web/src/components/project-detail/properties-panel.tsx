@@ -14,7 +14,8 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, Layers, Target } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';
 
-import { HEALTH_OPTIONS, labelOptions, PROJECT_STATUS_OPTIONS } from '@/components/pickers/options';
+import { HEALTH_OPTIONS, labelOptions, statusOptions } from '@/components/pickers/options';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityMetadataItem,
@@ -89,14 +90,19 @@ export function PropertiesPanel({
   const initiativeLabel = useVocabulary('initiative');
   const readOnly = !canEdit;
 
+  const statuses = useStatusRegistry();
+  const projectStatusOptions = useMemo(
+    () => statusOptions(statuses.statusesFor('project')),
+    [statuses],
+  );
   const labelPickerOptions = useMemo(() => labelOptions(availableLabels), [availableLabels]);
   const labelIds = useMemo<readonly string[]>(() => labels.map((label) => label.id), [labels]);
 
   return (
     <>
       <EntityMetadataItem priority={0}>
-        <EnumPicker<ProjectStatus>
-          options={PROJECT_STATUS_OPTIONS}
+        <EnumPicker
+          options={projectStatusOptions}
           value={status}
           onChange={(next) => {
             if (next) onStatusChange(next);

@@ -76,6 +76,7 @@ import { readCalendarSettings, requireUserId } from './calendar-shared';
 import { syncCalendarConnections } from './calendar-sync-engine';
 import { createDefaultCalendarSyncModules } from './calendar-sync-modules';
 import { toOut } from './task-helpers';
+import { landingStatus } from '../lib/work-status';
 
 const idParam = z.object({ id: z.string() });
 const itemTaskParam = z.object({ id: z.string(), taskId: z.string() });
@@ -111,7 +112,13 @@ function toVisibilityPatch(body: {
 async function resolveTaskTarget(
   userId: string,
   body: z.infer<typeof CalendarEventCreateTask>,
-): Promise<{ organizationId: string; teamId: string; actorId: string; state: string }> {
+): Promise<{
+  organizationId: string;
+  teamId: string;
+  actorId: string;
+  state: string;
+  statusId: string;
+}> {
   const actorRows = await db
     .select({ id: actor.id, organizationId: actor.organizationId })
     .from(actor)
@@ -140,7 +147,10 @@ async function resolveTaskTarget(
     organizationId: member.organizationId,
     teamId: targetTeam.id,
     actorId: member.id,
-    state: targetTeam.workflowStates[0]?.key ?? 'backlog',
+    ...(await landingStatus(member.organizationId, 'task', targetTeam.id).then((status) => ({
+      state: status.key,
+      statusId: status.id,
+    }))),
   };
 }
 
@@ -331,6 +341,7 @@ const meCalendar = new Hono<AppEnv>()
             createdBy: target.actorId,
             title: body.title ?? row.event.title,
             description: body.note ?? row.event.description,
+            statusId: target.statusId,
             state: target.state,
             priority: 'none',
             externalUrl: row.event.htmlLink,

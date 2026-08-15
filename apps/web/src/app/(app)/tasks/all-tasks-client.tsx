@@ -41,7 +41,7 @@ import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query'
 import { todayISODate } from '@/lib/today';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
-import { stateTypeOf } from '@/lib/work-state';
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
 
 /** Sort modes for the unified list. */
 type TaskSort = 'due' | 'priority';
@@ -206,6 +206,7 @@ interface TaskRowProps {
 /** One task row: status glyph · title · due · workspace chip, linking to the task. */
 function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
   const router = useRouter();
+  const categoryOf = useCategoryOf('task');
   const href = `/orgs/${task.organizationId}/tasks/${task.id}`;
   const overdue = task.dueDate != null && task.dueDate < todayISODate();
 
@@ -254,7 +255,7 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
         dragProps?.className,
       )}
     >
-      <StatusGlyph type={stateTypeOf(task.state)} />
+      <StatusGlyph type={categoryOf(task.state)} />
       {canEdit ? (
         <EditableTitle
           value={task.title}

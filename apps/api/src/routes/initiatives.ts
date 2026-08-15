@@ -42,6 +42,7 @@ import { clearableTextPatch } from '../lib/clearable-text';
 import { replaceLabels, resolveLabelSet } from '../lib/labels';
 import { deferAfterResponse } from '../lib/after-response';
 import { ok } from '../lib/ok';
+import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -115,6 +116,7 @@ const initiatives = new Hono<AppEnv>()
       // Through the shared resolver, so an initiative obeys label-group exclusivity exactly as a
       // task does. Initiatives have no team, so only workspace-wide labels are offerable.
       const labels = await resolveLabelSet(orgId, body.labelIds);
+      const status = await resolveContainerStatus(orgId, 'initiative', body.status ?? 'active');
       const row = await db.transaction(async (tx) => {
         const inserted = await tx
           .insert(initiative)
@@ -124,7 +126,8 @@ const initiatives = new Hono<AppEnv>()
             summary: body.summary,
             description: body.description,
             ownerId: body.ownerId,
-            status: body.status ?? 'active',
+            status: status.status,
+            statusId: status.statusId,
             priority: body.priority ?? 'none',
             updateCadence: body.updateCadence ?? 'monthly',
             targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
@@ -241,13 +244,19 @@ const initiatives = new Hono<AppEnv>()
       // Through the shared resolver, so an initiative obeys label-group exclusivity exactly as a
       // task does. Initiatives have no team, so only workspace-wide labels are offerable.
       const labels = await resolveLabelSet(orgId, body.labelIds);
+      const nextStatus =
+        body.status === undefined
+          ? undefined
+          : await resolveContainerStatus(orgId, 'initiative', body.status);
       const row = await db.transaction(async (tx) => {
         const values: Partial<typeof initiative.$inferInsert> = {
           ...(body.name !== undefined ? { name: body.name } : {}),
           ...clearableTextPatch('summary', body.summary),
           ...clearableTextPatch('description', body.description),
           ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
-          ...(body.status !== undefined ? { status: body.status } : {}),
+          ...(nextStatus === undefined
+            ? {}
+            : { status: nextStatus.status, statusId: nextStatus.statusId }),
           ...(body.priority !== undefined ? { priority: body.priority } : {}),
           ...(body.updateCadence !== undefined ? { updateCadence: body.updateCadence } : {}),
           ...(body.targetDate !== undefined

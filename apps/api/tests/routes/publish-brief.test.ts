@@ -13,7 +13,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { NotFoundError } from '../../src/error';
 import type * as PublishBriefModule from '../../src/routes/publish-brief';
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { getDb, one, seedBaseOrg, seedStatus } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -115,23 +115,38 @@ describe('resolveHostScope', () => {
 
 describe('requireSubjectTitle', () => {
   it('returns the record’s current name for each subject kind', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
+    const { orgId, statusId } = await seedBaseOrg(db, schema);
     const initiativeId = one(
       await db
         .insert(schema.initiative)
-        .values({ organizationId: orgId, name: 'Reliability push' })
+        .values({
+          organizationId: orgId,
+          name: 'Reliability push',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning({ id: schema.initiative.id }),
     ).id;
     const programId = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'Platform program' })
+        .values({
+          organizationId: orgId,
+          name: 'Platform program',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     ).id;
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Q3 project' })
+        .values({
+          organizationId: orgId,
+          name: 'Q3 project',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
 
@@ -146,7 +161,12 @@ describe('requireSubjectTitle', () => {
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: theirs.orgId, name: 'Not yours' })
+        .values({
+          organizationId: theirs.orgId,
+          name: 'Not yours',
+          status: 'planned',
+          statusId: theirs.statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     await expect(requireSubjectTitle(mine.orgId, 'project', projectId)).rejects.toThrow(
@@ -232,17 +252,27 @@ describe('publicationsForSubjects', () => {
   });
 
   it('returns the matching publication rows, newest first', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
+    const { orgId, statusId } = await seedBaseOrg(db, schema);
     const aId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'first' })
+        .values({
+          organizationId: orgId,
+          name: 'first',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const bId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'second' })
+        .values({
+          organizationId: orgId,
+          name: 'second',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     await db.insert(schema.publication).values({
@@ -278,13 +308,18 @@ describe('publicationsForSubjects', () => {
 
 describe('the underlying record disappearing after publication', () => {
   it('404s an initiative brief once the initiative row is gone', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
+    const { orgId, statusId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
     await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
     const initiativeId = one(
       await db
         .insert(schema.initiative)
-        .values({ organizationId: orgId, name: 'Gone soon' })
+        .values({
+          organizationId: orgId,
+          name: 'Gone soon',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning({ id: schema.initiative.id }),
     ).id;
     await db.insert(schema.publication).values({
@@ -303,13 +338,18 @@ describe('the underlying record disappearing after publication', () => {
   });
 
   it('404s a program brief once the program row is gone', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
+    const { orgId, statusId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
     await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
     const programId = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'Gone soon' })
+        .values({
+          organizationId: orgId,
+          name: 'Gone soon',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     ).id;
     await db.insert(schema.publication).values({
@@ -328,13 +368,18 @@ describe('the underlying record disappearing after publication', () => {
   });
 
   it('404s a project brief once the project row is gone', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
+    const { orgId, statusId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
     await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Gone soon' })
+        .values({
+          organizationId: orgId,
+          name: 'Gone soon',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     await db.insert(schema.publication).values({
@@ -366,7 +411,7 @@ describe('the underlying record disappearing after publication', () => {
 
 describe('owner resolution and the task-state fallback in a project brief', () => {
   it('resolves a real owner name, drops a deleted owner to null, and falls back to completedAt/canceledAt when a task’s state key is unknown to its team', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
     await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
 
@@ -380,7 +425,13 @@ describe('owner resolution and the task-state fallback in a project brief', () =
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Owned project', leadId: owner })
+        .values({
+          organizationId: orgId,
+          name: 'Owned project',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+          leadId: owner,
+        })
         .returning({ id: schema.project.id }),
     ).id;
     await db.insert(schema.publication).values({
@@ -393,6 +444,18 @@ describe('owner resolution and the task-state fallback in a project brief', () =
 
     // A task whose `state` no longer matches any of the team's configured workflow states, and
     // that is recorded complete via `completedAt` rather than the (now-absent) workflow state.
+    // The workspace still defines the key (work carries a status the workspace knows), but the
+    // team's own workflow no longer lists it — which is the fallback this exercises.
+    const retiredStatusId = await seedStatus(db, schema, {
+      organizationId: orgId,
+      entityType: 'task',
+      teamId: null,
+      key: 'retired-state-key',
+      name: 'retired-state-key',
+      description: null,
+      category: 'started',
+      position: 90,
+    });
     const doneTaskId = one(
       await db
         .insert(schema.task)
@@ -401,6 +464,7 @@ describe('owner resolution and the task-state fallback in a project brief', () =
           teamId,
           title: 'Legacy-completed task',
           state: 'retired-state-key',
+          statusId: retiredStatusId,
           projectId,
         })
         .returning({ id: schema.task.id }),
@@ -416,6 +480,7 @@ describe('owner resolution and the task-state fallback in a project brief', () =
       teamId,
       title: 'Legacy-open task',
       state: 'retired-state-key',
+      statusId: retiredStatusId,
       projectId,
     });
 
@@ -463,11 +528,16 @@ describe('a deployment with no brief host and no verified domain', () => {
     const saved = hosts['brief'];
     delete hosts['brief'];
     try {
-      const { orgId } = await seedBaseOrg(db, schema);
+      const { orgId, statusId } = await seedBaseOrg(db, schema);
       const projectId = one(
         await db
           .insert(schema.project)
-          .values({ organizationId: orgId, name: 'No brief host, no domain' })
+          .values({
+            organizationId: orgId,
+            name: 'No brief host, no domain',
+            status: 'planned',
+            statusId: statusId('project', 'planned'),
+          })
           .returning({ id: schema.project.id }),
       ).id;
       await db.insert(schema.publication).values({
@@ -486,7 +556,7 @@ describe('a deployment with no brief host and no verified domain', () => {
 
 describe('a program brief’s directly-held tasks and the owner fallback', () => {
   it('reads a program’s own owner name and its direct task section', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
     await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
     const owner = one(
@@ -498,7 +568,13 @@ describe('a program brief’s directly-held tasks and the owner fallback', () =>
     const programId = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'Owned program', ownerId: owner })
+        .values({
+          organizationId: orgId,
+          name: 'Owned program',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+          ownerId: owner,
+        })
         .returning({ id: schema.program.id }),
     ).id;
     await db.insert(schema.task).values({
@@ -506,6 +582,7 @@ describe('a program brief’s directly-held tasks and the owner fallback', () =>
       teamId,
       title: 'Directly on the program',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       programId,
     });
     await db.insert(schema.publication).values({

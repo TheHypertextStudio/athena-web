@@ -137,7 +137,7 @@ describe('daily-plan: null timeboxes on create + a minimal patch', () => {
       .insert(schema.hub)
       .values({ userId: assertDefined(user).id })
       .returning({ id: schema.hub.id });
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     await db.insert(schema.actor).values({
       organizationId: orgId,
       kind: 'human',
@@ -146,7 +146,14 @@ describe('daily-plan: null timeboxes on create + a minimal patch', () => {
     });
     const [t] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, title: 'T', teamId, state: 'todo', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        title: 'T',
+        teamId,
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: humanActorId,
+      })
       .returning({ id: schema.task.id });
 
     // appWithActor also injects a session; daily-plan reads the session for the user.

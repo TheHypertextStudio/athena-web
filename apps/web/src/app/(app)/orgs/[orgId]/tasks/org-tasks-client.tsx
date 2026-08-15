@@ -30,6 +30,7 @@ import { applyView } from '@/components/views/apply-view';
 import { resolveRelationLabel, type FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { useViewState } from '@/components/views/use-view-state';
@@ -110,6 +111,8 @@ export default function OrgTasksClient(): JSX.Element {
   const canEdit = useOrgCapability(members, roles, 'contribute');
   const renameTask = useRenameTask(orgId, [queryKeys.tasks(orgId)]);
 
+  const statuses = useStatusRegistry().statusesFor('task');
+
   // Keyed by plain `string`: the ids arriving from the catalog and column resolvers are opaque
   // strings, not the branded id types the DTOs carry, so branding the map keys would only force a
   // cast at every lookup.
@@ -133,6 +136,7 @@ export default function OrgTasksClient(): JSX.Element {
   const catalog = useMemo(
     () =>
       buildTaskCatalog({
+        statuses,
         projectLabel: projectNoun,
         programLabel: programNoun,
         resolveProject: (id) =>
@@ -154,6 +158,7 @@ export default function OrgTasksClient(): JSX.Element {
         tasks,
       }),
     [
+      statuses,
       tasks,
       agentActorIds,
       agentsQ.isPending,
@@ -177,6 +182,7 @@ export default function OrgTasksClient(): JSX.Element {
     () =>
       buildTaskColumns({
         catalog,
+        statuses,
         resolveActor: (actorId) => {
           const member = memberById.get(actorId);
           return member
@@ -189,7 +195,7 @@ export default function OrgTasksClient(): JSX.Element {
           router.push(`/orgs/${orgId}/tasks/${task.id}`);
         },
       }),
-    [canEdit, catalog, memberById, orgId, renameTask, router],
+    [canEdit, catalog, statuses, memberById, orgId, renameTask, router],
   );
 
   const openTaskComposer = (): void => {

@@ -106,6 +106,7 @@ Errors: 404 (\`No team to capture into\`) when the org has no team to land in. R
         title: deriveTitle(text),
         description: text,
         teamId: landing.teamId,
+        statusId: landing.statusId,
         state: landing.state,
         assigneeId: landing.assigneeId,
         cycleId: landing.cycleId,

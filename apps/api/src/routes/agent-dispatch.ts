@@ -331,6 +331,7 @@ export async function dispatchAthenaWork(input: DispatchWorkInput): Promise<Disp
       title: spawnLabel,
       description: input.prompt,
       teamId: landing.teamId,
+      statusId: landing.statusId,
       state: landing.state,
       assigneeId: landing.assigneeId,
       cycleId: landing.cycleId,

@@ -102,7 +102,7 @@ describe('list pagination (keyset cursor)', () => {
   });
 
   it('programs: optional limit pages the list newest-first', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const ids: string[] = [];
     for (let i = 0; i < 3; i++) {
       const [row] = await db
@@ -112,6 +112,8 @@ describe('list pagination (keyset cursor)', () => {
           name: `P${i}`,
           createdBy: humanActorId,
           createdAt: new Date(Date.UTC(2026, i, 1)),
+          status: 'active',
+          statusId: statusId('program', 'active'),
         })
         .returning({ id: schema.program.id });
       ids.push(assertDefined(row).id);
@@ -121,7 +123,7 @@ describe('list pagination (keyset cursor)', () => {
   });
 
   it('initiatives: optional limit pages the list newest-first', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const ids: string[] = [];
     for (let i = 0; i < 3; i++) {
       const [row] = await db
@@ -131,6 +133,8 @@ describe('list pagination (keyset cursor)', () => {
           name: `I${i}`,
           createdBy: humanActorId,
           createdAt: new Date(Date.UTC(2026, i, 1)),
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
         })
         .returning({ id: schema.initiative.id });
       ids.push(assertDefined(row).id);
@@ -144,7 +148,7 @@ describe('list pagination (keyset cursor)', () => {
   });
 
   it('projects: optional limit pages the list newest-first', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const ids: string[] = [];
     for (let i = 0; i < 3; i++) {
       const [row] = await db
@@ -155,6 +159,8 @@ describe('list pagination (keyset cursor)', () => {
           teamId,
           createdBy: humanActorId,
           createdAt: new Date(Date.UTC(2026, i, 1)),
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
         })
         .returning({ id: schema.project.id });
       ids.push(assertDefined(row).id);
@@ -164,7 +170,7 @@ describe('list pagination (keyset cursor)', () => {
   });
 
   it('tasks: optional limit pages the active-task list newest-first', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const ids: string[] = [];
     for (let i = 0; i < 3; i++) {
       const [row] = await db
@@ -176,6 +182,7 @@ describe('list pagination (keyset cursor)', () => {
           state: 'todo',
           createdBy: humanActorId,
           createdAt: new Date(Date.UTC(2026, i, 1)),
+          statusId: statusId('task', 'todo'),
         })
         .returning({ id: schema.task.id });
       ids.push(assertDefined(row).id);

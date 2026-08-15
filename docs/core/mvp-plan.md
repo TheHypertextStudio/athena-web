@@ -82,7 +82,7 @@ The Hub **gathers** the organizations you're a member of — it does **not** pri
    Organization
      ├─ contains ─► Initiative   (a theme — no work inside; spans Programs/Projects)
      │
-     ├─ contains ─► Program      (ONGOING operations — no end)
+     ├─ contains ─► Program      (ONGOING operations — usually no end)
      │                ├─ Project (a bounded effort — has an outcome/optional deadline)
      │                │    └─ Task (+ Milestones as a dated checkpoint attribute)
      │                └─ Task    (ongoing/recurring work, no project)
@@ -98,12 +98,14 @@ The Hub **gathers** the organizations you're a member of — it does **not** pri
 | Concept        | What it is                                                                                                                                                                                | Has an end?       | Headline signal                |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------ |
 | **Initiative** | A strategic **theme** that groups efforts ("Grow revenue"). Contains no work itself; Programs/Projects _associate_ with it.                                                               | No                | Rolled‑up health + child mix   |
-| **Program**    | An **ongoing area of operations** ("Customer Support"; a nonprofit's "After‑School Program"). Never finishes.                                                                             | No                | Health + flow (not a % bar)    |
+| **Program**    | An **ongoing area of operations** ("Customer Support"; a nonprofit's "After‑School Program"). Usually runs on, and can reach an end.                                                      | Usually not       | Health + flow (not a % bar)    |
 | **Project**    | A **bounded effort** ("Launch v2"; "Spring Gala"). Tracked to completion; may carry a deadline.                                                                                           | Yes               | Weighted‑progress bar + health |
 | **Cycle**      | A **recurring stretch of time** — say two weeks — that a team commits a batch of work to, then reviews (a marketing team's two‑week content push; a monthly giving cycle; _sprint‑like_). | Yes (fixed)       | Committed work + capacity      |
 | **Task**       | The **atomic unit of work**.                                                                                                                                                              | Optional due date | Status + assignee              |
 
-**Why "Program" is its own concept (not just a renamed Initiative).** Real organizations — especially nonprofits and operations teams — run continuous work that never "completes." Project (bounded) and Initiative (a theme with no work inside) leave that homeless. Program fills it: an ongoing container of work, the continuous counterpart to the bounded Project.
+**Why "Program" is its own concept (not just a renamed Initiative).** Real organizations — especially nonprofits and operations teams — run continuous work that keeps going after each deliverable inside it lands. Project (bounded) and Initiative (a theme with no work inside) leave that homeless. Program fills it: an ongoing container of work, the continuous counterpart to the bounded Project.
+
+> **Superseded:** the table row above previously read "Never finishes.", and this paragraph described Program as work that never "completes." A Program can now be completed. Most of them do run on indefinitely, which is why they are read through health and flow rather than a progress bar, and why the seeded Program statuses put `Active` at the centre — but a real after-school program can be wound down at the end of its last term, and an operations function can be retired. The seeded set is `Proposed · Active · Paused · Completed · Archived`, where `Archived` means retired and kept for history. Statuses are workspace-defined (`docs/engineering/specs/statuses.md`), so a workspace that wants Programs which only ever end by being archived deletes `Completed` from its Program set.
 
 ### 3.3 Key model rules
 

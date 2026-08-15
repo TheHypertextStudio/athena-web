@@ -11,6 +11,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -30,6 +31,7 @@ interface Seed {
   projectId: string;
   programId: string;
   initiativeId: string;
+  statusId: StatusIdLookup;
   ctx: McpContext;
 }
 
@@ -41,6 +43,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [role] = await db
     .insert(schema.role)
@@ -91,17 +94,31 @@ async function seedOrg(): Promise<Seed> {
       name: 'Auth Rewrite',
       teamId: assertDefined(team).id,
       createdBy: actorId,
+      status: 'planned',
+      statusId: statusId('project', 'planned'),
     })
     .returning({ id: schema.project.id });
 
   const [program] = await db
     .insert(schema.program)
-    .values({ organizationId: orgId, name: 'Reliability', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      name: 'Reliability',
+      createdBy: actorId,
+      status: 'active',
+      statusId: statusId('program', 'active'),
+    })
     .returning({ id: schema.program.id });
 
   const [initiative] = await db
     .insert(schema.initiative)
-    .values({ organizationId: orgId, name: 'Q3 Platform', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      name: 'Q3 Platform',
+      createdBy: actorId,
+      status: 'active',
+      statusId: statusId('initiative', 'active'),
+    })
     .returning({ id: schema.initiative.id });
 
   return {
@@ -111,6 +128,7 @@ async function seedOrg(): Promise<Seed> {
     projectId: assertDefined(project).id,
     programId: assertDefined(program).id,
     initiativeId: assertDefined(initiative).id,
+    statusId,
     ctx: {
       principal: {
         kind: 'user',
@@ -127,15 +145,17 @@ async function seedTask(
   s: Seed,
   values: Partial<typeof schema.task.$inferInsert> = {},
 ): Promise<string> {
+  const state = values.state ?? 'backlog';
   const [row] = await db
     .insert(schema.task)
     .values({
       organizationId: s.orgId,
       title: 'Task',
       teamId: s.teamId,
-      state: 'backlog',
       createdBy: s.actorId,
       ...values,
+      state,
+      statusId: s.statusId('task', state),
     })
     .returning({ id: schema.task.id });
   return assertDefined(row).id;
@@ -264,9 +284,13 @@ describe('link', () => {
 
   it('asks which one when a name is both a project and a program', async () => {
     const s = await seedOrg();
-    await db
-      .insert(schema.program)
-      .values({ organizationId: s.orgId, name: 'Auth Rewrite', createdBy: s.actorId });
+    await db.insert(schema.program).values({
+      organizationId: s.orgId,
+      name: 'Auth Rewrite',
+      createdBy: s.actorId,
+      status: 'active',
+      statusId: s.statusId('program', 'active'),
+    });
     const client = await connect(s.ctx);
     const res = (await client.callTool({
       name: 'link',

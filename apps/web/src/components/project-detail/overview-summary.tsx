@@ -18,7 +18,7 @@
  *   done/total count and a thin completion bar, so a viewer sees which milestones are
  *   carrying the project and which are stalled — without leaving Overview for the Tasks tab.
  *
- * All counts use {@link stateTypeOf} for the canonical type and the shared state tokens for
+ * All counts group by status category and use the shared state tokens for
  * color, so the breakdown stays consistent with the status glyphs everywhere else.
  */
 import type { TaskOut } from '@docket/types';
@@ -29,8 +29,9 @@ import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { countTasksByMilestone } from '@/lib/milestone-progress';
-import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
+import { CATEGORY_LABEL, CATEGORY_ORDER } from '@/lib/work-category';
 
 /** A task paired with its resolved milestone id (mirrors the Tasks-tab shape). */
 export interface SummaryTask {
@@ -82,16 +83,18 @@ export function OverviewSummary({
   taskNounPlural,
 }: OverviewSummaryProps): JSX.Element {
   const total = tasks.length;
+  const categoryOf = useCategoryOf('task');
 
-  /** Count of tasks per canonical state type, in canonical order (zeros dropped for chips). */
+  // Counted by category rather than by status name: the bar and its legend are a shape-of-the-work
+  // read, and a workspace with three in-progress statuses still wants one in-progress band.
   const byState = useMemo(() => {
     const counts = new Map<WorkflowStateType, number>();
     for (const t of tasks) {
-      const type = stateTypeOf(t.task.state);
+      const type = categoryOf(t.task.state);
       counts.set(type, (counts.get(type) ?? 0) + 1);
     }
-    return STATE_GROUP_ORDER.map((type) => ({ type, count: counts.get(type) ?? 0 }));
-  }, [tasks]);
+    return CATEGORY_ORDER.map((type) => ({ type, count: counts.get(type) ?? 0 }));
+  }, [tasks, categoryOf]);
 
   /** Per-milestone done/total roll-up, in display order with Unscheduled last. */
   const byMilestone = useMemo(() => {
@@ -99,7 +102,7 @@ export function OverviewSummary({
     milestones.forEach((m, i) => order.set(m.id, i));
     const name = new Map<string, string>(milestones.map((m) => [m.id, m.name]));
 
-    const buckets = countTasksByMilestone(tasks, UNSCHEDULED_ID);
+    const buckets = countTasksByMilestone(tasks, UNSCHEDULED_ID, categoryOf);
 
     return [...buckets.entries()]
       .map(([id, b]) => ({
@@ -110,7 +113,7 @@ export function OverviewSummary({
         rank: id === UNSCHEDULED_ID ? milestones.length : (order.get(id) ?? milestones.length),
       }))
       .sort((a, b) => a.rank - b.rank);
-  }, [tasks, milestones]);
+  }, [tasks, milestones, categoryOf]);
 
   if (total === 0) {
     return (
@@ -146,7 +149,7 @@ export function OverviewSummary({
           role="img"
           aria-label={byState
             .filter((s) => s.count > 0)
-            .map((s) => `${s.count} ${STATE_GROUP_LABEL[s.type]}`)
+            .map((s) => `${s.count} ${CATEGORY_LABEL[s.type]}`)
             .join(', ')}
         >
           {byState
@@ -166,8 +169,8 @@ export function OverviewSummary({
             .filter((s) => s.count > 0)
             .map((s) => (
               <li key={s.type} className="flex items-center gap-1.5 text-xs">
-                <StatusIcon type={s.type} className="size-4" label={STATE_GROUP_LABEL[s.type]} />
-                <span className="text-on-surface-variant">{STATE_GROUP_LABEL[s.type]}</span>
+                <StatusIcon type={s.type} className="size-4" label={CATEGORY_LABEL[s.type]} />
+                <span className="text-on-surface-variant">{CATEGORY_LABEL[s.type]}</span>
                 <span className="text-on-surface font-medium tabular-nums">{s.count}</span>
               </li>
             ))}

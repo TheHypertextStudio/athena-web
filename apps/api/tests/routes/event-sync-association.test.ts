@@ -92,7 +92,7 @@ async function soleEvent(orgId: string) {
 
 describe('entity association in the drain', () => {
   it('matches a webhook to the Docket task mirroring its subject', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     const [taskRow] = await db
@@ -102,6 +102,7 @@ describe('entity association in the drain', () => {
         teamId,
         title: 'Mirrored issue',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         visibility: 'public',
         source: 'linked',
         sourceIntegrationId: intgId,
@@ -121,7 +122,7 @@ describe('entity association in the drain', () => {
     // The rollout depends on this. Owner fan-out, search reindex, activity-document visibility and
     // automation subject matching all read `entity.docketEntityId`; writing it there would switch
     // all four on in one commit, which is precisely what resolving into a column avoids.
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     await db.insert(schema.task).values({
@@ -129,6 +130,7 @@ describe('entity association in the drain', () => {
       teamId,
       title: 'Mirrored issue',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       visibility: 'public',
       source: 'linked',
       sourceIntegrationId: intgId,
@@ -162,7 +164,7 @@ describe('entity association in the drain', () => {
   it('reindexes the associated task, so external activity refreshes what it concerns', async () => {
     // The first consumer switched onto the resolved id. Before association, an external event was
     // indexed as activity but never told the search index that the task it was about had moved.
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     const [taskRow] = await db
@@ -172,6 +174,7 @@ describe('entity association in the drain', () => {
         teamId,
         title: 'Mirrored issue',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         visibility: 'public',
         source: 'linked',
         sourceIntegrationId: intgId,
@@ -217,7 +220,7 @@ describe('entity association in the drain', () => {
     // `{kind:'completed', subjectType:'task'}`, and external events never carried a subjectType,
     // so closing an issue in Linear left the attached mail thread alone while closing the mirror
     // in Docket archived it. The task IS that issue, so the two now agree.
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     await seedDefaultAutomationRules(orgId, actorId);
@@ -229,6 +232,7 @@ describe('entity association in the drain', () => {
         teamId,
         title: 'Mirrored issue',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         visibility: 'public',
         source: 'linked',
         sourceIntegrationId: intgId,
@@ -307,7 +311,7 @@ describe('entity association in the drain', () => {
     // Owner rules query a Docket row by id, so a null association meant they never ran for
     // external activity: the assignee of a mirrored issue heard about Docket-side edits and
     // nothing that happened upstream, even though it is the same piece of work.
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const { actorId: ownerActorId } = await seedUserActor(orgId);
     const { userId: assigneeUserId, actorId: assigneeActorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, ownerActorId);
@@ -316,6 +320,7 @@ describe('entity association in the drain', () => {
       teamId,
       title: 'Mirrored issue',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       visibility: 'public',
       source: 'linked',
       sourceIntegrationId: intgId,
@@ -338,7 +343,7 @@ describe('entity association in the drain', () => {
   });
 
   it('fans out to nobody extra when the subject never resolved', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const { actorId: ownerActorId } = await seedUserActor(orgId);
     const { userId: assigneeUserId, actorId: assigneeActorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, ownerActorId);
@@ -348,6 +353,7 @@ describe('entity association in the drain', () => {
       teamId,
       title: 'Unrelated mirror',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       visibility: 'public',
       source: 'linked',
       sourceIntegrationId: intgId,
@@ -367,7 +373,7 @@ describe('entity association in the drain', () => {
   });
 
   it('will not associate across integrations within one org', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const { actorId } = await seedUserActor(orgId);
     const delivering = await seedIntegration(orgId, actorId);
     const other = await seedIntegration(orgId, actorId);
@@ -376,6 +382,7 @@ describe('entity association in the drain', () => {
       teamId,
       title: 'Someone else’s mirror',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       visibility: 'public',
       source: 'linked',
       sourceIntegrationId: other,

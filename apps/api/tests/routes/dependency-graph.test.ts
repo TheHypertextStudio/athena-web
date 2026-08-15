@@ -13,7 +13,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type { GraphOut } from '@docket/types';
 
-import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, one, seedBaseOrg, seedStatuses } from '../support/routes-harness';
 import type graphRouter from '../../src/routes/dependency-graph';
 
 let schema!: typeof DbModule;
@@ -43,6 +43,7 @@ async function seedTask(
     parentTaskId?: string;
   },
 ) {
+  const statusId = await seedStatuses(db, schema, orgId);
   return one(
     await db
       .insert(schema.task)
@@ -51,6 +52,7 @@ async function seedTask(
         title: opts.title,
         teamId,
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         visibility: opts.visibility ?? 'public',
         projectId: opts.projectId,
         parentTaskId: opts.parentTaskId,
@@ -137,11 +139,18 @@ describe('dependency graph — org scope', () => {
 
 describe('dependency graph — project scope', () => {
   it('narrows the node set to a single project', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const proj = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'P', teamId, createdBy: humanActorId })
+        .values({
+          organizationId: orgId,
+          name: 'P',
+          teamId,
+          createdBy: humanActorId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const inProj = await seedTask(orgId, teamId, { title: 'In', projectId: proj });

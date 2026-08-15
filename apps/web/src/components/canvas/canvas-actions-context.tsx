@@ -18,8 +18,16 @@ export interface CanvasActions {
   canEdit: boolean;
   /** Navigate to a task's detail page. */
   navigate: (id: string) => void;
-  /** Set a task's workflow state. */
-  setState: (id: string, state: string) => void;
+  /**
+   * Move a task into or out of its workspace's completed status.
+   *
+   * @remarks
+   * Deliberately a *verb* rather than `setState(id, key)`: every caller here means "finish this"
+   * or "reopen it", and each one used to spell that as the literal keys `done` and `todo`. Those
+   * keys belong to the workspace, not to the canvas, so the host resolves them once from the
+   * status registry and the elements ask for the outcome they want.
+   */
+  setComplete: (id: string, complete: boolean) => void;
   /** Create a subtask under a task. */
   createSubtask: (parentId: string, title: string) => void;
   /** Remove the dependency between two tasks (`blocking → blocked`). */

@@ -396,18 +396,31 @@ describe('tasks patch (PATCH /:id)', () => {
   });
 
   it('patches the project/program/milestone/cycle linkage fields (clear to null)', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
 
     // Seed a project + milestone + cycle and a task linked to all four so the patch
     // actually flips populated linkage columns back to null.
     const [proj] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'P', teamId, createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'P',
+        teamId,
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const [program] = await db
       .insert(schema.program)
-      .values({ organizationId: orgId, name: 'Prog', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Prog',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('program', 'active'),
+      })
       .returning({ id: schema.program.id });
     const [ms] = await db
       .insert(schema.milestone)
@@ -695,12 +708,19 @@ describe('tasks state transition (POST /:id/state)', () => {
 
 describe('tasks subtasks (GET + POST /:id/subtasks)', () => {
   it('creates a subtask (inherits team/project) and lists it', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
 
     const [proj] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'P', teamId, createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'P',
+        teamId,
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const projectId = assertDefined(proj).id;
 

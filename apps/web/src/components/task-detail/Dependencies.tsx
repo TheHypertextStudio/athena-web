@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
-import { stateTypeOf } from '@/lib/work-state';
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
 
 /** Props for {@link Dependencies}. */
 interface DependenciesProps {
@@ -45,6 +45,7 @@ function DependencyRow({
   canEdit,
   onRename,
 }: DependencyRowProps): JSX.Element {
+  const categoryOf = useCategoryOf('task');
   const project = (
     <span className="text-on-surface-variant shrink-0 text-xs">
       {task.projectId ? projectName(task.projectId) : `No ${projectLabel.toLowerCase()}`}
@@ -62,7 +63,7 @@ function DependencyRow({
           }}
           className="hover:bg-surface-container-high -mx-2 flex w-[calc(100%+1rem)] cursor-pointer items-center gap-2 rounded-md px-2 py-1.5"
         >
-          <StatusIcon type={stateTypeOf(task.state)} />
+          <StatusIcon type={categoryOf(task.state)} />
           <EditableTitle
             value={task.title}
             onSave={(title) => {
@@ -91,7 +92,7 @@ function DependencyRow({
         }}
         className="hover:bg-surface-container-high focus-visible:ring-ring -mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 py-1.5 text-left focus-visible:ring-1 focus-visible:outline-none"
       >
-        <StatusIcon type={stateTypeOf(task.state)} />
+        <StatusIcon type={categoryOf(task.state)} />
         <span className="text-body-medium min-w-0 flex-1 truncate">{task.title}</span>
         {project}
       </button>

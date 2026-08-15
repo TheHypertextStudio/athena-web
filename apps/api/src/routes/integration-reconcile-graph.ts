@@ -35,9 +35,8 @@
  * integration's existing rows — this keeps existence checks batched, never per-item selects.
  */
 import { and, eq, gt, inArray, isNotNull } from 'drizzle-orm';
-import { cycle, db, label, project, task, taskLabel, team } from '@docket/db';
-import type { WorkflowState, WorkflowStateType } from '@docket/db';
-import { ConnectorConfig } from '@docket/types';
+import { cycle, db, label, project, task, taskLabel } from '@docket/db';
+import { ConnectorConfig, type WorkStatusCategory } from '@docket/types';
 import type {
   ExternalCycle,
   ExternalLabel,
@@ -52,6 +51,7 @@ import type {
 } from '@docket/integrations';
 
 import { ConflictError } from '../error';
+import { loadStatusSets, type ResolvedStatus } from '../lib/work-status';
 
 import { externalActorReverseMap, syncExternalActors } from './integration-identity';
 import { resolveImportTeam } from './integration-import';
@@ -108,8 +108,10 @@ export interface GraphApplyContext {
   readonly identityMap: ReadonlyMap<string, string | null>;
   /** Resolve an external team id to its mapped Docket team id, or `undefined` when unmapped. */
   readonly resolveTeam: (externalTeamId: string) => string | undefined;
-  /** The mapped Docket team's workflow states, keyed by Docket team id (for state resolution). */
-  readonly statesByTeam: ReadonlyMap<string, readonly WorkflowState[]>;
+  /** Each mapped Docket team's Task statuses, keyed by Docket team id (for state resolution). */
+  readonly statesByTeam: ReadonlyMap<string, readonly ResolvedStatus[]>;
+  /** The workspace's Project statuses, in board order (Projects follow the workspace set). */
+  readonly projectStatuses: readonly ResolvedStatus[];
   readonly existingLabelsByExternal: ReadonlyMap<string, LabelRow>;
   readonly existingLabelsByScopeName: ReadonlyMap<string, LabelRow>;
   readonly existingProjectsByExternal: ReadonlyMap<string, ProjectRow>;
@@ -151,7 +153,7 @@ function isDirty(updatedAt: Date, externalUpdatedAt: Date | null): boolean {
  *
  * @remarks
  * Unlike the gtasks twin there is no `pushDelete`: a work item is never deleted, and a locally
- * canceled task simply pushes the team's canceled-type state. The push directions therefore
+ * canceled task simply pushes the team's canceled-category status. The push directions therefore
  * collapse to `noop` here (the local row stays dirty and the separate push phase drains it), so
  * this function only ever decides the *pull* side. `writeBack` gates whether a dirty local is
  * even allowed to win: a read-only mirror always yields to a newer provider.
@@ -202,17 +204,24 @@ export function planWorkItemReconcile(
 
 /* ────────────────────────────── field mapping ────────────────────────────── */
 
-/** Map an external project lifecycle state onto Docket's {@link projectStatus} enum. */
-function mapProjectStatus(
-  state: ExternalProject['state'],
-): 'planned' | 'active' | 'completed' | 'canceled' {
+/**
+ * Map an external project lifecycle state onto the category a Docket project status behaves as.
+ *
+ * @remarks
+ * A workspace names its own Project statuses, so the category is what crosses the boundary and
+ * {@link applyProject} resolves it against the workspace's set. A `paused` project keeps the
+ * reading it has always had here — committed to, not currently running — which is the
+ * `unstarted` category the default `Planned` status carries.
+ */
+function mapProjectCategory(state: ExternalProject['state']): WorkStatusCategory {
   switch (state) {
     case 'backlog':
+      return 'backlog';
     case 'planned':
     case 'paused':
-      return 'planned';
+      return 'unstarted';
     case 'started':
-      return 'active';
+      return 'started';
     case 'completed':
       return 'completed';
     case 'canceled':
@@ -242,33 +251,53 @@ function deriveCycleStatus(
   return 'active';
 }
 
-/** The Docket workflow-state type an external state type maps onto (triage folds into backlog). */
-function toWorkflowStateType(stateType: ExternalStateType): WorkflowStateType {
+/** The Docket category an external state type maps onto (triage folds into backlog). */
+function toStatusCategory(stateType: ExternalStateType): WorkStatusCategory {
   return stateType === 'triage' ? 'backlog' : stateType;
 }
 
 /**
- * Resolve the Docket team state key for an external state type (first by type, else the team's
- * first/backlog-ish state).
+ * The status in a set that behaves as a category, else the set's first.
  *
  * @remarks
- * Unreachable in the batch path (the orchestrator only maps items on teams whose states it
- * preloaded), but the exported single-entity appliers can be driven with an unpreloaded
- * `statesByTeam` — so an EMPTY state list throws a descriptive mapping error rather than silently
- * inventing a `'backlog'` key that no team defines.
+ * A workspace defines its own statuses and may name none of a given category, so a connector
+ * mapping work in settles on the set's first status — the earliest point on the board — which is
+ * a status the set genuinely contains. An empty set has no answer at all, and the callers turn
+ * that `undefined` into a descriptive mapping error.
  */
-function resolveStateKey(states: readonly WorkflowState[], stateType: ExternalStateType): string {
-  const want = toWorkflowStateType(stateType);
-  const byType = states.find((s) => s.type === want);
-  if (byType) return byType.key;
-  const first = states[0];
-  if (first) return first.key;
-  throw new ConflictError('Team has no workflow states to map an external work item onto');
+function pickStatus(
+  statuses: readonly ResolvedStatus[],
+  category: WorkStatusCategory,
+): ResolvedStatus | undefined {
+  return statuses.find((status) => status.category === category) ?? statuses[0];
 }
 
-/** The canonical type of a Docket team state key (defaults to backlog for an unknown key). */
-function stateTypeOfKey(states: readonly WorkflowState[], key: string): WorkflowStateType {
-  return states.find((s) => s.key === key)?.type ?? 'backlog';
+/**
+ * Resolve the Docket status an external state type maps onto, within one team's Task set.
+ *
+ * @remarks
+ * Returns the whole status because a row stores both halves of it: the `state` key and the
+ * `status_id` the composite foreign key holds that key to.
+ *
+ * The empty case is unreachable in the batch path (the orchestrator only maps items on teams
+ * whose statuses it preloaded), but the exported single-entity appliers can be driven with an
+ * unpreloaded `statesByTeam` — so an EMPTY set throws a descriptive mapping error rather than
+ * silently inventing a `'backlog'` key that no workspace defines.
+ */
+function resolveStatus(
+  statuses: readonly ResolvedStatus[],
+  stateType: ExternalStateType,
+): ResolvedStatus {
+  const status = pickStatus(statuses, toStatusCategory(stateType));
+  if (status === undefined) {
+    throw new ConflictError('Team has no statuses to map an external work item onto');
+  }
+  return status;
+}
+
+/** The category of a Docket status key (defaults to backlog for a key the set no longer has). */
+function categoryOfKey(statuses: readonly ResolvedStatus[], key: string): WorkStatusCategory {
+  return statuses.find((status) => status.key === key)?.category ?? 'backlog';
 }
 
 /** Parse an RFC3339 date/timestamp to a Date, or null when absent. */
@@ -377,8 +406,11 @@ export async function applyLabel(ctx: GraphApplyContext, ext: ExternalLabel): Pr
  * while the provider hasn't changed; once the provider is newer it overwrites the stale local
  * edit (documented, not silent). The Docket team is the mapped team of the FIRST of the project's
  * shared external teams that resolves (m2m flattening); a project shared only with unmapped teams
- * is skipped. `removed: true` sets status `canceled` (never a delete). Lead resolves via the
- * identity map (unmatched ⇒ null lead, never a fallback).
+ * is skipped. `removed: true` lands the project in the workspace's canceled-category Project
+ * status (never a delete). Lead resolves via the identity map (unmatched ⇒ null lead, never a
+ * fallback).
+ *
+ * @throws {ConflictError} When the workspace defines no Project statuses to map onto.
  */
 export async function applyProject(ctx: GraphApplyContext, ext: ExternalProject): Promise<void> {
   const teamId = firstMappedTeam(ctx, ext.externalTeamIds);
@@ -389,13 +421,20 @@ export async function applyProject(ctx: GraphApplyContext, ext: ExternalProject)
   const anchor = new Date(ext.updatedAt);
   const leadExternal = ext.leadExternalId;
   const leadId = leadExternal ? (ctx.identityMap.get(leadExternal) ?? null) : null;
-  const status = ext.removed ? 'canceled' : mapProjectStatus(ext.state);
+  const status = pickStatus(
+    ctx.projectStatuses,
+    ext.removed ? 'canceled' : mapProjectCategory(ext.state),
+  );
+  if (status === undefined) {
+    throw new ConflictError('This workspace has no statuses to map an external project onto');
+  }
   const fields = {
     name: ext.name,
     description: ext.description ?? null,
     leadId,
     teamId,
-    status,
+    status: status.key,
+    statusId: status.id,
     startDate: toDate(ext.startDate),
     targetDate: toDate(ext.targetDate),
     externalUrl: ext.url,
@@ -520,7 +559,7 @@ export async function applyCycle(ctx: GraphApplyContext, ext: ExternalCycle): Pr
  *
  * @remarks
  * The item's Docket team is the mapped team of its `externalTeamId`; an item on an unmapped team
- * is skipped entirely. State resolves against that team's workflow states by type; priority is
+ * is skipped entirely. State resolves against that team's Task statuses by category; priority is
  * 1:1 with the task enum; assignee, project, and cycle resolve via the identity/provenance maps
  * (each unmatched ⇒ null, never a fallback). Completion/cancel timestamps follow the item's own
  * `completedAt`/`canceledAt`, falling back to the anchor for a completed/canceled state with no
@@ -571,6 +610,7 @@ function itemColumns(
   description: string | null;
   teamId: string;
   state: string;
+  statusId: string;
   priority: ExternalPriority;
   assigneeId: string | null;
   projectId: string | null;
@@ -585,7 +625,7 @@ function itemColumns(
   updatedAt: Date;
 } {
   const anchor = new Date(item.updatedAt);
-  const states = ctx.statesByTeam.get(teamId) ?? [];
+  const status = resolveStatus(ctx.statesByTeam.get(teamId) ?? [], item.stateType);
   const assigneeId = item.assigneeExternalId
     ? (ctx.identityMap.get(item.assigneeExternalId) ?? null)
     : null;
@@ -600,7 +640,8 @@ function itemColumns(
     title: item.title,
     description: item.description ?? null,
     teamId,
-    state: resolveStateKey(states, item.stateType),
+    state: status.key,
+    statusId: status.id,
     priority: item.priority,
     assigneeId,
     projectId,
@@ -655,29 +696,30 @@ async function applyItemFields(
 }
 
 /**
- * Archive a linked task whose provider item was tombstoned (canceled state + stamp).
+ * Archive a linked task whose provider item was tombstoned (canceled status + stamp).
  *
  * @remarks
- * Resolves the team's canceled-type state (falling back to its last state), throwing a descriptive
- * mapping error on an EMPTY state list rather than stamping a silent `'canceled'` literal no team
- * defines. Unreachable in the batch path (states are preloaded), but the exported appliers can be
- * driven with an unpreloaded `statesByTeam`.
+ * Resolves the team's canceled-category status (falling back to the set's last status), throwing
+ * a descriptive mapping error on an EMPTY set rather than stamping a silent `'canceled'` literal
+ * no workspace defines. Unreachable in the batch path (statuses are preloaded), but the exported
+ * appliers can be driven with an unpreloaded `statesByTeam`.
  */
 async function archiveLinkedItem(
   taskId: string,
   item: ExternalWorkItem,
-  states: readonly WorkflowState[],
+  statuses: readonly ResolvedStatus[],
 ): Promise<void> {
   const anchor = new Date(item.updatedAt);
-  const canceledKey =
-    states.find((s) => s.type === 'canceled')?.key ?? states[states.length - 1]?.key;
-  if (canceledKey === undefined) {
-    throw new ConflictError('Team has no workflow states to archive a tombstoned work item into');
+  const canceled =
+    statuses.find((status) => status.category === 'canceled') ?? statuses[statuses.length - 1];
+  if (canceled === undefined) {
+    throw new ConflictError('Team has no statuses to archive a tombstoned work item into');
   }
   await db
     .update(task)
     .set({
-      state: canceledKey,
+      state: canceled.key,
+      statusId: canceled.id,
       canceledAt: anchor,
       archivedAt: anchor,
       externalUpdatedAt: anchor,
@@ -741,8 +783,13 @@ export async function reconcileWorkGraph(input: {
   // Team routing (explicit config interpretation; documented precedence, no hidden fallback).
   const resolveTeam = await buildTeamResolver(orgId, row);
 
-  // Preload every Docket team any snapshot entity could land in, plus its workflow states.
-  const statesByTeam = await loadTeamStates(orgId, snapshot, resolveTeam);
+  // Preload the statuses every snapshot entity could land in: each mapped team's Task set, and
+  // the workspace's Project set.
+  const { statesByTeam, projectStatuses } = await loadSnapshotStatuses(
+    orgId,
+    snapshot,
+    resolveTeam,
+  );
 
   // Preload the integration's existing mirrored rows (authoritative existence — no per-item reads).
   const [existingLabels, existingProjects, existingCycles, existingTasks] = await Promise.all([
@@ -782,6 +829,7 @@ export async function reconcileWorkGraph(input: {
     identityMap,
     resolveTeam,
     statesByTeam,
+    projectStatuses,
     existingLabelsByExternal,
     existingLabelsByScopeName,
     existingProjectsByExternal,
@@ -846,12 +894,23 @@ async function buildTeamResolver(
     allowed === null || allowed.has(externalTeamId) ? singleTeam : undefined;
 }
 
-/** Load the workflow states of every Docket team a snapshot entity could land in. */
-async function loadTeamStates(
+/**
+ * Load every status a snapshot entity could land in, in one query.
+ *
+ * @remarks
+ * One {@link loadStatusSets} call covers both kinds of work this reconciler writes a status onto:
+ * the Task set of each mapped team — that team's own statuses when it keeps them, the workspace's
+ * otherwise — and the workspace's Project set. A snapshot whose teams all resolve to nothing has
+ * no entity to land, so it skips the query entirely.
+ */
+async function loadSnapshotStatuses(
   orgId: string,
   snapshot: WorkGraphSnapshot,
   resolveTeam: (externalTeamId: string) => string | undefined,
-): Promise<Map<string, readonly WorkflowState[]>> {
+): Promise<{
+  statesByTeam: Map<string, readonly ResolvedStatus[]>;
+  projectStatuses: readonly ResolvedStatus[];
+}> {
   const teamIds = new Set<string>();
   const add = (extTeamId: string) => {
     const teamId = resolveTeam(extTeamId);
@@ -860,14 +919,15 @@ async function loadTeamStates(
   for (const item of snapshot.items) add(item.externalTeamId);
   for (const c of snapshot.cycles) add(c.externalTeamId);
   for (const p of snapshot.projects) for (const t of p.externalTeamIds) add(t);
-  const states = new Map<string, readonly WorkflowState[]>();
-  if (teamIds.size === 0) return states;
-  const rows = await db
-    .select({ id: team.id, workflowStates: team.workflowStates })
-    .from(team)
-    .where(and(eq(team.organizationId, orgId), inArray(team.id, [...teamIds])));
-  for (const t of rows) states.set(t.id, t.workflowStates);
-  return states;
+  const statesByTeam = new Map<string, readonly ResolvedStatus[]>();
+  if (teamIds.size === 0) return { statesByTeam, projectStatuses: [] };
+
+  const sets = await loadStatusSets(orgId, {
+    entityTypes: ['task', 'project'],
+    teamIds: [...teamIds],
+  });
+  for (const teamId of teamIds) statesByTeam.set(teamId, sets.for('task', teamId));
+  return { statesByTeam, projectStatuses: sets.for('project') };
 }
 
 /**
@@ -1063,7 +1123,7 @@ async function diffTaskLabels(
  * set where the local side won LWW (or that the snapshot didn't touch). Each is written field-
  * level via {@link WorkGraphConnector.pushWorkItem}; the response's `externalUpdatedAt` is stamped
  * as `lastPushedAt = externalUpdatedAt = updatedAt`, so the webhook echo of our own write is
- * suppressed. A locally canceled task pushes the team's canceled-type state id (never a delete);
+ * suppressed. A locally canceled task pushes the external canceled-type state id (never a delete);
  * an assignee with no reverse identity mapping OMITS the assignee field (never nulls it out).
  */
 async function pushDirtyTasks(
@@ -1118,10 +1178,11 @@ async function pushDirtyTasks(
   for (const t of dirty) {
     const externalTeamId = t.externalListId;
     if (!t.externalId || !externalTeamId) continue;
-    const docketStates = ctx.statesByTeam.get(t.teamId) ?? (await teamStates(ctx.orgId, t.teamId));
-    const wantType = stateTypeOfKey(docketStates, t.state);
+    const docketStatuses =
+      ctx.statesByTeam.get(t.teamId) ?? (await teamStatuses(ctx.orgId, t.teamId));
+    const wantCategory = categoryOfKey(docketStatuses, t.state);
     const extStates = await getExternalStates(externalTeamId);
-    const stateExternalId = extStates.find((s) => s.type === wantType)?.externalId;
+    const stateExternalId = extStates.find((s) => s.type === wantCategory)?.externalId;
 
     const assigneeExternalId = t.assigneeId ? reverseActors.get(t.assigneeId) : undefined;
     const fields: WorkItemPushFields = {
@@ -1144,14 +1205,10 @@ async function pushDirtyTasks(
   }
 }
 
-/** Load a single team's workflow states (fallback when it isn't in the preloaded map). */
-async function teamStates(orgId: string, teamId: string): Promise<readonly WorkflowState[]> {
-  const rows = await db
-    .select({ workflowStates: team.workflowStates })
-    .from(team)
-    .where(and(eq(team.id, teamId), eq(team.organizationId, orgId)))
-    .limit(1);
-  const states = rows[0]?.workflowStates;
-  if (!states) throw new ConflictError('Team has no workflow states to reconcile against');
-  return states;
+/** Load a single team's Task statuses (fallback when it isn't in the preloaded map). */
+async function teamStatuses(orgId: string, teamId: string): Promise<readonly ResolvedStatus[]> {
+  const sets = await loadStatusSets(orgId, { entityTypes: ['task'], teamIds: [teamId] });
+  const statuses = sets.for('task', teamId);
+  if (statuses.length === 0) throw new ConflictError('Team has no statuses to reconcile against');
+  return statuses;
 }

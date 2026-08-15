@@ -260,6 +260,7 @@ export async function ensureElicitationTask(
       title: actionSummary.slice(0, 120),
       description: question,
       teamId: landing.teamId,
+      statusId: landing.statusId,
       state: landing.state,
       assigneeId: landing.assigneeId,
       cycleId: landing.cycleId,

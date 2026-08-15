@@ -37,19 +37,22 @@ import {
   EntityTable,
   type EntityTableGroup,
   LabelChipRow,
-  StatusIcon,
 } from '@docket/ui/components';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import {
+  type WorkStatusDisplay,
+  unknownStatus,
+  WorkStatusIcon,
+} from '@/components/entity-display/work-status';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { TaskTimerButton } from '@/components/time-tracking';
 import { objectKey, type ObjectRef } from '@/lib/actions';
 import { entityDragSource } from '@/lib/entity-drag';
 import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
-import { stateTypeOf } from '@/lib/work-state';
 
 import type { FieldCatalog } from './field-catalog';
 import { findField } from './field-catalog';
@@ -89,6 +92,15 @@ function taskObject(task: TaskOut) {
 export interface TaskColumnsDeps {
   /** The task {@link FieldCatalog} (the same one the {@link FilterToolbar} drives). */
   catalog: FieldCatalog<TaskOut>;
+  /**
+   * The workspace's Task statuses, in board order, so the leading glyph can name itself.
+   *
+   * @remarks
+   * A row's `state` is a key into this set, and the glyph's colour comes from the matching
+   * status's category. Omit it and every row draws the neutral backlog ring, which is the right
+   * answer for a table rendered before the set has arrived.
+   */
+  statuses?: readonly WorkStatusDisplay[];
   /** Resolve a task's assignee actor id to its display name + kind for the avatar column. */
   resolveActor: (actorId: string) => TaskTableActor;
   /** Whether the viewer may rename a task in place (double-click the title). */
@@ -116,21 +128,25 @@ const DUE_DATE_OPTIONS: Intl.DateTimeFormatOptions = { month: 'short', day: 'num
  */
 export function buildTaskColumns({
   catalog,
+  statuses = [],
   resolveActor,
   canEdit,
   onRename,
   onOpen,
 }: TaskColumnsDeps): Column<TaskOut>[] {
+  const statusOf = (task: TaskOut): WorkStatusDisplay =>
+    statuses.find((status) => status.key === task.state) ?? unknownStatus(task.state);
+
   return [
-    // Leading status glyph — colored by the canonical workflow-state type. Always kept.
+    // Leading status glyph — coloured by the status's category, named by the workspace's own word.
     {
       key: 'glyph',
       header: '',
       width: '1.25rem',
       priority: 'always',
       render: (task) => {
-        const type = stateTypeOf(task.state);
-        return <StatusIcon type={type} label={headerFor(catalog, 'state', 'Status')} />;
+        const { name, category } = statusOf(task);
+        return <WorkStatusIcon name={name} category={category} />;
       },
     },
     // Title — the one flexing, truncating column.

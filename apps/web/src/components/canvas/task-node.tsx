@@ -10,14 +10,14 @@
  * stable `view-transition-name` (`task-node-<id>`) so that filtering, relayout, or expanding
  * the canvas morphs the same node between arrangements rather than hard-swapping it.
  */
-import type { Priority } from '@docket/types';
+import type { Priority, WorkStatusCategory } from '@docket/types';
 import { type ActorKind, ActorAvatar, StatusIcon } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import { Handle, type NodeProps, NodeToolbar, Position } from '@xyflow/react';
 import { memo } from 'react';
 
 import { formatCalendarDate } from '@/lib/format-date';
-import { stateTypeOf } from '@/lib/work-state';
+import { isEnded } from '@/lib/work-category';
 
 import { objectTargetProps } from '@/lib/actions';
 
@@ -48,8 +48,19 @@ export interface TaskNodeData extends Record<string, unknown> {
   orgId: string;
   /** The task title. */
   title: string;
-  /** The free-form workflow-state key (mapped to a canonical type for the glyph). */
+  /** The workspace's status key for this task, which is what a write sends back. */
   state: string;
+  /**
+   * The category that status behaves as, resolved once when the graph is mapped.
+   *
+   * @remarks
+   * Carried on the node rather than derived from {@link TaskNodeData.state} here, because a key
+   * only means something against the workspace's set — and the card, the minimap, the peek, and
+   * the filter catalog would otherwise each need that set in hand.
+   */
+  stateType: WorkStatusCategory;
+  /** The workspace's name for that status, which is what the glyph announces. */
+  statusName: string;
   /** The task priority (drives the {@link PriorityGlyph}). */
   priority: Priority;
   /** The owning project id, or null (used by the toolbar's project filter + grouping). */
@@ -87,10 +98,21 @@ export function taskData(node: { data: unknown }): TaskNodeData {
 
 /** A single task card on the canvas. */
 function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element {
-  const { title, state, projectName, assignee, isBlocked, isReady, dueDate, density, orgId } =
-    data as TaskNodeData;
+  const {
+    title,
+    state,
+    stateType,
+    statusName,
+    projectName,
+    assignee,
+    isBlocked,
+    isReady,
+    dueDate,
+    density,
+    orgId,
+  } = data as TaskNodeData;
   const compact = density === 'compact';
-  const done = stateTypeOf(state) === 'completed' || stateTypeOf(state) === 'canceled';
+  const done = isEnded(stateType);
   const overdue = !done && isOverdue(dueDate);
   const dueLabel = formatCalendarDate(dueDate, { month: 'short', day: 'numeric' });
   const actions = useCanvasActions();
@@ -133,7 +155,7 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
                 <button
                   type="button"
                   onClick={() => {
-                    actions.setState(id, done ? 'todo' : 'done');
+                    actions.setComplete(id, !done);
                   }}
                   className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface rounded px-2 py-1 text-xs"
                 >
@@ -160,7 +182,7 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
         className="!border-outline-variant !bg-surface !size-2"
       />
 
-      <StatusIcon type={stateTypeOf(state)} className="mt-0.5 shrink-0" />
+      <StatusIcon type={stateType} label={statusName} className="mt-0.5 shrink-0" />
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="text-on-surface text-body-medium line-clamp-2 leading-snug font-medium break-words">

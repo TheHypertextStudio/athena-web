@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import type * as ResolveModule from '../../../src/lib/identity/resolve-external-entity';
-import { getDb, seedBaseOrg } from '../../support/routes-harness';
+import { getDb, seedBaseOrg, seedStatuses } from '../../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -43,6 +43,7 @@ async function seedLinkedTask(
   integrationId: string,
   externalId: string,
 ): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const [row] = await db
     .insert(schema.task)
     .values({
@@ -50,6 +51,7 @@ async function seedLinkedTask(
       teamId,
       title: `Mirrored ${externalId}`,
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       visibility: 'public',
       source: 'linked',
       sourceIntegrationId: integrationId,
@@ -90,13 +92,14 @@ describe('resolveExternalEntities', () => {
   it('will not resolve a native task that happens to carry an external id', async () => {
     // Only `source='linked'` rows are mirrors. A native task is Docket's own, and claiming a
     // provider event is "about" it would attribute foreign activity to local work.
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegration(orgId, humanActorId);
     await db.insert(schema.task).values({
       organizationId: orgId,
       teamId,
       title: 'Native task',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       visibility: 'public',
       source: 'native',
       sourceIntegrationId: integrationId,
@@ -111,7 +114,7 @@ describe('resolveExternalEntities', () => {
   });
 
   it('resolves several kinds in one call', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegration(orgId, humanActorId);
     const taskId = await seedLinkedTask(orgId, teamId, integrationId, 'LIN-7');
     const [projectRow] = await db
@@ -119,6 +122,8 @@ describe('resolveExternalEntities', () => {
       .values({
         organizationId: orgId,
         name: 'Mirrored project',
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
         source: 'linked',
         sourceIntegrationId: integrationId,
         externalId: 'PRJ-7',

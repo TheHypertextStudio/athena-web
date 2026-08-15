@@ -7,38 +7,29 @@
  *
  * @remarks
  * Programs are *ongoing* operational lines of work, so this catalog reads liveness rather than a
- * finish line: a program can be filtered by **status** (`active | paused | archived`),
- * **health**, and **owner**; grouped by status / health / owner; and sorted by status, health, or
+ * finish line: a program can be filtered by **status**, **health**, and **owner**; grouped by status / health / owner; and sorted by status, health, or
  * name. It is the Programs counterpart to the reference
  * {@link import('@/components/projects/project-catalog').buildProjectCatalog} — the same unified
  * engine, with the project's `lead` / `team` / `target date` swapped for a program's `owner` (and
  * no target date, since a program has no finish line).
  *
- * Status and health declare a custom {@link FieldDescriptor.rank} so they order by lifecycle /
- * severity rather than alphabetically, and carry a glyph `hint` so a grouped header can show the
- * field's domain glyph. Owner is a `relation` field whose options + label resolution are injected
+ * Status options and their {@link FieldDescriptor.rank} come from the workspace's own Program
+ * status set, so the roster reads in the board order someone chose in settings; health declares its
+ * own severity rank. Both carry a glyph `hint` so a grouped header can show the field's domain
+ * glyph. Owner is a `relation` field whose options + label resolution are injected
  * from the page's already-loaded members (Phase B data), so the value chooser needs no extra
  * fetch.
  */
-import type { Health, ProgramOut, ProgramStatus } from '@docket/types';
+import type { Health, ProgramOut } from '@docket/types';
 
+import {
+  type WorkStatusDisplay,
+  statusFieldOptions,
+  statusRankOf,
+} from '@/components/entity-display/work-status';
 import { type FieldCatalog, type FieldOption } from '@/components/views/field-catalog';
 
 import { HEALTH_LABEL } from './health';
-import { STATUS_LABEL, statusGlyphType } from './program-status';
-
-/** The program lifecycle statuses, in liveness order, with their glyph hints. */
-const STATUS_OPTIONS: readonly FieldOption[] = (
-  ['active', 'paused', 'archived'] as const satisfies readonly ProgramStatus[]
-).map((status) => ({ value: status, label: STATUS_LABEL[status], hint: statusGlyphType(status) }));
-
-/** Liveness order rank for a status (active → paused → archived; unknown last). */
-function statusRank(value: string | number | null): number {
-  const order = ['active', 'paused', 'archived'];
-  if (value === null) return order.length;
-  const index = order.indexOf(String(value));
-  return index === -1 ? order.length : index;
-}
 
 /** The health verdicts, ordered by severity, with their labels + glyph hints. */
 const HEALTH_OPTIONS: readonly FieldOption[] = (
@@ -55,6 +46,8 @@ function healthRank(value: string | number | null): number {
 
 /** Injected resolvers a page supplies so the program catalog can skin its relation fields. */
 export interface ProgramCatalogDeps {
+  /** The workspace's Program statuses, in board order, from the status registry. */
+  statuses: readonly WorkStatusDisplay[];
   /** Vocabulary label for the program "Owner" relation (kept neutral as "Owner"). */
   ownerLabel: string;
   /** The owner relation options (the org's members as choosable values). */
@@ -76,10 +69,10 @@ export function buildProgramCatalog(deps: ProgramCatalogDeps): FieldCatalog<Prog
       label: 'Status',
       type: 'enum',
       accessor: (program) => program.status,
-      options: STATUS_OPTIONS,
+      options: statusFieldOptions(deps.statuses),
       groupable: true,
       sortable: true,
-      rank: statusRank,
+      rank: statusRankOf(deps.statuses),
     },
     {
       key: 'health',

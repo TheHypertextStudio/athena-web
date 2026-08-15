@@ -24,14 +24,11 @@ import type {
   CycleStatus,
   Health,
   InitiativeOut,
-  InitiativeStatus,
   LabelOut,
   MemberOut,
   Priority,
   ProgramOut,
-  ProgramStatus,
   ProjectOut,
-  ProjectStatus,
   Visibility,
   WorkflowState,
 } from '@docket/types';
@@ -39,10 +36,9 @@ import { ActorAvatar, type PickerOption, StatusIcon } from '@docket/ui/component
 import { Globe, Shield } from '@docket/ui/icons';
 import type { ReactNode } from 'react';
 
-import { statusGlyphType as cycleStatusGlyphType } from '@/components/cycles/cycle-status';
-import { statusGlyphType as programStatusGlyphType } from '@/components/programs/program-status';
+import { CYCLE_STATUS } from '@/components/cycles/cycle-status';
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/project-detail/health';
-import { statusGlyphType as projectStatusGlyphType } from '@/components/projects/project-status';
+import type { StatusLike } from '@/components/statuses/status-registry';
 import { PRIORITY_LABEL, PRIORITY_ORDER } from '@/components/task-detail/priority';
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
 
@@ -77,108 +73,56 @@ export const HEALTH_OPTIONS: readonly PickerOption<Health>[] = HEALTH_ORDER.map(
   icon: <span className={`size-2.5 rounded-full ${HEALTH_DOT_CLASS[health]}`} aria-hidden />,
 }));
 
-/** Human label for each {@link ProjectStatus}. */
-const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
-  planned: 'Planned',
-  active: 'Active',
-  completed: 'Completed',
-  canceled: 'Canceled',
-};
-
-/** The canonical project-status ordering for the picker menu. */
-const PROJECT_STATUS_ORDER: readonly ProjectStatus[] = [
-  'planned',
-  'active',
-  'completed',
-  'canceled',
-];
-
 /**
- * The {@link ProjectStatus} enum choices (lifecycle order), each carrying the exact
- * {@link StatusIcon} glyph the Projects list row already shows for that status (via
- * {@link projectStatusGlyphType}) — no new icon, the same one reused so the picker and the row
- * agree.
- */
-export const PROJECT_STATUS_OPTIONS: readonly PickerOption<ProjectStatus>[] =
-  PROJECT_STATUS_ORDER.map((status) => ({
-    value: status,
-    label: PROJECT_STATUS_LABEL[status],
-    icon: <StatusIcon type={projectStatusGlyphType(status)} />,
-  }));
-
-/** Human label for each {@link ProgramStatus}. */
-const PROGRAM_STATUS_LABEL: Record<ProgramStatus, string> = {
-  active: 'Active',
-  paused: 'Paused',
-  archived: 'Archived',
-};
-
-/** The canonical program-status ordering for the picker menu. */
-const PROGRAM_STATUS_ORDER: readonly ProgramStatus[] = ['active', 'paused', 'archived'];
-
-/**
- * The {@link ProgramStatus} enum choices, each carrying the exact {@link StatusIcon} glyph the
- * Programs list row already shows for that status (via {@link programStatusGlyphType}).
- */
-export const PROGRAM_STATUS_OPTIONS: readonly PickerOption<ProgramStatus>[] =
-  PROGRAM_STATUS_ORDER.map((status) => ({
-    value: status,
-    label: PROGRAM_STATUS_LABEL[status],
-    icon: <StatusIcon type={programStatusGlyphType(status)} />,
-  }));
-
-/** Human label for each {@link InitiativeStatus}. */
-const INITIATIVE_STATUS_LABEL: Record<InitiativeStatus, string> = {
-  proposed: 'Proposed',
-  active: 'Active',
-  completed: 'Completed',
-  canceled: 'Canceled',
-};
-
-/** The canonical initiative-status ordering for the picker menu. */
-const INITIATIVE_STATUS_ORDER: readonly InitiativeStatus[] = [
-  'proposed',
-  'active',
-  'completed',
-  'canceled',
-];
-
-/**
- * The {@link InitiativeStatus} enum choices.
+ * Offer a workspace's own statuses for one kind of work.
  *
  * @remarks
- * Deliberately icon-less, unlike its project/program/cycle siblings above: no other surface in
- * the product renders an initiative-status glyph today (no `components/initiatives/*-status.tsx`
- * analogous to the project/program/cycle ones exists), so there is no existing icon to reuse here
- * without inventing a new one.
+ * Replaces the three fixed `{ planned, active, … }` records this module used to keep for Projects,
+ * Programs, and Initiatives. Those records were written when a status key was a closed union; a
+ * workspace now names its own stages, so the only honest source of the choices is the workspace's
+ * set, read from
+ * {@link import('@/components/statuses/status-registry').useStatusRegistry | the registry} by the
+ * screen that opens the picker.
+ *
+ * The set arrives in board order and each entry already carries its category, so the option order
+ * and the {@link StatusIcon} glyph both come straight off the data. A status's `description` — the
+ * sentence a workspace wrote about when to use it — rides along as the supporting line, which is
+ * the moment it is actually worth reading.
+ *
+ * @param statuses - One kind of work's statuses, in board order.
+ * @returns one {@link PickerOption} per status, keyed by its stored key.
+ *
+ * @example
+ * ```tsx
+ * const statuses = useStatusRegistry();
+ * <EnumPicker options={statusOptions(statuses.statusesFor('project'))} … />
+ * ```
  */
-export const INITIATIVE_STATUS_OPTIONS: readonly PickerOption<InitiativeStatus>[] =
-  INITIATIVE_STATUS_ORDER.map((status) => ({
-    value: status,
-    label: INITIATIVE_STATUS_LABEL[status],
+export function statusOptions(statuses: readonly StatusLike[]): readonly PickerOption[] {
+  return statuses.map((status) => ({
+    value: status.key,
+    label: status.name,
+    icon: <StatusIcon type={status.category} label={status.name} />,
+    ...(status.description !== null && status.description.length > 0
+      ? { supporting: status.description }
+      : {}),
   }));
-
-/** Human label for each {@link CycleStatus}. */
-const CYCLE_STATUS_LABEL: Record<CycleStatus, string> = {
-  upcoming: 'Upcoming',
-  active: 'Active',
-  completed: 'Completed',
-};
-
-/** The canonical cycle-status ordering for the picker menu. */
-const CYCLE_STATUS_ORDER: readonly CycleStatus[] = ['upcoming', 'active', 'completed'];
+}
 
 /**
- * The {@link CycleStatus} enum choices, each carrying the exact {@link StatusIcon} glyph a cycle
- * row already shows for that status (via {@link cycleStatusGlyphType}).
+ * The {@link CycleStatus} choices, each with the glyph a cycle row shows for it.
+ *
+ * @remarks
+ * Cycle status stays declared rather than read from the workspace: a cycle's status follows its
+ * dates, so there is no stage for a workspace to rename.
  */
-export const CYCLE_STATUS_OPTIONS: readonly PickerOption<CycleStatus>[] = CYCLE_STATUS_ORDER.map(
-  (status) => ({
-    value: status,
-    label: CYCLE_STATUS_LABEL[status],
-    icon: <StatusIcon type={cycleStatusGlyphType(status)} />,
-  }),
-);
+export const CYCLE_STATUS_OPTIONS: readonly PickerOption<CycleStatus>[] = (
+  ['upcoming', 'active', 'completed'] as const
+).map((status) => ({
+  value: status,
+  label: CYCLE_STATUS[status].name,
+  icon: <StatusIcon type={CYCLE_STATUS[status].category} label={CYCLE_STATUS[status].name} />,
+}));
 
 /** Human label for each {@link Visibility}. */
 const VISIBILITY_LABEL: Record<Visibility, string> = {

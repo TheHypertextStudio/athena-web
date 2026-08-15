@@ -11,13 +11,10 @@
 import type { Health, ProgramStatus, Visibility } from '@docket/types';
 import { ActorPicker, EnumPicker, type PickerOption } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';
-import type { JSX } from 'react';
+import { type JSX, useMemo } from 'react';
 
-import { enumOptions, HEALTH_OPTIONS, VISIBILITY_OPTIONS } from '@/components/pickers/options';
-import { STATUS_LABEL } from '@/components/programs/program-status';
-
-/** The Program lifecycle statuses, ordered live → quiet. */
-const PROGRAM_STATUS_ORDER: readonly ProgramStatus[] = ['active', 'paused', 'archived'];
+import { HEALTH_OPTIONS, statusOptions, VISIBILITY_OPTIONS } from '@/components/pickers/options';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 
 /** Props for {@link ProgramComposerPickers}. */
 export interface ProgramComposerPickersProps {
@@ -61,6 +58,12 @@ export function ProgramComposerPickers({
   onVisibilityChange,
   disabled,
 }: ProgramComposerPickersProps): JSX.Element {
+  const statuses = useStatusRegistry();
+  const programStatusOptions = useMemo(
+    () => statusOptions(statuses.statusesFor('program')),
+    [statuses],
+  );
+
   return (
     <>
       {onOwnerChange ? (
@@ -75,7 +78,7 @@ export function ProgramComposerPickers({
         />
       ) : null}
       <EnumPicker
-        options={enumOptions(PROGRAM_STATUS_ORDER, STATUS_LABEL)}
+        options={programStatusOptions}
         value={status}
         onChange={(next) => {
           if (next) onStatusChange(next);

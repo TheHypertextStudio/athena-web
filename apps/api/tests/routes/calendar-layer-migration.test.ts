@@ -136,6 +136,7 @@ describe('layered-calendar migration (0016)', () => {
           teamId: base.teamId,
           title: 'Prep slides',
           state: 'todo',
+          statusId: base.statusId('task', 'todo'),
         })
         .returning({ id: schema.task.id }),
     );

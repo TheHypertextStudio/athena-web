@@ -154,6 +154,43 @@ Mounted `/orgs/:orgId/teams`.
 | `GET /:teamId/members`          | `query: ListQuery`                                                                               | `Page<ActorOut>`                                                                                | org  | `org:view`   |
 | `PUT /:teamId/members/:actorId` | `param`                                                                                          | `{ teamId, actorId, added: true }`                                                              | org  | `org:manage` |
 
+`workflowStates` above is retained on every team route and keeps working. A workspace now owns its
+statuses (`statuses.md`), so the authority on what a Task may be set to is the team's resolved
+status set: its own forked rows when it has any, otherwise the workspace's.
+
+**Statuses — `/orgs/:orgId/statuses`.** Design-complete; the DTOs are shipped in
+`@docket/types/work-status.ts` and the routes are the remaining slice. One surface serves all four
+kinds of work — Task, Project, Program, Initiative — discriminated by `entityType`. Cycles are
+absent because a Cycle's status follows its window rather than a choice.
+
+| Method + Path                            | Input                                                     | Output                                             | Auth | Capability   |
+| ---------------------------------------- | --------------------------------------------------------- | -------------------------------------------------- | ---- | ------------ |
+| `GET /orgs/:orgId/statuses`              | `query: { entityType?: WorkStatusEntityType, teamId? }`   | `WorkStatusSetOut[]` (each in board order)         | org  | `org:view`   |
+| `POST /orgs/:orgId/statuses`             | `json: WorkStatusCreate`                                  | `WorkStatusOut`                                    | org  | `org:manage` |
+| `PATCH /orgs/:orgId/statuses/:statusId`  | `json: WorkStatusUpdate`                                  | `WorkStatusOut`                                    | org  | `org:manage` |
+| `POST /orgs/:orgId/statuses/reorder`     | `json: WorkStatusReorder{ entityType, teamId?, order[] }` | `WorkStatusSetOut`                                 | org  | `org:manage` |
+| `DELETE /orgs/:orgId/statuses/:statusId` | the replacement status the deleted status's work moves to | `WorkStatusDeleteResult{ deleted, remappedCount }` | org  | `org:manage` |
+
+`WorkStatusSetOut{ entityType, teamId, forked, statuses }` is the resolved set, so a caller reads
+one shape whether the team follows the workspace or keeps its own. `WorkStatusOut` is
+`{ id, organizationId, entityType, teamId, key, name, description, category, position, isDefault }`.
+
+Four things the DTOs settle, each because a status is referred to from more places than its own
+picker:
+
+- **`key` is server-generated from the name at creation and never appears in `WorkStatusUpdate`.**
+  Saved-view predicates, automation-rule parameters, and connector mappings all store it, so a
+  rename moves `name` and leaves every one of them resolving.
+- **`teamId` is accepted for Tasks only.** Only Tasks are team-scoped, and a CHECK on `work_status`
+  makes a team-scoped Project status unrepresentable. A team forks by taking a copy of the
+  workspace Task set as team-owned rows, and returns to following the workspace by giving them up.
+- **`category` is the fixed five-value taxonomy** and a status carries no colour — the category
+  owns it. Changing a status's category records or clears completion on the work already sitting
+  in it.
+- **Deletion remaps.** `ON DELETE RESTRICT` on every referencing table means work has to move
+  first, and `remappedCount` reports how much did. The exact request shape naming the replacement
+  is pinned when the route lands; nothing else on this surface is open.
+
 ### 3.3 `initiatives` (themes; no work inside)
 
 Mounted `/orgs/:orgId/initiatives`.
@@ -183,15 +220,23 @@ Mounted `/orgs/:orgId/initiatives`.
 
 Mounted `/orgs/:orgId/programs`.
 
-| Method + Path             | Input                                                                                                  | Output                                                                                                                              | Auth                   | Capability                                                                                     |
-| ------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------- | --- | ---------- |
-| `GET /`                   | `query: ListQuery & { status?: "active"                                                                | "paused"                                                                                                                            | "archived", health? }` | `Page<ProgramOut{ id, name, description, ownerId, status, health?, flow{ throughput, wip } }>` | org | `org:view` |
-| `POST /`                  | `json: ProgramCreate{ name, description?, ownerId? }`                                                  | `ProgramOut`                                                                                                                        | org                    | `org:contribute`                                                                               |
-| `GET /:programId`         | `param`                                                                                                | `ProgramOut`                                                                                                                        | org                    | `org:view`                                                                                     |
-| `PATCH /:programId`       | `json: ProgramUpdate{ name?, description?, ownerId?, status? }` (status ∈ active/paused/archived only) | `ProgramOut`                                                                                                                        | org                    | `org:contribute`                                                                               |
-| `DELETE /:programId`      | `param`                                                                                                | `{ id, archivedAt }`                                                                                                                | org                    | `org:manage`                                                                                   |
-| `GET /:programId/work`    | `query: ListQuery & { cycleId?, projectId? }`                                                          | `{ groups: { cycle: CycleRef, segments: { project: ProjectRef, tasks: TaskOut[] }[] }[] }` (grouped-by-Cycle, segmented-by-Project) | org                    | `org:view`                                                                                     |
-| `GET /:programId/updates` | `query: ListQuery`                                                                                     | `Page<UpdateOut>`                                                                                                                   | org                    | `org:view`                                                                                     |
+| Method + Path             | Input                                                                                                            | Output                                                                                                                              | Auth                   | Capability                                                                                     |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------- | --- | ---------- |
+| `GET /`                   | `query: ListQuery & { status?: "active"                                                                          | "paused"                                                                                                                            | "archived", health? }` | `Page<ProgramOut{ id, name, description, ownerId, status, health?, flow{ throughput, wip } }>` | org | `org:view` |
+| `POST /`                  | `json: ProgramCreate{ name, description?, ownerId? }`                                                            | `ProgramOut`                                                                                                                        | org                    | `org:contribute`                                                                               |
+| `GET /:programId`         | `param`                                                                                                          | `ProgramOut`                                                                                                                        | org                    | `org:view`                                                                                     |
+| `PATCH /:programId`       | `json: ProgramUpdate{ name?, description?, ownerId?, status? }` (status is a key in the workspace's Program set) | `ProgramOut`                                                                                                                        | org                    | `org:contribute`                                                                               |
+| `DELETE /:programId`      | `param`                                                                                                          | `{ id, archivedAt }`                                                                                                                | org                    | `org:manage`                                                                                   |
+| `GET /:programId/work`    | `query: ListQuery & { cycleId?, projectId? }`                                                                    | `{ groups: { cycle: CycleRef, segments: { project: ProjectRef, tasks: TaskOut[] }[] }[] }` (grouped-by-Cycle, segmented-by-Project) | org                    | `org:view`                                                                                     |
+| `GET /:programId/updates` | `query: ListQuery`                                                                                               | `Page<UpdateOut>`                                                                                                                   | org                    | `org:view`                                                                                     |
+
+**Superseded (the heading's "no `completed`").** A Program's status is a key in the workspace's
+Program status set, so the `active | paused | archived` literals above are the seeded names rather
+than the accepted values, and a Program can complete. The seeded set is
+`Proposed · Active · Paused · Completed · Archived`, and a workspace renames, reorders, adds to,
+and deletes from it like any other set (`statuses.md`). Programs keep being read through health
+and flow rather than a progress bar, which is the part of "ongoing ops" that was always about the
+product rather than about the enum.
 
 ### 3.5 `projects` (bounded) + Milestones
 

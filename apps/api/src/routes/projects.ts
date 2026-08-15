@@ -35,6 +35,7 @@ import { clearableTextPatch } from '../lib/clearable-text';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { replaceLabels, resolveLabelSet } from '../lib/labels';
 import { ok } from '../lib/ok';
+import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -204,6 +205,9 @@ const projects = new Hono<AppEnv>()
 
       // `initiativeIds` writes `initiative_project` association rows; validate each lives in
       // the caller's org BEFORE the transaction so a bad id rejects the whole create.
+      // A Project's status is a key into the workspace's own Project statuses, resolved here so
+      // an unknown key is a 422 naming the keys that would work.
+      const status = await resolveContainerStatus(orgId, 'project', body.status ?? 'planned');
       const [initiativeIds, labels] = await Promise.all([
         validatedInitiativeIds(orgId, body.initiativeIds),
         // Through the shared resolver, so a project obeys label-group exclusivity exactly as a
@@ -222,7 +226,8 @@ const projects = new Hono<AppEnv>()
             leadId: body.leadId,
             teamId: body.teamId,
             programId: body.programId,
-            ...(body.status !== undefined ? { status: body.status } : {}),
+            status: status.status,
+            statusId: status.statusId,
             health: body.health,
             startDate: body.startDate ? new Date(body.startDate) : undefined,
             targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
@@ -476,6 +481,10 @@ const projects = new Hono<AppEnv>()
         teamId: body.teamId ?? existingTeam ?? null,
       });
 
+      const nextStatus =
+        body.status === undefined
+          ? undefined
+          : await resolveContainerStatus(orgId, 'project', body.status);
       const patch = {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...clearableTextPatch('summary', body.summary),
@@ -483,7 +492,9 @@ const projects = new Hono<AppEnv>()
         ...(body.leadId !== undefined ? { leadId: body.leadId } : {}),
         ...(body.programId !== undefined ? { programId: body.programId } : {}),
         ...(body.teamId !== undefined ? { teamId: body.teamId } : {}),
-        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(nextStatus === undefined
+          ? {}
+          : { status: nextStatus.status, statusId: nextStatus.statusId }),
         ...(body.health !== undefined ? { health: body.health } : {}),
         ...(body.startDate !== undefined
           ? { startDate: body.startDate ? new Date(body.startDate) : null }

@@ -46,6 +46,7 @@ export async function writeTaskStateTransition(
   tx: TaskStateTransaction,
   input: {
     readonly before: TaskRow;
+    readonly statusId: string;
     readonly state: string;
     readonly completedAt: Date | null;
     readonly canceledAt: Date | null;
@@ -54,6 +55,9 @@ export async function writeTaskStateTransition(
   const updated = await tx
     .update(task)
     .set({
+      // `statusId` is the authority and `state` its key; the composite foreign key refuses a
+      // write where the two disagree, so they always move together.
+      statusId: input.statusId,
       state: input.state,
       completedAt: input.completedAt,
       canceledAt: input.canceledAt,
@@ -129,6 +133,7 @@ export async function setTaskState(input: SetTaskStateInput): Promise<TaskRow | 
   const mutation = await db.transaction((tx) =>
     writeTaskStateTransition(tx, {
       before: row,
+      statusId: transition.statusId,
       state: transition.state,
       completedAt: transition.completedAt,
       canceledAt: transition.canceledAt,

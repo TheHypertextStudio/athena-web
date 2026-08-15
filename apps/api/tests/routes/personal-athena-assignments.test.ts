@@ -34,7 +34,7 @@ import type {
 import type { getContainer as GetContainer } from '../../src/container';
 import type { openToolbox as OpenToolbox } from '../../src/agent/toolbox';
 import { enqueueRunGeneration } from '../../src/agent/run-generation';
-import { appWithSession, fakeSession, getDb, one } from '../support/routes-harness';
+import { appWithSession, fakeSession, getDb, one, seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
@@ -87,18 +87,21 @@ interface Seed {
 
 async function seed(): Promise<Seed> {
   const suffix = Math.random().toString(36).slice(2, 10);
-  const [org] = await db
-    .insert(schema.organization)
-    .values({
-      name: `Assignment ${suffix}`,
-      slug: `assignment-${suffix}`,
-      lifecycleState: 'active',
-    })
-    .returning({ id: schema.organization.id });
+  const org = one(
+    await db
+      .insert(schema.organization)
+      .values({
+        name: `Assignment ${suffix}`,
+        slug: `assignment-${suffix}`,
+        lifecycleState: 'active',
+      })
+      .returning({ id: schema.organization.id }),
+  );
+  const statusId = await seedStatuses(db, schema, org.id);
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: assertDefined(org).id,
+      organizationId: org.id,
       key: `member-${suffix}`,
       name: 'Member',
       capabilities: ['view', 'contribute'],
@@ -115,14 +118,14 @@ async function seed(): Promise<Seed> {
     .insert(schema.actor)
     .values([
       {
-        organizationId: assertDefined(org).id,
+        organizationId: org.id,
         kind: 'human',
         displayName: 'Owner',
         userId: assertDefined(owner).id,
         roleId: assertDefined(role).id,
       },
       {
-        organizationId: assertDefined(org).id,
+        organizationId: org.id,
         kind: 'human',
         displayName: 'Other',
         userId: assertDefined(other).id,
@@ -131,23 +134,24 @@ async function seed(): Promise<Seed> {
     ])
     .returning({ id: schema.actor.id });
   await db.insert(schema.grant).values({
-    organizationId: assertDefined(org).id,
+    organizationId: org.id,
     subjectKind: 'role',
     subjectId: assertDefined(role).id,
     resourceKind: 'organization',
-    resourceId: assertDefined(org).id,
+    resourceId: org.id,
     capabilities: ['view', 'contribute'],
   });
   const [team] = await db
     .insert(schema.team)
-    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `A${suffix.slice(0, 4)}` })
+    .values({ organizationId: org.id, name: 'Core', key: `A${suffix.slice(0, 4)}` })
     .returning({ id: schema.team.id });
   const [project] = await db
     .insert(schema.project)
     .values({
-      organizationId: assertDefined(org).id,
+      organizationId: org.id,
       name: 'Launch',
       status: 'active',
+      statusId: statusId('project', 'active'),
       teamId: assertDefined(team).id,
       leadId: assertDefined(ownerActor).id,
       createdBy: assertDefined(ownerActor).id,
@@ -156,11 +160,12 @@ async function seed(): Promise<Seed> {
   const [task] = await db
     .insert(schema.task)
     .values({
-      organizationId: assertDefined(org).id,
+      organizationId: org.id,
       teamId: assertDefined(team).id,
       projectId: assertDefined(project).id,
       title: 'Ship it',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       assigneeId: assertDefined(ownerActor).id,
       createdBy: assertDefined(ownerActor).id,
     })
@@ -168,7 +173,7 @@ async function seed(): Promise<Seed> {
   return {
     userId: assertDefined(owner).id,
     otherUserId: assertDefined(other).id,
-    orgId: assertDefined(org).id,
+    orgId: org.id,
     actorId: assertDefined(ownerActor).id,
     otherActorId: assertDefined(otherActor).id,
     roleId: assertDefined(role).id,
@@ -298,6 +303,7 @@ describe('personal Athena assignments', () => {
 
   it('does not expose or fire for an inaccessible initiative-linked subject until exact access is granted', async () => {
     const seedData = await seed();
+    const statusId = await seedStatuses(db, schema, seedData.orgId);
     const initiative = one(
       await db
         .insert(schema.initiative)
@@ -305,6 +311,8 @@ describe('personal Athena assignments', () => {
           organizationId: seedData.orgId,
           name: 'Portfolio theme',
           ownerId: seedData.actorId,
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
         })
         .returning({ id: schema.initiative.id }),
     );
@@ -315,6 +323,8 @@ describe('personal Athena assignments', () => {
           organizationId: seedData.orgId,
           name: 'Sensitive operations',
           ownerId: seedData.actorId,
+          status: 'active',
+          statusId: statusId('program', 'active'),
         })
         .returning({ id: schema.program.id }),
     );

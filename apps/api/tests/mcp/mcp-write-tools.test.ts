@@ -12,6 +12,8 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import type { StatusIdLookup } from '../support/routes-harness';
+import { seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -29,6 +31,7 @@ interface Seed {
   orgId: string;
   teamId: string;
   actorId: string;
+  statusId: StatusIdLookup;
   ctx: McpContext;
 }
 
@@ -40,6 +43,9 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  // Statuses come before any work: the tools under test create Tasks, and the row needs a
+  // workspace status to point at.
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [role] = await db
     .insert(schema.role)
@@ -95,6 +101,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     orgId,
     teamId: assertDefined(team).id,
     actorId: assertDefined(human).id,
+    statusId,
     ctx: {
       principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
       scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
@@ -238,7 +245,7 @@ describe('undo tool', () => {
     // Somebody else moves it on before the undo lands.
     await db
       .update(schema.task)
-      .set({ state: 'in_progress' })
+      .set({ state: 'in_progress', statusId: s.statusId('task', 'in_progress') })
       .where(eq(schema.task.id, created.id));
 
     const res = (await client.callTool({
@@ -336,6 +343,7 @@ describe('change-set provenance', () => {
         title: 'Hand made',
         teamId: s.teamId,
         state: 'backlog',
+        statusId: s.statusId('task', 'backlog'),
         createdBy: s.actorId,
       })
       .returning({ id: schema.task.id });

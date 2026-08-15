@@ -158,7 +158,7 @@ describe('DocketVoiceToolRunner', () => {
 
     it('reads back at most five open tasks, excluding completed/canceled/archived ones', async () => {
       const runner = new DocketVoiceToolRunner();
-      const { orgId, teamId } = await seedBaseOrg(db, schema);
+      const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
       const userId = await seedUserWithHub(db, schema, 'VoiceListSome');
       for (let i = 0; i < 7; i += 1) {
         await db.insert(schema.task).values({
@@ -166,6 +166,7 @@ describe('DocketVoiceToolRunner', () => {
           title: `Open ${String(i)}`,
           teamId,
           state: 'backlog',
+          statusId: statusId('task', 'backlog'),
         });
       }
       await db.insert(schema.task).values({
@@ -173,6 +174,7 @@ describe('DocketVoiceToolRunner', () => {
         title: 'Already done',
         teamId,
         state: 'done',
+        statusId: statusId('task', 'done'),
         completedAt: new Date(),
       });
 
@@ -193,11 +195,17 @@ describe('DocketVoiceToolRunner', () => {
   describe('complete_task', () => {
     it('closes the one open task matching the spoken title', async () => {
       const runner = new DocketVoiceToolRunner();
-      const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+      const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
       const userId = await seedUserWithHub(db, schema, 'VoiceComplete');
       const [row] = await db
         .insert(schema.task)
-        .values({ organizationId: orgId, title: 'Water the plants', teamId, state: 'backlog' })
+        .values({
+          organizationId: orgId,
+          title: 'Water the plants',
+          teamId,
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        })
         .returning({ id: schema.task.id });
 
       const outcome = await runner.run(await ctxFor(orgId, userId, humanActorId), 'complete_task', {
@@ -244,11 +252,24 @@ describe('DocketVoiceToolRunner', () => {
 
     it('refuses to guess when more than one open task matches', async () => {
       const runner = new DocketVoiceToolRunner();
-      const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+      const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
       const userId = await seedUserWithHub(db, schema, 'VoiceCompleteAmbiguous');
+      const backlogId = statusId('task', 'backlog');
       await db.insert(schema.task).values([
-        { organizationId: orgId, title: 'Email the team', teamId, state: 'backlog' },
-        { organizationId: orgId, title: 'Email the client', teamId, state: 'backlog' },
+        {
+          organizationId: orgId,
+          title: 'Email the team',
+          teamId,
+          state: 'backlog',
+          statusId: backlogId,
+        },
+        {
+          organizationId: orgId,
+          title: 'Email the client',
+          teamId,
+          state: 'backlog',
+          statusId: backlogId,
+        },
       ]);
       const outcome = await runner.run(await ctxFor(orgId, userId, humanActorId), 'complete_task', {
         title: 'email',

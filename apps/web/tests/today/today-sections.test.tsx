@@ -36,6 +36,7 @@ function task(overrides: TaskOverrides): HubTaskItem {
   return {
     organizationId: ORG_A,
     state: 'todo',
+    stateType: 'unstarted',
     priority: null,
     assigneeId: null,
     projectId: null,
@@ -103,7 +104,13 @@ describe('TodaysWork', () => {
     render(
       <TodaysWork
         plan={[
-          task({ id: 't1', title: 'Finalise the budget', state: 'done', dueDate: '2026-08-07' }),
+          task({
+            id: 't1',
+            title: 'Finalise the budget',
+            state: 'done',
+            stateType: 'completed',
+            dueDate: '2026-08-07',
+          }),
         ]}
         orgName={orgName}
         loading={false}

@@ -23,7 +23,7 @@
 import { ArrowRight, CheckCircle2, Link, Plus, Tag, Workflow } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';
 import { useCopyOutcome } from '@/components/clipboard';
@@ -37,12 +37,9 @@ import {
   objectMetaString,
   useRegisterActionDomain,
 } from '@/lib/actions';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { queryKeys, unwrap } from '@/lib/query';
-import { stateTypeOf } from '@/lib/work-state';
-
-/** The workflow-state keys the quick toggle moves between. */
-const DONE_STATE = 'done';
-const REOPEN_STATE = 'todo';
+import type { CategoryOfState } from '@/lib/work-category';
 
 /** Every task the context names, or an empty list when it names none. */
 function taskIds(context: ActionContext): readonly string[] {
@@ -67,13 +64,21 @@ function taskHref(context: ActionContext): string | null {
   );
 }
 
-/** Whether every task in the context already sits in a completed state. */
-function allComplete(context: ActionContext): boolean {
+/**
+ * Whether every task in the context already sits in a completed status.
+ *
+ * @remarks
+ * The right-click menu carries a task's status *key* on its object payload, and a key means
+ * something only against the workspace's set — so the category comes from the registry rather than
+ * from a switch over five literal keys, which answered "backlog" for every renamed stage and left
+ * "Mark done" offering to complete work that was already complete.
+ */
+function allComplete(context: ActionContext, categoryOf: CategoryOfState): boolean {
   const tasks = context.objects.filter((o) => o.kind === 'task');
   if (tasks.length === 0) return false;
   return tasks.every((o) => {
     const state = objectMetaString(o, 'state');
-    return state !== null && stateTypeOf(state) === 'completed';
+    return state !== null && categoryOf(state) === 'completed';
   });
 }
 
@@ -90,6 +95,12 @@ export function useRegisterTaskActions(): void {
   const queryClient = useQueryClient();
   const pickerOverlay = usePickerOverlay();
   const reportOutcome = useCopyOutcome();
+  const statuses = useStatusRegistry();
+
+  const categoryOf = useCallback<CategoryOfState>(
+    (state) => statuses.categoryOf('task', state),
+    [statuses],
+  );
 
   const definitions = useMemo<readonly ActionDefinition[]>(() => {
     /** Invalidate everything that shows a task after a write. */
@@ -120,7 +131,7 @@ export function useRegisterTaskActions(): void {
           category: 'mutation',
           routeTemplateId: '/tasks/[taskId]',
         } as const,
-        label: (context) => (allComplete(context) ? 'Reopen' : 'Mark done'),
+        label: (context) => (allComplete(context, categoryOf) ? 'Reopen' : 'Mark done'),
         icon: CheckCircle2,
         objectKinds: ['task'],
         multi: true,
@@ -129,7 +140,13 @@ export function useRegisterTaskActions(): void {
         run: async (context) => {
           const orgId = context.organizationId;
           if (orgId === null) return;
-          const state = allComplete(context) ? REOPEN_STATE : DONE_STATE;
+          // "Mark done" and "Reopen" name outcomes; the workspace's set decides which status each
+          // outcome lands on, so a workspace that ships under `Shipped` gets `Shipped`.
+          const target = allComplete(context, categoryOf)
+            ? statuses.defaultOf('task')
+            : statuses.firstOfCategory('task', 'completed');
+          if (target === undefined) return;
+          const state = target.key;
           for (const id of taskIds(context)) {
             await unwrap(
               () =>
@@ -226,7 +243,7 @@ export function useRegisterTaskActions(): void {
         },
       },
     ]);
-  }, [router, queryClient, pickerOverlay, reportOutcome]);
+  }, [router, queryClient, pickerOverlay, reportOutcome, statuses, categoryOf]);
 
   useRegisterActionDomain('task', definitions);
 }

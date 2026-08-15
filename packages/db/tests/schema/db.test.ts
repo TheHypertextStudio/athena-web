@@ -732,7 +732,7 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
 
     // --- work island ---
     // A workspace's statuses exist before any of its work does — every kind of work points at one.
-    const statuses: SeededStatuses = await seedWorkspaceStatuses(db, ids['org'] as string);
+    const statuses: SeededStatuses = await seedWorkspaceStatuses(db, ids['org']);
     const statusId = (entityType: 'task' | 'project' | 'program' | 'initiative', key: string) => {
       const id = statuses.get(statusLookupKey(entityType, key));
       if (id === undefined) throw new Error(`no seeded ${entityType} status ${key}`);

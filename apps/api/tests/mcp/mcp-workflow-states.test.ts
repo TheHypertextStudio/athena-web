@@ -19,6 +19,7 @@ import { listWork } from '../../src/mcp/list-work';
 import { stateOptionsOf, stateTypeOf, teamWorkflows } from '../../src/mcp/workflow-states';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedStatus, seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -49,12 +50,28 @@ const OTHER_STATES = [
   { key: 'done', name: 'Done', type: 'completed' as const, position: 2 },
 ];
 
+/**
+ * The keys these teams use that the workspace's default status set does not name.
+ *
+ * @remarks
+ * A task stores both its state key and the id of the workspace status carrying that key, so a
+ * renamed key has to exist as a status before any task can sit on it. `retired` is deliberately
+ * absent from both teams' workflows — a task can outlive the stage it was in — but it still has
+ * to be a key the workspace knows, or the row could not be written at all.
+ */
+const EXTRA_STATUSES = [
+  { key: 'icebox', name: 'Icebox', category: 'backlog' as const },
+  { key: 'doing', name: 'Doing', category: 'started' as const },
+  { key: 'retired', name: 'Retired', category: 'unstarted' as const },
+];
+
 /** Seed an org with two teams on different workflows. */
 async function seedTeams(): Promise<{
   orgId: string;
   renamed: string;
   other: string;
   actorId: string;
+  taskStatusId: (key: string) => string;
 }> {
   const slug = `ws-${Math.random().toString(36).slice(2, 10)}`;
   const [org] = await db
@@ -62,6 +79,25 @@ async function seedTeams(): Promise<{
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+
+  const statusId = await seedStatuses(db, schema, orgId);
+  const extra = new Map<string, string>();
+  for (const [index, status] of EXTRA_STATUSES.entries()) {
+    extra.set(
+      status.key,
+      await seedStatus(db, schema, {
+        organizationId: orgId,
+        entityType: 'task',
+        teamId: null,
+        key: status.key,
+        name: status.name,
+        description: null,
+        category: status.category,
+        position: 10 + index,
+      }),
+    );
+  }
+  const taskStatusId = (key: string): string => extra.get(key) ?? statusId('task', key);
 
   const [renamed] = await db
     .insert(schema.team)
@@ -93,6 +129,7 @@ async function seedTeams(): Promise<{
     renamed: assertDefined(renamed).id,
     other: assertDefined(other).id,
     actorId: assertDefined(author).id,
+    taskStatusId,
   };
 }
 
@@ -148,13 +185,14 @@ describe('teamWorkflows', () => {
   });
 
   it('reaches the wire on every listed task, keyed off the type and not the name', async () => {
-    const { orgId, renamed, other, actorId } = await seedTeams();
+    const { orgId, renamed, other, actorId, taskStatusId } = await seedTeams();
     await db.insert(schema.task).values([
       {
         organizationId: orgId,
         title: 'Doing it',
         teamId: renamed,
         state: 'doing',
+        statusId: taskStatusId('doing'),
         createdBy: actorId,
       },
       {
@@ -162,6 +200,7 @@ describe('teamWorkflows', () => {
         title: 'Iced',
         teamId: renamed,
         state: 'icebox',
+        statusId: taskStatusId('icebox'),
         createdBy: actorId,
       },
       {
@@ -169,6 +208,7 @@ describe('teamWorkflows', () => {
         title: 'Underway',
         teamId: other,
         state: 'in_progress',
+        statusId: taskStatusId('in_progress'),
         createdBy: actorId,
       },
       // A state the owning team no longer lists, which must come back with no type at all.
@@ -177,6 +217,7 @@ describe('teamWorkflows', () => {
         title: 'Orphaned',
         teamId: other,
         state: 'retired',
+        statusId: taskStatusId('retired'),
         createdBy: actorId,
       },
     ]);

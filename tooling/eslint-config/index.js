@@ -186,7 +186,7 @@ export const appLocationConfig = [
               name: 'next/navigation',
               importNames: ['useParams', 'usePathname', 'useSearchParams'],
               message:
-                'Read the URL through useAppParams/useAppPathname/useAppSearchParams from @/lib/app-location. Next\'s router reports the route the cached document was rendered for, not the route the person is on. See docs/engineering/specs/offline.md.',
+                "Read the URL through useAppParams/useAppPathname/useAppSearchParams from @/lib/app-location. Next's router reports the route the cached document was rendered for, not the route the person is on. See docs/engineering/specs/offline.md.",
             },
           ],
         },

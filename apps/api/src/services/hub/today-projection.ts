@@ -1,4 +1,5 @@
 import type { Priority } from '@docket/types';
+import type { WorkStatusCategory } from '@docket/types';
 
 /** Scheduling evidence used to distinguish an untouched day from a generated empty one. */
 export type TodayReadiness = 'not_generated' | 'ready' | 'empty_week';
@@ -9,6 +10,8 @@ export interface TodayPlanCandidate {
   readonly organizationId: string;
   readonly title: string;
   readonly state: string;
+  /** The category the status behaves as, which is what a glyph reads across workspaces. */
+  readonly stateType: WorkStatusCategory;
   readonly priority: Priority;
   readonly assigneeId?: string | null | undefined;
   readonly projectId?: string | null | undefined;

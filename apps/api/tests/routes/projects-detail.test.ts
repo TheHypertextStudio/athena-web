@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, seedStatuses } from '../support/routes-harness';
 import type projectsRouter from '../../src/routes/projects';
 import type tasksRouter from '../../src/routes/tasks';
 import { assertDefined } from '@docket/test-utils';
@@ -30,9 +30,17 @@ const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 /** Create a project row directly in the db (bypassing the router) and return its id. */
 async function seedProject(orgId: string, teamId: string, createdBy: string): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const [proj] = await db
     .insert(schema.project)
-    .values({ organizationId: orgId, name: 'Seeded', teamId, createdBy })
+    .values({
+      organizationId: orgId,
+      name: 'Seeded',
+      teamId,
+      createdBy,
+      status: 'planned',
+      statusId: statusId('project', 'planned'),
+    })
     .returning({ id: schema.project.id });
   return assertDefined(proj).id;
 }
@@ -45,6 +53,7 @@ async function seedTask(args: {
   estimate?: number | null;
   completed?: boolean;
 }): Promise<string> {
+  const statusId = await seedStatuses(db, schema, args.orgId);
   const [t] = await db
     .insert(schema.task)
     .values({
@@ -52,6 +61,7 @@ async function seedTask(args: {
       title: 'T',
       teamId: args.teamId,
       state: 'backlog',
+      statusId: statusId('task', 'backlog'),
       projectId: args.projectId,
       estimate: args.estimate ?? null,
       completedAt: args.completed ? new Date() : null,
@@ -118,13 +128,19 @@ describe('projects detail router', () => {
   });
 
   it('patches every updatable field (incl. clearing nullable dates)', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
 
     // Seed a program + a second team to exercise programId/teamId re-pointing.
     const [prog] = await db
       .insert(schema.program)
-      .values({ organizationId: orgId, name: 'Prog', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Prog',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('program', 'active'),
+      })
       .returning({ id: schema.program.id });
     const [team2] = await db
       .insert(schema.team)
@@ -519,9 +535,16 @@ describe('projects create with initiative associations', () => {
 
   /** Insert an initiative row in the given org and return its id. */
   async function seedInitiative(orgId: string, createdBy: string, name = 'Theme'): Promise<string> {
+    const statusId = await seedStatuses(db, schema, orgId);
     const [row] = await db
       .insert(schema.initiative)
-      .values({ organizationId: orgId, name, createdBy })
+      .values({
+        organizationId: orgId,
+        name,
+        createdBy,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id });
     return assertDefined(row).id;
   }

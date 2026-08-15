@@ -28,6 +28,7 @@ import { type JSX, useEffect, useMemo, useRef } from 'react';
 import { applyView } from '@/components/views/apply-view';
 import { resolveRelationLabel, type FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { useViewState } from '@/components/views/use-view-state';
@@ -136,9 +137,12 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
     [agents],
   );
 
+  const statuses = useStatusRegistry().statusesFor('task');
+
   const catalog = useMemo(
     () =>
       buildTaskCatalog({
+        statuses,
         projectLabel: projectNoun,
         programLabel: programNoun,
         resolveProject: (id) =>
@@ -160,6 +164,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
         tasks,
       }),
     [
+      statuses,
       tasks,
       agentActorIds,
       agentsQ.isPending,
@@ -193,6 +198,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
     () =>
       buildTaskColumns({
         catalog,
+        statuses,
         resolveActor: (actorId) => {
           const member = memberById.get(actorId);
           return member
@@ -205,7 +211,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
           router.push(`/orgs/${orgId}/tasks/${task.id}`);
         },
       }),
-    [canEdit, catalog, memberById, orgId, renameTask, router],
+    [canEdit, catalog, statuses, memberById, orgId, renameTask, router],
   );
 
   if (tasksQ.isPending) {

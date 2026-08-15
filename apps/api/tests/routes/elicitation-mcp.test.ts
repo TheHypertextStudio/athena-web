@@ -59,10 +59,13 @@ async function seed(): Promise<Fixture> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  if (!org) throw new Error('seed failed to create an organization');
+  // A question implements itself as a Task, and work needs the workspace's status set to exist.
+  await schema.seedWorkspaceStatuses(db, org.id);
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: assertDefined(org).id,
+      organizationId: org.id,
       key: `owner-${slug}`,
       name: 'Owner',
       capabilities: ['view', 'contribute'],
@@ -74,7 +77,7 @@ async function seed(): Promise<Fixture> {
     .returning({ id: schema.user.id });
   await db.insert(schema.hub).values({ userId: assertDefined(owner).id, preferences: {} });
   await db.insert(schema.actor).values({
-    organizationId: assertDefined(org).id,
+    organizationId: org.id,
     kind: 'human',
     displayName: 'Ada',
     userId: assertDefined(owner).id,
@@ -82,13 +85,13 @@ async function seed(): Promise<Fixture> {
   });
   await db
     .insert(schema.team)
-    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `M${slug.slice(-4)}` });
+    .values({ organizationId: org.id, name: 'Core', key: `M${slug.slice(-4)}` });
   const [session] = await db
     .insert(schema.agentSession)
     .values({
       executorKind: 'athena',
       ownerUserId: assertDefined(owner).id,
-      contextOrganizationId: assertDefined(org).id,
+      contextOrganizationId: org.id,
       kind: 'chat',
       trigger: 'delegation',
       status: 'running',

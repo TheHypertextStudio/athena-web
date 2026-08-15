@@ -7,17 +7,29 @@
  * incomplete blocker) or *ready* (every blocker is done and it hasn't started), and per dependency
  * edge a *tone* keyed off the blocker's completion. The canvas renders these; the engine stays
  * dataset-agnostic because the meaning is computed here, not in `Canvas`.
+ *
+ * Nodes arrive carrying the *category* their status behaves as rather than the status key, so
+ * this analysis never needs a workspace's status set — which is what keeps it pure.
  */
-import { stateTypeOf } from '@/lib/work-state';
+import type { WorkStatusCategory } from '@docket/types';
+
+import { isEnded } from '@/lib/work-category';
 
 import { pushTo } from './graph-adjacency';
 
-/** The minimal node shape {@link annotateGraph} reads (a structural superset of `TaskGraphNode`). */
+/** The minimal node shape {@link annotateGraph} reads. */
 export interface AnnotateNode {
   /** The task id. */
   id: string;
-  /** The free-form workflow-state key. */
-  state: string;
+  /**
+   * The category the task's status behaves as.
+   *
+   * @remarks
+   * A category rather than a status key, because "is this blocker done?" is a question about the
+   * category and a key only answers it against the workspace's set. The caller resolves it — which
+   * keeps this module pure, and keeps a dependency analysis from having to know about workspaces.
+   */
+  stateType: WorkStatusCategory;
 }
 
 /** The minimal edge shape {@link annotateGraph} reads (a structural superset of `TaskGraphEdge`). */
@@ -32,7 +44,7 @@ export interface AnnotateEdge {
   target: string;
 }
 
-/** The structural graph {@link annotateGraph} operates on; `GraphOut` satisfies it. */
+/** The structural graph {@link annotateGraph} operates on. */
 export interface AnnotateInput {
   /** The graph's nodes. */
   nodes: readonly AnnotateNode[];
@@ -40,21 +52,14 @@ export interface AnnotateInput {
   edges: readonly AnnotateEdge[];
 }
 
-/** Whether a task's workflow state counts as terminal (done/canceled) for blocking purposes. */
-function isComplete(state: string): boolean {
-  const type = stateTypeOf(state);
-  return type === 'completed' || type === 'canceled';
-}
-
 /** Whether a task has not been started yet (so completing its blockers makes it actionable). */
-function isNotStarted(state: string): boolean {
-  const type = stateTypeOf(state);
-  return type === 'backlog' || type === 'unstarted';
+function isNotStarted(category: WorkStatusCategory): boolean {
+  return category === 'backlog' || category === 'unstarted';
 }
 
 /** Per-node dependency flags. */
 export interface NodeFlags {
-  /** Has at least one incomplete blocker (an open `blocking → this` dependency). */
+  /** Has at least one unfinished blocker (an open `blocking → this` dependency). */
   isBlocked: boolean;
   /** Has blockers, all of them complete, and itself not yet started — i.e. unblocked & actionable. */
   isReady: boolean;
@@ -74,29 +79,29 @@ export interface GraphAnnotations {
 /**
  * Compute blocked/ready flags and edge tones for a dependency graph.
  *
- * @param graph - The graph (nodes carry `state`; edges carry `kind`/`source`/`target`).
+ * @param graph - The graph (nodes carry `stateType`; edges carry `kind`/`source`/`target`).
  * @returns the {@link GraphAnnotations}.
  */
 export function annotateGraph(graph: AnnotateInput): GraphAnnotations {
-  const stateById = new Map(graph.nodes.map((n) => [n.id, n.state]));
+  const categoryById = new Map(graph.nodes.map((n) => [n.id, n.stateType]));
 
-  // Collect each task's blocker states (incoming `dependency` edges: source blocks target).
-  const blockersByTarget = new Map<string, string[]>();
+  // Collect each task's blocker categories (incoming `dependency` edges: source blocks target).
+  const blockersByTarget = new Map<string, WorkStatusCategory[]>();
   for (const e of graph.edges) {
     if (e.kind !== 'dependency') continue;
-    const blockerState = stateById.get(e.source);
-    if (blockerState === undefined) continue;
-    pushTo(blockersByTarget, e.target, blockerState);
+    const blocker = categoryById.get(e.source);
+    if (blocker === undefined) continue;
+    pushTo(blockersByTarget, e.target, blocker);
   }
 
   const nodeFlags = new Map<string, NodeFlags>();
   for (const n of graph.nodes) {
     const blockers = blockersByTarget.get(n.id) ?? [];
     const hasBlockers = blockers.length > 0;
-    const anyOpen = blockers.some((s) => !isComplete(s));
+    const anyOpen = blockers.some((category) => !isEnded(category));
     nodeFlags.set(n.id, {
       isBlocked: hasBlockers && anyOpen,
-      isReady: hasBlockers && !anyOpen && isNotStarted(n.state),
+      isReady: hasBlockers && !anyOpen && isNotStarted(n.stateType),
     });
   }
 
@@ -106,8 +111,8 @@ export function annotateGraph(graph: AnnotateInput): GraphAnnotations {
       edgeTone.set(e.id, 'neutral');
       continue;
     }
-    const blockerState = stateById.get(e.source);
-    edgeTone.set(e.id, blockerState !== undefined && isComplete(blockerState) ? 'done' : 'open');
+    const blocker = categoryById.get(e.source);
+    edgeTone.set(e.id, blocker !== undefined && isEnded(blocker) ? 'done' : 'open');
   }
 
   return { nodeFlags, edgeTone };

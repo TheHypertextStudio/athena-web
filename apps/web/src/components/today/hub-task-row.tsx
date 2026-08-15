@@ -24,7 +24,6 @@ import { formatDay } from '@/components/date-picker';
 import { OrgChip } from '@/components/org-chip';
 import { entityDragSource } from '@/lib/entity-drag';
 import { todayISODate } from '@/lib/today';
-import { stateTypeOf } from '@/lib/work-state';
 
 /** Props for {@link HubTaskRow}. */
 export interface HubTaskRowProps {
@@ -58,7 +57,7 @@ export default function HubTaskRow({ task, orgLabel, lead }: HubTaskRowProps): J
       {...dragProps}
       className="hover:bg-surface-container-low focus-visible:ring-ring -mx-2 flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
-      <StatusIcon type={stateTypeOf(task.state)} />
+      <StatusIcon type={task.stateType} />
       {lead ? (
         <span className="text-on-surface-variant text-body-small w-14 shrink-0 tabular-nums">
           {lead}

@@ -9,7 +9,13 @@ import type { AppEnv } from '../../src/context';
 import type { getContainer as GetContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import type meAthenaRouter from '../../src/routes/me-athena';
-import { fakeSession, getDb, one } from '../support/routes-harness';
+import {
+  fakeSession,
+  getDb,
+  one,
+  seedStatuses,
+  type StatusIdLookup,
+} from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -33,6 +39,7 @@ interface Seed {
   readonly teamB: string;
   readonly owner: Person;
   readonly other: Person;
+  readonly statusA: StatusIdLookup;
 }
 
 beforeAll(async () => {
@@ -64,6 +71,8 @@ async function seedPeople(): Promise<Seed> {
     ).id;
   const orgA = await makeOrg('Alpha');
   const orgB = await makeOrg('Beta');
+  const statusA = await seedStatuses(db, schema, orgA);
+  await seedStatuses(db, schema, orgB);
   const teamA = one(
     await db
       .insert(schema.team)
@@ -131,6 +140,7 @@ async function seedPeople(): Promise<Seed> {
     teamB,
     owner: await makePerson('Owner'),
     other: await makePerson('Other'),
+    statusA,
   };
 }
 
@@ -151,6 +161,9 @@ async function seedPersonalWorkspace(person: Person): Promise<{
       })
       .returning({ id: schema.organization.id }),
   ).id;
+  // A real workspace is given its status set when it is created; this one is inserted straight
+  // into the table, so the work the route creates here would have no status to point at.
+  await seedStatuses(db, schema, organizationId);
   await db.insert(schema.team).values({
     organizationId,
     name: 'Personal',
@@ -461,6 +474,7 @@ describe('personal Athena routes', () => {
         body: { text: `Unbounded activity ${index}` },
       })),
     );
+    const activeProjectStatusId = seed.statusA('project', 'active');
     const projects = await db
       .insert(schema.project)
       .values(
@@ -468,6 +482,7 @@ describe('personal Athena routes', () => {
           organizationId: seed.orgA,
           name: `Context project ${String(index)}`,
           status: 'active' as const,
+          statusId: activeProjectStatusId,
           createdBy: seed.owner.actorIds[seed.orgA],
         })),
       )
@@ -717,6 +732,7 @@ describe('personal Athena routes', () => {
           organizationId: seed.orgA,
           name: 'Launch',
           status: 'active',
+          statusId: seed.statusA('project', 'active'),
           createdBy: seed.owner.actorIds[seed.orgA],
         })
         .returning({ id: schema.project.id }),
@@ -792,6 +808,7 @@ describe('personal Athena routes', () => {
           organizationId: seed.orgA,
           name: 'Private launch name',
           status: 'active',
+          statusId: seed.statusA('project', 'active'),
           createdBy: seed.owner.actorIds[seed.orgA],
         })
         .returning({ id: schema.project.id }),
@@ -843,6 +860,7 @@ describe('personal Athena routes', () => {
           organizationId: seed.orgA,
           name: 'Secret launch codename',
           status: 'active',
+          statusId: seed.statusA('project', 'active'),
           createdBy: seed.owner.actorIds[seed.orgA],
         })
         .returning({ id: schema.project.id }),

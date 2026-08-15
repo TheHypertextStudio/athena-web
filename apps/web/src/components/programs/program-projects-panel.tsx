@@ -20,7 +20,8 @@ import Link from 'next/link';
 import { type JSX, useMemo } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
-import { ProjectStatusBadge } from '@/components/projects/project-status';
+import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
+import { WorkStatusBadge } from '@/components/entity-display/work-status';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { useProgramProjects } from '@/lib/use-program-projects';
 
@@ -46,6 +47,7 @@ export function ProgramProjectsPanel({
   onOpenProject,
 }: ProgramProjectsPanelProps): JSX.Element {
   const projectNounLower = projectNoun.toLowerCase();
+  const statusOf = useWorkStatusResolver('project');
   const { openCreate } = useCreateObject();
   const options = useComposerOptions(orgId, ['projects'], true);
   const { attach, detach, pending, mutationError } = useProgramProjects(
@@ -123,34 +125,37 @@ export function ProgramProjectsPanel({
         </p>
       ) : (
         <ul className="border-outline-variant divide-outline-variant divide-y overflow-hidden rounded-xl border">
-          {filed.map((project) => (
-            <li
-              key={project.id}
-              className="hover:bg-surface-container-high flex items-center gap-3 px-3 py-2.5"
-            >
-              <Link
-                href={`/orgs/${orgId}/projects/${project.id}`}
-                className="text-on-surface text-body-medium min-w-0 flex-1 truncate"
+          {filed.map((project) => {
+            const status = statusOf(project.status);
+            return (
+              <li
+                key={project.id}
+                className="hover:bg-surface-container-high flex items-center gap-3 px-3 py-2.5"
               >
-                {project.name}
-              </Link>
-              <ProjectStatusBadge status={project.status} />
-              {canEdit ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`Remove ${project.name} from this program`}
-                  disabled={pending}
-                  onClick={() => {
-                    detach(project.id);
-                  }}
+                <Link
+                  href={`/orgs/${orgId}/projects/${project.id}`}
+                  className="text-on-surface text-body-medium min-w-0 flex-1 truncate"
                 >
-                  <X className="size-4" />
-                </Button>
-              ) : null}
-            </li>
-          ))}
+                  {project.name}
+                </Link>
+                <WorkStatusBadge name={status.name} category={status.category} />
+                {canEdit ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove ${project.name} from this program`}
+                    disabled={pending}
+                    onClick={() => {
+                      detach(project.id);
+                    }}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
 

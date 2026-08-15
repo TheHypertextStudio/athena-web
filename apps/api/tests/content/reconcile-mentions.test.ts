@@ -6,7 +6,7 @@ import { formatMentionLink } from '@docket/types';
 
 import { createDrizzleMentionStorage } from '../../src/content/drizzle-mention-storage';
 import { createMentionReconciler } from '../../src/content/reconcile-mentions';
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { getDb, one, seedBaseOrg, seedStatuses } from '../support/routes-harness';
 
 let schema: typeof DbModule;
 let db: typeof DbModule.db;
@@ -21,10 +21,17 @@ beforeAll(async () => {
 });
 
 async function seedProject(orgId: string, description: string): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const row = one(
     await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'Platform rebuild', description })
+      .values({
+        organizationId: orgId,
+        name: 'Platform rebuild',
+        description,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id }),
   );
   return row.id;
@@ -117,11 +124,17 @@ describe('reconcileMentions', () => {
   });
 
   it('links an in-org entity mention to the entity, not to a resource', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const target = one(
       await db
         .insert(schema.task)
-        .values({ organizationId: orgId, teamId, title: 'Ship the migration', state: 'todo' })
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Ship the migration',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+        })
         .returning({ id: schema.task.id }),
     );
     const ref = { kind: 'entity', entityKind: 'task', entityId: target.id } as const;
@@ -150,6 +163,7 @@ describe('reconcileMentions', () => {
           teamId: other.teamId,
           title: 'Secret work',
           state: 'todo',
+          statusId: other.statusId('task', 'todo'),
         })
         .returning({ id: schema.task.id }),
     );

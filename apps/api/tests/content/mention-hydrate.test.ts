@@ -7,7 +7,14 @@ import { describe, expect, it } from 'vitest';
 
 import { canonicalizeResourceUrl } from '@docket/types';
 
-import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  getDb,
+  addMember,
+  one,
+  seedOrg,
+  seedStatuses,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 import { createDrizzleMentionStorage } from '../../src/content/drizzle-mention-storage';
 import { excerptMarkdownOf, hydrateMentions } from '../../src/content/mention-hydrate';
@@ -18,6 +25,7 @@ describe('hydrateMentions excerptMarkdown', () => {
     const { db } = schema;
     const userId = await seedUserWithHub(db, schema, 'MentionHydrateUser');
     const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
     await addMember(db, schema, orgId, userId);
     const teamId = one(
       await db
@@ -37,6 +45,7 @@ describe('hydrateMentions excerptMarkdown', () => {
           title: 'Ship the launch',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
         })
         .returning({ id: schema.task.id }),

@@ -54,19 +54,35 @@ async function seedGraph() {
   const program = one(
     await db
       .insert(schema.program)
-      .values({ organizationId: base.orgId, name: 'Transit' })
+      .values({
+        organizationId: base.orgId,
+        name: 'Transit',
+        status: 'active',
+        statusId: base.statusId('program', 'active'),
+      })
       .returning(),
   );
   const project = one(
     await db
       .insert(schema.project)
-      .values({ organizationId: base.orgId, name: 'Bus lanes', programId: program.id })
+      .values({
+        organizationId: base.orgId,
+        name: 'Bus lanes',
+        programId: program.id,
+        status: 'planned',
+        statusId: base.statusId('project', 'planned'),
+      })
       .returning(),
   );
   const initiative = one(
     await db
       .insert(schema.initiative)
-      .values({ organizationId: base.orgId, name: 'Ridership' })
+      .values({
+        organizationId: base.orgId,
+        name: 'Ridership',
+        status: 'active',
+        statusId: base.statusId('initiative', 'active'),
+      })
       .returning(),
   );
   await db
@@ -109,6 +125,7 @@ async function seedGraph() {
         teamId: base.teamId,
         title: 'Draft the brief',
         state: 'backlog',
+        statusId: base.statusId('task', 'backlog'),
         projectId: project.id,
         cycleId: cycle.id,
         milestoneId: milestone.id,
@@ -184,7 +201,12 @@ describe('loadEntityRows relation values', () => {
     const unowned = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: g.orgId, name: 'No program' })
+        .values({
+          organizationId: g.orgId,
+          name: 'No program',
+          status: 'planned',
+          statusId: g.statusId('project', 'planned'),
+        })
         .returning(),
     );
     const program = await recordFor(g.orgId, g.integration.id, 'program', g.program.id);
@@ -250,6 +272,7 @@ describe('loadEntityRows relation values', () => {
           teamId: g.teamId,
           title: 'Unfiled',
           state: 'backlog',
+          statusId: g.statusId('task', 'backlog'),
         })
         .returning(),
     );

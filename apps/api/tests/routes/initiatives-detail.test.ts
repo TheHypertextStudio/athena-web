@@ -11,6 +11,7 @@ import {
   one,
   seedBaseOrg,
   seedOrg,
+  seedStatuses,
   seedUserWithHub,
 } from '../support/routes-harness';
 import type initiativesRouter from '../../src/routes/initiatives';
@@ -36,9 +37,16 @@ const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 /** Create an initiative row directly in the db and return its id. */
 async function seedInitiative(orgId: string, createdBy: string): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const [row] = await db
     .insert(schema.initiative)
-    .values({ organizationId: orgId, name: 'Theme', createdBy })
+    .values({
+      organizationId: orgId,
+      name: 'Theme',
+      createdBy,
+      status: 'active',
+      statusId: statusId('initiative', 'active'),
+    })
     .returning({ id: schema.initiative.id });
   return assertDefined(row).id;
 }
@@ -55,6 +63,8 @@ async function seedProject(
     name?: string;
   } = {},
 ): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
+  const status = fields.status ?? 'planned';
   const [row] = await db
     .insert(schema.project)
     .values({
@@ -62,7 +72,8 @@ async function seedProject(
       name: fields.name ?? 'Proj',
       createdBy,
       health: fields.health ?? null,
-      status: fields.status ?? 'planned',
+      status,
+      statusId: statusId('project', status),
       startDate: fields.startDate ?? null,
       targetDate: fields.targetDate ?? null,
     })
@@ -76,6 +87,7 @@ async function seedProgram(
   createdBy: string,
   fields: { health?: 'on_track' | 'at_risk' | 'off_track' | null; name?: string } = {},
 ): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const [row] = await db
     .insert(schema.program)
     .values({
@@ -83,6 +95,8 @@ async function seedProgram(
       name: fields.name ?? 'Prog',
       createdBy,
       health: fields.health ?? null,
+      status: 'active',
+      statusId: statusId('program', 'active'),
     })
     .returning({ id: schema.program.id });
   return assertDefined(row).id;
@@ -1007,11 +1021,18 @@ describe('initiatives ownerId in-org validation', () => {
   });
 
   it('PATCH can clear ownerId to null (no validation on a null owner)', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const ownerId = await seedActor(orgId);
     const [row] = await db
       .insert(schema.initiative)
-      .values({ organizationId: orgId, name: 'Owned', createdBy: humanActorId, ownerId })
+      .values({
+        organizationId: orgId,
+        name: 'Owned',
+        createdBy: humanActorId,
+        ownerId,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id });
     const id = assertDefined(row).id;
 
@@ -1060,16 +1081,28 @@ describe('initiatives overview edge cases', () => {
   });
 
   it('sorts multiple children of the same parent alphabetically by name', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
     const root = await seedInitiative(orgId, humanActorId);
     const [zeta] = await db
       .insert(schema.initiative)
-      .values({ organizationId: orgId, name: 'Zeta', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Zeta',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id });
     const [alpha] = await db
       .insert(schema.initiative)
-      .values({ organizationId: orgId, name: 'Alpha', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Alpha',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id });
     await writer.request('/hierarchy-links', {
       method: 'POST',
@@ -1099,6 +1132,8 @@ describe('initiatives overview edge cases', () => {
     const foreignOrgId = await seedOrg(db, schema);
     const contextActorId = await addMember(db, schema, contextOrgId, userId, 'owner');
     const foreignActorId = await addMember(db, schema, foreignOrgId, userId, 'member');
+    const contextStatusId = await seedStatuses(db, schema, contextOrgId);
+    const foreignStatusId = await seedStatuses(db, schema, foreignOrgId);
 
     // Root: no parent, at_risk, no narrative updates — its excerpt falls back to its summary.
     const [root] = await db
@@ -1109,6 +1144,7 @@ describe('initiatives overview edge cases', () => {
         createdBy: contextActorId,
         health: 'at_risk',
         status: 'active',
+        statusId: contextStatusId('initiative', 'active'),
         summary: 'Rolling out phase two',
       })
       .returning({ id: schema.initiative.id });
@@ -1121,6 +1157,7 @@ describe('initiatives overview edge cases', () => {
         createdBy: foreignActorId,
         health: 'off_track',
         status: 'active',
+        statusId: foreignStatusId('initiative', 'active'),
       })
       .returning({ id: schema.initiative.id });
 
@@ -1300,9 +1337,16 @@ describe('initiatives aggregate — access and 404s', () => {
 describe('initiatives aggregate — connected work dedup and cross-org filtering', () => {
   /** Create a program row directly and return its id. */
   async function mkProgram(orgId: string, createdBy: string, name: string): Promise<string> {
+    const statusId = await seedStatuses(db, schema, orgId);
     const [row] = await db
       .insert(schema.program)
-      .values({ organizationId: orgId, name, createdBy })
+      .values({
+        organizationId: orgId,
+        name,
+        createdBy,
+        status: 'active',
+        statusId: statusId('program', 'active'),
+      })
       .returning({ id: schema.program.id });
     return assertDefined(row).id;
   }
@@ -1434,12 +1478,15 @@ describe('initiatives aggregate — connected work dedup and cross-org filtering
 
     const root = await seedInitiative(contextOrgId, contextActorId);
     const foreignProgram = await mkProgram(outsiderOrgId, outsiderActorId, 'Foreign program');
+    const outsiderStatusId = await seedStatuses(db, schema, outsiderOrgId);
     const [foreignProjectRow] = await db
       .insert(schema.project)
       .values({
         organizationId: outsiderOrgId,
         name: 'Foreign project',
         createdBy: outsiderActorId,
+        status: 'planned',
+        statusId: outsiderStatusId('project', 'planned'),
       })
       .returning({ id: schema.project.id });
     const foreignProject = assertDefined(foreignProjectRow).id;

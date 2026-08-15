@@ -4,8 +4,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import type projectResourcesRouter from '../../src/routes/project-resources';
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
-import { assertDefined } from '@docket/test-utils';
+import type { StatusIdLookup } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, seedProject } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -17,18 +17,23 @@ beforeAll(async () => {
   projectResources = (await import('../../src/routes/project-resources')).default;
 });
 
-async function makeProject(orgId: string, actorId: string): Promise<string> {
-  const rows = await db
-    .insert(schema.project)
-    .values({ organizationId: orgId, name: 'Funding campaign', createdBy: actorId })
-    .returning({ id: schema.project.id });
-  return assertDefined(rows[0]).id;
+async function makeProject(
+  orgId: string,
+  actorId: string,
+  statusId: StatusIdLookup,
+): Promise<string> {
+  const project = await seedProject(db, schema, statusId, {
+    organizationId: orgId,
+    name: 'Funding campaign',
+    createdBy: actorId,
+  });
+  return project.id;
 }
 
 describe('Project resources', () => {
   it('creates, lists, and removes URL resources', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const projectId = await makeProject(orgId, humanActorId);
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const projectId = await makeProject(orgId, humanActorId, statusId);
     const app = appWithActor(projectResources, orgId, ['view', 'contribute'], humanActorId);
 
     const created = await app.request(`/${projectId}/resources`, {
@@ -55,7 +60,7 @@ describe('Project resources', () => {
   it('does not expose a Project from another workspace', async () => {
     const owner = await seedBaseOrg(db, schema);
     const viewer = await seedBaseOrg(db, schema);
-    const projectId = await makeProject(owner.orgId, owner.humanActorId);
+    const projectId = await makeProject(owner.orgId, owner.humanActorId, owner.statusId);
     const app = appWithActor(projectResources, viewer.orgId, ['view'], viewer.humanActorId);
 
     expect((await app.request(`/${projectId}/resources`)).status).toBe(404);

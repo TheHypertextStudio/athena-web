@@ -15,7 +15,14 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { OrganizationId, ProjectId, TaskId, TeamId, type TaskOut } from '@docket/types';
+import {
+  DEFAULT_WORK_STATUSES,
+  OrganizationId,
+  ProjectId,
+  TaskId,
+  TeamId,
+  type TaskOut,
+} from '@docket/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -81,6 +88,7 @@ const TASK_WITH_PROJECT = '01HZZZ0000000000000000T001';
 const TASK_BARE = '01HZZZ0000000000000000T002';
 
 const catalog = buildTaskCatalog({
+  statuses: DEFAULT_WORK_STATUSES.task,
   projectLabel: 'Project',
   programLabel: 'Program',
   resolveProject: (id) => id,

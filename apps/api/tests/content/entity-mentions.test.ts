@@ -7,7 +7,14 @@ import { formatMentionLink } from '@docket/types';
 import { loadEntityMentions } from '../../src/content/entity-mentions';
 import { createDrizzleMentionStorage } from '../../src/content/drizzle-mention-storage';
 import { createMentionReconciler } from '../../src/content/reconcile-mentions';
-import { getDb, one, seedBaseOrg, seedUserWithHub, addMember } from '../support/routes-harness';
+import {
+  getDb,
+  one,
+  seedBaseOrg,
+  seedStatuses,
+  seedUserWithHub,
+  addMember,
+} from '../support/routes-harness';
 
 let schema: typeof DbModule;
 let db: typeof DbModule.db;
@@ -22,10 +29,17 @@ beforeAll(async () => {
 });
 
 async function seedProject(orgId: string, description: string): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const row = one(
     await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'Reference host', description })
+      .values({
+        organizationId: orgId,
+        name: 'Reference host',
+        description,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id }),
   );
   return row.id;
@@ -118,13 +132,19 @@ describe('loadEntityMentions', () => {
   });
 
   it('lists a referenced record the reader can see', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, 'MentionsReaderD');
     await addMember(db, schema, orgId, userId);
     const target = one(
       await db
         .insert(schema.task)
-        .values({ organizationId: orgId, teamId, title: 'Visible work', state: 'todo' })
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Visible work',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+        })
         .returning({ id: schema.task.id }),
     );
     await indexTask(orgId, target.id, 'Visible work');
@@ -148,14 +168,20 @@ describe('loadEntityMentions', () => {
   });
 
   it('omits a referenced record the reader cannot see, rather than naming it', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const reader = await seedUserWithHub(db, schema, 'MentionsReaderE');
     const owner = await seedUserWithHub(db, schema, 'MentionsOwnerE');
     await addMember(db, schema, orgId, reader);
     const target = one(
       await db
         .insert(schema.task)
-        .values({ organizationId: orgId, teamId, title: 'Sirius confidential', state: 'todo' })
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Sirius confidential',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+        })
         .returning({ id: schema.task.id }),
     );
     await indexTask(orgId, target.id, 'Sirius confidential');

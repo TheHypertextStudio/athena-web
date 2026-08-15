@@ -56,6 +56,8 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: `Acme ${slug}`, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  // The tools under test create work in this workspace, and work needs its status set to exist.
+  await schema.seedWorkspaceStatuses(db, orgId);
 
   const [role] = await db
     .insert(schema.role)

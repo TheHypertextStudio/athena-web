@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import type * as DbModule from '@docket/db';
 import { CaptureMailer } from '@docket/mail';
+import type { WorkStatusEntityType } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 
 import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';
@@ -108,11 +109,76 @@ export function fakeSession(userId: string, name = 'Ada', email = 'ada@example.c
   };
 }
 
-/** Seed a base org with a team and a human actor; returns the relevant ids. */
+/**
+ * Look up the id of one status in a workspace's set.
+ *
+ * @remarks
+ * Every piece of work stores both its status key (`task.state`, `project.status`, …) and the
+ * `status_id` of the workspace status carrying that key, and the composite foreign key over
+ * `(status_id, key, organization_id)` refuses a row where the two disagree. So a test that
+ * inserts work directly needs the id of the status matching the key it is setting, and this is
+ * how it gets one. Missing keys throw by name rather than producing `undefined`, so a typo in a
+ * test fails as a typo instead of as a foreign-key violation.
+ */
+export type StatusIdLookup = (entityType: WorkStatusEntityType, key: string) => string;
+
+/** Build a {@link StatusIdLookup} over an already-seeded status set. */
+function statusIdLookup(
+  statuses: DbModule.SeededStatuses,
+  schema: typeof DbModule,
+): StatusIdLookup {
+  return (entityType, key) => {
+    const id = statuses.get(schema.statusLookupKey(entityType, key));
+    if (id === undefined) throw new Error(`no seeded ${entityType} status ${key}`);
+    return id;
+  };
+}
+
+/**
+ * Give a workspace its default status set (if it has none yet) and return a lookup over it.
+ *
+ * @remarks
+ * Idempotent, because `seedWorkspaceStatuses` returns a workspace's existing set untouched. That
+ * makes this safe for a workspace an API route already created and seeded, as well as for one a
+ * test inserted straight into the table.
+ *
+ * @param db - The database client.
+ * @param schema - The `@docket/db` module.
+ * @param orgId - The workspace to seed.
+ * @returns a lookup from `(entityType, key)` to the status id to store alongside that key.
+ *
+ * @example
+ * ```typescript
+ * const statusId = await seedStatuses(db, schema, orgId);
+ * await db.insert(schema.task).values({
+ *   organizationId: orgId,
+ *   teamId,
+ *   title: 'T',
+ *   state: 'todo',
+ *   statusId: statusId('task', 'todo'),
+ * });
+ * ```
+ */
+export async function seedStatuses(
+  db: Db,
+  schema: typeof DbModule,
+  orgId: string,
+): Promise<StatusIdLookup> {
+  const statuses = await schema.seedWorkspaceStatuses(db, orgId);
+  return statusIdLookup(statuses, schema);
+}
+
+/** Seed a base org with a team, a human actor, and its default status sets. */
 export async function seedBaseOrg(
   db: Db,
   schema: typeof DbModule,
-): Promise<{ orgId: string; teamId: string; humanActorId: string }> {
+): Promise<{
+  orgId: string;
+  teamId: string;
+  humanActorId: string;
+  statuses: DbModule.SeededStatuses;
+  statusId: StatusIdLookup;
+}> {
   const slug = `org-${Math.random().toString(36).slice(2, 10)}`;
   const [org] = await db
     .insert(schema.organization)
@@ -120,6 +186,10 @@ export async function seedBaseOrg(
     .returning({ id: schema.organization.id });
   if (!org) throw new Error('seedBaseOrg failed to create an organization');
   const orgId = org.id;
+
+  // Statuses come before any work: a Task, Project, Program, or Initiative points at one, and
+  // the database refuses the row without it.
+  const statuses = await schema.seedWorkspaceStatuses(db, orgId);
 
   const [t] = await db
     .insert(schema.team)
@@ -139,7 +209,13 @@ export async function seedBaseOrg(
   if (!human) throw new Error('seedBaseOrg failed to create a human actor');
   const humanActorId = human.id;
 
-  return { orgId, teamId, humanActorId };
+  return {
+    orgId,
+    teamId,
+    humanActorId,
+    statuses,
+    statusId: statusIdLookup(statuses, schema),
+  };
 }
 
 /**
@@ -212,7 +288,7 @@ export async function seedStaffUser(
   return { userId, staffUserId: staff.id };
 }
 
-/** Seed an organization (personal or shared); returns its id. */
+/** Seed an organization (personal or shared) with its default status sets; returns its id. */
 export async function seedOrg(
   db: Db,
   schema: typeof DbModule,
@@ -225,7 +301,120 @@ export async function seedOrg(
       .values({ name: slug, slug, isPersonal })
       .returning({ id: schema.organization.id }),
   );
+  await schema.seedWorkspaceStatuses(db, o.id);
   return o.id;
+}
+
+/**
+ * Add one status to a workspace's set, beyond the seeded defaults.
+ *
+ * @remarks
+ * For a test that needs work in a status the defaults do not name — a renamed set, a team's own
+ * Task statuses, a key a connector mapping produces. The row it creates is what makes the key
+ * storable at all, since the composite foreign key only accepts keys the workspace defines.
+ *
+ * @param db - The database client.
+ * @param schema - The `@docket/db` module.
+ * @param values - The status columns; `isDefault` defaults to `false`.
+ * @returns the new status's id.
+ */
+export async function seedStatus(
+  db: Db,
+  schema: typeof DbModule,
+  values: typeof DbModule.workStatus.$inferInsert,
+): Promise<string> {
+  const row = one(
+    await db
+      .insert(schema.workStatus)
+      .values({ isDefault: false, ...values })
+      .returning({ id: schema.workStatus.id }),
+  );
+  return row.id;
+}
+
+/** The columns a work insert supplies for itself; the harness fills in `statusId`. */
+type WorkValues<T extends { statusId: string }> = Omit<T, 'statusId'>;
+
+/**
+ * Insert a Task, filling in the `status_id` matching the `state` it stores.
+ *
+ * @param db - The database client.
+ * @param schema - The `@docket/db` module.
+ * @param statusId - The workspace's status lookup, from {@link seedBaseOrg} or {@link seedStatuses}.
+ * @param values - The Task's columns, minus `statusId`.
+ * @returns the inserted row.
+ *
+ * @example
+ * ```typescript
+ * const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
+ * const task = await seedTask(db, schema, statusId, {
+ *   organizationId: orgId,
+ *   teamId,
+ *   title: 'Ship it',
+ *   state: 'in_progress',
+ * });
+ * ```
+ */
+export async function seedTask(
+  db: Db,
+  schema: typeof DbModule,
+  statusId: StatusIdLookup,
+  values: WorkValues<typeof DbModule.task.$inferInsert>,
+): Promise<typeof DbModule.task.$inferSelect> {
+  return one(
+    await db
+      .insert(schema.task)
+      .values({ ...values, statusId: statusId('task', values.state) })
+      .returning(),
+  );
+}
+
+/** Insert a Project, filling in the `status_id` matching the `status` it stores. */
+export async function seedProject(
+  db: Db,
+  schema: typeof DbModule,
+  statusId: StatusIdLookup,
+  values: WorkValues<typeof DbModule.project.$inferInsert>,
+): Promise<typeof DbModule.project.$inferSelect> {
+  const status = values.status ?? 'planned';
+  return one(
+    await db
+      .insert(schema.project)
+      .values({ ...values, status, statusId: statusId('project', status) })
+      .returning(),
+  );
+}
+
+/** Insert a Program, filling in the `status_id` matching the `status` it stores. */
+export async function seedProgram(
+  db: Db,
+  schema: typeof DbModule,
+  statusId: StatusIdLookup,
+  values: WorkValues<typeof DbModule.program.$inferInsert>,
+): Promise<typeof DbModule.program.$inferSelect> {
+  const status = values.status ?? 'active';
+  return one(
+    await db
+      .insert(schema.program)
+      .values({ ...values, status, statusId: statusId('program', status) })
+      .returning(),
+  );
+}
+
+/** Insert an Initiative, filling in the `status_id` matching the `status` it stores. */
+export async function seedInitiative(
+  db: Db,
+  schema: typeof DbModule,
+  statusId: StatusIdLookup,
+  values: WorkValues<typeof DbModule.initiative.$inferInsert>,
+): Promise<typeof DbModule.initiative.$inferSelect> {
+  const status = values.status ?? 'active';
+  return one(
+    await db
+      .insert(schema.initiative)
+      .values({ ...values, status, statusId: statusId('initiative', status) })
+      .returning(),
+  );
 }
 
 /**

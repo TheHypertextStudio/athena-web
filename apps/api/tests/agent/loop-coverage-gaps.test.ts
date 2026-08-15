@@ -96,6 +96,21 @@ beforeAll(async () => {
     await import('../../src/services/elicitation-service'));
 });
 
+/**
+ * The id of one of a workspace's Task statuses, which a directly-inserted Task must point at.
+ *
+ * @remarks
+ * Seeding a workspace's status set is idempotent, so this both establishes the set and reads back
+ * the id belonging to `key` — the value `task.status_id` has to carry alongside the `state` the
+ * same row stores, since the composite foreign key refuses a row where the two disagree.
+ */
+async function taskStatusId(orgId: string, key: string): Promise<string> {
+  const statuses = await schema.seedWorkspaceStatuses(db, orgId);
+  const id = statuses.get(schema.statusLookupKey('task', key));
+  if (id === undefined) throw new Error(`no seeded task status ${key}`);
+  return id;
+}
+
 interface RegisteredAgentSeed {
   readonly orgId: string;
   readonly teamId: string;
@@ -121,6 +136,7 @@ async function seedRegisteredAgentSession(
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  await schema.seedWorkspaceStatuses(db, orgId);
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
@@ -188,6 +204,9 @@ async function seedAthenaSession(
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  const athenaOrgId = org?.id;
+  if (athenaOrgId === undefined) throw new Error('seedAthenaSession failed to create a workspace');
+  await schema.seedWorkspaceStatuses(db, athenaOrgId);
   const [role] = await db
     .insert(schema.role)
     .values({
@@ -956,6 +975,7 @@ describe('deriveBrief — a session linked to a real task', () => {
         title: 'Ship the Q3 launch email',
         teamId: seed.teamId,
         state: 'backlog',
+        statusId: await taskStatusId(seed.orgId, 'backlog'),
       })
       .returning({ id: schema.task.id });
     await db
@@ -987,6 +1007,7 @@ describe('deriveBrief — a session linked to a real task', () => {
         title: 'Belongs to a different workspace',
         teamId: otherOrgSeed.teamId,
         state: 'backlog',
+        statusId: await taskStatusId(otherOrgSeed.orgId, 'backlog'),
       })
       .returning({ id: schema.task.id });
     // A taskId that does not resolve under this session's own organizationId — a data edge, not a

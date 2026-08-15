@@ -14,7 +14,15 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { addMember, getDb, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  addMember,
+  getDb,
+  one,
+  seedOrg,
+  seedStatuses,
+  seedUserWithHub,
+  type StatusIdLookup,
+} from '../support/routes-harness';
 import { resolveAnchorSuggestion } from '../../src/time/anchor-suggestion';
 
 let schema!: typeof DbModule;
@@ -27,6 +35,7 @@ let hubId: string;
 let organizationId: string;
 let teamId: string;
 let actorId: string;
+let statusId: StatusIdLookup;
 
 beforeEach(async () => {
   schema = await getDb();
@@ -36,6 +45,7 @@ beforeEach(async () => {
     await db.select({ id: schema.hub.id }).from(schema.hub).where(eq(schema.hub.userId, userId)),
   ).id;
   organizationId = await seedOrg(db, schema);
+  statusId = await seedStatuses(db, schema, organizationId);
   actorId = await addMember(db, schema, organizationId, userId);
   teamId = one(
     await db
@@ -54,7 +64,15 @@ async function seedTask(title: string, overrides: Record<string, unknown> = {}):
   return one(
     await db
       .insert(schema.task)
-      .values({ organizationId, teamId, title, state: 'todo', createdBy: actorId, ...overrides })
+      .values({
+        organizationId,
+        teamId,
+        title,
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: actorId,
+        ...overrides,
+      })
       .returning({ id: schema.task.id }),
   ).id;
 }
@@ -172,6 +190,7 @@ describe('resolveAnchorSuggestion', () => {
 
   it('ignores a task in a workspace the caller has no active actor in', async () => {
     const foreignOrg = await seedOrg(db, schema);
+    const foreignStatusId = await seedStatuses(db, schema, foreignOrg);
     const foreignTeam = one(
       await db
         .insert(schema.team)
@@ -181,7 +200,13 @@ describe('resolveAnchorSuggestion', () => {
     const foreignTask = one(
       await db
         .insert(schema.task)
-        .values({ organizationId: foreignOrg, teamId: foreignTeam, title: 'Hidden', state: 'todo' })
+        .values({
+          organizationId: foreignOrg,
+          teamId: foreignTeam,
+          title: 'Hidden',
+          state: 'todo',
+          statusId: foreignStatusId('task', 'todo'),
+        })
         .returning({ id: schema.task.id }),
     ).id;
     await seedBlock({

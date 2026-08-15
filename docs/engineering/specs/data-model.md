@@ -66,13 +66,20 @@ const auditColumns = () => ({
 ```ts
 export const actorKind = pgEnum('actor_kind', ['human', 'agent', 'team']);
 export const actorStatus = pgEnum('actor_status', ['active', 'suspended']);
-export const initiativeStatus = pgEnum('initiative_status', ['active', 'completed']);
-export const programStatus = pgEnum('program_status', ['active', 'paused', 'archived']); // NO completed
-export const projectStatus = pgEnum('project_status', [
-  'planned',
-  'active',
+// Initiative / Program / Project statuses are workspace-defined rows, so their columns are plain
+// text keys into `work_status` rather than enums. The taxonomy those keys roll up to is fixed:
+export const workStatusCategory = pgEnum('work_status_category', [
+  'backlog',
+  'unstarted',
+  'started',
   'completed',
   'canceled',
+]);
+export const workStatusEntity = pgEnum('work_status_entity', [
+  'task',
+  'project',
+  'program',
+  'initiative',
 ]);
 export const cycleStatus = pgEnum('cycle_status', ['upcoming', 'active', 'completed']);
 export const health = pgEnum('health', ['on_track', 'at_risk', 'off_track']);
@@ -197,6 +204,18 @@ export const orgLifecycleState = pgEnum('org_lifecycle_state', [
 ]);
 export const staffRole = pgEnum('staff_role', ['support', 'finance', 'superadmin']);
 ```
+
+**Superseded:** this block previously declared `initiative_status`, `program_status`
+(`active | paused | archived`, annotated `// NO completed`), and `project_status` as fixed enums,
+one per container. A workspace now names its own statuses for Tasks, Projects, Programs, and
+Initiatives in the `work_status` table, so `initiative.status`, `program.status`,
+`project.status`, and `task.state` are text keys into a set the workspace owns. The two enums above
+replace them: `work_status_category` is the fixed five-value taxonomy every status declares itself
+as, and `work_status_entity` names the four kinds of work that carry a set. The taxonomy stays a
+`pgEnum` for the reason §0.4 gives — it is a stable, cross-table value set, and holding it still is
+what keeps status glyphs, grouping, progress, and connector mappings correct for statuses nobody
+has invented yet. `cycle_status` stays an enum because a Cycle's status follows its window rather
+than a choice. Full model in `statuses.md`.
 
 ---
 
@@ -337,6 +356,8 @@ export const team = pgTable(
     name: text('name').notNull(),
     key: text('key').notNull(), // short prefix, e.g. "MKT"
     description: text('description'),
+    // Which statuses a Task may hold now lives in `work_status`; this column stays as the shape
+    // the team DTOs read and write. See the note below.
     workflowStates: jsonb('workflow_states')
       .$type<WorkflowState[]>()
       .notNull()
@@ -357,7 +378,19 @@ export const team = pgTable(
 );
 ```
 
-- Team↔Actor membership: a human is a member of a team via the actor; a normalized `team_member { team_id, actor_id }` join is added (acts as the "people in a team" set). Workflow states embedded as jsonb (Task.state references a `state.key`).
+- Team↔Actor membership: a human is a member of a team via the actor; a normalized `team_member { team_id, actor_id }` join is added (acts as the "people in a team" set).
+
+**Superseded (workflow states).** A team's `workflow_states` jsonb was the authority on which
+statuses its Tasks could hold, and each team owned its own list. Task statuses are now workspace-
+owned rows in `work_status`: a team with no `work_status` rows of its own follows the workspace's
+Task set, and a team that keeps its own set has forked it (`work_status.team_id` names the team,
+and a CHECK confines team-scoped rows to `entity_type = 'task'` because only Tasks are
+team-scoped). Which set a team resolves to, and whether it has forked, is what
+`WorkStatusSetOut{ teamId, forked, statuses }` reports. The column above remains, still populated
+and still accepted by the team routes, and it no longer governs what a Task may be set to — the
+composite FK described in §4.5 does. Migration `0087_sour_post.sql` seeded each workspace from the
+shape most of its teams already shared and forked only the teams that differed, so no
+customization was lost.
 
 ```ts
 export const teamMember = pgTable(
@@ -394,7 +427,8 @@ export const initiative = pgTable(
     name: text('name').notNull(),
     description: text('description'),
     ownerId: text('owner_id').references(() => actor.id, { onDelete: 'set null' }),
-    status: initiativeStatus('status').notNull().default('active'),
+    status: text('status').notNull().default('active'), // key into work_status
+    statusId: text('status_id').notNull(), // authority; same composite FK shape as §4.5
     targetDate: timestamp('target_date', { withTimezone: true }),
     health: health('health'), // nullable; derived from latest Update
   },
@@ -412,12 +446,23 @@ export const program = pgTable(
     name: text('name').notNull(),
     description: text('description'),
     ownerId: text('owner_id').references(() => actor.id, { onDelete: 'set null' }),
-    status: programStatus('status').notNull().default('active'), // active|paused|archived
+    status: text('status').notNull().default('active'), // key into work_status
+    statusId: text('status_id').notNull(), // authority; same composite FK shape as §4.5
     health: health('health'),
   },
   (t) => [index('program_org_idx').on(t.organizationId)],
 );
 ```
+
+**Superseded (the heading's "NO completed status").** `program_status` was an enum of
+`active | paused | archived` chosen so that a Program could never be marked done. A Program can now
+complete. Its seeded set is `Proposed · Active · Paused · Completed · Archived`, where `Completed`
+means it reached its end and `Archived` (category `canceled`) means it was retired and kept for
+history. The Program-versus-Project distinction the old enum was defending is a product statement
+and it still holds — a Project is scoped to one outcome, a Program to an ongoing responsibility —
+and it is now expressed in what the two containers mean and how each is read rather than in a value
+withheld from every workspace. A workspace that wants Programs which only ever end by being
+archived deletes `Completed` from its Program set.
 
 ### 4.3 `project` (bounded; under org or under a program)
 
@@ -431,7 +476,8 @@ export const project = pgTable(
     leadId: text('lead_id').references(() => actor.id, { onDelete: 'set null' }),
     programId: text('program_id').references(() => program.id, { onDelete: 'set null' }), // optional
     teamId: text('team_id').references(() => team.id, { onDelete: 'set null' }),
-    status: projectStatus('status').notNull().default('planned'),
+    status: text('status').notNull().default('planned'), // key into work_status
+    statusId: text('status_id').notNull(), // authority; same composite FK shape as §4.5
     health: health('health'),
     startDate: timestamp('start_date', { withTimezone: true }),
     targetDate: timestamp('target_date', { withTimezone: true }),
@@ -479,7 +525,8 @@ export const task = pgTable(
     teamId: text('team_id')
       .notNull()
       .references(() => team.id, { onDelete: 'restrict' }), // always a team
-    state: text('state').notNull(), // key into team.workflow_states (per-team, no global FK)
+    state: text('state').notNull(), // the key of the work_status row named by status_id
+    statusId: text('status_id').notNull(), // authority; held to `state` by the composite FK below
     priority: taskPriority('priority').notNull().default('none'),
     assigneeId: text('assignee_id').references(() => actor.id, { onDelete: 'set null' }), // Human|Agent
     delegateId: text('delegate_id').references(() => actor.id, { onDelete: 'set null' }), // Agent ("you own, agent does")
@@ -509,6 +556,14 @@ export const task = pgTable(
     index('task_cycle_idx').on(t.cycleId),
     index('task_assignee_idx').on(t.assigneeId),
     index('task_parent_idx').on(t.parentTaskId),
+    index('task_status_idx').on(t.statusId),
+    foreignKey({
+      name: 'task_status_fk',
+      columns: [t.statusId, t.state, t.organizationId],
+      foreignColumns: [workStatus.id, workStatus.key, workStatus.organizationId],
+    })
+      .onDelete('restrict')
+      .onUpdate('cascade'),
     uniqueIndex('task_source_uq')
       .on(t.sourceIntegrationId, t.externalId)
       .where(sql`${t.externalId} IS NOT NULL`), // idempotent import/mirror
@@ -518,6 +573,17 @@ export const task = pgTable(
 
 - "Triage" = a Task with `project_id IS NULL AND program_id IS NULL` on a team with `triage_enabled` (derived, not a column).
 - `assignee` and `delegate` MUST point at actors with `kind ∈ {human, agent}` / `kind = agent` respectively — enforced in the app layer.
+
+**Superseded (`task.state`).** `state` was "a key into `team.workflow_states`, per-team, with no
+global FK", and this spec carried a standing note that the foreign key which would have been right
+did not exist. It exists now. `task` gains `status_id`, and the composite foreign key above targets
+`work_status (id, key, organization_id)`, which makes three things true at once: `state` is
+provably the key of the status `status_id` names, a status from another tenant is unrepresentable,
+and the forty-odd readers, connectors, saved views, and API responses that have always read the
+string keep working untouched. `ON UPDATE CASCADE` turns a key rewrite into one statement.
+`ON DELETE RESTRICT` is what requires a status deletion to remap its work first. `initiative`,
+`program`, and `project` each carry the identical pair over their own `status` column. Applies from
+`0087_sour_post.sql`.
 
 ### 4.6 `milestone` (dated checkpoint attribute of a Project — real table)
 
@@ -790,10 +856,13 @@ export const integration = pgTable(
 
 ### 6.6 `label` + `label_group` (org-scoped, optional team scope; m2m with five entities)
 
-Labels are Docket's one deliberate escape hatch. The product ships no custom fields — statuses,
-priorities, and health are the app's own opinions — so labels carry every dimension an org needs
-that Docket does not model. That is also why they get exactly one structural idea, the group, and
-no more.
+Labels are Docket's one deliberate escape hatch. The product ships no custom fields — priority and
+health are the app's own opinions, and a workspace's statuses are configurable inside a fixed
+five-category taxonomy (`work_status`; see `statuses.md`) — so labels carry every dimension an org needs that
+Docket does not model. Statuses moving to workspace control narrows that gap by one axis and leaves
+the rest of it exactly where it was: a status still answers "how far along is this", so an org that
+wants to record a second dimension — a funding source, a channel, a request type — reaches for a
+label. That is also why labels get exactly one structural idea, the group, and no more.
 
 A **group** is a named set of labels and the only place _exclusivity_ can be recorded: with
 `exclusive` true (the default), applying one member releases every other member, which is how an

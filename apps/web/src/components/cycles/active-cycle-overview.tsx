@@ -22,12 +22,13 @@
  */
 import type { CycleOut, CycleStats, TaskOut } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Badge, Skeleton } from '@docket/ui/primitives';
+import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type JSX, useMemo } from 'react';
 
 import type { ActorDirectory } from '@/components/agents/actor-directory';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { resolveRelationLabel } from '@/components/views/field-catalog';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
@@ -36,7 +37,9 @@ import { userErrorMessage } from '@/lib/problem';
 import { useApiQuery, usePrefetchApi } from '@/lib/query';
 import { taskDetailDef } from '@/lib/use-task-detail';
 
-import { STATUS_LABEL, statusBadgeVariant } from './cycle-status';
+import { WorkStatusBadge } from '@/components/entity-display/work-status';
+
+import { CYCLE_STATUS } from './cycle-status';
 import { formatWindow, windowProgress, windowRunway } from './format-window';
 
 /** How many of the cycle's tasks the overview shows before deferring to the detail screen. */
@@ -140,8 +143,10 @@ export function ActiveCycleOverview({
     [detailQ.data],
   );
 
+  const statuses = useStatusRegistry().statusesFor('task');
   const columns = useMemo(() => {
     const catalog = buildTaskCatalog({
+      statuses,
       projectLabel: projectNoun,
       programLabel: programNoun,
       resolveProject: (id) =>
@@ -155,12 +160,14 @@ export function ActiveCycleOverview({
     });
     return buildTaskColumns({
       catalog,
+      statuses,
       resolveActor: (id) => resolveActor(id),
       onOpen: (task) => {
         router.push(`/orgs/${orgId}/tasks/${task.id}`);
       },
     });
   }, [
+    statuses,
     projectNoun,
     programNoun,
     projectName,
@@ -185,7 +192,7 @@ export function ActiveCycleOverview({
         <h2 id="active-cycle-heading" className="text-on-surface text-title-large min-w-0">
           {cycle.displayName}
         </h2>
-        <Badge variant={statusBadgeVariant('active')}>{STATUS_LABEL.active}</Badge>
+        <WorkStatusBadge name={CYCLE_STATUS.active.name} category={CYCLE_STATUS.active.category} />
         <span className="text-on-surface-variant text-label-large">{teamName}</span>
         <Link
           href={detailHref}

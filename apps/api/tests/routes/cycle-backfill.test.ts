@@ -12,7 +12,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, type StatusIdLookup } from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';
 import { assertDefined } from '@docket/test-utils';
 
@@ -55,6 +55,7 @@ async function makeCycle(
 
 /** Insert a task row directly, with control over cycle/state/archived. */
 async function makeTask(
+  statusId: StatusIdLookup,
   orgId: string,
   teamId: string,
   actorId: string,
@@ -67,6 +68,7 @@ async function makeTask(
       title: 'T',
       teamId,
       state: opts.state ?? 'todo',
+      statusId: statusId('task', opts.state ?? 'todo'),
       cycleId: opts.cycleId ?? null,
       createdBy: actorId,
       ...(opts.archivedAt ? { archivedAt: opts.archivedAt } : {}),
@@ -86,16 +88,18 @@ async function cycleOf(taskId: string): Promise<string | null> {
 
 describe('cycle backfill (POST /:id/backfill)', () => {
   it('assigns only unscoped, non-terminal, non-archived tasks on the same team', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const cycleId = await makeCycle(orgId, teamId, humanActorId, 1);
     const otherCycle = await makeCycle(orgId, teamId, humanActorId, 2);
 
-    const unscoped = await makeTask(orgId, teamId, humanActorId, { state: 'todo' });
-    const alreadyOnThisCycle = await makeTask(orgId, teamId, humanActorId, { cycleId });
-    const onAnotherCycle = await makeTask(orgId, teamId, humanActorId, { cycleId: otherCycle });
-    const done = await makeTask(orgId, teamId, humanActorId, { state: 'done' });
-    const canceled = await makeTask(orgId, teamId, humanActorId, { state: 'canceled' });
-    const archived = await makeTask(orgId, teamId, humanActorId, {
+    const unscoped = await makeTask(statusId, orgId, teamId, humanActorId, { state: 'todo' });
+    const alreadyOnThisCycle = await makeTask(statusId, orgId, teamId, humanActorId, { cycleId });
+    const onAnotherCycle = await makeTask(statusId, orgId, teamId, humanActorId, {
+      cycleId: otherCycle,
+    });
+    const done = await makeTask(statusId, orgId, teamId, humanActorId, { state: 'done' });
+    const canceled = await makeTask(statusId, orgId, teamId, humanActorId, { state: 'canceled' });
+    const archived = await makeTask(statusId, orgId, teamId, humanActorId, {
       state: 'todo',
       archivedAt: new Date(),
     });
@@ -114,9 +118,9 @@ describe('cycle backfill (POST /:id/backfill)', () => {
   });
 
   it('is idempotent — a repeat call only touches tasks still missing a cycle', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const cycleId = await makeCycle(orgId, teamId, humanActorId);
-    await makeTask(orgId, teamId, humanActorId, { state: 'todo' });
+    await makeTask(statusId, orgId, teamId, humanActorId, { state: 'todo' });
 
     const writer = appWithActor(cycles, orgId, ['contribute'], humanActorId);
     const first = await writer.request(`/${cycleId}/backfill`, { method: 'POST' });
@@ -127,13 +131,13 @@ describe('cycle backfill (POST /:id/backfill)', () => {
   });
 
   it('leaves a task on another team untouched', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [otherTeam] = await db
       .insert(schema.team)
       .values({ organizationId: orgId, name: 'Elsewhere', key: 'ELS' })
       .returning();
     const cycleId = await makeCycle(orgId, teamId, humanActorId);
-    const foreignTask = await makeTask(orgId, assertDefined(otherTeam).id, humanActorId, {
+    const foreignTask = await makeTask(statusId, orgId, assertDefined(otherTeam).id, humanActorId, {
       state: 'todo',
     });
 

@@ -287,6 +287,7 @@ describe('linked-task visibility on calendar items', () => {
           teamId: base.teamId,
           title: 'Prep the deck',
           state: 'todo',
+          statusId: base.statusId('task', 'todo'),
           priority: 'high',
         })
         .returning({ id: schema.task.id }),
@@ -338,6 +339,7 @@ describe('linked-task visibility on calendar items', () => {
           teamId: base.teamId,
           title: 'Prep the deck',
           state: 'todo',
+          statusId: base.statusId('task', 'todo'),
           priority: 'high',
         })
         .returning({ id: schema.task.id }),

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import time from '../../src/routes/time';
 import timeSubmissions from '../../src/routes/time-submissions';
+import type { StatusIdLookup } from '../support/routes-harness';
 import {
   addMember,
   appWithActor,
@@ -13,6 +14,7 @@ import {
   getDb,
   one,
   seedOrg,
+  seedStatuses,
   seedUserWithHub,
 } from '../support/routes-harness';
 
@@ -27,12 +29,14 @@ describe('Time Ledger routes', () => {
   let organizationId: string;
   let teamId: string;
   let actorId: string;
+  let statusId: StatusIdLookup;
   let app: ReturnType<typeof appWithSession>;
 
   beforeEach(async () => {
     const schema = await getDb();
     userId = await seedUserWithHub(schema.db, schema, 'TimeLedger');
     organizationId = await seedOrg(schema.db, schema);
+    statusId = await seedStatuses(schema.db, schema, organizationId);
     actorId = await addMember(schema.db, schema, organizationId, userId);
     // Every real workspace is created with a default team, and the timer creates its task on one.
     teamId = one(
@@ -83,6 +87,7 @@ describe('Time Ledger routes', () => {
           teamId,
           title,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           createdBy: actorId,
           ...overrides,
         })
@@ -177,6 +182,7 @@ describe('Time Ledger routes', () => {
   it('refuses to track a task in a workspace the caller cannot see', async () => {
     const schema = await getDb();
     const foreignOrg = await seedOrg(schema.db, schema);
+    const foreignStatusId = await seedStatuses(schema.db, schema, foreignOrg);
     const foreignTeam = one(
       await schema.db
         .insert(schema.team)
@@ -186,7 +192,13 @@ describe('Time Ledger routes', () => {
     const foreignTask = one(
       await schema.db
         .insert(schema.task)
-        .values({ organizationId: foreignOrg, teamId: foreignTeam, title: 'Hidden', state: 'todo' })
+        .values({
+          organizationId: foreignOrg,
+          teamId: foreignTeam,
+          title: 'Hidden',
+          state: 'todo',
+          statusId: foreignStatusId('task', 'todo'),
+        })
         .returning({ id: schema.task.id }),
     ).id;
     const response = await app.request('/records', {
@@ -764,19 +776,35 @@ describe('Time Ledger routes', () => {
     const programId = one(
       await schema.db
         .insert(schema.program)
-        .values({ organizationId, name: 'Platform' })
+        .values({
+          organizationId,
+          name: 'Platform',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     ).id;
     const projectId = one(
       await schema.db
         .insert(schema.project)
-        .values({ organizationId, name: 'Ledger', programId })
+        .values({
+          organizationId,
+          name: 'Ledger',
+          programId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const initiativeId = one(
       await schema.db
         .insert(schema.initiative)
-        .values({ organizationId, name: 'Ship v1' })
+        .values({
+          organizationId,
+          name: 'Ship v1',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning({ id: schema.initiative.id }),
     ).id;
     await schema.db

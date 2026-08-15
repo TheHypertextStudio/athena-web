@@ -216,6 +216,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Due today',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         assigneeId: myActorId,
         estimateMinutes: 20,
         dueDate: new Date(date),
@@ -229,6 +230,7 @@ describe('hub /today (daily operating projection)', () => {
         organizationId: org.orgId,
         name: 'Reliable launch',
         status: 'active',
+        statusId: org.statusId('initiative', 'active'),
         health: 'on_track',
         createdBy: org.humanActorId,
       })
@@ -240,6 +242,7 @@ describe('hub /today (daily operating projection)', () => {
         name: 'Ship Today',
         teamId: org.teamId,
         status: 'active',
+        statusId: org.statusId('project', 'active'),
         health: 'at_risk',
         targetDate: new Date('2026-08-03T00:00:00.000Z'),
         createdBy: org.humanActorId,
@@ -274,6 +277,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Planned',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         projectId: assertDefined(project).id,
         assigneeId: myActorId,
         estimateMinutes: 45,
@@ -294,6 +298,7 @@ describe('hub /today (daily operating projection)', () => {
       title: 'Already shipped',
       teamId: org.teamId,
       state: 'done',
+      statusId: org.statusId('task', 'done'),
       projectId: assertDefined(project).id,
       completedAt: new Date(),
       createdBy: org.humanActorId,
@@ -319,6 +324,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Needs approval',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.task.id });
@@ -339,6 +345,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Blocker',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.task.id });
@@ -349,6 +356,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Blocked mine',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         assigneeId: myActorId,
         createdBy: org.humanActorId,
       })
@@ -427,6 +435,7 @@ describe('hub /today (daily operating projection)', () => {
         name: 'Private project',
         teamId: org.teamId,
         status: 'active',
+        statusId: org.statusId('project', 'active'),
         visibility: 'private',
         createdBy: org.humanActorId,
       })
@@ -438,6 +447,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Visible task',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         projectId: assertDefined(privateProject).id,
         visibility: 'public',
         createdBy: org.humanActorId,
@@ -450,6 +460,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Private task',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         visibility: 'private',
         createdBy: org.humanActorId,
       })
@@ -499,6 +510,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Done blocker',
         teamId: org.teamId,
         state: 'done',
+        statusId: org.statusId('task', 'done'),
         completedAt: new Date(),
         createdBy: org.humanActorId,
       })
@@ -510,6 +522,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Now free',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         assigneeId: myActorId,
         createdBy: org.humanActorId,
       })
@@ -548,6 +561,7 @@ describe('hub /today (daily operating projection)', () => {
           title: 'First accepted task',
           teamId: org.teamId,
           state: 'todo',
+          statusId: org.statusId('task', 'todo'),
           createdBy: org.humanActorId,
         },
         {
@@ -555,6 +569,7 @@ describe('hub /today (daily operating projection)', () => {
           title: 'Second accepted task',
           teamId: org.teamId,
           state: 'todo',
+          statusId: org.statusId('task', 'todo'),
           createdBy: org.humanActorId,
         },
       ])
@@ -595,6 +610,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Already finished elsewhere',
         teamId: org.teamId,
         state: 'done',
+        statusId: org.statusId('task', 'done'),
         completedAt: new Date(),
         createdBy: org.humanActorId,
       })
@@ -630,6 +646,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Finish this',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.task.id });
@@ -765,7 +782,7 @@ describe('hub /today (daily operating projection)', () => {
     ]);
   });
 
-  it('cannot complete another user plan row or a task without a completed workflow state', async () => {
+  it('cannot complete another user plan row, and completing your own lands in the workspace’s Done', async () => {
     const owner = await seedUserWithHub();
     const caller = await seedUserWithHub();
     const org = await seedBaseOrg(db, schema);
@@ -778,6 +795,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Owner task',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.task.id });
@@ -797,10 +815,11 @@ describe('hub /today (daily operating projection)', () => {
         .status,
     ).toBe(404);
 
-    await db
-      .update(schema.team)
-      .set({ workflowStates: [{ key: 'todo', name: 'Todo', type: 'unstarted', position: 0 }] })
-      .where(eq(schema.team.id, org.teamId));
+    // This test used to end by stripping the team's completed workflow state and asserting a 409.
+    // That scenario is now unreachable: a status set is required to keep a way to finish work, and
+    // the route that would remove the last one refuses (see `tests/routes/work-statuses.test.ts`).
+    // What is worth pinning here instead is the other half of that guarantee — the owner's own
+    // completion succeeds, and it lands on the workspace's completed status.
     const ownerApp = appWithSession(hub, fakeSession(owner.userId));
     expect(
       (
@@ -808,7 +827,7 @@ describe('hub /today (daily operating projection)', () => {
           method: 'POST',
         })
       ).status,
-    ).toBe(409);
+    ).toBe(200);
 
     const [taskAfter] = await db
       .select()
@@ -818,8 +837,9 @@ describe('hub /today (daily operating projection)', () => {
       .select()
       .from(schema.dailyPlanItem)
       .where(eq(schema.dailyPlanItem.id, assertDefined(planItem).id));
-    expect(taskAfter?.state).toBe('todo');
-    expect(planAfter?.status).toBe('planned');
+    expect(taskAfter?.statusId).toBe(org.statusId('task', 'done'));
+    expect(taskAfter?.completedAt).not.toBeNull();
+    expect(planAfter?.status).toBe('done');
   });
 
   it('requires contribute capability to complete a visible task from a personal plan', async () => {
@@ -842,6 +862,7 @@ describe('hub /today (daily operating projection)', () => {
         title: 'Visible but not editable',
         teamId: org.teamId,
         state: 'todo',
+        statusId: org.statusId('task', 'todo'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.task.id });
@@ -886,6 +907,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
         organizationId: org.orgId,
         name: 'Customer Success',
         status: 'active',
+        statusId: org.statusId('program', 'active'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.program.id });
@@ -898,6 +920,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
         teamId: org.teamId,
         programId: assertDefined(prog).id,
         status: 'active',
+        statusId: org.statusId('project', 'active'),
         startDate: new Date('2026-09-01'),
         targetDate: new Date('2026-10-01'),
         createdBy: org.humanActorId,
@@ -912,6 +935,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
         name: 'Standalone',
         teamId: org.teamId,
         status: 'planned',
+        statusId: org.statusId('project', 'planned'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.project.id });
@@ -922,6 +946,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
       name: 'Old Done',
       teamId: org.teamId,
       status: 'completed',
+      statusId: org.statusId('project', 'completed'),
       createdBy: org.humanActorId,
     });
 
@@ -979,6 +1004,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
       name: 'PastProject',
       teamId: org.teamId,
       status: 'active',
+      statusId: org.statusId('project', 'active'),
       startDate: new Date('2025-01-01'),
       targetDate: new Date('2025-02-01'),
       createdBy: org.humanActorId,
@@ -989,6 +1015,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
       name: 'CurrentProject',
       teamId: org.teamId,
       status: 'active',
+      statusId: org.statusId('project', 'active'),
       startDate: new Date('2026-09-01'),
       targetDate: new Date('2026-10-01'),
       createdBy: org.humanActorId,
@@ -1014,6 +1041,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
       name: 'Hidden',
       teamId: foreign.teamId,
       status: 'active',
+      statusId: foreign.statusId('project', 'active'),
       createdBy: foreign.humanActorId,
     });
     const app = appWithSession(hub, fakeSession(userId));
@@ -1031,7 +1059,13 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
     // An initiative the user filters by, plus a program + two projects.
     const [init] = await db
       .insert(schema.initiative)
-      .values({ organizationId: org.orgId, name: 'Q3 Push', createdBy: org.humanActorId })
+      .values({
+        organizationId: org.orgId,
+        name: 'Q3 Push',
+        status: 'active',
+        statusId: org.statusId('initiative', 'active'),
+        createdBy: org.humanActorId,
+      })
       .returning({ id: schema.initiative.id });
 
     const [linkedProgram] = await db
@@ -1040,6 +1074,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
         organizationId: org.orgId,
         name: 'Linked Prog',
         status: 'active',
+        statusId: org.statusId('program', 'active'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.program.id });
@@ -1049,6 +1084,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
         organizationId: org.orgId,
         name: 'Other Prog',
         status: 'active',
+        statusId: org.statusId('program', 'active'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.program.id });
@@ -1060,6 +1096,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
         name: 'Linked Proj',
         teamId: org.teamId,
         status: 'active',
+        statusId: org.statusId('project', 'active'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.project.id });
@@ -1070,6 +1107,7 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
         name: 'Unlinked Proj',
         teamId: org.teamId,
         status: 'active',
+        statusId: org.statusId('project', 'active'),
         createdBy: org.humanActorId,
       })
       .returning({ id: schema.project.id });
@@ -1134,11 +1172,18 @@ describe('hub /portfolio (org swimlanes → program lanes → project bars)', ()
       name: 'Mine',
       teamId: mine.teamId,
       status: 'active',
+      statusId: mine.statusId('project', 'active'),
       createdBy: mine.humanActorId,
     });
     const [foreignInit] = await db
       .insert(schema.initiative)
-      .values({ organizationId: foreign.orgId, name: 'Theirs', createdBy: foreign.humanActorId })
+      .values({
+        organizationId: foreign.orgId,
+        name: 'Theirs',
+        status: 'active',
+        statusId: foreign.statusId('initiative', 'active'),
+        createdBy: foreign.humanActorId,
+      })
       .returning({ id: schema.initiative.id });
 
     const app = appWithSession(hub, fakeSession(userId));

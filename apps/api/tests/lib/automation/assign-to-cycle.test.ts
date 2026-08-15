@@ -47,7 +47,7 @@ async function cycleOf(taskId: string): Promise<string | null> {
 
 describe('task.assignToCycle', () => {
   it('assigns the task to whichever cycle covers today', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [cycle] = await db
       .insert(schema.cycle)
       .values({
@@ -62,7 +62,14 @@ describe('task.assignToCycle', () => {
       .returning({ id: schema.cycle.id });
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'T',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: humanActorId,
+      })
       .returning({ id: schema.task.id });
 
     await assignToCycle(orgId, assertDefined(row).id);
@@ -70,10 +77,17 @@ describe('task.assignToCycle', () => {
   });
 
   it('leaves the task in triage when no cycle covers today', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'T',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: humanActorId,
+      })
       .returning({ id: schema.task.id });
 
     await assignToCycle(orgId, assertDefined(row).id);
@@ -81,7 +95,7 @@ describe('task.assignToCycle', () => {
   });
 
   it('never overwrites a cycle someone assigned by hand', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const manual = await db
       .insert(schema.cycle)
       .values({
@@ -111,6 +125,7 @@ describe('task.assignToCycle', () => {
         teamId,
         title: 'T',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         cycleId: assertDefined(manual[0]).id,
         createdBy: humanActorId,
       })

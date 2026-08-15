@@ -13,7 +13,7 @@ import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { getContainer as GetContainer } from '../../src/container';
-import { fakeSession } from '../support/routes-harness';
+import { fakeSession, seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
@@ -63,6 +63,7 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  await seedStatuses(db, schema, assertDefined(org).id);
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })

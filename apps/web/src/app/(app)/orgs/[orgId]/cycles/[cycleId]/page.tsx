@@ -19,6 +19,8 @@ import { CyclePacePanel } from '@/components/cycle-detail/cycle-pace-panel';
 import { formatWindow, windowProgress, windowRunway } from '@/components/cycles/format-window';
 import { GroupByMenu } from '@/components/cycles/group-by-menu';
 import { resolveRelationLabel } from '@/components/views/field-catalog';
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
@@ -32,7 +34,7 @@ import { EditableTitle } from '@/components/editor/editable-title';
 import { useCycleMutations } from '@/lib/use-cycle-mutations';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { useOrgCapability } from '@/lib/use-org-capability';
-import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
+import { categoryRank } from '@/lib/work-category';
 import { userErrorMessage } from '@/lib/problem';
 
 /** The detail page's two sections. */
@@ -111,6 +113,9 @@ export default function CycleDetailPage(): JSX.Element {
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
   const detailKey = queryKeys.cycle(orgId, cycleId);
+  const registry = useStatusRegistry();
+  const statuses = registry.statusesFor('task');
+  const categoryOf = useCategoryOf('task');
 
   const detailQ = useApiQuery(
     cycleDetailDef(orgId, cycleId, `Could not load this ${cycleNounLower}.`),
@@ -155,7 +160,7 @@ export default function CycleDetailPage(): JSX.Element {
     backfilling,
     backfillResult,
     backfillError,
-  } = useCycleMutations(orgId, cycleId, cycleNounLower, tasks, otherCycles, detailKey);
+  } = useCycleMutations(orgId, cycleId, cycleNounLower, tasks, otherCycles, detailKey, categoryOf);
 
   const canEditCycle = useOrgCapability(members, roles, 'contribute');
   const renameCycleTask = useRenameTask(orgId, [detailKey]);
@@ -182,6 +187,7 @@ export default function CycleDetailPage(): JSX.Element {
 
   const columns = useMemo(() => {
     const catalog = buildTaskCatalog({
+      statuses,
       projectLabel: projectNoun,
       programLabel: programNoun,
       resolveProject: (id) =>
@@ -195,6 +201,7 @@ export default function CycleDetailPage(): JSX.Element {
     });
     return buildTaskColumns({
       catalog,
+      statuses,
       resolveActor: (id) => resolveActor(id),
       canEdit: canEditCycle,
       onRename: renameCycleTask,
@@ -203,6 +210,7 @@ export default function CycleDetailPage(): JSX.Element {
       },
     });
   }, [
+    statuses,
     projectNoun,
     programNoun,
     projectName,
@@ -216,9 +224,9 @@ export default function CycleDetailPage(): JSX.Element {
   ]);
 
   const orderedTasks = useMemo(() => {
-    const rank = (task: TaskOut): number => STATE_GROUP_ORDER.indexOf(stateTypeOf(task.state));
+    const rank = (task: TaskOut): number => categoryRank(categoryOf(task.state));
     return [...tasks].sort((a, b) => rank(a) - rank(b));
-  }, [tasks]);
+  }, [tasks, categoryOf]);
 
   const taskGroups = useMemo<EntityTableGroup<TaskOut>[]>(() => {
     const axisValue = (task: TaskOut): string | null =>

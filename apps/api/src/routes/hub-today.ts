@@ -40,7 +40,15 @@ import {
   type TodayStatusCandidate,
 } from '../services/hub/today-projection';
 import { addDays, instantAt, weekStartOf } from '../services/scheduling/zoned-time';
-import { callerActorIds, callerOrgIds, sameDay, toTaskItem, type TaskRow } from './hub-helpers';
+import {
+  callerActorIds,
+  callerOrgIds,
+  sameDay,
+  taskCategoriesFor,
+  toTaskItem,
+  type TaskRow,
+} from './hub-helpers';
+import type { WorkStatusCategory } from '@docket/types';
 
 /** Select the caller's tasks blocked by at least one incomplete blocking task. */
 async function selectBlockedTasks(orgIds: string[], actorIds: string[]): Promise<TaskRow[]> {
@@ -365,6 +373,9 @@ export async function buildHubTodayPayload(
   const planByTaskId = new Map(visiblePlanned.map((row) => [row.id, row]));
   const activeTaskId = activeIntervals[0]?.taskId ?? null;
   const now = new Date();
+  const planCategories = await taskCategoriesFor(visiblePlanned);
+  const planCategoryOf = (row: TaskRow): WorkStatusCategory =>
+    planCategories.get(row.id) ?? 'backlog';
   const planCandidates: TodayPlanCandidate[] = scopedPlanRows
     .filter((planRow) => planByTaskId.has(planRow.refTaskId))
     .map((planRow, position) => {
@@ -373,7 +384,7 @@ export async function buildHubTodayPayload(
       if (!row) throw new Error('visible plan task disappeared');
       const impact = dependencyFacts.impactByTaskId.get(row.id) ?? 0;
       return {
-        ...toTaskItem(row),
+        ...toTaskItem(row, planCategoryOf(row)),
         planItemId: planRow.id,
         planStatus:
           planRow.status === 'done' ||
@@ -451,6 +462,14 @@ export async function buildHubTodayPayload(
     remainingMinutes: capacity.totalMinutes,
     largestSpanMinutes: capacity.largestSpanMinutes,
   });
+  const categories = await taskCategoriesFor([
+    ...visiblePlanned,
+    ...visibleMomentum,
+    ...dueRows.filter(visibleTask),
+    ...approvalRows.filter(visibleTask),
+    ...blockedRows.filter(visibleTask),
+  ]);
+  const categoryOf = (row: TaskRow): WorkStatusCategory => categories.get(row.id) ?? 'backlog';
   const momentumById = new Map(visibleMomentum.map((row) => [row.id, row]));
   const suggestions: z.input<typeof HubTodaySuggestion>[] = selectedMomentum.flatMap(
     (candidate) => {
@@ -459,7 +478,7 @@ export async function buildHubTodayPayload(
       const impact = dependencyFacts.impactByTaskId.get(row.id) ?? 0;
       return [
         {
-          ...toTaskItem(row),
+          ...toTaskItem(row, categoryOf(row)),
           estimateMinutes: row.estimateMinutes,
           dependencyImpact: impact,
           reason: suggestionReason(row, date, impact),
@@ -468,9 +487,12 @@ export async function buildHubTodayPayload(
     },
   );
 
-  const dueToday = dueRows.filter(visibleTask).map(toTaskItem);
-  const approvals = approvalRows.filter(visibleTask).map(toTaskItem);
-  const blocked = blockedRows.filter(visibleTask).map(toTaskItem);
+  const visibleDue = dueRows.filter(visibleTask);
+  const visibleApprovals = approvalRows.filter(visibleTask);
+  const visibleBlocked = blockedRows.filter(visibleTask);
+  const dueToday = visibleDue.map((row) => toTaskItem(row, categoryOf(row)));
+  const approvals = visibleApprovals.map((row) => toTaskItem(row, categoryOf(row)));
+  const blocked = visibleBlocked.map((row) => toTaskItem(row, categoryOf(row)));
   const inbox = inboxRows[0]?.n ?? 0;
   const attentionCount = approvals.length + blocked.length + dueToday.length + inbox;
   const firstAttention = approvals[0] ?? blocked[0] ?? dueToday[0];

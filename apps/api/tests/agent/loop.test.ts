@@ -70,6 +70,7 @@ async function seedSession(policy?: 'suggest' | 'act_with_approval' | 'autonomou
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  await schema.seedWorkspaceStatuses(db, orgId);
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })

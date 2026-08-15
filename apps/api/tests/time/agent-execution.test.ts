@@ -8,13 +8,21 @@ import {
   finishAgentExecution,
 } from '../../src/time/agent-execution';
 import { createTimeRecord, pauseTimeRecord } from '../../src/time/service';
-import { addMember, getDb, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  addMember,
+  getDb,
+  one,
+  seedOrg,
+  seedStatuses,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 describe('Time Ledger agent execution bridge', () => {
   it('records an agent-active interval under the delegator’s active record and closes it at rest', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'ExecutionOwner');
     const orgId = await seedOrg(schema.db, schema);
+    const statusId = await seedStatuses(schema.db, schema, orgId);
     const humanActorId = await addMember(schema.db, schema, orgId, userId);
     const agentActor = one(
       await schema.db
@@ -57,7 +65,13 @@ describe('Time Ledger agent execution bridge', () => {
     const sessionTaskId = one(
       await schema.db
         .insert(schema.task)
-        .values({ organizationId: orgId, teamId, title: 'Migration review', state: 'todo' })
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Migration review',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+        })
         .returning({ id: schema.task.id }),
     ).id;
     await schema.db
@@ -145,6 +159,7 @@ describe('Time Ledger agent execution bridge', () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'TaskExecutionOwner');
     const orgId = await seedOrg(schema.db, schema);
+    const statusId = await seedStatuses(schema.db, schema, orgId);
     const humanActorId = await addMember(schema.db, schema, orgId, userId);
     const team = one(
       await schema.db
@@ -160,6 +175,7 @@ describe('Time Ledger agent execution bridge', () => {
           teamId: team.id,
           title: 'Refactor the time boundary',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           createdBy: humanActorId,
         })
         .returning({ id: schema.task.id }),
@@ -237,6 +253,7 @@ describe('Time Ledger agent execution bridge', () => {
     const ownerUserId = await seedUserWithHub(schema.db, schema, 'AthenaTaskOwner');
     const otherUserId = await seedUserWithHub(schema.db, schema, 'AthenaTaskInitiator');
     const orgId = await seedOrg(schema.db, schema);
+    const statusId = await seedStatuses(schema.db, schema, orgId);
     const ownerActorId = await addMember(schema.db, schema, orgId, ownerUserId);
     const otherActorId = await addMember(schema.db, schema, orgId, otherUserId);
     const team = one(
@@ -253,6 +270,7 @@ describe('Time Ledger agent execution bridge', () => {
           teamId: team.id,
           title: 'Reconcile the personal queue',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           createdBy: ownerActorId,
         })
         .returning({ id: schema.task.id }),

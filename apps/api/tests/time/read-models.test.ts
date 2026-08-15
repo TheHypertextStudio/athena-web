@@ -16,7 +16,13 @@ import type { z } from 'zod';
 import type * as DbModule from '@docket/db';
 import type { TimeRecordOut } from '@docket/types';
 
-import { getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  getDb,
+  one,
+  seedBaseOrg,
+  seedUserWithHub,
+  type StatusIdLookup,
+} from '../support/routes-harness';
 import {
   getActiveTime,
   getTimeBreakdown,
@@ -258,7 +264,7 @@ describe('hydrateTimeRecords', () => {
 describe('getActiveTime', () => {
   /** Seed a user, org, team, and task ready to track time against. */
   async function seedTrackable(label: string) {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, label);
     const [hubRow] = await db
       .select({ id: schema.hub.id })
@@ -268,7 +274,13 @@ describe('getActiveTime', () => {
     const taskId = one(
       await db
         .insert(schema.task)
-        .values({ organizationId: orgId, teamId, title: 'Tracked task', state: 'todo' })
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Tracked task',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+        })
         .returning({ id: schema.task.id }),
     ).id;
     return { userId, hubId: assertDefined(hubRow).id, taskId };
@@ -445,7 +457,7 @@ describe('getTimeTimeline', () => {
 describe('getTimeSummary', () => {
   /** Seed a user, org, team, and task ready to track time against. */
   async function seedTrackable(label: string) {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, label);
     await db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, humanActorId));
     const [hubRow] = await db
@@ -456,7 +468,13 @@ describe('getTimeSummary', () => {
     const t = one(
       await db
         .insert(schema.task)
-        .values({ organizationId: orgId, teamId, title: 'Tracked task', state: 'todo' })
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Tracked task',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+        })
         .returning({ id: schema.task.id }),
     );
     return { orgId, userId, hubId: assertDefined(hubRow).id, taskId: t.id };
@@ -576,7 +594,7 @@ describe('listTimeCategories', () => {
 describe('getTimeBreakdown', () => {
   /** Seed a user, org, team, and task ready to track time against. */
   async function seedTrackable(label: string) {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, label);
     await db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, humanActorId));
     const [hubRow] = await db
@@ -584,14 +602,20 @@ describe('getTimeBreakdown', () => {
       .from(schema.hub)
       .where(eq(schema.hub.userId, userId))
       .limit(1);
-    return { orgId, teamId, humanActorId, userId, hubId: assertDefined(hubRow).id };
+    return { orgId, teamId, humanActorId, userId, hubId: assertDefined(hubRow).id, statusId };
   }
 
-  async function seedTask(orgId: string, teamId: string, title = 'Task') {
+  async function seedTask(statusId: StatusIdLookup, orgId: string, teamId: string, title = 'Task') {
     return one(
       await db
         .insert(schema.task)
-        .values({ organizationId: orgId, teamId, title, state: 'todo' })
+        .values({
+          organizationId: orgId,
+          teamId,
+          title,
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+        })
         .returning({ id: schema.task.id }),
     ).id;
   }
@@ -647,8 +671,8 @@ describe('getTimeBreakdown', () => {
   });
 
   it('groups by category: a named category alongside uncategorized time', async () => {
-    const { orgId, teamId, hubId, userId } = await seedTrackable('BreakdownCategory');
-    const taskId = await seedTask(orgId, teamId);
+    const { orgId, teamId, hubId, userId, statusId } = await seedTrackable('BreakdownCategory');
+    const taskId = await seedTask(statusId, orgId, teamId);
     const category = one(
       await db
         .insert(schema.timeCategory)
@@ -672,8 +696,8 @@ describe('getTimeBreakdown', () => {
   });
 
   it('groups by actor: human-only, agent-only (with wait time), and both', async () => {
-    const { orgId, teamId, hubId, userId } = await seedTrackable('BreakdownActor');
-    const taskId = await seedTask(orgId, teamId);
+    const { orgId, teamId, hubId, userId, statusId } = await seedTrackable('BreakdownActor');
+    const taskId = await seedTask(statusId, orgId, teamId);
     await seedRecordWithInterval(hubId, userId, taskId, {
       mode: 'human_active',
       startedAt: new Date('2026-08-01T09:00:00Z'),
@@ -692,20 +716,38 @@ describe('getTimeBreakdown', () => {
   });
 
   it('credits only the lowest-id initiative when a project belongs to more than one', async () => {
-    const { orgId, teamId, hubId, userId, humanActorId } = await seedTrackable(
+    const { orgId, teamId, hubId, userId, humanActorId, statusId } = await seedTrackable(
       'BreakdownMultiInitiative',
     );
     const [project] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'Shared project', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Shared project',
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const [initiativeA] = await db
       .insert(schema.initiative)
-      .values({ organizationId: orgId, name: 'Initiative A', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Initiative A',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id });
     const [initiativeB] = await db
       .insert(schema.initiative)
-      .values({ organizationId: orgId, name: 'Initiative B', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Initiative B',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id });
     const [first, second] = [assertDefined(initiativeA).id, assertDefined(initiativeB).id].sort();
     await db.insert(schema.initiativeProject).values([
@@ -728,6 +770,7 @@ describe('getTimeBreakdown', () => {
           teamId,
           title: 'Project task',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           projectId: assertDefined(project).id,
         })
         .returning({ id: schema.task.id }),
@@ -743,8 +786,8 @@ describe('getTimeBreakdown', () => {
   });
 
   it('rolls an unlinked task up to the "No project/program/initiative" buckets', async () => {
-    const { orgId, teamId, hubId, userId } = await seedTrackable('BreakdownUnassigned');
-    const taskId = await seedTask(orgId, teamId, 'Unlinked task');
+    const { orgId, teamId, hubId, userId, statusId } = await seedTrackable('BreakdownUnassigned');
+    const taskId = await seedTask(statusId, orgId, teamId, 'Unlinked task');
     await seedRecordWithInterval(hubId, userId, taskId, {
       startedAt: new Date('2026-08-01T09:00:00Z'),
       endedAt: new Date('2026-08-01T09:30:00Z'),

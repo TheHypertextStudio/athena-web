@@ -248,7 +248,7 @@ describe('planWorkItemReconcile', () => {
 describe('reconcileWorkGraph', () => {
   /** Seed an org + Core team, a matched member, and a both-teams-mapped integration. */
   async function scaffold(writeBack = false) {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     await addMatchableMember(orgId);
     const row = await seedIntegration(
       orgId,
@@ -259,7 +259,7 @@ describe('reconcileWorkGraph', () => {
       ],
       writeBack,
     );
-    return { orgId, teamId, humanActorId, row };
+    return { orgId, teamId, humanActorId, row, statusId };
   }
 
   it('backfills projects, cycles, labels, and tasks with correct FKs and joins', async () => {
@@ -387,7 +387,7 @@ describe('reconcileWorkGraph', () => {
   });
 
   it('heals a legacy identifier-keyed task by re-keying it to the UUID (no duplicate)', async () => {
-    const { orgId, teamId, humanActorId, row } = await scaffold();
+    const { orgId, teamId, humanActorId, row, statusId } = await scaffold();
     // A migration-era row keyed on the human identifier rather than the provider UUID.
     const legacy = one(
       await db
@@ -397,6 +397,7 @@ describe('reconcileWorkGraph', () => {
           title: 'Legacy title',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           source: 'linked',
           sourceIntegrationId: row.id,
           externalId: 'ENG-1', // the identifier of lin-issue-1
@@ -424,7 +425,7 @@ describe('reconcileWorkGraph', () => {
   });
 
   it('re-keys an anchored legacy row without dirtying it (provider not newer → stays clean, unpushed)', async () => {
-    const { orgId, teamId, humanActorId, row } = await scaffold(true);
+    const { orgId, teamId, humanActorId, row, statusId } = await scaffold(true);
     // A legacy identifier-keyed row that is CLEAN and whose anchor EQUALS the provider item's
     // updatedAt (lin-issue-1 → 2025-12-01), so the pull pass must no-op after the re-key.
     const anchor = new Date('2025-12-01T00:00:00.000Z');
@@ -436,6 +437,7 @@ describe('reconcileWorkGraph', () => {
           title: 'Legacy title',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           source: 'linked',
           sourceIntegrationId: row.id,
           externalId: 'ENG-1',
@@ -527,7 +529,7 @@ describe('reconcileWorkGraph', () => {
   });
 
   it('archives a task on tombstone and cancels a project on removal (never deletes)', async () => {
-    const { orgId, teamId, humanActorId, row } = await scaffold();
+    const { orgId, teamId, humanActorId, row, statusId } = await scaffold();
     const first = await pull();
     await reconcileWorkGraph({
       orgId,
@@ -544,6 +546,7 @@ describe('reconcileWorkGraph', () => {
       title: 'Spike',
       teamId,
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       source: 'linked',
       sourceIntegrationId: row.id,
       externalId: 'lin-issue-7',
@@ -583,7 +586,7 @@ describe('reconcileWorkGraph', () => {
   });
 
   it('a second full sync after a tombstone was applied does not re-archive (removed tally 0)', async () => {
-    const { orgId, teamId, humanActorId, row } = await scaffold();
+    const { orgId, teamId, humanActorId, row, statusId } = await scaffold();
     // First full sync: issue-7 is a tombstone with no local row → skipped, never materialized.
     const first = await pull();
     await reconcileWorkGraph({
@@ -601,6 +604,7 @@ describe('reconcileWorkGraph', () => {
       title: 'Spike',
       teamId,
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       source: 'linked',
       sourceIntegrationId: row.id,
       externalId: 'lin-issue-7',

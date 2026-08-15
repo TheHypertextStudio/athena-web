@@ -238,7 +238,7 @@ describe('Notion mirror reconciliation', () => {
   });
 
   it('creates, skips, updates, and budgets projected rows truthfully', async () => {
-    const { orgId, teamId, integration, designs, mirror, ctx } = await seedMirror();
+    const { orgId, teamId, integration, designs, mirror, ctx, statusId } = await seedMirror();
     const seeded = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
@@ -253,12 +253,22 @@ describe('Notion mirror reconciliation', () => {
     const first = one(
       await db
         .insert(schema.task)
-        .values({ organizationId: orgId, teamId, title: 'First', state: 'backlog' })
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'First',
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        })
         .returning(),
     );
-    await db
-      .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'Second', state: 'backlog' });
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      teamId,
+      title: 'Second',
+      state: 'backlog',
+      statusId: statusId('task', 'backlog'),
+    });
 
     expect(await projectEntity(ctx, design, 1, NO_PAGES)).toMatchObject({
       written: 1,
@@ -311,7 +321,7 @@ describe('Notion mirror reconciliation', () => {
   });
 
   it('counts provider no-op responses without claiming provider ids were returned', async () => {
-    const { orgId, teamId, integration, designs, mirror, ctx } = await seedMirror();
+    const { orgId, teamId, integration, designs, mirror, ctx, statusId } = await seedMirror();
     const seeded = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
@@ -326,7 +336,13 @@ describe('Notion mirror reconciliation', () => {
     const task = one(
       await db
         .insert(schema.task)
-        .values({ organizationId: orgId, teamId, title: 'No result', state: 'backlog' })
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'No result',
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        })
         .returning(),
     );
     mirror.omitWriteResults = true;
@@ -351,7 +367,7 @@ describe('Notion mirror reconciliation', () => {
   });
 
   it('adopts, pulls, records contested edits, and trashes archived rows in one pass', async () => {
-    const { orgId, teamId, integration, designs, mirror, ctx } = await seedMirror();
+    const { orgId, teamId, integration, designs, mirror, ctx, statusId } = await seedMirror();
     const seeded = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
@@ -366,9 +382,27 @@ describe('Notion mirror reconciliation', () => {
     const tasks = await db
       .insert(schema.task)
       .values([
-        { organizationId: orgId, teamId, title: 'Pull me', state: 'backlog' },
-        { organizationId: orgId, teamId, title: 'Conflict', state: 'backlog' },
-        { organizationId: orgId, teamId, title: 'Archived', state: 'backlog' },
+        {
+          organizationId: orgId,
+          teamId,
+          title: 'Pull me',
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        },
+        {
+          organizationId: orgId,
+          teamId,
+          title: 'Conflict',
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        },
+        {
+          organizationId: orgId,
+          teamId,
+          title: 'Archived',
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        },
       ])
       .returning();
     const [pullTask, conflictTask, archivedTask] = tasks;
@@ -481,7 +515,7 @@ describe('Notion mirror reconciliation', () => {
   });
 
   it('recreates a trashed projection-only page and stops when the budget is exhausted', async () => {
-    const { orgId, integration, designs, mirror, ctx } = await seedMirror();
+    const { orgId, integration, designs, mirror, ctx, statusId } = await seedMirror();
     const seeded = findDesign(designs, 'initiative');
     await db
       .update(schema.notionMirrorDatabase)
@@ -496,7 +530,13 @@ describe('Notion mirror reconciliation', () => {
     const initiative = one(
       await db
         .insert(schema.initiative)
-        .values({ organizationId: orgId, createdBy: ctx.actorId, name: 'North star' })
+        .values({
+          organizationId: orgId,
+          createdBy: ctx.actorId,
+          name: 'North star',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning(),
     );
     const t0 = new Date('2026-08-01T10:00:00.000Z');
@@ -663,7 +703,7 @@ describe('Notion mirror reconciliation', () => {
   });
 
   it('writes People before the rows that point at it, and omits an id it does not have yet', async () => {
-    const { orgId, teamId, integration, designs, mirror, ctx } = await seedMirror();
+    const { orgId, teamId, integration, designs, mirror, ctx, statusId } = await seedMirror();
     const taskDesign = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
@@ -691,6 +731,7 @@ describe('Notion mirror reconciliation', () => {
       teamId,
       title: 'Assigned work',
       state: 'backlog',
+      statusId: statusId('task', 'backlog'),
       assigneeId: ctx.actorId,
     });
 
@@ -736,7 +777,7 @@ describe('Notion mirror reconciliation', () => {
     // Not `[]` — an empty relation CLEARS the Notion property, which for "not written yet" would
     // erase a cell rather than defer it. The omitted value also stays out of the content hash, so
     // the pass that can resolve it sees a change and writes exactly once.
-    const { orgId, teamId, designs, mirror, ctx } = await seedMirror();
+    const { orgId, teamId, designs, mirror, ctx, statusId } = await seedMirror();
     const taskDesign = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
@@ -757,6 +798,7 @@ describe('Notion mirror reconciliation', () => {
       teamId,
       title: 'Assigned work',
       state: 'backlog',
+      statusId: statusId('task', 'backlog'),
       assigneeId: ctx.actorId,
     });
     const refreshed = one(
@@ -776,11 +818,16 @@ describe('Notion mirror reconciliation', () => {
   it('fills an ordinary relation column with the target rows real page ids', async () => {
     // The defect this covers: every relation column was provisioned correctly, pointed at the
     // right data source, and then never received a single value, because no loader produced one.
-    const { orgId, teamId, integration, designs, mirror, ctx } = await seedMirror();
+    const { orgId, teamId, integration, designs, mirror, ctx, statusId } = await seedMirror();
     const projectRow = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Transit campaign' })
+        .values({
+          organizationId: orgId,
+          name: 'Transit campaign',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning(),
     );
     await db.insert(schema.task).values({
@@ -788,6 +835,7 @@ describe('Notion mirror reconciliation', () => {
       teamId,
       title: 'Draft the brief',
       state: 'backlog',
+      statusId: statusId('task', 'backlog'),
       projectId: projectRow.id,
     });
     await db
@@ -836,11 +884,16 @@ describe('Notion mirror reconciliation', () => {
   it('reports a reference to a disabled database as final, so the pass can still complete', async () => {
     // Its database is never projected, so no page will ever exist. Deferring would leave the pass
     // permanently incomplete and `stampFullSync` permanently false.
-    const { orgId, teamId, designs, mirror, ctx } = await seedMirror();
+    const { orgId, teamId, designs, mirror, ctx, statusId } = await seedMirror();
     const projectRow = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Unmirrored' })
+        .values({
+          organizationId: orgId,
+          name: 'Unmirrored',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning(),
     );
     await db.insert(schema.task).values({
@@ -848,6 +901,7 @@ describe('Notion mirror reconciliation', () => {
       teamId,
       title: 'Draft the brief',
       state: 'backlog',
+      statusId: statusId('task', 'backlog'),
       projectId: projectRow.id,
     });
     const taskDesign = findDesign(designs, 'task');

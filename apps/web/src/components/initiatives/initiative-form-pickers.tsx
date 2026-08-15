@@ -17,24 +17,12 @@ import type {
 } from '@docket/types';
 import { ActorPicker, DatePicker, EnumPicker, type PickerOption } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';
-import type { JSX } from 'react';
+import { type JSX, useMemo } from 'react';
 
-import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
+import { enumOptions, HEALTH_OPTIONS, statusOptions } from '@/components/pickers/options';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { formatCalendarDate } from '@/lib/format-date';
 
-/** The Initiative statuses, ordered open → done. */
-const INITIATIVE_STATUS_ORDER: readonly InitiativeStatus[] = [
-  'proposed',
-  'active',
-  'completed',
-  'canceled',
-];
-const INITIATIVE_STATUS_LABEL: Record<InitiativeStatus, string> = {
-  proposed: 'Proposed',
-  active: 'Active',
-  completed: 'Completed',
-  canceled: 'Canceled',
-};
 const PRIORITY_ORDER: readonly InitiativePriority[] = ['none', 'low', 'medium', 'high'];
 const PRIORITY_LABEL: Record<InitiativePriority, string> = {
   none: 'No priority',
@@ -122,6 +110,12 @@ export function InitiativeComposerPickers({
   onUpdateCadenceChange,
   disabled,
 }: InitiativeComposerPickersProps): JSX.Element {
+  const statuses = useStatusRegistry();
+  const initiativeStatusOptions = useMemo(
+    () => statusOptions(statuses.statusesFor('initiative')),
+    [statuses],
+  );
+
   return (
     <>
       {onOwnerChange ? (
@@ -136,7 +130,7 @@ export function InitiativeComposerPickers({
         />
       ) : null}
       <EnumPicker
-        options={enumOptions(INITIATIVE_STATUS_ORDER, INITIATIVE_STATUS_LABEL)}
+        options={initiativeStatusOptions}
         value={status}
         onChange={(next) => {
           if (next) onStatusChange(next);

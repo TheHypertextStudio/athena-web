@@ -55,7 +55,7 @@ async function labelsOn(taskId: string): Promise<string[]> {
 
 describe('task.applyLabel', () => {
   it('swaps within an exclusive group rather than stacking both members', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [group] = await db
       .insert(schema.labelGroup)
       .values({ organizationId: orgId, name: 'Type', exclusive: true })
@@ -72,7 +72,14 @@ describe('task.applyLabel', () => {
 
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'T',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: humanActorId,
+      })
       .returning();
     const taskId = assertDefined(row).id;
 
@@ -84,7 +91,7 @@ describe('task.applyLabel', () => {
   });
 
   it('leaves ungrouped labels alone, so applying two accumulates', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const mk = async (name: string): Promise<string> => {
       const [row] = await db
         .insert(schema.label)
@@ -97,7 +104,14 @@ describe('task.applyLabel', () => {
 
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'T',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: humanActorId,
+      })
       .returning();
     const taskId = assertDefined(row).id;
 
@@ -107,14 +121,21 @@ describe('task.applyLabel', () => {
   });
 
   it('stays idempotent — re-applying a label the task already has changes nothing', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [labelRow] = await db
       .insert(schema.label)
       .values({ organizationId: orgId, name: 'repeat', color: 'blue' })
       .returning();
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'T',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: humanActorId,
+      })
       .returning();
 
     await applyLabel(orgId, assertDefined(row).id, assertDefined(labelRow).id);
@@ -123,7 +144,7 @@ describe('task.applyLabel', () => {
   });
 
   it('no-ops on a label from another org rather than writing across tenants', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const other = await seedBaseOrg(db, schema);
     const [foreign] = await db
       .insert(schema.label)
@@ -131,7 +152,14 @@ describe('task.applyLabel', () => {
       .returning();
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'T',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: humanActorId,
+      })
       .returning();
 
     await applyLabel(orgId, assertDefined(row).id, assertDefined(foreign).id);
@@ -145,7 +173,7 @@ describe('task.applyLabel — a label narrowed to another team', () => {
     // it. Resolving the existing set strictly would therefore throw on exactly the state the
     // scoping feature creates, and the handler contract is that a rule may misfire but must
     // never throw. This is the regression that pairing those two decisions produced.
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [otherTeam] = await db
       .insert(schema.team)
       .values({ organizationId: orgId, name: 'Elsewhere', key: 'ELS' })
@@ -167,7 +195,14 @@ describe('task.applyLabel — a label narrowed to another team', () => {
 
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'T',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: humanActorId,
+      })
       .returning();
     // The attachment predates the narrowing, exactly as the settings action leaves it.
     await db.insert(schema.taskLabel).values({

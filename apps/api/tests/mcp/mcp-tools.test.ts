@@ -15,6 +15,7 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import { getSession, resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -42,6 +43,7 @@ interface Seed {
   initiativeId: string;
   agentId: string;
   integrationId: string;
+  statusId: StatusIdLookup;
   ctx: McpContext;
 }
 
@@ -53,6 +55,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [r] = await db
     .insert(schema.role)
@@ -102,25 +105,51 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
 
   const [tk] = await db
     .insert(schema.task)
-    .values({ organizationId: orgId, title: 'Ship', teamId, state: 'todo', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      title: 'Ship',
+      teamId,
+      state: 'todo',
+      statusId: statusId('task', 'todo'),
+      createdBy: actorId,
+    })
     .returning({ id: schema.task.id });
   const taskId = assertDefined(tk).id;
 
   const [proj] = await db
     .insert(schema.project)
-    .values({ organizationId: orgId, name: 'Proj', teamId, createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      name: 'Proj',
+      teamId,
+      createdBy: actorId,
+      status: 'planned',
+      statusId: statusId('project', 'planned'),
+    })
     .returning({ id: schema.project.id });
   const projectId = assertDefined(proj).id;
 
   const [prog] = await db
     .insert(schema.program)
-    .values({ organizationId: orgId, name: 'Prog', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      name: 'Prog',
+      createdBy: actorId,
+      status: 'active',
+      statusId: statusId('program', 'active'),
+    })
     .returning({ id: schema.program.id });
   const programId = assertDefined(prog).id;
 
   const [init] = await db
     .insert(schema.initiative)
-    .values({ organizationId: orgId, name: 'Init', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      name: 'Init',
+      createdBy: actorId,
+      status: 'active',
+      statusId: statusId('initiative', 'active'),
+    })
     .returning({ id: schema.initiative.id });
   const initiativeId = assertDefined(init).id;
 
@@ -161,6 +190,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     initiativeId,
     agentId,
     integrationId,
+    statusId,
     ctx,
   };
 }
@@ -258,7 +288,13 @@ describe('descriptor resolution', () => {
     const s = await seedOrg(['contribute']);
     const [longer] = await db
       .insert(schema.project)
-      .values({ organizationId: s.orgId, name: 'Proj Two', createdBy: s.actorId })
+      .values({
+        organizationId: s.orgId,
+        name: 'Proj Two',
+        createdBy: s.actorId,
+        status: 'planned',
+        statusId: s.statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const client = await connect(s.ctx);
     const res = (await client.callTool({
@@ -284,9 +320,22 @@ describe('descriptor resolution', () => {
 
   it('refuses to guess when no candidate is an exact match', async () => {
     const s = await seedOrg(['contribute']);
+    const plannedId = s.statusId('project', 'planned');
     await db.insert(schema.project).values([
-      { organizationId: s.orgId, name: 'Atlas One', createdBy: s.actorId },
-      { organizationId: s.orgId, name: 'Atlas Two', createdBy: s.actorId },
+      {
+        organizationId: s.orgId,
+        name: 'Atlas One',
+        createdBy: s.actorId,
+        status: 'planned',
+        statusId: plannedId,
+      },
+      {
+        organizationId: s.orgId,
+        name: 'Atlas Two',
+        createdBy: s.actorId,
+        status: 'planned',
+        statusId: plannedId,
+      },
     ]);
     const client = await connect(s.ctx);
     const res = (await client.callTool({

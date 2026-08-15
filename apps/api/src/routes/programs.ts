@@ -24,6 +24,7 @@ import { clearableTextPatch } from '../lib/clearable-text';
 import { labelsForSubjects, type LabelRefRow } from '../lib/labels';
 import { deferAfterResponse } from '../lib/after-response';
 import { ok } from '../lib/ok';
+import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -136,6 +137,7 @@ const programs = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
+      const status = await resolveContainerStatus(orgId, 'program', body.status ?? 'active');
       const inserted = await db
         .insert(program)
         .values({
@@ -144,7 +146,8 @@ const programs = new Hono<AppEnv>()
           summary: body.summary,
           description: body.description,
           ownerId: body.ownerId,
-          status: body.status ?? 'active',
+          status: status.status,
+          statusId: status.statusId,
           health: body.health,
           visibility: body.visibility ?? 'public',
           createdBy: actorId,
@@ -233,6 +236,10 @@ const programs = new Hono<AppEnv>()
       const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
+      const nextStatus =
+        body.status === undefined
+          ? undefined
+          : await resolveContainerStatus(orgId, 'program', body.status);
       const updated = await db
         .update(program)
         .set({
@@ -240,7 +247,9 @@ const programs = new Hono<AppEnv>()
           ...clearableTextPatch('summary', body.summary),
           ...(body.description !== undefined ? { description: body.description } : {}),
           ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
-          ...(body.status !== undefined ? { status: body.status } : {}),
+          ...(nextStatus === undefined
+            ? {}
+            : { status: nextStatus.status, statusId: nextStatus.statusId }),
           ...(body.health !== undefined ? { health: body.health } : {}),
           ...(body.visibility !== undefined ? { visibility: body.visibility } : {}),
         })

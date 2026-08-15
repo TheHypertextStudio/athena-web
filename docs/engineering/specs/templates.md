@@ -49,10 +49,22 @@ worth. Two exceptions and one near-miss are worth knowing:
 
 - `labelIds` **is** carried, on tasks only. Labels are org-scoped and long-lived, and a "Bug
   report" template that cannot apply a `bug` label is not doing its job.
-- **Workflow state is not carried**, though it is neither a row reference nor a date. A state key
-  belongs to one team's workflow and a template is org-wide, so any key stored would be wrong for
-  most of the teams applying it. The composer already defaults the status to the chosen team's
-  first state.
+- **Workflow state is not carried**, though it is neither a row reference nor a date. The composer
+  defaults the status to the default status of the set the chosen team resolves to.
+
+  The reason this bullet used to give — a state key belongs to one team's workflow and a template
+  is org-wide, so any key stored would be wrong for most of the teams applying it — held while
+  every team owned its own state list. Task statuses are now workspace-owned
+  (`statuses.md`), and a team keeps its own set only by forking. **In a workspace where no team
+  has forked, every team resolves to the same Task set, so an org-wide template could carry a
+  status key and have it resolve correctly everywhere.** That is what the change enables and it is
+  as far as the claim goes: a workspace with even one forked team is back in the original
+  situation for that team, and a template that stored `in_review` would still be applying a key
+  that team's set may not hold. Carrying it would therefore need a stated rule for what happens on
+  a miss — silently fall back to the default, or refuse the apply — plus an editor control that
+  can show which set it is picking from. None of that is designed yet, so the field stays out and
+  the composer's default stands.
+
 - **Absolute dates are not carried.** A target date baked into a reusable template is wrong the day
   after it is written. Relative dates ("due three days after creation") would need an expression
   evaluator; see _Not built_ below.

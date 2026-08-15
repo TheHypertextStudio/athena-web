@@ -21,7 +21,7 @@ import type {
   resolveAthenaDisplays as ResolveAthenaDisplays,
   resolveAthenaInvocation as ResolveAthenaInvocation,
 } from '../../src/routes/me-athena-context';
-import { getDb, one } from '../support/routes-harness';
+import { getDb, one, seedStatuses } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -74,6 +74,7 @@ async function seed(): Promise<Fixture> {
       .values({ name: `CtxOther-${suffix}`, slug: `ctx-other-${suffix}`, lifecycleState: 'active' })
       .returning({ id: schema.organization.id }),
   );
+  const statusId = await seedStatuses(db, schema, org.id);
   const team = one(
     await db
       .insert(schema.team)
@@ -122,7 +123,13 @@ async function seed(): Promise<Fixture> {
   const program = one(
     await db
       .insert(schema.program)
-      .values({ organizationId: org.id, name: 'Growth', ownerId: actor.id })
+      .values({
+        organizationId: org.id,
+        name: 'Growth',
+        ownerId: actor.id,
+        status: 'active',
+        statusId: statusId('program', 'active'),
+      })
       .returning({ id: schema.program.id }),
   );
   // Full ancestry (team + program) so batchedWorkSources' optional-ancestor branches run for
@@ -134,6 +141,7 @@ async function seed(): Promise<Fixture> {
         organizationId: org.id,
         name: 'Launch',
         status: 'active',
+        statusId: statusId('project', 'active'),
         createdBy: actor.id,
         teamId: team.id,
         programId: program.id,
@@ -148,6 +156,7 @@ async function seed(): Promise<Fixture> {
         teamId: team.id,
         title: 'Ship the release',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         createdBy: actor.id,
         projectId: project.id,
         programId: program.id,
@@ -157,7 +166,13 @@ async function seed(): Promise<Fixture> {
   const initiative = one(
     await db
       .insert(schema.initiative)
-      .values({ organizationId: org.id, name: 'Portfolio theme', ownerId: actor.id })
+      .values({
+        organizationId: org.id,
+        name: 'Portfolio theme',
+        ownerId: actor.id,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id }),
   );
   const bareTask = one(
@@ -168,6 +183,7 @@ async function seed(): Promise<Fixture> {
         teamId: team.id,
         title: 'Bare task',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         createdBy: actor.id,
       })
       .returning({ id: schema.task.id }),
@@ -179,6 +195,7 @@ async function seed(): Promise<Fixture> {
         organizationId: org.id,
         name: 'Bare project',
         status: 'active',
+        statusId: statusId('project', 'active'),
         createdBy: actor.id,
       })
       .returning({ id: schema.project.id }),
@@ -793,6 +810,10 @@ describe('resolveAthenaDisplay', () => {
       capabilities: ['view', 'contribute'],
       effect: 'allow',
     });
+    // A row's status travels with it: the status id, the status key, and the workspace are bound
+    // together by one composite foreign key, so a task moving workspace takes the destination's
+    // status of the same key.
+    const otherStatusId = await seedStatuses(db, schema, fixture.otherOrgId);
 
     const originalCanActor = authz.canActor;
     let calls = 0;
@@ -803,7 +824,12 @@ describe('resolveAthenaDisplay', () => {
         // organization, and strictly before the disclosure boundary re-reads it.
         await db
           .update(schema.task)
-          .set({ organizationId: fixture.otherOrgId, projectId: null, programId: null })
+          .set({
+            organizationId: fixture.otherOrgId,
+            statusId: otherStatusId('task', 'todo'),
+            projectId: null,
+            programId: null,
+          })
           .where(eq(schema.task.id, fixture.taskId));
       }
       return originalCanActor(actorId, required, target, database);

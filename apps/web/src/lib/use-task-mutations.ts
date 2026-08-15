@@ -23,8 +23,10 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
+import { useStatusRegistry } from '@/components/statuses/status-registry';
+
 import { api } from './api';
-import { userErrorMessage } from './problem';
+import { userErrorMessage, UserFacingError } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** Fields accepted by the task patch mutation. All are optional; `null` clears the field. */
@@ -115,6 +117,21 @@ export function useTaskMutations(
   commentsKey: QueryKey,
 ): TaskMutations {
   const queryClient = useQueryClient();
+  const statuses = useStatusRegistry();
+
+  // The subtask checkbox writes a status *key*, and the keys it used to write were the literals
+  // `done` and `todo` — which name nothing in a workspace that renamed its stages. Ticking the box
+  // means "this is finished", so it writes the first completed status of the workspace's own set,
+  // and unticking it returns the subtask to wherever new work starts.
+  const toggleTarget = useCallback(
+    (done: boolean): string | null => {
+      const target = done
+        ? statuses.firstOfCategory('task', 'completed')
+        : statuses.defaultOf('task');
+      return target?.key ?? null;
+    },
+    [statuses],
+  );
 
   const writeDetail = useCallback(
     (patch: Partial<TaskDetail>): TaskDetail | undefined => {
@@ -273,25 +290,29 @@ export function useTaskMutations(
     { subtaskId: string; done: boolean },
     { previous?: TaskDetail | undefined }
   >({
-    mutationFn: ({ subtaskId, done }) =>
-      unwrap(
+    mutationFn: ({ subtaskId, done }) => {
+      const state = toggleTarget(done);
+      // Nothing to write to before the workspace's statuses arrive; the caller's error surface
+      // says so in the app's own words rather than leaking a thrown message.
+      if (state === null) throw new UserFacingError('Could not update the subtask.');
+      return unwrap(
         () =>
           api.v1.orgs[':orgId'].tasks[':id'].state.$post({
             param: { orgId, id: subtaskId },
-            json: { state: done ? 'done' : 'todo' },
+            json: { state },
           }),
         'Could not update the subtask.',
-      ),
+      );
+    },
     onMutate: async ({ subtaskId, done }) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
       const previous = queryClient.getQueryData<TaskDetail>(detailKey);
+      const state = toggleTarget(done);
       queryClient.setQueryData<TaskDetail>(detailKey, (current) =>
-        current
+        current && state !== null
           ? {
               ...current,
-              subtasks: current.subtasks.map((s) =>
-                s.id === subtaskId ? { ...s, state: done ? 'done' : 'todo' } : s,
-              ),
+              subtasks: current.subtasks.map((s) => (s.id === subtaskId ? { ...s, state } : s)),
             }
           : current,
       );

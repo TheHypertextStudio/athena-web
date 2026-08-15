@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import type * as DbModule from '@docket/db';
 import type {
   db as DbType,
   organization as OrgTable,
@@ -24,9 +25,11 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let db!: typeof DbType;
+let schema!: typeof DbModule;
 let organization!: typeof OrgTable;
 let team!: typeof TeamTable;
 let actor!: typeof ActorTable;
@@ -41,6 +44,7 @@ let mcpHandler!: typeof McpHandler;
 beforeAll(async () => {
   const dbmod = await getMigratedDb();
   db = dbmod.db;
+  schema = dbmod;
   organization = dbmod.organization;
   team = dbmod.team;
   actor = dbmod.actor;
@@ -75,6 +79,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [r] = await db
     .insert(role)
@@ -123,6 +128,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       title: 'Ship the Hub',
       teamId,
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       createdBy: actorId,
     })
     .returning({ id: task.id });

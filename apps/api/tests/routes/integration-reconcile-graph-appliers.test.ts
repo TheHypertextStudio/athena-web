@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { defaultWorkflowStates } from '@docket/db';
 import type * as DbModule from '@docket/db';
 import type {
   ExternalCycle,
@@ -11,9 +10,10 @@ import type {
 } from '@docket/integrations';
 
 import type * as ReconcileGraph from '../../src/routes/integration-reconcile-graph';
+import type * as WorkStatus from '../../src/lib/work-status';
+import type { ResolvedStatus } from '../../src/lib/work-status';
 import { ConflictError } from '../../src/error';
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
-import { assertDefined } from '@docket/test-utils';
+import { getDb, one, seedBaseOrg, seedStatus } from '../support/routes-harness';
 
 /**
  * Direct unit tests for `integration-reconcile-graph.ts`'s exported single-entity appliers
@@ -29,6 +29,7 @@ let applyLabel!: typeof ReconcileGraph.applyLabel;
 let applyProject!: typeof ReconcileGraph.applyProject;
 let applyCycle!: typeof ReconcileGraph.applyCycle;
 let applyWorkItem!: typeof ReconcileGraph.applyWorkItem;
+let loadStatusSets!: typeof WorkStatus.loadStatusSets;
 
 beforeAll(async () => {
   schema = await getDb();
@@ -38,6 +39,7 @@ beforeAll(async () => {
   applyProject = mod.applyProject;
   applyCycle = mod.applyCycle;
   applyWorkItem = mod.applyWorkItem;
+  ({ loadStatusSets } = await import('../../src/lib/work-status'));
 });
 
 const NOW = new Date('2026-07-02T12:00:00.000Z');
@@ -47,13 +49,27 @@ function emptyTally() {
   return { created: 0, updated: 0, skipped: 0, removed: 0, pushed: 0 };
 }
 
+/**
+ * The Task statuses a team resolves to — what the orchestrator preloads into `statesByTeam`.
+ *
+ * @remarks
+ * A workspace names its own statuses, so a test driving an applier has to hand it the real set
+ * rather than a literal: the row the applier writes stores both the key and the `status_id`, and
+ * the composite foreign key refuses a pair the workspace does not define.
+ */
+async function teamTaskStatuses(orgId: string, teamId: string): Promise<readonly ResolvedStatus[]> {
+  const sets = await loadStatusSets(orgId, { entityTypes: ['task'], teamIds: [teamId] });
+  return sets.for('task', teamId);
+}
+
 /** Build a minimal, fully-overridable `GraphApplyContext`. */
-function baseCtx(
+async function baseCtx(
   orgId: string,
   actorId: string,
   integrationId: string,
   overrides: Partial<ReconcileGraph.GraphApplyContext> = {},
-): ReconcileGraph.GraphApplyContext {
+): Promise<ReconcileGraph.GraphApplyContext> {
+  const sets = await loadStatusSets(orgId, { entityTypes: ['project'] });
   return {
     orgId,
     actorId,
@@ -63,6 +79,7 @@ function baseCtx(
     identityMap: new Map(),
     resolveTeam: () => undefined,
     statesByTeam: new Map(),
+    projectStatuses: sets.for('project'),
     existingLabelsByExternal: new Map(),
     existingLabelsByScopeName: new Map(),
     existingProjectsByExternal: new Map(),
@@ -145,7 +162,7 @@ describe('applyLabel', () => {
   it('skips a team-scoped label whose team is unmapped', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId, { resolveTeam: () => undefined });
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, { resolveTeam: () => undefined });
     await applyLabel(ctx, extLabel({ externalTeamId: 'unmapped-team' }));
     // A no-op — not even a tally bump, since the label was never even scoped.
     expect(ctx.result.labels).toEqual({
@@ -175,7 +192,7 @@ describe('applyLabel', () => {
         })
         .returning(),
     );
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       existingLabelsByExternal: new Map([['lbl-1', existing]]),
     });
     await applyLabel(ctx, extLabel({ name: 'New name', color: '#123456' }));
@@ -194,7 +211,7 @@ describe('applyLabel', () => {
         .values({ organizationId: orgId, name: 'Bug', color: '#111111' })
         .returning(),
     );
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       existingLabelsByScopeName: new Map([['@org::Bug', native]]),
     });
     await applyLabel(ctx, extLabel({ color: '#ff0000' }));
@@ -222,7 +239,7 @@ describe('applyLabel', () => {
         })
         .returning(),
     );
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       existingLabelsByScopeName: new Map([['@org::Bug', foreign]]),
     });
     await applyLabel(ctx, extLabel());
@@ -233,7 +250,7 @@ describe('applyLabel', () => {
   it('lands a workspace-level label (no externalTeamId) org-wide (teamId: null)', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId);
+    const ctx = await baseCtx(orgId, humanActorId, integrationId);
     await applyLabel(ctx, extLabel({ externalTeamId: undefined }));
     expect(ctx.result.labels.created).toBe(1);
     const created = one(
@@ -250,7 +267,7 @@ describe('applyProject', () => {
   it('skips a project shared only with unmapped teams', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId);
+    const ctx = await baseCtx(orgId, humanActorId, integrationId);
     await applyProject(ctx, extProject({ externalTeamIds: ['unmapped'] }));
     expect(ctx.result.projects.skipped).toBe(1);
   });
@@ -258,7 +275,7 @@ describe('applyProject', () => {
   it('never materializes a tombstone for a project it never mirrored', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
     });
     await applyProject(ctx, extProject({ removed: true }));
@@ -275,7 +292,7 @@ describe('applyProject', () => {
     async (state) => {
       const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
       const integrationId = await seedIntegrationRow(orgId, humanActorId);
-      const ctx = baseCtx(orgId, humanActorId, integrationId, {
+      const ctx = await baseCtx(orgId, humanActorId, integrationId, {
         resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       });
       await applyProject(ctx, extProject({ state }));
@@ -290,7 +307,7 @@ describe('applyProject', () => {
   );
 
   it('tallies updated (not removed) when a newer, non-tombstoned remote updates an existing project', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
     const existing = one(
       await db
@@ -299,6 +316,8 @@ describe('applyProject', () => {
           organizationId: orgId,
           name: 'Old name',
           teamId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
           source: 'linked',
           sourceIntegrationId: integrationId,
           externalId: 'proj-1',
@@ -308,7 +327,7 @@ describe('applyProject', () => {
         })
         .returning(),
     );
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       existingProjectsByExternal: new Map([['proj-1', existing]]),
     });
@@ -324,7 +343,7 @@ describe('applyProject', () => {
   it('maps a literal canceled external state onto the canceled status', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
     });
     await applyProject(ctx, extProject({ state: 'canceled' }));
@@ -338,7 +357,7 @@ describe('applyProject', () => {
   });
 
   it('preserves a locally-dirty project when the remote has not changed since the anchor', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
     const existing = one(
       await db
@@ -347,6 +366,8 @@ describe('applyProject', () => {
           organizationId: orgId,
           name: 'Dirty locally',
           teamId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
           source: 'linked',
           sourceIntegrationId: integrationId,
           externalId: 'proj-1',
@@ -356,7 +377,7 @@ describe('applyProject', () => {
         })
         .returning(),
     );
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       existingProjectsByExternal: new Map([['proj-1', existing]]),
     });
@@ -372,7 +393,7 @@ describe('applyProject', () => {
   });
 
   it('tallies removed (not updated) when a newer remote tombstones an existing mirrored project', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
     const existing = one(
       await db
@@ -381,6 +402,8 @@ describe('applyProject', () => {
           organizationId: orgId,
           name: 'Still active',
           teamId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
           source: 'linked',
           sourceIntegrationId: integrationId,
           externalId: 'proj-1',
@@ -390,7 +413,7 @@ describe('applyProject', () => {
         })
         .returning(),
     );
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       existingProjectsByExternal: new Map([['proj-1', existing]]),
     });
@@ -408,7 +431,7 @@ describe('applyCycle', () => {
   it('skips a cycle on an unmapped team', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId);
+    const ctx = await baseCtx(orgId, humanActorId, integrationId);
     await applyCycle(ctx, extCycle());
     expect(ctx.result.cycles.skipped).toBe(1);
   });
@@ -416,7 +439,7 @@ describe('applyCycle', () => {
   it('never materializes a tombstone for a cycle it never mirrored', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
     });
     await applyCycle(ctx, extCycle({ removed: true }));
@@ -431,7 +454,7 @@ describe('applyCycle', () => {
   it("derives 'upcoming' status for a cycle window that hasn't started yet", async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       now: new Date('2026-01-01T00:00:00.000Z'), // before the cycle's window
     });
@@ -470,7 +493,7 @@ describe('applyCycle', () => {
         })
         .returning(),
     );
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       existingCyclesByExternal: new Map([['cyc-1', existing]]),
     });
@@ -501,7 +524,7 @@ describe('applyCycle', () => {
         })
         .returning(),
     );
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       existingCyclesByExternal: new Map([['cyc-1', existing]]),
     });
@@ -533,7 +556,7 @@ describe('applyCycle', () => {
         })
         .returning(),
     );
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       existingCyclesByExternal: new Map([['cyc-1', existing]]),
     });
@@ -549,9 +572,31 @@ describe('applyWorkItem — state resolution fallbacks', () => {
   it("falls back to the team's first state when no state matches the item's type", async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    // Only 'canceled'-type states — the item's 'started' type matches none of them.
-    const oddStates = [{ key: 'weird', name: 'Weird', type: 'canceled' as const, position: 0 }];
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    // Only 'canceled'-category statuses — the item's 'started' type matches none of them. The row
+    // has to exist in the workspace's set for the key to be storable at all.
+    const weirdId = await seedStatus(db, schema, {
+      organizationId: orgId,
+      entityType: 'task',
+      teamId: null,
+      key: 'weird',
+      name: 'Weird',
+      description: null,
+      category: 'canceled',
+      position: 1,
+    });
+    const oddStates: readonly ResolvedStatus[] = [
+      {
+        id: weirdId,
+        key: 'weird',
+        name: 'Weird',
+        description: null,
+        category: 'canceled',
+        position: 1,
+        isDefault: false,
+        teamId: null,
+      },
+    ];
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       statesByTeam: new Map([[teamId, oddStates]]),
     });
@@ -566,7 +611,7 @@ describe('applyWorkItem — state resolution fallbacks', () => {
   it('throws a descriptive ConflictError when the team has no workflow states to map onto at all', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       statesByTeam: new Map(), // no entry for teamId -> itemColumns' `?? []` fallback
     });
@@ -576,6 +621,7 @@ describe('applyWorkItem — state resolution fallbacks', () => {
   it('throws a descriptive ConflictError archiving a tombstoned item into a team with no states', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
+    const start = one(await teamTaskStatuses(orgId, teamId));
     const existingTask = one(
       await db
         .insert(schema.task)
@@ -583,7 +629,8 @@ describe('applyWorkItem — state resolution fallbacks', () => {
           organizationId: orgId,
           teamId,
           title: 'Existing',
-          state: assertDefined(defaultWorkflowStates[0]).key,
+          state: start.key,
+          statusId: start.id,
           source: 'linked',
           sourceIntegrationId: integrationId,
           externalId: 'item-1',
@@ -592,7 +639,7 @@ describe('applyWorkItem — state resolution fallbacks', () => {
         })
         .returning(),
     );
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
       existingTasksByExternal: new Map([['item-1', existingTask]]),
       statesByTeam: new Map(), // no entry -> archiveLinkedItem's `?? []` fallback
@@ -607,24 +654,25 @@ describe('applyWorkItem — triage folding and implicit lifecycle stamps', () =>
   it("folds a 'triage' stateType into the team's backlog-type state", async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const states = await teamTaskStatuses(orgId, teamId);
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
-      statesByTeam: new Map([[teamId, defaultWorkflowStates]]),
+      statesByTeam: new Map([[teamId, states]]),
     });
     await applyWorkItem(ctx, extWorkItem({ stateType: 'triage' }));
     const created = one(
       await db.select().from(schema.task).where(eq(schema.task.sourceIntegrationId, integrationId)),
     );
-    const backlogKey = assertDefined(defaultWorkflowStates.find((s) => s.type === 'backlog')).key;
+    const backlogKey = one(states.filter((s) => s.category === 'backlog')).key;
     expect(created.state).toBe(backlogKey);
   });
 
   it('stamps completedAt from the reconcile anchor when the item carries no explicit timestamp', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
-      statesByTeam: new Map([[teamId, defaultWorkflowStates]]),
+      statesByTeam: new Map([[teamId, await teamTaskStatuses(orgId, teamId)]]),
       now: NOW,
     });
     await applyWorkItem(
@@ -640,9 +688,9 @@ describe('applyWorkItem — triage folding and implicit lifecycle stamps', () =>
   it('stamps canceledAt from the reconcile anchor when the item carries no explicit timestamp', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);
-    const ctx = baseCtx(orgId, humanActorId, integrationId, {
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
       resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
-      statesByTeam: new Map([[teamId, defaultWorkflowStates]]),
+      statesByTeam: new Map([[teamId, await teamTaskStatuses(orgId, teamId)]]),
       now: NOW,
     });
     await applyWorkItem(

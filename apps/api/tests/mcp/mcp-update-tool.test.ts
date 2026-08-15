@@ -12,6 +12,7 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -31,6 +32,7 @@ interface Seed {
   /** A second member, so "Sarah's work" is a real distinction. */
   sarahId: string;
   projectId: string;
+  statusId: StatusIdLookup;
   ctx: McpContext;
 }
 
@@ -42,6 +44,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [role] = await db
     .insert(schema.role)
@@ -103,6 +106,8 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
       name: 'Platform Migration',
       teamId: assertDefined(team).id,
       createdBy: assertDefined(human).id,
+      status: 'planned',
+      statusId: statusId('project', 'planned'),
     })
     .returning({ id: schema.project.id });
 
@@ -112,6 +117,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     actorId: assertDefined(human).id,
     sarahId: assertDefined(sarah).id,
     projectId: assertDefined(project).id,
+    statusId,
     ctx: {
       principal: {
         kind: 'user',
@@ -129,15 +135,17 @@ async function seedTask(
   s: Seed,
   values: Partial<typeof schema.task.$inferInsert> = {},
 ): Promise<string> {
+  const state = values.state ?? 'backlog';
   const [row] = await db
     .insert(schema.task)
     .values({
       organizationId: s.orgId,
       title: 'Task',
       teamId: s.teamId,
-      state: 'backlog',
       createdBy: s.actorId,
       ...values,
+      state,
+      statusId: s.statusId('task', state),
     })
     .returning({ id: schema.task.id });
   return assertDefined(row).id;
@@ -441,9 +449,13 @@ describe('update guardrails', () => {
 
   it('names the candidates when a scope descriptor is ambiguous', async () => {
     const s = await seedOrg(['contribute']);
-    await db
-      .insert(schema.project)
-      .values({ organizationId: s.orgId, name: 'Platform Rebuild', createdBy: s.actorId });
+    await db.insert(schema.project).values({
+      organizationId: s.orgId,
+      name: 'Platform Rebuild',
+      createdBy: s.actorId,
+      status: 'planned',
+      statusId: s.statusId('project', 'planned'),
+    });
     const client = await connect(s.ctx);
     const res = (await client.callTool({
       name: 'update',

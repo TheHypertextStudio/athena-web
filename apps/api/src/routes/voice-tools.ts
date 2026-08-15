@@ -141,6 +141,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
         title,
         ...(notes ? { description: notes } : {}),
         teamId: landing.teamId,
+        statusId: landing.statusId,
         state: landing.state,
         assigneeId: landing.assigneeId,
         cycleId: landing.cycleId,

@@ -34,7 +34,6 @@ import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from 
 import { todayISODate } from '@/lib/today';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
-import { stateTypeOf } from '@/lib/work-state';
 
 /** Format a due date as `Jul 1`, or `null` when the row carries nothing readable. */
 function formatDue(dueDate: string): string | null {
@@ -100,7 +99,7 @@ function DayTaskRow({
         dragProps?.className,
       )}
     >
-      <StatusIcon type={stateTypeOf(task.state)} />
+      <StatusIcon type={task.stateType} />
       {canEdit ? (
         <EditableTitle
           value={task.title}

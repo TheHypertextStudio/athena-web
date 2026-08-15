@@ -8,6 +8,7 @@ import {
   processInstanceTask,
   processOccurrence,
   recurrenceSeriesRevision,
+  seedWorkspaceStatuses,
   task,
   team,
   type Database,
@@ -50,6 +51,9 @@ beforeAll(async () => {
         .returning()
     )[0],
   ).id;
+  // Statuses come before any work: every Task this sweep materializes stores both its state key
+  // and the id of the workspace status carrying it.
+  await seedWorkspaceStatuses(db, organizationId);
   teamId = TeamId.parse(
     assertDefined(
       (

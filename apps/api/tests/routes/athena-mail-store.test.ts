@@ -171,7 +171,7 @@ describe('listAttachmentTargets', () => {
   });
 
   it('resolves a project-only attachment set (no task attachments) with the project title', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
+    const { orgId, statusId } = await seedBaseOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, 'ProjectOnlyOwner');
     const mailbox = await ensureMailbox(userId);
     const [message] = await db
@@ -190,7 +190,12 @@ describe('listAttachmentTargets', () => {
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Attachment target project' })
+        .values({
+          organizationId: orgId,
+          name: 'Attachment target project',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     await db.insert(schema.attachment).values({
@@ -211,7 +216,7 @@ describe('listAttachmentTargets', () => {
   });
 
   it('resolves an initiative attachment with the initiative’s title', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
+    const { orgId, statusId } = await seedBaseOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, 'InitiativeOwner');
     const mailbox = await ensureMailbox(userId);
     const [message] = await db
@@ -230,7 +235,12 @@ describe('listAttachmentTargets', () => {
     const initiativeId = one(
       await db
         .insert(schema.initiative)
-        .values({ organizationId: orgId, name: 'Attachment target initiative' })
+        .values({
+          organizationId: orgId,
+          name: 'Attachment target initiative',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning({ id: schema.initiative.id }),
     ).id;
     await db.insert(schema.attachment).values({
@@ -251,7 +261,7 @@ describe('listAttachmentTargets', () => {
   });
 
   it('silently drops an attachment whose subject has since been hard-deleted', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, 'OrphanOwner');
     const mailbox = await ensureMailbox(userId);
     const [message] = await db
@@ -269,7 +279,13 @@ describe('listAttachmentTargets', () => {
       .returning();
     const [task] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'Doomed task', state: 'backlog' })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Doomed task',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      })
       .returning({ id: schema.task.id });
     await db.insert(schema.attachment).values({
       organizationId: orgId,

@@ -96,7 +96,7 @@ describe('dispatchAthenaWork with no team to land in', () => {
 
 describe('parentColumns files work under every referenceable container kind', () => {
   it('files a matching request under a program, not just a project', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const ownerUserId = await seedUserWithHub(db, schema, 'ProgramOwner');
     const [program] = await db
       .insert(schema.program)
@@ -104,6 +104,8 @@ describe('parentColumns files work under every referenceable container kind', ()
         organizationId: orgId,
         name: 'Zephyrfest Roadmap',
         description: 'The whole Zephyrfest program of work.',
+        status: 'active',
+        statusId: statusId('program', 'active'),
       })
       .returning({ id: schema.program.id });
 
@@ -135,13 +137,19 @@ describe('parentColumns files work under every referenceable container kind', ()
   });
 
   it('files a matching request under a milestone, not just a project', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
+    const { orgId, statusId } = await seedBaseOrg(db, schema);
     const ownerUserId = await seedUserWithHub(db, schema, 'MilestoneOwner');
     // A milestone must belong to a project; give it a generic name so it never outscores the
     // milestone itself for this prompt.
     const [project] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'General Work', description: 'Everything else.' })
+      .values({
+        organizationId: orgId,
+        name: 'General Work',
+        description: 'Everything else.',
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const [milestone] = await db
       .insert(schema.milestone)

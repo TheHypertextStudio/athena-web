@@ -4,10 +4,11 @@
  * Settings → Labels: where the workspace's own vocabulary is curated.
  *
  * @remarks
- * Docket ships no custom fields on purpose — the MVP plan's first principle is that people should
- * not have to configure their way to a workflow. Labels are the single deliberate exception, the
- * one place a workspace can name a dimension the product does not model. This page is where that
- * vocabulary is kept honest.
+ * Docket ships no custom-field engine on purpose — the MVP plan's first principle is that people
+ * should not have to configure their way to a workflow. Labels are where a workspace names a
+ * dimension the product does not model at all, which is a different job from Settings → Statuses:
+ * that page reshapes a dimension Docket *does* model, within a taxonomy it holds fixed. This page
+ * is where the free-form half is kept honest.
  *
  * Most labels are *not* created here; they are created inline from a picker, mid-thought, by
  * whoever is doing the work. So this page is weighted toward curation rather than creation: usage
@@ -127,7 +128,7 @@ export default function LabelsSettingsPage(): JSX.Element {
     <div className="flex flex-col gap-6">
       <SectionHeader
         title="Labels"
-        description="Your workspace's own vocabulary. Statuses and priorities are Docket's opinions — labels are yours."
+        description="Your workspace's own vocabulary, for the dimensions Docket does not model. Priorities and health are Docket's opinions; statuses and labels are yours."
         action={
           canManage ? (
             <Button

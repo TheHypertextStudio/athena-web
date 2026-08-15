@@ -12,7 +12,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, seedStatuses } from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';
 import { assertDefined } from '@docket/test-utils';
 
@@ -71,13 +71,16 @@ async function makeTask(
     state?: string;
   } = {},
 ): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
+  const state = opts.state ?? (opts.completedAt ? 'done' : 'todo');
   const [row] = await db
     .insert(schema.task)
     .values({
       organizationId: orgId,
       title: 'T',
       teamId,
-      state: opts.state ?? (opts.completedAt ? 'done' : 'todo'),
+      state,
+      statusId: statusId('task', state),
       cycleId: opts.cycleId ?? null,
       projectId: opts.projectId ?? null,
       programId: opts.programId ?? null,
@@ -262,10 +265,17 @@ describe('cycle list (GET /) — inline stats', () => {
 
 describe('cycle committed tasks (GET /:id/tasks)', () => {
   it('groups committed tasks by project (default)', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [proj] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'P', teamId, createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'P',
+        teamId,
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const cycleId = await makeCycle(orgId, teamId, humanActorId);
 
@@ -297,10 +307,16 @@ describe('cycle committed tasks (GET /:id/tasks)', () => {
   });
 
   it('groups committed tasks by program when groupBy=program', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [program] = await db
       .insert(schema.program)
-      .values({ organizationId: orgId, name: 'Prog', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Prog',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('program', 'active'),
+      })
       .returning({ id: schema.program.id });
     const cycleId = await makeCycle(orgId, teamId, humanActorId);
     const inProg = await makeTask(orgId, teamId, humanActorId, {

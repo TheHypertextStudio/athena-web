@@ -21,7 +21,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type inboundMailRouter from '../../src/routes/inbound-mail';
 import type athenaMailRouter from '../../src/routes/athena-mail';
 import type { ensureMailbox as EnsureMailbox } from '../../src/routes/athena-mail-store';
-import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
+import {
+  appWithSession,
+  fakeSession,
+  getDb,
+  seedStatuses,
+  type StatusIdLookup,
+} from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -51,6 +57,7 @@ interface Fixture {
   readonly ownerUserId: string;
   readonly organizationId: string;
   readonly address: string;
+  readonly statusId: StatusIdLookup;
 }
 
 let counter = 0;
@@ -68,6 +75,7 @@ async function seedOwner(): Promise<Fixture> {
     .insert(schema.organization)
     .values({ name: `Workspace ${slug}`, slug })
     .returning({ id: schema.organization.id });
+  const statusId = await seedStatuses(db, schema, assertDefined(org).id);
   await db.insert(schema.actor).values({
     organizationId: assertDefined(org).id,
     kind: 'human',
@@ -83,6 +91,7 @@ async function seedOwner(): Promise<Fixture> {
     ownerUserId: assertDefined(owner).id,
     organizationId: assertDefined(org).id,
     address: `${mailbox.key}@${HOST}`,
+    statusId,
   };
 }
 
@@ -461,6 +470,7 @@ describe('attaching a received message to work', () => {
         teamId: assertDefined(team).id,
         title,
         state: 'backlog',
+        statusId: fixture.statusId('task', 'backlog'),
       })
       .returning({ id: schema.task.id });
     return assertDefined(row).id;
@@ -476,7 +486,12 @@ describe('attaching a received message to work', () => {
     const taskId = await seedTask(fixture, 'File the contract');
     const [project] = await db
       .insert(schema.project)
-      .values({ organizationId: fixture.organizationId, name: 'Q3 refresh' })
+      .values({
+        organizationId: fixture.organizationId,
+        name: 'Q3 refresh',
+        status: 'planned',
+        statusId: fixture.statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
 
     const app = appWithSession(athenaMail, fakeSession(fixture.ownerUserId));

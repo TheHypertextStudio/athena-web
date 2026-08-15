@@ -27,10 +27,10 @@ import { type Edge, type Node, Panel } from '@xyflow/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
-import { stateTypeOf } from '@/lib/work-state';
 import {
   type FieldOption,
   type ViewFilterTerm,
@@ -95,9 +95,9 @@ export interface TaskGraphPanelProps {
   className?: string;
 }
 
-/** Minimap node color by workflow-state token (the canvas is generic; the host injects this). */
+/** Minimap node color by status-category token (the canvas is generic; the host injects this). */
 function taskStateColor(node: Node): string {
-  return `var(--color-state-${stateTypeOf(taskData(node).state)})`;
+  return `var(--color-state-${taskData(node).stateType})`;
 }
 
 /** Keep only edges whose endpoints both survived filtering. */
@@ -248,6 +248,20 @@ export default function TaskGraphPanel({
     [],
   );
 
+  // "Mark done" / "Reopen" name outcomes, so the workspace's own completed and starting statuses
+  // are resolved once here rather than spelled as literal keys by every element that offers them.
+  const statuses = useStatusRegistry();
+  const setComplete = useCallback(
+    (id: string, complete: boolean) => {
+      const target = complete
+        ? statuses.firstOfCategory('task', 'completed')
+        : statuses.defaultOf('task');
+      if (target === undefined) return;
+      mutations.setState(id, target.key);
+    },
+    [statuses, mutations],
+  );
+
   const catalog = useMemo(
     () =>
       buildGraphCatalog({
@@ -330,12 +344,19 @@ export default function TaskGraphPanel({
     () => ({
       canEdit,
       navigate,
-      setState: mutations.setState,
+      setComplete,
       createSubtask: mutations.createSubtask,
       removeDependency: mutations.removeDependency,
       reverseDependency: mutations.reverseDependency,
     }),
-    [canEdit, navigate, mutations.setState, mutations.createSubtask, mutations.removeDependency],
+    [
+      canEdit,
+      navigate,
+      setComplete,
+      mutations.createSubtask,
+      mutations.removeDependency,
+      mutations.reverseDependency,
+    ],
   );
 
   // Grouping reads straight off the catalog, so every groupable field the catalog declares works
@@ -439,7 +460,7 @@ export default function TaskGraphPanel({
                 edges={filtered.edges}
                 canEdit={canEdit}
                 onNavigate={navigate}
-                onSetState={mutations.setState}
+                onSetComplete={setComplete}
                 onClose={() => {
                   setSelectedId(null);
                 }}

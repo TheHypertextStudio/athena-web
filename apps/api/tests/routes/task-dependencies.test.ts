@@ -118,11 +118,18 @@ describe('task dependencies create + read', () => {
   });
 
   it('carries each ref project across projects', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const [proj] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'P', teamId, createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'P',
+        teamId,
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const projectId = assertDefined(proj).id;
 

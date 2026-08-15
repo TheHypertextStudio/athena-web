@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { getDb, one, seedBaseOrg, type StatusIdLookup } from '../support/routes-harness';
 import { buildAutomationRegistry, type MailApplier } from '../../src/lib/automation/handlers';
 import { defaultMailApplier, runAutomationsForEvent } from '../../src/lib/automation/runtime';
 import { loadEnabledRules, seedDefaultAutomationRules } from '../../src/lib/automation/rules-store';
@@ -26,7 +26,7 @@ interface RecordedMail {
 
 /** Seed an org with a Gmail integration, a task, and an email attachment on it. */
 async function seedTaskWithEmail() {
-  const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+  const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
   const integration = one(
     await db
       .insert(schema.integration)
@@ -47,6 +47,7 @@ async function seedTaskWithEmail() {
         teamId,
         title: 'Reply to recruiter',
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         createdBy: humanActorId,
       })
       .returning({ id: schema.task.id }),
@@ -250,7 +251,12 @@ describe('generic action handlers (M5)', () => {
     );
   }
 
-  async function seedTask(orgId: string, teamId: string, actorId: string) {
+  async function seedTask(
+    statusId: StatusIdLookup,
+    orgId: string,
+    teamId: string,
+    actorId: string,
+  ) {
     return one(
       await db
         .insert(schema.task)
@@ -259,6 +265,7 @@ describe('generic action handlers (M5)', () => {
           teamId,
           title: 'Automatable task',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           createdBy: actorId,
         })
         .returning(),
@@ -266,8 +273,8 @@ describe('generic action handlers (M5)', () => {
   }
 
   it('task.setStatus transitions via the shared lib (terminal state derives completedAt)', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const t = await seedTask(orgId, teamId, humanActorId);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const t = await seedTask(statusId, orgId, teamId, humanActorId);
     await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
       { type: 'task.setStatus', params: { state: 'done' } },
     ]);
@@ -285,7 +292,7 @@ describe('generic action handlers (M5)', () => {
     // runAutomationsForEvent. A regression here (e.g. the mutation becoming fire-and-forget,
     // decoupled from the awaited automationDispatch.run scope) would let the internally-
     // emitted 'completed' event trigger a second rule pass.
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const [u] = await db
       .insert(schema.user)
       .values({ name: 'Ada', email: `cascade-${Date.now().toString()}@example.com` })
@@ -301,7 +308,7 @@ describe('generic action handlers (M5)', () => {
         })
         .returning({ id: schema.actor.id }),
     );
-    const t = await seedTask(orgId, teamId, actorRow.id);
+    const t = await seedTask(statusId, orgId, teamId, actorRow.id);
 
     // Rule 1 fires on the initiating 'created' event and transitions the task to a terminal
     // state — internally emitting 'completed' through the real emitEvent facade.
@@ -327,8 +334,8 @@ describe('generic action handlers (M5)', () => {
   });
 
   it('task.setStatus with an unknown state key is a logged no-op, never a throw', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const t = await seedTask(orgId, teamId, humanActorId);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const t = await seedTask(statusId, orgId, teamId, humanActorId);
     await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
       { type: 'task.setStatus', params: { state: 'not-a-state' } },
     ]);
@@ -338,9 +345,9 @@ describe('generic action handlers (M5)', () => {
   });
 
   it('task.assign assigns an org actor and refuses a cross-tenant one', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const other = await seedBaseOrg(db, schema); // a different org's actor
-    const t = await seedTask(orgId, teamId, humanActorId);
+    const t = await seedTask(statusId, orgId, teamId, humanActorId);
 
     await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
       { type: 'task.assign', params: { assigneeId: other.humanActorId } }, // cross-tenant: no-op
@@ -353,8 +360,8 @@ describe('generic action handlers (M5)', () => {
   });
 
   it('task.setPriority validates against the Priority enum', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const t = await seedTask(orgId, teamId, humanActorId);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const t = await seedTask(statusId, orgId, teamId, humanActorId);
     await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
       { type: 'task.setPriority', params: { priority: 'ludicrous' } }, // invalid: no-op
       { type: 'task.setPriority', params: { priority: 'urgent' } },
@@ -365,9 +372,9 @@ describe('generic action handlers (M5)', () => {
   });
 
   it('task.applyLabel attaches an org label idempotently and refuses a cross-tenant one', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const other = await seedBaseOrg(db, schema); // a different org's label
-    const t = await seedTask(orgId, teamId, humanActorId);
+    const t = await seedTask(statusId, orgId, teamId, humanActorId);
     const labelRow = one(
       await db
         .insert(schema.label)
@@ -392,7 +399,7 @@ describe('generic action handlers (M5)', () => {
   });
 
   it('notification.send writes an automation inbox notification to the acting user', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const [u] = await db
       .insert(schema.user)
       .values({ name: 'Ada', email: `ada-auto-${Date.now().toString()}@example.com` })
@@ -408,7 +415,7 @@ describe('generic action handlers (M5)', () => {
         })
         .returning({ id: schema.actor.id }),
     );
-    const t = await seedTask(orgId, teamId, actorRow.id);
+    const t = await seedTask(statusId, orgId, teamId, actorRow.id);
 
     await addRule(orgId, { kind: 'completed', subjectType: 'task' }, [
       {
@@ -692,7 +699,7 @@ describe('mail.* handler variety and no-op branches', () => {
   });
 
   it('skips an email attachment row missing its integration id or external id', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const t = one(
       await db
         .insert(schema.task)
@@ -701,6 +708,7 @@ describe('mail.* handler variety and no-op branches', () => {
           teamId,
           title: 'Incomplete attachment',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           createdBy: humanActorId,
         })
         .returning({ id: schema.task.id }),
@@ -775,7 +783,7 @@ describe('task.* handlers: invalid params and a missing task subject', () => {
   }
 
   it('task.setStatus no-ops on invalid params (missing state)', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const t = one(
       await db
         .insert(schema.task)
@@ -784,6 +792,7 @@ describe('task.* handlers: invalid params and a missing task subject', () => {
           teamId,
           title: 'T',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           createdBy: humanActorId,
         })
         .returning(),
@@ -848,7 +857,7 @@ describe('task.* handlers: invalid params and a missing task subject', () => {
   });
 
   it('task.applyLabel no-ops on invalid params and when the event names no task', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const t = one(
       await db
         .insert(schema.task)
@@ -857,6 +866,7 @@ describe('task.* handlers: invalid params and a missing task subject', () => {
           teamId,
           title: 'T',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           createdBy: humanActorId,
         })
         .returning(),
@@ -955,7 +965,7 @@ describe('notification.send: targeting, and the no-inbox/no-target no-ops', () =
   });
 
   it('targets the task assignee for to:"taskAssignee", and no-ops when unassigned', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [u] = await db
       .insert(schema.user)
       .values({ name: 'Assignee', email: `assignee-${Date.now().toString()}@example.com` })
@@ -979,6 +989,7 @@ describe('notification.send: targeting, and the no-inbox/no-target no-ops', () =
           teamId,
           title: 'Assigned',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           createdBy: humanActorId,
           assigneeId: assigneeActor.id,
         })
@@ -992,6 +1003,7 @@ describe('notification.send: targeting, and the no-inbox/no-target no-ops', () =
           teamId,
           title: 'Unassigned',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           createdBy: humanActorId,
         })
         .returning({ id: schema.task.id }),

@@ -3,11 +3,13 @@
  *
  * @remarks
  * Pure logic, so it earns its own gate independent of the canvas React tree: a task is blocked
- * while any blocker is open, ready once every blocker is done and it hasn't started, and each
- * dependency edge's tone follows its blocker's completion. Default workflow keys (`backlog`/`todo`/
- * `in_progress`/`done`/`canceled`) map via `stateTypeOf`.
+ * while any blocker is open, ready once every blocker has ended and it hasn't started, and each
+ * dependency edge's tone follows its blocker's completion. Nodes carry the status *category* they
+ * behave as, which is what the caller resolves from the workspace's set before annotating.
  */
 import { describe, expect, it } from 'vitest';
+
+import type { WorkStatusCategory } from '@docket/types';
 
 import {
   type AnnotateEdge,
@@ -17,11 +19,11 @@ import {
 
 /** Build a graph fixture from terse node/edge tuples. */
 function graph(
-  nodes: readonly [id: string, state: string][],
+  nodes: readonly [id: string, stateType: WorkStatusCategory][],
   edges: readonly [kind: 'dependency' | 'subtask', source: string, target: string][],
 ): { nodes: AnnotateNode[]; edges: AnnotateEdge[] } {
   return {
-    nodes: nodes.map(([id, state]) => ({ id, state })),
+    nodes: nodes.map(([id, stateType]) => ({ id, stateType })),
     edges: edges.map(([kind, source, target]) => ({
       id: `${kind}:${source}:${target}`,
       kind,
@@ -36,8 +38,8 @@ describe('annotateGraph — blocked / ready', () => {
     const { nodeFlags } = annotateGraph(
       graph(
         [
-          ['a', 'in_progress'],
-          ['b', 'todo'],
+          ['a', 'started'],
+          ['b', 'unstarted'],
         ],
         [['dependency', 'a', 'b']], // a blocks b; a is open
       ),
@@ -50,9 +52,9 @@ describe('annotateGraph — blocked / ready', () => {
     const { nodeFlags } = annotateGraph(
       graph(
         [
-          ['a', 'done'],
+          ['a', 'completed'],
           ['b', 'canceled'],
-          ['c', 'todo'],
+          ['c', 'unstarted'],
         ],
         [
           ['dependency', 'a', 'c'],
@@ -67,8 +69,8 @@ describe('annotateGraph — blocked / ready', () => {
     const { nodeFlags } = annotateGraph(
       graph(
         [
-          ['a', 'done'],
-          ['b', 'in_progress'],
+          ['a', 'completed'],
+          ['b', 'started'],
         ],
         [['dependency', 'a', 'b']],
       ),
@@ -80,8 +82,8 @@ describe('annotateGraph — blocked / ready', () => {
     const { nodeFlags } = annotateGraph(
       graph(
         [
-          ['parent', 'todo'],
-          ['child', 'todo'],
+          ['parent', 'unstarted'],
+          ['child', 'unstarted'],
         ],
         [['subtask', 'parent', 'child']],
       ),
@@ -95,10 +97,10 @@ describe('annotateGraph — edge tone', () => {
     const { edgeTone } = annotateGraph(
       graph(
         [
-          ['a', 'done'],
-          ['b', 'in_progress'],
-          ['c', 'todo'],
-          ['d', 'todo'],
+          ['a', 'completed'],
+          ['b', 'started'],
+          ['c', 'unstarted'],
+          ['d', 'unstarted'],
         ],
         [
           ['dependency', 'a', 'c'], // blocker done

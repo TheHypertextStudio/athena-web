@@ -11,6 +11,8 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import type { StatusIdLookup } from '../support/routes-harness';
+import { seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -27,6 +29,7 @@ interface Seed {
   orgId: string;
   teamId: string;
   actorId: string;
+  statusId: StatusIdLookup;
   ctx: McpContext;
 }
 
@@ -38,6 +41,8 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  // Work carries a status the workspace defines, so the set comes before anything organize places.
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [role] = await db
     .insert(schema.role)
@@ -89,6 +94,7 @@ async function seedOrg(): Promise<Seed> {
     orgId,
     teamId: assertDefined(team).id,
     actorId: assertDefined(human).id,
+    statusId,
     ctx: {
       principal: {
         kind: 'user',
@@ -269,6 +275,8 @@ describe('organize', () => {
         name: 'Auth Rewrite',
         teamId: s.teamId,
         createdBy: s.actorId,
+        status: 'planned',
+        statusId: s.statusId('project', 'planned'),
       })
       .returning({ id: schema.project.id });
 

@@ -4,19 +4,23 @@
  * @remarks
  * The single definition of the "default landing target" rule, shared by quick-capture and the
  * email-suggestion accept flow (both create a task from loose input without a team picker): the
- * org's oldest active team, that team's first workflow state, the caller as assignee, and the
- * team's current cycle when a window covers today. Centralized so the rule lives in one place.
+ * org's oldest active team, the status new work of that team starts in, the caller as assignee,
+ * and the team's current cycle when a window covers today. Centralized so the rule lives in one
+ * place.
  */
 import { actor, db, team } from '@docket/db';
 import { and, asc, eq } from 'drizzle-orm';
 
 import { resolveCurrentCycleId } from './current-cycle';
+import { landingStatus } from './work-status';
 
 /** The resolved landing target for a new task. */
 export interface LandingTarget {
   readonly teamId: string;
-  /** The team's first workflow-state key, or `backlog` for a stateless team. */
+  /** The key of the status new work starts in. */
   readonly state: string;
+  /** The id of that status, which the row stores alongside the key. */
+  readonly statusId: string;
   /** The caller as assignee, or `null` if they're not a resolvable actor in the org. */
   readonly assigneeId: string | null;
   /** The team's current cycle, or `null` when no window covers today. */
@@ -40,7 +44,7 @@ export async function resolveLandingTarget(
   // Team and assignee lookups are independent — run them together; the cycle needs the team.
   const [teamRows, assigneeRows] = await Promise.all([
     db
-      .select({ id: team.id, workflowStates: team.workflowStates })
+      .select({ id: team.id })
       .from(team)
       .where(eq(team.organizationId, orgId))
       .orderBy(asc(team.createdAt))
@@ -56,9 +60,11 @@ export async function resolveLandingTarget(
   const teamRow = teamRows[0];
   if (!teamRow) return null;
 
+  const status = await landingStatus(orgId, 'task', teamRow.id);
   return {
     teamId: teamRow.id,
-    state: teamRow.workflowStates[0]?.key ?? 'backlog',
+    state: status.key,
+    statusId: status.id,
     assigneeId: assigneeRows[0]?.id ?? null,
     cycleId: await resolveCurrentCycleId(orgId, teamRow.id),
   };

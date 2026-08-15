@@ -12,6 +12,7 @@ import {
   fakeSession,
   getDb,
   seedBaseOrg,
+  seedStatuses,
 } from '../support/routes-harness';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type dailyPlanRouter from '../../src/routes/daily-plan';
@@ -169,11 +170,25 @@ describe('orgs router', () => {
     expect(rescaled.status).toBe(200);
     expect(await body(rescaled)).toEqual({ initiativeMaxDepth: 3, estimationScale: 't_shirt' });
 
+    const statusId = await seedStatuses(db, schema, orgId);
+    const activeInitiative = statusId('initiative', 'active');
     const [root, child] = await db
       .insert(schema.initiative)
       .values([
-        { organizationId: orgId, name: 'Root', createdBy: result.ownerActorId },
-        { organizationId: orgId, name: 'Child', createdBy: result.ownerActorId },
+        {
+          organizationId: orgId,
+          name: 'Root',
+          createdBy: result.ownerActorId,
+          status: 'active',
+          statusId: activeInitiative,
+        },
+        {
+          organizationId: orgId,
+          name: 'Child',
+          createdBy: result.ownerActorId,
+          status: 'active',
+          statusId: activeInitiative,
+        },
       ])
       .returning({ id: schema.initiative.id });
     await db.insert(schema.initiativeHierarchyLink).values({
@@ -473,7 +488,7 @@ describe('daily-plan router', () => {
 
   it('full lifecycle: list, create (with timeboxes), patch, delete', async () => {
     const { userId } = await seedUserWithHub();
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     // The session user must be a human actor in the org for the cross-org scope check.
     await db
       .insert(schema.actor)
@@ -485,6 +500,7 @@ describe('daily-plan router', () => {
         title: 'Task',
         teamId,
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         createdBy: humanActorId,
       })
       .returning({ id: schema.task.id });
@@ -530,7 +546,7 @@ describe('daily-plan router', () => {
 
   it('create: 404 when the org is not in the caller scope, and when the task is missing', async () => {
     const { userId } = await seedUserWithHub();
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId });
@@ -574,6 +590,7 @@ describe('daily-plan router', () => {
         title: 'T2',
         teamId,
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         createdBy: humanActorId,
       })
       .returning({ id: schema.task.id });
@@ -632,7 +649,7 @@ describe('hub router', () => {
 
   it('today: accepted plan stays distinct from due work that needs attention', async () => {
     const { userId, hubId } = await seedUserWithHub();
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId });
@@ -646,6 +663,7 @@ describe('hub router', () => {
         title: 'Due',
         teamId,
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         dueDate: new Date(date),
         createdBy: humanActorId,
       })
@@ -658,6 +676,7 @@ describe('hub router', () => {
         title: 'Planned',
         teamId,
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         createdBy: humanActorId,
       })
       .returning({ id: schema.task.id });
@@ -677,7 +696,7 @@ describe('hub router', () => {
 
   it('today: due work alone leaves the day unplanned and appears under attention', async () => {
     const { userId } = await seedUserWithHub();
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId });
@@ -687,6 +706,7 @@ describe('hub router', () => {
       title: 'DueOnly',
       teamId,
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       dueDate: new Date(date),
       createdBy: humanActorId,
     });
@@ -721,7 +741,7 @@ describe('hub router', () => {
 
   it('inbox, portfolio, and search return scoped items', async () => {
     const { userId } = await seedUserWithHub();
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId });
@@ -736,6 +756,7 @@ describe('hub router', () => {
         name: 'Searchable Project',
         teamId,
         status: 'active',
+        statusId: statusId('project', 'active'),
         createdBy: humanActorId,
       })
       .returning({ id: schema.project.id });
@@ -746,6 +767,7 @@ describe('hub router', () => {
         title: 'Searchable Task',
         teamId,
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         createdBy: humanActorId,
       })
       .returning({ id: schema.task.id });
@@ -788,7 +810,7 @@ describe('hub router', () => {
 describe('agent-sessions router (list/get + approve/reject conflict paths)', () => {
   /** Seed an org with an agent + a session in a given status. */
   async function seedSession(status: 'pending' | 'awaiting_approval' | 'completed') {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [agentActor] = await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'agent', displayName: 'Athena' })
@@ -803,7 +825,14 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
       .returning({ id: schema.agent.id });
     const [tk] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, title: 'T', teamId, state: 'todo', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        title: 'T',
+        teamId,
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: humanActorId,
+      })
       .returning({ id: schema.task.id });
     const [s] = await db
       .insert(schema.agentSession)
@@ -981,7 +1010,7 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
 
   /** Seed a runnable session with a valid agent; `withTask` controls the task ref. */
   async function seedRunnable(withTask: boolean) {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [agentActor] = await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'agent', displayName: 'Athena' })
@@ -1003,6 +1032,7 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
           title: 'Run T',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           createdBy: humanActorId,
         })
         .returning({ id: schema.task.id });
@@ -1092,6 +1122,7 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
         title: 'Other',
         teamId: b.teamId,
         state: 'todo',
+        statusId: b.statusId('task', 'todo'),
         createdBy: b.humanActorId,
       })
       .returning({ id: schema.task.id });

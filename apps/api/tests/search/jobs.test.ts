@@ -17,7 +17,7 @@ describe('search index jobs', () => {
   it('dedupes pending jobs and idempotently upserts projected documents', async () => {
     const schema = await getDb();
     const { db } = schema;
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const taskRow = one(
       await db
         .insert(schema.task)
@@ -27,6 +27,7 @@ describe('search index jobs', () => {
           title: 'Index budget task',
           description: 'Budget task body',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
         })
         .returning(),
@@ -139,7 +140,7 @@ describe('search index jobs', () => {
   it('backfills source rows without duplicating pending jobs', async () => {
     const schema = await getDb();
     const { db } = schema;
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const taskRow = one(
       await db
         .insert(schema.task)
@@ -149,6 +150,7 @@ describe('search index jobs', () => {
           title: 'Backfill budget task',
           description: 'Backfill body',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
         })
         .returning(),
@@ -174,8 +176,9 @@ describe('search index jobs', () => {
   it('returns a resume cursor for paged source-table backfills', async () => {
     const schema = await getDb();
     const { db } = schema;
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const prefix = `000_paged_${Math.random().toString(36).slice(2, 8)}`;
+    const todoStatusId = statusId('task', 'todo');
     const rows = await db
       .insert(schema.task)
       .values(
@@ -186,6 +189,7 @@ describe('search index jobs', () => {
           title: `Paged ${id}`,
           description: 'Paged backfill body',
           state: 'todo' as const,
+          statusId: todoStatusId,
           visibility: 'public' as const,
         })),
       )
@@ -218,7 +222,7 @@ describe('search index jobs', () => {
   it('repair-enqueues source rows whose search document is missing or stale', async () => {
     const schema = await getDb();
     const { db } = schema;
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const sourceUpdatedAt = new Date('2026-07-03T12:00:00.000Z');
     const taskRow = one(
       await db
@@ -229,6 +233,7 @@ describe('search index jobs', () => {
           title: 'Repair stale task',
           description: 'Repair body',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
           updatedAt: sourceUpdatedAt,
         })
@@ -270,7 +275,7 @@ describe('search index jobs', () => {
   it('repair-reconciles newer event-log rows and their mapped Docket entities', async () => {
     const schema = await getDb();
     const { db } = schema;
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const taskRow = one(
       await db
         .insert(schema.task)
@@ -280,6 +285,7 @@ describe('search index jobs', () => {
           title: 'Event repair task',
           description: 'Event repair body',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
         })
         .returning(),
@@ -362,7 +368,7 @@ describe('search index jobs', () => {
   it('applies the default source-table list and page limit when both are omitted', async () => {
     const schema = await getDb();
     const { db } = schema;
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const taskRow = one(
       await db
         .insert(schema.task)
@@ -372,6 +378,7 @@ describe('search index jobs', () => {
           title: 'Default-scan budget task',
           description: 'Exercises the omitted sourceTables/limit branches',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
         })
         .returning(),
@@ -401,7 +408,7 @@ describe('search index jobs', () => {
   it('treats a shape-invalid cursor as absent and restarts the scan from the first table', async () => {
     const schema = await getDb();
     const { db } = schema;
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const taskRow = one(
       await db
         .insert(schema.task)
@@ -411,6 +418,7 @@ describe('search index jobs', () => {
           title: 'Bad-cursor budget task',
           description: 'Exercises the cursor-shape-invalid fallback branch',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
         })
         .returning(),
@@ -445,7 +453,7 @@ describe('search index jobs', () => {
   it('applies the default source-table list and page limit for repair when both are omitted', async () => {
     const schema = await getDb();
     const { db } = schema;
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const sourceUpdatedAt = new Date('2026-07-05T12:00:00.000Z');
     const taskRow = one(
       await db
@@ -456,6 +464,7 @@ describe('search index jobs', () => {
           title: 'Default-repair budget task',
           description: 'Exercises the omitted sourceTables/limit branches for repair',
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
           updatedAt: sourceUpdatedAt,
         })

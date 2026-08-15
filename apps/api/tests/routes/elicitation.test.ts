@@ -26,6 +26,7 @@ import type {
 } from '../../src/services/elicitation-service';
 import type { notifyElicitation as NotifyElicitation } from '../../src/services/elicitation-notify';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -77,6 +78,7 @@ async function seed(options: { withTask?: boolean } = {}): Promise<Fixture> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  const statusId = await seedStatuses(db, schema, assertDefined(org).id);
   const [role] = await db
     .insert(schema.role)
     .values({
@@ -119,6 +121,7 @@ async function seed(options: { withTask?: boolean } = {}): Promise<Fixture> {
         title: 'Weekly sprint update',
         teamId: assertDefined(teamRow).id,
         state: 'backlog',
+        statusId: statusId('task', 'backlog'),
         createdBy: assertDefined(ownerActor).id,
       })
       .returning({ id: schema.task.id });

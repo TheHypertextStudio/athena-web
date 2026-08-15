@@ -35,12 +35,12 @@ import { EntityDocument } from '@/components/editor/entity-document';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
+import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import { InitiativeRelationshipPanels } from '@/components/initiatives/initiative-relationship-panels';
 import {
   INITIATIVE_CADENCE_LABEL,
   INITIATIVE_PRIORITY_LABEL,
-  INITIATIVE_STATUS_LABEL,
   InitiativePropertiesPanel,
 } from '@/components/initiatives/properties-panel';
 
@@ -96,6 +96,8 @@ export default function InitiativeDetailPage(): JSX.Element {
   const recordQ = useApiQuery(initiativeRecordDef(orgId, initiativeId));
   const data = detailQ.data;
   const detail = data?.detail;
+  // Resolved unconditionally, above the loading branches, because a hook cannot wait for the read.
+  const status = useWorkStatus('initiative', detail?.status ?? '');
 
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
   const initiativeName = detail?.name ?? recordQ.data?.name;
@@ -526,7 +528,7 @@ export default function InitiativeDetailPage(): JSX.Element {
 
       <section className="print-only border-outline-variant border-y py-4">
         <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-          <PrintProperty label="Status" value={INITIATIVE_STATUS_LABEL[detail.status]} />
+          <PrintProperty label="Status" value={status.name} />
           <PrintProperty
             label="Initiative health"
             value={detail.health ? detail.health.replace('_', ' ') : '—'}

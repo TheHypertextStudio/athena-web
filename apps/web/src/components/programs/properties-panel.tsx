@@ -20,13 +20,10 @@
 import { type Health, type ProgramStatus, type Visibility } from '@docket/types';
 import { ActorPicker, EnumPicker, type PickerOption } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';
-import type { JSX } from 'react';
+import { type JSX, useMemo } from 'react';
 
-import {
-  HEALTH_OPTIONS,
-  PROGRAM_STATUS_OPTIONS,
-  VISIBILITY_OPTIONS,
-} from '@/components/pickers/options';
+import { HEALTH_OPTIONS, statusOptions, VISIBILITY_OPTIONS } from '@/components/pickers/options';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityMetadataItem,
@@ -79,12 +76,17 @@ export function ProgramPropertiesPanel({
   onVisibilityChange,
 }: ProgramPropertiesPanelProps): JSX.Element {
   const readOnly = !canEdit;
+  const statuses = useStatusRegistry();
+  const programStatusOptions = useMemo(
+    () => statusOptions(statuses.statusesFor('program')),
+    [statuses],
+  );
 
   return (
     <>
       <EntityMetadataItem priority={0}>
-        <EnumPicker<ProgramStatus>
-          options={PROGRAM_STATUS_OPTIONS}
+        <EnumPicker
+          options={programStatusOptions}
           value={status}
           onChange={(next) => {
             if (next) onStatusChange(next);

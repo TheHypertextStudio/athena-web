@@ -45,7 +45,6 @@ import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
-import { projectStatusOf } from '@/components/project-detail/project-config';
 import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
@@ -345,7 +344,7 @@ export default function ProjectDetailPage(): JSX.Element {
           <EntityMetadataRow ariaLabel="Project properties">
             <PropertiesPanel
               health={health}
-              status={projectStatusOf(project.status)}
+              status={project.status}
               startDate={project.startDate ?? null}
               targetDate={project.targetDate ?? null}
               programId={project.programId ?? null}

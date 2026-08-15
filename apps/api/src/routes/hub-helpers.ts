@@ -18,6 +18,8 @@ import type {
 } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 import type { z } from 'zod';
+import type { WorkStatusCategory } from '@docket/types';
+import { loadStatusSets } from '../lib/work-status';
 
 /** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
@@ -37,13 +39,63 @@ export type AuditEventRow = typeof auditEvent.$inferSelect;
 /** IN_FLIGHT_PROJECT_STATES lists the statuses treated specially by this API route helper. */
 export const IN_FLIGHT_PROJECT_STATES = ['planned', 'active'] as const;
 
-/** toTaskItem converts internal API route data into the public API response shape. */
-export function toTaskItem(t: TaskRow): z.input<typeof HubTaskItem> {
+/**
+ * Resolve the status category of tasks drawn from several workspaces at once.
+ *
+ * @remarks
+ * The Hub fans out across every workspace the reader belongs to, so a single status set cannot
+ * answer for all of it. This groups the rows by workspace, resolves each workspace's task
+ * statuses once — honouring any team that keeps its own — and returns a lookup the serializer can
+ * use per row. The alternative, resolving per row, would be a query per task on a page that is
+ * already a fan-out.
+ *
+ * @param rows - The task rows about to be serialized.
+ * @returns the status category for each task id that resolves.
+ */
+export async function taskCategoriesFor(
+  rows: readonly TaskRow[],
+): Promise<ReadonlyMap<string, WorkStatusCategory>> {
+  const byOrg = new Map<string, TaskRow[]>();
+  for (const row of rows) {
+    const bucket = byOrg.get(row.organizationId);
+    if (bucket === undefined) byOrg.set(row.organizationId, [row]);
+    else bucket.push(row);
+  }
+  const resolved = new Map<string, WorkStatusCategory>();
+  await Promise.all(
+    [...byOrg].map(async ([orgId, orgRows]) => {
+      const sets = await loadStatusSets(orgId, {
+        entityTypes: ['task'],
+        teamIds: orgRows.map((row) => row.teamId),
+      });
+      for (const row of orgRows) {
+        const category = sets.categoryOf(row.statusId);
+        if (category !== undefined) resolved.set(row.id, category);
+      }
+    }),
+  );
+  return resolved;
+}
+
+/**
+ * toTaskItem converts internal API route data into the public API response shape.
+ *
+ * @remarks
+ * The Hub gathers work from every workspace the reader belongs to, each naming its own statuses,
+ * so the status *category* travels with the row. A reader of a Hub item has no single workspace
+ * whose statuses it could look the key up in.
+ *
+ * @param t - The task row.
+ * @param stateType - The category of the task's status, resolved by the caller in bulk.
+ * @returns the serialized Hub task item.
+ */
+export function toTaskItem(t: TaskRow, stateType: WorkStatusCategory): z.input<typeof HubTaskItem> {
   return {
     id: t.id,
     organizationId: t.organizationId,
     title: t.title,
     state: t.state,
+    stateType,
     priority: t.priority,
     assigneeId: t.assigneeId,
     projectId: t.projectId,

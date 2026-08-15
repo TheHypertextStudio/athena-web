@@ -8,7 +8,14 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  getDb,
+  addMember,
+  one,
+  seedOrg,
+  seedStatuses,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 import { resolveUsedIn } from '../../src/search/used-in';
 
@@ -22,6 +29,7 @@ describe('used-in resolution', () => {
     const { db } = schema;
     const userId = await seedUserWithHub(db, schema, 'UsedInRollupUser');
     const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
     const actorId = await addMember(db, schema, orgId, userId);
 
     const teamId = one(
@@ -37,13 +45,25 @@ describe('used-in resolution', () => {
     const initiativeId = one(
       await db
         .insert(schema.initiative)
-        .values({ organizationId: orgId, name: 'Q3 launch', ownerId: actorId })
+        .values({
+          organizationId: orgId,
+          name: 'Q3 launch',
+          ownerId: actorId,
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning({ id: schema.initiative.id }),
     ).id;
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'API surface freeze', teamId })
+        .values({
+          organizationId: orgId,
+          name: 'API surface freeze',
+          teamId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     await db
@@ -58,6 +78,7 @@ describe('used-in resolution', () => {
           title: 'Cut launch candidate build',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           projectId,
         })
         .returning({ id: schema.task.id }),
@@ -106,6 +127,7 @@ describe('used-in resolution', () => {
     const { db } = schema;
     const userId = await seedUserWithHub(db, schema, 'UsedInProjectUser');
     const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
     const actorId = await addMember(db, schema, orgId, userId);
 
     const teamId = one(
@@ -121,7 +143,13 @@ describe('used-in resolution', () => {
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Standalone project', teamId })
+        .values({
+          organizationId: orgId,
+          name: 'Standalone project',
+          teamId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const resourceId = one(
@@ -195,6 +223,7 @@ describe('used-in resolution', () => {
     const { db } = schema;
     const userId = await seedUserWithHub(db, schema, 'UsedInHiddenSubjectUser');
     const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
     const actorId = await addMember(db, schema, orgId, userId);
 
     const teamId = one(
@@ -210,7 +239,13 @@ describe('used-in resolution', () => {
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Confidential project', teamId })
+        .values({
+          organizationId: orgId,
+          name: 'Confidential project',
+          teamId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const resourceId = one(

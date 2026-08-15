@@ -12,6 +12,7 @@ import {
   organization,
   processOccurrence,
   recurrenceSeries,
+  seedWorkspaceStatuses,
   task,
   team,
   user,
@@ -29,6 +30,7 @@ import {
   materializeCalendarProcessBindings,
 } from '../../src/lib/recurrence/calendar-binding';
 import { createPublishedProcessDefinition } from '../../src/lib/recurrence/process-definition';
+import { one } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
@@ -53,18 +55,23 @@ describe('calendar process bindings', () => {
       .insert(user)
       .values({ name: 'Meetup coordinator', email: 'calendar-binding@example.test' })
       .returning();
-    const [workspace] = await db
-      .insert(organization)
-      .values({ name: 'Transit organizers', slug: 'calendar-binding-transit' })
-      .returning();
+    const workspace = one(
+      await db
+        .insert(organization)
+        .values({ name: 'Transit organizers', slug: 'calendar-binding-transit' })
+        .returning(),
+    );
+    // Statuses come before any work: every Task this binding materializes stores both its state
+    // key and the id of the workspace status carrying it.
+    await seedWorkspaceStatuses(db, workspace.id);
     const [workTeam] = await db
       .insert(team)
-      .values({ organizationId: assertDefined(workspace).id, name: 'Events', key: 'EVENTS' })
+      .values({ organizationId: workspace.id, name: 'Events', key: 'EVENTS' })
       .returning();
     const [coordinator] = await db
       .insert(actor)
       .values({
-        organizationId: assertDefined(workspace).id,
+        organizationId: workspace.id,
         userId: assertDefined(identity).id,
         kind: 'human',
         displayName: 'Meetup coordinator',
@@ -114,7 +121,7 @@ describe('calendar process bindings', () => {
       })
       .returning();
     const process = await createPublishedProcessDefinition(db, {
-      organizationId: assertDefined(workspace).id,
+      organizationId: workspace.id,
       actorId: assertDefined(coordinator).id,
       definition: {
         name: 'Meetup event work',
@@ -143,7 +150,7 @@ describe('calendar process bindings', () => {
     });
 
     const command = {
-      organizationId: assertDefined(workspace).id,
+      organizationId: workspace.id,
       actorId: assertDefined(coordinator).id,
       userId: assertDefined(identity).id,
       calendarItemId: assertDefined(firstEvent).id,
@@ -187,11 +194,8 @@ describe('calendar process bindings', () => {
     ).toEqual({ materialized: 1, errors: [] });
 
     expect(await db.select().from(processOccurrence)).toHaveLength(3);
-    expect(
-      await db
-        .select()
-        .from(task)
-        .where(eq(task.organizationId, assertDefined(workspace).id)),
-    ).toHaveLength(6);
+    expect(await db.select().from(task).where(eq(task.organizationId, workspace.id))).toHaveLength(
+      6,
+    );
   });
 });

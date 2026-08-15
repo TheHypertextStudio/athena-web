@@ -5,7 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import type * as HubTodayModule from '../../src/routes/hub-today';
 
-import { getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import { getDb, one, seedBaseOrg, seedStatuses, seedUserWithHub } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -79,6 +79,7 @@ async function seedTask(
     .from(schema.actor)
     .where(eq(schema.actor.userId, userId))
     .limit(1);
+  const statusId = await seedStatuses(db, schema, orgId);
   seq += 1;
   return one(
     await db
@@ -88,6 +89,7 @@ async function seedTask(
         teamId,
         title: over.title ?? `Task ${String(seq)}`,
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         visibility: 'public',
         assigneeId: actorRow?.id ?? null,
         ...(over.priority ? { priority: over.priority } : {}),

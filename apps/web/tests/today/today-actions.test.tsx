@@ -60,6 +60,7 @@ function item(id: string, position: number): HubTodayPlanItem {
     organizationId: ORG,
     title: `Task ${id}`,
     state: 'todo',
+    stateType: 'unstarted',
     priority: 'medium',
     assigneeId: null,
     projectId: null,

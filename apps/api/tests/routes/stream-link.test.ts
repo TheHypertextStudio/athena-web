@@ -7,7 +7,14 @@ import type * as DbModule from '@docket/db';
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type streamRouter from '../../src/routes/stream';
-import { fakeSession, getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  fakeSession,
+  getDb,
+  one,
+  seedBaseOrg,
+  seedStatuses,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -91,6 +98,7 @@ async function seedEvent(
 
 async function seedTask(orgId: string, teamId: string, actorId: string): Promise<string> {
   seq += 1;
+  const statusId = await seedStatuses(db, schema, orgId);
   return one(
     await db
       .insert(schema.task)
@@ -99,6 +107,7 @@ async function seedTask(orgId: string, teamId: string, actorId: string): Promise
         teamId,
         title: `Task ${String(seq)}`,
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         createdBy: actorId,
       })
       .returning({ id: schema.task.id }),

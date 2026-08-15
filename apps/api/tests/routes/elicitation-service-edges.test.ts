@@ -27,6 +27,7 @@ import type {
   sweepElicitations as SweepElicitations,
 } from '../../src/services/elicitation-service';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -82,6 +83,7 @@ async function seedWorkspace(): Promise<Workspace> {
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id }),
   );
+  const statusId = await seedStatuses(db, schema, org.id);
   const owner = one(
     await db
       .insert(schema.user)
@@ -109,6 +111,7 @@ async function seedWorkspace(): Promise<Workspace> {
         teamId: team.id,
         title: 'Existing work',
         state: 'backlog',
+        statusId: statusId('task', 'backlog'),
         createdBy: ownerActor.id,
       })
       .returning({ id: schema.task.id }),

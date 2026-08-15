@@ -13,7 +13,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type elicitationsDefault from '../../src/routes/elicitations';
 import type { raiseElicitation as RaiseElicitation } from '../../src/services/elicitation-service';
-import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
+import { appWithSession, fakeSession, getDb, one, seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -44,30 +44,34 @@ interface Fixture {
 /** Seed a workspace with a team (so a task can land) and one Athena conversation. */
 async function seed(): Promise<Fixture> {
   const slug = `elr-${Math.random().toString(36).slice(2, 10)}`;
-  const [org] = await db
-    .insert(schema.organization)
-    .values({ name: slug, slug, lifecycleState: 'active' })
-    .returning({ id: schema.organization.id });
+  const org = one(
+    await db
+      .insert(schema.organization)
+      .values({ name: slug, slug, lifecycleState: 'active' })
+      .returning({ id: schema.organization.id }),
+  );
+  // A question implements itself as a Task, and work needs the workspace's status set to exist.
+  await seedStatuses(db, schema, org.id);
   const [owner] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@example.com` })
     .returning({ id: schema.user.id });
   await db.insert(schema.hub).values({ userId: assertDefined(owner).id, preferences: {} });
   await db.insert(schema.actor).values({
-    organizationId: assertDefined(org).id,
+    organizationId: org.id,
     kind: 'human',
     displayName: 'Ada',
     userId: assertDefined(owner).id,
   });
   await db
     .insert(schema.team)
-    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `E${slug.slice(-4)}` });
+    .values({ organizationId: org.id, name: 'Core', key: `E${slug.slice(-4)}` });
   const [session] = await db
     .insert(schema.agentSession)
     .values({
       executorKind: 'athena',
       ownerUserId: assertDefined(owner).id,
-      contextOrganizationId: assertDefined(org).id,
+      contextOrganizationId: org.id,
       kind: 'chat',
       trigger: 'delegation',
       status: 'awaiting_input',
@@ -76,7 +80,7 @@ async function seed(): Promise<Fixture> {
     .returning({ id: schema.agentSession.id });
   return {
     ownerUserId: assertDefined(owner).id,
-    orgId: assertDefined(org).id,
+    orgId: org.id,
     sessionId: assertDefined(session).id,
   };
 }

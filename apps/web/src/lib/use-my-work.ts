@@ -17,7 +17,7 @@ import { api } from './api';
 import { userErrorMessage } from './problem';
 import { useOrgCapability } from './use-org-capability';
 import { useRenameTask } from './use-rename-task';
-import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from './work-state';
+import { type CategoryOfState, CATEGORY_LABEL, categoryRank } from './work-category';
 import { myWorkDefs } from './my-work-defs';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
 
@@ -54,8 +54,19 @@ export interface MyWorkState {
   rename: (taskId: string, title: string) => void;
 }
 
-/** useMyWork coordinates use my work state, loading, and mutations for its screen. */
-export function useMyWork(orgId: string, userId: string | null): MyWorkState {
+/**
+ * useMyWork coordinates use my work state, loading, and mutations for its screen.
+ *
+ * @param orgId - The workspace in view.
+ * @param userId - The viewer, or null before the session resolves.
+ * @param categoryOf - Resolves a task's status key to its category, from the status registry.
+ * @returns the screen's data contract.
+ */
+export function useMyWork(
+  orgId: string,
+  userId: string | null,
+  categoryOf: CategoryOfState,
+): MyWorkState {
   const queryClient = useQueryClient();
 
   // The five slices flow through myWorkDefs — the same definitions the SSR entry prefetches with —
@@ -201,10 +212,10 @@ export function useMyWork(orgId: string, userId: string | null): MyWorkState {
       const inTab = tasks.filter((task) =>
         tab === 'mine' ? Boolean(myActorId) && task.assigneeId === myActorId : isDelegated(task),
       );
-      const rank = (task: TaskOut): number => STATE_GROUP_ORDER.indexOf(stateTypeOf(task.state));
+      const rank = (task: TaskOut): number => categoryRank(categoryOf(task.state));
       return [...inTab].sort((a, b) => rank(a) - rank(b));
     },
-    [tasks, myActorId, isDelegated],
+    [tasks, myActorId, isDelegated, categoryOf],
   );
 
   const toRow = useCallback(
@@ -223,12 +234,12 @@ export function useMyWork(orgId: string, userId: string | null): MyWorkState {
       return {
         id: task.id,
         title: task.title,
-        stateType: stateTypeOf(task.state),
+        stateType: categoryOf(task.state),
         actor,
         session: pillModel,
       };
     },
-    [actorInfo, orgId, sessionByTask],
+    [actorInfo, orgId, sessionByTask, categoryOf],
   );
 
   const groupBy = useCallback(
@@ -237,10 +248,16 @@ export function useMyWork(orgId: string, userId: string | null): MyWorkState {
     [projectName],
   );
 
-  const subGroupBy = useCallback((task: TaskOut): GroupKey => {
-    const stateType = stateTypeOf(task.state);
-    return { id: stateType, label: STATE_GROUP_LABEL[stateType], stateType };
-  }, []);
+  // Sub-groups are headed by the *category*, not by the workspace's status name: two statuses can
+  // share one, and a person scanning My Work is asking "what is in progress", not "what is in
+  // review versus in QA".
+  const subGroupBy = useCallback(
+    (task: TaskOut): GroupKey => {
+      const stateType = categoryOf(task.state);
+      return { id: stateType, label: CATEGORY_LABEL[stateType], stateType };
+    },
+    [categoryOf],
+  );
 
   return {
     tasks,

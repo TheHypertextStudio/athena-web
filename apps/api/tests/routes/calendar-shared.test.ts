@@ -59,6 +59,7 @@ describe('buildAgendaPayload', () => {
           teamId: base.teamId,
           title: 'Untimeboxed task',
           state: 'todo',
+          statusId: base.statusId('task', 'todo'),
           priority: 'none',
         })
         .returning({ id: schema.task.id }),
@@ -95,6 +96,7 @@ describe('buildAgendaPayload', () => {
           teamId: base.teamId,
           title: 'Timeboxed task',
           state: 'todo',
+          statusId: base.statusId('task', 'todo'),
           priority: 'high',
         })
         .returning({ id: schema.task.id }),

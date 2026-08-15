@@ -18,20 +18,19 @@ import {
 import { type JSX, useMemo } from 'react';
 
 import { RolledUpHealthPill } from '@/components/initiatives/health-pill';
-import { enumOptions, HEALTH_OPTIONS, labelOptions } from '@/components/pickers/options';
+import {
+  enumOptions,
+  HEALTH_OPTIONS,
+  labelOptions,
+  statusOptions,
+} from '@/components/pickers/options';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityMetadataItem,
 } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 
-/** Human labels for each Initiative lifecycle status (shared with the page's print + child rows). */
-export const INITIATIVE_STATUS_LABEL: Record<InitiativeStatus, string> = {
-  proposed: 'Proposed',
-  active: 'Active',
-  completed: 'Completed',
-  canceled: 'Canceled',
-};
 /** Human labels for each Initiative priority (shared with the page's print block). */
 export const INITIATIVE_PRIORITY_LABEL: Record<InitiativePriority, string> = {
   none: 'No priority',
@@ -47,7 +46,6 @@ export const INITIATIVE_CADENCE_LABEL: Record<InitiativeUpdateCadence, string> =
   quarterly: 'Quarterly',
   none: 'None',
 };
-const STATUS_ORDER: readonly InitiativeStatus[] = ['proposed', 'active', 'completed', 'canceled'];
 const PRIORITY_ORDER: readonly InitiativePriority[] = ['none', 'low', 'medium', 'high'];
 const CADENCE_ORDER: readonly InitiativeUpdateCadence[] = [
   'weekly',
@@ -125,14 +123,19 @@ export function InitiativePropertiesPanel({
   onCreateLabel,
 }: InitiativePropertiesPanelProps): JSX.Element {
   const readOnly = !canEdit;
+  const statuses = useStatusRegistry();
+  const initiativeStatusOptions = useMemo(
+    () => statusOptions(statuses.statusesFor('initiative')),
+    [statuses],
+  );
   const labelIds = useMemo<readonly string[]>(() => labels.map((label) => label.id), [labels]);
   const labelPickerOptions = useMemo(() => labelOptions(availableLabels), [availableLabels]);
 
   return (
     <>
       <EntityMetadataItem priority={0}>
-        <EnumPicker<InitiativeStatus>
-          options={enumOptions(STATUS_ORDER, INITIATIVE_STATUS_LABEL)}
+        <EnumPicker
+          options={initiativeStatusOptions}
           value={status}
           onChange={(next) => {
             if (next) onStatusChange(next);

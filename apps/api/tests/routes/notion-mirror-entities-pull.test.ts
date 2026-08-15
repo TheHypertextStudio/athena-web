@@ -52,10 +52,16 @@ const option = (value: string | null): MirrorValue => ({ kind: 'option', value }
 
 describe('applyPulledValues — task', () => {
   it('applies title, description, dates, estimate, and priority', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'Old title', state: 'backlog' })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Old title',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      })
       .returning({ id: schema.task.id });
     const taskId = assertDefined(row).id;
 
@@ -81,10 +87,16 @@ describe('applyPulledValues — task', () => {
   });
 
   it('substitutes "Untitled" for an emptied title rather than violating the not-blank column', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'Had a title', state: 'backlog' })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Had a title',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      })
       .returning({ id: schema.task.id });
 
     await applyPulledValues(orgId, humanActorId, 'task', assertDefined(row).id, {
@@ -99,7 +111,7 @@ describe('applyPulledValues — task', () => {
   });
 
   it('ignores an unrecognized priority option rather than writing an invalid enum value', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [row] = await db
       .insert(schema.task)
       .values({
@@ -107,6 +119,7 @@ describe('applyPulledValues — task', () => {
         teamId,
         title: 'Keep my priority',
         state: 'backlog',
+        statusId: statusId('task', 'backlog'),
         priority: 'medium',
       })
       .returning({ id: schema.task.id });
@@ -125,7 +138,7 @@ describe('applyPulledValues — task', () => {
   });
 
   it('leaves state, assignee, and every other unpulled field untouched', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [row] = await db
       .insert(schema.task)
       .values({
@@ -133,6 +146,7 @@ describe('applyPulledValues — task', () => {
         teamId,
         title: 'Assigned already',
         state: 'in_progress',
+        statusId: statusId('task', 'in_progress'),
         assigneeId: humanActorId,
       })
       .returning({ id: schema.task.id });
@@ -152,7 +166,7 @@ describe('applyPulledValues — task', () => {
   });
 
   it('returns false and touches nothing for an archived task', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [row] = await db
       .insert(schema.task)
       .values({
@@ -160,6 +174,7 @@ describe('applyPulledValues — task', () => {
         teamId,
         title: 'Archived',
         state: 'backlog',
+        statusId: statusId('task', 'backlog'),
         archivedAt: new Date(),
       })
       .returning({ id: schema.task.id });
@@ -177,10 +192,16 @@ describe('applyPulledValues — task', () => {
   });
 
   it('is a no-op when the values object carries nothing this entity applies', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'Unaffected', state: 'backlog' })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Unaffected',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      })
       .returning({ id: schema.task.id });
 
     // Only assignee/docketUrl reported — neither is applied by this function.
@@ -198,12 +219,18 @@ describe('applyPulledValues — task', () => {
   });
 
   it('transitions to a recognized state via the shared setTaskState path', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     // seedBaseOrg's team carries no explicit workflow, so its default states apply — 'backlog'
     // (unstarted) is the open key setTaskState/resolveStateTransition will accept.
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'To be started', state: 'backlog' })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'To be started',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      })
       .returning({ id: schema.task.id });
 
     const applied = await applyPulledValues(orgId, humanActorId, 'task', assertDefined(row).id, {
@@ -220,10 +247,16 @@ describe('applyPulledValues — task', () => {
   });
 
   it('ignores an unrecognized state name rather than throwing the whole pull', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [row] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: 'Keep my state', state: 'backlog' })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Keep my state',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      })
       .returning({ id: schema.task.id });
 
     // A team's workflow does not contain an arbitrary Notion-authored name.
@@ -242,10 +275,15 @@ describe('applyPulledValues — task', () => {
 
 describe('applyPulledValues — project', () => {
   it('applies name, summary, dates, status, and health', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [row] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'Old name' })
+      .values({
+        organizationId: orgId,
+        name: 'Old name',
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const projectId = assertDefined(row).id;
 
@@ -273,10 +311,15 @@ describe('applyPulledValues — project', () => {
   });
 
   it('ignores an unrecognized status/health option', async () => {
-    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [row] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'Keep my status', status: 'active' })
+      .values({
+        organizationId: orgId,
+        name: 'Keep my status',
+        status: 'active',
+        statusId: statusId('project', 'active'),
+      })
       .returning({ id: schema.project.id });
 
     await applyPulledValues(orgId, humanActorId, 'project', assertDefined(row).id, {

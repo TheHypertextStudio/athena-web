@@ -28,7 +28,7 @@ import type { Node } from '@xyflow/react';
 
 import { PRIORITY_LABEL, PRIORITY_ORDER } from '@/components/task-detail/priority';
 import { type FieldCatalog, type FieldOption } from '@/components/views/field-catalog';
-import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
+import { CATEGORY_LABEL, CATEGORY_ORDER, categoryRank } from '@/lib/work-category';
 
 import { taskData } from './task-node';
 
@@ -41,11 +41,18 @@ const PRIORITY_OPTIONS: readonly FieldOption[] = PRIORITY_ORDER.map((priority) =
   label: PRIORITY_LABEL[priority],
 }));
 
-/** Canonical workflow-state options, in workflow order. */
-const STATE_OPTIONS: readonly FieldOption[] = STATE_GROUP_ORDER.map((type) => ({
-  value: type,
-  label: STATE_GROUP_LABEL[type],
-  hint: type,
+/**
+ * The status options, in category order.
+ *
+ * @remarks
+ * The graph groups by *category* rather than by a workspace's status names, which is what lets a
+ * canvas spanning several teams put their work in the same swimlanes. A node carries its own
+ * resolved category, so this list needs no workspace data.
+ */
+const STATE_OPTIONS: readonly FieldOption[] = CATEGORY_ORDER.map((category) => ({
+  value: category,
+  label: CATEGORY_LABEL[category],
+  hint: category,
 }));
 
 /** Sort/group rank for a priority value (urgent first). */
@@ -55,10 +62,10 @@ function priorityRank(value: string | number | null): number {
   return index === -1 ? PRIORITY_ORDER.length : index;
 }
 
-/** Sort/group rank for a canonical state type, by workflow order. */
+/** Sort/group rank for a category, by board order. */
 function stateRank(value: string | number | null): number {
-  if (value === null) return STATE_GROUP_ORDER.length;
-  return STATE_GROUP_ORDER.indexOf(value as (typeof STATE_GROUP_ORDER)[number]);
+  if (value === null) return CATEGORY_ORDER.length;
+  return categoryRank(CATEGORY_ORDER.find((category) => category === String(value)));
 }
 
 /** The reference data the catalog needs to turn ids into names. */
@@ -107,7 +114,7 @@ export function buildGraphCatalog(deps: GraphCatalogDeps): FieldCatalog<Node> {
       key: 'state',
       label: 'Status',
       type: 'enum',
-      accessor: (node) => stateTypeOf(taskData(node).state),
+      accessor: (node) => taskData(node).stateType,
       options: STATE_OPTIONS,
       groupable: true,
       rank: stateRank,

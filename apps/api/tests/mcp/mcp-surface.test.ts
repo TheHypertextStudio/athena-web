@@ -17,6 +17,7 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type { registerPrompts as RegisterPrompts } from '../../src/mcp/prompts';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -47,6 +48,7 @@ interface Seed {
   agentId: string;
   integrationId: string;
   cycleId: string;
+  statusId: StatusIdLookup;
   ctx: McpContext;
 }
 
@@ -58,6 +60,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [r] = await db
     .insert(schema.role)
@@ -108,30 +111,63 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
 
   const [tk] = await db
     .insert(schema.task)
-    .values({ organizationId: orgId, title: 'Ship', teamId, state: 'todo', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      title: 'Ship',
+      teamId,
+      state: 'todo',
+      statusId: statusId('task', 'todo'),
+      createdBy: actorId,
+    })
     .returning({ id: schema.task.id });
   const taskId = assertDefined(tk).id;
   const [tk2] = await db
     .insert(schema.task)
-    .values({ organizationId: orgId, title: 'Ship 2', teamId, state: 'todo', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      title: 'Ship 2',
+      teamId,
+      state: 'todo',
+      statusId: statusId('task', 'todo'),
+      createdBy: actorId,
+    })
     .returning({ id: schema.task.id });
   const task2Id = assertDefined(tk2).id;
 
   const [proj] = await db
     .insert(schema.project)
-    .values({ organizationId: orgId, name: 'Proj', teamId, createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      name: 'Proj',
+      teamId,
+      createdBy: actorId,
+      status: 'planned',
+      statusId: statusId('project', 'planned'),
+    })
     .returning({ id: schema.project.id });
   const projectId = assertDefined(proj).id;
 
   const [prog] = await db
     .insert(schema.program)
-    .values({ organizationId: orgId, name: 'Prog', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      name: 'Prog',
+      createdBy: actorId,
+      status: 'active',
+      statusId: statusId('program', 'active'),
+    })
     .returning({ id: schema.program.id });
   const programId = assertDefined(prog).id;
 
   const [init] = await db
     .insert(schema.initiative)
-    .values({ organizationId: orgId, name: 'Init', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      name: 'Init',
+      createdBy: actorId,
+      status: 'active',
+      statusId: statusId('initiative', 'active'),
+    })
     .returning({ id: schema.initiative.id });
   const initiativeId = assertDefined(init).id;
 
@@ -194,6 +230,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     agentId,
     integrationId,
     cycleId,
+    statusId,
     ctx,
   };
 }
@@ -735,6 +772,7 @@ describe('list_work / find tools', () => {
         title: 'Mine',
         teamId: s.teamId,
         state: 'todo',
+        statusId: s.statusId('task', 'todo'),
         assigneeId: s.actorId,
         createdBy: s.actorId,
       })
@@ -851,6 +889,7 @@ describe('list_work / find tools', () => {
           title: 'Ship granted',
           teamId: s.teamId,
           state: 'todo',
+          statusId: s.statusId('task', 'todo'),
           visibility: 'private',
           createdBy: s.actorId,
         },
@@ -859,6 +898,7 @@ describe('list_work / find tools', () => {
           title: 'Ship secret',
           teamId: s.teamId,
           state: 'todo',
+          statusId: s.statusId('task', 'todo'),
           visibility: 'private',
           createdBy: s.actorId,
         },
@@ -910,6 +950,7 @@ describe('list_work / find tools', () => {
         title: 'Ship 3',
         teamId: s.teamId,
         state: 'todo',
+        statusId: s.statusId('task', 'todo'),
         createdBy: s.actorId,
       },
       {
@@ -917,6 +958,7 @@ describe('list_work / find tools', () => {
         title: 'Ship 4',
         teamId: s.teamId,
         state: 'todo',
+        statusId: s.statusId('task', 'todo'),
         createdBy: s.actorId,
       },
       {
@@ -924,6 +966,7 @@ describe('list_work / find tools', () => {
         title: 'Ship 5',
         teamId: s.teamId,
         state: 'todo',
+        statusId: s.statusId('task', 'todo'),
         createdBy: s.actorId,
       },
     ]);
@@ -1021,6 +1064,7 @@ describe('hydrated resources', () => {
       title: 'Sub',
       teamId: s.teamId,
       state: 'todo',
+      statusId: s.statusId('task', 'todo'),
       parentTaskId: s.taskId,
       createdBy: s.actorId,
     });

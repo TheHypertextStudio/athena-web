@@ -21,12 +21,12 @@
  */
 import { and, eq, isNull } from 'drizzle-orm';
 import { db, task, team } from '@docket/db';
-import type { WorkflowStateType } from '@docket/db';
-import { ConnectorConfig } from '@docket/types';
+import { ConnectorConfig, type WorkStatusCategory } from '@docket/types';
 import type { ConnectorProvider, ImportedItem } from '@docket/integrations';
 import type { WritableConnector } from '@docket/integrations';
 
 import { ConflictError } from '../error';
+import { loadStatusSets, type ResolvedStatus, type StatusSets } from '../lib/work-status';
 import { serializableTx } from '../lib/serializable-tx';
 import { enqueueSearchUpsert } from '../search/write-through';
 
@@ -42,10 +42,10 @@ export interface ReconcileLocalTask {
   readonly title: string;
   /** Current description (null when unset). */
   readonly description: string | null;
-  /** The task's workflow-state key. */
+  /** The task's status key. */
   readonly state: string;
-  /** The canonical type of {@link ReconcileLocalTask.state} (drives completion/cancel mapping). */
-  readonly stateType: WorkflowStateType;
+  /** The category {@link ReconcileLocalTask.state} behaves as (drives completion/cancel mapping). */
+  readonly stateType: WorkStatusCategory;
   /** Current due date (null when unset). */
   readonly dueDate: Date | null;
   /** Last local modification (auto-bumped on every write that doesn't set it explicitly). */
@@ -188,29 +188,45 @@ export function planTaskReconcile(
   return remoteNewer ? { kind: 'pull' } : { kind: 'noop' };
 }
 
-/** The per-team workflow-state keys reconciliation maps completion/cancellation onto. */
-export interface StateKeys {
-  /** New-task / reopened default (first state). */
-  readonly openKey: string;
-  /** First `completed`-type state. */
-  readonly completedKey: string;
-  /** First `canceled`-type state. */
-  readonly canceledKey: string;
-  /** Resolve a state key to its canonical type. */
-  readonly typeOf: (key: string) => WorkflowStateType;
+/** The statuses reconciliation moves a linked task between, from one team's Task set. */
+export interface ReconcileStatuses {
+  /** Where a newly-inserted or reopened task lands. */
+  readonly open: ResolvedStatus;
+  /** The status a completed remote maps onto. */
+  readonly completed: ResolvedStatus;
+  /** The status a locally canceled task or a tombstoned remote maps onto. */
+  readonly canceled: ResolvedStatus;
+  /** The category a stored status key behaves as. */
+  readonly typeOf: (key: string) => WorkStatusCategory;
 }
 
-/** Build the {@link StateKeys} for a team from its workflow-state list. */
-export function resolveStateKeys(
-  states: readonly { key: string; type: WorkflowStateType }[],
-): StateKeys {
-  const byType = (t: WorkflowStateType): string | undefined =>
-    states.find((s) => s.type === t)?.key;
-  const openKey = byType('unstarted') ?? states[0]?.key ?? 'backlog';
-  const completedKey = byType('completed') ?? states[states.length - 1]?.key ?? 'done';
-  const canceledKey = byType('canceled') ?? completedKey;
-  const typeMap = new Map(states.map((s) => [s.key, s.type] as const));
-  return { openKey, completedKey, canceledKey, typeOf: (k) => typeMap.get(k) ?? 'backlog' };
+/**
+ * Resolve the three statuses reconciliation writes for a team.
+ *
+ * @remarks
+ * Each one comes from {@link StatusSets.firstOfCategory}, whose fallback chain walks outward
+ * through the taxonomy and settles on the set's default — so a workspace that names no `canceled`
+ * status still gets an answer, and it is a status the set genuinely contains. Every write pairs
+ * the returned status's key with its id, which is what the composite foreign key holds together.
+ *
+ * @param sets - The workspace's loaded status sets.
+ * @param teamId - The team linked tasks attach to, which decides whether a forked set applies.
+ * @returns the statuses to write, plus the category of any key already stored on a local task.
+ * @throws {ConflictError} When the workspace has no Task statuses at all.
+ */
+export function resolveStateKeys(sets: StatusSets, teamId: string): ReconcileStatuses {
+  const open = sets.firstOfCategory('task', 'unstarted', teamId);
+  const completed = sets.firstOfCategory('task', 'completed', teamId);
+  const canceled = sets.firstOfCategory('task', 'canceled', teamId);
+  if (open === undefined || completed === undefined || canceled === undefined) {
+    throw new ConflictError('This workspace has no task statuses to reconcile work into');
+  }
+  const categories = new Map(
+    sets.for('task', teamId).map((status) => [status.key, status.category] as const),
+  );
+  // A key the set no longer has belongs to a status that was renamed or removed out from under an
+  // older row; reading it as `backlog` keeps such a task open rather than pushing it as finished.
+  return { open, completed, canceled, typeOf: (key) => categories.get(key) ?? 'backlog' };
 }
 
 /** Outcome tallies for one reconcile pass (surfaced on the sync run / for tests). */
@@ -267,13 +283,15 @@ export async function reconcileTasks(
   options: ReconcileOptions,
 ): Promise<ReconcileResult> {
   const teamRows = await db
-    .select({ workflowStates: team.workflowStates })
+    .select({ id: team.id })
     .from(team)
     .where(and(eq(team.id, teamId), eq(team.organizationId, orgId)))
     .limit(1);
-  const states = teamRows[0]?.workflowStates;
-  if (!states) throw new ConflictError('Organization has no team to reconcile work into');
-  const keys = resolveStateKeys(states);
+  if (teamRows.length === 0) {
+    throw new ConflictError('Organization has no team to reconcile work into');
+  }
+  const sets = await loadStatusSets(orgId, { entityTypes: ['task'], teamIds: [teamId] });
+  const keys = resolveStateKeys(sets, teamId);
 
   const writable = options.writable;
   const writeBack = row.writeBack && writable !== null;
@@ -438,13 +456,14 @@ async function insertLinked(
   integrationId: string,
   teamId: string,
   item: ImportedItem,
-  keys: StateKeys,
+  keys: ReconcileStatuses,
   assigneeId: string | null,
   parentTaskId: string | null,
 ): Promise<string> {
   const anchor = item.provenance.externalUpdatedAt
     ? new Date(item.provenance.externalUpdatedAt)
     : null;
+  const status = item.completed ? keys.completed : keys.open;
   const inserted = await db
     .insert(task)
     .values({
@@ -452,7 +471,8 @@ async function insertLinked(
       title: item.title,
       description: item.body ?? null,
       teamId,
-      state: item.completed ? keys.completedKey : keys.openKey,
+      state: status.key,
+      statusId: status.id,
       ...(item.completed ? { completedAt: anchor ?? new Date() } : {}),
       ...(assigneeId !== null ? { assigneeId } : {}),
       ...(item.dueDate ? { dueDate: new Date(item.dueDate) } : {}),
@@ -486,7 +506,7 @@ async function applyPull(
   orgId: string,
   taskId: string,
   item: ImportedItem,
-  keys: StateKeys,
+  keys: ReconcileStatuses,
   taskIdByExternalId: ReadonlyMap<string, string>,
 ): Promise<void> {
   /* v8 ignore next -- @preserve defensive: applyPull's one call site only runs when
@@ -500,10 +520,12 @@ async function applyPull(
   // without them cannot clear a value the user set locally. An explicit `null` DOES clear. An
   // unresolvable (or self-referencing) parent id leaves the local parent alone: hierarchy is
   // metadata, and a broken reference must not detach or corrupt existing structure.
+  const status = item.completed ? keys.completed : keys.open;
   const patch = {
     title: item.title,
     description: item.body ?? null,
-    state: item.completed ? keys.completedKey : keys.openKey,
+    state: status.key,
+    statusId: status.id,
     completedAt: item.completed ? anchor : null,
     dueDate: item.dueDate ? new Date(item.dueDate) : null,
     ...(item.startDate !== undefined
@@ -599,14 +621,19 @@ async function pushDelete(
 }
 
 /** Archive a local linked task whose remote was tombstoned. */
-async function archiveLocal(taskId: string, item: ImportedItem, keys: StateKeys): Promise<void> {
+async function archiveLocal(
+  taskId: string,
+  item: ImportedItem,
+  keys: ReconcileStatuses,
+): Promise<void> {
   const anchor = item.provenance.externalUpdatedAt
     ? new Date(item.provenance.externalUpdatedAt)
     : new Date();
   await db
     .update(task)
     .set({
-      state: keys.canceledKey,
+      state: keys.canceled.key,
+      statusId: keys.canceled.id,
       canceledAt: anchor,
       externalUpdatedAt: anchor,
       updatedAt: anchor,
@@ -620,7 +647,7 @@ async function pushNativeCreates(
   row: IntegrationRow,
   teamId: string,
   defaultListId: string,
-  keys: StateKeys,
+  keys: ReconcileStatuses,
   writable: WritableConnector,
 ): Promise<number> {
   const natives = await db

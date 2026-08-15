@@ -22,7 +22,6 @@
  */
 import { db, initiative, program, project, task } from '@docket/db';
 import { Health, InitiativePriority, Priority } from '@docket/types';
-import { InitiativeStatus, ProgramStatus, ProjectStatus } from '@docket/types';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
@@ -38,6 +37,7 @@ import { listWork, listWorkFilters, WORK_ENTITIES, type WorkEntity } from './lis
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
+import { resolveContainerStatus } from '../lib/work-status';
 
 /**
  * The most rows one call will touch.
@@ -154,13 +154,6 @@ const SETTABLE: Record<WorkEntity, readonly SetName[]> = {
   initiative: ['title', 'description', 'status', 'health', 'priority', 'owner', 'targetDate'],
 };
 
-/** The enum each entity's `status` must belong to. */
-const STATUS_ENUM = {
-  project: ProjectStatus,
-  program: ProgramStatus,
-  initiative: InitiativeStatus,
-} as const;
-
 /**
  * Raise a field error carrying the legal alternatives.
  *
@@ -198,12 +191,6 @@ function assertSettable(entity: WorkEntity, set: UpdateSet): void {
  * initiative status. Checking here instead means the rejection names the entity's own values.
  */
 function assertEnums(entity: WorkEntity, set: UpdateSet): void {
-  if (set.status !== undefined && entity !== 'task') {
-    const schema = STATUS_ENUM[entity];
-    if (!schema.safeParse(set.status).success) {
-      reject('set.status', set.status, `Not a ${entity} status.`, schema.options);
-    }
-  }
   if (set.priority !== undefined) {
     const schema = entity === 'initiative' ? InitiativePriority : Priority;
     if (!schema.safeParse(set.priority).success) {
@@ -284,12 +271,17 @@ async function buildPatch(
   row: Record<string, unknown>,
   set: UpdateSet,
   refs: ResolvedRefs,
+  containerStatus?: { statusId: string; status: string },
 ): Promise<Record<string, unknown>> {
   const patch: Record<string, unknown> = {
     // `title` is the caller's word for it; the column is `name` on everything but a task.
     ...(set.title !== undefined ? { [entity === 'task' ? 'title' : 'name']: set.title } : {}),
     ...clearableTextPatch('description', set.description),
-    ...(set.status !== undefined ? { status: set.status } : {}),
+    // Resolved once by the caller, before the scope query, so a status this workspace does not
+    // have is refused even when the scope matches nothing.
+    ...(containerStatus === undefined
+      ? {}
+      : { status: containerStatus.status, statusId: containerStatus.statusId }),
     ...(set.priority !== undefined ? { priority: set.priority } : {}),
     ...(set.health !== undefined ? { health: set.health } : {}),
     ...(refs.assignee !== undefined ? { assigneeId: refs.assignee } : {}),
@@ -304,6 +296,9 @@ async function buildPatch(
   };
   if (set.state !== undefined) {
     const transition = await resolveStateTransition(orgId, String(row['teamId']), set.state);
+    // The key and the status it names move together; the composite foreign key refuses a row
+    // where they disagree.
+    patch['statusId'] = transition.statusId;
     patch['state'] = transition.state;
     patch['completedAt'] = transition.completedAt;
     patch['canceledAt'] = transition.canceledAt;
@@ -472,6 +467,12 @@ export function registerUpdateTool(
         const set = input.set;
         assertSettable(entity, set);
         assertEnums(entity, set);
+        // Resolved here rather than per row: a status this workspace does not have is a bad
+        // request, and it has to be refused even when the scope matches nothing at all.
+        const containerStatus =
+          set.status !== undefined && entity !== 'task'
+            ? await resolveContainerStatus(input.orgId, entity, set.status, 'set.status')
+            : undefined;
         if (Object.keys(set).length === 0) {
           reject('set', '', 'Nothing to change — name at least one field.', SETTABLE[entity]);
         }
@@ -544,7 +545,7 @@ export function registerUpdateTool(
             continue;
           }
 
-          const patch = await buildPatch(entity, input.orgId, row, set, refs);
+          const patch = await buildPatch(entity, input.orgId, row, set, refs, containerStatus);
           const before = trackedFields(entity, row);
           const updated = await db
             .update(table)

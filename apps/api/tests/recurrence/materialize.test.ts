@@ -27,6 +27,7 @@ import {
   team,
   type Database,
 } from '@docket/db';
+import type * as DbModule from '@docket/db';
 import {
   ActorId,
   CycleId,
@@ -56,11 +57,13 @@ import {
 import { materializeOccurrence } from '../../src/lib/recurrence/materialize';
 import { advanceCompletedProcessTask } from '../../src/lib/recurrence/advance';
 import { loadGeneratedWorkRecurrence } from '../../src/lib/recurrence/series';
+import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
 let client!: PGlite;
+let dbmod!: typeof DbModule;
 let db!: Database;
 let organizationId!: string;
 type TeamIdBrand = ReturnType<typeof TeamId.parse>;
@@ -68,6 +71,8 @@ type LabelIdBrand = ReturnType<typeof LabelId.parse>;
 
 let teamId!: TeamIdBrand;
 let actorId!: string;
+/** The workspace's status ids, for every row this file inserts with a status key of its own. */
+let statusId!: StatusIdLookup;
 let promotionLabelId!: LabelIdBrand;
 let reportingLabelId!: LabelIdBrand;
 
@@ -191,6 +196,7 @@ describe('process materialization', () => {
     const migrated = drizzle(client, { schema: fullSchema });
     await migrate(migrated, { migrationsFolder: MIGRATIONS });
     db = migrated;
+    dbmod = await import('@docket/db');
     organizationId = assertDefined(
       (
         await db
@@ -199,6 +205,9 @@ describe('process materialization', () => {
           .returning()
       )[0],
     ).id;
+    // Statuses come before any work: every Task, Project, and Program below stores both its
+    // status key and the id of the workspace status carrying it.
+    statusId = await seedStatuses(db, dbmod, organizationId);
     teamId = TeamId.parse(
       await db
         .insert(team)
@@ -312,7 +321,12 @@ describe('process materialization', () => {
 
     const [owningProgram] = await db
       .insert(program)
-      .values({ organizationId, name: 'Urbanist Book Club Program' })
+      .values({
+        organizationId,
+        name: 'Urbanist Book Club Program',
+        status: 'active',
+        statusId: statusId('program', 'active'),
+      })
       .returning();
     const qualified = bookClubDefinition();
     qualified.project = {
@@ -362,6 +376,7 @@ describe('process materialization', () => {
         name: 'Intro to Urbanism Workshop',
         teamId,
         status: 'active',
+        statusId: statusId('project', 'active'),
         startDate: new Date('2026-09-10T00:00:00.000Z'),
         targetDate: new Date('2026-09-20T00:00:00.000Z'),
       })
@@ -385,6 +400,7 @@ describe('process materialization', () => {
           teamId,
           title: 'Publish the event',
           state: 'backlog',
+          statusId: statusId('task', 'backlog'),
           priority: 'medium',
           dueDate: new Date('2026-09-12T00:00:00.000Z'),
         },
@@ -394,6 +410,7 @@ describe('process materialization', () => {
           teamId,
           title: 'Send attendee follow-ups',
           state: 'done',
+          statusId: statusId('task', 'done'),
           priority: 'none',
           dueDate: new Date('2026-09-19T00:00:00.000Z'),
         },
@@ -428,7 +445,12 @@ describe('process materialization', () => {
   it('snapshots an undated minimal project from the supplied planning date', async () => {
     const [sourceProject] = await db
       .insert(project)
-      .values({ organizationId, name: 'Transit meetup', status: 'planned' })
+      .values({
+        organizationId,
+        name: 'Transit meetup',
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning();
     await db.insert(task).values({
       organizationId,
@@ -436,6 +458,7 @@ describe('process materialization', () => {
       projectId: assertDefined(sourceProject).id,
       title: 'Host meetup',
       state: 'backlog',
+      statusId: statusId('task', 'backlog'),
     });
 
     const created = await createProcessDefinitionFromProject(db, {
@@ -487,7 +510,12 @@ describe('process materialization', () => {
 
     const [emptyProject] = await db
       .insert(project)
-      .values({ organizationId, name: 'Empty workshop' })
+      .values({
+        organizationId,
+        name: 'Empty workshop',
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning();
     await expect(
       createProcessDefinitionFromProject(db, {
@@ -723,7 +751,13 @@ describe('process materialization', () => {
       (
         await db
           .insert(project)
-          .values({ organizationId, name: 'Marathon training', teamId })
+          .values({
+            organizationId,
+            name: 'Marathon training',
+            teamId,
+            status: 'planned',
+            statusId: statusId('project', 'planned'),
+          })
           .returning()
       )[0],
     );
@@ -754,7 +788,13 @@ describe('process materialization', () => {
       (
         await db
           .insert(task)
-          .values({ organizationId, teamId, title: 'Marathon plan', state: 'backlog' })
+          .values({
+            organizationId,
+            teamId,
+            title: 'Marathon plan',
+            state: 'backlog',
+            statusId: statusId('task', 'backlog'),
+          })
           .returning()
       )[0],
     );
@@ -869,7 +909,11 @@ describe('process materialization', () => {
     const rootTaskId = assertDefined(initial.taskIdsByKey['interest-email']);
     await db
       .update(task)
-      .set({ state: 'done', completedAt: new Date('2026-09-08T20:00:00.000Z') })
+      .set({
+        state: 'done',
+        statusId: statusId('task', 'done'),
+        completedAt: new Date('2026-09-08T20:00:00.000Z'),
+      })
       .where(eq(task.id, rootTaskId));
     const advanced = await advanceCompletedProcessTask(db, {
       organizationId,
@@ -956,7 +1000,11 @@ describe('process materialization', () => {
     const rootTaskId = assertDefined(initial.taskIdsByKey['interest-email']);
     await db
       .update(task)
-      .set({ state: 'done', completedAt: new Date('2026-11-05T20:00:00.000Z') })
+      .set({
+        state: 'done',
+        statusId: statusId('task', 'done'),
+        completedAt: new Date('2026-11-05T20:00:00.000Z'),
+      })
       .where(eq(task.id, rootTaskId));
 
     const advanced = await advanceCompletedProcessTask(db, {
@@ -990,7 +1038,13 @@ describe('process materialization', () => {
   it('ignores ordinary tasks and generated tasks that have not actually completed', async () => {
     const [ordinaryTask] = await db
       .insert(task)
-      .values({ organizationId, teamId, title: 'Ordinary task', state: 'backlog' })
+      .values({
+        organizationId,
+        teamId,
+        title: 'Ordinary task',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      })
       .returning();
     expect(
       await advanceCompletedProcessTask(db, {
@@ -1148,7 +1202,11 @@ describe('process materialization', () => {
     const taskId = assertDefined(first.taskIdsByKey['check-in']);
     await db
       .update(task)
-      .set({ state: 'done', completedAt: new Date('2026-09-30T23:30:00.000Z') })
+      .set({
+        state: 'done',
+        statusId: statusId('task', 'done'),
+        completedAt: new Date('2026-09-30T23:30:00.000Z'),
+      })
       .where(eq(task.id, taskId));
 
     const advanced = await advanceCompletedProcessTask(db, {

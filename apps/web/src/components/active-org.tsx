@@ -6,6 +6,7 @@ import { createContext, type JSX, type ReactNode, useContext, useMemo } from 're
 import { api } from '@/lib/api';
 import { RESOLVING_LABEL } from '@/components/views/field-catalog';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { StatusRegistryProvider } from './statuses/status-registry';
 
 /**
  * The `key` of the org's default ("General") team, seeded at org creation.
@@ -139,7 +140,11 @@ export function ActiveOrgContext({
     };
   }, [orgs, activeOrgId, skin, orgsError, orgsLoading, teams, teamsLoading]);
 
-  return <ActiveOrgReactContext.Provider value={value}>{children}</ActiveOrgReactContext.Provider>;
+  return (
+    <ActiveOrgReactContext.Provider value={value}>
+      <StatusRegistryProvider orgId={activeOrgId}>{children}</StatusRegistryProvider>
+    </ActiveOrgReactContext.Provider>
+  );
 }
 
 /**

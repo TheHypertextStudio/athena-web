@@ -18,12 +18,30 @@ import {
 import { UpdateOut } from './update';
 import { EntityDisplayOut } from './entity-display';
 
-/** Initiative (theme) status. */
+/**
+ * The key of a Initiative status in this workspace.
+ *
+ * @remarks
+ * A workspace names its own Initiative statuses, so this is a key into that set rather than one of a
+ * fixed list. A new workspace starts with `proposed`, `active`, `completed`, and `canceled`. The accompanying `statusCategory` is the
+ * field that carries meaning across workspaces.
+ */
 export const InitiativeStatus = z
-  .enum(['proposed', 'active', 'completed', 'canceled'])
-  .describe('Manually owned Initiative lifecycle: proposed, active, completed, or canceled.');
-/** Initiative status value. */
+  .string()
+  .min(1)
+  .describe(
+    'The key of an Initiative status in this workspace. A workspace defines its own Initiative statuses, so this is a key into that set rather than a fixed value; new workspaces start with `proposed`, `active`, `completed`, and `canceled`. The accompanying `statusCategory` is what carries meaning across workspaces.',
+  );
+/** An Initiative status key. */
 export type InitiativeStatus = z.infer<typeof InitiativeStatus>;
+
+/** The Initiative statuses a new workspace starts with. */
+export const DEFAULT_INITIATIVE_STATUS_KEYS = [
+  'proposed',
+  'active',
+  'completed',
+  'canceled',
+] as const;
 
 /** Initiative priority. */
 export const InitiativePriority = z

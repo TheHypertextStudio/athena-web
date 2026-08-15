@@ -134,7 +134,7 @@ describe('labels router', () => {
   });
 
   it('merge moves attachments onto the survivor and deletes the source', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(r['labels'], orgId, ['manage'], humanActorId);
     const mk = async (name: string): Promise<string> =>
       (
@@ -147,7 +147,14 @@ describe('labels router', () => {
 
     const [proj] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, teamId, name: 'P', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        teamId,
+        name: 'P',
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning();
     await db.insert(schema.projectLabel).values([
       { projectId: assertDefined(proj).id, labelId: sourceId, organizationId: orgId },
@@ -193,7 +200,7 @@ describe('labels router', () => {
   });
 
   it('reports usage counts only when asked, and zero for an unused label', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(r['labels'], orgId, ['manage'], humanActorId);
     const usedId = (
       await body<{ id: string }>(
@@ -207,7 +214,14 @@ describe('labels router', () => {
     await w.request('/', { method: 'POST', headers: J, body: JSON.stringify({ name: 'unused' }) });
     const [proj] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, teamId, name: 'P2', createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        teamId,
+        name: 'P2',
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning();
     await db
       .insert(schema.projectLabel)
@@ -648,13 +662,20 @@ describe('projects router', () => {
 
 describe('updates router', () => {
   it('list-by-subject + post (sets subject health) + post without health + 403/422', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const w = appWithActor(r['updates'], orgId, ['contribute'], humanActorId);
 
     // Seed a project to update the health of.
     const [proj] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'P', teamId, createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'P',
+        teamId,
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const subjectId = assertDefined(proj).id;
 

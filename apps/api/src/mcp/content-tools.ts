@@ -10,6 +10,7 @@ import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
 import { DESCRIPTOR_HINT, resolveSubject } from './descriptors';
 import { orgIdParam, subjectTable } from './tools-shared';
+import { landingStatus } from '../lib/work-status';
 
 /** Register comment, report_status, link_external on `server`. */
 export function registerContentTools(server: McpRegistrar, ctx: McpContext): void {
@@ -275,7 +276,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
           .limit(1);
         if (existing[0]) return jsonResult({ id: existing[0].id, alreadyLinked: true });
 
-        const state = teamRow.workflowStates[0]?.key ?? 'backlog';
+        const landing = await landingStatus(input.orgId, 'task', input.teamId);
         const inserted = await db
           .insert(task)
           .values({
@@ -283,7 +284,8 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
             title: input.title,
             description: input.description ?? null,
             teamId: input.teamId,
-            state,
+            statusId: landing.id,
+            state: landing.key,
             source: 'linked',
             sourceIntegrationId: input.integrationId,
             externalId: input.externalId,

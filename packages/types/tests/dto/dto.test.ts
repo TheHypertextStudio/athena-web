@@ -71,6 +71,7 @@ import {
   InitiativeCreate,
   InitiativeHierarchyLinkCreate,
   InitiativeHierarchyLinkMove,
+  DEFAULT_INITIATIVE_STATUS_KEYS,
   InitiativeHierarchyLinkOut,
   InitiativeOut,
   InitiativeStatus,
@@ -129,7 +130,13 @@ import {
   WorkspaceSettingsOut,
   WorkspaceSettingsUpdate,
 } from '../../src/organization';
-import { ProgramCreate, ProgramOut, ProgramStatus, ProgramUpdate } from '../../src/program';
+import {
+  DEFAULT_PROGRAM_STATUS_KEYS,
+  ProgramCreate,
+  ProgramOut,
+  ProgramStatus,
+  ProgramUpdate,
+} from '../../src/program';
 import { ProjectCreate, ProjectDependencyCreate, ProjectOut } from '../../src/project';
 import { RoleCreate, RoleOut, RoleUpdate } from '../../src/role';
 import {
@@ -570,11 +577,14 @@ describe('actor + team DTOs', () => {
 });
 
 describe('initiative DTOs', () => {
-  it('InitiativeStatus accepts/rejects', () => {
-    expect(InitiativeStatus.parse('proposed')).toBe('proposed');
-    expect(InitiativeStatus.parse('completed')).toBe('completed');
-    expect(InitiativeStatus.parse('canceled')).toBe('canceled');
-    expect(InitiativeStatus.safeParse('paused').success).toBe(false);
+  it('InitiativeStatus carries a workspace-defined key', () => {
+    // A workspace names its own Initiative statuses, so the DTO holds a key rather than a fixed
+    // value; what is legal is decided against that workspace's set, not here.
+    for (const key of DEFAULT_INITIATIVE_STATUS_KEYS) {
+      expect(InitiativeStatus.parse(key)).toBe(key);
+    }
+    expect(InitiativeStatus.parse('awaiting_board')).toBe('awaiting_board');
+    expect(InitiativeStatus.safeParse('').success).toBe(false);
   });
 
   it('InitiativeCreate parses minimal + full', () => {
@@ -753,11 +763,13 @@ describe('workspace settings DTOs', () => {
 });
 
 describe('program DTOs', () => {
-  it('ProgramStatus accepts/rejects', () => {
-    for (const s of ['active', 'paused', 'archived'] as const) {
-      expect(ProgramStatus.parse(s)).toBe(s);
+  it('ProgramStatus carries a workspace-defined key, and a Program can complete', () => {
+    for (const key of DEFAULT_PROGRAM_STATUS_KEYS) {
+      expect(ProgramStatus.parse(key)).toBe(key);
     }
-    expect(ProgramStatus.safeParse('completed').success).toBe(false);
+    // The seeded set now includes a way for a Program to end, which the old enum withheld.
+    expect(DEFAULT_PROGRAM_STATUS_KEYS).toContain('completed');
+    expect(ProgramStatus.safeParse('').success).toBe(false);
   });
 
   it('ProgramCreate parses minimal + full', () => {
@@ -2141,6 +2153,7 @@ describe('hub DTOs', () => {
       organizationId: ID2,
       title: 'T',
       state: 'todo',
+      stateType: 'unstarted',
       priority: 'high',
       assigneeId: null,
       projectId: null,
@@ -2153,6 +2166,7 @@ describe('hub DTOs', () => {
         organizationId: ID2,
         title: 'T',
         state: 'todo',
+        stateType: 'unstarted',
         priority: 'huge',
       }).success,
     ).toBe(false);
@@ -2177,6 +2191,7 @@ describe('hub DTOs', () => {
       organizationId: ID2,
       title: 'T',
       state: 'todo',
+      stateType: 'unstarted',
       priority: 'none' as const,
       planItemId: ID2,
       planStatus: 'planned' as const,
@@ -2228,6 +2243,7 @@ describe('hub DTOs', () => {
           organizationId: ID2,
           title: 'Small follow-up',
           state: 'todo',
+          stateType: 'unstarted',
           priority: 'medium',
           estimateMinutes: 20,
           dependencyImpact: 0,

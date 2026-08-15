@@ -24,6 +24,7 @@ import {
   statusLookupKey,
   type SeededStatuses,
 } from '../../src/seed-statuses';
+import { assertDefined } from '@docket/test-utils';
 
 let client!: PGlite;
 let db!: Database;
@@ -50,15 +51,17 @@ beforeAll(async () => {
   await migrate(d, { migrationsFolder: resolve(import.meta.dirname, '../../drizzle') });
   db = d;
 
-  orgId = (
-    await db.insert(organization).values({ name: 'Statuses', slug: 'statuses' }).returning()
-  )[0]!.id;
-  otherOrgId = (
-    await db.insert(organization).values({ name: 'Elsewhere', slug: 'elsewhere' }).returning()
-  )[0]!.id;
-  teamId = (
-    await db.insert(team).values({ organizationId: orgId, name: 'Core', key: 'CORE' }).returning()
-  )[0]!.id;
+  orgId = assertDefined(
+    (await db.insert(organization).values({ name: 'Statuses', slug: 'statuses' }).returning())[0],
+  ).id;
+  otherOrgId = assertDefined(
+    (await db.insert(organization).values({ name: 'Elsewhere', slug: 'elsewhere' }).returning())[0],
+  ).id;
+  teamId = assertDefined(
+    (
+      await db.insert(team).values({ organizationId: orgId, name: 'Core', key: 'CORE' }).returning()
+    )[0],
+  ).id;
   statuses = await seedWorkspaceStatuses(db, orgId);
   await seedWorkspaceStatuses(db, otherOrgId);
 });
@@ -82,18 +85,20 @@ describe('a status key cannot drift from the status it names', () => {
   });
 
   it('rewrites the key on every row when a status key is rewritten', async () => {
-    const created = (
-      await db
-        .insert(task)
-        .values({
-          organizationId: orgId,
-          teamId,
-          title: 'Follows its status',
-          state: 'todo',
-          statusId: statusId('task', 'todo'),
-        })
-        .returning()
-    )[0]!;
+    const created = assertDefined(
+      (
+        await db
+          .insert(task)
+          .values({
+            organizationId: orgId,
+            teamId,
+            title: 'Follows its status',
+            state: 'todo',
+            statusId: statusId('task', 'todo'),
+          })
+          .returning()
+      )[0],
+    );
 
     await db
       .update(workStatus)
@@ -185,7 +190,7 @@ describe('a status set stays well-formed', () => {
       })
       .returning();
     expect(row[0]?.teamId).toBe(teamId);
-    await db.delete(workStatus).where(eq(workStatus.id, row[0]!.id));
+    await db.delete(workStatus).where(eq(workStatus.id, assertDefined(row[0]).id));
   });
 
   it('refuses a second default in one set', async () => {

@@ -17,7 +17,7 @@ import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import type { sealCredential as Seal, unsealCredential as Unseal } from '../../src/lib/credentials';
 import type { getContainer as GetContainer } from '../../src/container';
-import { fakeSession } from '../support/routes-harness';
+import { fakeSession, one } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 vi.hoisted(() => {
@@ -73,10 +73,15 @@ interface Seed {
 
 async function seedOrg(): Promise<Seed> {
   const slug = `im-${Math.random().toString(36).slice(2, 10)}`;
-  const [org] = await db
-    .insert(schema.organization)
-    .values({ name: slug, slug, lifecycleState: 'active' })
-    .returning({ id: schema.organization.id });
+  const org = one(
+    await db
+      .insert(schema.organization)
+      .values({ name: slug, slug, lifecycleState: 'active' })
+      .returning({ id: schema.organization.id }),
+  );
+  // Work needs a status set: the Tasks the agent's capture tool lands each point at one of this
+  // workspace's statuses, so give it the defaults before any tool creates work here.
+  await schema.seedWorkspaceStatuses(db, org.id);
   const [u] = await db
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
@@ -84,7 +89,7 @@ async function seedOrg(): Promise<Seed> {
   const [human] = await db
     .insert(schema.actor)
     .values({
-      organizationId: assertDefined(org).id,
+      organizationId: org.id,
       kind: 'human',
       displayName: 'Ada',
       userId: assertDefined(u).id,
@@ -92,12 +97,12 @@ async function seedOrg(): Promise<Seed> {
     .returning({ id: schema.actor.id });
   const [team] = await db
     .insert(schema.team)
-    .values({ organizationId: assertDefined(org).id, name: 'Core', key: 'CORE' })
+    .values({ organizationId: org.id, name: 'Core', key: 'CORE' })
     .returning({ id: schema.team.id });
-  const registeredAgent = await ensureDefaultAgent(assertDefined(org).id, assertDefined(human).id);
+  const registeredAgent = await ensureDefaultAgent(org.id, assertDefined(human).id);
   return {
     userId: assertDefined(u).id,
-    orgId: assertDefined(org).id,
+    orgId: org.id,
     teamId: assertDefined(team).id,
     humanActorId: assertDefined(human).id,
     agentId: registeredAgent.id,

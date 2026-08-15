@@ -106,7 +106,7 @@ describe('validateTimeContext / resolveDocketContextOrganization', () => {
   it.each(['project', 'program', 'initiative', 'cycle'] as const)(
     'resolves a Docket %s context to its owning workspace',
     async (kind) => {
-      const { orgId, teamId } = await seedBaseOrg(db, schema);
+      const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
       const userId = await seedUserWithHub(db, schema, `TimeCtx-${kind}`);
       await addMember(db, schema, orgId, userId);
 
@@ -115,21 +115,37 @@ describe('validateTimeContext / resolveDocketContextOrganization', () => {
         entityId = one(
           await db
             .insert(schema.project)
-            .values({ organizationId: orgId, name: 'P', teamId })
+            .values({
+              organizationId: orgId,
+              name: 'P',
+              teamId,
+              status: 'planned',
+              statusId: statusId('project', 'planned'),
+            })
             .returning({ id: schema.project.id }),
         ).id;
       } else if (kind === 'program') {
         entityId = one(
           await db
             .insert(schema.program)
-            .values({ organizationId: orgId, name: 'Prog' })
+            .values({
+              organizationId: orgId,
+              name: 'Prog',
+              status: 'active',
+              statusId: statusId('program', 'active'),
+            })
             .returning({ id: schema.program.id }),
         ).id;
       } else if (kind === 'initiative') {
         entityId = one(
           await db
             .insert(schema.initiative)
-            .values({ organizationId: orgId, name: 'I' })
+            .values({
+              organizationId: orgId,
+              name: 'I',
+              status: 'active',
+              statusId: statusId('initiative', 'active'),
+            })
             .returning({ id: schema.initiative.id }),
         ).id;
       } else {
@@ -247,7 +263,7 @@ describe('validateTimeContext / resolveDocketContextOrganization', () => {
   });
 
   it('refuses an explicit organizationId that disagrees with the referenced item’s own workspace', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const otherOrgId = await seedOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, 'TimeCtxMismatch');
     await addMember(db, schema, orgId, userId);
@@ -255,7 +271,13 @@ describe('validateTimeContext / resolveDocketContextOrganization', () => {
     const project = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'P', teamId })
+        .values({
+          organizationId: orgId,
+          name: 'P',
+          teamId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     );
 
@@ -271,13 +293,19 @@ describe('validateTimeContext / resolveDocketContextOrganization', () => {
 
 describe('prepareInitialTimeContexts', () => {
   it('builds one prepared context per supplied ref (primary, workspace, contextual)', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, 'TimePrepare');
     await addMember(db, schema, orgId, userId);
     const project = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'P', teamId })
+        .values({
+          organizationId: orgId,
+          name: 'P',
+          teamId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     );
 
@@ -315,14 +343,20 @@ describe('validateTimeAllocationTarget', () => {
   });
 
   it('accepts a project-kind allocation resolved to its workspace', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, 'AllocProject');
     await addMember(db, schema, orgId, userId);
     const hubId = await resolveTimeHubId(userId);
     const project = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'P', teamId })
+        .values({
+          organizationId: orgId,
+          name: 'P',
+          teamId,
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     );
 
@@ -376,7 +410,7 @@ describe('validateTimeAllocationTarget', () => {
   });
 
   it('refuses an explicit organizationId that disagrees with the target’s own workspace', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const otherOrgId = await seedOrg(db, schema);
     const userId = await seedUserWithHub(db, schema, 'AllocMismatch');
     await addMember(db, schema, orgId, userId);
@@ -385,7 +419,13 @@ describe('validateTimeAllocationTarget', () => {
     const task = one(
       await db
         .insert(schema.task)
-        .values({ organizationId: orgId, title: 'T', teamId, state: 'backlog' })
+        .values({
+          organizationId: orgId,
+          title: 'T',
+          teamId,
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        })
         .returning({ id: schema.task.id }),
     );
 

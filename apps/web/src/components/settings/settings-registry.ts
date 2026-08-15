@@ -31,6 +31,7 @@ import {
   User,
   Users,
   Workflow,
+  CircleDot,
 } from '@docket/ui/icons';
 
 /** One Settings section in the sub-navigation. */
@@ -162,6 +163,13 @@ const MEMBERS_SECTION: SettingsSection = {
 
 /** How this workspace's own work is configured — shown for both workspace kinds. */
 const WORK_CONFIGURATION_SECTIONS: readonly SettingsSection[] = [
+  {
+    key: 'statuses',
+    label: 'Statuses',
+    description: 'What your work moves through, in your workspace\u2019s own words.',
+    icon: CircleDot,
+    href: 'statuses',
+  },
   {
     key: 'work-structure',
     label: 'Work structure',

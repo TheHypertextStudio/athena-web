@@ -14,8 +14,6 @@ import { type Node, Panel, useOnSelectionChange } from '@xyflow/react';
 import { Button } from '@docket/ui/primitives';
 import { useCallback, useState } from 'react';
 
-import { stateTypeOf } from '@/lib/work-state';
-
 import { useCanvasActions } from './canvas-actions-context';
 import { taskData } from './task-node';
 
@@ -31,9 +29,9 @@ export default function BulkActionsBar(): React.JSX.Element | null {
 
   if (selected.length < 2 || !actions?.canEdit) return null;
 
-  const allDone = selected.every((n) => stateTypeOf(taskData(n).state) === 'completed');
-  const applyState = (state: string): void => {
-    for (const n of selected) actions.setState(n.id, state);
+  const allDone = selected.every((n) => taskData(n).stateType === 'completed');
+  const applyComplete = (complete: boolean): void => {
+    for (const n of selected) actions.setComplete(n.id, complete);
   };
 
   return (
@@ -45,7 +43,7 @@ export default function BulkActionsBar(): React.JSX.Element | null {
           size="sm"
           variant="outline"
           onClick={() => {
-            applyState(allDone ? 'todo' : 'done');
+            applyComplete(!allDone);
           }}
         >
           {allDone ? 'Reopen all' : 'Mark all done'}

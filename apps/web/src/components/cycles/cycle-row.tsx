@@ -15,7 +15,7 @@ import type { CycleOut, CycleStats } from '@docket/types';
 import { StatusGlyph } from '@docket/ui/components';
 import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { cn } from '@docket/ui/lib/utils';
-import { Badge, Skeleton } from '@docket/ui/primitives';
+import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { ComponentPropsWithoutRef, JSX } from 'react';
 
@@ -23,7 +23,9 @@ import { EditableTitle } from '@/components/editor/editable-title';
 import { entityDragSource } from '@/lib/entity-drag';
 
 import { formatWindow } from './format-window';
-import { STATUS_LABEL, statusBadgeVariant, statusGlyphType } from './cycle-status';
+import { WorkStatusBadge } from '@/components/entity-display/work-status';
+
+import { CYCLE_STATUS } from './cycle-status';
 
 /** Column widths shared by {@link CycleRows}'s header and each {@link CycleRow}. */
 const ROW_GRID = 'grid-cols-[minmax(20rem,1fr)_7rem_10rem_8rem]';
@@ -100,6 +102,8 @@ export function CycleRow({
     }),
   );
 
+  const status = CYCLE_STATUS[cycle.status];
+
   return (
     <Link
       href={href}
@@ -114,7 +118,7 @@ export function CycleRow({
       )}
     >
       <div className="flex min-w-0 items-center gap-3 px-2 py-2">
-        <StatusGlyph type={statusGlyphType(cycle.status)} label={STATUS_LABEL[cycle.status]} />
+        <StatusGlyph type={status.category} label={status.name} />
         <div className="min-w-0">
           <span className="flex min-w-0 items-center gap-2">
             {canRename && onRename ? (
@@ -143,7 +147,7 @@ export function CycleRow({
         </div>
       </div>
       <div className="px-3">
-        <Badge variant={statusBadgeVariant(cycle.status)}>{STATUS_LABEL[cycle.status]}</Badge>
+        <WorkStatusBadge name={status.name} category={status.category} />
       </div>
       <div className="px-3">
         {stats ? (

@@ -15,6 +15,7 @@ import { applyView } from '@/components/views/apply-view';
 import type { ViewState } from '@/components/views/field-catalog';
 
 const DEPS = {
+  statuses: [],
   projectLabel: 'Project',
   programLabel: 'Program',
   resolveProject: (id: string) => id,

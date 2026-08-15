@@ -10,7 +10,14 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { addMember, getDb, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  addMember,
+  getDb,
+  one,
+  seedOrg,
+  seedStatuses,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 import { searchWorkspace } from '../../src/search/query';
 
@@ -57,6 +64,7 @@ describe('search query — agent callers', () => {
         })
         .returning({ id: schema.team.id }),
     ).id;
+    const statusId = await seedStatuses(db, schema, orgId);
     const privateTaskId = one(
       await db
         .insert(schema.task)
@@ -65,6 +73,7 @@ describe('search query — agent callers', () => {
           title: 'Agentscope private subject task',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'private',
         })
         .returning({ id: schema.task.id }),

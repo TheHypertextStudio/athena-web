@@ -6,6 +6,7 @@ import { ConflictError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import { type IntegrationRow, toTaskOut } from './integration-provider';
+import { landingStatus } from '../lib/work-status';
 
 /** Options controlling how imported items are materialized. */
 export interface ImportItemsOptions {
@@ -76,12 +77,8 @@ export async function importItems(
   items: readonly ImportedItem[],
   options: ImportItemsOptions,
 ): Promise<ReturnType<typeof toTaskOut>[]> {
-  const teamRows = await db
-    .select({ workflowStates: team.workflowStates })
-    .from(team)
-    .where(and(eq(team.id, teamId), eq(team.organizationId, orgId)))
-    .limit(1);
-  const state = teamRows[0]?.workflowStates[0]?.key ?? 'backlog';
+  const landing = await landingStatus(orgId, 'task', teamId);
+  const state = landing.key;
 
   const created: ReturnType<typeof toTaskOut>[] = [];
   for (const item of items) {
@@ -107,6 +104,7 @@ export async function importItems(
         title: item.title,
         description: item.body ?? null,
         teamId,
+        statusId: landing.id,
         state,
         ...(options.assigneeId !== null ? { assigneeId: options.assigneeId } : {}),
         source: 'linked',

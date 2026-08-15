@@ -31,7 +31,6 @@ import {
   type ProjectDependencyRemoved,
   type ProjectOverviewItem,
   type ProjectOverviewOut,
-  type ProjectStatus,
 } from '@docket/types';
 import { X } from '@docket/ui/icons';
 import { type Edge, type Node, Panel } from '@xyflow/react';
@@ -208,7 +207,7 @@ export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.
       const data: ProjectNodeData = {
         name: item.name,
         orgId,
-        status: item.status as ProjectStatus,
+        status: item.status,
         health: item.health ?? null,
         progress: progressPercent(item),
         taskCount: item.taskCount,
@@ -252,7 +251,7 @@ export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.
         return {
           id,
           name: row?.name ?? 'Filtered out',
-          status: (row?.status ?? 'planned') as ProjectStatus,
+          status: row?.status ?? '',
           onCanvas: onCanvas.has(id as (typeof rows)[number]['id']),
         };
       });

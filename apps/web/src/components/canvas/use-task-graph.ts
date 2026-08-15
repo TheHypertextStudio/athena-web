@@ -14,6 +14,8 @@ import type { GraphOut } from '@docket/types';
 import { type Edge, MarkerType, type Node } from '@xyflow/react';
 import { useMemo } from 'react';
 
+import { unknownStatus, type WorkStatusDisplay } from '@/components/entity-display/work-status';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, STALE, useLiveApiQuery } from '@/lib/query';
 
@@ -70,15 +72,26 @@ function toFlow(
   orgId: string,
   density: CanvasDensity,
   rootTaskId: string | undefined,
+  statusOf: (key: string) => WorkStatusDisplay,
   options: UseTaskGraphOptions,
 ): { nodes: Node[]; edges: Edge[] } {
   if (!graph) return { nodes: [], edges: [] };
-  const { nodeFlags, edgeTone } = annotateGraph(graph);
+  // The graph carries status *keys*; the category is resolved once, here, so the card, the
+  // minimap, the peek, and the filter catalog all read one already-answered field.
+  const statuses = new Map(graph.nodes.map((n) => [n.id, statusOf(n.state)]));
+  const { nodeFlags, edgeTone } = annotateGraph({
+    nodes: graph.nodes.map((n) => ({
+      id: n.id,
+      stateType: statuses.get(n.id)?.category ?? 'backlog',
+    })),
+    edges: graph.edges,
+  });
   // `graph.nodes`/`graph.edges` are structural supersets of what the pure analysis reads.
   const insights = computeInsights(graph.nodes, graph.edges);
 
   const nodes: Node[] = graph.nodes.map((n) => {
     const flags = nodeFlags.get(n.id) ?? { isBlocked: false, isReady: false };
+    const status = statuses.get(n.id) ?? unknownStatus(n.state);
     return {
       id: n.id,
       type: 'task',
@@ -87,6 +100,8 @@ function toFlow(
         orgId,
         title: n.title,
         state: n.state,
+        stateType: status.category,
+        statusName: status.name,
         priority: n.priority,
         projectId: n.projectId ?? null,
         projectName: options.resolveProjectName?.(n.projectId ?? null) ?? null,
@@ -146,6 +161,7 @@ export function useTaskGraph(
 ): TaskGraphResult {
   const { orgId, projectId, rootTaskId, depth } = scope;
   const { resolveAssignee, resolveProjectName } = options;
+  const registry = useStatusRegistry();
 
   const query: Record<string, string> = {};
   if (projectId !== undefined) query['projectId'] = projectId;
@@ -163,8 +179,16 @@ export function useTaskGraph(
   );
 
   const { nodes, edges } = useMemo(
-    () => toFlow(q.data, orgId, density, rootTaskId, { resolveAssignee, resolveProjectName }),
-    [q.data, orgId, density, rootTaskId, resolveAssignee, resolveProjectName],
+    () =>
+      toFlow(
+        q.data,
+        orgId,
+        density,
+        rootTaskId,
+        (key) => registry.statusOf('task', key) ?? unknownStatus(key),
+        { resolveAssignee, resolveProjectName },
+      ),
+    [q.data, orgId, density, rootTaskId, registry, resolveAssignee, resolveProjectName],
   );
 
   return {

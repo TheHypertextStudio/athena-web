@@ -379,6 +379,7 @@ describe('native calendar block CRUD', () => {
           teamId: base.teamId,
           title: 'Prep the block',
           state: 'todo',
+          statusId: base.statusId('task', 'todo'),
           priority: 'none',
         })
         .returning({ id: schema.task.id }),

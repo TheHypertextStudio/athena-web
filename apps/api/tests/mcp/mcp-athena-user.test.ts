@@ -37,10 +37,13 @@ async function seedUserWorkspace(): Promise<Seed> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  if (!org) throw new Error('seedUserWorkspace failed to create an organization');
+  // The tools under test create work in this workspace, and work needs its status set to exist.
+  await schema.seedWorkspaceStatuses(db, org.id);
   const [role] = await db
     .insert(schema.role)
     .values({
-      organizationId: assertDefined(org).id,
+      organizationId: org.id,
       key: `owner-${slug}`,
       name: 'Owner',
       capabilities: ['view', 'contribute'],
@@ -53,7 +56,7 @@ async function seedUserWorkspace(): Promise<Seed> {
   const [human] = await db
     .insert(schema.actor)
     .values({
-      organizationId: assertDefined(org).id,
+      organizationId: org.id,
       kind: 'human',
       displayName: 'Ada',
       userId: assertDefined(user).id,
@@ -61,21 +64,21 @@ async function seedUserWorkspace(): Promise<Seed> {
     })
     .returning({ id: schema.actor.id });
   await db.insert(schema.grant).values({
-    organizationId: assertDefined(org).id,
+    organizationId: org.id,
     subjectKind: 'role',
     subjectId: assertDefined(role).id,
     resourceKind: 'organization',
-    resourceId: assertDefined(org).id,
+    resourceId: org.id,
     capabilities: ['view', 'contribute'],
     effect: 'allow',
   });
   const [team] = await db
     .insert(schema.team)
-    .values({ organizationId: assertDefined(org).id, name: 'Core', key: `A${slug.slice(-4)}` })
+    .values({ organizationId: org.id, name: 'Core', key: `A${slug.slice(-4)}` })
     .returning({ id: schema.team.id });
   return {
     userId: assertDefined(user).id,
-    orgId: assertDefined(org).id,
+    orgId: org.id,
     actorId: assertDefined(human).id,
     roleId: assertDefined(role).id,
     teamId: assertDefined(team).id,

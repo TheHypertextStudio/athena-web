@@ -53,12 +53,18 @@ async function resolveHubId(userId: string): Promise<string> {
 async function seedFixture(label: string): Promise<Fixture> {
   const userId = await seedUserWithHub(db, schema, `Report-${label}`);
   const hubId = await resolveHubId(userId);
-  const { orgId, teamId } = await seedBaseOrg(db, schema);
+  const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
   await addMember(db, schema, orgId, userId);
   const taskId = one(
     await db
       .insert(schema.task)
-      .values({ organizationId: orgId, teamId, title: `Task ${label}`, state: 'todo' })
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: `Task ${label}`,
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+      })
       .returning({ id: schema.task.id }),
   ).id;
   return { userId, hubId, orgId, taskId };

@@ -36,6 +36,7 @@ import { type JSX, type ReactNode, useCallback, useId, useState } from 'react';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
+import { useDefaultedStatus } from '@/components/entity-display/use-work-status';
 import { InitiativeComposerPickers } from '@/components/initiatives/initiative-form-pickers';
 import { ProgramComposerPickers } from '@/components/programs/program-form-pickers';
 import { ProjectComposerPickers } from '@/components/projects/project-form-pickers';
@@ -320,8 +321,14 @@ function ProjectTemplateBody({ shared, template, noun, onSave }: KindBodyProps):
     name: stored?.name ?? '',
     summary: stored?.summary ?? '',
     description: stored?.description ?? '',
-    status: stored?.status ?? 'planned',
+    status: stored?.status ?? '',
     health: stored?.health ?? null,
+  });
+
+  // A template stored under a status the workspace has since renamed or removed still opens; the
+  // editor moves it to wherever a Project starts now rather than showing an empty status chip.
+  useDefaultedStatus('project', draft.status, (key) => {
+    setField('status', key);
   });
 
   return (
@@ -368,10 +375,14 @@ function InitiativeTemplateBody({ shared, template, noun, onSave }: KindBodyProp
     name: stored?.name ?? '',
     summary: stored?.summary ?? '',
     description: stored?.description ?? '',
-    status: stored?.status ?? 'active',
+    status: stored?.status ?? '',
     priority: stored?.priority ?? 'none',
     updateCadence: stored?.updateCadence ?? 'monthly',
     health: stored?.health ?? null,
+  });
+
+  useDefaultedStatus('initiative', draft.status, (key) => {
+    setField('status', key);
   });
 
   return (
@@ -427,9 +438,13 @@ function ProgramTemplateBody({ shared, template, noun, onSave }: KindBodyProps):
     name: stored?.name ?? '',
     summary: stored?.summary ?? '',
     description: stored?.description ?? '',
-    status: stored?.status ?? 'active',
+    status: stored?.status ?? '',
     health: stored?.health ?? null,
     visibility: stored?.visibility ?? 'public',
+  });
+
+  useDefaultedStatus('program', draft.status, (key) => {
+    setField('status', key);
   });
 
   return (

@@ -23,7 +23,6 @@ import {
   milestone,
   program,
   project,
-  projectStatus,
   task,
   taskLabel,
   taskPriority,
@@ -37,10 +36,10 @@ import type { MirrorSourceValue, MirrorValue } from '@docket/integrations';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { setTaskState } from '../lib/task-state';
+import { landingStatus, loadStatusSets, type ResolvedStatus } from '../lib/work-status';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import { resolveImportTeam } from './integration-import';
-import { resolveStateKeys } from './integration-reconcile';
 import type { IntegrationRow } from './integration-provider';
 
 /** One Docket record, ready to resolve and then project. */
@@ -525,6 +524,36 @@ function pulledEnumOption<T extends string>(
 }
 
 /**
+ * Read the `status` property as one of the workspace's own Project statuses.
+ *
+ * @remarks
+ * A Project's status is workspace-defined rather than a fixed enum, so the pulled option is
+ * matched against the workspace's Project set by key or display name, case-insensitively — the
+ * same two spellings the write routes accept. An option naming no status in the set is treated as
+ * "not read", exactly like an unrecognized `priority`/`health` option: the column keeps whatever
+ * Docket already had.
+ *
+ * Returning the whole status is what lets the caller write the `status` key and the `status_id`
+ * the composite foreign key holds it to, from one answer.
+ *
+ * @param orgId - The tenant whose Project set the option is read against.
+ * @param values - Field values read from Notion, keyed by the catalog's field keys.
+ * @returns the named status, or undefined when the property is absent, empty, or unrecognized.
+ */
+async function pulledProjectStatus(
+  orgId: string,
+  values: Readonly<Record<string, MirrorValue>>,
+): Promise<ResolvedStatus | undefined> {
+  const value = values['status'];
+  if (value?.kind !== 'option' || value.value === null) return undefined;
+  const needle = value.value.trim().toLowerCase();
+  const sets = await loadStatusSets(orgId, { entityTypes: ['project'] });
+  return sets
+    .for('project')
+    .find((status) => status.key.toLowerCase() === needle || status.name.toLowerCase() === needle);
+}
+
+/**
  * Apply Notion-sourced field values onto an existing two-way entity.
  *
  * @remarks
@@ -536,12 +565,14 @@ function pulledEnumOption<T extends string>(
  *   pulling it at all, so it is left alone.
  * - **`docketUrl`** is derived from the entity's own id, never stored, so there is nothing to pull.
  *
- * `priority`/`status`/`health` ARE applied, but only when the pulled option exactly matches one of
+ * `priority` and `health` ARE applied, but only when the pulled option exactly matches one of
  * Docket's fixed enum values (see {@link pulledEnumOption}) — these are static enums the whole org
- * shares. `task.state` is per-team configurable instead, so it goes through `setTaskState` (the
- * same shared transition `PATCH /tasks/:id/status` uses) rather than a plain column write — that
- * gets `completedAt`/`canceledAt` derivation and event emission for free, and an unrecognized
- * state name (a rename, a typo) is caught and treated the same as "not read", exactly like an
+ * shares. A Project's `status` comes from the workspace's own Project set instead, matched by
+ * {@link pulledProjectStatus} so the row can carry the status id alongside the key.
+ * `task.state` is workspace-defined too, and goes through `setTaskState` (the same shared
+ * transition `PATCH /tasks/:id/status` uses) rather than a plain column write — that gets
+ * `completedAt`/`canceledAt` derivation and event emission for free, and a state name naming no
+ * status (a rename, a typo) is caught and treated the same as "not read", exactly like an
  * unrecognized `priority`/`status`/`health` option.
  *
  * @param orgId - The tenant, for the scoped update.
@@ -635,7 +666,7 @@ async function applyPulledProject(
   const summary = pulledText(values, 'summary');
   const targetDate = pulledDate(values, 'targetDate');
   const startDate = pulledDate(values, 'startDate');
-  const status = pulledEnumOption(values, 'status', projectStatus.enumValues);
+  const status = await pulledProjectStatus(orgId, values);
   const projectHealth = pulledEnumOption(values, 'health', health.enumValues);
 
   const patch = {
@@ -643,7 +674,7 @@ async function applyPulledProject(
     ...(summary !== undefined ? { summary: summary.length > 0 ? summary : null } : {}),
     ...(targetDate !== undefined ? { targetDate } : {}),
     ...(startDate !== undefined ? { startDate } : {}),
-    ...(status !== undefined ? { status } : {}),
+    ...(status !== undefined ? { status: status.key, statusId: status.id } : {}),
     ...(projectHealth !== undefined ? { health: projectHealth } : {}),
   };
   const where = and(
@@ -667,12 +698,13 @@ async function applyPulledProject(
  * Reuses the exact team-landing answer the linked-database connector already settled on
  * (`resolveImportTeam` — `config.teamId` if configured, otherwise the org's earliest-created
  * team): a Notion-created row lands wherever a Notion-imported task would, which is the
- * consistent answer rather than a new one invented for this mode. A task additionally needs an
- * initial workflow state, resolved from the landing team's own `workflowStates` the same way
- * reconciliation resolves one for a freshly-inserted linked task — never a Notion status value,
- * since interpreting an arbitrary select option as a *starting* state (rather than validating an
- * edit against an existing one, which `applyPulledValues` already declines to do for the same
- * reason) has no more of a principled answer than "the team's own default".
+ * consistent answer rather than a new one invented for this mode. A task additionally needs a
+ * starting status, taken from the landing team's Task set — the status that set declares new work
+ * starts in, the same one every other create path uses. A Notion status value is not consulted for
+ * a task, since interpreting an arbitrary select option as a *starting* status has no more of a
+ * principled answer than the set's own default. A project, whose status set the pulled option can
+ * be matched against by name, keeps the option when it names a real status and falls back to the
+ * same default otherwise.
  *
  * @param orgId - The tenant.
  * @param actorId - Recorded as the new entity's `createdBy`.
@@ -707,12 +739,7 @@ async function adoptTask(
   values: Readonly<Record<string, MirrorValue>>,
 ): Promise<string | undefined> {
   const teamId = await resolveImportTeam(orgId, integrationRow);
-  const teamRows = await db
-    .select({ workflowStates: team.workflowStates })
-    .from(team)
-    .where(eq(team.id, teamId))
-    .limit(1);
-  const openKey = resolveStateKeys(teamRows[0]?.workflowStates ?? []).openKey;
+  const landing = await landingStatus(orgId, 'task', teamId);
 
   const title = pulledText(values, 'title');
   const description = pulledText(values, 'description');
@@ -729,7 +756,8 @@ async function adoptTask(
       // Same "Untitled" substitution as an edit — task.title is NOT NULL with a not-blank CHECK.
       title: title !== undefined && title.length > 0 ? title : 'Untitled',
       description: description !== undefined && description.length > 0 ? description : null,
-      state: openKey,
+      state: landing.key,
+      statusId: landing.id,
       // Designed-mode provenance lives entirely in `notion_mirror_row`, never these columns — a
       // task can be linked from an existing database and projected into a designed one at once.
       source: 'native',
@@ -760,7 +788,8 @@ async function adoptProject(
   const summary = pulledText(values, 'summary');
   const targetDate = pulledDate(values, 'targetDate');
   const startDate = pulledDate(values, 'startDate');
-  const status = pulledEnumOption(values, 'status', projectStatus.enumValues);
+  const status =
+    (await pulledProjectStatus(orgId, values)) ?? (await landingStatus(orgId, 'project'));
   const projectHealth = pulledEnumOption(values, 'health', health.enumValues);
 
   const inserted = await db
@@ -772,7 +801,8 @@ async function adoptProject(
       summary: summary !== undefined && summary.length > 0 ? summary : null,
       ...(targetDate !== undefined ? { targetDate } : {}),
       ...(startDate !== undefined ? { startDate } : {}),
-      ...(status !== undefined ? { status } : {}),
+      status: status.key,
+      statusId: status.id,
       ...(projectHealth !== undefined ? { health: projectHealth } : {}),
     })
     .returning({ id: project.id });

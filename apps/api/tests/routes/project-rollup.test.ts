@@ -11,7 +11,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, type StatusIdLookup } from '../support/routes-harness';
 import type projectRollupRouter from '../../src/routes/project-rollup';
 import { assertDefined } from '@docket/test-utils';
 
@@ -34,10 +34,22 @@ async function json<T>(res: Response): Promise<T> {
 const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 /** Insert a project row directly; returns its id. */
-async function makeProject(orgId: string, teamId: string, actorId: string): Promise<string> {
+async function makeProject(
+  statusId: StatusIdLookup,
+  orgId: string,
+  teamId: string,
+  actorId: string,
+): Promise<string> {
   const [row] = await db
     .insert(schema.project)
-    .values({ organizationId: orgId, name: 'P', teamId, createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      name: 'P',
+      teamId,
+      createdBy: actorId,
+      status: 'planned',
+      statusId: statusId('project', 'planned'),
+    })
     .returning({ id: schema.project.id });
   return assertDefined(row).id;
 }
@@ -53,6 +65,7 @@ async function makeMilestone(orgId: string, projectId: string, actorId: string):
 
 /** Insert a task directly (control over project + milestone); returns its id. */
 async function makeTask(
+  statusId: StatusIdLookup,
   orgId: string,
   teamId: string,
   actorId: string,
@@ -65,6 +78,7 @@ async function makeTask(
       title: 'T',
       teamId,
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       projectId: opts.projectId ?? null,
       milestoneId: opts.milestoneId ?? null,
       createdBy: actorId,
@@ -75,13 +89,20 @@ async function makeTask(
 
 /** Insert an initiative and link it to a project; returns the initiative id. */
 async function makeLinkedInitiative(
+  statusId: StatusIdLookup,
   orgId: string,
   projectId: string,
   actorId: string,
 ): Promise<string> {
   const [init] = await db
     .insert(schema.initiative)
-    .values({ organizationId: orgId, name: 'I', createdBy: actorId })
+    .values({
+      organizationId: orgId,
+      name: 'I',
+      createdBy: actorId,
+      status: 'active',
+      statusId: statusId('initiative', 'active'),
+    })
     .returning({ id: schema.initiative.id });
   await db
     .insert(schema.initiativeProject)
@@ -139,22 +160,22 @@ interface RollupBody {
 
 describe('project roll-up (GET /:id/rollup)', () => {
   it('maps each project task to its milestone and resolves the project’s initiative', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const projectId = await makeProject(orgId, teamId, humanActorId);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const projectId = await makeProject(statusId, orgId, teamId, humanActorId);
     const milestoneId = await makeMilestone(orgId, projectId, humanActorId);
 
-    const t1 = await makeTask(orgId, teamId, humanActorId, { projectId, milestoneId });
-    const t2 = await makeTask(orgId, teamId, humanActorId, { projectId, milestoneId });
-    const tUngrouped = await makeTask(orgId, teamId, humanActorId, {
+    const t1 = await makeTask(statusId, orgId, teamId, humanActorId, { projectId, milestoneId });
+    const t2 = await makeTask(statusId, orgId, teamId, humanActorId, { projectId, milestoneId });
+    const tUngrouped = await makeTask(statusId, orgId, teamId, humanActorId, {
       projectId,
       milestoneId: null,
     });
     // A task on another project must NOT appear in this project's roll-up.
-    const otherProject = await makeProject(orgId, teamId, humanActorId);
-    await makeTask(orgId, teamId, humanActorId, { projectId: otherProject });
+    const otherProject = await makeProject(statusId, orgId, teamId, humanActorId);
+    await makeTask(statusId, orgId, teamId, humanActorId, { projectId: otherProject });
 
-    const initiativeId = await makeLinkedInitiative(orgId, projectId, humanActorId);
-    const secondInitiativeId = await makeLinkedInitiative(orgId, projectId, humanActorId);
+    const initiativeId = await makeLinkedInitiative(statusId, orgId, projectId, humanActorId);
+    const secondInitiativeId = await makeLinkedInitiative(statusId, orgId, projectId, humanActorId);
 
     const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
     const res = await reader.request(`/${projectId}/rollup`);
@@ -170,14 +191,16 @@ describe('project roll-up (GET /:id/rollup)', () => {
   });
 
   it('returns recent activity on the project’s sessions, scoped to this project', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const projectId = await makeProject(orgId, teamId, humanActorId);
-    const taskId = await makeTask(orgId, teamId, humanActorId, { projectId });
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const projectId = await makeProject(statusId, orgId, teamId, humanActorId);
+    const taskId = await makeTask(statusId, orgId, teamId, humanActorId, { projectId });
     const { agentId, activityId } = await seedSessionActivity(orgId, taskId, humanActorId);
 
     // Activity on a session for ANOTHER project's task must not appear in this project's roll-up.
-    const otherProject = await makeProject(orgId, teamId, humanActorId);
-    const otherTask = await makeTask(orgId, teamId, humanActorId, { projectId: otherProject });
+    const otherProject = await makeProject(statusId, orgId, teamId, humanActorId);
+    const otherTask = await makeTask(statusId, orgId, teamId, humanActorId, {
+      projectId: otherProject,
+    });
     await seedSessionActivity(orgId, otherTask, humanActorId);
 
     const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
@@ -188,9 +211,9 @@ describe('project roll-up (GET /:id/rollup)', () => {
   });
 
   it('returns an empty initiative list when the project belongs to none', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const projectId = await makeProject(orgId, teamId, humanActorId);
-    await makeTask(orgId, teamId, humanActorId, { projectId });
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const projectId = await makeProject(statusId, orgId, teamId, humanActorId);
+    await makeTask(statusId, orgId, teamId, humanActorId, { projectId });
 
     const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
     const body = await json<RollupBody>(await reader.request(`/${projectId}/rollup`));
@@ -201,8 +224,8 @@ describe('project roll-up (GET /:id/rollup)', () => {
   });
 
   it('returns attached Project labels as objects', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const projectId = await makeProject(orgId, teamId, humanActorId);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const projectId = await makeProject(statusId, orgId, teamId, humanActorId);
     const [projectLabel] = await db
       .insert(schema.label)
       .values({ organizationId: orgId, name: 'Legislative', color: '#6750a4' })
@@ -233,7 +256,7 @@ describe('project roll-up (GET /:id/rollup)', () => {
   it('isolates tenants: another org’s project 404s', async () => {
     const a = await seedBaseOrg(db, schema);
     const b = await seedBaseOrg(db, schema);
-    const projectA = await makeProject(a.orgId, a.teamId, a.humanActorId);
+    const projectA = await makeProject(a.statusId, a.orgId, a.teamId, a.humanActorId);
     const readerB = appWithActor(projectRollup, b.orgId, ['view'], b.humanActorId);
     expect((await readerB.request(`/${projectA}/rollup`)).status).toBe(404);
   });

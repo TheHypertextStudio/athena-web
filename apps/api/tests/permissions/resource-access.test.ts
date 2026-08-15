@@ -8,7 +8,14 @@ import {
   resolveResourceAccess,
   type ResourceAccessRef,
 } from '../../src/permissions/resource-access';
-import { addMember, getDb, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  addMember,
+  getDb,
+  one,
+  seedOrg,
+  seedStatuses,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 type Schema = typeof DbModule;
 type Database = typeof DbModule.db;
@@ -64,6 +71,7 @@ async function seedTask(
     programId?: string;
   },
 ): Promise<string> {
+  const statusId = await seedStatuses(db, schema, input.organizationId);
   return one(
     await db
       .insert(schema.task)
@@ -72,6 +80,7 @@ async function seedTask(
         teamId: input.teamId,
         title: `Permission task ${Math.random().toString(36).slice(2)}`,
         state: 'todo',
+        statusId: statusId('task', 'todo'),
         visibility: input.visibility,
         projectId: input.projectId,
         programId: input.programId,
@@ -95,22 +104,42 @@ describe('resource access permission service', () => {
     const organizationId = await seedOrg(db, schema);
     await addMember(db, schema, organizationId, userId);
     const teamId = await seedTeam(db, schema, organizationId);
+    const statusId = await seedStatuses(db, schema, organizationId);
     const initiativeId = one(
       await db
         .insert(schema.initiative)
-        .values({ organizationId, name: 'Public Initiative' })
+        .values({
+          organizationId,
+          name: 'Public Initiative',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning({ id: schema.initiative.id }),
     ).id;
     const programId = one(
       await db
         .insert(schema.program)
-        .values({ organizationId, name: 'Public Program', visibility: 'public' })
+        .values({
+          organizationId,
+          name: 'Public Program',
+          visibility: 'public',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     ).id;
     const projectId = one(
       await db
         .insert(schema.project)
-        .values({ organizationId, name: 'Public Project', teamId, programId, visibility: 'public' })
+        .values({
+          organizationId,
+          name: 'Public Project',
+          teamId,
+          programId,
+          visibility: 'public',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     ).id;
     const cycleId = one(

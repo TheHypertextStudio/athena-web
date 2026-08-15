@@ -27,6 +27,7 @@ import type {
   reportAgentMilestone as ReportAgentMilestone,
 } from '../../src/routes/agent-bus';
 import { getMigratedDb } from '../support/db';
+import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -69,6 +70,7 @@ interface Workspace {
   readonly teamId: string;
   readonly projectNewsletterId: string;
   readonly projectMigrationId: string;
+  readonly statusId: StatusIdLookup;
 }
 
 /** Seed a workspace with real structure so parent resolution has something to resolve against. */
@@ -78,6 +80,7 @@ async function seedWorkspace(): Promise<Workspace> {
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
+  const statusId = await seedStatuses(db, schema, assertDefined(org).id);
   const [role] = await db
     .insert(schema.role)
     .values({
@@ -113,6 +116,7 @@ async function seedWorkspace(): Promise<Workspace> {
       name: 'Weekly newsletter relaunch',
       description: 'Rebuild the newsletter template, cadence and Substack import.',
       status: 'active',
+      statusId: statusId('project', 'active'),
       createdBy: assertDefined(ownerActor).id,
     })
     .returning({ id: schema.project.id });
@@ -123,6 +127,7 @@ async function seedWorkspace(): Promise<Workspace> {
       name: 'Postgres upgrade',
       description: 'Move the primary database to Postgres 17 with zero downtime.',
       status: 'active',
+      statusId: statusId('project', 'active'),
       createdBy: assertDefined(ownerActor).id,
     })
     .returning({ id: schema.project.id });
@@ -133,6 +138,7 @@ async function seedWorkspace(): Promise<Workspace> {
     teamId: assertDefined(team).id,
     projectNewsletterId: assertDefined(newsletter).id,
     projectMigrationId: assertDefined(migration).id,
+    statusId,
   };
 }
 
@@ -636,6 +642,7 @@ describe('dispatched work keeps its ordering guarantees', () => {
         title: 'Already tracked',
         teamId: workspace.teamId,
         state: 'backlog',
+        statusId: workspace.statusId('task', 'backlog'),
         source: 'native',
         createdBy: workspace.ownerActorId,
       })

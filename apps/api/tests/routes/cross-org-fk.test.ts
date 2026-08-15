@@ -14,7 +14,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, seedStatuses } from '../support/routes-harness';
 import type projectsRouter from '../../src/routes/projects';
 import type tasksRouter from '../../src/routes/tasks';
 import { assertDefined } from '@docket/test-utils';
@@ -41,18 +41,33 @@ const JSON_HEADERS = { 'content-type': 'application/json' } as const;
 
 /** Insert a program in `orgId`, returning its id. */
 async function seedProgram(orgId: string, createdBy: string): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const [row] = await db
     .insert(schema.program)
-    .values({ organizationId: orgId, name: 'Prog', createdBy })
+    .values({
+      organizationId: orgId,
+      name: 'Prog',
+      createdBy,
+      status: 'active',
+      statusId: statusId('program', 'active'),
+    })
     .returning({ id: schema.program.id });
   return assertDefined(row).id;
 }
 
 /** Insert a project in `orgId`, returning its id. */
 async function seedProject(orgId: string, teamId: string, createdBy: string): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const [row] = await db
     .insert(schema.project)
-    .values({ organizationId: orgId, name: 'Proj', teamId, createdBy })
+    .values({
+      organizationId: orgId,
+      name: 'Proj',
+      teamId,
+      createdBy,
+      status: 'planned',
+      statusId: statusId('project', 'planned'),
+    })
     .returning({ id: schema.project.id });
   return assertDefined(row).id;
 }

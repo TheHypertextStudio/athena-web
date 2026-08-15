@@ -301,9 +301,15 @@ describe('recurrence series routes', () => {
       (occurrence) => occurrence.scheduledFor === '2098-09-07',
     )?.taskId;
     expect(protectedTaskId).toBeTruthy();
+    // The key and the status it names move together; the composite foreign key refuses a row
+    // where they disagree, so a raw completion here writes both.
     await db
       .update(schema.task)
-      .set({ state: 'done', completedAt: new Date('2098-09-07T20:00:00.000Z') })
+      .set({
+        statusId: org.statusId('task', 'done'),
+        state: 'done',
+        completedAt: new Date('2098-09-07T20:00:00.000Z'),
+      })
       .where(eq(schema.task.id, assertDefined(protectedTaskId)));
     expect(
       (
@@ -612,7 +618,13 @@ describe('recurring task route', () => {
       (
         await db
           .insert(schema.project)
-          .values({ organizationId: org.orgId, teamId: org.teamId, name: 'Marathon training' })
+          .values({
+            organizationId: org.orgId,
+            teamId: org.teamId,
+            name: 'Marathon training',
+            status: 'planned',
+            statusId: org.statusId('project', 'planned'),
+          })
           .returning()
       )[0],
     );

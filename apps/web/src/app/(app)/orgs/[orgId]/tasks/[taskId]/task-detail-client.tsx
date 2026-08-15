@@ -44,7 +44,7 @@ import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
-import { stateTypeOf } from '@/lib/work-state';
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
 import { useSession } from '@/lib/auth-client';
 
@@ -63,6 +63,7 @@ export default function TaskDetailPage(): JSX.Element {
   const projectLabel = useVocabulary('project');
   const programLabel = useVocabulary('program');
   const cycleLabel = useVocabulary('cycle');
+  const categoryOf = useCategoryOf('task');
 
   const {
     task,
@@ -270,7 +271,7 @@ export default function TaskDetailPage(): JSX.Element {
             <StatusPicker
               current={task.state}
               states={workflowStates}
-              currentType={stateTypeOf(task.state)}
+              currentType={categoryOf(task.state)}
               onSelect={(stateKey) => {
                 void setState(stateKey);
               }}

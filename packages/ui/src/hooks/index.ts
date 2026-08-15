@@ -2,10 +2,20 @@
  * `@docket/ui/hooks` — barrel for the app-shell React hooks.
  *
  * @remarks
- * Re-exports the vocabulary provider/resolver, the ListView keyboard hook, and the
- * already-authenticated redirect guard so consumers can import them from a single subpath:
- * `import { VocabularyProvider, useListKeyboard } from '@docket/ui/hooks'`.
+ * Re-exports the vocabulary provider/resolver, the ListView keyboard hook, the reorder
+ * primitive, and the already-authenticated redirect guard so consumers can import them from a
+ * single subpath: `import { VocabularyProvider, useReorderable } from '@docket/ui/hooks'`.
  */
+export {
+  computeDropIndex,
+  type DropEdge,
+  REORDER_DRAG_MIME,
+  type ReorderableBinding,
+  type ReorderableHandleProps,
+  type ReorderableItemProps,
+  useReorderable,
+  type UseReorderableOptions,
+} from './use-reorderable';
 export {
   useListKeyboard,
   type UseListKeyboardOptions,

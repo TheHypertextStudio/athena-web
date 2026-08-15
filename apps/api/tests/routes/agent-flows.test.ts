@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { and, asc, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
+import type * as DbModule from '@docket/db';
 import type {
   db as DbType,
   organization as OrgTable,
@@ -21,9 +22,10 @@ import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type integrationsRouter from '../../src/routes/integrations';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-import { fakeSession } from '../support/routes-harness';
+import { fakeSession, seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
+let schema!: typeof DbModule;
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
 let team!: typeof TeamTable;
@@ -57,6 +59,7 @@ function appFor(
 
 beforeAll(async () => {
   const dbmod = await getMigratedDb();
+  schema = dbmod;
   db = dbmod.db;
   organization = dbmod.organization;
   team = dbmod.team;
@@ -87,6 +90,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [t] = await db
     .insert(team)
@@ -122,6 +126,7 @@ async function seedOrg(): Promise<Seed> {
       title: 'Ship the Hub',
       teamId,
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       createdBy: humanActorId,
     })
     .returning({ id: task.id });

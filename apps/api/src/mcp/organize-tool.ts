@@ -40,6 +40,7 @@ import { DESCRIPTOR_HINT, resolveOptional } from './descriptors';
 import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
+import { resolveContainerStatus } from '../lib/work-status';
 
 /** The kinds `organize` can place, outermost first — also the order they must be walked in. */
 const KINDS = ['initiative', 'program', 'project', 'task'] as const;
@@ -294,7 +295,12 @@ export function registerOrganizeTool(
             const refs = await resolveItem(input.orgId, item);
             const state =
               item.state === undefined
-                ? { state: landing.state, completedAt: null, canceledAt: null }
+                ? {
+                    statusId: landing.statusId,
+                    state: landing.state,
+                    completedAt: null,
+                    canceledAt: null,
+                  }
                 : await resolveStateTransition(
                     input.orgId,
                     refs.teamId ?? landing.teamId,
@@ -419,7 +425,12 @@ interface PlaceInput {
   readonly at: Placement;
   readonly teamId: string;
   /** The workflow state a new task lands in, already resolved against its team. */
-  readonly state: { state: string; completedAt: Date | null; canceledAt: Date | null };
+  readonly state: {
+    statusId: string;
+    state: string;
+    completedAt: Date | null;
+    canceledAt: Date | null;
+  };
   readonly assigneeId: string | null;
   readonly ownerId: string | null;
   readonly leadId: string | null;
@@ -462,10 +473,19 @@ async function placeItem(
     if (existing[0]) {
       return { placed: { ref: item.ref, kind: 'initiative', id: existing[0].id, created: false } };
     }
+    const initiativeStatus = await resolveContainerStatus(
+      orgId,
+      'initiative',
+      'active',
+      'status',
+      tx,
+    );
     const inserted = await tx
       .insert(initiative)
       .values({
         organizationId: orgId,
+        statusId: initiativeStatus.statusId,
+        status: initiativeStatus.status,
         name: item.title,
         description: item.description,
         ownerId: input.ownerId,
@@ -499,6 +519,13 @@ async function placeItem(
         ),
       )
       .limit(1);
+    const programStatusFields = await resolveContainerStatus(
+      orgId,
+      'program',
+      'active',
+      'status',
+      tx,
+    ).then((resolved) => ({ statusId: resolved.statusId, status: resolved.status }));
     const id =
       existing[0]?.id ??
       (
@@ -506,6 +533,7 @@ async function placeItem(
           .insert(program)
           .values({
             organizationId: orgId,
+            ...programStatusFields,
             name: item.title,
             description: item.description,
             ownerId: input.ownerId,
@@ -555,6 +583,13 @@ async function placeItem(
         ),
       )
       .limit(1);
+    const projectStatusFields = await resolveContainerStatus(
+      orgId,
+      'project',
+      'planned',
+      'status',
+      tx,
+    ).then((resolved) => ({ statusId: resolved.statusId, status: resolved.status }));
     const id =
       existing[0]?.id ??
       (
@@ -562,6 +597,7 @@ async function placeItem(
           .insert(project)
           .values({
             organizationId: orgId,
+            ...projectStatusFields,
             name: item.title,
             description: item.description,
             leadId: input.leadId,
@@ -631,6 +667,7 @@ async function placeItem(
       title: item.title,
       description: item.description,
       teamId: input.teamId,
+      statusId: input.state.statusId,
       state: input.state.state,
       completedAt: input.state.completedAt,
       canceledAt: input.state.canceledAt,

@@ -368,13 +368,20 @@ describe('cycles router', () => {
 
 describe('milestones router', () => {
   it('lists (with + without project filter), creates, gets, patches, deletes', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
 
     // Seed a project to attach milestones to.
     const [proj] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'Proj', teamId, createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'Proj',
+        teamId,
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const projectId = assertDefined(proj).id;
 
@@ -417,11 +424,18 @@ describe('milestones router', () => {
   });
 
   it('create without targetDate omits the date', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
     const [proj] = await db
       .insert(schema.project)
-      .values({ organizationId: orgId, name: 'P2', teamId, createdBy: humanActorId })
+      .values({
+        organizationId: orgId,
+        name: 'P2',
+        teamId,
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
     const created = await writer.request('/', {
       method: 'POST',

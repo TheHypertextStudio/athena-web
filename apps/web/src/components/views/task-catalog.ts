@@ -12,10 +12,10 @@
  * {@link import('@docket/types').ViewFilter}/{@link ViewGrouping}/{@link ViewSort} shapes:
  *
  * - {@link buildTaskCatalog} declares the task fields (status, priority, assignee, project,
- *   program, due date, title) as a {@link FieldCatalog} over {@link TaskOut}, with the same
- *   workflow/urgency ranking the old engine used so status sorts by workflow order and priority
- *   by urgency. Entity-noun labels and option/label resolution are injected by the page (so
- *   vocabulary + the org's members/projects/programs flow through).
+ *   program, due date, title) as a {@link FieldCatalog} over {@link TaskOut}, so status sorts by
+ *   the workspace's own board order and priority by urgency. The status set, entity-noun labels,
+ *   and option/label resolution are injected by the page (so the workspace's statuses, its
+ *   vocabulary, and its members/projects/programs all flow through).
  * - {@link toViewState} / {@link toStoredView} convert between the generic toolbar state (which
  *   uses `groupBy.field` and `sort[].dir`) and the stored shape (`grouping.by`, `sort[].order`),
  *   so opening a saved view, tweaking it in the toolbar, and saving it round-trips losslessly.
@@ -25,8 +25,12 @@
  */
 import type { TaskOut, ViewFilter, ViewGrouping, ViewSort } from '@docket/types';
 
+import {
+  type WorkStatusDisplay,
+  statusFieldOptions,
+  statusRankOf,
+} from '@/components/entity-display/work-status';
 import { PRIORITY_LABEL, PRIORITY_ORDER } from '@/components/task-detail/priority';
-import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 
 import {
   type FieldCatalog,
@@ -36,26 +40,11 @@ import {
   type ViewState,
 } from './field-catalog';
 
-/** The canonical workflow-state keys a default org seeds, in workflow order. */
-const STATE_KEY_ORDER: readonly string[] = ['backlog', 'todo', 'in_progress', 'done', 'canceled'];
-
-/** The status field options (state key + canonical-type label + glyph hint), in workflow order. */
-const STATE_OPTIONS: readonly FieldOption[] = STATE_KEY_ORDER.map((key) => {
-  const type = stateTypeOf(key);
-  return { value: key, label: STATE_GROUP_LABEL[type], hint: type };
-});
-
 /** The priority field options (value + label), most-pressing first. */
 const PRIORITY_OPTIONS: readonly FieldOption[] = PRIORITY_ORDER.map((priority) => ({
   value: priority,
   label: PRIORITY_LABEL[priority],
 }));
-
-/** Sort/group rank for a status key, by its canonical type's workflow order. */
-function statusRank(value: string | number | null): number {
-  if (value === null) return STATE_GROUP_ORDER.length;
-  return STATE_GROUP_ORDER.indexOf(stateTypeOf(String(value)));
-}
 
 /** Sort/group rank for a priority value (urgent first), by {@link PRIORITY_ORDER}. */
 function priorityRank(value: string | number | null): number {
@@ -66,6 +55,16 @@ function priorityRank(value: string | number | null): number {
 
 /** Injected resolvers a page supplies so the task catalog can skin labels + relation options. */
 export interface TaskCatalogDeps {
+  /**
+   * The workspace's Task statuses, in board order, from the status registry.
+   *
+   * @remarks
+   * The Status field used to offer five fixed keys under five category labels, which meant a
+   * workspace that renamed `in_progress` to `building` got a filter menu offering a value none of
+   * its tasks held. The set decides both the choices and their ordering now, so filtering by
+   * "Building" finds the tasks that are building.
+   */
+  statuses: readonly WorkStatusDisplay[];
   /** Vocabulary label for the "Project" field. */
   projectLabel: string;
   /** Vocabulary label for the "Program" field. */
@@ -123,10 +122,10 @@ export function buildTaskCatalog(deps: TaskCatalogDeps): FieldCatalog<TaskOut> {
       label: 'Status',
       type: 'enum',
       accessor: (task) => task.state,
-      options: STATE_OPTIONS,
+      options: statusFieldOptions(deps.statuses),
       groupable: true,
       sortable: true,
-      rank: statusRank,
+      rank: statusRankOf(deps.statuses),
     },
     {
       key: 'priority',

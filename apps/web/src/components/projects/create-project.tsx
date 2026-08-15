@@ -9,7 +9,8 @@
  * health, the team it belongs to, its lead, its start→target timeline, the
  * {@link useVocabulary | program} it's filed under, and any cross-cutting initiatives it advances.
  * Sensible defaults keep it fast: only a name is required; the team defaults to the org's default
- * and status defaults to `planned`. Built on the shared {@link ComposerShell} + the `@docket/ui`
+ * and status defaults to wherever the workspace starts a Project. Built on the shared
+ * {@link ComposerShell} + the `@docket/ui`
  * compact pickers.
  *
  * The dialog is *controlled* by the host page so the page's header "New {project}" button and its
@@ -51,6 +52,7 @@ import {
 } from '@/components/create-object/create-object-provider';
 import { useCreationContext } from '@/components/create-object/creation-context';
 import { WorkspacePicker } from '@/components/create-object/workspace-picker';
+import { useDefaultedStatus } from '@/components/entity-display/use-work-status';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
@@ -172,6 +174,10 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
     startDate: null,
     targetDate: null,
     initiativeIds: [],
+  });
+
+  useDefaultedStatus('project', draft.status, (key) => {
+    setField('status', key);
   });
 
   const [creating, setCreating] = useState(false);

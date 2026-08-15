@@ -39,7 +39,8 @@ import { type ComponentPropsWithoutRef, type JSX, useRef } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/programs/health';
-import { ProgramStatusBadge } from '@/components/programs/program-status';
+import { useWorkStatus } from '@/components/entity-display/use-work-status';
+import { WorkStatusBadge } from '@/components/entity-display/work-status';
 import { entityDragSource } from '@/lib/entity-drag';
 
 /** The row view-model derived for one Program (owner + child-work roll-up). */
@@ -185,6 +186,7 @@ function ProgramGridRow({
 }: ProgramItemProps): JSX.Element {
   const dragOccurredRef = useRef(false);
   const dragProps = useProgramDrag(program, dragOccurredRef);
+  const status = useWorkStatus('program', program.status);
 
   return (
     <div
@@ -218,7 +220,7 @@ function ProgramGridRow({
         </div>
       </div>
       <div role="gridcell" className="px-3">
-        <ProgramStatusBadge status={program.status} />
+        <WorkStatusBadge name={status.name} category={status.category} />
       </div>
       <div role="gridcell" className="px-3 whitespace-nowrap">
         <HealthLabel health={program.health ?? null} />
@@ -351,6 +353,7 @@ function ProgramCard({
 }: ProgramItemProps): JSX.Element {
   const dragOccurredRef = useRef(false);
   const dragProps = useProgramDrag(program, dragOccurredRef);
+  const status = useWorkStatus('program', program.status);
 
   return (
     <Card
@@ -378,7 +381,7 @@ function ProgramCard({
           />
         </div>
         <span className="shrink-0">
-          <ProgramStatusBadge status={program.status} />
+          <WorkStatusBadge name={status.name} category={status.category} />
         </span>
       </div>
 

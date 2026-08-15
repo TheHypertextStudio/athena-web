@@ -1,7 +1,14 @@
 import { inArray } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  getDb,
+  addMember,
+  one,
+  seedOrg,
+  seedStatuses,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 import { searchWorkspace } from '../../src/search/query';
 import { assertDefined } from '@docket/test-utils';
@@ -33,6 +40,7 @@ describe('search query service', () => {
         })
         .returning({ id: schema.team.id }),
     ).id;
+    const statusId = await seedStatuses(db, schema, orgId);
     const publicTaskId = one(
       await db
         .insert(schema.task)
@@ -41,6 +49,7 @@ describe('search query service', () => {
           title: 'Obsidian public subject',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'public',
         })
         .returning({ id: schema.task.id }),
@@ -53,6 +62,7 @@ describe('search query service', () => {
           title: 'Obsidian private subject',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'private',
         })
         .returning({ id: schema.task.id }),
@@ -175,6 +185,7 @@ describe('search query service', () => {
         })
         .returning({ id: schema.team.id }),
     ).id;
+    const statusId = await seedStatuses(db, schema, orgId);
     const privateTaskId = one(
       await db
         .insert(schema.task)
@@ -183,6 +194,7 @@ describe('search query service', () => {
           title: 'Quartz private subject',
           teamId,
           state: 'todo',
+          statusId: statusId('task', 'todo'),
           visibility: 'private',
         })
         .returning({ id: schema.task.id }),
@@ -274,12 +286,14 @@ describe('search query service', () => {
         })
         .returning({ id: schema.team.id }),
     ).id;
+    const statusId = await seedStatuses(db, schema, orgA);
     await db.insert(schema.task).values({
       id: 'zeppelin_task',
       organizationId: orgA,
       title: 'Zeppelin budget task',
       teamId: teamA,
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       visibility: 'public',
     });
 

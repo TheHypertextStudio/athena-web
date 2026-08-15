@@ -325,11 +325,11 @@
   "apps/web/src/components/programs/flow-snapshot.tsx": {
     "raw-type-utility": 4
   },
+  "apps/web/src/components/programs/program-health.tsx": {
+    "raw-type-utility": 6
+  },
   "apps/web/src/components/programs/program-list-ui.tsx": {
     "raw-type-utility": 28
-  },
-  "apps/web/src/components/programs/program-status.tsx": {
-    "raw-type-utility": 6
   },
   "apps/web/src/components/project-detail/agent-activity-feed.tsx": {
     "raw-type-utility": 4
@@ -343,7 +343,7 @@
   "apps/web/src/components/projects/project-catalog.ts": {
     "raw-type-utility": 1
   },
-  "apps/web/src/components/projects/project-status.tsx": {
+  "apps/web/src/components/projects/project-health.tsx": {
     "raw-type-utility": 6
   },
   "apps/web/src/components/property-pickers/property-panel.tsx": {

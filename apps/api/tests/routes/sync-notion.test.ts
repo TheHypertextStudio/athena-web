@@ -44,7 +44,7 @@ const CONFLICT: TaskSyncConflict = {
 
 describe('sync conflict log', () => {
   it('records a losing remote value against the winning task', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [integration] = await db
       .insert(schema.integration)
       .values({ organizationId: orgId, provider: 'notion', pattern: 'connector' })
@@ -56,6 +56,7 @@ describe('sync conflict log', () => {
         title: 'Ship the launch checklist',
         teamId,
         state: 'backlog',
+        statusId: statusId('task', 'backlog'),
       })
       .returning({ id: schema.task.id });
 
@@ -91,14 +92,20 @@ describe('sync conflict log', () => {
   });
 
   it('records a system-attributed conflict (no actor) when a sweep ran it', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const [integration] = await db
       .insert(schema.integration)
       .values({ organizationId: orgId, provider: 'notion', pattern: 'connector' })
       .returning({ id: schema.integration.id });
     const [task] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, title: 'Automated sync', teamId, state: 'backlog' })
+      .values({
+        organizationId: orgId,
+        title: 'Automated sync',
+        teamId,
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      })
       .returning({ id: schema.task.id });
 
     await recordSyncConflict(
@@ -118,14 +125,20 @@ describe('sync conflict log', () => {
   });
 
   it('normalizes optional-undefined remote fields to explicit nulls', async () => {
-    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const [integration] = await db
       .insert(schema.integration)
       .values({ organizationId: orgId, provider: 'notion', pattern: 'connector' })
       .returning({ id: schema.integration.id });
     const [task] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, title: 'No due date', teamId, state: 'backlog' })
+      .values({
+        organizationId: orgId,
+        title: 'No due date',
+        teamId,
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      })
       .returning({ id: schema.task.id });
 
     await recordSyncConflict(
@@ -151,7 +164,7 @@ describe('sync conflict log', () => {
   });
 
   it('lists conflicts for one integration, newest first, ignoring other orgs and other kinds', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [integration] = await db
       .insert(schema.integration)
       .values({ organizationId: orgId, provider: 'notion', pattern: 'connector' })
@@ -162,7 +175,13 @@ describe('sync conflict log', () => {
       .returning({ id: schema.integration.id });
     const [task] = await db
       .insert(schema.task)
-      .values({ organizationId: orgId, title: 'Task A', teamId, state: 'backlog' })
+      .values({
+        organizationId: orgId,
+        title: 'Task A',
+        teamId,
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      })
       .returning({ id: schema.task.id });
 
     // An ordinary audit row (no `metadata.kind`) must never surface as a conflict.
@@ -229,6 +248,7 @@ describe('sync conflict log', () => {
         title: 'Org A task',
         teamId: orgA.teamId,
         state: 'backlog',
+        statusId: orgA.statusId('task', 'backlog'),
       })
       .returning({ id: schema.task.id });
     await recordSyncConflict(

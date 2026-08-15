@@ -107,7 +107,7 @@ describe('task activity log — what is written', () => {
   });
 
   it('gives a task inserted by any other writer the same creation entry', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     // Athena's capture path, the subtask route, connector import and the email-to-task accept
     // path all insert straight into `task`. None of them writes a ledger row, and neither did
@@ -121,6 +121,7 @@ describe('task activity log — what is written', () => {
           title: 'Captured by Athena',
           teamId,
           state: 'backlog',
+          statusId: statusId('task', 'backlog'),
           createdBy: humanActorId,
         })
         .returning({ id: schema.task.id }),
@@ -132,14 +133,20 @@ describe('task activity log — what is written', () => {
   });
 
   it('reports an unattributed creation rather than inventing a creator', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     // `createdBy` is null for a system import, and is nulled out when the creating actor is
     // deleted. Either way the log must say "no actor", never a dangling id.
     const systemTask = one(
       await db
         .insert(schema.task)
-        .values({ organizationId: orgId, title: 'Imported', teamId, state: 'backlog' })
+        .values({
+          organizationId: orgId,
+          title: 'Imported',
+          teamId,
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        })
         .returning({ id: schema.task.id }),
     );
 
@@ -170,7 +177,7 @@ describe('task activity log — what is written', () => {
   });
 
   it('records every one of the eight fields ENT-29 names, in the order applied', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute', 'assign'], humanActorId);
     const assignee = one(
       await db
@@ -181,7 +188,12 @@ describe('task activity log — what is written', () => {
     const proj = one(
       await db
         .insert(schema.project)
-        .values({ organizationId: orgId, name: 'Website redesign' })
+        .values({
+          organizationId: orgId,
+          name: 'Website redesign',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
         .returning({ id: schema.project.id }),
     );
     const id = await createTask(app, teamId, { title: 'Original' });
@@ -219,12 +231,17 @@ describe('task activity log — what is written', () => {
   });
 
   it('resolves reference ids to the names they had when the change was made', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const prog = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'Platform' })
+        .values({
+          organizationId: orgId,
+          name: 'Platform',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     );
     const cyc = one(

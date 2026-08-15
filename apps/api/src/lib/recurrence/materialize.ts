@@ -35,6 +35,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../../error';
 import { addCalendarDays, parseCalendarDate } from './calendar-date';
+import { loadStatusSets } from '../work-status';
 
 /** Transaction handle shared with completion advancement. */
 export type ProcessTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -294,6 +295,14 @@ export async function materializeInstanceSteps(
     blockers.push(edge.blockingStepId);
     incomingDependencies.set(edge.blockedStepId, blockers);
   }
+  // Every status this materialization might land on, resolved once for the whole run.
+  const statusSets = await loadStatusSets(
+    command.organizationId,
+    { teamIds: taskSpecs.map((spec) => spec.teamId) },
+    // Read through the open transaction: the module-level client would issue this on a connection
+    // the transaction already holds, which stalls rather than returning stale rows.
+    tx,
+  );
   const allAtOnce = revision.creationMode === 'all_at_once';
   const createdProjects = new Map<string, string>();
   const createdMilestones = new Map<string, string>();
@@ -303,6 +312,13 @@ export async function materializeInstanceSteps(
     if (projectIds.has(step.id) || (!allAtOnce && !timingReady(step, completionDates))) continue;
     const spec = projectsByStep.get(step.id);
     if (!spec) throw new ConflictError('Published project step is missing its specification');
+    // A template stores a status key rather than a status, because a workspace may have reshaped
+    // its statuses since the template was written; the key is resolved now, or the work lands
+    // where new work lands.
+    const projectStatus =
+      statusSets.for('project').find((candidate) => candidate.key === spec.status) ??
+      statusSets.defaultOf('project');
+    if (!projectStatus) throw new ConflictError('This workspace has no project statuses');
     const insertedId = insertedEntityId(
       await tx
         .insert(project)
@@ -314,7 +330,8 @@ export async function materializeInstanceSteps(
           leadId: spec.leadId,
           teamId: spec.teamId,
           programId: spec.programId,
-          status: spec.status,
+          status: projectStatus.key,
+          statusId: projectStatus.id,
           health: spec.health,
           startDate: planningTimestamp(
             spec.startOffsetDays === null
@@ -421,9 +438,12 @@ export async function materializeInstanceSteps(
       if (spec.parentTaskStepId && !parentTaskId) continue;
       const teamRow = teamsById.get(spec.teamId);
       if (!teamRow) throw new NotFoundError('Generated task team not found');
-      const state = spec.state ?? teamRow.workflowStates[0]?.key ?? 'backlog';
-      const workflowState = teamRow.workflowStates.find((candidate) => candidate.key === state);
-      if (!workflowState) throw new ConflictError('Generated task state is not available');
+      const generated =
+        spec.state === null
+          ? statusSets.defaultOf('task', spec.teamId)
+          : statusSets.for('task', spec.teamId).find((candidate) => candidate.key === spec.state);
+      if (!generated) throw new ConflictError('Generated task state is not available');
+      const state = generated.key;
       const terminalAt = new Date();
       const insertedId = insertedEntityId(
         await tx
@@ -433,6 +453,7 @@ export async function materializeInstanceSteps(
             title: renderName(spec.title, command.scheduledFor),
             description: spec.description,
             teamId: spec.teamId,
+            statusId: generated.id,
             state,
             priority: spec.priority,
             assigneeId: spec.assigneeId,
@@ -452,8 +473,8 @@ export async function materializeInstanceSteps(
                 ? stepPlanningDate(step, command.scheduledFor, completionDates)
                 : addCalendarDays(command.scheduledFor, spec.dueOffsetDays),
             ),
-            completedAt: workflowState.type === 'completed' ? terminalAt : undefined,
-            canceledAt: workflowState.type === 'canceled' ? terminalAt : undefined,
+            completedAt: generated.category === 'completed' ? terminalAt : undefined,
+            canceledAt: generated.category === 'canceled' ? terminalAt : undefined,
             source: 'native',
             createdBy: command.actorId,
           })

@@ -21,6 +21,7 @@ import {
   findField,
   resolveRelationLabel,
 } from '@/components/views/field-catalog';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { buildTaskCatalog, toStoredView, toViewState } from '@/components/views/task-catalog';
 import type { RunnerActor } from '@/components/views/view-runner';
 import { api } from '@/lib/api';
@@ -156,9 +157,12 @@ export function useViewsPage(orgId: string): ViewsPageData {
     [actorById],
   );
 
+  const statuses = useStatusRegistry().statusesFor('task');
+
   const catalog = useMemo(
     () =>
       buildTaskCatalog({
+        statuses,
         projectLabel,
         programLabel,
         resolveProject: (id) =>
@@ -179,6 +183,7 @@ export function useViewsPage(orgId: string): ViewsPageData {
           programs.map((p) => ({ value: p.id, label: p.name })),
       }),
     [
+      statuses,
       actorById,
       agentsQ.isPending,
       membersQ.isPending,

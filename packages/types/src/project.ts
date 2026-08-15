@@ -28,12 +28,16 @@ import {
  * `planned → active → completed`, or is `canceled`.
  */
 export const ProjectStatus = z
-  .enum(['planned', 'active', 'completed', 'canceled'])
+  .string()
+  .min(1)
   .describe(
-    'Project lifecycle status (mirrors the `project_status` Postgres enum). `planned` = scoped but not started; `active` = in progress; `completed` = finished successfully; `canceled` = abandoned. `completed` and `canceled` are the two terminal states (a Project is terminal for an Initiative’s derived-`completed` roll-up when in either).',
+    'The key of a Project status in this workspace. A workspace defines its own Project statuses, so this is a key into that set rather than a fixed value; new workspaces start with `planned`, `active`, `completed`, and `canceled`. The accompanying `statusCategory` is what carries meaning across workspaces.',
   );
-/** Project lifecycle status value. */
+/** A Project status key. */
 export type ProjectStatus = z.infer<typeof ProjectStatus>;
+
+/** The Project statuses a new workspace starts with. */
+export const DEFAULT_PROJECT_STATUS_KEYS = ['planned', 'active', 'completed', 'canceled'] as const;
 
 /** Body for creating a Project (organizationId comes from the path, never the body). */
 export const ProjectCreate = z

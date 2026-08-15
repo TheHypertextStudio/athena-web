@@ -23,6 +23,7 @@ function planCandidate(
     organizationId: 'org-one',
     title: `Task ${id}`,
     state: 'todo',
+    stateType: 'unstarted',
     priority: 'medium',
     assigneeId: 'actor-one',
     projectId: null,

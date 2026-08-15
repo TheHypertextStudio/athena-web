@@ -19,28 +19,18 @@
  * label resolution are injected from the page's already-loaded teams (Phase B data), so the value
  * chooser needs no extra fetch.
  */
-import type { CycleOut, CycleStatus } from '@docket/types';
+import type { CycleOut } from '@docket/types';
 
+import { statusFieldOptions, statusRankOf } from '@/components/entity-display/work-status';
 import { type FieldCatalog, type FieldOption } from '@/components/views/field-catalog';
 
-import { STATUS_LABEL, statusGlyphType } from './cycle-status';
+import { CYCLE_STATUS_ORDER } from './cycle-status';
 
 /** The cycle statuses, in cadence-lifecycle order, with their glyph hints. */
-const STATUS_OPTIONS: readonly FieldOption[] = (['active', 'upcoming', 'completed'] as const).map(
-  (status: CycleStatus) => ({
-    value: status,
-    label: STATUS_LABEL[status],
-    hint: statusGlyphType(status),
-  }),
-);
+const STATUS_OPTIONS: readonly FieldOption[] = statusFieldOptions(CYCLE_STATUS_ORDER);
 
 /** Cadence-lifecycle order rank for a status (active → upcoming → completed; unknown last). */
-function statusRank(value: string | number | null): number {
-  const order = ['active', 'upcoming', 'completed'];
-  if (value === null) return order.length;
-  const index = order.indexOf(String(value));
-  return index === -1 ? order.length : index;
-}
+const statusRank = statusRankOf(CYCLE_STATUS_ORDER);
 
 /** Injected resolvers a page supplies so the cycle catalog can skin its team relation field. */
 export interface CycleCatalogDeps {

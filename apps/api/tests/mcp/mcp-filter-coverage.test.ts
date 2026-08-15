@@ -25,6 +25,8 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import type { StatusIdLookup } from '../support/routes-harness';
+import { seedStatuses } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -41,6 +43,7 @@ interface Seed {
   orgId: string;
   teamId: string;
   actorId: string;
+  statusId: StatusIdLookup;
   ctx: McpContext;
 }
 
@@ -51,6 +54,7 @@ async function seedOrg(): Promise<Seed> {
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
 
   const [role] = await db
     .insert(schema.role)
@@ -93,6 +97,7 @@ async function seedOrg(): Promise<Seed> {
     orgId,
     teamId: assertDefined(team).id,
     actorId: assertDefined(human).id,
+    statusId,
     ctx: {
       principal: {
         kind: 'user',
@@ -177,17 +182,29 @@ async function seedSubjects(s: Seed): Promise<void> {
     .values({ organizationId: s.orgId, name: 'Decoy Label', color: '#888888' });
   const [decoyProgram] = await db
     .insert(schema.program)
-    .values({ organizationId: s.orgId, name: 'Decoy Program', createdBy: s.actorId })
+    .values({
+      organizationId: s.orgId,
+      name: 'Decoy Program',
+      createdBy: s.actorId,
+      status: 'active',
+      statusId: s.statusId('program', 'active'),
+    })
     .returning({ id: schema.program.id });
   await db.insert(schema.project).values({
     organizationId: s.orgId,
     name: 'Decoy Project',
     programId: assertDefined(decoyProgram).id,
     createdBy: s.actorId,
+    status: 'planned',
+    statusId: s.statusId('project', 'planned'),
   });
-  await db
-    .insert(schema.initiative)
-    .values({ organizationId: s.orgId, name: 'Decoy Initiative', createdBy: s.actorId });
+  await db.insert(schema.initiative).values({
+    organizationId: s.orgId,
+    name: 'Decoy Initiative',
+    createdBy: s.actorId,
+    status: 'active',
+    statusId: s.statusId('initiative', 'active'),
+  });
   const [cycleRow] = await db
     .insert(schema.cycle)
     .values({
@@ -206,7 +223,13 @@ async function seedSubjects(s: Seed): Promise<void> {
   // The subject each listing should find with no filter, and lose with any of them.
   const [subjectProject] = await db
     .insert(schema.project)
-    .values({ organizationId: s.orgId, name: 'Subject project', createdBy: s.actorId })
+    .values({
+      organizationId: s.orgId,
+      name: 'Subject project',
+      createdBy: s.actorId,
+      status: 'planned',
+      statusId: s.statusId('project', 'planned'),
+    })
     .returning({ id: schema.project.id });
   // Filed into its own project on purpose: an unfiled subject would legitimately match
   // `unfiled: true`, which would read as that filter failing to narrow.
@@ -215,15 +238,24 @@ async function seedSubjects(s: Seed): Promise<void> {
     title: 'Subject task',
     teamId: s.teamId,
     state: 'backlog',
+    statusId: s.statusId('task', 'backlog'),
     projectId: assertDefined(subjectProject).id,
     createdBy: s.actorId,
   });
-  await db
-    .insert(schema.program)
-    .values({ organizationId: s.orgId, name: 'Subject program', createdBy: s.actorId });
-  await db
-    .insert(schema.initiative)
-    .values({ organizationId: s.orgId, name: 'Subject initiative', createdBy: s.actorId });
+  await db.insert(schema.program).values({
+    organizationId: s.orgId,
+    name: 'Subject program',
+    createdBy: s.actorId,
+    status: 'active',
+    statusId: s.statusId('program', 'active'),
+  });
+  await db.insert(schema.initiative).values({
+    organizationId: s.orgId,
+    name: 'Subject initiative',
+    createdBy: s.actorId,
+    status: 'active',
+    statusId: s.statusId('initiative', 'active'),
+  });
 }
 
 async function list(
@@ -308,15 +340,31 @@ describe('the two that shipped unapplied', () => {
     const client = await connect(s.ctx);
     const [init] = await db
       .insert(schema.initiative)
-      .values({ organizationId: s.orgId, name: 'Q3', createdBy: s.actorId })
+      .values({
+        organizationId: s.orgId,
+        name: 'Q3',
+        createdBy: s.actorId,
+        status: 'active',
+        statusId: s.statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id });
     const [linked] = await db
       .insert(schema.program)
-      .values({ organizationId: s.orgId, name: 'Linked', createdBy: s.actorId })
+      .values({
+        organizationId: s.orgId,
+        name: 'Linked',
+        createdBy: s.actorId,
+        status: 'active',
+        statusId: s.statusId('program', 'active'),
+      })
       .returning({ id: schema.program.id });
-    await db
-      .insert(schema.program)
-      .values({ organizationId: s.orgId, name: 'Unlinked', createdBy: s.actorId });
+    await db.insert(schema.program).values({
+      organizationId: s.orgId,
+      name: 'Unlinked',
+      createdBy: s.actorId,
+      status: 'active',
+      statusId: s.statusId('program', 'active'),
+    });
     await db.insert(schema.initiativeProgram).values({
       organizationId: s.orgId,
       initiativeId: assertDefined(init).id,
@@ -337,11 +385,21 @@ describe('the two that shipped unapplied', () => {
 
     const [proj] = await db
       .insert(schema.project)
-      .values({ organizationId: s.orgId, name: 'Has label', createdBy: s.actorId })
+      .values({
+        organizationId: s.orgId,
+        name: 'Has label',
+        createdBy: s.actorId,
+        status: 'planned',
+        statusId: s.statusId('project', 'planned'),
+      })
       .returning({ id: schema.project.id });
-    await db
-      .insert(schema.project)
-      .values({ organizationId: s.orgId, name: 'No label', createdBy: s.actorId });
+    await db.insert(schema.project).values({
+      organizationId: s.orgId,
+      name: 'No label',
+      createdBy: s.actorId,
+      status: 'planned',
+      statusId: s.statusId('project', 'planned'),
+    });
     await db.insert(schema.projectLabel).values({
       organizationId: s.orgId,
       projectId: assertDefined(proj).id,
@@ -350,11 +408,21 @@ describe('the two that shipped unapplied', () => {
 
     const [init] = await db
       .insert(schema.initiative)
-      .values({ organizationId: s.orgId, name: 'Has label', createdBy: s.actorId })
+      .values({
+        organizationId: s.orgId,
+        name: 'Has label',
+        createdBy: s.actorId,
+        status: 'active',
+        statusId: s.statusId('initiative', 'active'),
+      })
       .returning({ id: schema.initiative.id });
-    await db
-      .insert(schema.initiative)
-      .values({ organizationId: s.orgId, name: 'No label', createdBy: s.actorId });
+    await db.insert(schema.initiative).values({
+      organizationId: s.orgId,
+      name: 'No label',
+      createdBy: s.actorId,
+      status: 'active',
+      statusId: s.statusId('initiative', 'active'),
+    });
     await db.insert(schema.initiativeLabel).values({
       organizationId: s.orgId,
       initiativeId: assertDefined(init).id,

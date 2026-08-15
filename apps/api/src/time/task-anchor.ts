@@ -31,6 +31,7 @@ import {
 import { and, asc, desc, eq } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError, ValidationError } from '../error';
+import { landingStatus } from '../lib/work-status';
 
 /**
  * A transaction handle, or the pooled connection when there is no transaction in play.
@@ -187,21 +188,24 @@ async function anchorToNewTask(
   const organizationId = await resolveTargetOrganization(executor, userId, requestedOrganizationId);
   const actorId = await actorIdFor(executor, userId, organizationId);
   const teamRows = await executor
-    .select({ id: team.id, workflowStates: team.workflowStates })
+    .select({ id: team.id })
     .from(team)
     .where(eq(team.organizationId, organizationId))
     .orderBy(asc(team.createdAt))
     .limit(1);
   const teamRow = teamRows[0];
   if (!teamRow) throw new ConflictError('Create a team before tracking time');
-  const state = teamRow.workflowStates[0]?.key ?? 'backlog';
+  // Read through whatever the caller is using: this runs inside a transaction on the timer path,
+  // and the module-level client would stall on a connection that transaction already holds.
+  const landing = await landingStatus(organizationId, 'task', teamRow.id, executor);
   const inserted = await executor
     .insert(task)
     .values({
       organizationId,
       title,
       teamId: teamRow.id,
-      state,
+      statusId: landing.id,
+      state: landing.key,
       source: 'native',
       createdBy: actorId,
       ...(actorId ? { assigneeId: actorId } : {}),

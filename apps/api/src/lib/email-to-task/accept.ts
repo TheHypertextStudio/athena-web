@@ -105,6 +105,7 @@ export async function acceptSuggestion(
         title: overrides.title ?? suggestion.title,
         description: overrides.description ?? suggestion.description,
         teamId: landing.teamId,
+        statusId: landing.statusId,
         state: landing.state,
         priority: overrides.priority ?? suggestion.priority,
         assigneeId: landing.assigneeId,

@@ -10,6 +10,7 @@ import type * as IntegrationsModule from '@docket/integrations';
 import type * as ContainerModule from '../../src/container';
 import type ingestLinearAgentRouter from '../../src/routes/ingest-linear-agent';
 import type { sealCredential as SealCredential } from '../../src/lib/credentials';
+import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 const { buildLinearAgentClient } = vi.hoisted(() => ({
@@ -74,15 +75,20 @@ function signed(body: Record<string, unknown>): {
 }
 
 /** Seed an org with a connected `linear_agent` integration (and, by default, its credential). */
-async function seedOrgWithLinearAgent(
-  opts: { withCredential?: boolean } = {},
-): Promise<{ orgId: string; humanActorId: string; integrationId: string; workspaceId: string }> {
+async function seedOrgWithLinearAgent(opts: { withCredential?: boolean } = {}): Promise<{
+  orgId: string;
+  humanActorId: string;
+  integrationId: string;
+  workspaceId: string;
+  statusId: StatusIdLookup;
+}> {
   const slug = `lia-${Math.random().toString(36).slice(2, 10)}`;
   const [org] = await db
     .insert(schema.organization)
     .values({ name: slug, slug, lifecycleState: 'active' })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  const statusId = await seedStatuses(db, schema, orgId);
   const [human] = await db
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada' })
@@ -109,7 +115,7 @@ async function seedOrgWithLinearAgent(
       ciphertext: sealCredential(JSON.stringify({ accessToken: 'tok' })),
     });
   }
-  return { orgId, humanActorId, integrationId, workspaceId };
+  return { orgId, humanActorId, integrationId, workspaceId, statusId };
 }
 
 /** Link a Linear external id to a fresh Docket actor in `orgId` via a Better Auth `account`. */
@@ -370,6 +376,7 @@ describe('POST /internal/ingest/linear-agent', () => {
           title: 'Fix the thing',
           teamId: assertDefined(team).id,
           state: 'backlog',
+          statusId: seeded.statusId('task', 'backlog'),
           source: 'linked',
           sourceIntegrationId: assertDefined(regularConnector).id,
           externalId: 'issue_42',

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, seedStatuses } from '../support/routes-harness';
 import type programsRouter from '../../src/routes/programs';
 import { assertDefined } from '@docket/test-utils';
 
@@ -27,9 +27,16 @@ const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 /** Insert a program row directly and return its id. */
 async function seedProgram(orgId: string, createdBy: string): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const [p] = await db
     .insert(schema.program)
-    .values({ organizationId: orgId, name: 'Platform', createdBy })
+    .values({
+      organizationId: orgId,
+      name: 'Platform',
+      createdBy,
+      status: 'active',
+      statusId: statusId('program', 'active'),
+    })
     .returning({ id: schema.program.id });
   return assertDefined(p).id;
 }
@@ -42,9 +49,18 @@ async function seedProject(
   createdBy: string,
   name = 'Proj',
 ): Promise<string> {
+  const statusId = await seedStatuses(db, schema, orgId);
   const [proj] = await db
     .insert(schema.project)
-    .values({ organizationId: orgId, name, teamId, programId, createdBy })
+    .values({
+      organizationId: orgId,
+      name,
+      teamId,
+      programId,
+      createdBy,
+      status: 'planned',
+      statusId: statusId('project', 'planned'),
+    })
     .returning({ id: schema.project.id });
   return assertDefined(proj).id;
 }
@@ -85,6 +101,7 @@ async function seedTask(args: {
   cycleId?: string | null;
   archived?: boolean;
 }): Promise<string> {
+  const statusId = await seedStatuses(db, schema, args.orgId);
   const [t] = await db
     .insert(schema.task)
     .values({
@@ -92,6 +109,7 @@ async function seedTask(args: {
       title: args.title ?? 'T',
       teamId: args.teamId,
       state: 'backlog',
+      statusId: statusId('task', 'backlog'),
       programId: args.programId ?? null,
       projectId: args.projectId ?? null,
       cycleId: args.cycleId ?? null,

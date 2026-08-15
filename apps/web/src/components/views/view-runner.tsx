@@ -23,8 +23,8 @@ import type { WorkflowStateType } from '@docket/ui/components';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { entityDragSource } from '@/lib/entity-drag';
-import { stateTypeOf } from '@/lib/work-state';
 
 import { applyView, EMPTY_GROUP_ID } from './apply-view';
 import type { FieldCatalog, ViewState } from './field-catalog';
@@ -69,6 +69,8 @@ export function ViewRunner({
   label,
   onOpenTask,
 }: ViewRunnerProps): JSX.Element {
+  const categoryOf = useCategoryOf('task');
+
   /** The filtered + sorted + (optionally) grouped result for this query. */
   const applied = useMemo(() => applyView(tasks, state, catalog), [tasks, state, catalog]);
 
@@ -77,16 +79,18 @@ export function ViewRunner({
     const map = new Map<string, GroupKey>();
     if (applied.groups) {
       for (const group of applied.groups) {
+        // A status-grouped bucket is keyed by a status *key*, so the header's glyph comes from
+        // that status's category — which is the one thing about it that is true across workspaces.
         const stateType: WorkflowStateType | undefined =
           state.groupBy?.field === 'state' && group.id !== EMPTY_GROUP_ID
-            ? stateTypeOf(group.id)
+            ? categoryOf(group.id)
             : undefined;
         const key: GroupKey = { id: group.id, label: group.label, stateType };
         for (const task of group.rows) map.set(task.id, key);
       }
     }
     return map;
-  }, [applied.groups, state.groupBy]);
+  }, [applied.groups, state.groupBy, categoryOf]);
 
   /** Adapt a task DTO to the design-system {@link TaskRow} view-model. */
   const toRow = (task: TaskOut): TaskRowData => {
@@ -94,7 +98,7 @@ export function ViewRunner({
     return {
       id: task.id,
       title: task.title,
-      stateType: stateTypeOf(task.state),
+      stateType: categoryOf(task.state),
       assigneeName: actor?.name ?? null,
       assigneeKind: actor?.kind ?? 'human',
       assigneeAvatarUrl: actor?.avatarUrl ?? null,

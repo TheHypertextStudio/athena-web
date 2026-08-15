@@ -3,7 +3,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import type { StatusIdLookup } from '../support/routes-harness';
+import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
 import type milestonesRouter from '../../src/routes/milestones';
 import { assertDefined } from '@docket/test-utils';
 
@@ -23,12 +24,25 @@ async function json<T>(res: Response): Promise<T> {
 }
 
 /** Create a project row directly in the db and return its id. */
-async function seedProject(orgId: string, teamId: string, createdBy: string): Promise<string> {
-  const [proj] = await db
-    .insert(schema.project)
-    .values({ organizationId: orgId, name: 'Proj', teamId, createdBy })
-    .returning({ id: schema.project.id });
-  return assertDefined(proj).id;
+async function seedProject(
+  statusId: StatusIdLookup,
+  orgId: string,
+  teamId: string,
+  createdBy: string,
+): Promise<string> {
+  return one(
+    await db
+      .insert(schema.project)
+      .values({
+        organizationId: orgId,
+        name: 'Proj',
+        teamId,
+        createdBy,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
+      .returning({ id: schema.project.id }),
+  ).id;
 }
 
 /** Create a milestone row directly in the db (bypassing the router) and return its id. */
@@ -44,7 +58,7 @@ describe('milestones detail: tenant isolation', () => {
   it("cannot get/patch/delete another org's milestone (404, existence-hidden)", async () => {
     const orgA = await seedBaseOrg(db, schema);
     const orgB = await seedBaseOrg(db, schema);
-    const projA = await seedProject(orgA.orgId, orgA.teamId, orgA.humanActorId);
+    const projA = await seedProject(orgA.statusId, orgA.orgId, orgA.teamId, orgA.humanActorId);
     const idInA = await seedMilestone(orgA.orgId, projA, orgA.humanActorId);
 
     // An actor scoped to org B must not see org A's milestone, even with manage-level caps.
@@ -74,7 +88,7 @@ describe('milestones detail: tenant isolation', () => {
   it("list is org-scoped: another org's milestones never appear", async () => {
     const orgA = await seedBaseOrg(db, schema);
     const orgB = await seedBaseOrg(db, schema);
-    const projA = await seedProject(orgA.orgId, orgA.teamId, orgA.humanActorId);
+    const projA = await seedProject(orgA.statusId, orgA.orgId, orgA.teamId, orgA.humanActorId);
     await seedMilestone(orgA.orgId, projA, orgA.humanActorId);
 
     // Org B starts empty and stays empty regardless of org A's rows.
@@ -89,7 +103,7 @@ describe('milestones detail: list project filter is org-scoped', () => {
   it("filtering by a foreign org's projectId returns nothing for the caller's org", async () => {
     const orgA = await seedBaseOrg(db, schema);
     const orgB = await seedBaseOrg(db, schema);
-    const projA = await seedProject(orgA.orgId, orgA.teamId, orgA.humanActorId);
+    const projA = await seedProject(orgA.statusId, orgA.orgId, orgA.teamId, orgA.humanActorId);
     await seedMilestone(orgA.orgId, projA, orgA.humanActorId);
 
     // Even naming org A's projectId, org B's scope yields zero rows.
@@ -102,9 +116,9 @@ describe('milestones detail: list project filter is org-scoped', () => {
 
 describe('milestones detail: delete nulls referencing tasks', () => {
   it("deleting a milestone sets referencing tasks' milestone_id to null (FK on delete)", async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
-    const projectId = await seedProject(orgId, teamId, humanActorId);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
     const milestoneId = await seedMilestone(orgId, projectId, humanActorId);
 
     // A task pinned to the milestone.
@@ -115,6 +129,7 @@ describe('milestones detail: delete nulls referencing tasks', () => {
         title: 'Pinned',
         teamId,
         state: 'backlog',
+        statusId: statusId('task', 'backlog'),
         projectId,
         milestoneId,
       })
@@ -134,9 +149,9 @@ describe('milestones detail: delete nulls referencing tasks', () => {
 
 describe('milestones detail: description field', () => {
   it('round-trips a description through create and read', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
-    const projectId = await seedProject(orgId, teamId, humanActorId);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
     const created = await writer.request('/', {
       method: 'POST',
@@ -152,9 +167,9 @@ describe('milestones detail: description field', () => {
   });
 
   it('omitting description on create leaves it null', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
-    const projectId = await seedProject(orgId, teamId, humanActorId);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
 
     const created = await writer.request('/', {
       method: 'POST',
@@ -165,9 +180,9 @@ describe('milestones detail: description field', () => {
   });
 
   it('an explicit null on patch clears the description', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
-    const projectId = await seedProject(orgId, teamId, humanActorId);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
     const milestoneId = await seedMilestone(orgId, projectId, humanActorId);
 
     await writer.request(`/${milestoneId}`, {
@@ -184,9 +199,9 @@ describe('milestones detail: description field', () => {
   });
 
   it('omitting description on patch leaves it unchanged', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
-    const projectId = await seedProject(orgId, teamId, humanActorId);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
     const milestoneId = await seedMilestone(orgId, projectId, humanActorId);
 
     await writer.request(`/${milestoneId}`, {
@@ -216,9 +231,9 @@ describe('milestones detail: invalid input', () => {
   });
 
   it('422s on a non-integer sort in the create body', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
-    const projectId = await seedProject(orgId, teamId, humanActorId);
+    const projectId = await seedProject(statusId, orgId, teamId, humanActorId);
     const res = await writer.request('/', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

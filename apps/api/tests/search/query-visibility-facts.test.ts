@@ -11,7 +11,14 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { addMember, getDb, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
+import {
+  addMember,
+  getDb,
+  one,
+  seedOrg,
+  seedStatuses,
+  seedUserWithHub,
+} from '../support/routes-harness';
 import { searchWorkspace } from '../../src/search/query';
 
 describe('search query — empty query', () => {
@@ -37,6 +44,7 @@ describe('search query — grantable visibility across every subject kind', () =
       const { db } = schema;
       const userId = await seedUserWithHub(db, schema, `SearchFacts-${kind}`);
       const orgId = await seedOrg(db, schema);
+      const statusId = await seedStatuses(db, schema, orgId);
       const actorId = await addMember(db, schema, orgId, userId);
       const teamId = one(
         await db
@@ -55,14 +63,27 @@ describe('search query — grantable visibility across every subject kind', () =
         subjectId = one(
           await db
             .insert(schema.project)
-            .values({ organizationId: orgId, name: 'P', teamId, visibility: 'private' })
+            .values({
+              organizationId: orgId,
+              name: 'P',
+              teamId,
+              visibility: 'private',
+              status: 'planned',
+              statusId: statusId('project', 'planned'),
+            })
             .returning({ id: schema.project.id }),
         ).id;
       } else if (kind === 'program') {
         subjectId = one(
           await db
             .insert(schema.program)
-            .values({ organizationId: orgId, name: 'Prog', visibility: 'private' })
+            .values({
+              organizationId: orgId,
+              name: 'Prog',
+              visibility: 'private',
+              status: 'active',
+              statusId: statusId('program', 'active'),
+            })
             .returning({ id: schema.program.id }),
         ).id;
       } else {
@@ -125,6 +146,7 @@ describe('search query — grantable visibility across every subject kind', () =
       const { db } = schema;
       const userId = await seedUserWithHub(db, schema, `SearchFactsPublic-${kind}`);
       const orgId = await seedOrg(db, schema);
+      const statusId = await seedStatuses(db, schema, orgId);
       await addMember(db, schema, orgId, userId);
 
       let subjectId: string;
@@ -132,7 +154,12 @@ describe('search query — grantable visibility across every subject kind', () =
         subjectId = one(
           await db
             .insert(schema.initiative)
-            .values({ organizationId: orgId, name: 'I' })
+            .values({
+              organizationId: orgId,
+              name: 'I',
+              status: 'active',
+              statusId: statusId('initiative', 'active'),
+            })
             .returning({ id: schema.initiative.id }),
         ).id;
       } else if (kind === 'cycle') {
@@ -199,11 +226,18 @@ describe('search query — grantable visibility across every subject kind', () =
     const { db } = schema;
     const userId = await seedUserWithHub(db, schema, 'SearchGrantExpired');
     const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
     const actorId = await addMember(db, schema, orgId, userId);
     const program = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'Expiring', visibility: 'private' })
+        .values({
+          organizationId: orgId,
+          name: 'Expiring',
+          visibility: 'private',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     );
     const docId = `doc:${orgId}:expired-grant`;
@@ -251,11 +285,18 @@ describe('search query — grantable visibility across every subject kind', () =
     const { db } = schema;
     const userId = await seedUserWithHub(db, schema, 'SearchGrantDeny');
     const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
     const actorId = await addMember(db, schema, orgId, userId);
     const program = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'Denied', visibility: 'private' })
+        .values({
+          organizationId: orgId,
+          name: 'Denied',
+          visibility: 'private',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     );
     const docId = `doc:${orgId}:denied-grant`;
@@ -302,11 +343,18 @@ describe('search query — grantable visibility across every subject kind', () =
     const { db } = schema;
     const userId = await seedUserWithHub(db, schema, 'SearchGrantNoView');
     const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
     const actorId = await addMember(db, schema, orgId, userId);
     const program = one(
       await db
         .insert(schema.program)
-        .values({ organizationId: orgId, name: 'NoView', visibility: 'private' })
+        .values({
+          organizationId: orgId,
+          name: 'NoView',
+          visibility: 'private',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+        })
         .returning({ id: schema.program.id }),
     );
     const docId = `doc:${orgId}:noview-grant`;

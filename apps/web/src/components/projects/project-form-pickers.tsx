@@ -23,9 +23,10 @@ import {
 import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, Layers, Target } from '@docket/ui/icons';
 import type { TeamOut } from '@docket/types';
-import type { JSX } from 'react';
+import { type JSX, useMemo } from 'react';
 
-import { HEALTH_OPTIONS, PROJECT_STATUS_OPTIONS } from '@/components/pickers/options';
+import { HEALTH_OPTIONS, statusOptions } from '@/components/pickers/options';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { TeamPicker } from '@/components/teams/team-picker';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -102,11 +103,16 @@ export function ProjectComposerPickers({
 }: ProjectComposerPickersProps): JSX.Element {
   const initiativeNoun = useVocabulary('initiative');
   const programLabel = useVocabulary('program');
+  const statuses = useStatusRegistry();
+  const projectStatusOptions = useMemo(
+    () => statusOptions(statuses.statusesFor('project')),
+    [statuses],
+  );
 
   return (
     <>
       <EnumPicker
-        options={PROJECT_STATUS_OPTIONS}
+        options={projectStatusOptions}
         value={status}
         onChange={(next) => {
           if (next) onStatusChange(next);

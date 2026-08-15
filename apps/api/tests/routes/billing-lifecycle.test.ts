@@ -147,11 +147,13 @@ describe('billing lifecycle: POST /lifecycle/reactivate', () => {
 
 describe('billing: POST /export', () => {
   it('generates a downloadable archive of the org work layer and stamps exportReadyAt', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     // Seed a couple of work-layer rows so the archive is non-trivial.
     await db.insert(schema.initiative).values({
       organizationId: orgId,
       name: 'Q3 Goals',
+      status: 'active',
+      statusId: statusId('initiative', 'active'),
       createdBy: humanActorId,
     });
     await db.insert(schema.task).values({
@@ -159,6 +161,7 @@ describe('billing: POST /export', () => {
       teamId,
       title: 'Ship export',
       state: 'todo',
+      statusId: statusId('task', 'todo'),
       createdBy: humanActorId,
     });
 
@@ -184,6 +187,7 @@ describe('billing: POST /export', () => {
       teamId: b.teamId,
       title: 'Other org secret',
       state: 'todo',
+      statusId: b.statusId('task', 'todo'),
       createdBy: b.humanActorId,
     });
     // A task in org A that MUST appear.
@@ -192,6 +196,7 @@ describe('billing: POST /export', () => {
       teamId: a.teamId,
       title: 'My org task',
       state: 'todo',
+      statusId: a.statusId('task', 'todo'),
       createdBy: a.humanActorId,
     });
 

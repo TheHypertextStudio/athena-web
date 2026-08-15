@@ -5,13 +5,16 @@ import { SchedulingCommitmentInput } from '../../src/scheduling';
 import {
   WorkLocationAssertionCreate,
   WorkLocationAssertionMutationOut,
+  WorkLocationAssertionUpdate,
   WorkLocationObservationCreate,
   WorkLocationPointOut,
   WorkLocationProfileUpdate,
+  WorkLocationRangeQuery,
   WorkLocationSyncAccountOut,
   WorkLocationSyncOut,
   WorkPlaceCreate,
   WorkPlaceOut,
+  WorkPlaceUpdate,
 } from '../../src/work-location';
 
 const PLACE_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -40,6 +43,13 @@ describe('WorkPlace', () => {
     expect(WorkPlaceCreate.safeParse({ name: 'Library', address: 'x'.repeat(241) }).success).toBe(
       false,
     );
+  });
+
+  it('requires saved-place updates to name at least one changed field', () => {
+    expect(WorkPlaceUpdate.parse({ name: 'Thursday client site' })).toEqual({
+      name: 'Thursday client site',
+    });
+    expect(WorkPlaceUpdate.safeParse({}).success).toBe(false);
   });
 
   it('keeps provider classifications in account-aware mappings', () => {
@@ -179,6 +189,72 @@ describe('WorkLocationAssertion', () => {
           endMinute: 540,
           timezone: 'America/Los_Angeles',
         },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('validates weekly effective ranges for all-day and timed schedules', () => {
+    expect(
+      WorkLocationAssertionCreate.safeParse({
+        placeId: PLACE_ID,
+        schedule: {
+          type: 'weekly_all_day',
+          effectiveFrom: '2026-08-10',
+          effectiveUntil: null,
+          weekdays: [1],
+          timezone: 'America/Los_Angeles',
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      WorkLocationAssertionCreate.safeParse({
+        placeId: PLACE_ID,
+        schedule: {
+          type: 'weekly_all_day',
+          effectiveFrom: '2026-08-10',
+          effectiveUntil: '2026-08-09',
+          weekdays: [1],
+          timezone: 'America/Los_Angeles',
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      WorkLocationAssertionCreate.safeParse({
+        placeId: PLACE_ID,
+        schedule: {
+          type: 'weekly_timed',
+          effectiveFrom: '2026-08-10',
+          effectiveUntil: '2026-08-09',
+          weekdays: [1],
+          startMinute: 540,
+          endMinute: 1_020,
+          timezone: 'America/Los_Angeles',
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('requires assertion updates to name a place or schedule change', () => {
+    expect(WorkLocationAssertionUpdate.parse({ placeId: PLACE_ID })).toEqual({
+      placeId: PLACE_ID,
+    });
+    expect(WorkLocationAssertionUpdate.safeParse({}).success).toBe(false);
+  });
+
+  it('requires expected-location ranges to move forward in time', () => {
+    expect(
+      WorkLocationRangeQuery.parse({
+        start: '2026-08-13T16:00:00.000Z',
+        end: '2026-08-13T20:00:00.000Z',
+      }),
+    ).toEqual({
+      start: '2026-08-13T16:00:00.000Z',
+      end: '2026-08-13T20:00:00.000Z',
+    });
+    expect(
+      WorkLocationRangeQuery.safeParse({
+        start: '2026-08-13T20:00:00.000Z',
+        end: '2026-08-13T16:00:00.000Z',
       }).success,
     ).toBe(false);
   });

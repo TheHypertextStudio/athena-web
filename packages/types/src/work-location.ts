@@ -49,7 +49,7 @@ export const WorkPlaceProviderMapping = z
 /** Saved-place provider-mapping value. */
 export type WorkPlaceProviderMapping = z.infer<typeof WorkPlaceProviderMapping>;
 
-const WorkPlaceFields = {
+const WorkPlaceFieldSchemas = {
   name: z.string().trim().min(1).max(120).describe('User-defined saved-place name.'),
   address: z
     .string()
@@ -57,16 +57,20 @@ const WorkPlaceFields = {
     .min(1)
     .max(240)
     .nullable()
-    .default(null)
     .describe('Optional private owner-facing address; never provider-projected.'),
-  geofence: WorkPlaceGeofence.nullable()
-    .default(null)
-    .describe('Optional user-authorized geofence.'),
+  geofence: WorkPlaceGeofence.nullable().describe('Optional user-authorized geofence.'),
   providerMappings: z
     .array(WorkPlaceProviderMapping)
-    .default([])
     .describe('Account-aware provider mappings; these do not classify the core place.'),
-  sort: z.number().int().nonnegative().default(0).describe('Stable personal display order.'),
+  sort: z.number().int().nonnegative().describe('Stable personal display order.'),
+};
+
+const WorkPlaceFields = {
+  ...WorkPlaceFieldSchemas,
+  address: WorkPlaceFieldSchemas.address.default(null),
+  geofence: WorkPlaceFieldSchemas.geofence.default(null),
+  providerMappings: WorkPlaceFieldSchemas.providerMappings.default([]),
+  sort: WorkPlaceFieldSchemas.sort.default(0),
 };
 
 /** Input for creating one arbitrary named place; a name alone is sufficient. */
@@ -79,7 +83,7 @@ export type WorkPlaceCreate = z.input<typeof WorkPlaceCreate>;
 
 /** Input for changing a saved place. */
 export const WorkPlaceUpdate = z
-  .object(WorkPlaceFields)
+  .object(WorkPlaceFieldSchemas)
   .partial()
   .strict()
   .refine((value) => Object.keys(value).length > 0, 'At least one saved-place field is required')

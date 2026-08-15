@@ -1,6 +1,7 @@
 import path from 'path';
 import type { NextConfig } from 'next';
 
+import { docsSiteOrigin } from './src/lib/docs-site';
 import { validatedApiOrigin } from './src/lib/proxy-origin';
 
 /** The API origin the browser is rewritten to (same-origin so Better Auth cookies flow). */
@@ -21,6 +22,29 @@ const API_ORIGIN = validatedApiOrigin(apiUrl, process.env['NEXT_PUBLIC_APP_URL']
  * callback. The dots are escaped because Next treats `has.value` as a regex-like matcher.
  */
 const LEGACY_ATHENA_HOST = 'athena\\.hypertext\\.studio';
+
+/**
+ * The rewrites that put the public documentation site (`apps/docs`) under `/docs` on this origin.
+ *
+ * @remarks
+ * Five sources, not two: `/_mintlify/*` and `/mintlify-assets/*` carry the client bundle, fonts,
+ * and search index, and `/api/request` is the telemetry endpoint the in-page search calls. Omit
+ * those three and the page looks correct with no working search.
+ *
+ * Unconfigured until the subpath is enabled on the Mintlify side ("Host at"); the rewrites are then
+ * omitted and `/docs` 404s, which is also what makes the marketing nav drop the link.
+ */
+function docsRewrites(): { source: string; destination: string }[] {
+  const origin = docsSiteOrigin();
+  if (origin === undefined) return [];
+  return [
+    { source: '/docs', destination: `${origin}/docs` },
+    { source: '/docs/:path*', destination: `${origin}/docs/:path*` },
+    { source: '/_mintlify/:path*', destination: `${origin}/_mintlify/:path*` },
+    { source: '/mintlify-assets/:path+', destination: `${origin}/mintlify-assets/:path+` },
+    { source: '/api/request', destination: `${origin}/_mintlify/api/request` },
+  ];
+}
 
 /**
  * Extra allowed dev origins taken from the auth allowlist.
@@ -56,15 +80,43 @@ function authAllowedDevOrigins(): string[] {
  * violation in the console while the UI shows a permission denial the person cannot fix from
  * their own browser settings. `self` still forbids every embedded third-party frame from asking.
  * The camera and geolocation stay fully denied: nothing in Docket uses either.
+ *
+ * Every one of these replaces the upstream header on the `/docs` paths proxied to Mintlify, which
+ * is fine for all five — Docket's values are at least as strict, and `X-Frame-Options: DENY` is
+ * wanted there. The CSP is the exception and is split into {@link cspHeader}; see it for why.
  */
 const securityHeaders = [
-  { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
 ];
+
+/**
+ * The app's own CSP, applied everywhere except the documentation subpath.
+ *
+ * @remarks
+ * `frame-ancestors 'none'` (plus the legacy `X-Frame-Options: DENY` above) is the anti-clickjacking
+ * control — it stops the OAuth consent page (`/oauth/authorize`) and every other surface from being
+ * framed, closing the UI-redress attack. Only the framing directive is set; a full content CSP
+ * (`script-src`/`style-src`) is a deliberate follow-up (Next's inline styles need a nonce pipeline
+ * first) and would be introduced in report-only mode.
+ *
+ * `/docs` is excluded because a same-named header replaces the upstream one, and applying this CSP
+ * there would discard Mintlify's much stricter policy — one covering services this repo cannot
+ * track (CloudFront, `mintcdn.com`, `leaves.mintlify.com`, hCaptcha's `unsafe-eval`), where a
+ * hand-copied allowlist would go stale into a silently broken search box. `X-Frame-Options: DENY`
+ * still covers those paths via {@link securityHeaders}.
+ * See https://www.mintlify.com/docs/deploy/csp-configuration.
+ *
+ * The lookahead is anchored so `/documentation` keeps the CSP;
+ * `tests/config/security-headers.test.ts` compiles this `source` and asserts both directions.
+ */
+const cspHeader = [{ key: 'Content-Security-Policy', value: "frame-ancestors 'none'" }];
+
+/** Every route except the documentation subpath, as a header `source` pattern. */
+const NON_DOCS_ROUTES = '/:path((?!docs$|docs/).*)';
 
 /**
  * Next.js config for the Docket product app.
@@ -93,6 +145,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },
+      { source: NON_DOCS_ROUTES, headers: cspHeader },
       {
         // The worker script itself must never be served stale, or a deployed update can sit
         // unnoticed behind a cached copy for as long as the browser's heuristic freshness lasts —
@@ -169,6 +222,7 @@ const nextConfig: NextConfig = {
         source: '/internal/integrations/github/:path*',
         destination: `${API_ORIGIN}/internal/integrations/github/:path*`,
       },
+      ...docsRewrites(),
     ];
   },
 };

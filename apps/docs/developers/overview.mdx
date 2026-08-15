@@ -1,0 +1,101 @@
+---
+title: "Developer overview"
+description: "The three ways into Docket — the MCP server, the REST API, and OAuth apps — and which one fits what you are building."
+---
+
+Docket has one domain model and three doors into it. Everything below acts as a real person under
+that person's real permissions; none of them is a back channel.
+
+<CardGroup cols={3}>
+  <Card title="MCP server" icon="robot" href="/developers/connect-an-agent-mcp">
+    Connect an AI agent. Any MCP-capable client speaking Streamable HTTP and OAuth 2.1 can read
+    and act on a workspace. **The most complete surface.**
+  </Card>
+  <Card title="REST API" icon="code" href="/developers/rest-api">
+    Around 450 documented operations under `/v1`. Live reference rendered from the running
+    service.
+  </Card>
+  <Card title="OAuth apps" icon="key" href="/developers/authentication">
+    Register a client, ask a person for scopes, and act as them.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Docket is **pre-launch**. Nobody is building on this externally yet, no SDK is published, and the
+  API is unversioned. Read [Platform status](/developers/platform-status) before you invest in
+  anything here.
+</Warning>
+
+## Which one do I want?
+
+| You are building | Use |
+| --- | --- |
+| An AI agent that works in Docket | [MCP](/developers/connect-an-agent-mcp) |
+| A script that syncs something nightly | [REST](/developers/rest-api) |
+| A product other Docket users install | [OAuth app](/developers/authentication) + MCP or REST |
+| An integration that reacts to changes | REST plus the [SSE stream](/developers/rest-api#live-updates) |
+
+The MCP surface is deliberately the richest, because it is designed for a caller that describes
+intent rather than one that knows the schema. `capture` turns a sentence into a task; `organize`
+takes an entire plan in one call and reconciles it so a re-run creates no duplicates.
+
+## The model in one screen
+
+Everything is scoped to an **Organization** — a workspace, the tenant boundary. Inside one:
+
+```
+Organization
+  ├─ Team          owns workflow states, cycles, and a triage queue
+  ├─ Initiative    a theme; holds no work; many-to-many with the two below
+  ├─ Program       ongoing operations; holds Projects and Tasks
+  ├─ Project       a bounded effort; holds Tasks; carries Milestones
+  └─ Task          the atomic unit; subtasks, acyclic dependencies, attachments, labels
+```
+
+Alongside: **Cycles** (a team's recurring time window, scheduling Tasks without containing them),
+**Updates** (narrative status that drives health), and **Comments** (threaded, on anything).
+
+Two relationship kinds, kept apart on purpose:
+
+- **Containment** — a hard parent → child. Authorization cascades down these edges.
+- **Association** — a soft link either side can live without. An Initiative themes a Project; a
+  Cycle schedules a Task; a Task blocks a Task.
+
+The [user-facing concept guides](/guides/concepts/terminology) describe the same model in
+product terms, and are worth reading first if any of the above is unfamiliar.
+
+<Note>
+  Workspaces relabel these words for their members — a Cycle may display as a Season or a Sprint.
+  **The API always uses the default names**, so `cycle` is `cycle` regardless of what the UI shows.
+  See [Terminology](/guides/concepts/terminology).
+</Note>
+
+## Conventions every surface shares
+
+| | |
+| --- | --- |
+| **Identifiers** | ULIDs. Sortable, opaque — never parse them. |
+| **Pagination** | Keyset, via an opaque cursor. Never offset. |
+| **Errors** | RFC 9457 problem documents, with a stable machine-readable `code`. See [Errors](/developers/errors). |
+| **Idempotency** | Unsafe operations accept an `Idempotency-Key` header. |
+| **Authorization** | The capability ladder `view < comment < contribute < assign < manage`, cascading down containment. A token can never exceed the person who granted it. |
+
+## Permissions, and the ceiling on them
+
+Worth stating once because it governs everything:
+
+**A token never grants more than the human behind it has.** OAuth scopes are the first gate; the
+person's own roles and grants in each workspace remain binding underneath. A read-only token
+calling a write tool gets a `403` with an `insufficient_scope` challenge, and well-behaved clients
+step up automatically.
+
+## Start here
+
+<CardGroup cols={2}>
+  <Card title="Connect an agent" icon="plug" href="/developers/connect-an-agent-mcp">
+    The fastest useful thing: point Claude Code, Cursor, or Codex at Docket in one command.
+  </Card>
+  <Card title="Authentication" icon="lock" href="/developers/authentication">
+    OAuth 2.1, client registration, scopes, and token lifetimes.
+  </Card>
+</CardGroup>

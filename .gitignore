@@ -93,3 +93,8 @@ apps/web/public/sw.js
 
 # Local scratch space for one-off audit scripts; never committed.
 .scratch/
+
+# Written on demand by `pnpm --filter @docket/api openapi:export`, for generating a client or
+# diffing the surface. Deliberately not committed: it is 4.7 MB of generated JSON that changes
+# with almost every API commit. `/v1/openapi.json` from the running service is the copy to trust.
+apps/api/openapi.json

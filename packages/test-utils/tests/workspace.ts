@@ -184,6 +184,33 @@ function collectSourceFiles(directory: string, sourceDirectory: string): string[
   return files;
 }
 
+/**
+ * Every file under `directory`, recursively, whose name ends with one of `extensions`.
+ *
+ * @remarks
+ * The plain walk, for policy tests scanning something other than a package's production sources —
+ * a docs content tree, say. Use {@link collectPackageSourceFiles} for shipped code; it also skips
+ * source-local test directories and declaration files. Neither skips build output.
+ *
+ * @param directory - Absolute path to walk.
+ * @param extensions - Suffixes to keep, e.g. `['.mdx', '.json']`.
+ * @returns Absolute paths, in directory order.
+ */
+export function filesUnder(directory: string, extensions: readonly string[]): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const entryPath = resolve(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...filesUnder(entryPath, extensions));
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (!extensions.some((extension) => entry.name.endsWith(extension))) continue;
+    files.push(entryPath);
+  }
+  return files;
+}
+
 function usesViteBuild(manifest: PackageManifest): boolean {
   const build = manifest.scripts?.['build'];
   return build !== undefined && /(?:^|[;&|\s])vite\s+build(?:\s|$)/.test(build);

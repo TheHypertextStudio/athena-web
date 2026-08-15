@@ -16,7 +16,8 @@
  */
 import { Scalar } from '@scalar/hono-api-reference';
 import { openAPIRouteHandler } from 'hono-openapi';
-import type { Hono } from 'hono';
+// A value import, not `import type`: `openapiDocument` constructs a throwaway server.
+import { Hono } from 'hono';
 
 import type { AdminInstance, AppInstance } from './app';
 import type { AppEnv } from './context';
@@ -357,4 +358,27 @@ export function registerOpenapi(
     openAPIRouteHandler(adminApp, { documentation: buildAdminDocumentation() }),
   );
   server.get('/admin/docs', scalar('/admin/openapi.json'));
+}
+
+/**
+ * Generate one of the two OpenAPI documents in-process, as its route serves it.
+ *
+ * @remarks
+ * Not `generateSpecs(app)`: the bare generator omits `info`, `servers`, `security`, and `tags`,
+ * which live in the `documentation` object {@link registerOpenapi} passes in. The apps are
+ * parameters, not imports, so this module stays free of `./app`.
+ *
+ * @param app - The public `/v1` app.
+ * @param adminApp - The staff `/admin` app.
+ * @param surface - Which document to return.
+ * @returns The parsed document.
+ */
+export async function openapiDocument(
+  app: AppInstance,
+  adminApp: AdminInstance,
+  surface: 'v1' | 'admin' = 'v1',
+): Promise<unknown> {
+  const server = new Hono<AppEnv>();
+  registerOpenapi(server, app, adminApp);
+  return (await server.request(`/${surface}/openapi.json`)).json();
 }

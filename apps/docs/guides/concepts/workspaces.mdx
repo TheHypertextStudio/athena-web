@@ -1,0 +1,100 @@
+---
+title: "Workspaces and your Hub"
+description: "The two altitudes Docket is built on — the personal Hub that spans everything, and the isolated workspace where work actually lives."
+---
+
+Docket has exactly two heights. Almost every question about where something lives resolves to
+which one you are standing at.
+
+```
+   YOU (one person)
+     │ owns
+     ▼
+   ┌──────────────────── YOUR HUB ────────────────────┐
+   │  Home · Inbox · Portfolio · Search               │
+   │  spans every workspace you belong to             │
+   └───────┬──────────────────────────┬───────────────┘
+           │ owns                     │ gathers, via your membership
+           ▼                          ▼
+   ┌───────────────┐      ┌───────────────┐   ┌───────────────┐
+   │ Personal space│      │  Workspace    │   │  Workspace    │
+   │  (yours only) │      │  "Startup"    │   │  "Nonprofit"  │
+   └───────────────┘      └───────────────┘   └───────────────┘
+```
+
+## Your Hub
+
+One per person, and it belongs to you rather than to any organization. The Hub aggregates across
+every workspace you are a member of and owns your cross-workspace surfaces:
+
+- [**Home**](/guides/daily/home-today) — today's plan, your calendar, and what needs attention.
+- [**Inbox**](/guides/daily/inbox) — everything awaiting a response, from every workspace.
+- [**Portfolio**](/guides/daily/portfolio) — every workspace's programs and projects on one
+  timeline.
+- [**Search**](/guides/daily/search-and-views) — one palette that fuses search, navigation,
+  actions, and switching workspaces.
+
+Every item pulled into a Hub surface wears a chip naming the workspace it came from.
+
+## A workspace
+
+The boundary that isolates one venture from another. Scoped to a workspace and invisible outside
+it: its members, its connected tools, its agents, its
+[terminology](/guides/concepts/terminology), and all of its work.
+
+Drop into a workspace and the whole app rebinds — it speaks that workspace's language and shows
+its people and its tools. Step back to the Hub and you are aggregated again.
+
+<Note>
+  **Separation is structural. Unification is a view.** Data never merges across workspaces;
+  Hub surfaces gather. The same workspace appears in every member's own Hub, because a workspace
+  is a shared tenant rather than something your Hub privately owns.
+</Note>
+
+## Your personal space
+
+An organization of one, for work tied to no venture. It reuses the same machinery as a shared
+workspace, so tasks, projects, cycles, and Athena all work identically inside it.
+
+What it drops is the parts that only make sense with other people in the room: there is no member
+roster to manage, no publishing settings, and its data sources are your personal connections
+rather than a separate shared set.
+
+Docket creates it for you when you sign up as an individual. You never name it, and you are never
+asked to invent an organization to hold your own to-do list.
+
+## Membership, roles, and access
+
+Access inside a workspace is decided by two things working together.
+
+**Capabilities** are a single ordered ladder. A higher one satisfies every lower one.
+
+| Capability | What it allows |
+| --- | --- |
+| `view` | Read the item. |
+| `comment` | Add comments and discussion. |
+| `contribute` | Create and edit content — tasks, fields. |
+| `assign` | Route and assign work to others. |
+| `manage` | Full control, including settings, membership, and deletion. |
+
+**Grants** bind a subject to a place in the work tree. The subject is either one Actor or an
+entire role, and the target is any node from the workspace down to a single task —
+organization, team, initiative, program, project, cycle, or task. A grant cascades down
+containment, so `contribute` on a Program reaches the Projects and Tasks inside it.
+
+An item is also either **public** to workspace members or **private**, in which case only holders
+of an explicit grant can see it at all.
+
+Roles themselves are workspace-defined. You name them and pick what they carry, so a nonprofit's
+"Volunteer" and an agency's "Client" can both be real roles rather than an approximation of
+someone else's fixed list.
+
+Manage all of this in **Settings → Members & Access**.
+
+## Switching, adding, and leaving
+
+The workspace switcher sits at the top of the sidebar. Creating a workspace opens a focused page
+asking for a name and a terminology preset.
+
+Every workspace you join appears in your Hub automatically, and leaving one removes it from your
+Hub while leaving the workspace itself untouched for everyone else.

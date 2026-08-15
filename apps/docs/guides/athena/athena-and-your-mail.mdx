@@ -1,0 +1,79 @@
+---
+title: "Athena and your mail"
+description: "Her own email address, and turning the mail you already get into work you can act on."
+---
+
+Mail reaches Athena two different ways, and they are worth keeping apart.
+
+<CardGroup cols={2}>
+  <Card title="Athena's own address" icon="envelope">
+    She receives email natively, at an address of her own. Nothing to connect, nothing to import.
+    Forward things to her.
+  </Card>
+  <Card title="Your connected mailbox" icon="inbox">
+    Connect Gmail and Athena reads what arrives, deciding what work it implies and proposing
+    tasks for you to accept.
+  </Card>
+</CardGroup>
+
+## Athena's own address
+
+Athena has an inbox. Forward anything to it — a confirmation, a thread you need to act on, a
+document someone sent you — and it becomes context she can work from.
+
+A received message is stored as a **context object** rather than as an email. It carries a title,
+its content, where it came from, and when — the same shape any other piece of context has. That
+is what lets a message be attached to work without dragging an email client's worth of concepts
+along with it.
+
+Nothing about this depends on connecting a mailbox. It has no relationship to the mail Docket
+syncs out of a connected account.
+
+## Mail into tasks
+
+Connect Gmail and the pipeline runs the other direction: Athena reads what arrives, works out
+what work it implies, and drafts a Task with the original email **attached as context**.
+
+**The task is the real object; the email is an attachment.** You act on the task, and the message
+that caused it stays one click away for when you need to check what was actually said.
+
+### It is always a suggestion first
+
+A drafted task is a [proposal](/guides/athena/proposals-and-approvals), not a task. It waits for
+you to accept, edit, or dismiss it. Nothing is created behind your back.
+
+Each suggestion carries a confidence indicator and a preview of the source thread, so deciding
+usually takes a glance.
+
+### Dates come from the message, never from a guess
+
+If an email states a date, the drafted task carries it. If it does not, the task has no due date.
+Athena declines to infer one, because a confidently wrong deadline is worse than none.
+
+## Rules and automations
+
+Once suggestions are flowing you can automate the obvious parts. Rules act on incoming suggestions
+and on tasks, and can:
+
+- Set a status, assignee, or priority
+- Apply a label
+- Send a notification
+- Accept a suggestion automatically
+
+Enabling email-to-task seeds a sensible default set of rules immediately, so it is useful before
+you configure anything.
+
+Set this up in **Settings → Connections → Email to task**, and manage rules in
+**Settings → Automations**.
+
+## Housekeeping
+
+Suggestions you never act on expire after 30 days, and resolved ones are cleared after 90. The
+queue stays a queue rather than becoming an archive.
+
+## When mail access breaks
+
+If the connection loses its authorization, it is flagged as needing re-authorization and you are
+notified. A mail connector never reports success while reading nothing.
+
+Re-authorize from **Settings → Connections**.

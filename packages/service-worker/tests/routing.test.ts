@@ -41,6 +41,21 @@ describe('service worker routing', () => {
       expect(route(`${ORIGIN}/api/authz`, { isNavigation: true })).toBe('navigation');
     });
 
+    it('never intercepts the documentation site', () => {
+      // Served by Mintlify. Reaching the navigation strategy would store it under the shell key,
+      // and it would then boot chrome-less in place of any app route with no cached document.
+      expect(route(`${ORIGIN}/docs`, { isNavigation: true })).toBe('passthrough');
+      expect(route(`${ORIGIN}/docs/guides/what-docket-is`, { isNavigation: true })).toBe(
+        'passthrough',
+      );
+    });
+
+    it('does not treat a lookalike path as the documentation site', () => {
+      // Same segment-boundary requirement as the API guard above.
+      expect(route(`${ORIGIN}/documentation`, { isNavigation: true })).toBe('navigation');
+      expect(route(`${ORIGIN}/docsy`, { isNavigation: true })).toBe('navigation');
+    });
+
     it('never caches a non-GET request', () => {
       expect(route(`${ORIGIN}/icons/icon-192.png`, { method: 'POST' })).toBe('passthrough');
       expect(route(`${ORIGIN}/_next/static/chunk.js`, { method: 'HEAD' })).toBe('passthrough');

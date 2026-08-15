@@ -1,0 +1,132 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "maple",
+  "name": "Docket",
+  "colors": {
+    "primary": "#4e4d4a",
+    "light": "#dddcd9",
+    "dark": "#121210"
+  },
+  "appearance": {
+    "default": "system"
+  },
+  "fonts": {
+    "heading": {
+      "family": "Fraunces"
+    },
+    "body": {
+      "family": "IBM Plex Sans"
+    }
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
+    "href": "/"
+  },
+  "favicon": "/logo/favicon.svg",
+  "styling": {
+    "codeblocks": "dark"
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Getting started",
+            "pages": [
+              "guides/what-docket-is",
+              "guides/create-your-workspace",
+              "guides/your-first-week",
+              "guides/connect-calendar-and-mail"
+            ]
+          },
+          {
+            "group": "Core concepts",
+            "pages": [
+              "guides/concepts/terminology",
+              "guides/concepts/workspaces",
+              "guides/concepts/teams",
+              "guides/concepts/tasks",
+              "guides/concepts/projects",
+              "guides/concepts/cycles-and-milestones",
+              "guides/concepts/initiatives-and-programs",
+              "guides/concepts/updates-and-health",
+              "guides/concepts/labels-and-statuses"
+            ]
+          },
+          {
+            "group": "Daily use",
+            "pages": [
+              "guides/daily/home-today",
+              "guides/daily/inbox",
+              "guides/daily/portfolio",
+              "guides/daily/calendar-and-scheduling",
+              "guides/daily/time",
+              "guides/daily/search-and-views"
+            ]
+          },
+          {
+            "group": "Athena",
+            "pages": [
+              "guides/athena/what-athena-is",
+              "guides/athena/talking-to-athena",
+              "guides/athena/proposals-and-approvals",
+              "guides/athena/athena-and-your-mail",
+              "guides/athena/bring-your-own-model"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Developers",
+        "pages": [
+          "developers/overview",
+          "developers/platform-status",
+          "developers/authentication",
+          "developers/connect-an-agent-mcp",
+          "developers/mcp-tools-and-resources",
+          "developers/rest-api",
+          "developers/errors"
+        ]
+      },
+      {
+        "tab": "Changelog",
+        "pages": ["changelog"]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Pricing",
+        "href": "https://docket.hypertext.studio/pricing"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Open Docket",
+      "href": "https://docket.hypertext.studio"
+    }
+  },
+  "footer": {
+    "links": [
+      {
+        "header": "Product",
+        "items": [
+          { "label": "Docket", "href": "https://docket.hypertext.studio" },
+          { "label": "Pricing", "href": "https://docket.hypertext.studio/pricing" },
+          { "label": "API reference", "href": "https://docket-api.hypertext.studio/v1/docs" }
+        ]
+      },
+      {
+        "header": "Company",
+        "items": [
+          { "label": "About", "href": "https://docket.hypertext.studio/about" },
+          { "label": "Privacy", "href": "https://docket.hypertext.studio/privacy" },
+          { "label": "Terms", "href": "https://docket.hypertext.studio/terms" }
+        ]
+      }
+    ]
+  }
+}

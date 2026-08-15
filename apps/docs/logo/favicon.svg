@@ -1,0 +1,4 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" rx="8" fill="#265ADF" />
+  <path fill="#FAFAFA" d="M5 9A3 3 0 0 1 8 6A3 3 0 0 1 11 9V25A3 3 0 0 1 8 28A3 3 0 0 1 5 25ZM13 9A3 3 0 0 1 16 6A3 3 0 0 1 19 9V17A3 3 0 0 1 16 20A3 3 0 0 1 13 17ZM21 9A3 3 0 0 1 24 6A3 3 0 0 1 27 9V21A3 3 0 0 1 24 24A3 3 0 0 1 21 21Z" />
+</svg>

@@ -1,0 +1,62 @@
+---
+title: "Bring your own model"
+description: "Point Athena's model work at a computer you own, so the prompt and your workspace context never leave it."
+---
+
+You can point Athena's model work at a machine you own. Her replies are then generated there
+instead of on Docket's model service.
+
+The reason to want this is that **"where did my data go" becomes answerable**. The prompt, the
+workspace context, and the reply never leave a computer you control.
+
+## What you need
+
+<Steps>
+  <Step title="A Lovelace account">
+    Lovelace Lattice is the compute network this runs on.
+  </Step>
+  <Step title="A paired machine">
+    A laptop or desktop running the Lattice daemon, which fronts a local model server — Ollama or
+    LM Studio.
+  </Step>
+  <Step title="Authorize Docket">
+    From **Settings → Athena**, connect your Lovelace account and pick which of your paired
+    machines to use.
+  </Step>
+</Steps>
+
+From then on, Athena's model work runs there.
+
+## How it reaches your machine
+
+Your computer **polls outward**. There is no inbound port to open, no tunnel to run, and no
+callback from the cloud into your home network.
+
+Work travels through Lovelace's hosted gateway: Docket sends the request to the gateway, your
+daemon picks it up on its next poll, runs it locally, and the answer comes back the same way.
+
+<Note>
+  **Docket never talks to your device.** It talks to the gateway. Your machine is never addressable
+  from the internet, and nothing about this setup requires it to be.
+</Note>
+
+## What changes, and what does not
+
+| | |
+| --- | --- |
+| Runs on your machine | Generating Athena's replies — the model work |
+| Stays in Docket | Your work itself: tasks, projects, comments, calendar, the time ledger |
+
+Everything about how Athena behaves is unchanged. Sessions, proposals, approvals, and permissions
+all work exactly as they do otherwise — see
+[Proposals and approvals](/guides/athena/proposals-and-approvals).
+
+## When the machine is off
+
+A laptop that is closed cannot answer. Docket surfaces that plainly rather than silently falling
+back to a hosted model without telling you, so you always know where a reply came from.
+
+## Setting it up
+
+**Settings → Athena** holds the connection, the machine picker, and the model selection. You can
+disconnect at any time, which returns Athena's model work to Docket's own service.

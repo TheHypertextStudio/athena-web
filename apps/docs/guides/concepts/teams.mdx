@@ -1,0 +1,61 @@
+---
+title: "Teams"
+description: "The units that own work — each with its own workflow, cycles, and triage queue."
+---
+
+A Team is a named group of people inside a workspace. Teams are the units that own work: each one
+carries its own workflow states, its own cycle cadence, and its own triage queue.
+
+Larger workspaces usually run several. A workspace with one team is completely normal, and a
+personal space needs to think about teams roughly never.
+
+## What a team owns
+
+<CardGroup cols={3}>
+  <Card title="Workflow states" icon="list-check">
+    The stages work moves through in this team's words. Two teams in the same workspace can run
+    different processes. See [Labels and statuses](/guides/concepts/labels-and-statuses).
+  </Card>
+  <Card title="Cycles" icon="rotate">
+    Each team runs its own cadence. One team's two-week cycle has nothing to do with another's
+    monthly one. See [Cycles](/guides/concepts/cycles-and-milestones).
+  </Card>
+  <Card title="Triage" icon="inbox">
+    Where work arrives before anyone has filed it — captured notes, items from a connected tool,
+    anything without a home yet.
+  </Card>
+</CardGroup>
+
+## You cannot assign work to a team
+
+This one catches people. Assignment always points at a single **Actor** — one person or one
+agent. A Team is a grouping for organizing and for permissions.
+
+The reason is accountability. "The team is on it" is how work goes quietly unowned; naming one
+Actor keeps the answer to "who is doing this" short.
+
+If you want work to belong to a team without belonging to a person yet, leave it unassigned in
+that team's triage queue. That is a real, supported state.
+
+## Teams and tasks
+
+Every Task belongs to a workspace **and** a team. That is what gives it a set of workflow states
+to move through and a triage queue to wait in.
+
+A task's project is optional; its team is not.
+
+## Teams and permissions
+
+A team is a valid target for a [grant](/guides/concepts/workspaces#membership-roles-and-access),
+so you can hand a role `contribute` on one team and `view` on another. The grant cascades down
+into the work that team owns.
+
+## Setting them up
+
+Create and manage teams in **Settings → Members & Access**. Each team's workflow states live in
+**Settings → Statuses**, and its cycle cadence in the team's own settings.
+
+<Tip>
+  Resist creating a team per project. Teams are for groups of people who share a process; the
+  bounded piece of work is a [Project](/guides/concepts/projects).
+</Tip>

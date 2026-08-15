@@ -6,16 +6,19 @@
  * overview, per-resource narratives, an operation-level description on (nearly) every route,
  * truthful per-operation security, and field-level descriptions on DTO schema properties.
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
+
+/** The published page that deep-links readers into the Scalar reference by tag. */
+const REST_API_PAGE = resolve(import.meta.dirname, '../../../../apps/docs/developers/rest-api.mdx');
 
 describe('openapi documentation richness', () => {
   it('serves an exhaustive, truthful, self-documenting spec', async () => {
-    const { Hono } = await import('hono');
-    const { registerOpenapi } = await import('../../src/openapi');
+    const { openapiDocument } = await import('../../src/openapi');
     const { app, adminApp } = await import('../../src/app');
-    const server = new Hono();
-    registerOpenapi(server as never, app, adminApp);
-    const doc = (await (await server.request('/v1/openapi.json')).json()) as {
+    const doc = (await openapiDocument(app, adminApp)) as {
       info: { description: string };
       tags: { name: string; description?: string }[];
       security?: unknown[];
@@ -30,6 +33,20 @@ describe('openapi documentation richness', () => {
 
     // Every tag carries a real narrative (not a stub one-liner).
     for (const tag of doc.tags) expect((tag.description ?? '').length).toBeGreaterThan(80);
+
+    // The published REST page deep-links into `/v1/docs#tag/<name>`. An anchor at an undeclared tag
+    // silently drops the reader at the top of the reference. Checked here because the document is
+    // already generated; doing it in its own file would import `src/app` a second time.
+    const declared = new Set(doc.tags.map((tag) => tag.name.toLowerCase()));
+    const page = readFileSync(REST_API_PAGE, 'utf8');
+    const anchors = [...page.matchAll(/\/v1\/docs#tag\/([a-z-]+)/g)].map(([, tag]) => tag ?? '');
+    // Zero anchors would pass the check below vacuously.
+    expect(anchors.length).toBeGreaterThanOrEqual(10);
+    const unresolvable = [...new Set(anchors)].filter((tag) => !declared.has(tag));
+    expect(
+      unresolvable,
+      `\nDeep links in apps/docs/developers/rest-api.mdx pointing at undeclared tags:\n  ${unresolvable.join('\n  ')}\n`,
+    ).toEqual([]);
 
     // Walk all operations.
     interface Op {

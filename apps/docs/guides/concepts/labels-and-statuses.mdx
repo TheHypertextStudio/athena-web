@@ -1,0 +1,79 @@
+---
+title: "Labels and statuses"
+description: "Your workspace's own words for how far along work is, and for everything else you need to say about it."
+---
+
+Two workspace-owned vocabularies, doing different jobs. A **status** answers "how far along is
+this?" A **label** is everything else you want to say.
+
+## Statuses
+
+A status is a stage work moves through. Your workspace names its own: how many there are, what
+they are called, what each one means, what order they read in, and which one new work starts in.
+
+A grant-making nonprofit can run `Drafting → Submitted → Under review → Awarded`. A studio can run
+`Idea → Booked → Shot → Delivered`. Each is describing its real process in its own words.
+
+Set them up in **Settings → Statuses**.
+
+### The five categories
+
+Every status a workspace invents declares one of five categories. That much is Docket's, and it is
+what makes the rest yours.
+
+| Category | Means |
+| --- | --- |
+| `backlog` | Recorded, not queued. |
+| `unstarted` | Queued, not begun. |
+| `started` | In progress. |
+| `completed` | Finished successfully. |
+| `canceled` | Ended without being finished. |
+
+The category is what draws a status glyph, what a board groups by, what a progress percentage
+counts, what a connector maps a Linear or Jira state onto, and what tells Docket that a piece of
+work just finished.
+
+Two workspaces calling the same stage `Shipped` and `Awarded` are both saying `completed`, so
+their numbers, their icons, and their integrations still line up.
+
+<Note>
+  This is also what agents rely on. An agent comparing work across two teams reads the category
+  rather than the label, so it never has to learn your words to know that something is done.
+</Note>
+
+### Statuses are per team and per kind of work
+
+A team owns the workflow states its Tasks move through, so two teams in the same workspace can run
+genuinely different processes.
+
+Projects, Programs, and Initiatives carry their own status sets, because "how far along is this
+project" and "how far along is this task" are not the same question. The seeded Program set is
+`Proposed · Active · Paused · Completed · Archived`.
+
+## Labels
+
+A label is free-form workspace vocabulary that you attach to work. `needs-legal`. `Q3`.
+`grant-funded`. `flaky`.
+
+Labels carry no behaviour. They do not gate anything, order anything, or mean anything to Docket
+beyond being a thing you can filter and search on. That is the point — statuses have rules, and
+labels are where you put everything that should not.
+
+Manage them in **Settings → Labels**, described there as "the words this workspace uses that
+Docket does not ship."
+
+## Which one do I reach for?
+
+| You want to record | Use |
+| --- | --- |
+| That this is in review | A **status** |
+| That this is blocked on someone outside the company | A **label**, plus a comment naming who |
+| That this belongs to the Q3 push | An [Initiative](/guides/concepts/initiatives-and-programs), or a label if it is lighter than that |
+| That this was cancelled rather than finished | A **status** in the `canceled` category |
+| That this needs a lawyer to look at it | A **label** |
+
+<Tip>
+  Keep the status set short. Every status is a decision someone has to make every time they touch
+  a piece of work, and a seven-stage workflow usually means two of the stages are labels wearing a
+  disguise.
+</Tip>

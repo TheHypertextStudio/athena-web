@@ -1,0 +1,80 @@
+---
+title: "Tasks"
+description: "The atomic unit of work — the single thing someone actually does."
+---
+
+A Task is one thing someone does. "Draft the grant report." "Call the caterer." It is the atomic
+unit: everything else in Docket exists to give tasks context, timing, and an owner.
+
+## What a task carries
+
+| Field | Notes |
+| --- | --- |
+| **Assignee** | One Actor — a person or an agent. Never a team. |
+| **Delegate** | Optional. You stay the owner; an agent does the work. |
+| **Status** | One of the owning team's workflow states. See [Labels and statuses](/guides/concepts/labels-and-statuses). |
+| **Priority** | `none`, `low`, `medium`, `high`, or `urgent`. Drives sorting and badges. |
+| **Due date** | Optional. |
+| **Time estimate** | How long you think it will take, in minutes. |
+| **Point estimate** | A coarser abstract number, for teams that size that way. |
+| **Labels** | Free-form workspace vocabulary. |
+
+Tasks also carry **subtasks**, **attachments**, threaded **comments**, and **dependencies**.
+
+## The time estimate is the important one
+
+A task's time estimate is what makes [Home](/guides/daily/home-today) honest. A plan built from
+tasks with durations can be compared against the hours you actually have; a plan built from
+untimed tasks is a wish list that always fits.
+
+That estimate is also what [scheduling](/guides/daily/calendar-and-scheduling) uses to place work
+on your calendar, and what the [time ledger](/guides/daily/time) compares your real hours
+against afterwards.
+
+## Where a task can live
+
+A Task always belongs to a workspace and a [team](/guides/concepts/teams). Beyond that it has
+three legitimate homes:
+
+<CardGroup cols={3}>
+  <Card title="In a Project" icon="folder">
+    Part of a bounded effort with an outcome.
+  </Card>
+  <Card title="In a Program" icon="rotate">
+    Ongoing or recurring work that belongs to a continuous area of operations.
+  </Card>
+  <Card title="In Triage" icon="inbox">
+    Unsorted. It arrived and has not been filed yet.
+  </Card>
+</CardGroup>
+
+**A project is optional on a task.** This is deliberate. Real work arrives messy — a note
+captured on a bus, an email that implies something, a favour someone asked for in a hallway.
+Docket holds all of it without demanding you invent a project first.
+
+## Dependencies
+
+A Task can be **blocked by** or **blocking** any other Task in the same workspace, including one
+in a different project. Docket keeps the graph acyclic, so a dependency loop is refused rather
+than silently accepted.
+
+Blockers surface inline in your daily plan rather than in a separate queue, so the thing standing
+in your way appears next to the work it is standing in the way of.
+
+## Recurring work
+
+Work that comes back on a schedule is defined once as a repeating series rather than copied by
+hand. Docket materializes the next occurrence on its cadence.
+
+## Assigning to an agent
+
+The assignee field takes an agent exactly where it takes a person. Handing a task to
+[Athena](/guides/athena/what-athena-is) opens a session you can watch, steer, and approve.
+
+If you would rather keep your own name on the work, set yourself as assignee and the agent as
+**delegate** — you own it, the agent does it. Every action records both names.
+
+<Tip>
+  Capture first, structure later. Use quick capture or ask Athena to note something, let it land
+  in Triage, and file it when the right home is obvious.
+</Tip>

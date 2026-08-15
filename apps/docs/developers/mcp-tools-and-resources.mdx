@@ -1,0 +1,161 @@
+---
+title: "MCP tools and resources"
+description: "The 25 tools, the docket:// resource scheme, the bootstrap prompts, and the scopes each one needs."
+---
+
+The MCP server exposes **25 tools**, a set of `docket://` resources, and 3 prompts.
+
+Tools are named for what someone is trying to do rather than for the table underneath. That is
+what makes them stable while the schema moves, and it is why an agent rarely needs to know
+Docket's data model to be useful in it.
+
+## Tools
+
+<AccordionGroup>
+  <Accordion title="Reading — 5 tools" defaultOpen>
+    | Tool | Does |
+    | --- | --- |
+    | `workspaces` | Lists the workspaces you belong to. Usually the first call. |
+    | `find` | Ranked relevance search across the whole workspace. |
+    | `list_work` | Enumerates live rows by exact criteria. |
+    | `get` | Reads one or more entities in full, by ID or by name. |
+    | `brief` | What needs me today. |
+
+    **`find` versus `list_work`** is the distinction worth internalising.
+
+    `find` is ranked search over tasks, projects, programs, initiatives, cycles, milestones,
+    comments, updates, attachments, calendar events, agent sessions, teams, members, and labels.
+    It reads the same permission-filtered index the web app uses, so results are trimmed to what
+    the caller may actually see — and it trails writes by a moment.
+
+    `list_work` enumerates live rows by exact criteria: team, project, assignee, delegate, state,
+    priority, label, cycle, due window, blocked-ness, and unfiled (the triage queue). A filter the
+    chosen entity has no column for is **rejected, naming the ones it does**, rather than silently
+    ignored.
+
+    `get` reads entities in full — a task with its dependencies and subtasks, a project with its
+    milestones and latest update. References you cannot see come back in `missing` rather than
+    failing the whole batch.
+  </Accordion>
+
+  <Accordion title="Writing — 9 tools">
+    | Tool | Does |
+    | --- | --- |
+    | `capture` | A sentence becomes a task. |
+    | `organize` | A whole plan in one call, reconciled so a re-run creates no duplicates. |
+    | `update` | Changes work by describing which work. |
+    | `comment` | Adds threaded discussion. |
+    | `report_status` | Posts an update, driving the item's health. |
+    | `link` | Links Docket work to Docket work. |
+    | `archive` | Archives work. |
+    | `plan_day` | Builds a day's plan. |
+    | `undo` | Reverses a previous change set. |
+
+    **Every write records an undoable change set.** `undo` is a first-class tool rather than a
+    recovery procedure, which is what makes an agent safe to let loose on a batch.
+
+    `organize` is the one to reach for when applying a plan rather than a single edit. It
+    reconciles against what already exists, so running it twice produces one result.
+  </Accordion>
+
+  <Accordion title="Time and reflection — 2 tools">
+    | Tool | Does |
+    | --- | --- |
+    | `track` | Records time against work. See [Time](/guides/daily/time). |
+    | `retrospect` | Produces a retrospective over a period of work. |
+  </Accordion>
+
+  <Accordion title="Repeating work and processes — 3 tools">
+    | Tool | Does |
+    | --- | --- |
+    | `define_process` | Defines a repeatable process. |
+    | `schedule_process` | Puts a defined process on a schedule. |
+    | `repeat_task` | Makes a task recur. |
+
+    These three enforce `work:write` inline rather than through the shared scope table. The
+    behaviour you observe is identical; it matters only if you are reading the source.
+  </Accordion>
+
+  <Accordion title="Agents, sessions, and connectors — 6 tools">
+    | Tool | Does |
+    | --- | --- |
+    | `run_agent` | Triggers an agent session. |
+    | `manage_session` | Manages a running session — approve, reject, steer. |
+    | `link_external` | Links an external item (GitHub, Linear) onto Docket work. |
+    | `acknowledge_directive` | Acknowledges a scheduling directive. |
+    | `pause_athena_assignment_trigger` | Pauses one trigger on your personal Athena assignment. |
+    | `remove_athena_assignment_trigger` | Removes one trigger on your personal Athena assignment. |
+  </Accordion>
+</AccordionGroup>
+
+### Scopes per tool
+
+| Scope | Covers |
+| --- | --- |
+| `work:read` | `workspaces`, `find`, `list_work`, `get`, `brief`, and every resource read |
+| `work:write` | `capture`, `organize`, `update`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task` |
+| `agents:run` | `run_agent`, `manage_session`, and the two Athena trigger tools |
+| `connectors:link` | `link_external` |
+
+See [Authentication](/developers/authentication#scopes) for how scopes are requested and stepped
+up.
+
+## Resources
+
+Reads are also modelled as resources, all permission-gated with existence-hiding — an item you
+cannot see is indistinguishable from one that does not exist.
+
+### Static
+
+| URI | Contents |
+| --- | --- |
+| `docket://orgs` | Every workspace you belong to |
+| `docket://hub/today` | Your daily plan |
+| `docket://hub/inbox` | What needs a response |
+| `docket://hub/directive` | The current scheduling directive |
+| `docket://hub/portfolio` | Every workspace's programs and projects |
+
+### Templated
+
+```
+docket://{org}/{type}/{id}
+```
+
+Where `type` is one of `task`, `project`, `program`, `initiative`, `cycle`, `team`, `update`,
+`comment`, `session`, `agent`, `view`, or `org`.
+
+### Subscriptions
+
+Resources support `resources/subscribe`. A subscribed client holding the `GET /mcp` stream open
+gets `notifications/resources/updated` when something changes. Delivery is best-effort and never
+replayed — re-read on notification rather than treating the notification as data.
+
+## Prompts
+
+Three, for bootstrapping an agent with workspace context.
+
+| Prompt | Purpose |
+| --- | --- |
+| `docket_system` | The Docket system prompt |
+| `task_brief` | A brief on one task |
+| `standup` | A standup summary |
+
+## Widgets
+
+The server also serves UI resources under `ui://docket/*` for hosts that render MCP Apps, covering
+work lists, entities, tasks, projects, programs, initiatives, cycles, teams, updates, comments,
+sessions, agents, views, organizations, plans, and change reports.
+
+Hosts without MCP App support ignore these and get the structured results as normal.
+
+## Server capabilities
+
+The server advertises `tools.listChanged`, `resources.subscribe`, `resources.listChanged`,
+`prompts.listChanged`, `completions`, and `logging`. Experimental MCP task support is available
+behind a deployment flag.
+
+<Note>
+  `tools/list` reflects **your** grants. Two people connecting the same client can legitimately see
+  different tool lists, and a grant change fires `notifications/tools/list_changed` rather than
+  waiting for a reconnect.
+</Note>

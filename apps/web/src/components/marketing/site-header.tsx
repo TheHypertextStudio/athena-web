@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { JSX } from 'react';
 
+import { isDocsSitePublished } from '@/lib/docs-site';
+
 import { HeaderActions } from './marketing-cta';
 
 interface NavLink {
@@ -8,8 +10,13 @@ interface NavLink {
   label: string;
 }
 
+/**
+ * The primary nav. `/docs` is Mintlify proxied onto this origin, so it takes an ordinary `Link`,
+ * and it only appears where the rewrites do — {@link isDocsSitePublished} answers for both.
+ */
 const NAV: readonly NavLink[] = [
   { href: '/pricing', label: 'Pricing' },
+  ...(isDocsSitePublished() ? [{ href: '/docs', label: 'Docs' }] : []),
   { href: '/about', label: 'About' },
 ];
 

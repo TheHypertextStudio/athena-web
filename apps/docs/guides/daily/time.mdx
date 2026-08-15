@@ -1,0 +1,68 @@
+---
+title: "Time"
+description: "The time ledger — a record of the hours work actually took, kept beside the hours you planned."
+---
+
+Docket keeps a **time ledger**: a record of effort you chose to track, with a real actor and
+concrete start and end instants. A tracked interval is a measured fact.
+
+The ledger stays deliberately separate from everything that merely *implies* time. A task moving
+to `completed`, an event sitting on your calendar, and an agent finishing a session are all
+signals about time, and none of them is a measurement. Docket declines to substitute any of them
+for the ledger.
+
+## What you can track
+
+- A [Task](/guides/concepts/tasks)
+- A calendar item
+- A whole workspace, project, or category
+- Freeform activity that maps to nothing in Docket
+- An Athena session, or a subagent inside one
+
+That last pair matters: agent work is accounted in the same ledger as human work, so "how long did
+this actually take" has one answer regardless of who did it.
+
+## Starting and stopping
+
+Timers start from the work itself — a task, a calendar item, a project — rather than from a
+separate stopwatch screen you have to remember exists.
+
+A running timer can be paused, resumed, switched to different work, or stopped. Switching records
+the boundary rather than losing it, so moving between two tasks leaves two honest intervals
+instead of one vague one.
+
+## Planned against actual
+
+This is what the ledger is for.
+
+| | Where it comes from |
+| --- | --- |
+| **Planned** | The [time estimate](/guides/concepts/tasks) on the task |
+| **Scheduled** | Where [scheduling](/guides/daily/calendar-and-scheduling) placed it |
+| **Actual** | The ledger |
+
+Reading the three together tells you whether your estimates are any good — which is the input that
+makes next week's plan better. Estimates that are consistently half of reality are worth knowing
+about, and no amount of planning discipline surfaces that on its own.
+
+## Reflection and reporting
+
+The ledger backs a personal view of where your hours went, and workspace-level reporting for teams
+that need it.
+
+Submissions are **recipient-scoped**: time is submitted to whoever needs it, so a client, a
+grant-reporting requirement, and your own reflection can draw from the same ledger without seeing
+each other's scope.
+
+## What Docket will not do
+
+- It will not invent time you did not track.
+- It will not derive an interval from a status change.
+- It will not treat a calendar event as proof you were doing the thing.
+
+Tracking is something you elect to do, per piece of work.
+
+<Tip>
+  Track a week honestly before changing anything. The first useful output of a time ledger is
+  usually the discovery that one recurring commitment costs three times what you assumed.
+</Tip>

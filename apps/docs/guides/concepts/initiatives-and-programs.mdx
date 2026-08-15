@@ -1,0 +1,91 @@
+---
+title: "Initiatives and programs"
+description: "The theme that gathers work, and the ongoing area of operations that holds it."
+---
+
+These are the two concepts above a Project, and they solve different problems. Most tools ship
+one of them and make you bend the other to fit.
+
+<CardGroup cols={2}>
+  <Card title="Program" icon="rotate">
+    An **ongoing area of operations**. It holds real work and usually runs on.
+    "Customer Support." "After-School Program." "Donor relations."
+  </Card>
+  <Card title="Initiative" icon="flag">
+    A **strategic theme**. It holds no work of its own and gathers other things under a banner.
+    "Grow revenue." "Expand to a second city."
+  </Card>
+</CardGroup>
+
+## Program — continuous work with a home
+
+A Program is the continuous counterpart to the bounded [Project](/guides/concepts/projects).
+
+Real organizations run work that keeps going after each deliverable inside it lands. Support
+tickets keep arriving. Books keep needing to be current. A tutoring program runs every term. A
+Project ends, and an Initiative holds no work, which leaves all of that homeless. A Program is
+where it lives.
+
+**A Program contains work directly.** It can hold Projects — a bounded push inside a continuous
+area, like "Fall term enrolment" inside "After-School Program" — and it can hold Tasks with no
+project at all, which is what ongoing and recurring work usually looks like.
+
+A Program is read through **health and flow** rather than a progress bar, because a percentage
+complete means very little for something designed to keep going.
+
+### Programs can end
+
+Most run on indefinitely. A real after-school program can still be wound down at the end of its
+last term, and an operations function can be retired.
+
+The seeded program statuses are `Proposed · Active · Paused · Completed · Archived`, where
+`Archived` means retired and kept for history. Statuses are workspace-defined, so a workspace that
+wants programs which only ever end by being archived can delete `Completed` from its program set.
+See [Labels and statuses](/guides/concepts/labels-and-statuses).
+
+## Initiative — a theme, holding no work
+
+An Initiative is a strategic banner. "Grow revenue" is not a thing anyone does on a Tuesday; it is
+the reason several things that *are* done on a Tuesday belong together.
+
+**Initiatives contain no work themselves.** Programs and Projects *associate* with them, and the
+relationship is many-to-many, because themes genuinely cut across structure. One project can
+serve both "Grow revenue" and "Expand to a second city", and neither theme owns it.
+
+An initiative reports rolled-up health and the mix of what sits under it.
+
+### Nesting
+
+Workspaces can arrange Initiatives into a shallow hierarchy. The maximum depth defaults to two
+total levels and is configurable in **Settings → Work structure**.
+
+Hierarchy links are contextual references. One may point at an Initiative in another workspace,
+and doing so grants no access to it — the link records a relationship without opening a door.
+
+## Containment and association, side by side
+
+This is the distinction the whole model rests on.
+
+| | Containment | Association |
+| --- | --- | --- |
+| **Means** | A hard parent → child. The child cannot exist without the parent. | A soft, optional link. Either side can exist alone. |
+| **Examples** | A workspace contains its work. A project contains its tasks. | An initiative themes a project. A cycle schedules a task. A task blocks a task. |
+| **Cardinality** | One parent. | Many-to-many. |
+
+Most planning tools flatten both into one tree and then force structure where none belongs.
+Keeping them apart is what lets a task be themed by two initiatives, scheduled into a cycle, and
+blocked by something in a different project, all at once.
+
+## Choosing between them
+
+| The work | The shape |
+| --- | --- |
+| Has an outcome and a finish line | [Project](/guides/concepts/projects) |
+| Keeps going, and holds real work | Program |
+| Is a reason several efforts belong together | Initiative |
+| Is one thing a person does | [Task](/guides/concepts/tasks) |
+
+<Tip>
+  If you cannot decide between a Program and an Initiative, ask whether tasks would ever sit
+  directly inside it. If yes, it is a Program.
+</Tip>

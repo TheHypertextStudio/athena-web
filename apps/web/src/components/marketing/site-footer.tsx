@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { JSX } from 'react';
 
+import { isDocsSitePublished } from '@/lib/docs-site';
 import { TAGLINE } from '@/lib/marketing-copy';
 
 import { FooterEntryLink } from './marketing-cta';
@@ -22,10 +23,17 @@ interface FooterColumn {
 const LINK_CLASS =
   'text-on-surface-variant hover:text-on-surface text-body-medium transition-colors';
 
+/**
+ * The footer columns. `/docs` only appears where the Mintlify rewrites do —
+ * see {@link isDocsSitePublished}.
+ */
 const COLUMNS: readonly FooterColumn[] = [
   {
     title: 'Product',
-    links: [{ href: '/pricing', label: 'Pricing' }],
+    links: [
+      { href: '/pricing', label: 'Pricing' },
+      ...(isDocsSitePublished() ? [{ href: '/docs', label: 'Docs' }] : []),
+    ],
     entryLink: true,
   },
   {

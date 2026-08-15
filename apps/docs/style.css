@@ -1,0 +1,67 @@
+/*
+ * Docket documentation — the paper-and-ink skin.
+ *
+ * These values are conversions of the marketing site's OKLCH tokens in
+ * `apps/web/src/app/(marketing)/marketing.css`, which is the origin and the place to change them.
+ * They are literal hex here because Mintlify's config and stylesheet are outside the app's token
+ * pipeline and cannot reference `--mk-*`. If the marketing palette moves, re-run the conversion
+ * rather than eyeballing a match.
+ *
+ *   --mk-paper       oklch(0.988 0.002 95)   #fbfbfa
+ *   --mk-paper-deep  oklch(0.963 0.003 95)   #f3f3f0
+ *   --mk-ink         oklch(0.18  0.004 95)   #121210
+ *   --mk-ink-muted   oklch(0.505 0.006 95)   #666561
+ *   --mk-accent      oklch(0.42  0.005 95)   #4e4d4a
+ *   --mk-line        oklch(0.895 0.004 95)   #dddcd9
+ *
+ * The docs deliberately wear the marketing skin rather than the app's Plex/MD3 surfaces: a reader
+ * arrives here from the public site, not from inside the product.
+ */
+
+:root {
+  --docket-paper: #fbfbfa;
+  --docket-paper-deep: #f3f3f0;
+  --docket-ink: #121210;
+  --docket-ink-muted: #666561;
+  --docket-accent: #4e4d4a;
+  --docket-line: #dddcd9;
+}
+
+:root.dark {
+  --docket-paper: #121210;
+  --docket-paper-deep: #1b1b19;
+  --docket-ink: #f3f3f0;
+  --docket-ink-muted: #a3a29d;
+  --docket-accent: #dddcd9;
+  --docket-line: #302f2c;
+}
+
+/* Display face for headings; the body face is set in docs.json. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
+}
+
+/* Hairline rules instead of filled bars — the marketing site's one structural motif. */
+hr,
+table th,
+table td {
+  border-color: var(--docket-line);
+}
+
+blockquote {
+  border-left: 1px solid var(--docket-line);
+  color: var(--docket-ink-muted);
+  font-style: normal;
+}
+
+/* Tables read as ledgers here: ruled rows, no zebra fill. */
+table {
+  border-collapse: collapse;
+}
+
+table th {
+  font-weight: 600;
+  text-align: left;
+}

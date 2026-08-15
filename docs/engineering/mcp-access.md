@@ -2,7 +2,9 @@
 
 Docket ships a first-party [Model Context Protocol](https://modelcontextprotocol.io) server. Any MCP-capable agent — Claude Code, Claude Desktop, claude.ai, Codex, Cursor, Windsurf, or anything else that speaks Streamable HTTP + OAuth 2.1 — can read and act on your Docket workspace.
 
-> The in-app equivalent of this guide lives at **Settings → Connected apps**, which shows the same setup snippets with your deployment's URL pre-filled. The snippets below MUST stay in sync with `apps/web/src/components/settings/mcp-clients.ts` — that catalog is the source of truth.
+> **The published version of this guide is [`apps/docs/developers/connect-an-agent-mcp.mdx`](../../apps/docs/developers/connect-an-agent-mcp.mdx)**, which is what external readers see at `/docs`. Treat that page as the one to keep correct; this file remains for engineers who want the same material beside the rest of `docs/engineering/`.
+>
+> The in-app equivalent lives at **Settings → Connected apps**, which shows the same setup snippets with your deployment's URL pre-filled. The snippets below MUST stay in sync with `apps/web/src/components/settings/mcp-clients.ts` — that catalog is the source of truth.
 
 ## The endpoint
 
@@ -122,10 +124,19 @@ the normal action policy still decide whether Athena may execute it or must requ
 
 ## What's exposed
 
-- **Tools** (15) — named for what someone is trying to do, not for the table underneath:
-  - _Read_ — `find` (ranked search), `list_work` (filtered sets), `get` (hydrate by id or name), `brief` (what needs me today).
+- **Tools** (25) — named for what someone is trying to do, not for the table underneath:
+  - _Read_ — `workspaces` (which workspaces you belong to), `find` (ranked search), `list_work` (filtered sets), `get` (hydrate by id or name), `brief` (what needs me today).
   - _Write_ — `capture` (a sentence becomes a task), `organize` (a whole plan in one call, reconciled so a re-run does not duplicate), `update` (change work by describing which work), `link`, `archive`, `comment`, `report_status`, `plan_day`, `undo`.
-  - _Agents and connectors_ — `run_agent`, `manage_session`, `link_external`.
+  - _Time and reflection_ — `track`, `retrospect`.
+  - _Repeating work_ — `define_process`, `schedule_process`, `repeat_task`.
+  - _Agents and connectors_ — `run_agent`, `manage_session`, `link_external`, `acknowledge_directive`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger`.
+
+  > This count was wrong for a long time — it read 15 while 25 were registered, and
+  > [`specs/mcp-surface.md`](specs/mcp-surface.md) copied a similarly wrong number (18 + 2) from
+  > it. `packages/test-utils/tests/docs-policies/docs-site-coverage.test.ts` now scans the
+  > `registerTool` call sites and fails when a tool is missing from the published page, so the
+  > external copy cannot drift again. This list is maintained by hand and is not covered by that
+  > test; when the two disagree, believe `apps/docs/developers/mcp-tools-and-resources.mdx`.
 
   Every write records an undoable change set, and every id parameter also accepts a name.
   - `find` is ranked relevance search over the whole workspace — tasks, projects, programs, initiatives, cycles, milestones, comments, updates, attachments, calendar events, agent sessions, teams, members, labels. It reads the same permission-filtered search index the web app uses, so results are trimmed to what the caller may actually see, and it trails writes by a moment. Use `list_work` to enumerate live rows by exact criteria — it filters by team, project, assignee, delegate, state, priority, label, cycle, due window, blocked-ness, and unfiled (the triage queue). A filter the chosen entity has no column for is rejected, naming the ones it does, rather than silently ignored.

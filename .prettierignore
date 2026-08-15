@@ -31,3 +31,9 @@ docs/engineering/specs/vendor/
 # committed file is byte-identical to what that generator emits. Formatting it here would rewrap
 # the `load:` arrows and make that test unsatisfiable — the generator owns this file's shape.
 apps/web/src/lib/offline-routes.generated.ts
+
+# Mintlify rewrites and reorders this file itself — adding `$schema`, normalising navigation, and
+# reordering keys — whenever the site is edited through its dashboard or upgraded. Formatting it
+# puts Mintlify and `pnpm format:check` in the same fight drizzle-kit was in above. The MDX pages
+# beside it are already outside Prettier's `**/*.{ts,tsx,md,json}` glob.
+apps/docs/docs.json

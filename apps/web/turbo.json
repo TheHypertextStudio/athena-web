@@ -5,7 +5,9 @@
   // the intent token with `BETTER_AUTH_SECRET` (read from `process.env`, not via `@docket/env`).
   "tasks": {
     "build": {
-      "env": ["NEXT_PUBLIC_*"],
+      // `DOCS_MINTLIFY_ORIGIN` decides whether `next.config.ts` emits the five `/docs` rewrites,
+      // so it changes build output and belongs in the cache key rather than `passThroughEnv`.
+      "env": ["NEXT_PUBLIC_*", "DOCS_MINTLIFY_ORIGIN"],
       // Set on the Vercel project and read only at runtime by the server routes. Passed through
       // rather than declared in `env` so rotating the blob token does not bust the build cache.
       "passThroughEnv": ["BLOB_READ_WRITE_TOKEN"],
@@ -17,7 +19,11 @@
     },
     "dev": {
       "dependsOn": ["^db:migrate", "@docket/api#build"],
-      "env": ["NEXT_PUBLIC_*", "BETTER_AUTH_SECRET"]
+      // `DOCS_MINTLIFY_ORIGIN` is declared here as well as on `build` because `envMode` is
+      // `strict`: without it, a value in the root `.env.local` (which `pnpm dev` loads via
+      // `dotenv`) is filtered out before `next.config.ts` reads it, and `/docs` 404s locally with
+      // nothing to say why.
+      "env": ["NEXT_PUBLIC_*", "BETTER_AUTH_SECRET", "DOCS_MINTLIFY_ORIGIN"]
     },
     "typecheck": {
       "dependsOn": ["@docket/api#build"]

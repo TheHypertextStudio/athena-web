@@ -25,6 +25,7 @@
     "pretest": "tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "openapi:export": "tsx scripts/export-openapi.ts",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
     "test:coverage": "vitest run --coverage"
   },

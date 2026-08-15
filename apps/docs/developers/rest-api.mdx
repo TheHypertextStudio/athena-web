@@ -1,0 +1,143 @@
+---
+title: "REST API"
+description: "Conventions, the permission model, and where the complete endpoint reference lives."
+---
+
+Docket exposes around 450 documented operations under `/v1`.
+
+<Card title="Open the full API reference" icon="book" href="https://docket-api.hypertext.studio/v1/docs" horizontal>
+  Every endpoint, every field, with a request playground. Generated from the running service.
+</Card>
+
+<Note>
+  **The reference is the source of truth for endpoint detail.** It is generated from the deployed
+  API at request time, so it cannot drift from the service. This page covers what the reference
+  assumes you already know. Where the two disagree, believe the reference.
+</Note>
+
+The machine-readable document is at
+[`/v1/openapi.json`](https://docket-api.hypertext.studio/v1/openapi.json), publicly reachable and
+suitable for generating a client. No SDK is published — see
+[Platform status](/developers/platform-status).
+
+## Authentication
+
+Bearer token on every request:
+
+```http
+Authorization: Bearer <token>
+```
+
+**Every endpoint requires it except `GET /v1/config`**, the public bootstrap config. Authentication
+runs as a global gate rather than per-handler, so no route is accidentally public.
+
+See [Authentication](/developers/authentication) for how to get one.
+
+## Conventions
+
+<AccordionGroup>
+  <Accordion title="Identifiers are ULIDs" defaultOpen>
+    26 Crockford base-32 characters, matching `^[0-9A-HJKMNP-TV-Z]{26}$`.
+
+    Each entity type carries its own branded ID, so IDs are **not interchangeable across
+    resources** — a `TaskId` is not accepted where a `ProjectId` belongs. Treat them as opaque and
+    never parse them.
+  </Accordion>
+  <Accordion title="Pagination is keyset, never offset">
+    Pass `cursor` and `limit`; read `nextCursor` from the response. It is `null` on the last page.
+
+    ```http
+    GET /v1/orgs/{orgId}/tasks?limit=50&cursor=<opaque>
+    ```
+  </Accordion>
+  <Accordion title="Errors are RFC 9457 problem documents">
+    `application/problem+json`, carrying a stable machine-readable `code`, an HTTP `status`, and —
+    for validation failures — per-field `fieldErrors`.
+
+    **Branch on `code`.** See [Errors](/developers/errors).
+  </Accordion>
+  <Accordion title="Creates accept an Idempotency-Key">
+    ```http
+    Idempotency-Key: <your-unique-key>
+    ```
+
+    A retried request never duplicates a resource.
+  </Accordion>
+  <Accordion title="Request and response bodies share one schema">
+    Both are validated against the same schemas rendered in the reference, so the documented shape
+    is the runtime shape. A response that does not match its schema is a bug rather than an
+    undocumented variant.
+  </Accordion>
+</AccordionGroup>
+
+## Permissions
+
+Two complementary layers, both always applied.
+
+**Membership.** Every `/v1/orgs/{orgId}/*` route requires an active Actor in that workspace.
+Non-members receive **404** rather than 403 — existence-hiding, so you cannot learn that a
+workspace or resource exists unless you may see it.
+
+**Capability.** Mutations require a capability on the ladder:
+
+```
+view  <  comment  <  contribute  <  assign  <  manage
+```
+
+Reassigning work needs `assign`. Commenting needs `comment`. Administrative changes need `manage`.
+Read endpoints apply a visibility and grant predicate inside the query, so you only ever receive
+permitted rows rather than filtering client-side.
+
+Agents traverse the identical checks — an agent is an Actor with explicit grants — plus the
+[approval gate](/guides/athena/proposals-and-approvals) layered on top.
+
+## Cross-workspace surfaces
+
+Some surfaces span tenants by design: the Hub (`/hub/today`, `/portfolio`, `/search`, `/inbox`,
+`/activity`), notifications, and the personal daily plan.
+
+These fan out **one permission-scoped query per membership** and merge in application code. There
+is no cross-tenant SQL join. Every item carries its own `organizationId`, and each is run
+individually through that workspace's visibility predicate — the result is a union of per-workspace
+permission decisions rather than a bypass of any of them.
+
+## Resource groups
+
+The reference is organised by resource. The main entry points:
+
+| Group | Covers |
+| --- | --- |
+| [Orgs](https://docket-api.hypertext.studio/v1/docs#tag/orgs) | Workspaces, the tenant boundary |
+| [Teams](https://docket-api.hypertext.studio/v1/docs#tag/teams) | Teams and their workflow states |
+| [Tasks](https://docket-api.hypertext.studio/v1/docs#tag/tasks) | The atomic unit, its subtasks and dependencies |
+| [Projects](https://docket-api.hypertext.studio/v1/docs#tag/projects) | Bounded efforts and their milestones |
+| [Programs](https://docket-api.hypertext.studio/v1/docs#tag/programs) | Ongoing areas of operation |
+| [Initiatives](https://docket-api.hypertext.studio/v1/docs#tag/initiatives) | Strategic themes |
+| [Cycles](https://docket-api.hypertext.studio/v1/docs#tag/cycles) | Team time windows |
+| [Updates](https://docket-api.hypertext.studio/v1/docs#tag/updates) | Narrative status and health |
+| [Comments](https://docket-api.hypertext.studio/v1/docs#tag/comments) | Threaded discussion |
+| [Agents](https://docket-api.hypertext.studio/v1/docs#tag/agents) | Agents and their sessions |
+| [Hub](https://docket-api.hypertext.studio/v1/docs#tag/hub) | Cross-workspace surfaces |
+| [Me](https://docket-api.hypertext.studio/v1/docs#tag/me) | The signed-in person — connections, sessions, preferences |
+
+## Live updates
+
+`GET /v1/stream/sse` is a server-sent event stream of `stream-event` frames, with a ping every 25
+seconds. Typed paginated fallbacks exist at `/v1/hub/stream` and `/v1/orgs/{orgId}/stream` for
+clients that cannot hold a connection open.
+
+<Warning>
+  Docket sends **no outbound webhooks**. It receives them from connected providers. If you need to
+  react to changes, poll a stream endpoint or subscribe over
+  [MCP](/developers/mcp-tools-and-resources#subscriptions).
+</Warning>
+
+## REST or MCP?
+
+The same operations reach agents over the [MCP server](/developers/connect-an-agent-mcp), which
+calls the identical service layer beneath the same permission engine. They are two front doors
+onto one system.
+
+Choose REST when you know exactly which record you want. Choose MCP when your caller describes
+intent — MCP tools accept names anywhere IDs are accepted, and `organize` applies a whole plan in
+one reconciled call.

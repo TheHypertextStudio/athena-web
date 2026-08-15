@@ -1,0 +1,67 @@
+---
+title: "Platform status"
+description: "What is stable, what is not, and what Docket does and does not promise about the API today."
+---
+
+Read this before building anything you intend to keep.
+
+## Where things stand
+
+**Docket is pre-launch.** There are no external developers building on this platform yet. These
+pages exist so that the first ones have something honest to read.
+
+| | Status |
+| --- | --- |
+| REST API `/v1` | Available. **Unversioned in practice** — `/v1` is a path, not yet a compatibility promise. |
+| MCP server | Available. Follows the MCP specification, including its authorization spec. |
+| OAuth 2.1 authorization | Available. Standards-based, and the most stable thing here. |
+| Published SDK | **None.** No client library is published for any language. |
+| Outbound webhooks | **None.** Docket receives webhooks; it does not send them. |
+| Deprecation policy | **None yet.** |
+
+## What this means for you
+
+<Warning>
+  Shapes may change without a deprecation window. Field names, response envelopes, and tool
+  signatures are all subject to revision while the product is pre-launch.
+</Warning>
+
+Practical advice:
+
+- **Prefer MCP over REST** where both would work. The MCP tools are named for what someone is
+  trying to do rather than for the table underneath, which makes them markedly more stable than
+  endpoint shapes as the schema moves.
+- **Do not parse identifiers.** They are ULIDs. Treat them as opaque.
+- **Branch on the error `code`**, never on a message string. See [Errors](/developers/errors).
+- **Pin nothing to the OpenAPI document's byte shape.** It is generated from the running service
+  and changes with it.
+
+## What is genuinely stable
+
+Some things are safe to build against because they are specifications rather than choices Docket
+made:
+
+- The OAuth 2.1 flow, PKCE, and the discovery documents (RFC 8414, RFC 9728, RFC 8707).
+- MCP Streamable HTTP transport semantics.
+- RFC 9457 problem documents as the error envelope.
+
+The domain model itself is also settled. Organizations, Teams, Initiatives, Programs, Projects,
+Cycles, Tasks, Updates, and Comments have been stable in concept for a long time, and the
+containment-versus-association distinction is foundational. Field-level detail is where movement
+happens.
+
+## No SDK, and what to do instead
+
+Every package in the Docket repository is private. There is no published npm or PyPI client.
+
+For REST, generate a client from the OpenAPI document at `/v1/openapi.json`, which is publicly
+reachable and always reflects the deployed service.
+
+For MCP, use your language's MCP client library — the server implements the specification, so
+nothing Docket-specific is required to talk to it.
+
+## Telling us something is wrong
+
+If a documented behaviour and the real behaviour disagree, the real behaviour is the truth and the
+document is the bug. The [Scalar reference](/developers/rest-api) is generated from the running
+service, so it is the tiebreaker for anything endpoint-level.

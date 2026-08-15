@@ -1,0 +1,6 @@
+{
+  "name": "@docket/docs",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Docket's public documentation site — MDX content rendered by Mintlify."
+}

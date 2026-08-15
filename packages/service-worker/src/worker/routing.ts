@@ -31,6 +31,22 @@ export type CacheStrategy =
   /** Try the network, fall back to the offline document. Responses are never cached. */
   | 'navigation';
 
+/**
+ * Path prefixes this origin answers on but does not own — each rewritten by `next.config.ts` to a
+ * different application, so origin alone cannot exclude them.
+ *
+ * @remarks
+ * Two reasons, both load-bearing. `/api/auth` and `/v1` carry authenticated data that must never
+ * enter Cache Storage. `/docs` is Mintlify: a navigation there would be stored under the *shell*
+ * key, and the shell is only interchangeable across routes because `(app)/layout.tsx` renders the
+ * same chrome for all of them — so the next offline navigation would boot a docs page with no
+ * `RouteSlot` and no way back.
+ *
+ * The two `mintlify` asset prefixes already reach the terminal `passthrough`, being non-navigation
+ * GETs; listing them keeps that a decision rather than an accident.
+ */
+const PROXIED_PREFIXES = ['/api/auth', '/v1', '/docs', '/_mintlify', '/mintlify-assets'] as const;
+
 /** The inputs the routing decision depends on. */
 export interface RouteRequest {
   /** HTTP method. */
@@ -49,11 +65,11 @@ export interface RouteRequest {
  * Decide how to handle a request.
  *
  * @remarks
- * Evaluated in order; the first match wins. The two API rules are the security floor and must stay
- * ahead of every caching rule: **no authenticated response ever enters Cache Storage.** Because of
- * them the worker needs no per-user cache partitioning, and signing out on a shared device has
- * nothing to purge here — the only place user data persists is the per-user IndexedDB query cache,
- * which is cleared explicitly. Weakening either rule turns this worker into a data leak.
+ * Evaluated in order; the first match wins. {@link PROXIED_PREFIXES} is the security floor and must
+ * stay ahead of every caching rule: **no authenticated response ever enters Cache Storage.**
+ * Because of it the worker needs no per-user cache partitioning, and signing out on a shared device
+ * has nothing to purge here — the only place user data persists is the per-user IndexedDB query
+ * cache, which is cleared explicitly. Weakening that list turns this worker into a data leak.
  *
  * @param request - The request being routed.
  * @returns The strategy to apply.
@@ -68,10 +84,9 @@ export function routeRequest(request: RouteRequest): CacheStrategy {
   const path = pathOf(url, origin);
 
   // --- Security floor. Never cache, never intercept. ---
-  // Better Auth traffic and the typed API are same-origin here (the app proxies them), which is
-  // exactly why they must be excluded explicitly rather than by origin.
-  if (path === '/api/auth' || path.startsWith('/api/auth/')) return 'passthrough';
-  if (path === '/v1' || path.startsWith('/v1/')) return 'passthrough';
+  if (PROXIED_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
+    return 'passthrough';
+  }
 
   // --- Dev-server plumbing. Intercepting any of this breaks hot reload. ---
   if (isDevPath(path) || url.includes('?_rsc=') || url.includes('__nextDataReq')) {

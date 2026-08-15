@@ -1,0 +1,122 @@
+---
+title: "Errors"
+description: "RFC 9457 problem documents, the closed code taxonomy to branch on, and the ones that surprise people."
+---
+
+Every failure returns an RFC 9457 problem document:
+
+```http
+HTTP/1.1 409 Conflict
+Content-Type: application/problem+json
+```
+
+```json
+{
+  "type": "https://docket.hypertext.studio/problems/dependency_cycle",
+  "title": "That would create a loop",
+  "status": 409,
+  "code": "dependency_cycle",
+  "detail": "..."
+}
+```
+
+<Warning>
+  **Branch on `code`, never on `title` or `detail`.** The code is a closed, stable taxonomy. The
+  human-readable strings are product copy and are rewritten freely.
+</Warning>
+
+`validation_error` additionally carries `fieldErrors`, mapping each failing field to a stable
+reason code.
+
+## The live catalog
+
+<Card title="Browse every problem code" icon="triangle-exclamation" href="https://docket.hypertext.studio/problems" horizontal>
+  Each code with its HTTP status, what it means, and what to do about it — rendered from the same
+  definitions the API uses.
+</Card>
+
+That catalog is the `externalDocs` target of the OpenAPI document, so a `type` URI in any problem
+response resolves to the page explaining it.
+
+## The taxonomy
+
+<AccordionGroup>
+  <Accordion title="Ordinary HTTP failures" defaultOpen>
+    | Code | Status | Means |
+    | --- | --- | --- |
+    | `validation_error` | 422 | Body, params, or query failed schema validation. See `fieldErrors`. |
+    | `unauthorized` | 401 | No session, or an invalid or expired one. Sign in. |
+    | `forbidden` | 403 | Authenticated, lacking the required capability, grant, or OAuth scope. |
+    | `not_found` | 404 | The resource does not exist — **or is hidden from a caller who may not see it.** |
+    | `conflict` | 409 | The request conflicts with current state. |
+    | `internal` | 500 | An unexpected server error. Safe to retry. |
+  </Accordion>
+
+  <Accordion title="The two that catch people out">
+    **`not_found` is also the answer for "you may not see this."** Docket hides existence rather
+    than confirming it with a 403. A 404 from a workspace route can mean the workspace exists and
+    you are not a member of it. Do not treat 404 as proof of absence.
+
+    **`reauth_required` (401) is not a sign-out.** The caller is signed in, and the session is too
+    old for a high-risk action. Prompt for a passkey step-up and retry the same request. Clearing
+    the session here logs people out for no reason.
+  </Accordion>
+
+  <Accordion title="Writes that the model refuses">
+    | Code | Status | Means |
+    | --- | --- | --- |
+    | `dependency_cycle` | 409 | The dependency edge would create a loop in the task graph. |
+    | `idempotency_key_reuse` | 422 | An `Idempotency-Key` was replayed with a different payload. |
+    | `task_already_linked` | 409 | The task already has the relationship you are creating. |
+    | `deletion_blocked` | 409 | Account deletion is blocked by sole-owner shared workspaces that must be transferred or deleted first. |
+  </Accordion>
+
+  <Accordion title="Membership and ownership guards">
+    | Code | Status | Means |
+    | --- | --- | --- |
+    | `last_owner_guard` | 409 | The change would leave a workspace or resource with no owner. |
+    | `self_escalation` | 403 | An actor tried to raise its own privileges. Never permitted. |
+    | `current_session` | 409 | The target is the session making this request. Sign out instead. |
+    | `personal_org_no_invites` | 409 | A personal workspace cannot issue invitations. |
+  </Accordion>
+
+  <Accordion title="Identity and connectors">
+    | Code | Status | Means |
+    | --- | --- | --- |
+    | `identity_in_use` | 409 | The linked identity still funds external connections. |
+    | `account_selection_required` | 409 | An unbound integration has several eligible identities; the person must choose. |
+    | `linear_workspace_already_connected` | 409 | That Linear workspace already has a connection here. |
+    | `linear_write_scope_required` | 409 | Linear write-back needs a reconnect with the write scope. |
+  </Accordion>
+
+  <Accordion title="Billing and naming">
+    | Code | Status | Means |
+    | --- | --- | --- |
+    | `card_required` | 402 | The action needs payment details or an active subscription. |
+    | `billing_frozen` | 402 | The workspace's billing state blocks writes. **Reads still work.** |
+    | `agent_plan_required` | 402 | The action needs a plan that includes agents. |
+    | `domain_already_claimed` | 409 | One host belongs to exactly one workspace. |
+    | `public_name_taken` | 409 | The workspace name or brief path is taken or reserved. |
+  </Accordion>
+</AccordionGroup>
+
+## Errors over MCP
+
+MCP tools surface the same failures. Scope problems arrive as a `403` with an
+`insufficient_scope` challenge:
+
+```http
+WWW-Authenticate: Bearer error="insufficient_scope"
+```
+
+Treat that as a step-up prompt and re-authorize for the wider scope. See
+[Authentication](/developers/authentication#insufficient-scope).
+
+## Never show these strings to a person
+
+The `title` and `detail` fields are Docket's own copy, written for Docket's surfaces. If you are
+building a product on top of this API, write your own messages and branch on `code` to decide
+which one to show.
+
+That is the rule Docket's own applications follow — a source-policy test in the repository fails
+the build on any UI that renders a provider or exception string directly.

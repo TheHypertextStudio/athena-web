@@ -1,0 +1,125 @@
+---
+title: "Authentication"
+description: "OAuth 2.1, client registration, the four scopes, and what a token can never do."
+---
+
+Docket's API is an OAuth 2.1 resource server. The authorization server runs on the same origin,
+mounted at `/api/auth/*`.
+
+## Discovery
+
+Point a standards-aware client at the resource and it finds everything else on its own.
+
+| Document | Path | Standard |
+| --- | --- | --- |
+| Protected Resource Metadata | `/.well-known/oauth-protected-resource/mcp` | RFC 9728 |
+| Authorization Server Metadata | `/.well-known/oauth-authorization-server` | RFC 8414 |
+
+The AS metadata advertises the authorize, token, and registration endpoints, PKCE `S256`, and
+support for URL-form client IDs.
+
+## Registering a client
+
+Two ways, and clients generally pick for themselves.
+
+<Tabs>
+  <Tab title="Dynamic registration">
+    Classic Dynamic Client Registration (RFC 7591):
+
+    ```http
+    POST /api/auth/mcp/register
+    ```
+
+    Returns a `client_id` you then use in the authorization flow.
+  </Tab>
+  <Tab title="Client ID Metadata Document">
+    Your `client_id` is itself an HTTPS URL serving a metadata document (CIMD). Nothing is
+    registered ahead of time.
+
+    Docket fetches, DNS-checks, and validates that document server-side during the authorize
+    preflight. The consent screen renders only the already-validated name and logo, so it never
+    displays attacker-controlled content.
+
+    Deployments can restrict which hosts may serve a CIMD.
+  </Tab>
+</Tabs>
+
+## The flow
+
+<Steps>
+  <Step title="Authorize">
+    The browser opens Docket's sign-in at `/sign-in`, then the consent screen at
+    `/oauth/authorize`, where the person approves the scopes you asked for.
+  </Step>
+  <Step title="Exchange the code">
+    PKCE, with the token audience-bound to the resource URL per RFC 8707.
+  </Step>
+  <Step title="Call with the token">
+    `Authorization: Bearer <token>` on every request.
+  </Step>
+</Steps>
+
+## Token lifetimes
+
+| | |
+| --- | --- |
+| Access token | 15 minutes |
+| Refresh token | 30 days |
+
+Request `offline_access` if you need a refresh token.
+
+## Scopes
+
+Four capability scopes, plus `offline_access`.
+
+| Scope | Grants |
+| --- | --- |
+| `work:read` | Read work — run views, search, read tasks, projects, and Hub resources. The usual default. |
+| `work:write` | Create and update work — tasks, projects, initiatives, comments, updates. |
+| `agents:run` | Manage agents — trigger sessions, approve or reject proposed actions. |
+| `connectors:link` | Link external items, such as GitHub and Linear references, onto work. |
+| `offline_access` | Issue a refresh token. |
+
+Ask for the narrowest set that does the job. A person reading a consent screen that requests
+`work:write` and `agents:run` for something that only reads is a person who declines.
+
+### Insufficient scope
+
+A read-only token calling a write operation gets a `403` with:
+
+```http
+WWW-Authenticate: Bearer error="insufficient_scope"
+```
+
+Well-behaved clients treat this as a step-up prompt and re-authorize for the wider scope, rather
+than failing outright.
+
+## The ceiling on every token
+
+<Warning>
+  **A token can never do more than the human who consented to it.**
+</Warning>
+
+Scopes are the first gate. The person's own roles and grants in each workspace remain binding
+underneath, and the two are checked independently. A `work:write` token held by someone with
+`view` on a project cannot write to that project.
+
+Revocation and permission changes take effect on the next call. There is no cached authority to
+wait out.
+
+## Session-based access
+
+The web app itself authenticates with a Better Auth session cookie rather than a bearer token.
+That path exists for first-party surfaces; anything you build should use OAuth.
+
+## Revoking
+
+People manage this themselves in **Settings → Connected apps**, which lists every client they have
+consented to and revokes per client — deleting the consent and its access tokens.
+
+Build for revocation. It happens, and the correct response is to re-run the authorization flow.
+
+## What is not available
+
+There is no first-party API key product. Long-lived static credentials are deliberately absent;
+every caller is a person or acts as one.

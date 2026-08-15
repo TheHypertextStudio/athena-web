@@ -1,0 +1,77 @@
+---
+title: "Projects"
+description: "A bounded effort with an outcome — something you finish and close."
+---
+
+A Project is a bounded body of work with an outcome and often a deadline. "Launch v2."
+"Spring Gala." "Rebuild the donor page." You finish it, and then it closes.
+
+That boundedness is the whole distinction. Work that keeps going after each deliverable inside it
+lands belongs in a [Program](/guides/concepts/initiatives-and-programs) instead.
+
+## What a project carries
+
+- A **lead** — the Actor accountable for it.
+- **Dates** — a start and a target, either of which may be absent.
+- A **status**, from the workspace's own project statuses.
+- A **health signal** — `on_track`, `at_risk`, or `off_track` — driven by the
+  [updates](/guides/concepts/updates-and-health) posted on it.
+- **Milestones**, **tasks**, **attachments**, and threaded discussion.
+
+A project reports **weighted progress** alongside its health, so a reader gets both "how much is
+done" and "how is it actually going" without opening it.
+
+## Milestones
+
+A Milestone is an attribute of a project, rather than a thing of its own. It is a dated checkpoint
+that groups some of the project's tasks toward a deliverable — "Beta to design partners",
+"Invitations mailed".
+
+Use them when a project has real internal checkpoints. Skip them when it does not; a project with
+no milestones is completely ordinary. See
+[Cycles and milestones](/guides/concepts/cycles-and-milestones).
+
+## Where a project sits
+
+A Project can sit directly inside the workspace, or inside a Program when it is one bounded push
+within a continuous area of operations.
+
+```
+Workspace
+  ├─ Program "After-School Program"
+  │    └─ Project "Fall term enrolment"
+  └─ Project "Website rebuild"
+```
+
+Separately, any number of [Initiatives](/guides/concepts/initiatives-and-programs) can *theme* a
+project. That is an association rather than containment: an initiative gathers projects under a
+strategic banner without owning them, and a project can carry several.
+
+## Project resources and dependencies
+
+Projects can **depend on** other projects, which is how a delivery order gets recorded when two
+bounded efforts are genuinely sequential.
+
+They also hold **resources** — links, documents, and references to items in connected tools —
+so the material a project runs on has a home beside the work.
+
+## Publishing a project
+
+A project can be published as a **brief**: a read-only public page at a web address you control,
+for people who need to see where something stands without an account.
+
+Configure the address under **Settings → Publishing**, which an admin owns. A workspace can point
+a custom domain at its briefs.
+
+## Templates
+
+If you start the same shape of project repeatedly — every client engagement, every event —
+save it as a template. A template is a named, reusable pre-filled draft, scoped to you, a team, or
+the whole workspace.
+
+Manage them in **Settings → Templates**.
+
+<Note>
+  Tasks, Projects, Initiatives, and Programs are all templatable. Cycles and Teams are not — a
+  cycle is a window of time and a team is structural, so neither has a document to seed.
+</Note>

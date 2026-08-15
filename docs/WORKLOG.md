@@ -5123,6 +5123,59 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [DOCS-SITE-001] Docket has public documentation
+
+- **Completed**: 2026-08-15
+- **Summary**: Docket shipped with no documentation of any kind — no help page, no `/docs` route, no
+  "Learn more" link anywhere in `apps/web/src`. What explained the product to a person was the
+  onboarding wizard, ~35 empty-state bodies, and the one-line section descriptions in
+  `settings-registry.ts`. `apps/docs` is now a Mintlify site of 32 pages across three tabs, served
+  at `/docs` on the web app's own origin. **Guides** (24 pages) carry the concept vocabulary, the
+  getting-started path, the daily loop, and Athena, seeded from `docs/core/mvp-plan.md` §3–§5 and
+  the empty-state copy that was already user-voiced. **Developers** (7 pages) promote
+  `docs/engineering/mcp-access.md` into a real external guide and open with a Platform status page
+  stating plainly that the API is unversioned, that no SDK is published, and that shapes may
+  change. **Changelog** is a curated, user-voiced surface, separate from the semantic-release
+  `CHANGELOG.md`, which is raw commit subjects with engineering scopes.
+- **Decisions**: One site with tabs rather than two properties, so a user page can link into a
+  developer page where they meet. Scalar at `/v1/docs` stays the source of truth for endpoint
+  detail and Mintlify carries the higher-level prose — nothing here is generated from the OpenAPI
+  document, so the reference cannot go stale relative to the deployed service. The site wears the
+  marketing paper-and-ink skin (Fraunces over IBM Plex Sans, the `--mk-*` palette converted to
+  hex) rather than the app's Plex/MD3 surfaces, because a reader arrives from the public site.
+  `terminology.mdx` was written first: workspaces relabel the work hierarchy, so every other
+  concept page depends on committing to the default noun set.
+- **Files Changed**: new `apps/docs/` (`package.json` with deliberately no scripts, `docs.json`,
+  `style.css`, `logo/`, `README.md`, 32 `.mdx` pages); new
+  `packages/test-utils/tests/docs-policies/docs-site-coverage.test.ts`;
+  new `apps/api/tests/core/openapi-docs-anchors.test.ts` and `apps/api/scripts/export-openapi.ts`
+  (plus the `openapi:export` script and `scripts/**/*.ts` in `apps/api/tsconfig.json`);
+  `apps/web/next.config.ts` (five Mintlify rewrites behind `DOCS_MINTLIFY_ORIGIN`),
+  `apps/web/turbo.json`, `.env.example`, `.gitignore`, `.prettierignore`, `COMMIT_SCOPES.txt`
+  (new `docs` scope), `apps/web/src/components/marketing/site-header.tsx` and `site-footer.tsx`,
+  and `docs/engineering/mcp-access.md`.
+- **Validation**: `pnpm format:check`, `pnpm lint`, `pnpm typecheck` all green with `apps/docs`
+  present, which is the point of the package declaring no scripts — turbo skips it entirely rather
+  than each gate needing an exclusion. `pnpm test` passes 21 of 21 packages. `mint broken-links`
+  reports none. The `/docs` rewrites were exercised in both branches: five emitted with
+  `DOCS_MINTLIFY_ORIGIN` set, none without. The freshness test was watched go red — removing every
+  mention of the `undo` tool from the reference page failed it, and restoring them passed.
+- **Learnings**: The stale-docs failure this guards against was already real and already spread.
+  `mcp-access.md` claimed 15 MCP tools while 25 were registered, and `specs/mcp-surface.md` had
+  copied a similarly wrong number (18 + 2) from it. The tool list cannot be imported — registration
+  is identity-scoped — and the one importable near-miss, `TOOL_SCOPE`, covers 22 of 25 because
+  `repeating-work-tools.ts` enforces scope inline, so the test scans the `registerTool` call sites.
+  Separately, `generateSpecs(app)` returns a document with **no** `tags` at all: the tag list lives
+  in the `documentation` object `registerOpenapi` passes in, so both the anchor test and the export
+  script go through the real route. The exported document is 4.7 MB across 345 paths, which is why
+  it is gitignored rather than committed with a staleness check — see the follow-up below.
+- **Deviation from the plan**: the approved plan called for a committed OpenAPI artifact with a CI
+  staleness check. At 4.7 MB regenerated on almost every API commit, that would have made each
+  review a diff of generated JSON. The plan's stated purpose — keeping the Scalar deep-links in
+  `rest-api.mdx` from rotting — is met instead by `openapi-docs-anchors.test.ts`, which generates
+  the document in-process and asserts every `#tag/` anchor resolves. The export script still
+  exists, on demand, for client generation.
+
 ### [PUBLISH-ADDR-001] Every address a workspace answers on is one list
 
 - **Completed**: 2026-08-14

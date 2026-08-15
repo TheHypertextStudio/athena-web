@@ -47,9 +47,28 @@ jobs:
   # turns on strictTypeChecked/stylisticTypeChecked with projectService — so ESLint builds the
   # same TypeScript program `tsc --noEmit` just built, then runs rules over it. That duplication
   # is the real defect here; splitting the jobs only stops us paying for it twice in series.
+  # `--concurrency=1` is load-bearing and stays: type-aware ESLint builds a full TypeScript program
+  # per package, and @docket/api's alone spikes to ~2.5GB, so running packages concurrently on one
+  # runner exhausts it. What that flag cost was wall-clock — 25 packages one after another took
+  # 430s, making this the slowest job in the pipeline.
+  #
+  # Sharding restores the parallelism without touching the memory ceiling: each runner still lints
+  # exactly one package at a time, there are simply three runners. api is alone because it is the
+  # 2.5GB one; web and admin ride together because both first build @docket/api (their lint script
+  # does) and would otherwise duplicate that build across two runners.
   lint:
-    name: Lint
+    name: Lint (${{ matrix.group }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: api
+            filter: --filter=@docket/api
+          - group: apps
+            filter: --filter=@docket/web --filter=@docket/admin
+          - group: rest
+            filter: --filter=!@docket/api --filter=!@docket/web --filter=!@docket/admin
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
@@ -64,11 +83,28 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run lint --concurrency=1
+      - run: pnpm turbo run lint ${{ matrix.filter }} --concurrency=1
 
+  # Sharded for the same reason as lint, and with the same memory ceiling intact: `tsc` holds a
+  # whole program in memory per package, so each runner still typechecks one at a time. 26 packages
+  # in series took 319s.
   typecheck:
-    name: Types
+    name: Types (${{ matrix.group }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: api
+            filter: --filter=@docket/api
+            gates: false
+          - group: apps
+            filter: --filter=@docket/web --filter=@docket/admin
+            gates: false
+          # The repo-wide gates ride here rather than on `api`, which is the long pole.
+          - group: rest
+            filter: --filter=!@docket/api --filter=!@docket/web --filter=!@docket/admin
+            gates: true
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
@@ -83,16 +119,18 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Rides with typecheck rather than lint to balance the two runners: typecheck 48s plus
-      # format 33s lands beside lint's 83s.
-      - run: pnpm turbo run typecheck --concurrency=1
+      - run: pnpm turbo run typecheck ${{ matrix.filter }} --concurrency=1
 
+      # Prettier reads the whole repo in one pass, so it belongs to no shard in particular and
+      # runs exactly once.
       - run: pnpm format:check
+        if: matrix.gates
 
       # SCR-19/SCR-20 guard: fails when a job that runs tests or checks is added to this file
       # without being added to deploy-production.needs, or when a gating step is soft-failed
       # (continue-on-error, `|| true`, `if: always()`). See scripts/ci-gate-policy.ts.
       - run: pnpm ci:gate-policy
+        if: matrix.gates
 
   # GEN-06 clause 1: no credential may reach the default branch. Fails the run — and therefore
   # the production deploy, via deploy-production.needs — on any finding.

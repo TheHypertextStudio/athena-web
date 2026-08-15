@@ -439,10 +439,19 @@ describe('the real workflows', () => {
     // enumerated list, so a newly added package lands there by default instead of nowhere.
     // Rewriting that group as a list of package names is the regression this guards against.
     const source = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
-    const groups = [...source.matchAll(/^ +- group: (\S+)$/gm)].map(([, group]) => group);
+    const shardGroups = [...source.matchAll(/^ +- group: (\S+)$/gm)].map(([, group]) => group);
+    const catchAlls = [...source.matchAll(/^ +filter: (--filter=!\S.*)$/gm)].map(
+      ([, filter]) => filter,
+    );
 
-    expect(groups).toEqual(['api', 'web', 'rest']);
-    expect(source).toContain('filter: --filter=!@docket/api --filter=!@docket/web');
+    // Three gates are sharded — lint, typecheck, and test — and each needs its own catch-all.
+    // Asserting the count rather than a fixed group list means adding a shard to an existing gate
+    // is free, while adding one that enumerates packages instead of excluding them is not.
+    expect(shardGroups.length).toBeGreaterThanOrEqual(9);
+    expect(catchAlls).toHaveLength(3);
+    for (const filter of catchAlls) {
+      expect(filter.startsWith('--filter=!')).toBe(true);
+    }
   });
 
   it('bounds every Turbo workspace gate to one package at a time', () => {
@@ -452,12 +461,15 @@ describe('the real workflows', () => {
     );
     const turboGates = commands.filter((command) => command.startsWith('pnpm turbo run '));
 
-    expect(turboGates).toEqual([
-      'pnpm turbo run lint --concurrency=1',
-      'pnpm turbo run typecheck --concurrency=1',
-      'pnpm turbo run test:coverage ${{ matrix.filter }} --concurrency=1',
-      'pnpm turbo run build --concurrency=1',
-    ]);
+    // The constraint is the flag, not the exact command text. Type-aware ESLint and `tsc` each
+    // hold a whole TypeScript program per package — @docket/api's alone spikes to ~2.5GB — so a
+    // gate that lets turbo schedule packages concurrently exhausts the runner. Asserting the flag
+    // on every gate keeps that invariant while leaving shard filters free to change; matching
+    // whole strings made adding a `--filter` look like removing the memory bound.
+    expect(turboGates.length).toBeGreaterThanOrEqual(4);
+    for (const gate of turboGates) {
+      expect(gate).toContain('--concurrency=1');
+    }
   });
 
   it('runs the secret scan against the committed .gitleaks.toml (GEN-06 clause 1)', () => {

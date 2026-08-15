@@ -24,16 +24,16 @@ import { mcpSafeFetch } from './mcp-network';
 export interface PendingMcpOAuthCredential {
   readonly kind: 'mcp_oauth_pending';
   readonly codeVerifier: string;
-  readonly clientInformation?: OAuthClientInformationMixed;
-  readonly discoveryState?: OAuthDiscoveryState;
+  readonly clientInformation?: OAuthClientInformationMixed | undefined;
+  readonly discoveryState?: OAuthDiscoveryState | undefined;
 }
 
 /** Persisted, encrypted credential for an approved remote MCP connection. */
 export interface McpOAuthCredential {
   readonly kind: 'mcp_oauth';
   readonly tokens: OAuthTokens;
-  readonly clientInformation?: OAuthClientInformationMixed;
-  readonly discoveryState?: OAuthDiscoveryState;
+  readonly clientInformation?: OAuthClientInformationMixed | undefined;
+  readonly discoveryState?: OAuthDiscoveryState | undefined;
   /** When Docket received the token, used to refresh short-lived credentials before use. */
   readonly obtainedAt: string;
 }
@@ -42,7 +42,7 @@ export interface McpOAuthCredential {
 export interface BeginMcpOAuthInput {
   readonly serverUrl: string;
   readonly redirectUrl: string;
-  readonly clientMetadataUrl?: string;
+  readonly clientMetadataUrl?: string | undefined;
   readonly state: string;
 }
 
@@ -173,7 +173,9 @@ export async function refreshMcpOAuthCredential(
   const refreshedTokens = await refreshAuthorization(
     credential.discoveryState.authorizationServerUrl,
     {
-      metadata: credential.discoveryState.authorizationServerMetadata,
+      ...(credential.discoveryState.authorizationServerMetadata
+        ? { metadata: credential.discoveryState.authorizationServerMetadata }
+        : {}),
       clientInformation: credential.clientInformation,
       refreshToken: credential.tokens.refresh_token,
       ...(credential.discoveryState.resourceMetadata
@@ -209,7 +211,7 @@ export function parseMcpOAuthCredential(
   value: string,
 ): McpOAuthCredential | PendingMcpOAuthCredential | null {
   try {
-    const parsed = JSON.parse(value) as { readonly kind?: string };
+    const parsed = JSON.parse(value) as { readonly kind?: string | undefined };
     if (parsed.kind === 'mcp_oauth' || parsed.kind === 'mcp_oauth_pending') {
       return parsed as McpOAuthCredential | PendingMcpOAuthCredential;
     }

@@ -56,7 +56,7 @@ export interface ExternalLabel {
   /** The label's color. */
   readonly color: string;
   /** The owning team's external id; absent means a workspace-level label. */
-  readonly externalTeamId?: string;
+  readonly externalTeamId?: string | undefined;
 }
 
 /** One project known to the provider workspace. */
@@ -128,7 +128,7 @@ export interface ExternalWorkItem {
   /** The work item's title. */
   readonly title: string;
   /** The work item's description, when set. */
-  readonly description?: string;
+  readonly description?: string | undefined;
   /** The provider-agnostic lifecycle bucket of the item's current state. */
   readonly stateType: ExternalStateType;
   /** The provider's own name for the current state (e.g. `In Review`). */
@@ -136,27 +136,27 @@ export interface ExternalWorkItem {
   /** The work item's priority. */
   readonly priority: ExternalPriority;
   /** The assignee's external user id, when assigned. */
-  readonly assigneeExternalId?: string;
+  readonly assigneeExternalId?: string | undefined;
   /** The external ids of every label applied to the item. */
   readonly labelExternalIds: readonly string[];
   /** The owning project's external id, when the item belongs to one. */
-  readonly projectExternalId?: string;
+  readonly projectExternalId?: string | undefined;
   /** The owning cycle's external id, when the item is scheduled into one. */
-  readonly cycleExternalId?: string;
+  readonly cycleExternalId?: string | undefined;
   /** The parent work item's external id, when this item is a sub-issue. */
-  readonly parentExternalId?: string;
+  readonly parentExternalId?: string | undefined;
   /** The owning team's external id. */
   readonly externalTeamId: string;
   /** The item's point/size estimate, when set. */
-  readonly estimate?: number;
+  readonly estimate?: number | undefined;
   /** The item's due date (RFC3339 date), when set. */
-  readonly dueDate?: string;
+  readonly dueDate?: string | undefined;
   /** When work started on the item, when known. */
-  readonly startedAt?: string;
+  readonly startedAt?: string | undefined;
   /** When the item was completed, when it has been. */
-  readonly completedAt?: string;
+  readonly completedAt?: string | undefined;
   /** When the item was canceled, when it has been. */
-  readonly canceledAt?: string;
+  readonly canceledAt?: string | undefined;
   /** Canonical URL of the item in the provider. */
   readonly url: string;
   /**
@@ -169,7 +169,7 @@ export interface ExternalWorkItem {
    */
   readonly updatedAt: string;
   /** Set when the item is archived/trashed at the provider — a tombstone, not live content. */
-  readonly removed?: boolean;
+  readonly removed?: boolean | undefined;
 }
 
 /** One full or incremental pull of a provider workspace's work graph. */

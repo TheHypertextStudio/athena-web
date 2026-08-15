@@ -3,6 +3,7 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   MCP_UI_EXTENSION,
@@ -55,7 +56,7 @@ export function readUiToolMeta(meta: unknown): McpUiToolMeta | null {
  * @param meta - A tool's `_meta`, as the server sent it.
  * @returns `{ ui }` or an empty object, so `exactOptionalPropertyTypes` stays satisfied.
  */
-export function uiMetaSpread(meta: unknown): { ui?: McpUiToolMeta } {
+export function uiMetaSpread(meta: unknown): { ui?: McpUiToolMeta | undefined } {
   const ui = readUiToolMeta(meta);
   return ui ? { ui } : {};
 }
@@ -75,17 +76,17 @@ export interface McpEndpoint {
   /** The server URL (Streamable HTTP). */
   readonly url: string;
   /** Bearer token sent on every request, when the server requires one. */
-  readonly bearerToken?: string;
+  readonly bearerToken?: string | undefined;
 }
 
 /** The gate-relevant annotation hints a remote tool may declare. */
 export interface RemoteToolAnnotations {
   /** Whether the tool declares itself side-effect free. */
-  readonly readOnlyHint?: boolean;
+  readonly readOnlyHint?: boolean | undefined;
   /** Whether the tool declares destructive updates. */
-  readonly destructiveHint?: boolean;
+  readonly destructiveHint?: boolean | undefined;
   /** Whether the tool reaches further external systems. */
-  readonly openWorldHint?: boolean;
+  readonly openWorldHint?: boolean | undefined;
 }
 
 /** One tool a remote server advertises. */
@@ -97,7 +98,7 @@ export interface RemoteToolDescriptor {
   /** The JSON Schema for the tool's input. */
   readonly inputSchema: Record<string, unknown>;
   /** Declared annotations; absent hints classify as writes. */
-  readonly annotations?: RemoteToolAnnotations;
+  readonly annotations?: RemoteToolAnnotations | undefined;
   /**
    * The tool's MCP Apps metadata, when it declares a widget.
    *
@@ -105,7 +106,7 @@ export interface RemoteToolDescriptor {
    * Present means the server offers a `ui://` document to render this tool's result through. The
    * agent path ignores it; the Athena UI reads `resourceUri` and asks for that resource.
    */
-  readonly ui?: McpUiToolMeta;
+  readonly ui?: McpUiToolMeta | undefined;
 }
 
 /** One `ui://` document read from a remote server. */
@@ -117,7 +118,7 @@ export interface RemoteUiResource {
   /** The HTML document. */
   readonly text: string;
   /** The resource's `_meta.ui`, carrying its declared CSP and permissions. */
-  readonly meta?: McpUiResourceMeta;
+  readonly meta?: McpUiResourceMeta | undefined;
 }
 
 /** The serialized outcome of one remote tool call. */
@@ -133,7 +134,7 @@ export interface RemoteMcpServerInfo {
   /** The server's product name. */
   readonly name: string;
   /** A more descriptive title when the server provides one. */
-  readonly title?: string;
+  readonly title?: string | undefined;
 }
 
 /** One open session against a remote MCP server. */
@@ -178,13 +179,13 @@ export interface McpConnector {
 /** One scripted fixture server. */
 export interface FixtureMcpServer {
   /** The server identity returned during initialization. */
-  readonly serverInfo?: RemoteMcpServerInfo;
+  readonly serverInfo?: RemoteMcpServerInfo | undefined;
   /** The advertised tools. */
   readonly tools: readonly RemoteToolDescriptor[];
   /** Resolve one call by un-namespaced tool name. */
   call(name: string, input: unknown): RemoteToolResult;
   /** The `ui://` documents this server serves, by uri. */
-  readonly uiResources?: Readonly<Record<string, RemoteUiResource>>;
+  readonly uiResources?: Readonly<Record<string, RemoteUiResource>> | undefined;
   /** The structured result for a call, when the fixture models one. */
   callRaw?(name: string, input: unknown): Record<string, unknown>;
 }
@@ -493,7 +494,7 @@ const FIXTURE_SERVERS: Readonly<Record<string, FixtureMcpServer>> = {
 /** Construction options for {@link MockMcpConnector}. */
 export interface MockMcpConnectorOptions {
   /** Extra/override fixture servers keyed by host. */
-  readonly servers?: Readonly<Record<string, FixtureMcpServer>>;
+  readonly servers?: Readonly<Record<string, FixtureMcpServer>> | undefined;
 }
 
 /** A mock remote-MCP connector serving deterministic fixture servers by host. */
@@ -557,7 +558,11 @@ export class RealMcpConnector implements McpConnector {
       // rather than their text-only fallbacks.
       { capabilities: { extensions: { [MCP_UI_EXTENSION]: MCP_UI_CLIENT_CAPABILITY } } },
     );
-    await client.connect(transport);
+    // The SDK's own `sessionId?: string` on `Transport` and `get sessionId(): string | undefined`
+    // on `StreamableHTTPClientTransport` are incompatible under exactOptionalPropertyTypes; both
+    // types come from the vendor package, so the mismatch is cast away here rather than by
+    // touching SDK types.
+    await client.connect(transport as Transport);
     const serverInfo = client.getServerVersion();
     return {
       serverInfo: (): RemoteMcpServerInfo => ({

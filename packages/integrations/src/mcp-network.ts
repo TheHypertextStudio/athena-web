@@ -29,24 +29,40 @@ export type McpPinnedRequest = (
 /** Resource bounds applied to each remote MCP request. */
 export interface McpNetworkLimits {
   /** Maximum manual redirect hops. */
-  readonly maxRedirects?: number;
+  readonly maxRedirects?: number | undefined;
   /** Maximum time to establish TLS. */
-  readonly connectTimeoutMs?: number;
+  readonly connectTimeoutMs?: number | undefined;
   /** Maximum total time for a request, including redirects and body consumption. */
-  readonly overallTimeoutMs?: number;
+  readonly overallTimeoutMs?: number | undefined;
   /** Maximum serialized response-header bytes. */
-  readonly maxHeaderBytes?: number;
+  readonly maxHeaderBytes?: number | undefined;
   /** Maximum response body bytes. */
-  readonly maxBodyBytes?: number;
+  readonly maxBodyBytes?: number | undefined;
 }
 
-const DEFAULT_LIMITS: Required<McpNetworkLimits> = {
+const DEFAULT_LIMITS = {
   maxRedirects: 3,
   connectTimeoutMs: 5_000,
   overallTimeoutMs: 30_000,
   maxHeaderBytes: 32 * 1024,
   maxBodyBytes: 2 * 1024 * 1024,
+} as const satisfies Required<McpNetworkLimits>;
+
+/** Every {@link McpNetworkLimits} field, guaranteed present and defined. */
+type ResolvedMcpNetworkLimits = {
+  readonly [K in keyof Required<McpNetworkLimits>]: NonNullable<Required<McpNetworkLimits>[K]>;
 };
+
+/** Fill in caller-supplied overrides against {@link DEFAULT_LIMITS}, one field at a time. */
+function resolveLimits(overrides: McpNetworkLimits | undefined): ResolvedMcpNetworkLimits {
+  return {
+    maxRedirects: overrides?.maxRedirects ?? DEFAULT_LIMITS.maxRedirects,
+    connectTimeoutMs: overrides?.connectTimeoutMs ?? DEFAULT_LIMITS.connectTimeoutMs,
+    overallTimeoutMs: overrides?.overallTimeoutMs ?? DEFAULT_LIMITS.overallTimeoutMs,
+    maxHeaderBytes: overrides?.maxHeaderBytes ?? DEFAULT_LIMITS.maxHeaderBytes,
+    maxBodyBytes: overrides?.maxBodyBytes ?? DEFAULT_LIMITS.maxBodyBytes,
+  };
+}
 
 /* v8 ignore start -- live DNS IO boundary: the only caller (`resolvePublicAddress`) always
    injects a `lookup` in tests; this default reaches the real OS resolver and is exercised by
@@ -320,7 +336,7 @@ const defaultRequest: McpPinnedRequest = async (url, init, address, signal, limi
         resolve(
           new Response(Readable.toWeb(incoming) as ReadableStream<Uint8Array>, {
             status: incoming.statusCode ?? 500,
-            statusText: incoming.statusMessage,
+            ...(incoming.statusMessage !== undefined ? { statusText: incoming.statusMessage } : {}),
             headers: responseHeaders,
           }),
         );
@@ -353,14 +369,14 @@ const defaultRequest: McpPinnedRequest = async (url, init, address, signal, limi
  */
 export function createMcpSafeFetch(
   options: {
-    readonly lookup?: McpDnsLookup;
-    readonly request?: McpPinnedRequest;
-    readonly limits?: McpNetworkLimits;
+    readonly lookup?: McpDnsLookup | undefined;
+    readonly request?: McpPinnedRequest | undefined;
+    readonly limits?: McpNetworkLimits | undefined;
   } = {},
 ): FetchLike {
   const lookup = options.lookup ?? defaultLookup;
   const request = options.request ?? defaultRequest;
-  const limits = { ...DEFAULT_LIMITS, ...options.limits };
+  const limits = resolveLimits(options.limits);
   return async (input, init = {}) => {
     const original = new Request(input, init);
     const controller = new AbortController();

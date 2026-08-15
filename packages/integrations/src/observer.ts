@@ -111,9 +111,9 @@ export interface EventEntityRef {
   /** The entity's native id in the source system. */
   readonly externalId: string;
   /** Display title, when known. */
-  readonly title?: string;
+  readonly title?: string | undefined;
   /** Canonical URL, when available. */
-  readonly url?: string;
+  readonly url?: string | undefined;
 }
 
 /**

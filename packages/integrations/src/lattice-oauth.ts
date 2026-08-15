@@ -84,15 +84,15 @@ const REFRESH_SKEW_MS = 60_000;
 /** Where a flow talks to, and as whom. */
 export interface LatticeOAuthClientConfig {
   /** The accounts issuer origin; defaults to {@link LOVELACE_ACCOUNTS_ISSUER}. */
-  readonly issuer?: string;
+  readonly issuer?: string | undefined;
   /** The registered OAuth client id. */
   readonly clientId: string;
   /** The registered client secret, when Docket is deployed as a confidential client. */
-  readonly clientSecret?: string;
+  readonly clientSecret?: string | undefined;
   /** The callback Lovelace redirects the browser back to. */
   readonly redirectUri: string;
   /** Injected fetch, for tests. */
-  readonly fetch?: typeof globalThis.fetch;
+  readonly fetch?: typeof globalThis.fetch | undefined;
 }
 
 /** Encrypted-at-rest state held while the person is on Lovelace's consent screen. */

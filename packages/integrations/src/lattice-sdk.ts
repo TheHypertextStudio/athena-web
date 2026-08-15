@@ -110,9 +110,9 @@ export interface PersonalLatticeRuntimeResource {
   /** ISO-8601 last-update time. */
   readonly updatedAt: string;
   /** ISO-8601 time the relay last saw the daemon, when it ever has. */
-  readonly lastSeenAt?: string;
+  readonly lastSeenAt?: string | undefined;
   /** ISO-8601 revocation time, when revoked. */
-  readonly revokedAt?: string;
+  readonly revokedAt?: string | undefined;
 }
 
 /**
@@ -134,11 +134,11 @@ export interface OpenAiChatMessage {
 /** Token accounting the gateway returns. Upstream `OpenAiChatCompletionUsage`. */
 export interface OpenAiChatCompletionUsage {
   /** Tokens consumed by the prompt. */
-  readonly prompt_tokens?: number;
+  readonly prompt_tokens?: number | undefined;
   /** Tokens produced by the model. */
-  readonly completion_tokens?: number;
+  readonly completion_tokens?: number | undefined;
   /** Prompt plus completion. */
-  readonly total_tokens?: number;
+  readonly total_tokens?: number | undefined;
 }
 
 /** One completion choice. Upstream `OpenAiChatCompletionChoice`. */
@@ -148,7 +148,7 @@ export interface OpenAiChatCompletionChoice {
   /** The generated message. */
   readonly message: OpenAiChatMessage;
   /** Why generation stopped, when the provider says. */
-  readonly finish_reason?: string;
+  readonly finish_reason?: string | undefined;
 }
 
 /** A non-streaming completion. Upstream `OpenAiChatCompletionResponse`. */
@@ -158,13 +158,13 @@ export interface OpenAiChatCompletionResponse {
   /** Always the literal `chat.completion`. */
   readonly object: 'chat.completion';
   /** Unix seconds. */
-  readonly created?: number;
+  readonly created?: number | undefined;
   /** The model the gateway actually served with. */
   readonly model: string;
   /** The generated choices. */
   readonly choices: readonly OpenAiChatCompletionChoice[];
   /** Token accounting, when reported. */
-  readonly usage?: OpenAiChatCompletionUsage;
+  readonly usage?: OpenAiChatCompletionUsage | undefined;
 }
 
 /**
@@ -196,13 +196,13 @@ export interface LatticeOAuthCredential {
 /** Construction options. Upstream `LatticeClientOptions`. */
 export interface LatticeClientOptions {
   /** Gateway base URL; defaults to {@link LATTICE_GATEWAY_BASE_URL}. */
-  readonly baseUrl?: string;
+  readonly baseUrl?: string | undefined;
   /** The credential used on every request. */
   readonly credential: LatticeCredential;
   /** Injected fetch, for tests and custom HTTP stacks. */
-  readonly fetch?: typeof globalThis.fetch;
+  readonly fetch?: typeof globalThis.fetch | undefined;
   /** Request timeout in milliseconds. */
-  readonly timeoutMs?: number;
+  readonly timeoutMs?: number | undefined;
 }
 
 /**
@@ -300,11 +300,11 @@ export interface ChatCompletionsRequest {
   /** The conversation. */
   readonly messages: readonly OpenAiChatMessage[];
   /** Sampling temperature. */
-  readonly temperature?: number;
+  readonly temperature?: number | undefined;
   /** Output token ceiling; sent on the wire as `max_tokens`. */
-  readonly maxTokens?: number;
+  readonly maxTokens?: number | undefined;
   /** Stable key so a retried dispatch is not executed twice. */
-  readonly idempotencyKey?: string;
+  readonly idempotencyKey?: string | undefined;
 }
 
 /** A chat request already bound to one device. Upstream `PersonalRuntimeChatCompletionsRequest`. */
@@ -318,7 +318,7 @@ interface PersonalRuntimeListResponseBody {
 /** Per-request knobs for the low-level helper. */
 interface LatticeRequestOptions {
   readonly body?: unknown;
-  readonly idempotencyKey?: string;
+  readonly idempotencyKey?: string | undefined;
 }
 
 /**
@@ -485,7 +485,7 @@ export class LatticeClient {
       response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         method,
         headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
         signal: controller.signal,
       });
     } catch (cause) {

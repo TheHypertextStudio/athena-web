@@ -227,9 +227,11 @@ export interface MirrorRowOp {
   readonly kind: 'create' | 'update' | 'delete';
   readonly dataSourceId: string;
   /** Absent for `create`. */
-  readonly externalPageId?: string;
+  readonly externalPageId?: string | undefined;
   /** Docket field key → already-formatted Notion value. */
-  readonly properties?: SdkPropertySchemaMap extends never ? never : Record<string, unknown>;
+  readonly properties?: SdkPropertySchemaMap extends never
+    ? never
+    : Record<string, unknown> | undefined;
 }
 
 /** The outcome of one row write. */

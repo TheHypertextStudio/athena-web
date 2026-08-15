@@ -85,7 +85,7 @@ export interface RealConnectorConfig {
    * API base URL override for the provider (e.g. a GitHub Enterprise / self-hosted
    * host). Defaults to the provider's public API base.
    */
-  readonly apiBase?: string;
+  readonly apiBase?: string | undefined;
 }
 
 /** The default public API base per provider. */

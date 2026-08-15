@@ -233,8 +233,11 @@ describe('TaskTable', () => {
         </InteractionProvider>,
       ),
     );
-    const row = (id: string) =>
-      document.querySelector<HTMLElement>(`[role="row"][data-object-id="${id}"]`)!;
+    const row = (id: string): HTMLElement => {
+      const element = document.querySelector<HTMLElement>(`[role="row"][data-object-id="${id}"]`);
+      if (!element) throw new Error(`Expected task row ${id}`);
+      return element;
+    };
 
     fireEvent.click(row(TASK_1));
     fireEvent.click(row(TASK_2), { metaKey: true });
@@ -293,8 +296,11 @@ describe('TaskTable', () => {
         </InteractionProvider>,
       ),
     );
-    const row = (id: string) =>
-      document.querySelector<HTMLElement>(`[role="row"][data-object-id="${id}"]`)!;
+    const row = (id: string): HTMLElement => {
+      const element = document.querySelector<HTMLElement>(`[role="row"][data-object-id="${id}"]`);
+      if (!element) throw new Error(`Expected task row ${id}`);
+      return element;
+    };
     fireEvent.click(row(TASK_1));
     fireEvent.click(row(TASK_2), { metaKey: true });
     const transfer = fakeDataTransfer();
@@ -337,8 +343,8 @@ describe('TaskTable', () => {
     );
 
     const titleLink = screen.getByRole('link', { name: 'Wire the table' });
-    const row = titleLink.closest<HTMLElement>('[role="row"]')!;
-    expect(row).not.toBeNull();
+    const row = titleLink.closest<HTMLElement>('[role="row"]');
+    if (!row) throw new Error('Expected task row for Wire the table');
     // The leading status glyph reads as the `started` category for an in-progress task, and names
     // itself with the workspace's own word for that status rather than the field's header.
     const glyph = row.querySelector('[data-state-type]');
@@ -407,7 +413,8 @@ describe('TaskTable', () => {
     );
 
     const titleLink = screen.getByRole('link', { name: 'Wire the table' });
-    const row = titleLink.closest<HTMLElement>('[role="row"]')!;
+    const row = titleLink.closest<HTMLElement>('[role="row"]');
+    if (!row) throw new Error('Expected task row for Wire the table');
     const timerButton = await within(row).findByTestId(`task-timer-${TASK_1}`);
 
     fireEvent.click(timerButton);

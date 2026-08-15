@@ -271,7 +271,7 @@ describe('EntityTable — selection', () => {
       <EntityTable
         aria-label="Items"
         columns={columns}
-        rows={[ROWS[0]!]}
+        rows={[assertDefined(ROWS[0])]}
         getRowKey={getRowKey}
         rowHref={(row) => `/items/${row.id}`}
         rowLinkColumnKey="name"

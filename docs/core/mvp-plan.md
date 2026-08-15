@@ -92,6 +92,7 @@ The Hub **gathers** the organizations you're a member of — it does **not** pri
 
    Initiative  ┄themes┄►  Programs & Projects    (many-to-many overlay)
    Cycle       ┄schedules┄►  Tasks               (a team's recurring time window)
+   Task        └─ decomposes into ─► Task         (same-org hierarchy, always visible in Task graph)
    Task        ┄blocked by┄►  Task               (org-wide, cross-project, acyclic)
 ```
 
@@ -117,6 +118,10 @@ The Hub **gathers** the organizations you're a member of — it does **not** pri
   Initiative in another workspace, but never grant access to it.
 - **Cycles are team‑scoped.** Each Team runs its own cadence.
 - **Dependencies are org‑wide and cross‑project.** A Task can be "blocked by" / "blocking" any other Task in the organization, even in a different Project. The graph is kept acyclic.
+- **Task hierarchy is workspace-wide and independent from dependencies.** Any active Task may be
+  made a subtask of another active Task in the same Organization, including across Projects or
+  Teams. The Task graph shows this decomposition as indented branches and keeps blocking
+  relationships as separate directed edges.
 - **Teams are first‑class** within an Organization. A Team owns its workflow states, its Cycles, and its Triage queue.
 
 ---
@@ -315,7 +320,7 @@ This is the page you open when you want to understand one effort deeply, and Doc
   update, Markdown document, weighted progress, agents, activity, and dependencies together;
   Tasks, Updates, and URL Resources have dedicated tabs. Projects may support several Initiatives,
   carry organization-global Labels, and use display metadata stored separately from the work row.
-- **Projects overview:** one filter/group/sort model drives dense List, dependency-graph, and
+- **Projects overview:** one filter/group/sort model drives dense List, Task graph, and
   timeline lenses. Medium widths retain the complete roster in a local horizontal scroller rather
   than collapsing columns into ambiguous inline metadata.
 - **Program** (ongoing, no % bar): headline is a **health + flow snapshot**; its work list is **grouped by Cycle, segmented by Project** so it stays usable as it accumulates for years.
@@ -330,7 +335,11 @@ This is the page you open when you want to understand one effort deeply, and Doc
 These two detail screens sit at the most granular level, where planning meets the actual doing. A Cycle is a fixed stretch of time, often two weeks, that a team commits a batch of work to and then reviews, like a marketing team's content push or a monthly giving drive. Its screen is a focused list of the committed tasks (grouped by which effort each belongs to) topped by a collapsible stats banner that answers "are we on pace?": a line tracking how much of the planned work is done versus still remaining, alongside the team's capacity and any scope that crept in. And because real work always overruns, the close of a cycle isn't automatic, you're walked through each leftover task and decide, one by one, whether to keep it, move it forward, or send it back to be re-sorted, so nothing rolls over by accident. The Task screen is the smallest unit, and it's built so the human and the AI worker share one timeline: when you delegate the task, the agent's live activity streams right inside the same comment-and-activity feed where your own notes go, so watching the work is the same surface as discussing it. The to-do steps within the task sit as a simple inline checklist under the description, and because something blocking this task might live in an entirely different effort, a dedicated section shows those dependencies and names which effort each one comes from. It's shaped this way so the unit where work actually gets done never hides what an agent is doing or what's standing in the way.
 
 - **Cycle:** a **list with a collapsible stats banner** (a **burn‑up line** — planned work done vs. remaining — plus capacity, scope changes, carryover); tasks **grouped by Project/Program**; carryover is **reviewed before it rolls** (at cycle close, keep / move / return‑to‑Triage each leftover). That "nothing rolls by accident" posture is specific to _closing_ a cycle; _filling_ one is opt-in the other direction — an **Assign backlog** action on the detail screen sweeps the team's still-unscoped, open tasks in explicitly, and a team can enable an automation rule so every new task lands straight into whichever cycle is current the moment it's created.
-- **Task:** the agent **session streams inline in the comment+activity feed**; **subtasks are an inline checklist** under the description, with a **dedicated dependency‑visualization section** (dependencies are cross‑project, so each shows the other task's project); external links appear as **rows in the properties panel**.
+- **Task:** the agent **session streams inline in the comment+activity feed**; **subtasks are an
+  inline hierarchy** under the description and can be created from existing work through the
+  shared parent picker or task-on-task drag; the **Task graph** keeps this hierarchy visible while
+  a dedicated dependency section names the other task's project; external links appear as **rows
+  in the properties panel**.
 
 ### 8.6 Agents — sessions‑first
 

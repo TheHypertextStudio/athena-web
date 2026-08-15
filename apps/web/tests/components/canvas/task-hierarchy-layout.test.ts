@@ -25,6 +25,12 @@ const nodes = [
 ];
 const edges: Edge[] = [{ id: 'dep:grandchild-a:root-b', source: 'grandchild-a', target: 'root-b' }];
 
+function findNode(items: Node[], id: string): Node {
+  const item = items.find((candidate) => candidate.id === id);
+  if (!item) throw new Error(`Expected layout node ${id}`);
+  return item;
+}
+
 describe('layoutTaskHierarchy', () => {
   it('emits parents before children with 48px relative indentation and recursive bounds', () => {
     const laidOut = layoutTaskHierarchy(nodes, edges, 'compact', 'LR');
@@ -47,21 +53,21 @@ describe('layoutTaskHierarchy', () => {
   it('preserves sibling order and changes top-level flow for LR and TB', () => {
     const lr = layoutTaskHierarchy(nodes, edges, 'compact', 'LR');
     const tb = layoutTaskHierarchy(nodes, edges, 'compact', 'TB');
-    const child = lr.find(({ id }) => id === 'child-a')!;
-    const sibling = lr.find(({ id }) => id === 'sibling-a')!;
+    const child = findNode(lr, 'child-a');
+    const sibling = findNode(lr, 'sibling-a');
     expect(child.position.y).toBeLessThan(sibling.position.y);
-    const lrA = lr.find(({ id }) => id === 'root-a')!.position;
-    const lrB = lr.find(({ id }) => id === 'root-b')!.position;
-    const tbA = tb.find(({ id }) => id === 'root-a')!.position;
-    const tbB = tb.find(({ id }) => id === 'root-b')!.position;
+    const lrA = findNode(lr, 'root-a').position;
+    const lrB = findNode(lr, 'root-b').position;
+    const tbA = findNode(tb, 'root-a').position;
+    const tbB = findNode(tb, 'root-b').position;
     expect(lrA.x).toBeLessThan(lrB.x);
     expect(tbA.y).toBeLessThan(tbB.y);
   });
 
   it('projects cross-tree dependencies to compound roots while retaining actual edge endpoints', () => {
     const laidOut = layoutTaskHierarchy(nodes, edges, 'compact', 'LR');
-    expect(laidOut.find(({ id }) => id === 'root-a')!.position.x).toBeLessThan(
-      laidOut.find(({ id }) => id === 'root-b')!.position.x,
+    expect(findNode(laidOut, 'root-a').position.x).toBeLessThan(
+      findNode(laidOut, 'root-b').position.x,
     );
     expect(edges[0]).toMatchObject({ source: 'grandchild-a', target: 'root-b' });
   });

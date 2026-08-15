@@ -10,7 +10,13 @@ import {
 } from '@/components/canvas/use-task-hierarchy-drag';
 import { OBJECT_SET_DRAG_MIME } from '@/components/dnd/drag-payload';
 
-const nativeDrag = vi.hoisted(() => ({
+const nativeDrag: {
+  value: {
+    object: null;
+    objects: { kind: 'task'; id: string; title: string; organizationId: string }[];
+    sourceSurfaceId: null;
+  };
+} = vi.hoisted(() => ({
   value: { object: null, objects: [], sourceSurfaceId: null },
 }));
 
@@ -76,6 +82,7 @@ describe('resolveHierarchyDrag', () => {
   });
 
   it('previews the deepest hit, snaps back, and commits once on drag stop', () => {
+    const rootNode = node('root', null);
     const setNodes = vi.fn();
     const onCommit = vi.fn();
     const instance = {
@@ -95,13 +102,13 @@ describe('resolveHierarchyDrag', () => {
     const pointer = { clientX: 20, clientY: 30 } as MouseEvent;
 
     act(() => {
-      result.current.onNodeDragStart(pointer, nodes[0]!, [nodes[0]!]);
-      result.current.onNodeDrag(pointer, nodes[0]!, [nodes[0]!]);
+      result.current.onNodeDragStart(pointer, rootNode, [rootNode]);
+      result.current.onNodeDrag(pointer, rootNode, [rootNode]);
     });
     expect(result.current.status).toContain('other');
 
     act(() => {
-      result.current.onNodeDragStop(pointer, nodes[0]!, [nodes[0]!]);
+      result.current.onNodeDragStop(pointer, rootNode, [rootNode]);
     });
     expect(onCommit).toHaveBeenCalledWith(['root'], 'other-child');
     expect(setNodes).toHaveBeenCalled();

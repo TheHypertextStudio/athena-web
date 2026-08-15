@@ -5153,6 +5153,38 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [DEPLOY-ENV-001] A required variable cannot reach the schema without reaching the deploy
+
+- **Completed**: 2026-08-15
+- **Priority**: P0
+- **Summary**: `WORK_LOCATION_PROJECTION_ENABLED` shipped as required and reached `.env.example`
+  and `.env.local`, but not the Cloud Run environment file `deploy.yml` writes. That file is passed
+  as `--env-vars-file`, which replaces the service's whole environment, so the next production
+  deploy handed the API an environment missing a required variable. Every container exited 1 during
+  environment validation before binding port 8080, the startup probe failed, and the release never
+  promoted — which also held the Vercel web alias on an old build, because promotion gates on the
+  `Deploy production / Migrate database and deploy API` check. Migrations `0090` and `0091` had
+  already applied, since the migrate step precedes the deploy step. The bootstrap `.env.local`
+  skeleton had drifted the same way and was missing four required variables. Neither generated
+  manifest was checked against the schema, which is why a variable could be required everywhere the
+  tests looked and absent everywhere the deploy read.
+- **Files Changed**: `scripts/bootstrap.ts` (skeleton gained `GOOGLE_OAUTH_PUBLIC`,
+  `WORK_LOCATION_PROJECTION_ENABLED`, `AGENT_MAX_TURNS`, `ATHENA_ASYNC_RUNNER_ENABLED`) and
+  `packages/env/tests/env-files/env-files.test.ts` (two schema-derived assertions covering the
+  Cloud Run env file and the bootstrap skeleton). The `deploy.yml` line landed in `2d5953df`, an
+  identical concurrent fix; the rebase absorbed the duplicate hunk and main carries one copy.
+- **Validation**: `@docket/env` passes 124 of 124 with 100% coverage, Prettier and ESLint clean on
+  both touched files. Both new assertions were run against the pre-fix content read from `HEAD` and
+  reported exactly the real gaps (`WORK_LOCATION_PROJECTION_ENABLED` for Cloud Run; four for the
+  skeleton), with the parser sanity checks confirming neither was passing vacuously.
+- **Learnings**: The env-files suite derived the required set from the schema but only held the two
+  committed files to it. A required variable is provisioned in four places, and the two generated
+  manifests were the two nobody checked. Secrets are exempt from the Cloud Run assertion because
+  production mounts them from Secret Manager via `API_SECRET_BINDINGS`, a GitHub variable no test
+  can read; `PORT` is exempt because Cloud Run sets it and pinning it would be wrong.
+  `tests/tooling/bootstrap-setup.test.ts` also gained a literal check for this one variable in
+  `2d5953df`; the schema-derived assertions cover the general case.
+
 ### [PHONE-VERIFY-001] A texted code stays enterable after the page reloads
 
 - **Completed**: 2026-08-15

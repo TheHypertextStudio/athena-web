@@ -13,6 +13,7 @@
  * can target.
  */
 import { ExpandMoreRounded } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EditableFreeformText } from '@/components/editor/freeform-text';
@@ -141,15 +142,24 @@ export function EntityDocument({
   );
 
   return (
+    // `flex-1 flex flex-col` on this chain down to the visible box below is a no-op unless a
+    // caller's own wrapper happens to be a flex column with real spare height to give up (e.g. a
+    // tab where this document is the whole page, so its section carries `min-h-full`) — nothing
+    // here needs to know that context exists. A host with more content stacked below the body
+    // (a project's milestones, an initiative's updates) never has spare height to distribute in
+    // the first place, so this is inert for them: the body still sizes to its own text.
     <div
-      className={`grid min-w-0 gap-8 ${hasContents ? '@4xl:grid-cols-[minmax(0,1fr)_11rem]' : ''}`}
+      className={cn(
+        'grid min-w-0 flex-1 gap-8',
+        hasContents && '@4xl:grid-cols-[minmax(0,1fr)_11rem]',
+      )}
     >
       {/*
        * The body is the first (left) column, so its edge stays flush with the masthead and the
        * sibling sections — the contents live in their own column to the *right*, never indenting
        * the body. Below @4xl the rail collapses into a compact disclosure above the body.
        */}
-      <div className="min-w-0">
+      <div className="flex min-w-0 flex-col">
         {hasContents ? (
           <details className="entity-contents-mobile bg-surface-container-low group mb-6 w-fit max-w-full min-w-56 rounded-xl @4xl:hidden">
             <summary className="text-on-surface text-label-large flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 [&::-webkit-details-marker]:hidden">
@@ -186,7 +196,7 @@ export function EntityDocument({
             event.preventDefault();
             focusDocumentEnd(rootRef.current);
           }}
-          className="entity-document bg-surface-container-low flex min-h-56 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0"
+          className="entity-document bg-surface-container-low flex min-h-56 flex-1 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0"
         >
           {headerActions ? <div className="mb-2 flex justify-end">{headerActions}</div> : null}
           <EditableFreeformText

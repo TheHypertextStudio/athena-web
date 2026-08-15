@@ -34,6 +34,25 @@ describe('FreeformTextEditor', () => {
     expect(screen.queryByRole('toolbar')).toBeNull();
   });
 
+  it('marks the empty paragraph for the placeholder to actually render from', () => {
+    renderEditor(
+      <FreeformTextEditor
+        value=""
+        onChange={vi.fn()}
+        placeholder="What is this team for?"
+        ariaLabel="Description"
+      />,
+    );
+
+    // The `Placeholder` extension decorates the empty *paragraph*, not the `.ProseMirror` root —
+    // regression guard for the gap that shipped once already: the extension was never installed,
+    // so the class/attribute this depends on never appeared and the CSS had nothing to read.
+    const writing = screen.getByRole('textbox', { name: 'Description' });
+    const emptyNode = writing.querySelector('.is-editor-empty');
+    expect(emptyNode).not.toBeNull();
+    expect(emptyNode).toHaveAttribute('data-placeholder', 'What is this team for?');
+  });
+
   it('renders saved writing as quiet readable text, rather than a disabled field', () => {
     renderEditor(<FreeformText value="A saved update." emptyText="Nothing here." />);
 

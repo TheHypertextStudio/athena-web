@@ -21,13 +21,7 @@
  *   quietly rewrote every task in an organization is not a recoverable mistake, even with undo.
  */
 import { db, initiative, program, project, task } from '@docket/db';
-import {
-  Health,
-  InitiativePriority,
-  InitiativeStatus,
-  ProgramStatus,
-  ProjectStatus,
-} from '@docket/types';
+import { Health, InitiativePriority } from '@docket/types';
 import { Priority } from '@docket/work/task-contract';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
@@ -35,6 +29,7 @@ import { z } from 'zod';
 
 import { ApiError, ValidationError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
+import { resolveContainerStatus } from '../lib/work-status';
 import { buildTaskViewFilter } from '../routes/task-helpers';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
@@ -167,13 +162,6 @@ const SETTABLE: Record<WorkEntity, readonly SetName[]> = {
   initiative: ['title', 'description', 'status', 'health', 'priority', 'owner', 'targetDate'],
 };
 
-/** The enum each entity's `status` must belong to. */
-const STATUS_ENUM = {
-  project: ProjectStatus,
-  program: ProgramStatus,
-  initiative: InitiativeStatus,
-} as const;
-
 /**
  * Raise a field error carrying the legal alternatives.
  *
@@ -203,20 +191,13 @@ function assertSettable(entity: WorkEntity, set: UpdateSet): void {
 }
 
 /**
- * Validate `priority` and `status` against the enum that belongs to this entity.
+ * Validate `priority` against the enum that belongs to this entity.
  *
  * @remarks
- * These two are declared as open strings on the input schema because their legal values differ per
- * entity — a single `z.enum` would have to be the union, which would advertise `planned` as a legal
- * initiative status. Checking here instead means the rejection names the entity's own values.
+ * Statuses are workspace-defined and are resolved through {@link resolveContainerStatus} instead
+ * of a fixed enum. Priority remains fixed by entity and can be validated synchronously here.
  */
 function assertEnums(entity: WorkEntity, set: UpdateSet): void {
-  if (set.status !== undefined && entity !== 'task') {
-    const schema = STATUS_ENUM[entity];
-    if (!schema.safeParse(set.status).success) {
-      reject('set.status', set.status, `Not a ${entity} status.`, schema.options);
-    }
-  }
   if (set.priority !== undefined) {
     const schema = entity === 'initiative' ? InitiativePriority : Priority;
     if (!schema.safeParse(set.priority).success) {
@@ -297,12 +278,17 @@ async function buildPatch(
   row: Record<string, unknown>,
   set: UpdateSet,
   refs: ResolvedRefs,
+  containerStatus?: { statusId: string; status: string },
 ): Promise<Record<string, unknown>> {
   const patch: Record<string, unknown> = {
     // `title` is the caller's word for it; the column is `name` on everything but a task.
     ...(set.title !== undefined ? { [entity === 'task' ? 'title' : 'name']: set.title } : {}),
     ...clearableTextPatch('description', set.description),
-    ...(set.status !== undefined ? { status: set.status } : {}),
+    // Resolved once by the caller, before the scope query, so a status this workspace does not
+    // have is refused even when the scope matches nothing.
+    ...(containerStatus === undefined
+      ? {}
+      : { status: containerStatus.status, statusId: containerStatus.statusId }),
     ...(set.priority !== undefined ? { priority: set.priority } : {}),
     ...(set.health !== undefined ? { health: set.health } : {}),
     ...(refs.assignee !== undefined ? { assigneeId: refs.assignee } : {}),
@@ -317,6 +303,9 @@ async function buildPatch(
   };
   if (set.state !== undefined) {
     const transition = await resolveStateTransition(orgId, String(row['teamId']), set.state);
+    // The key and the status it names move together; the composite foreign key refuses a row
+    // where they disagree.
+    patch['statusId'] = transition.statusId;
     patch['state'] = transition.state;
     patch['completedAt'] = transition.completedAt;
     patch['canceledAt'] = transition.canceledAt;
@@ -485,6 +474,12 @@ export function registerUpdateTool(
         const set = input.set;
         assertSettable(entity, set);
         assertEnums(entity, set);
+        // Resolve this before selecting rows so an unknown workspace status is invalid even when
+        // the requested scope happens to match nothing.
+        const containerStatus =
+          set.status !== undefined && entity !== 'task'
+            ? await resolveContainerStatus(input.orgId, entity, set.status, 'set.status')
+            : undefined;
         if (Object.keys(set).length === 0) {
           reject('set', '', 'Nothing to change — name at least one field.', SETTABLE[entity]);
         }
@@ -569,7 +564,7 @@ export function registerUpdateTool(
             continue;
           }
 
-          const patch = await buildPatch(entity, input.orgId, row, set, refs);
+          const patch = await buildPatch(entity, input.orgId, row, set, refs, containerStatus);
           const before = trackedFields(entity, row);
           const updated = await db
             .update(table)

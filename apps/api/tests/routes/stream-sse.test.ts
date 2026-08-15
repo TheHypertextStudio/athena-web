@@ -12,6 +12,8 @@ import { listenerCount, publish } from '../../src/lib/event-bus';
 import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { assertDefined } from '@docket/test-utils';
+
 let streamSse!: unknown;
 
 const openConnections: (() => void)[] = [];
@@ -39,7 +41,7 @@ async function openStream(userId: string) {
     signal: controller.signal,
   });
   expect(res.status).toBe(200);
-  const reader = res.body!.getReader();
+  const reader = assertDefined(res.body).getReader();
   const decoder = new TextDecoder();
   let buffered = '';
 

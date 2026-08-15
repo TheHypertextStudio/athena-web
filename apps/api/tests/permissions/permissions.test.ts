@@ -174,12 +174,12 @@ describe('orgContextMiddleware', () => {
       .insert(schema.organization)
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
-    const orgId = org!.id;
+    const orgId = assertDefined(org).id;
     const [user] = await db
       .insert(schema.user)
       .values({ name: 'Suspended Ada', email: `${slug}@e.com` })
       .returning({ id: schema.user.id });
-    const userId = user!.id;
+    const userId = assertDefined(user).id;
     const [role] = await db
       .insert(schema.role)
       .values({
@@ -195,7 +195,7 @@ describe('orgContextMiddleware', () => {
       kind: 'human',
       displayName: 'Suspended Ada',
       userId,
-      roleId: role!.id,
+      roleId: assertDefined(role).id,
       status: 'suspended',
     });
 

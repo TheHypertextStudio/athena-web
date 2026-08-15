@@ -20,16 +20,16 @@ to answer it never leave that machine.
   </Step>
 </Steps>
 
-## How it reaches your machine
+## How Docket sends a request to your machine
 
 Your computer polls outward. You open no inbound port, run no tunnel, and accept no callback from
 the cloud into your home network.
 
-Docket sends the request to Lovelace's hosted gateway. Your daemon picks it up on its next poll,
-runs it, and sends the reply back the same way.
+Docket sends the request to Lovelace's hosted gateway. Your daemon reads it on its next poll, runs
+it, and sends the reply back the same way.
 
 <Note>
-  **Docket never talks to your device.** It talks to the gateway. Your machine stays unaddressable
+  **Docket never talks to your device.** It talks to the gateway. Your machine is unaddressable
   from the internet.
 </Note>
 
@@ -45,8 +45,8 @@ Sessions, proposals, approvals, and permissions work exactly as they do otherwis
 
 ## When the machine is off
 
-A closed laptop cannot answer. Docket tells you so and never falls back to a hosted model without
-saying it did.
+A closed laptop cannot answer. Docket tells you so and never uses a hosted model without saying it
+did.
 
 ## Disconnecting
 

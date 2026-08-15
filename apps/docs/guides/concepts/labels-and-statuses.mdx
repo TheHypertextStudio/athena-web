@@ -26,13 +26,13 @@ Map every status you invent onto one of five categories.
 | `completed` | Finished successfully. |
 | `canceled` | Ended without being finished. |
 
-The category drives:
+Docket reads the category to decide:
 
-- the status glyph Docket draws
+- which status glyph to draw
 - how a board groups work
 - what a progress percentage counts
 - how a connector maps a Linear or Jira state onto your status
-- when Docket knows a piece of work has just finished
+- when a piece of work has just finished
 
 You call the stage `Shipped`. Another workspace calls it `Awarded`. Both map to `completed`, and
 the numbers, the icons, and the integrations line up.
@@ -47,14 +47,14 @@ the numbers, the icons, and the integrations line up.
 Each Team owns the workflow states its Tasks move through. Two teams in one workspace can run
 different processes.
 
-Projects, Programs, and Initiatives carry their own status sets. The seeded Program set is
+Projects, Programs, and Initiatives have their own status sets. The seeded Program set is
 `Proposed · Active · Paused · Completed · Archived`.
 
 ## Labels
 
 Attach a label to record what a status does not. `needs-legal`. `Q3`. `grant-funded`. `flaky`.
 
-Labels carry no behaviour. They gate nothing and order nothing. Filter and search on them.
+Labels do nothing on their own. They gate nothing and order nothing. Filter and search on them.
 
 Manage them in **Settings → Labels**.
 
@@ -64,11 +64,11 @@ Manage them in **Settings → Labels**.
 | --- | --- |
 | That this is in review | A **status** |
 | That this is blocked on someone outside the company | A **label**, plus a comment naming who |
-| That this belongs to the Q3 push | An [Initiative](/guides/concepts/initiatives-and-programs), or a label if it is lighter than that |
+| That this is part of the Q3 push | An [Initiative](/guides/concepts/initiatives-and-programs), or a label if it is lighter than that |
 | That this ended without being finished | A **status** in the `canceled` category |
 | That this needs a lawyer to look at it | A **label** |
 
 <Tip>
-  Keep the status set short. Every status is a decision someone makes each time they touch a piece
+  Use a short status set. Every status is a decision someone makes each time they touch a piece
   of work, and a seven-stage workflow usually contains two stages that should be labels.
 </Tip>

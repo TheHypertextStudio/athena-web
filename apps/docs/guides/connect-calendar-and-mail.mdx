@@ -9,7 +9,7 @@ Connect tools one workspace at a time.
 
 <CardGroup cols={2}>
   <Card title="Connections" icon="arrows-rotate">
-    Docket keeps reading the source and reflects changes as they happen. Set one up in
+    Docket re-reads the source and applies changes as they happen. Set one up in
     **Settings → Connections**.
   </Card>
   <Card title="Import" icon="box-archive">
@@ -18,7 +18,7 @@ Connect tools one workspace at a time.
   </Card>
 </CardGroup>
 
-Migrating off a tool is an Import. Keeping both tools running is a Connection.
+Migrating off a tool is an Import. Running both tools at once is a Connection.
 
 ## What you can connect
 
@@ -40,7 +40,7 @@ Connect **your own** Gmail and calendar under the Personal group in **Settings �
 Athena reads them on your behalf. Nobody else in a workspace sees them.
 
 An admin connects **shared** tools from **Settings → Connections** inside the workspace, and
-everyone there uses them. Linear belongs to the team.
+everyone there uses them. Connect Linear this way.
 
 Your personal space has no separate workspace connections.
 
@@ -49,8 +49,8 @@ Your personal space has no separate workspace connections.
 The connection runs both ways. Google's events appear on Docket's calendar, and Docket writes work
 you schedule back to Google.
 
-Docket preserves the source calendar's time zone. An event keeps its intended time when your own
-time zone differs.
+Docket stores each event with its source calendar's time zone and displays it at its intended time
+when your own time zone differs.
 
 See [Calendar and scheduling](/guides/daily/calendar-and-scheduling) for what happens once the
 events are in.

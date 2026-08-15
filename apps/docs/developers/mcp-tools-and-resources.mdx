@@ -12,51 +12,52 @@ trying to do.
   <Accordion title="Reading: 5 tools" defaultOpen>
     | Tool | Does |
     | --- | --- |
-    | `workspaces` | The workspaces you belong to. Usually the first call. |
-    | `find` | Ranked search across the workspace. |
-    | `list_work` | Live rows by exact criteria. |
-    | `get` | Entities in full, by ID or by name. |
-    | `brief` | What needs me today. |
+    | `workspaces` | Lists the workspaces you belong to. Usually the first call. |
+    | `find` | Searches the workspace and ranks the results. |
+    | `list_work` | Lists rows matching exact criteria. |
+    | `get` | Returns one entity in full, by ID or by name. |
+    | `brief` | Returns what needs you today. |
 
-    `find` reads the same permission-filtered index the web app reads. That index trails writes by
-    a moment.
+    `find` reads the same permission-filtered index the web app reads. That index updates a moment
+    after a write.
 
     `list_work` filters on team, project, assignee, delegate, state, priority, label, cycle, due
     window, blocked-ness, and the triage queue. Pass a filter the chosen entity has no column for
     and the call **fails, naming the filters that entity does support**.
 
-    `get` returns a task with its dependencies and subtasks. References you cannot see come back in
-    `missing`.
+    `get` returns a task with its dependencies and subtasks, and lists the references you cannot
+    see in `missing`.
   </Accordion>
 
   <Accordion title="Writing: 9 tools">
     | Tool | Does |
     | --- | --- |
-    | `capture` | A sentence becomes a task. |
-    | `organize` | A whole plan in one call. Re-runs create no duplicates. |
-    | `update` | Changes work by describing it. |
+    | `capture` | Creates a task from a sentence. |
+    | `organize` | Applies a whole plan in one call. Re-runs create no duplicates. |
+    | `update` | Changes work you describe in words. |
     | `comment` | Adds threaded discussion. |
-    | `report_status` | Posts an update. Drives health. |
-    | `link` | Docket work to Docket work. |
+    | `report_status` | Posts an update. The verdict you set becomes the item's health. |
+    | `link` | Links Docket work to Docket work. |
     | `archive` | Archives work. |
-    | `plan_day` | Builds the day's plan. |
+    | `plan_day` | Creates the day's plan. |
     | `undo` | Reverses a change set. |
 
-    **Every write records an undoable change set.** Call `undo` once and forty edits go back.
+    **Every write records an undoable change set.** Call `undo` once and Docket reverses forty
+    edits.
   </Accordion>
 
   <Accordion title="Time and reflection: 2 tools">
     | Tool | Does |
     | --- | --- |
-    | `track` | Time against work. See [Time](/guides/daily/time). |
-    | `retrospect` | A retrospective over a period. |
+    | `track` | Records time against work. See [Time](/guides/daily/time). |
+    | `retrospect` | Returns a retrospective for a period. |
   </Accordion>
 
   <Accordion title="Repeating work and processes: 3 tools">
     | Tool | Does |
     | --- | --- |
     | `define_process` | Defines a process. |
-    | `schedule_process` | Puts one on a schedule. |
+    | `schedule_process` | Schedules a process to run. |
     | `repeat_task` | Makes a task recur. |
   </Accordion>
 
@@ -64,7 +65,7 @@ trying to do.
     | Tool | Does |
     | --- | --- |
     | `run_agent` | Starts an agent session. |
-    | `manage_session` | Approve, reject, or steer a running session. |
+    | `manage_session` | Approves, rejects, or redirects a running session. |
     | `link_external` | Links a GitHub or Linear item onto Docket work. |
     | `acknowledge_directive` | Acknowledges a directive. |
     | `pause_athena_assignment_trigger` | Pauses a trigger on your Athena assignment. |
@@ -106,8 +107,9 @@ Where `type` is one of `task`, `project`, `program`, `initiative`, `cycle`, `tea
 
 ### Subscriptions
 
-Call `resources/subscribe` and hold the `GET /mcp` stream open for
-`notifications/resources/updated`. Delivery is best-effort and never replayed. Re-read on arrival.
+Call `resources/subscribe`, then open the `GET /mcp` stream and Docket sends
+`notifications/resources/updated`. Delivery is best-effort and never replayed. Read the resource
+again when one arrives.
 
 ## Prompts
 
@@ -125,9 +127,9 @@ lists, plans, and change reports. Other hosts get the structured results.
 ## Server capabilities
 
 `tools.listChanged`, `resources.subscribe`, `resources.listChanged`, `prompts.listChanged`,
-`completions`, and `logging`. Experimental MCP task support sits behind a deployment flag.
+`completions`, and `logging`. A deployment flag turns on experimental MCP task support.
 
 <Note>
-  `tools/list` reflects **your** grants. Change one and `notifications/tools/list_changed` fires
-  immediately.
+  `tools/list` returns only the tools **your** grants allow. Change one and Docket sends
+  `notifications/tools/list_changed` immediately.
 </Note>

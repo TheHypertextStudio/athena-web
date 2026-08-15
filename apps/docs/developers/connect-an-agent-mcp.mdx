@@ -20,7 +20,7 @@ every snippet below with your own deployment's URL in it.
     claude mcp add docket https://docket-api.hypertext.studio/mcp
     ```
 
-    Once, in any terminal, for every project. Claude Code walks the OAuth flow in your browser.
+    Once, in any terminal, for every project. Claude Code opens your browser to authorize.
   </Tab>
   <Tab title="Claude Desktop">
     1. Open the **+** menu in the chat bar and select **Connectors → Manage Connectors**.
@@ -75,8 +75,8 @@ Pass a name to any tool that takes an ID.
 { "teamId": "Platform", "assigneeId": "Sarah", "state": "In Review" }
 ```
 
-Docket matches exact, then prefix, then substring, and takes only an unambiguous hit. Send "Sam"
-with two Sams in the workspace and the call comes back listing both.
+Docket matches exact, then prefix, then substring, and accepts only an unambiguous hit. Send "Sam"
+with two Sams in the workspace and Docket returns an error listing both.
 
 ## Getting a token
 
@@ -87,24 +87,23 @@ more than you can.** Full detail in [Authentication](/developers/authentication)
 ## The transport
 
 `POST` sends messages, `GET` opens the stream, `DELETE` ends the session. Requests are stateless.
-`initialize` hands back an `Mcp-Session-Id` anyway; present it, hold `GET /mcp` open, and you get:
+`initialize` returns an `Mcp-Session-Id` anyway; send it back, open `GET /mcp`, and Docket sends:
 
 - `notifications/resources/updated` for anything you subscribed to
 - `notifications/tools/list_changed` when a grant change alters what you may call
 - `notifications/message` at whatever level you set via `logging/setLevel`
 
 <Note>
-  Delivery is best-effort and never replayed. Treat one as a prompt to re-read.
+  Delivery is best-effort and never replayed. Read the resource again when one arrives.
 </Note>
 
 ## Athena as an MCP client
 
-Athena can also act as an MCP **client** for a workspace.
+Athena can also call an external MCP server for a workspace.
 
 Go to **Settings → Connections → MCP connectors**, enter the server URL, choose **Sign in and
 approve access**, and finish the provider's browser approval. Docket calls `tools/list` first and
-namespaces what comes back as `<connector>__<tool>`. Athena gets those tools and never a raw user
-token.
+renames each tool `<connector>__<tool>`. Athena receives those tools, never a raw user token.
 
 <Warning>
   External tools do not bypass Docket's approval policy. A tool's declared annotations and the

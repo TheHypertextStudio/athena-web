@@ -13,7 +13,7 @@ Three ways in, one domain model. Every call runs as a real person, under that pe
     More than 470 operations under `/v1`. Read them at `/v1/docs`.
   </Card>
   <Card title="OAuth apps" icon="key" href="/developers/authentication">
-    Register a client, ask for `work:read`, act as the person who consents.
+    Register a client, ask for `work:read`, call as the person who consents.
   </Card>
 </CardGroup>
 
@@ -31,8 +31,8 @@ Three ways in, one domain model. Every call runs as a real person, under that pe
 | A product other Docket users install | [OAuth app](/developers/authentication) + MCP or REST |
 | An integration that reacts to changes | REST plus the [SSE stream](/developers/rest-api#live-updates) |
 
-Call `capture` and "email the caterer by Friday" becomes a task. `organize` lands a twelve-item
-plan in one write, twice over.
+Call `capture` and "email the caterer by Friday" becomes a task. `organize` writes a twelve-item
+plan in one call, and a second run creates no duplicates.
 
 ## The model in one screen
 
@@ -41,9 +41,9 @@ Docket scopes every row to one **Organization**, the tenant boundary.
 ```
 Organization
   ├─ Team          owns workflow states, cycles, and a triage queue
-  ├─ Initiative    a theme; holds no work; many-to-many with the two below
-  ├─ Program       ongoing operations; holds Projects and Tasks
-  ├─ Project       a bounded effort; holds Tasks; carries Milestones
+  ├─ Initiative    a theme; no work of its own; links to Programs and Projects
+  ├─ Program       ongoing operations; contains Projects and Tasks
+  ├─ Project       a bounded effort; contains Tasks and Milestones
   └─ Task          the atomic unit; subtasks, acyclic dependencies, attachments, labels
 ```
 
@@ -55,15 +55,15 @@ Two kinds of edge:
 
 | Kind | What it is |
 | --- | --- |
-| **Containment** | A hard parent-to-child edge. Grant someone `contribute` on a Program and it covers every Project and Task inside it. |
-| **Association** | A soft link either side can live without. An Initiative themes a Project, a Cycle schedules a Task, a Task blocks a Task. |
+| **Containment** | A hard parent-to-child edge. Grant someone `contribute` on a Program and it applies to every Project and Task in it. |
+| **Association** | A soft link. Delete it and both sides remain. An Initiative themes a Project, a Cycle schedules a Task, a Task blocks a Task. |
 
 <Note>
   Workspaces relabel these words: a Cycle may display as a Season. **The API always uses the
   default names.** See [Terminology](/guides/concepts/terminology).
 </Note>
 
-## Conventions every surface shares
+## Conventions every call follows
 
 | | |
 | --- | --- |
@@ -75,5 +75,6 @@ Two kinds of edge:
 
 ## What a token can do
 
-**A token never grants more than the human behind it has.** Scopes gate first, then that person's
-own grants. A `work:write` token held by someone with `view` on "Launch v2" cannot write to it.
+**A token never grants more than the human behind it has.** Docket checks the scope first, then
+that person's own grants. Someone with `view` on "Launch v2" cannot write to it with a `work:write`
+token.

@@ -1,37 +1,37 @@
 ---
 title: "Tasks"
-description: "One thing you do: call the caterer. Give it a duration, an owner, and somewhere to live."
+description: "One thing you do: call the caterer. Give it a duration, an owner, and a team."
 ---
 
 "Draft the grant report." "Call the caterer." One person, one thing.
 
-## What a task carries
+## The fields on a task
 
 | Field | Notes |
 | --- | --- |
 | **Assignee** | One Actor: a person or an agent. Never a team. |
-| **Delegate** | Optional. You stay the owner and an agent does the work. |
+| **Delegate** | Optional. Docket records you as the owner and an agent does the work. |
 | **Status** | One of the owning team's workflow states. See [Labels and statuses](/guides/concepts/labels-and-statuses). |
-| **Priority** | `none`, `low`, `medium`, `high`, or `urgent`. Drives sorting and badges. |
+| **Priority** | `none`, `low`, `medium`, `high`, or `urgent`. Docket sorts by it and shows it as a badge. |
 | **Due date** | Optional. |
 | **Time estimate** | How long you think it will take, in minutes. |
 | **Point estimate** | A coarser abstract number, for teams that size that way. |
 | **Labels** | Free-form workspace vocabulary. |
 
-Tasks also carry **subtasks**, **attachments**, threaded **comments**, and **dependencies**.
+A task also has **subtasks**, **attachments**, threaded **comments**, and **dependencies**.
 
 ## Fill in the time estimate
 
 Give every task a duration so your day fits.
-[Home](/guides/daily/home-today) adds them up and sets the total against the hours you have.
+[Home](/guides/daily/home-today) adds them up and compares the total to the hours you have.
 
-The same number drives [scheduling](/guides/daily/calendar-and-scheduling), which places the task
-on your calendar, and the [time ledger](/guides/daily/time), which compares your measured hours
-against it afterwards.
+[Scheduling](/guides/daily/calendar-and-scheduling) uses the same number to place the task on your
+calendar, and the [time ledger](/guides/daily/time) compares your measured hours against it
+afterwards.
 
-## Where a task belongs
+## Where to file a task
 
-Every Task belongs to a workspace and a [team](/guides/concepts/teams). Beyond that:
+Every Task has a workspace and a [team](/guides/concepts/teams). Beyond that:
 
 <CardGroup cols={3}>
   <Card title="In a Project" icon="folder">
@@ -46,21 +46,21 @@ Every Task belongs to a workspace and a [team](/guides/concepts/teams). Beyond t
 </CardGroup>
 
 **A project is optional on a task.** Record the note you took on a bus, the email that implies
-something, the favour someone asked for in a hallway. Docket takes all of it without a project.
+something, the favour someone asked for in a hallway. Docket stores all of it without a project.
 
 ## Dependencies
 
 Mark a Task **blocked by** or **blocking** any other Task in the same workspace, including one in
-a different project. Docket refuses any dependency that would create a loop. Blockers show up
-inline in your daily plan, next to the work they block.
+a different project. Docket refuses any dependency that would create a loop. Docket shows blockers
+in your daily plan, next to the task they block.
 
 ## Recurring work
 
-Define a repeating series once. Docket materializes the next occurrence on its cadence.
+Define a repeating series once. Docket creates the next occurrence on its cadence.
 
 ## Assigning to an agent
 
 Assign a task to [Athena](/guides/athena/what-athena-is) and watch the session, steer it, approve
 what she proposes.
 
-To keep your own name on the work, assign it to yourself and set the agent as **delegate**.
+To show your own name on the work, assign it to yourself and set the agent as **delegate**.

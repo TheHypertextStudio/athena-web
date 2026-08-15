@@ -1,6 +1,6 @@
 ---
 title: "REST API"
-description: "Conventions, the permission model, and where the complete endpoint reference lives."
+description: "Conventions, the permission model, and the complete endpoint reference."
 ---
 
 Call more than 470 operations under `/v1`.
@@ -31,11 +31,11 @@ get one.
 
 ## What shapes your client
 
-Four things decide how you build against `/v1`. The reference spells out the rest, including
+Four things decide how you build against `/v1`. The reference documents the rest, including
 idempotency, conditional requests with `ETag`, content negotiation, and caching.
 
-- **IDs are ULIDs, branded per entity type.** A `TaskId` fails where a `ProjectId` belongs. Never
-  parse one.
+- **IDs are ULIDs, branded per entity type.** Pass a `TaskId` to a parameter typed `ProjectId` and
+  the call fails. Never parse one.
 - **Pagination is keyset.** Pass `cursor` and `limit`, read `nextCursor`, stop when it is `null`.
 - **Failures are RFC 9457 problem documents.** Branch on `code`. See [Errors](/developers/errors).
 - **Requests and responses share one schema.** A response that does not match what `/v1/docs`
@@ -43,8 +43,8 @@ idempotency, conditional requests with `ETag`, content negotiation, and caching.
 
 ## Permissions
 
-**Membership.** Every `/v1/orgs/{orgId}/*` route needs an active Actor. Non-members get **404**,
-never 403. Probing tells you nothing.
+**Membership.** Every `/v1/orgs/{orgId}/*` route needs an active Actor. Docket returns **404** to
+non-members, never 403. Probing tells you nothing.
 
 **Capability.** Mutations need a capability on the ladder:
 
@@ -53,14 +53,15 @@ view  <  comment  <  contribute  <  assign  <  manage
 ```
 
 Reassign a task, you need `assign`. Post a comment, `comment`. Rename the workspace, `manage`. Read
-endpoints push the predicate into the query. Skip the client-side filter. Agents pass the
-identical checks, plus the [approval gate](/guides/athena/proposals-and-approvals).
+endpoints apply the permission predicate inside the query. Skip the client-side filter.
+Agents pass the identical checks, plus the
+[approval gate](/guides/athena/proposals-and-approvals).
 
-## Cross-workspace surfaces
+## Cross-workspace reads
 
 The Hub (`/hub/today`, `/portfolio`, `/search`, `/inbox`, `/activity`), notifications, and the
-personal daily plan span tenants. Docket fans them out as **one permission-scoped query per
-membership** and merges in application code. No SQL join crosses tenants.
+personal daily plan read every workspace you are a member of. Docket runs **one permission-scoped
+query per membership** and merges the results in application code. No SQL join crosses tenants.
 
 ## Resource groups
 
@@ -76,13 +77,13 @@ membership** and merges in application code. No SQL join crosses tenants.
 | [Updates](https://docket-api.hypertext.studio/v1/docs#tag/updates) | Narrative status and health |
 | [Comments](https://docket-api.hypertext.studio/v1/docs#tag/comments) | Threaded discussion |
 | [Agents](https://docket-api.hypertext.studio/v1/docs#tag/agents) | Agents and their sessions |
-| [Hub](https://docket-api.hypertext.studio/v1/docs#tag/hub) | Cross-workspace surfaces |
+| [Hub](https://docket-api.hypertext.studio/v1/docs#tag/hub) | Cross-workspace reads |
 | [Me](https://docket-api.hypertext.studio/v1/docs#tag/me) | Connections, sessions, preferences |
 
 ## Live updates
 
-Hold `GET /v1/stream/sse` open for `stream-event` frames, pinged every 25 seconds. Cannot hold a
-connection? Poll `/v1/hub/stream` and `/v1/orgs/{orgId}/stream`.
+Open `GET /v1/stream/sse` and Docket sends `stream-event` frames, with a ping every 25 seconds.
+Cannot open a long-lived connection? Poll `/v1/hub/stream` and `/v1/orgs/{orgId}/stream`.
 
 <Warning>
   Docket sends **no outbound webhooks**. To react to changes, poll a stream endpoint or subscribe

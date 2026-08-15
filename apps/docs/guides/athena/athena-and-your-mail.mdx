@@ -26,10 +26,10 @@ dismiss it. Docket creates no task until you accept one.
 
 Each suggestion shows a confidence indicator and a preview of the source thread.
 
-### Dates come from the message
+### Athena reads due dates from the message
 
-An email that says "by the 14th" gives the task a due date of the 14th. An email that names no
-date gives the task no due date. Athena declines to infer one.
+An email that says "by the 14th" sets the task's due date to the 14th. An email that names no date
+leaves the due date empty. Athena infers no due date.
 
 ## Automation rules
 
@@ -40,14 +40,14 @@ A rule can:
 - Send a notification
 - Accept a suggestion automatically
 
-Turning on email-to-task seeds a default set of rules.
+Turning on email-to-task creates a default set of rules.
 
 Turn it on in **Settings → Connections → Email to task**. Edit the rules in
 **Settings → Automations**.
 
 ## Suggestions expire after 30 days
 
-Suggestions you never act on expire after 30 days. Resolved ones clear after 90.
+Suggestions you never act on expire after 30 days. Docket removes resolved ones after 90.
 
 ## When mail access breaks
 

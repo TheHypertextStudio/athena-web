@@ -3,8 +3,8 @@ title: "Platform status"
 description: "What is stable today, what may still change, and what Docket promises about the API."
 ---
 
-Read this before you build anything you intend to keep. **Docket is pre-launch.** Nobody builds on
-it from outside yet.
+Read this before you build anything you plan to maintain. **Docket is pre-launch.** Nobody builds
+on it from outside yet.
 
 | | Status |
 | --- | --- |
@@ -22,27 +22,28 @@ it from outside yet.
   deprecation window.
 </Warning>
 
-- **Prefer MCP over REST** where both would work. `capture` keeps its name after the task payload
-  underneath it changes shape.
+- **Prefer MCP over REST** where both would work. Docket can reshape the task payload underneath
+  `capture` without renaming the tool.
 - **Never parse an identifier.** ULIDs are opaque.
 - **Branch on the error `code`.** Match `not_found`, never "We could not find that".
-- **Pin nothing to the byte shape of `/v1/openapi.json`.** It moves when the service moves.
+- **Pin nothing to the byte shape of `/v1/openapi.json`.** It changes when the service changes.
 
 ## What is stable
 
 Build on these specifications:
 
-- The OAuth 2.1 flow, PKCE, and the discovery documents of RFC 8414, RFC 9728, and RFC 8707.
+- OAuth 2.1 with PKCE, and the discovery documents of RFC 8414, RFC 9728, and RFC 8707.
 - MCP Streamable HTTP transport semantics.
 - RFC 9457 problem documents as the error envelope.
 
-The nouns hold too. Organization, Team, Initiative, Program, Project, Cycle, Task, Update, and
-Comment have meant the same thing for a long time. Field-level detail is where movement happens.
+The nouns are stable too. Organization, Team, Initiative, Program, Project, Cycle, Task, Update,
+and Comment have meant the same thing for a long time. Docket changes the fields underneath them,
+not the nouns.
 
 ## No SDK, and what to do instead
 
 Every package in the Docket repository is private. Generate your REST client from
-`/v1/openapi.json`, which anyone can fetch and which reflects the deployed service. For MCP, use
+`/v1/openapi.json`, which anyone can fetch and which describes the deployed service. For MCP, use
 your language's client library.
 
 ## When the docs and the API disagree

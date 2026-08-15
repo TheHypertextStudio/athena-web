@@ -25,10 +25,10 @@ Content-Type: application/problem+json
   strings are Docket's own copy, rewritten freely. Write your own.
 </Warning>
 
-`validation_error` also carries `fieldErrors`, one stable reason code per failing field.
+A `validation_error` also includes `fieldErrors`, one stable reason code per failing field.
 
 <Card title="Browse every problem code" icon="triangle-exclamation" href="https://docket.hypertext.studio/problems" horizontal>
-  The live catalog: each code, its status, and what to do. Any `type` URI resolves into it.
+  Each code, its status, and what to do. Every `type` URI resolves to a page in this catalog.
 </Card>
 
 ## `not_found` can mean hidden
@@ -43,7 +43,7 @@ step-up and retry the same request. Clear the session here and you log someone o
 
 ## Errors over MCP
 
-MCP tools return the same failures. A scope problem arrives as a `403`:
+MCP tools return the same failures. Docket returns a `403` for a scope problem:
 
 ```http
 WWW-Authenticate: Bearer error="insufficient_scope"

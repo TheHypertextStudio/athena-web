@@ -15,7 +15,7 @@ Fetch these two and you need nothing else to start.
 | Protected Resource Metadata | `/.well-known/oauth-protected-resource/mcp` | RFC 9728 |
 | Authorization Server Metadata | `/.well-known/oauth-authorization-server` | RFC 8414 |
 
-The AS metadata advertises the authorize, token, and registration endpoints, `S256` for
+The AS metadata lists the authorize, token, and registration endpoints, `S256` for
 `code_challenge_method`, and URL-form client IDs.
 
 ## Registering a client
@@ -44,7 +44,7 @@ The AS metadata advertises the authorize, token, and registration endpoints, `S2
 <Steps>
   <Step title="Authorize">
     Send the browser to `/oauth/authorize` with `client_id`, `scope`, and `code_challenge`. Docket
-    routes anyone unauthenticated through `/sign-in` first.
+    sends anyone unauthenticated to `/sign-in` first.
   </Step>
   <Step title="Exchange the code">
     PKCE, with `resource` set to the MCP resource URL per RFC 8707.
@@ -78,13 +78,13 @@ Ask for the narrowest set that does the job. People decline a read-only integrat
 
 ### Insufficient scope
 
-A `work:read` token calling a write operation gets a `403` with:
+Docket rejects a write operation from a `work:read` token with a `403` and:
 
 ```http
 WWW-Authenticate: Bearer error="insufficient_scope"
 ```
 
-Re-run the authorization flow for the wider scope, then retry the call.
+Authorize again for the wider scope, then retry the call.
 
 ## The limit on every token
 
@@ -92,11 +92,11 @@ Re-run the authorization flow for the wider scope, then retry the call.
   **A token can never do more than the human who consented to it.**
 </Warning>
 
-Scopes gate first, then that person's own grants. A `work:write` token held by someone with `view`
-on "Launch v2" cannot write to it. People revoke in **Settings → Connected apps**, which deletes
-the consent and its access tokens. Build for it: run the authorization flow again.
+Docket checks the scope first, then that person's own grants. Someone with `view` on "Launch v2"
+cannot write to it with a `work:write` token. People revoke in **Settings → Connected apps**,
+which deletes the consent and its access tokens. Handle it: ask for authorization again.
 
 ## What is not available
 
-No API keys. No long-lived static credentials. The web app's Better Auth session cookie serves
-first-party surfaces only.
+No API keys. No long-lived static credentials. The web app's Better Auth session cookie
+authenticates first-party requests only.

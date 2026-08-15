@@ -1,0 +1,1 @@
+ALTER TABLE "organization" ADD COLUMN "export_blob_key" text;

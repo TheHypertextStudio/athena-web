@@ -316,15 +316,7 @@ export function useRegisterTaskActions(): void {
         },
       },
     ]);
-  }, [
-    router,
-    queryClient,
-    pickerOverlay,
-    reportOutcome,
-    statuses,
-    categoryOf,
-    reparentHierarchy,
-  ]);
+  }, [router, queryClient, pickerOverlay, reportOutcome, statuses, categoryOf, reparentHierarchy]);
 
   useRegisterActionDomain('task', definitions);
 }

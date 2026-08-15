@@ -31,12 +31,7 @@
  * resend the rate limiter refuses. A code that exists on the server is always enterable here.
  */
 import { DIAL_CODES, DEFAULT_DIAL_CODE } from '@docket/athena/phone';
-import type {
-  PhoneChallengeOut,
-  PhoneNumberListOut,
-  PhoneNumberOut,
-  PhoneNumberStatus,
-} from '@docket/athena/phone';
+import type { PhoneChallengeOut, PhoneNumberOut, PhoneNumberStatus } from '@docket/athena/phone';
 import { Check, Phone, PhoneOff, Trash2 } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup, Field, Input, Select, Text } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
@@ -45,7 +40,14 @@ import { type JSX, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { formatClock } from '@/lib/format-time';
 import { userErrorMessage } from '@/lib/problem';
-import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import {
+  apiQueryOptions,
+  queryKeys,
+  seedListItem,
+  unwrap,
+  useApiMutation,
+  useApiQuery,
+} from '@/lib/query';
 
 /** The country preselected when nothing has been bound yet. */
 const DEFAULT_COUNTRY = 'US';
@@ -89,23 +91,6 @@ const COUNTRY_OPTIONS = DIAL_CODES.map((option) => (
     {option.name} +{option.dialCode}
   </option>
 ));
-
-/**
- * Replace a number in the cached list, or add it to the front when it is not there yet.
- *
- * @remarks
- * Position is preserved for a number already listed, so re-sending a code does not shuffle a row
- * up the page; the server's `createdAt` ordering reasserts itself on the next refetch either way.
- *
- * @param list - The currently cached numbers.
- * @param number - The number the server just returned.
- * @returns the list with `number` present exactly once.
- */
-function upsertNumber(list: readonly PhoneNumberOut[], number: PhoneNumberOut): PhoneNumberOut[] {
-  return list.some((existing) => existing.id === number.id)
-    ? list.map((existing) => (existing.id === number.id ? number : existing))
-    : [number, ...list];
-}
 
 /**
  * The caller-owned phone numbers section.
@@ -159,13 +144,7 @@ export function VoicePhoneNumbers(): JSX.Element {
    * list, so the server's own answer goes into it rather than into a state slot beside it.
    */
   const acceptChallenge = (result: PhoneChallengeOut): void => {
-    // `setQueryData`, not `optimisticPatch`: this is the row the server just returned rather than a
-    // guess, so there is nothing to roll back, and the patch helper no-ops before the first list
-    // response is cached — exactly the window this covers.
-    queryClient.setQueryData<PhoneNumberListOut>(queryKeys.phoneNumbers(), (previous) => ({
-      ...previous,
-      items: upsertNumber(previous?.items ?? [], result.phoneNumber),
-    }));
+    seedListItem(queryClient, queryKeys.phoneNumbers(), result.phoneNumber);
     pointAt({ kind: 'number', id: result.phoneNumber.id });
   };
 

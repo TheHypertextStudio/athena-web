@@ -23,6 +23,7 @@ import {
   apiQueryOptions,
   createQueryClient,
   queryKeys,
+  seedListItem,
   SessionExpiredError,
   useApiMutation,
   useApiQuery,
@@ -439,5 +440,60 @@ describe('useApiMutation', () => {
       expect(result.current.isError).toBe(true);
     });
     expect(result.current.error?.message).toBe('Could not update the project.');
+  });
+});
+
+describe('seedListItem', () => {
+  const KEY = ['seed-list-test'];
+  interface Row {
+    readonly id: string;
+    readonly label: string;
+  }
+
+  it('seeds a row before the list has ever been fetched', () => {
+    // The window this exists for: a create resolves before the first list response has landed, so
+    // there is no cached envelope to patch and `optimisticPatch` would no-op.
+    const { client } = makeQueryWrapper();
+    const next = seedListItem<Row>(client, KEY, { id: 'a', label: 'first' });
+
+    expect(next).toEqual([{ id: 'a', label: 'first' }]);
+    expect(client.getQueryData<{ items: Row[] }>(KEY)?.items).toEqual([
+      { id: 'a', label: 'first' },
+    ]);
+  });
+
+  it('puts a new row at the front of an existing list', () => {
+    const { client } = makeQueryWrapper();
+    client.setQueryData<{ items: Row[] }>(KEY, { items: [{ id: 'a', label: 'old' }] });
+
+    expect(seedListItem<Row>(client, KEY, { id: 'b', label: 'new' }).map((r) => r.id)).toEqual([
+      'b',
+      'a',
+    ]);
+  });
+
+  it('replaces a row in place rather than moving it', () => {
+    // Re-saving something must not shuffle it up the page while the refetch is in flight.
+    const { client } = makeQueryWrapper();
+    client.setQueryData<{ items: Row[] }>(KEY, {
+      items: [
+        { id: 'a', label: 'first' },
+        { id: 'b', label: 'second' },
+      ],
+    });
+
+    const next = seedListItem<Row>(client, KEY, { id: 'b', label: 'updated' });
+    expect(next).toEqual([
+      { id: 'a', label: 'first' },
+      { id: 'b', label: 'updated' },
+    ]);
+  });
+
+  it('leaves the rest of the envelope alone', () => {
+    const { client } = makeQueryWrapper();
+    client.setQueryData(KEY, { items: [], nextCursor: 'abc' });
+
+    seedListItem<Row>(client, KEY, { id: 'a', label: 'first' });
+    expect(client.getQueryData<{ nextCursor: string }>(KEY)?.nextCursor).toBe('abc');
   });
 });

@@ -312,6 +312,52 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
 }
 
 /**
+ * Put a row the server just returned into a cached `{ items }` list.
+ *
+ * @remarks
+ * The companion to {@link optimisticPatch} for list keys, and deliberately not the same tool.
+ * `optimisticPatch` is for a guess made *before* the server answers — it snapshots so the guess can
+ * be rolled back, and it no-ops when the key is not cached yet. This is for the row the server has
+ * already returned: there is nothing to roll back, and it must work before the first list response
+ * has landed, which is exactly the window between a create and the refetch that will confirm it.
+ *
+ * A row already in the list is replaced in place rather than moved, so re-saving something does not
+ * shuffle it up the page; a new row goes to the front. Either way the server's own ordering
+ * reasserts itself on the next refetch, so this only governs the gap.
+ *
+ * Pair it with `invalidateKeys` on the same mutation — this closes the window, the refetch closes
+ * the question.
+ *
+ * @example
+ * ```ts
+ * useApiMutation({
+ *   mutationFn: () => unwrap(() => api.v1.orgs[':orgId'].views.$post(...), '…'),
+ *   onSuccess: (created) => { seedListItem(queryClient, savedViewsKey, created); },
+ *   invalidateKeys: [savedViewsKey],
+ * });
+ * ```
+ *
+ * @typeParam T - The row type, which must carry a stable `id`.
+ * @param queryClient - The active client (from `useQueryClient`).
+ * @param key - The list query key to seed.
+ * @param item - The row the server returned.
+ * @returns the list as it now stands in the cache.
+ */
+export function seedListItem<T extends { readonly id: string }>(
+  queryClient: QueryClient,
+  key: QueryKey,
+  item: T,
+): readonly T[] {
+  const previous = queryClient.getQueryData<{ items: T[] }>(key);
+  const items = previous?.items ?? [];
+  const next = items.some((existing) => existing.id === item.id)
+    ? items.map((existing) => (existing.id === item.id ? item : existing))
+    : [item, ...items];
+  queryClient.setQueryData<{ items: T[] }>(key, { ...previous, items: next });
+  return next;
+}
+
+/**
  * Optimistically patch one cached query and return a rollback — the easy path for making a write
  * feel instant. Call it from a {@link useApiMutation} `onMutate` and return its result as the
  * mutation context; call `rollback()` from `onError` to restore the pre-mutation cache if the

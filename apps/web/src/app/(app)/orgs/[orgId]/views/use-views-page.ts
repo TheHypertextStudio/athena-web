@@ -25,7 +25,14 @@ import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { buildTaskCatalog, toStoredView, toViewState } from '@/components/views/task-catalog';
 import type { RunnerActor } from '@/components/views/view-runner';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiListQuery } from '@/lib/query';
+import {
+  apiQueryOptions,
+  queryKeys,
+  seedListItem,
+  unwrap,
+  useApiMutation,
+  useApiListQuery,
+} from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
 
 /** The active working query the toolbar edits, the runner renders, and the composer saves. */
@@ -238,9 +245,7 @@ export function useViewsPage(orgId: string): ViewsPageData {
         'Could not save the view. Please try again.',
       ),
     onSuccess: (created) => {
-      queryClient.setQueryData<NonNullable<typeof viewsQ.data>>(savedViewsKey, (current) =>
-        current ? { ...current, items: [created, ...current.items] } : { items: [created] },
-      );
+      seedListItem(queryClient, savedViewsKey, created);
       setComposerOpen(false);
       setQuery((current) => ({ ...current, sourceViewId: created.id }));
     },

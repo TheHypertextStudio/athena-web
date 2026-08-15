@@ -3,7 +3,7 @@ import { RoleId } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
-import { unwrap, useApiMutation } from '@/lib/query';
+import { seedListItem, unwrap, useApiMutation } from '@/lib/query';
 
 import type { InvitePayload } from './invite-form';
 import { userErrorMessage } from '@/lib/problem';
@@ -52,9 +52,7 @@ export function useMembersMutations(
         'Could not send the invitation.',
       ),
     onSuccess: (created) => {
-      queryClient.setQueryData<InvitationsBody>(invitationsKey, (current) =>
-        current ? { ...current, items: [created, ...current.items] } : { items: [created] },
-      );
+      seedListItem(queryClient, invitationsKey, created);
     },
     invalidateKeys: [invitationsKey],
   });

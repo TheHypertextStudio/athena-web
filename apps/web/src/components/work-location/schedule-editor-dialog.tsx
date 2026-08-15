@@ -284,7 +284,7 @@ export function ScheduleEditorDialog({
               {WEEKDAYS.map((label, day) => (
                 <label
                   key={label}
-                  className="text-on-surface flex min-h-10 items-center gap-1 text-sm"
+                  className="text-on-surface text-label-large flex min-h-10 items-center gap-1"
                 >
                   <input
                     type="checkbox"

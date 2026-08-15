@@ -403,7 +403,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
   return (
     <div className="flex flex-col gap-6">
       <header className="border-outline-variant flex flex-row items-center justify-between gap-4 border-b pb-4">
-        <h2 className="text-on-surface text-title-medium font-semibold">Work locations</h2>
+        <h2 className="text-on-surface text-title-medium">Work locations</h2>
         <Button onClick={openNewPlace}>
           <Plus aria-hidden="true" />
           Add place
@@ -447,7 +447,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                          <p className="text-on-surface text-body-medium min-w-0 truncate font-medium">
+                          <p className="text-on-surface text-title-small min-w-0 truncate">
                             {place.name}
                           </p>
                           {isHome ? <Badge variant="outline">Home</Badge> : null}
@@ -534,10 +534,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
 
           <section className="flex flex-col gap-3" aria-labelledby="location-schedule-heading">
             <div className="flex min-h-10 items-center justify-between gap-3">
-              <h3
-                id="location-schedule-heading"
-                className="text-on-surface text-title-small font-semibold"
-              >
+              <h3 id="location-schedule-heading" className="text-on-surface text-title-small">
                 Schedule
               </h3>
               <Button variant="outline" disabled={places.length === 0} onClick={openNewSchedule}>
@@ -567,9 +564,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                          <p className="text-on-surface text-body-medium truncate font-medium">
-                            {placeName}
-                          </p>
+                          <p className="text-on-surface text-title-small truncate">{placeName}</p>
                           {assertion.origin === 'provider' ? (
                             <Badge variant="outline">Imported</Badge>
                           ) : null}
@@ -628,10 +623,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
 
           {schedulingQ.data?.commitments.length ? (
             <section className="flex flex-col gap-3" aria-labelledby="planned-work-heading">
-              <h3
-                id="planned-work-heading"
-                className="text-on-surface text-title-small font-semibold"
-              >
+              <h3 id="planned-work-heading" className="text-on-surface text-title-small">
                 Planned work
               </h3>
               <div className="border-outline-variant divide-outline-variant divide-y overflow-hidden rounded-xl border">
@@ -641,7 +633,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                     className="bg-surface-container-low flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="text-on-surface text-body-medium truncate font-medium">
+                      <p className="text-on-surface text-title-small truncate">
                         {commitment.title}
                       </p>
                       <p className="text-on-surface-variant text-body-small">
@@ -673,10 +665,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
           ) : null}
 
           <section className="flex flex-col gap-3" aria-labelledby="automatic-location-heading">
-            <h3
-              id="automatic-location-heading"
-              className="text-on-surface text-title-small font-semibold"
-            >
+            <h3 id="automatic-location-heading" className="text-on-surface text-title-small">
               Automatic location
             </h3>
             <div className="border-outline-variant bg-surface-container-low flex min-h-16 items-center gap-3 rounded-xl border px-3 py-2">
@@ -684,7 +673,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                 <Target aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-on-surface text-body-medium font-medium">
+                <p className="text-on-surface text-title-small">
                   Use this device while Docket is open
                 </p>
                 <p className="text-on-surface-variant text-body-small" role="status">
@@ -714,10 +703,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
 
           <section className="flex flex-col gap-3" aria-labelledby="calendar-sync-heading">
             <div className="flex flex-col gap-0.5">
-              <h3
-                id="calendar-sync-heading"
-                className="text-on-surface text-title-small font-semibold"
-              >
+              <h3 id="calendar-sync-heading" className="text-on-surface text-title-small">
                 Calendar sync
               </h3>
               <p className="text-on-surface-variant text-body-small">
@@ -738,7 +724,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                     )}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-on-surface text-body-medium truncate font-medium">
+                    <p className="text-on-surface text-title-small truncate">
                       {account.accountLabel ?? account.provider}
                     </p>
                     <p className="text-on-surface-variant text-body-small">

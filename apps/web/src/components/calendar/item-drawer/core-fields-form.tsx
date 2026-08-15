@@ -185,7 +185,7 @@ export function CoreFieldsForm({
 
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex flex-col gap-1 text-xs font-medium">
+      <label className="text-label-medium flex flex-col gap-1">
         <span className="text-on-surface-variant">Title</span>
         <Input
           value={title}
@@ -206,7 +206,7 @@ export function CoreFieldsForm({
           </span>
         ) : null}
       </label>
-      <label className="flex flex-col gap-1 text-xs font-medium">
+      <label className="text-label-medium flex flex-col gap-1">
         <span className="text-on-surface-variant">Saved place</span>
         <Select
           value={workPlaceId}

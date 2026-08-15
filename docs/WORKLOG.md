@@ -77,7 +77,9 @@
   `origin/main` with zero merge commits. Stripe sandbox and production were reconciled through the
   shared `pnpm integrations` provider path without Vercel or a one-off provisioning script. The
   production workflow now reads `BILLING_ENABLED` from that bootstrap-managed environment variable
-  and carries no MCP vendor-origin list; a repository test locks both deployment properties.
+  and carries no MCP vendor-origin list; a repository test locks both deployment properties. The
+  first remote release run also exposed the new billing type helper to the package's 100% coverage
+  gate; its product-catalog contract now has direct coverage.
 
 ### [WORK-LOCATION-002] Make work-location settings feel like a place list
 

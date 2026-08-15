@@ -45,13 +45,16 @@ const ROW_INDENT = 'pl-7';
  *
  * @remarks
  * The loudest treatment on the row, because it is the fact the old surface spent an entire section
- * restating above the list.
+ * restating above the list. Rendered only where the answer distinguishes one address from another:
+ * a workspace with a single address has nothing for `Primary` to mean, and pairing it with that
+ * row's own `Default` would be two badges for one fact — the duplication this surface exists to
+ * have stopped doing.
  *
  * @returns The rendered badge.
  */
 function PrimaryBadge(): JSX.Element {
   return (
-    <Badge variant="default" className="shrink-0 font-normal">
+    <Badge variant="default" className="shrink-0">
       Primary
     </Badge>
   );
@@ -155,8 +158,8 @@ export function DefaultAddressRow({
           </span>
         )}
 
-        <Badge variant="outline" className="shrink-0 font-normal">
-          Default
+        <Badge variant="outline" className="shrink-0">
+          {url === undefined ? 'Not reachable' : 'Default'}
         </Badge>
         {primary ? <PrimaryBadge /> : null}
 
@@ -273,7 +276,7 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
           </Text>
         </span>
 
-        <Badge variant={domain.verified ? 'secondary' : 'outline'} className="shrink-0 font-normal">
+        <Badge variant={domain.verified ? 'secondary' : 'outline'} className="shrink-0">
           {domain.verified ? 'Verified' : 'Not verified'}
         </Badge>
         {primary ? <PrimaryBadge /> : null}

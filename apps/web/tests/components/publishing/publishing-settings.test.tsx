@@ -234,6 +234,23 @@ describe('PublishingSettings — the address list', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('withholds Primary when there is only one address for it to distinguish', () => {
+    envMock.NEXT_PUBLIC_BRIEF_HOST = 'briefs.docket.example';
+    renderSettings();
+
+    expect(screen.queryByText('Primary')).not.toBeInTheDocument();
+  });
+
+  it('calls the default address unreachable where the deployment configures no shared host', () => {
+    renderSettings({
+      domains: [domain({ id: 'dom_1', host: 'updates.acme.com', verified: true })],
+    });
+
+    const row = addressRow('acme');
+    expect(within(row).getByText(/not reachable/i)).toBeVisible();
+    expect(within(row).queryByText('Primary')).not.toBeInTheDocument();
+  });
+
   it('renames the default address in its own row, with no trip to another settings page', async () => {
     const user = userEvent.setup();
     envMock.NEXT_PUBLIC_BRIEF_HOST = 'briefs.docket.example';

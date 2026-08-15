@@ -93,6 +93,12 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
   // already belongs to exactly this workspace — so it wins over the shared brief host, which still
   // needs the identity slug to disambiguate the many workspaces that share it.
   const primaryDomain = domains.find((domain) => domain.verified);
+  // `Primary` answers "which of these?", so it appears only where there is more than one address to
+  // choose between. A deployment with no shared brief host has no default address at all, so the
+  // default row cannot hold the mark even when it is the only row.
+  const defaultReachable =
+    env.NEXT_PUBLIC_BRIEF_HOST !== undefined && orgQ.data?.slug !== undefined;
+  const marksPrimary = domains.length > 0;
 
   const submitDomain = (event: SyntheticEvent<HTMLFormElement>): void => {
     event.preventDefault();
@@ -170,7 +176,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
             orgId={orgId}
             slug={orgQ.data?.slug}
             briefHost={env.NEXT_PUBLIC_BRIEF_HOST}
-            primary={primaryDomain === undefined}
+            primary={marksPrimary && defaultReachable && primaryDomain === undefined}
             canManage={canManage}
           />
           {domainsQ.isPending ? (
@@ -183,7 +189,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
                 key={domain.id}
                 orgId={orgId}
                 domain={domain}
-                primary={domain.id === primaryDomain?.id}
+                primary={marksPrimary && domain.id === primaryDomain?.id}
               />
             ))
           )}

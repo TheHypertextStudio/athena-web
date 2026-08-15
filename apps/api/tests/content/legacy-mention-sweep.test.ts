@@ -91,6 +91,84 @@ describe('sweepLegacyMentions', () => {
     expect(after.startsWith('Blocked by [Renovate the loading dock](')).toBe(true);
   });
 
+  it('looks up the real name for every other mentionable kind, not only task', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({ organizationId: orgId, name: 'Platform rebuild' })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const programId = one(
+      await db
+        .insert(schema.program)
+        .values({ organizationId: orgId, name: 'Growth initiatives' })
+        .returning({ id: schema.program.id }),
+    ).id;
+    const initiativeId = one(
+      await db
+        .insert(schema.initiative)
+        .values({ organizationId: orgId, name: 'Q3 expansion' })
+        .returning({ id: schema.initiative.id }),
+    ).id;
+    const cycleId = one(
+      await db
+        .insert(schema.cycle)
+        .values({
+          organizationId: orgId,
+          teamId,
+          number: 1,
+          name: 'Sprint 12',
+          startsAt: new Date('2199-01-01'),
+          endsAt: new Date('2199-02-01'),
+        })
+        .returning({ id: schema.cycle.id }),
+    ).id;
+
+    const carrier = await seedTask(
+      orgId,
+      teamId,
+      [
+        `Project: [mention kind="project" id="${projectId}"]`,
+        `Program: [mention kind="program" id="${programId}"]`,
+        `Initiative: [mention kind="initiative" id="${initiativeId}"]`,
+        `Cycle: [mention kind="cycle" id="${cycleId}"]`,
+        `Person: [mention kind="person" id="${humanActorId}"]`,
+      ].join(' '),
+    );
+
+    await sweepLegacyMentions(db);
+
+    const after = await readTask(carrier);
+    expect(after).toContain('[Platform rebuild](');
+    expect(after).toContain('[Growth initiatives](');
+    expect(after).toContain('[Q3 expansion](');
+    expect(after).toContain('[Sprint 12](');
+    expect(after).toContain('[Ada](');
+  });
+
+  it('treats a cycle with no name as unresolved, not a lookup failure', async () => {
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const cycleId = one(
+      await db
+        .insert(schema.cycle)
+        .values({
+          organizationId: orgId,
+          teamId,
+          number: 2,
+          // No `name`: a real, unremarkable cycle, distinct from a deleted one.
+          startsAt: new Date('2199-03-01'),
+          endsAt: new Date('2199-04-01'),
+        })
+        .returning({ id: schema.cycle.id }),
+    ).id;
+    const carrier = await seedTask(orgId, teamId, `See [mention kind="cycle" id="${cycleId}"].`);
+
+    await sweepLegacyMentions(db);
+
+    expect(await readTask(carrier)).toContain('[Cycle](');
+  });
+
   it('never resolves a name across orgs, even when the id belongs to a real task elsewhere', async () => {
     const other = await seedBaseOrg(db, schema);
     const foreign = await seedTaskTitled(other.orgId, other.teamId, 'Confidential renovation plan');

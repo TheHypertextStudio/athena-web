@@ -9,7 +9,10 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { rewriteLegacyMentions } from '../../src/content/legacy-mention-shortcodes';
+import {
+  findUnlabeledMentionRefs,
+  rewriteLegacyMentions,
+} from '../../src/content/legacy-mention-shortcodes';
 
 const ORG = 'org_1';
 
@@ -64,6 +67,11 @@ describe('rewriteLegacyMentions', () => {
     expect(rewriteLegacyMentions(prose, ORG)).toBe(prose);
   });
 
+  it('leaves a shortcode missing its kind alone rather than guessing a route', () => {
+    const prose = '[mention id="t1" label="Orphan"]';
+    expect(rewriteLegacyMentions(prose, ORG)).toBe(prose);
+  });
+
   it('falls back to a kind-based label when there is no label, rather than the raw id', () => {
     // The chip renders this stored text until hydration resolves, so falling back to the raw id
     // would leak it to a viewer for a moment — a generic kind name stays honest without that leak.
@@ -84,5 +92,41 @@ describe('rewriteLegacyMentions', () => {
     expect(
       rewriteLegacyMentions('[mention kind="task" id="t1" label="Say \\"hi\\""]', ORG),
     ).toContain('Say "hi"');
+  });
+});
+
+describe('findUnlabeledMentionRefs', () => {
+  it('returns nothing for prose with no shortcode', () => {
+    expect(findUnlabeledMentionRefs('Just words, no brackets.')).toEqual([]);
+  });
+
+  it('finds a labelless reference and maps its kind onto the current vocabulary', () => {
+    expect(findUnlabeledMentionRefs('[mention kind="person" id="m1"]')).toEqual([
+      { entityKind: 'actor', entityId: 'm1' },
+    ]);
+  });
+
+  it('skips a shortcode that already has a label — nothing to look up', () => {
+    expect(findUnlabeledMentionRefs('[mention kind="task" id="t1" label="Ship it"]')).toEqual([]);
+  });
+
+  it('skips a shortcode missing its kind', () => {
+    expect(findUnlabeledMentionRefs('[mention id="t1"]')).toEqual([]);
+  });
+
+  it('skips a shortcode missing its id', () => {
+    expect(findUnlabeledMentionRefs('[mention kind="task"]')).toEqual([]);
+  });
+
+  it('skips a shortcode naming a kind it cannot route', () => {
+    expect(findUnlabeledMentionRefs('[mention kind="unicorn" id="u1"]')).toEqual([]);
+  });
+
+  it('finds every labelless reference in one body, not just the first', () => {
+    const prose = '[mention kind="task" id="t1"] and [mention kind="project" id="p1"]';
+    expect(findUnlabeledMentionRefs(prose)).toEqual([
+      { entityKind: 'task', entityId: 't1' },
+      { entityKind: 'project', entityId: 'p1' },
+    ]);
   });
 });

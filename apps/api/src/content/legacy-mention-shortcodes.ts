@@ -115,6 +115,8 @@ export function findUnlabeledMentionRefs(prose: string): readonly UnlabeledMenti
   const refs: UnlabeledMentionRef[] = [];
   for (const match of prose.matchAll(SHORTCODE)) {
     const attributes = match[1];
+    /* v8 ignore next -- @preserve defensive: SHORTCODE's one capturing group is not optional, so
+     * match[1] is always defined whenever match exists. */
     if (attributes === undefined) continue;
     const { kind, id, label } = attributesOf(attributes);
     if (kind === undefined || id === undefined || label !== undefined) continue;

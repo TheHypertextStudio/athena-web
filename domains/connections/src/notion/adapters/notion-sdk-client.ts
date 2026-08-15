@@ -276,11 +276,9 @@ export class NotionMirrorClient implements NotionMirrorPort {
         data_source_id: dataSourceId,
         page_size: NOTION_PAGE_SIZE,
         ...(filter ? { filter } : {}),
-        // `is_archived`, not `in_trash` — the SDK's own types advertise the latter, and the live
-        // API rejects it with `body.in_trash should be not present`. `in_trash` is the spelling
-        // for *page updates* (see `writeRow`'s delete branch, where it is correct). The cast below
-        // is what let the wrong one through, so it stays narrow enough to keep reading as a cast
-        // over the SDK's parameter union rather than a licence to send anything.
+        // The SDK types name this `in_trash`; the live API rejects that with
+        // `body.in_trash should be not present`. `in_trash` is the page-update spelling, used in
+        // `writeRow`'s delete branch.
         ...(archived ? { is_archived: true } : {}),
       } as unknown as QueryDataSourceParameters;
       const results = await collectPaginatedAPI(this.notion.dataSources.query, parameters);

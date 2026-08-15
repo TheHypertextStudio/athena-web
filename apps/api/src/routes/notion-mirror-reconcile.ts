@@ -72,6 +72,9 @@ import type { MirrorDatabaseRow } from './notion-mirror-design';
  */
 const WRITE_BUDGET = 400;
 
+/** How many times one pass may rebuild databases Notion reports as gone. */
+const MAX_REBUILD_PASSES = 1;
+
 /** Milliseconds between Notion writes — three per second, with headroom. */
 const WRITE_INTERVAL_MS = 350;
 
@@ -302,14 +305,19 @@ function toColumnSpecs(
  * is created with its scalar columns first, then each is patched to add the relations now that
  * their targets exist. A single wave would either fail or silently drop every relation.
  *
- * Idempotent by construction — a design that already carries an `externalDataSourceId` is skipped —
- * which makes this the repair path too, for a database somebody deleted in Notion.
+ * Creation is skipped for a design that already carries an `externalDataSourceId`. The schema patch
+ * still runs every pass for any design holding a relation column.
  *
  * @param ctx - The sync context.
  * @param parentPageId - The page to create the databases under.
+ * @param rebuildsLeft - Remaining rebuild rounds; exhausting it throws.
  * @returns how many databases were created.
  */
-export async function provisionMirror(ctx: MirrorContext, parentPageId: string): Promise<number> {
+export async function provisionMirror(
+  ctx: MirrorContext,
+  parentPageId: string,
+  rebuildsLeft = MAX_REBUILD_PASSES,
+): Promise<number> {
   const designs = await db
     .select()
     .from(notionMirrorDatabase)
@@ -390,37 +398,30 @@ export async function provisionMirror(ctx: MirrorContext, parentPageId: string):
         .where(eq(notionMirrorDatabase.id, row.id));
     } catch (error) {
       if (!isProviderMissingObjectError(error)) throw error;
-      // The database Docket recorded no longer exists — somebody deleted it in Notion. Forget the
-      // ids so the next wave recreates it.
-      //
-      // Without this the connection wedges permanently, and in exactly the way the reader can do
-      // nothing about: wave one skips creation because an id is recorded, then this patch throws
-      // `object_not_found`, which fails the whole pass before a single row is projected. Every
-      // retry — scheduled or by hand — reproduces it, so the surface shows databases that exist
-      // in Docket, no rows in Notion, and a connection stuck in `error`.
       await forgetProvisionedDatabase(row.id);
       forgotten += 1;
     }
     await pace();
   }
 
-  // Recreate anything forgotten above in this same pass, rather than leaving the workspace a
-  // sweep short of correct. Bounded by construction: recreation happens only for rows this call
-  // just nulled, and the recursive pass can only forget rows it did not create.
-  if (forgotten > 0) created += await provisionMirror(ctx, parentPageId);
+  if (forgotten > 0) {
+    if (rebuildsLeft <= 0) {
+      throw new Error(
+        'Notion keeps reporting newly created databases as missing; stopped rebuilding.',
+      );
+    }
+    created += await provisionMirror(ctx, parentPageId, rebuildsLeft - 1);
+  }
 
   return created;
 }
 
 /**
- * Drop every trace of a Notion database that no longer exists, keeping the design itself.
+ * Drop the Notion ids for a database that no longer exists, keeping the design.
  *
  * @remarks
- * The design is deliberately kept: it is the user's configuration — the table's name, its columns,
- * whether it is enabled — and none of that became wrong because the database was deleted. Only the
- * ids pointing at Notion did. Clearing the property ids too matters as much as clearing the data
- * source: a stale `propertyId` would be written into a *recreated* database whose properties have
- * entirely different ids, and Notion would reject every row.
+ * Property ids are cleared too: a recreated database assigns new ones, and a stale id makes Notion
+ * reject the row.
  *
  * @param id - The `notion_mirror_database` row to reset.
  */
@@ -447,9 +448,7 @@ async function forgetProvisionedDatabase(id: string): Promise<void> {
       propertyMap: cleared,
     })
     .where(eq(notionMirrorDatabase.id, id));
-  // The row mirrors are addressed by page id inside the deleted database, so every one of them is
-  // a pointer to nothing. Left behind, `projectEntity` would treat each entity as already present
-  // and issue an update against a page that no longer exists instead of creating a fresh row.
+  // Row mirrors point at pages inside the deleted database.
   await db
     .delete(notionMirrorRow)
     .where(

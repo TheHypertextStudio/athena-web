@@ -2,19 +2,11 @@
  * `pnpm sync:failure` — print why a connector's most recent sync runs failed.
  *
  * @remarks
- * Every failure is already recorded: the sync spine writes the reason to `sync_run.error` and
- * mirrors it onto `integration.last_error`. Neither reaches a screen, and deliberately so — the
- * web error-source policy bars provider diagnostics from production UI, and `lastError` is named
- * in its ban list. That leaves a real gap for whoever is *operating* Docket rather than using it:
- * a connection reads "needs attention" while the one fact that would explain it is unreachable
- * without a database client.
+ * The sync spine records each failure in `sync_run.error`. The web error-source policy keeps that
+ * text off product surfaces, so this read-only operator tool is where it can be read.
  *
- * This closes that gap where the policy does not apply. It is a read-only operator tool rather
- * than a product surface, so it may print the stored text verbatim.
- *
- * Standalone via `tsx`, so it talks to Postgres directly rather than importing the workspace's
- * Drizzle client — the same choice `migration-0080-org-slug-unify.ts` makes, and the reason a
- * root script can run against a database the monorepo was not built for.
+ * Talks to Postgres directly rather than importing the workspace's Drizzle client, as
+ * `migration-0080-org-slug-unify.ts` does, so it can run against any database.
  *
  * @example
  * ```bash
@@ -36,11 +28,7 @@ const PROD_PROJECT = process.env.DOCKET_GCP_PROJECT ?? 'athena-services';
  * Read production's connection string from Secret Manager.
  *
  * @remarks
- * The same `gcloud secrets versions access` call the deploy runs before migrating, so `--prod`
- * needs no connection string pasted anywhere and none is ever written to disk or shell history.
- *
- * Requires a live `gcloud` login; the CLI's own reauth prompt cannot run unattended, so an expired
- * session is reported as the one actionable thing rather than as a connection failure later.
+ * The same call `deploy.yml` makes before migrating. Requires a live `gcloud` login.
  */
 function productionUrl(): string {
   try {
@@ -74,20 +62,13 @@ function flag(name: string): string | undefined {
 /**
  * The purposes a run can have.
  *
- * @remarks
- * A literal copy of the `sync_run_purpose` enum rather than an import, for the reason
- * `migration-0080-org-slug-unify.ts` states about its own copied list: this script runs standalone
- * under `tsx`, outside the workspace build graph.
- *
- * @see `packages/db/src/enums.ts` — the source of truth.
+ * @see `packages/db/src/enums.ts` — the source of truth this copy tracks.
  */
 const PURPOSES: readonly string[] = ['task_sync', 'email_ingest', 'notion_mirror', 'activity_pull'];
 
 const provider = flag('provider');
 const purpose = flag('purpose');
-// Checked rather than passed through. An unrecognized purpose matches nothing, and "No sync runs
-// matched" is indistinguishable from "this connection has never failed" — the one answer a tool
-// for diagnosing failures must never give by accident.
+// An unrecognized purpose would match nothing and read as "never failed".
 if (purpose !== undefined && !PURPOSES.includes(purpose)) {
   console.error(`Unknown --purpose=${purpose}. Expected one of: ${PURPOSES.join(', ')}`);
   process.exit(1);
@@ -101,17 +82,13 @@ const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.trunc(parse
  * Read a connection string, treating a blank one as absent.
  *
  * @remarks
- * Not `??`: the committed `.env.local` ships `DATABASE_URL_UNPOOLED=` with no value, and nullish
- * coalescing would accept that empty string and then fail to connect rather than falling through
- * to `DATABASE_URL`.
+ * The committed `.env.local` ships `DATABASE_URL_UNPOOLED=` empty, which `??` would accept.
  */
 function envUrl(name: string): string | undefined {
   const value = process.env[name];
   return value !== undefined && value.trim() !== '' ? value : undefined;
 }
 
-// The unpooled URL first when one is set, because that is the connection the deploy already uses
-// for schema work against production and so the one most likely to be to hand.
 const url = prod ? productionUrl() : (envUrl('DATABASE_URL_UNPOOLED') ?? envUrl('DATABASE_URL'));
 if (!url || !/^postgres(ql)?:\/\//.test(url)) {
   console.error(
@@ -125,8 +102,7 @@ if (!url || !/^postgres(ql)?:\/\//.test(url)) {
 const sql = postgres(url, { max: 1, onnotice: () => undefined });
 
 try {
-  // Joined rather than queried separately: a run's provider lives on the integration, and the
-  // question being asked ("why did Notion fail") is phrased in those terms.
+  // Joined because a run's provider lives on the integration.
   const rows = await sql<
     {
       started_at: Date;
@@ -162,8 +138,7 @@ try {
         `${row.status}  ${counts}  (${row.trigger})`,
     );
     console.log(`  integration ${row.integration_id} — currently ${row.integration_status}`);
-    // The whole reason this script exists. On its own line because a provider's validation
-    // message is long, and the surrounding columns are not what anybody ran this to read.
+    // On its own line: provider validation messages are long.
     if (row.error !== null) console.log(`  reason: ${row.error}`);
   }
 } finally {

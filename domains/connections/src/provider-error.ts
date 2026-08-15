@@ -110,17 +110,13 @@ export function isProviderAuthError(value: unknown): value is ProviderAuthError 
 }
 
 /**
- * Determine whether a failure means the object Docket addressed no longer exists.
+ * Determine whether a failure means the addressed object no longer exists at the provider.
  *
  * @remarks
- * Distinct from every other `provider` failure because the remediation is the opposite one:
- * a rate limit or a bad gateway means *try the same request again*, while this means *stop
- * addressing that id*. Something a connector recorded — a database, a page, a data source — has
- * been deleted at the provider, and every future request naming it will fail identically until
- * the record is forgotten.
+ * Separated from other `provider` failures because the remediation differs: a rate limit or bad
+ * gateway is retryable against the same id, while a deleted object requires forgetting the id.
  *
- * Structural, like {@link isProviderAuthError}, so an adapter keeping its own error class still
- * participates.
+ * Structural, like {@link isProviderAuthError}.
  *
  * @param value - A caught throwable or other unknown value.
  * @returns Whether the provider reported the addressed object as missing.

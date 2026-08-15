@@ -175,10 +175,8 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
   // Gated on the container page, not on `provisionedCount`: a provision that recorded the page and
   // then failed before creating anything has zero databases, and gating on those would leave the
   // one connection most in need of a re-run with no way to ask for one.
-  //
-  // Gated on health too. Every pass runs on the leased sync spine, which records what it did — so a
-  // run against a rejected credential does not merely fail, it demotes the connection again and
-  // notifies its owner about a breakage they are already reading an alert about.
+  // Gated on health too: a run against a rejected credential fails, which demotes the connection
+  // again and notifies its owner.
   const canSync = containerPage !== null && !connectionBroken;
   const syncButton = canSync ? (
     <Button
@@ -275,11 +273,8 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
 
       {nothingProvisioned ? (
         <>
-          {/* Setup is withheld while the credential is rejected, rather than offered and left to
-              fail. Provisioning creates the databases and *then* projects rows through the same
-              token, so a run started here does not bounce harmlessly off the API — it leaves real,
-              empty tables behind in somebody's Notion workspace, which is the state this page was
-              reported in. The alert above carries the only action that can move this forward. */}
+          {/* Provisioning creates the databases and then projects rows through the same token, so
+              a run started here leaves empty tables behind in Notion. */}
           {connectionBroken ? (
             <p className="text-on-surface-variant text-body-small max-w-prose">{SETUP_BLOCKED}</p>
           ) : (

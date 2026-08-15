@@ -184,11 +184,6 @@ export class MockNotionMirror implements NotionMirrorPort {
   /**
    * Forget a data source, as deleting its database in Notion would.
    *
-   * @remarks
-   * Exists because this is a state the mirror has to survive and could not previously be
-   * reproduced: a database Docket created and recorded, removed by a human in Notion afterwards.
-   * Every subsequent request naming it answers `object_not_found`.
-   *
    * @param dataSourceId - The data source to remove.
    */
   deleteDataSource(dataSourceId: string): void {
@@ -202,10 +197,8 @@ export class MockNotionMirror implements NotionMirrorPort {
    * {@inheritDoc NotionMirrorPort.updateDatabaseSchema}
    *
    * @remarks
-   * Refuses an unknown data source rather than inventing one. This mock used to accept any id and
-   * quietly mint a schema for it, which made a deleted database indistinguishable from a live one
-   * — so the whole provision → project flow passed locally and in E2E while production answered
-   * `object_not_found` and failed every run.
+   * Rejects an unknown data source with `object_not_found`, matching Notion. Accepting any id made
+   * a deleted database look live, which hid this failure from local and E2E runs.
    */
   updateDatabaseSchema(
     dataSourceId: string,

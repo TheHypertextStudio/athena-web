@@ -117,17 +117,10 @@ class RecordingMirror implements NotionMirrorPort {
     });
   }
 
-  /**
-   * Data sources deleted at the provider, which answer `object_not_found` from then on.
-   *
-   * @remarks
-   * Modelled because this fake ignored the data source id entirely, so a deleted database was
-   * indistinguishable from a live one and the mirror's behaviour against one could not be tested
-   * at all — which is how `object_not_found` reached production unnoticed.
-   */
+  /** Data sources deleted at the provider, which answer `object_not_found` from then on. */
   readonly missingDataSources = new Set<string>();
 
-  /** Delete a data source, as removing its database in Notion would. */
+  /** Delete a data source. */
   deleteDataSource(dataSourceId: string): void {
     this.missingDataSources.add(dataSourceId);
   }
@@ -147,9 +140,6 @@ class RecordingMirror implements NotionMirrorPort {
     }
     this.schemaUpdates.push(spec);
     return Promise.resolve(
-      // Keyed by data source, as Notion's property ids are. A constant id per field made two
-      // different databases hand out the same ones, which hid whether a rebuild had actually
-      // rebound its columns to the database it just created.
       Object.fromEntries(
         spec.columns.map((column) => [column.field, `property-${dataSourceId}-${column.field}`]),
       ),
@@ -272,10 +262,8 @@ describe('Notion mirror reconciliation', () => {
   });
 
   it('rebuilds a database somebody deleted in Notion instead of failing every pass', async () => {
-    // The production failure this reproduces: `Notion schema update for "Teams" failed
-    // (object_not_found)`. Wave one skips creation because an id is recorded, wave two patches a
-    // data source that no longer exists, and the throw fails the whole pass before a single row
-    // is projected — identically on every retry, so the connection can never recover on its own.
+    // Reproduces `Notion schema update for "Teams" failed (object_not_found)` from production:
+    // creation is skipped because an id is recorded, then patching that dead id fails the pass.
     const { designs, mirror, ctx } = await seedMirror();
     await provisionMirror(ctx, 'parent-1');
     const before = one(
@@ -296,8 +284,6 @@ describe('Notion mirror reconciliation', () => {
         .from(schema.notionMirrorDatabase)
         .where(eq(schema.notionMirrorDatabase.id, findDesign(designs, 'task').id)),
     );
-    // Rebuilt, not merely un-wedged: a fresh data source, and property ids belonging to it rather
-    // than the ones the deleted database handed out.
     expect(after.externalDataSourceId).not.toBeNull();
     expect(after.externalDataSourceId).not.toBe(deleted);
     expect(after.provisionedAt).not.toBeNull();
@@ -305,6 +291,23 @@ describe('Notion mirror reconciliation', () => {
     expect(after.propertyMap['title']?.propertyId).not.toBe(
       before.propertyMap['title']?.propertyId,
     );
+  });
+
+  it('stops rebuilding when Notion calls a database it just created missing', async () => {
+    // The rebuild recovers from a database deleted between passes, so it assumes the recreated one
+    // works. A provider that keeps answering `object_not_found` would otherwise drive an unbounded
+    // loop creating real databases in somebody's workspace. It has to fail instead.
+    const { mirror, ctx } = await seedMirror();
+    const rejectEverything = mirror.updateDatabaseSchema.bind(mirror);
+    mirror.updateDatabaseSchema = (dataSourceId: string, spec: MirrorDatabaseSpec) => {
+      mirror.deleteDataSource(dataSourceId);
+      return rejectEverything(dataSourceId, spec);
+    };
+
+    await expect(provisionMirror(ctx, 'parent-1')).rejects.toThrow(/stopped rebuilding/i);
+
+    // One initial creation per design, plus one rebuild each.
+    expect(mirror.provisions.length).toBeLessThanOrEqual(MIRROR_ENTITY_ORDER.length * 2);
   });
 
   it('creates, skips, updates, and budgets projected rows truthfully', async () => {

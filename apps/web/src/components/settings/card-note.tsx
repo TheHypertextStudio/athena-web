@@ -33,15 +33,7 @@ export interface CardAlertProps {
   message: string;
   /** A quieter follow-up line (e.g. the recommended recovery action). */
   detail: ReactNode;
-  /**
-   * The recovery control, when the surface can actually offer one.
-   *
-   * @remarks
-   * Optional because not every caller can. The Connections list owns the reconnect ceremony inline,
-   * so its alert describes a button the reader can see; a surface that cannot reach that ceremony
-   * has to describe the path instead. Passing the control lets an alert stop being a set of
-   * directions and start being the repair.
-   */
+  /** The recovery control, for surfaces that can offer one. */
   action?: ReactNode;
 }
 

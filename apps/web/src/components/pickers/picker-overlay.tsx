@@ -29,6 +29,7 @@ import {
 import type { ObjectRef } from '@/lib/actions';
 
 import { InitiativeHierarchyPickerOverlay } from '../initiatives/initiative-hierarchy-picker-overlay';
+import { TaskHierarchyPickerOverlay } from '../tasks/task-hierarchy-picker-overlay';
 import { LabelPickerOverlay } from './label-picker-overlay';
 
 /** A request to edit the label set of one or more objects. */
@@ -57,8 +58,19 @@ export interface InitiativeHierarchyPickerRequest {
   readonly anchor?: HTMLElement | null;
 }
 
+/** A request to make one or more existing tasks subtasks of a chosen task. */
+export interface TaskHierarchyPickerRequest {
+  readonly kind: 'task-hierarchy';
+  readonly organizationId: string;
+  readonly subjects: readonly (ObjectRef & { readonly kind: 'task' })[];
+  readonly anchor?: HTMLElement | null;
+}
+
 /** Every picker the single app overlay can move to an invoking object. */
-export type PickerOverlayRequest = LabelPickerRequest | InitiativeHierarchyPickerRequest;
+export type PickerOverlayRequest =
+  | LabelPickerRequest
+  | InitiativeHierarchyPickerRequest
+  | TaskHierarchyPickerRequest;
 
 /** What `usePickerOverlay()` exposes. */
 export interface PickerOverlayApi {
@@ -124,8 +136,16 @@ export function PickerOverlayProvider({ children }: PickerOverlayProviderProps):
               setRequest(null);
             }}
           />
-        ) : (
+        ) : request.kind === 'initiative-hierarchy' ? (
           <InitiativeHierarchyPickerOverlay
+            key={sequenceRef.current}
+            request={request}
+            onClose={() => {
+              setRequest(null);
+            }}
+          />
+        ) : (
+          <TaskHierarchyPickerOverlay
             key={sequenceRef.current}
             request={request}
             onClose={() => {

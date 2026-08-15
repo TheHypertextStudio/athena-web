@@ -20,7 +20,16 @@
  * so they are built once in a memo over dependencies React itself keeps stable. The array is
  * therefore identical on every re-render, and the registration effect runs exactly once.
  */
-import { ArrowRight, CheckCircle2, Link, Plus, Tag, Workflow } from '@docket/ui/icons';
+import {
+  ArrowRight,
+  ArrowUp,
+  CheckCircle2,
+  CornerDownLeft,
+  Link,
+  Plus,
+  Tag,
+  Workflow,
+} from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
@@ -28,6 +37,7 @@ import { useCallback, useMemo } from 'react';
 import { copyObjectAction } from '@/components/actions/copy-object-action';
 import { useCopyOutcome } from '@/components/clipboard';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
+import { useTaskHierarchyMutation } from '@/components/tasks/use-task-hierarchy-mutation';
 import { api } from '@/lib/api';
 import {
   type ActionContext,
@@ -35,6 +45,7 @@ import {
   defineActionDomain,
   objectHref,
   objectMetaString,
+  type ObjectRef,
   useRegisterActionDomain,
 } from '@/lib/actions';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
@@ -96,6 +107,7 @@ export function useRegisterTaskActions(): void {
   const pickerOverlay = usePickerOverlay();
   const reportOutcome = useCopyOutcome();
   const statuses = useStatusRegistry();
+  const { reparent: reparentHierarchy } = useTaskHierarchyMutation();
 
   const categoryOf = useCallback<CategoryOfState>(
     (state) => statuses.categoryOf('task', state),
@@ -168,7 +180,7 @@ export function useRegisterTaskActions(): void {
           category: 'mutation',
           routeTemplateId: '/tasks/[taskId]',
         } as const,
-        label: 'Add subtask',
+        label: 'Create subtask',
         icon: Plus,
         objectKinds: ['task'],
         section: 'organize',
@@ -186,6 +198,56 @@ export function useRegisterTaskActions(): void {
             'Could not create the subtask.',
           );
           refresh(orgId, id);
+        },
+      },
+      {
+        id: 'task.makeSubtaskOf',
+        label: 'Make subtask of…',
+        icon: CornerDownLeft,
+        objectKinds: ['task'],
+        multi: true,
+        section: 'organize',
+        keywords: ['parent', 'nest', 'move under'],
+        run: (context) => {
+          if (context.organizationId === null) return;
+          const subjects = context.objects.filter(
+            (object): object is ObjectRef & { readonly kind: 'task' } => object.kind === 'task',
+          );
+          if (subjects.length === 0) return;
+          pickerOverlay.open({
+            kind: 'task-hierarchy',
+            organizationId: context.organizationId,
+            subjects,
+          });
+        },
+      },
+      {
+        id: 'task.moveToTopLevel',
+        label: 'Move to top level',
+        icon: ArrowUp,
+        objectKinds: ['task'],
+        multi: true,
+        section: 'organize',
+        keywords: ['detach', 'remove parent', 'unnest'],
+        appliesTo: (context) =>
+          context.objects.some(
+            (object) => object.kind === 'task' && objectMetaString(object, 'parentTaskId') !== null,
+          ),
+        run: (context) => {
+          const organizationId = context.organizationId;
+          if (organizationId === null) return;
+          const moves = context.objects
+            .filter(
+              (object) =>
+                object.kind === 'task' && objectMetaString(object, 'parentTaskId') !== null,
+            )
+            .map(({ id }) => ({ taskId: id, parentTaskId: null }));
+          if (moves.length === 0) return;
+          reparentHierarchy({
+            organizationId,
+            moves,
+            preserveSelectedSubtrees: true,
+          });
         },
       },
       {
@@ -231,7 +293,7 @@ export function useRegisterTaskActions(): void {
       copyObjectAction('task', reportOutcome),
       {
         id: 'task.showInGraph',
-        label: 'Show in dependency graph',
+        label: 'Show in Task graph',
         icon: Workflow,
         objectKinds: ['task'],
         section: 'organize',
@@ -243,7 +305,15 @@ export function useRegisterTaskActions(): void {
         },
       },
     ]);
-  }, [router, queryClient, pickerOverlay, reportOutcome, statuses, categoryOf]);
+  }, [
+    router,
+    queryClient,
+    pickerOverlay,
+    reportOutcome,
+    statuses,
+    categoryOf,
+    reparentHierarchy,
+  ]);
 
   useRegisterActionDomain('task', definitions);
 }

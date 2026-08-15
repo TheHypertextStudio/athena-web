@@ -87,6 +87,96 @@ describe('task.label registration', () => {
   });
 });
 
+describe('task hierarchy action registration', () => {
+  it('registers create, multi-object reparent, and top-level actions', () => {
+    const registry = createActionRegistry();
+    const { client } = makeQueryWrapper();
+    render(
+      <QueryClientProvider client={client}>
+        <InteractionProvider registry={registry}>
+          <TaskActionRegistration />
+        </InteractionProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(registry.get('task.addSubtask')?.label).toBe('Create subtask');
+    expect(registry.get('task.makeSubtaskOf')?.multi).toBe(true);
+    expect(registry.get('task.moveToTopLevel')?.multi).toBe(true);
+  });
+
+  it('opens one parent picker for every selected task', async () => {
+    open.mockClear();
+    const registry = createActionRegistry();
+    const { client } = makeQueryWrapper();
+    render(
+      <QueryClientProvider client={client}>
+        <InteractionProvider registry={registry}>
+          <TaskActionRegistration />
+        </InteractionProvider>
+      </QueryClientProvider>,
+    );
+    const subjects = [
+      { kind: 'task' as const, id: 't1', organizationId: 'org_1', title: 'One' },
+      { kind: 'task' as const, id: 't2', organizationId: 'org_1', title: 'Two' },
+    ];
+
+    await registry.invoke('task.makeSubtaskOf', () => ({
+      objects: subjects,
+      source: 'context-menu',
+      organizationId: 'org_1',
+    }));
+
+    expect(open).toHaveBeenCalledWith({
+      kind: 'task-hierarchy',
+      organizationId: 'org_1',
+      subjects,
+    });
+  });
+
+  it('offers top-level movement only when at least one selected root is nested', () => {
+    const registry = createActionRegistry();
+    const { client } = makeQueryWrapper();
+    render(
+      <QueryClientProvider client={client}>
+        <InteractionProvider registry={registry}>
+          <TaskActionRegistration />
+        </InteractionProvider>
+      </QueryClientProvider>,
+    );
+    const action = registry.get('task.moveToTopLevel');
+    const base = { source: 'context-menu' as const, organizationId: 'org_1' };
+
+    expect(
+      action?.appliesTo?.({
+        ...base,
+        objects: [
+          {
+            kind: 'task',
+            id: 'top',
+            organizationId: 'org_1',
+            title: 'Top',
+            meta: { parentTaskId: null },
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      action?.appliesTo?.({
+        ...base,
+        objects: [
+          {
+            kind: 'task',
+            id: 'child',
+            organizationId: 'org_1',
+            title: 'Child',
+            meta: { parentTaskId: 'parent' },
+          },
+        ],
+      }),
+    ).toBe(true);
+  });
+});
+
 describe('task action responsiveness metadata', () => {
   it('declares root receipts only for promise-returning task actions', () => {
     const registry = createActionRegistry();
@@ -109,6 +199,8 @@ describe('task action responsiveness metadata', () => {
     expect(registry.get('task.copyLink')?.responsiveness).toMatchObject({ ownership: 'root' });
     expect(registry.get('task.open')?.responsiveness).toBeUndefined();
     expect(registry.get('task.label')?.responsiveness).toBeUndefined();
+    expect(registry.get('task.makeSubtaskOf')?.responsiveness).toBeUndefined();
+    expect(registry.get('task.moveToTopLevel')?.responsiveness).toBeUndefined();
     expect(registry.get('task.showInGraph')?.responsiveness).toBeUndefined();
   });
 });

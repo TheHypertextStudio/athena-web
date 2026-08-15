@@ -85,6 +85,7 @@ function taskObject(task: TaskOut) {
     id: task.id,
     organizationId: task.organizationId,
     title: task.title,
+    meta: { parentTaskId: task.parentTaskId ?? null },
   } satisfies ObjectRef;
 }
 

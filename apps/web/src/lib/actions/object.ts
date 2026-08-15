@@ -146,7 +146,7 @@ export const OBJECT_DESCRIPTORS: Readonly<Record<ObjectKind, ObjectDescriptor>> 
     icon: ListChecks,
     draggable: true,
     selectable: true,
-    metaKeys: ['projectId', 'cycleId', 'assigneeId'],
+    metaKeys: ['projectId', 'cycleId', 'assigneeId', 'parentTaskId'],
   },
   project: {
     kind: 'project',

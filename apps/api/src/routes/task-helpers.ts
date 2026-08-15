@@ -41,6 +41,7 @@ export function toOut(t: TaskRow, labels: readonly LabelRefRow[]): z.input<typeo
     delegateId: t.delegateId,
     projectId: t.projectId,
     programId: t.programId,
+    parentTaskId: t.parentTaskId,
     estimateMinutes: t.estimateMinutes,
     startDate: t.startDate?.toISOString() ?? null,
     dueDate: t.dueDate?.toISOString() ?? null,

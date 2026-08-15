@@ -331,6 +331,9 @@ export const TaskOut = z
     programId: ProgramId.nullable()
       .optional()
       .describe('Program this task is associated with; null when none.'),
+    parentTaskId: TaskId.nullable()
+      .optional()
+      .describe('Parent task when this is a subtask; null when it is top-level.'),
     estimateMinutes: z
       .number()
       .int()

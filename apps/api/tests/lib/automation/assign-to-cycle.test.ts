@@ -13,6 +13,7 @@ import type * as DbModule from '@docket/db';
 
 import type { buildAutomationRegistry as BuildAutomationRegistry } from '../../../src/lib/automation/handlers';
 import { getDb, seedBaseOrg } from '../../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -41,7 +42,7 @@ async function cycleOf(taskId: string): Promise<string | null> {
     .select({ cycleId: schema.task.cycleId })
     .from(schema.task)
     .where(eq(schema.task.id, taskId));
-  return row!.cycleId;
+  return assertDefined(row).cycleId;
 }
 
 describe('task.assignToCycle', () => {
@@ -64,8 +65,8 @@ describe('task.assignToCycle', () => {
       .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
       .returning({ id: schema.task.id });
 
-    await assignToCycle(orgId, row!.id);
-    expect(await cycleOf(row!.id)).toBe(cycle!.id);
+    await assignToCycle(orgId, assertDefined(row).id);
+    expect(await cycleOf(assertDefined(row).id)).toBe(assertDefined(cycle).id);
   });
 
   it('leaves the task in triage when no cycle covers today', async () => {
@@ -75,8 +76,8 @@ describe('task.assignToCycle', () => {
       .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
       .returning({ id: schema.task.id });
 
-    await assignToCycle(orgId, row!.id);
-    expect(await cycleOf(row!.id)).toBeNull();
+    await assignToCycle(orgId, assertDefined(row).id);
+    expect(await cycleOf(assertDefined(row).id)).toBeNull();
   });
 
   it('never overwrites a cycle someone assigned by hand', async () => {
@@ -110,12 +111,12 @@ describe('task.assignToCycle', () => {
         teamId,
         title: 'T',
         state: 'todo',
-        cycleId: manual[0]!.id,
+        cycleId: assertDefined(manual[0]).id,
         createdBy: humanActorId,
       })
       .returning({ id: schema.task.id });
 
-    await assignToCycle(orgId, row!.id);
-    expect(await cycleOf(row!.id)).toBe(manual[0]!.id);
+    await assignToCycle(orgId, assertDefined(row).id);
+    expect(await cycleOf(assertDefined(row).id)).toBe(assertDefined(manual[0]).id);
   });
 });

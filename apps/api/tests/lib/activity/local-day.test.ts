@@ -7,6 +7,7 @@ import {
   nextLocalDayStart,
   zonedParts,
 } from '../../../src/lib/activity/local-day';
+import { assertDefined } from '@docket/test-utils';
 
 /** Whether `instant` really is midnight on `localDate` in `tz`, read back through the zone. */
 function isLocalMidnightOn(instant: Date, localDate: string, tz: string): boolean {
@@ -50,7 +51,7 @@ describe('localDayStartOf', () => {
     for (const { tz, date } of cases) {
       const start = localDayStartOf(date, tz);
       expect(start, `${tz} ${date}`).not.toBeNull();
-      expect(isLocalMidnightOn(start!, date, tz), `${tz} ${date}`).toBe(true);
+      expect(isLocalMidnightOn(assertDefined(start), date, tz), `${tz} ${date}`).toBe(true);
     }
   });
 
@@ -113,7 +114,7 @@ describe('nextLocalDayStart', () => {
       const start = localDayStartOf(date, tz);
       const end = nextLocalDayStart(date, tz);
       expect(end, `${tz} ${date}`).not.toBeNull();
-      const spanHours = (end!.getTime() - start!.getTime()) / 3_600_000;
+      const spanHours = (assertDefined(end).getTime() - assertDefined(start).getTime()) / 3_600_000;
       expect(spanHours, `${tz} ${date}`).toBe(hours);
     }
   });

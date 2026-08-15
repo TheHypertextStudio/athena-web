@@ -14,6 +14,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -49,7 +50,7 @@ async function makeCycle(
       createdBy: actorId,
     })
     .returning({ id: schema.cycle.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** Insert a task row directly, with control over cycle/state/archived. */
@@ -71,7 +72,7 @@ async function makeTask(
       ...(opts.archivedAt ? { archivedAt: opts.archivedAt } : {}),
     })
     .returning({ id: schema.task.id });
-  return row!.id;
+  return assertDefined(row).id;
 }
 
 /** The stored `cycleId` for a task. */
@@ -80,7 +81,7 @@ async function cycleOf(taskId: string): Promise<string | null> {
     .select({ cycleId: schema.task.cycleId })
     .from(schema.task)
     .where(eq(schema.task.id, taskId));
-  return row!.cycleId;
+  return assertDefined(row).cycleId;
 }
 
 describe('cycle backfill (POST /:id/backfill)', () => {
@@ -132,7 +133,9 @@ describe('cycle backfill (POST /:id/backfill)', () => {
       .values({ organizationId: orgId, name: 'Elsewhere', key: 'ELS' })
       .returning();
     const cycleId = await makeCycle(orgId, teamId, humanActorId);
-    const foreignTask = await makeTask(orgId, otherTeam!.id, humanActorId, { state: 'todo' });
+    const foreignTask = await makeTask(orgId, assertDefined(otherTeam).id, humanActorId, {
+      state: 'todo',
+    });
 
     const writer = appWithActor(cycles, orgId, ['contribute'], humanActorId);
     const res = await writer.request(`/${cycleId}/backfill`, { method: 'POST' });

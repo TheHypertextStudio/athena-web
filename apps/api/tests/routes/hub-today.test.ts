@@ -6,6 +6,7 @@ import type * as DbModule from '@docket/db';
 import type * as HubTodayModule from '../../src/routes/hub-today';
 
 import { getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
+import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -48,7 +49,7 @@ async function seedPerson(): Promise<{ orgId: string; teamId: string; userId: st
   // Desk time every day, all day: capacity is a precondition for a suggestion, not the thing under
   // test, so it is made generous rather than realistic.
   await db.insert(schema.schedulingPreference).values({
-    hubId: hubRow!.id,
+    hubId: assertDefined(hubRow).id,
     timezone: 'UTC',
     windows: Array.from({ length: 7 }, (_, weekday) => ({
       weekday,
@@ -226,8 +227,20 @@ describe('buildHubTodayPayload', () => {
     const first = await seedTask(orgId, teamId, userId, { title: 'Chosen first' });
     const second = await seedTask(orgId, teamId, userId, { title: 'Chosen second' });
     await db.insert(schema.dailyPlanItem).values([
-      { hubId: hubRow!.id, refOrganizationId: orgId, refTaskId: first, date: DATE, sort: 0 },
-      { hubId: hubRow!.id, refOrganizationId: orgId, refTaskId: second, date: DATE, sort: 1 },
+      {
+        hubId: assertDefined(hubRow).id,
+        refOrganizationId: orgId,
+        refTaskId: first,
+        date: DATE,
+        sort: 0,
+      },
+      {
+        hubId: assertDefined(hubRow).id,
+        refOrganizationId: orgId,
+        refTaskId: second,
+        date: DATE,
+        sort: 1,
+      },
     ]);
 
     const payload = await buildHubTodayPayload(userId, DATE);
@@ -252,8 +265,20 @@ describe('buildHubTodayPayload', () => {
       dueDate: new Date(`${DATE}T15:00:00.000Z`),
     });
     await db.insert(schema.dailyPlanItem).values([
-      { hubId: hubRow!.id, refOrganizationId: orgId, refTaskId: first, date: DATE, sort: 0 },
-      { hubId: hubRow!.id, refOrganizationId: orgId, refTaskId: due, date: DATE, sort: 1 },
+      {
+        hubId: assertDefined(hubRow).id,
+        refOrganizationId: orgId,
+        refTaskId: first,
+        date: DATE,
+        sort: 0,
+      },
+      {
+        hubId: assertDefined(hubRow).id,
+        refOrganizationId: orgId,
+        refTaskId: due,
+        date: DATE,
+        sort: 1,
+      },
     ]);
 
     const payload = await buildHubTodayPayload(userId, DATE);

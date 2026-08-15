@@ -17,6 +17,7 @@ import {
   type PolicyFinding,
 } from '../../scripts/ci-gate-policy';
 import { assertDefined } from '@docket/test-utils';
+import { VAR_REGISTRY } from '../../packages/env/src/registry';
 
 /**
  * Builds a synthetic workflow around a `deploy-production` job so a rule can be
@@ -514,5 +515,33 @@ describe('the real workflows', () => {
     );
 
     expect(commands).toContain('pnpm ci:gate-policy');
+  });
+});
+
+describe('production carries every environment variable the API requires', () => {
+  it('names each required, non-sensitive API var in the Cloud Run env file', () => {
+    // The API validates its whole env contract at boot, so a required var missing from the deploy
+    // is not a disabled feature — the container exits before it listens on $PORT and Cloud Run
+    // fails the health check with nothing that names the variable. That is exactly how
+    // WORK_LOCATION_PROJECTION_ENABLED took production down: it was added to the registry as
+    // required and to `.env.example`, but never to deploy.yml.
+    //
+    // Only non-sensitive vars are checked here. Secrets are mounted from Secret Manager through
+    // the `API_SECRET_BINDINGS` repository variable, which lives outside the repo and so cannot be
+    // read from a test; `scripts/production-secrets.ts` validates that mapping at deploy time.
+    // `PORT` is injected by Cloud Run itself.
+    const deploy = readFileSync(join(REPO_ROOT, '.github/workflows/deploy.yml'), 'utf8');
+    const providedByPlatform = new Set(['PORT']);
+
+    const missing = VAR_REGISTRY.filter(
+      (entry) =>
+        entry.required &&
+        entry.targets.includes('api') &&
+        entry.sensitive !== true &&
+        !providedByPlatform.has(entry.name) &&
+        !deploy.includes(entry.name),
+    ).map((entry) => entry.name);
+
+    expect(missing, `deploy.yml is missing required API vars: ${missing.join(', ')}`).toEqual([]);
   });
 });

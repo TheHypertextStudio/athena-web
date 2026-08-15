@@ -10,11 +10,15 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { assertDefined } from '@docket/test-utils';
+
+import type * as ResolveTitleModule from '../../../src/components/tabs/resolve-title';
+
 const push = vi.fn();
 let pathname = '/orgs/01JAAAAAAAAAAAAAAAAAAAAAAA/projects/01JBBBBBBBBBBBBBBBBBBBBBBB';
 
 vi.mock('../../../src/components/tabs/resolve-title', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../src/components/tabs/resolve-title')>();
+  const actual = await importOriginal<typeof ResolveTitleModule>();
   return { ...actual, resolveTabTitle: vi.fn().mockResolvedValue(null) };
 });
 vi.mock('../../../src/lib/app-location', () => ({
@@ -92,20 +96,24 @@ beforeEach(() => {
 describe('open-document tab shortcuts', () => {
   it('cycles to the adjacent tab with the Linear-style forward shortcut', async () => {
     const { result } = harness();
-    await waitFor(() => expect(result.current.tabs).toHaveLength(3));
+    await waitFor(() => {
+      expect(result.current.tabs).toHaveLength(3);
+    });
 
-    let event: KeyboardEvent;
+    let event: KeyboardEvent | undefined;
     act(() => {
       event = keydown({ key: 'ArrowRight', metaKey: true, altKey: true });
     });
 
     expect(push).toHaveBeenCalledWith(href('task', TASK));
-    expect(event!.defaultPrevented).toBe(true);
+    expect(assertDefined(event).defaultPrevented).toBe(true);
   });
 
   it('wraps backward from the first tab to the last tab', async () => {
     const { result } = harness();
-    await waitFor(() => expect(result.current.tabs).toHaveLength(3));
+    await waitFor(() => {
+      expect(result.current.tabs).toHaveLength(3);
+    });
 
     act(() => {
       keydown({ key: 'ArrowLeft', metaKey: true, altKey: true });
@@ -117,7 +125,9 @@ describe('open-document tab shortcuts', () => {
   it('opens the first or last tab from a non-document page', async () => {
     pathname = '/today';
     const { result } = harness();
-    await waitFor(() => expect(result.current.tabs).toHaveLength(3));
+    await waitFor(() => {
+      expect(result.current.tabs).toHaveLength(3);
+    });
 
     act(() => {
       keydown({ key: 'ArrowRight', metaKey: true, altKey: true });
@@ -133,22 +143,26 @@ describe('open-document tab shortcuts', () => {
   it('closes the active document with the platform close shortcut', async () => {
     pathname = href('task', TASK);
     const { result } = harness();
-    await waitFor(() => expect(result.current.activeKey).toBe(`task:${ORG}:${TASK}`));
+    await waitFor(() => {
+      expect(result.current.activeKey).toBe(`task:${ORG}:${TASK}`);
+    });
 
-    let event: KeyboardEvent;
+    let event: KeyboardEvent | undefined;
     act(() => {
       event = keydown({ key: 'w', metaKey: true });
     });
 
     expect(result.current.tabs.map((tab) => tab.id)).toEqual([PROJECT, INITIATIVE]);
     expect(push).toHaveBeenCalledWith(href('initiative', INITIATIVE));
-    expect(event!.defaultPrevented).toBe(true);
+    expect(assertDefined(event).defaultPrevented).toBe(true);
   });
 
   it('accepts Control+W as the non-Apple close shortcut', async () => {
     pathname = href('task', TASK);
     const { result } = harness();
-    await waitFor(() => expect(result.current.activeKey).toBe(`task:${ORG}:${TASK}`));
+    await waitFor(() => {
+      expect(result.current.activeKey).toBe(`task:${ORG}:${TASK}`);
+    });
 
     act(() => {
       keydown({ key: 'w', ctrlKey: true });
@@ -161,7 +175,9 @@ describe('open-document tab shortcuts', () => {
   it('does not close a document when Control+W has an extra modifier', async () => {
     pathname = href('task', TASK);
     const { result } = harness();
-    await waitFor(() => expect(result.current.activeKey).toBe(`task:${ORG}:${TASK}`));
+    await waitFor(() => {
+      expect(result.current.activeKey).toBe(`task:${ORG}:${TASK}`);
+    });
 
     const event = keydown({ key: 'w', ctrlKey: true, altKey: true });
 
@@ -172,10 +188,17 @@ describe('open-document tab shortcuts', () => {
 
   it('leaves repeated, composing, and already-handled tab shortcuts alone', async () => {
     const { result } = harness();
-    await waitFor(() => expect(result.current.tabs).toHaveLength(3));
+    await waitFor(() => {
+      expect(result.current.tabs).toHaveLength(3);
+    });
 
     const repeated = keydown({ key: 'ArrowRight', metaKey: true, altKey: true, repeat: true });
-    const composing = keydown({ key: 'ArrowRight', metaKey: true, altKey: true, isComposing: true });
+    const composing = keydown({
+      key: 'ArrowRight',
+      metaKey: true,
+      altKey: true,
+      isComposing: true,
+    });
     const handled = new KeyboardEvent('keydown', {
       bubbles: true,
       cancelable: true,

@@ -78,7 +78,7 @@ Pass a name to any tool that takes an ID.
 Docket matches exact, then prefix, then substring, and takes only an unambiguous hit. Send "Sam"
 with two Sams in the workspace and the call comes back listing both.
 
-## How your client gets a token
+## Getting a token
 
 The client registers through DCR or a URL-form client ID, sends you to the consent screen, and
 exchanges the code with PKCE for a token bound to the `/mcp` resource URL. **A token can never do
@@ -97,7 +97,7 @@ more than you can.** Full detail in [Authentication](/developers/authentication)
   Delivery is best-effort and never replayed. Treat one as a prompt to re-read.
 </Note>
 
-## Letting Athena use another MCP server
+## Athena as an MCP client
 
 Athena can also act as an MCP **client** for a workspace.
 
@@ -125,7 +125,7 @@ issuer from the API URL, the resource from `${API_URL}/mcp`, and the login page 
 discovery documents are public under an open credential-free CORS policy, per RFC 7591, 6749, 7662,
 7009, 8414, and 9728.
 
-## The tool, resource, and prompt reference
+## Reference
 
 <Card title="Tools, resources, and prompts" icon="wrench" href="/developers/mcp-tools-and-resources">
   All 25 tools, the `docket://` resource scheme, and the bootstrap prompts.

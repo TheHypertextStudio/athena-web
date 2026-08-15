@@ -9,10 +9,11 @@
  * cannot fix that, because there is nothing to be first about.
  *
  * The governing rule is **precache anything that will not take a surprising amount of space on the
- * device**, so this is a measured budget rather than a curated list of routes. Measured against the
- * real build, the whole of `.next/static` is about 8 MB on disk and 2 MB over the wire — the entire
- * application's code, styles and fonts. At that size there is nothing to choose between: everything
- * ships, and the budget exists to catch the release where that stops being true.
+ * device**, so this is a measured budget rather than a curated list of routes. The one deliberate
+ * runtime-only exception is MapLibre: its binaries support an optional map whose tiles already
+ * require a network connection, so paying for them on every offline install creates no usable
+ * offline capability. The budget exists to catch any other release where the application stops
+ * fitting as a whole.
  *
  * When the budget is exceeded the build **fails**, printing the largest assets. It does not silently
  * drop them: a precache that quietly shrinks is a feature that quietly stops working, and the person
@@ -42,15 +43,21 @@ export interface PrecacheAsset {
   readonly bytes: number;
 }
 
+/** Return whether an emitted asset only supports the network-dependent optional map picker. */
+function isRuntimeOnlyAsset(relativePath: string): boolean {
+  return relativePath.startsWith('media/maplibre-gl') && relativePath.endsWith('.mjs');
+}
+
 /**
- * Every emitted static asset, as URLs the worker can fetch.
+ * Every offline-useful emitted static asset, as URLs the worker can fetch.
  *
  * @remarks
  * The whole of `.next/static` rather than a manifest walk from the route table's module. Both would
  * work, but the directory is the thing that is actually true: it is what the server will serve, it
  * needs no knowledge of which bundler emitted what, and it cannot fall out of step with a manifest
  * format that changes between Next releases. It also sweeps in the fonts and stylesheets, without
- * which a route that "renders" offline renders unstyled in a fallback face.
+ * which a route that "renders" offline renders unstyled in a fallback face. MapLibre's runtime
+ * modules are excluded explicitly because their network-backed map is unusable offline.
  *
  * @param staticDir - Absolute path of `.next/static`.
  * @returns The assets, sorted by URL so the generated worker is byte-stable across builds.
@@ -68,8 +75,12 @@ export function collectPrecacheAssets(staticDir: string): readonly PrecacheAsset
       if (!entry.isFile()) {
         continue;
       }
+      const relativePath = relative(staticDir, path).split('\\').join('/');
+      if (isRuntimeOnlyAsset(relativePath)) {
+        continue;
+      }
       assets.push({
-        url: `/_next/static/${relative(staticDir, path).split('\\').join('/')}`,
+        url: `/_next/static/${relativePath}`,
         bytes: statSync(path).size,
       });
     }

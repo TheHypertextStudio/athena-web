@@ -57,6 +57,20 @@ describe('collectPrecacheAssets', () => {
     expect(collectPrecacheAssets(root)).toHaveLength(3);
   });
 
+  it('leaves optional MapLibre runtime modules out of the offline install', () => {
+    const root = fakeStatic({
+      'chunks/settings.js': 1,
+      'media/maplibre-gl.a1b2c3.mjs': 20,
+      'media/maplibre-gl-shared-dev.d4e5f6.mjs': 30,
+      'media/plex.woff2': 1,
+    });
+
+    expect(collectPrecacheAssets(root)).toEqual([
+      { url: '/_next/static/chunks/settings.js', bytes: 1 },
+      { url: '/_next/static/media/plex.woff2', bytes: 1 },
+    ]);
+  });
+
   it('is byte-stable across builds, so an unchanged manifest produces an unchanged worker', () => {
     const files = { 'chunks/b.js': 1, 'chunks/a.js': 1, 'media/c.woff2': 1 };
 

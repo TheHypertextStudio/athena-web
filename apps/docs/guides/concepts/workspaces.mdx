@@ -22,7 +22,7 @@ description: "The two levels Docket is built on: the personal Hub that spans eve
 ## Your Hub
 
 You own one Hub personally. No organization owns it. It pulls from every workspace you belong to
-and owns four surfaces:
+and holds four screens:
 
 - [**Home**](/guides/daily/home-today): today's plan, your calendar, and what needs attention.
 - [**Inbox**](/guides/daily/inbox): everything awaiting a response, from every workspace.
@@ -31,18 +31,17 @@ and owns four surfaces:
 - [**Search**](/guides/daily/search-and-views): one palette that searches, navigates, acts, and
   switches workspaces.
 
-Every item on a Hub surface carries a chip naming the workspace it came from.
+Every item on those screens carries a chip naming the workspace it came from.
 
 ## A workspace
 
-A workspace isolates one venture from another. It scopes its members, its connected tools, its
-agents, its [terminology](/guides/concepts/terminology), and all of its work to itself and hides
-them from outside. Open one and the whole app switches to it.
+A workspace keeps one venture separate from another. Its members, connected tools, agents,
+[terminology](/guides/concepts/terminology), and work all stay inside it, invisible from anywhere
+else. Open one and the whole app switches to it.
 
 <Note>
-  Docket never merges data across workspaces; Hub surfaces only read from them. The same workspace
-  appears in every member's own Hub, because a workspace is a shared tenant that no single Hub
-  owns.
+  Docket never merges data across workspaces. Your Hub only reads from them. The same workspace
+  appears in every member's own Hub, because the workspace is shared and no single Hub owns it.
 </Note>
 
 ## Your personal space
@@ -65,10 +64,10 @@ A capability plus a grant decides access inside a workspace.
 | `assign` | Route and assign work to others. |
 | `manage` | Full control, including settings, membership, and deletion. |
 
-**Grants** bind a subject to a place in the work tree. The subject is one Actor or an entire role.
-The target is any node from the workspace down to a single task: organization, team, initiative,
-program, project, cycle, or task. A grant cascades down containment, so `contribute` on a Program
-reaches the Projects and Tasks inside it.
+**Grants** give one person, or everyone holding a role, a capability somewhere. Grant it on the
+whole workspace, a team, an Initiative, a Program, a Project, a Cycle, or one task. A grant reaches
+everything inside what you granted it on. Give someone `contribute` on a Program and they get it on
+every Project and Task in that Program.
 
 Mark an item **public** to workspace members, or **private**, where only holders of an explicit
 grant see it at all.

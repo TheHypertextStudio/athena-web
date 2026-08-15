@@ -51,7 +51,17 @@ export type WorkPlaceProviderMapping = z.infer<typeof WorkPlaceProviderMapping>;
 
 const WorkPlaceFields = {
   name: z.string().trim().min(1).max(120).describe('User-defined saved-place name.'),
-  geofence: WorkPlaceGeofence.nullable().describe('Optional user-authorized geofence.'),
+  address: z
+    .string()
+    .trim()
+    .min(1)
+    .max(240)
+    .nullable()
+    .default(null)
+    .describe('Optional private owner-facing address; never provider-projected.'),
+  geofence: WorkPlaceGeofence.nullable()
+    .default(null)
+    .describe('Optional user-authorized geofence.'),
   providerMappings: z
     .array(WorkPlaceProviderMapping)
     .default([])
@@ -59,13 +69,13 @@ const WorkPlaceFields = {
   sort: z.number().int().nonnegative().default(0).describe('Stable personal display order.'),
 };
 
-/** Input for creating one arbitrary named regular place. */
+/** Input for creating one arbitrary named place; a name alone is sufficient. */
 export const WorkPlaceCreate = z
   .object(WorkPlaceFields)
   .strict()
   .meta({ id: 'WorkPlaceCreate', description: 'Input for creating a saved work place.' });
 /** Saved-place creation value. */
-export type WorkPlaceCreate = z.infer<typeof WorkPlaceCreate>;
+export type WorkPlaceCreate = z.input<typeof WorkPlaceCreate>;
 
 /** Input for changing a saved place. */
 export const WorkPlaceUpdate = z

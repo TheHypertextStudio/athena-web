@@ -24,6 +24,7 @@ import {
   WorkLocationProfileOut,
   WorkLocationProjectionOut,
   WorkLocationSyncOut,
+  WorkPlaceCreate,
   WorkPlaceListOut,
   WorkPlaceOut,
   type WorkLocationAssertionCreate,
@@ -31,7 +32,6 @@ import {
   type WorkLocationObservationCreate,
   type WorkLocationProfileUpdate,
   type WorkLocationSchedule,
-  type WorkPlaceCreate,
   type WorkPlaceUpdate,
 } from '@docket/types';
 import { and, asc, desc, eq, inArray, isNull, lte, ne } from 'drizzle-orm';
@@ -105,7 +105,7 @@ async function requireAssertion(database: Database, hubId: string, assertionId: 
 async function requireOwnedMappings(
   database: Database,
   hubId: string,
-  mappings: WorkPlaceCreate['providerMappings'],
+  mappings: NonNullable<WorkPlaceCreate['providerMappings']>,
 ): Promise<void> {
   if (mappings.length === 0) return;
   const { userId } = await ownedHub(database, hubId);
@@ -155,6 +155,7 @@ function placeOut(
   return WorkPlaceOut.parse({
     id: row.id,
     name: row.name,
+    address: row.address,
     geofence: hasGeofence
       ? {
           latitude: row.geofenceLatitude,
@@ -202,26 +203,29 @@ export async function createWorkPlace(
   hubId: string,
   input: WorkPlaceCreate,
 ): Promise<WorkPlaceOut> {
-  await requireOwnedMappings(database, hubId, input.providerMappings);
+  const parsed = WorkPlaceCreate.parse(input);
+  const providerMappings = parsed.providerMappings;
+  await requireOwnedMappings(database, hubId, providerMappings);
   const row = await database.transaction(async (tx) => {
     const created = persisted(
       await tx
         .insert(workPlace)
         .values({
           hubId,
-          name: input.name,
-          geofenceLatitude: input.geofence?.latitude ?? null,
-          geofenceLongitude: input.geofence?.longitude ?? null,
-          geofenceRadiusMeters: input.geofence?.radiusMeters ?? null,
-          sort: input.sort,
+          name: parsed.name,
+          address: parsed.address,
+          geofenceLatitude: parsed.geofence?.latitude ?? null,
+          geofenceLongitude: parsed.geofence?.longitude ?? null,
+          geofenceRadiusMeters: parsed.geofence?.radiusMeters ?? null,
+          sort: parsed.sort,
         })
         .returning()
         .then((rows) => rows[0]),
       'create place',
     );
-    if (input.providerMappings.length > 0) {
+    if (providerMappings.length > 0) {
       await tx.insert(workPlaceProviderMapping).values(
-        input.providerMappings.map((mapping) => ({
+        providerMappings.map((mapping) => ({
           hubId,
           placeId: created.id,
           connectionId: mapping.connectionId,
@@ -234,7 +238,7 @@ export async function createWorkPlace(
     }
     return created;
   });
-  return placeOut(row, input.providerMappings);
+  return placeOut(row, providerMappings);
 }
 
 /** Replace only the supplied saved-place fields and account mappings. */
@@ -251,6 +255,7 @@ export async function updateWorkPlace(
       .update(workPlace)
       .set({
         ...(input.name === undefined ? {} : { name: input.name }),
+        ...(input.address === undefined ? {} : { address: input.address }),
         ...(input.sort === undefined ? {} : { sort: input.sort }),
         ...(input.geofence === undefined
           ? {}

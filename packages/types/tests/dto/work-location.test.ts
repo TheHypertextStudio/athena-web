@@ -22,21 +22,31 @@ describe('WorkPlace', () => {
   it('models arbitrary regular places without a fixed home or office kind', () => {
     const place = WorkPlaceCreate.parse({
       name: 'Tuesday client site',
+      address: '401 S 4th Street',
       geofence: null,
       providerMappings: [],
     });
 
     expect(place.name).toBe('Tuesday client site');
+    expect(place.address).toBe('401 S 4th Street');
     expect(WorkPlaceCreate.shape).not.toHaveProperty('kind');
     expect(
       WorkPlaceCreate.safeParse({ name: 'Library', kind: 'custom', geofence: null }).success,
     ).toBe(false);
   });
 
+  it('keeps an address optional and rejects oversized address text', () => {
+    expect(WorkPlaceCreate.parse({ name: 'Train' }).address).toBeNull();
+    expect(WorkPlaceCreate.safeParse({ name: 'Library', address: 'x'.repeat(241) }).success).toBe(
+      false,
+    );
+  });
+
   it('keeps provider classifications in account-aware mappings', () => {
     const parsed = WorkPlaceOut.parse({
       id: PLACE_ID,
       name: 'Downtown office',
+      address: '100 Main Street',
       geofence: { latitude: 36.1699, longitude: -115.1398, radiusMeters: 250 },
       providerMappings: [
         {
@@ -54,6 +64,7 @@ describe('WorkPlace', () => {
     });
 
     expect(parsed.providerMappings[0]?.classification).toBe('officeLocation');
+    expect(parsed.address).toBe('100 Main Street');
     expect(parsed.geofence?.radiusMeters).toBe(250);
     expect(WorkPlaceOut.shape).not.toHaveProperty('hubId');
   });

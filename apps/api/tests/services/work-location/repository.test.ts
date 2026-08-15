@@ -91,6 +91,7 @@ describe('work-location repository', () => {
   it('stores arbitrary places, account mappings, and one independent home designation', async () => {
     const place = await createWorkPlace(database, hubId, {
       name: 'North branch library',
+      address: '10 Library Lane',
       geofence: { latitude: 36.17, longitude: -115.14, radiusMeters: 180 },
       providerMappings: [
         {
@@ -106,6 +107,7 @@ describe('work-location repository', () => {
     const profile = await updateWorkLocationProfile(database, hubId, { homePlaceId: place.id });
 
     expect(profile.homePlaceId).toBe(place.id);
+    expect(place.address).toBe('10 Library Lane');
     expect((await listWorkPlaces(database, hubId)).items).toContainEqual(place);
     await expect(
       updateWorkLocationProfile(database, otherHubId, { homePlaceId: place.id }),

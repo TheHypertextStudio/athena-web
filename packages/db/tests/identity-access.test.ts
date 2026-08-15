@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { fullSchema, type Database } from '../src/client';
 import { actor, grant, organization, program, project, role, task, team } from '../src/schema';
+import { seedWorkspaceStatuses, statusLookupKey, type SeededStatuses } from '../src/seed-statuses';
 
 let client!: PGlite;
 let db!: Database;
@@ -30,9 +31,24 @@ let teamId!: string;
 let programId!: string;
 let projectId!: string;
 let taskId!: string;
+let statuses!: SeededStatuses;
+
+/** Resolve one default status seeded for the adapter workspace. */
+function statusId(entityType: 'task' | 'project' | 'program', key: string): string {
+  const id = statuses.get(statusLookupKey(entityType, key));
+  if (id === undefined) throw new Error(`no seeded ${entityType} status ${key}`);
+  return id;
+}
 
 function target(kind: ResourceKind, id: string, orgIdForTarget: string = orgId): ResourceRef {
   return { kind, id, orgId: orgIdForTarget };
+}
+
+/** Return the id from a required single-row insert result. */
+function insertedId(rows: readonly { readonly id: string }[]): string {
+  const row = rows[0];
+  if (row === undefined) throw new Error('fixture insert returned no row');
+  return row.id;
 }
 
 beforeAll(async () => {
@@ -41,26 +57,28 @@ beforeAll(async () => {
   await migrate(migrated, { migrationsFolder: resolve(import.meta.dirname, '../drizzle') });
   db = migrated;
 
-  orgId = (
+  orgId = insertedId(
     await db
       .insert(organization)
       .values({ name: 'Adapter organization', slug: `identity-access-${Date.now()}` })
-      .returning({ id: organization.id })
-  )[0]!.id;
-  foreignOrgId = (
+      .returning({ id: organization.id }),
+  );
+  foreignOrgId = insertedId(
     await db
       .insert(organization)
       .values({ name: 'Foreign organization', slug: `foreign-identity-access-${Date.now()}` })
-      .returning({ id: organization.id })
-  )[0]!.id;
+      .returning({ id: organization.id }),
+  );
+  statuses = await seedWorkspaceStatuses(db, orgId);
+  await seedWorkspaceStatuses(db, foreignOrgId);
 
-  roleId = (
+  roleId = insertedId(
     await db
       .insert(role)
       .values({ organizationId: orgId, key: 'operator', name: 'Operator', capabilities: [] })
-      .returning({ id: role.id })
-  )[0]!.id;
-  foreignRoleId = (
+      .returning({ id: role.id }),
+  );
+  foreignRoleId = insertedId(
     await db
       .insert(role)
       .values({
@@ -69,10 +87,10 @@ beforeAll(async () => {
         name: 'Foreign operator',
         capabilities: [],
       })
-      .returning({ id: role.id })
-  )[0]!.id;
+      .returning({ id: role.id }),
+  );
 
-  activeAgentId = (
+  activeAgentId = insertedId(
     await db
       .insert(actor)
       .values({
@@ -81,9 +99,9 @@ beforeAll(async () => {
         displayName: 'Active agent',
         roleId,
       })
-      .returning({ id: actor.id })
-  )[0]!.id;
-  suspendedActorId = (
+      .returning({ id: actor.id }),
+  );
+  suspendedActorId = insertedId(
     await db
       .insert(actor)
       .values({
@@ -93,9 +111,9 @@ beforeAll(async () => {
         roleId,
         status: 'suspended',
       })
-      .returning({ id: actor.id })
-  )[0]!.id;
-  archivedActorId = (
+      .returning({ id: actor.id }),
+  );
+  archivedActorId = insertedId(
     await db
       .insert(actor)
       .values({
@@ -105,9 +123,9 @@ beforeAll(async () => {
         roleId,
         archivedAt: new Date('2026-08-14T00:00:00.000Z'),
       })
-      .returning({ id: actor.id })
-  )[0]!.id;
-  foreignRoleActorId = (
+      .returning({ id: actor.id }),
+  );
+  foreignRoleActorId = insertedId(
     await db
       .insert(actor)
       .values({
@@ -116,28 +134,38 @@ beforeAll(async () => {
         displayName: 'Foreign-role actor',
         roleId: foreignRoleId,
       })
-      .returning({ id: actor.id })
-  )[0]!.id;
+      .returning({ id: actor.id }),
+  );
 
-  teamId = (
+  teamId = insertedId(
     await db
       .insert(team)
       .values({ organizationId: orgId, name: 'Adapter team', key: 'ADAPT' })
-      .returning({ id: team.id })
-  )[0]!.id;
-  programId = (
+      .returning({ id: team.id }),
+  );
+  programId = insertedId(
     await db
       .insert(program)
-      .values({ organizationId: orgId, name: 'Adapter program' })
-      .returning({ id: program.id })
-  )[0]!.id;
-  projectId = (
+      .values({
+        organizationId: orgId,
+        name: 'Adapter program',
+        statusId: statusId('program', 'active'),
+      })
+      .returning({ id: program.id }),
+  );
+  projectId = insertedId(
     await db
       .insert(project)
-      .values({ organizationId: orgId, name: 'Adapter project', teamId, programId })
-      .returning({ id: project.id })
-  )[0]!.id;
-  taskId = (
+      .values({
+        organizationId: orgId,
+        name: 'Adapter project',
+        teamId,
+        programId,
+        statusId: statusId('project', 'planned'),
+      })
+      .returning({ id: project.id }),
+  );
+  taskId = insertedId(
     await db
       .insert(task)
       .values({
@@ -147,9 +175,10 @@ beforeAll(async () => {
         projectId,
         programId,
         state: 'todo',
+        statusId: statusId('task', 'todo'),
       })
-      .returning({ id: task.id })
-  )[0]!.id;
+      .returning({ id: task.id }),
+  );
 
   await db.insert(grant).values([
     {

@@ -78,9 +78,32 @@ export const MIRROR_FAILED_TITLE = 'The last update to Notion didn’t finish.';
 export const MIRROR_FAILED_DETAIL =
   'What’s in Notion is older than what’s in Docket. Try running it again.';
 
-/** The follow-up line on the hub's broken-connection alert, naming this surface's recovery path. */
+/**
+ * The follow-up line on the hub's broken-connection alert.
+ *
+ * @remarks
+ * Names what reconnecting costs and keeps, rather than where to go and do it. The copy this
+ * replaces sent the reader to Connections because the repair genuinely lived there — the hub could
+ * describe the recovery but not offer it. {@link RECONNECT_ACTION} now sits beside this line, so
+ * directions to another page would be directions past the button.
+ */
 export const CONNECTION_ERROR_DETAIL =
-  'Reconnect Notion from Connections to resume syncing. Your designed databases are kept.';
+  'Your designed databases are kept — reconnecting picks up where this left off rather than rebuilding them.';
+
+/** The hub's own repair action: reopen Notion's consent screen in place. */
+export const RECONNECT_ACTION = 'Reconnect Notion';
+
+/**
+ * Shown in place of the setup card while the connection is broken.
+ *
+ * @remarks
+ * Setup is not merely likely to fail here, it fails *destructively*: provisioning creates the
+ * databases and then projects rows through the same credential, so a run started against a rejected
+ * one leaves real, empty tables in somebody's Notion workspace and records another failure against
+ * a connection whose owner is already looking at the last one.
+ */
+export const SETUP_BLOCKED =
+  'Docket can’t build your databases until this connection is working again.';
 
 /** The collapsed group of people who were deliberately excluded. */
 export function ignoredTitle(count: number): string {

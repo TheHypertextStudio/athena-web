@@ -7,6 +7,36 @@
 
 ## Active Tasks
 
+### [NOTION-UX-001] A broken Notion connection stops offering setup and starts offering repair
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-15
+- **Priority**: P0
+- **Description**: The Notion hub rendered connection health as decoration above a body chosen
+  only by `provisionedCount`, so a rejected credential and a live provisioning wizard appeared
+  together, both fully enabled. Provisioning creates the databases and then projects rows through
+  the same token, so a run started in that state leaves real empty tables in the user's Notion
+  workspace and records a second failure against a connection whose owner is already reading the
+  alert for the first. The alert itself was a dead end: it named a Reconnect button that exists
+  only on the Connections list, one level up, because that is where the lifecycle actions live.
+- **Subtasks**:
+  - [x] Withhold the setup card while the connection is broken, replacing it with a stated reason.
+  - [x] Withhold the manual sync action for the same reason (a doomed run re-demotes the
+        connection and notifies its owner).
+  - [x] Give the broken-connection alert a real inline Reconnect, sharing one `linkSocial` call
+        site with the setup card's "Choose pages to share".
+  - [ ] Identify why row projection fails in production, and surface the recorded reason.
+  - [ ] Adopt the shared connector-detail frame across Notion and Google Calendar.
+- **Blockers**: Root cause of the empty tables is unresolved. `sync_run.error` holds the reason and
+  the API already returns it, but no surface renders it and the reporter's environment is
+  production, which this session cannot reach (expired `gcloud` auth; the app is passkey-only).
+- **Notes**: Ruled out during investigation — the in-memory mock (`APP_MODE=local` only, and the
+  report is from production), silent write-swallowing (`NotionMirrorClient.writeRow` throws), and
+  Notion's status-property restriction (`STATE_KIND` is `select`, so none are ever created).
+  Rendering `sync_run.error` directly is barred by the web error-source policy; the compliant path
+  is to persist `ProviderErrorKind` — an existing stable taxonomy — and key application-owned copy
+  to it.
+
 ### [WORK-LOCATION-002] Make work-location settings feel like a place list
 
 - **Status**: REVIEW

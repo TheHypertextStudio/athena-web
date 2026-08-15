@@ -44,6 +44,8 @@ import {
   OPEN_IN_NOTION,
   PROVISIONED_HINT,
   PROVISIONED_TITLE,
+  RECONNECT_ACTION,
+  SETUP_BLOCKED,
   SYNC_ACTION,
   SYNC_ACTION_BUSY,
   tableAction,
@@ -51,6 +53,7 @@ import {
   previewSummary,
   tableMeaning,
 } from './notion-copy';
+import { NotionConnectAction } from './notion-connect-action';
 import { NotionSetupCard } from './notion-setup-card';
 import {
   useNotionMirror,
@@ -172,7 +175,11 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
   // Gated on the container page, not on `provisionedCount`: a provision that recorded the page and
   // then failed before creating anything has zero databases, and gating on those would leave the
   // one connection most in need of a re-run with no way to ask for one.
-  const canSync = containerPage !== null;
+  //
+  // Gated on health too. Every pass runs on the leased sync spine, which records what it did — so a
+  // run against a rejected credential does not merely fail, it demotes the connection again and
+  // notifies its owner about a breakage they are already reading an alert about.
+  const canSync = containerPage !== null && !connectionBroken;
   const syncButton = canSync ? (
     <Button
       variant="outline"
@@ -225,7 +232,11 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
       </div>
 
       {connectionBroken ? (
-        <CardAlert message={CONNECTION_ERROR_MESSAGE} detail={CONNECTION_ERROR_DETAIL} />
+        <CardAlert
+          message={CONNECTION_ERROR_MESSAGE}
+          detail={CONNECTION_ERROR_DETAIL}
+          action={<NotionConnectAction label={RECONNECT_ACTION} variant="default" />}
+        />
       ) : null}
 
       {mirrorBroken ? (
@@ -264,7 +275,16 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
 
       {nothingProvisioned ? (
         <>
-          <NotionSetupCard orgId={orgId} integrationId={integrationId} />
+          {/* Setup is withheld while the credential is rejected, rather than offered and left to
+              fail. Provisioning creates the databases and *then* projects rows through the same
+              token, so a run started here does not bounce harmlessly off the API — it leaves real,
+              empty tables behind in somebody's Notion workspace, which is the state this page was
+              reported in. The alert above carries the only action that can move this forward. */}
+          {connectionBroken ? (
+            <p className="text-on-surface-variant text-body-small max-w-prose">{SETUP_BLOCKED}</p>
+          ) : (
+            <NotionSetupCard orgId={orgId} integrationId={integrationId} />
+          )}
           {/* A page was already chosen but nothing exists in Notion — a provision that recorded
               its config and then failed. Retrying the run is the repair, and without this the
               connection is stranded on a setup card that only offers to pick a page again. */}

@@ -24,10 +24,6 @@ import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useState } from 'react';
 
-import { authClient } from '@/lib/auth-client';
-
-import { socialProviderForConnector } from '../integrations-config';
-
 import {
   NO_PAGES_ACTION,
   NO_PAGES_HINT,
@@ -38,6 +34,7 @@ import {
   SETUP_RUNNING,
   SETUP_TITLE,
 } from './notion-copy';
+import { NotionConnectAction } from './notion-connect-action';
 import { NotionParentPagePicker } from './notion-parent-page-picker';
 import { useNotionParentPages, useNotionSetup } from './use-notion-mirror-controller';
 
@@ -74,17 +71,7 @@ export function NotionSetupCard({ orgId, integrationId }: NotionSetupCardProps):
           <p className="text-on-surface-variant text-body-small max-w-prose" role="note">
             {NO_PAGES_HINT}
           </p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              void authClient.linkSocial({
-                provider: socialProviderForConnector('notion'),
-                callbackURL: window.location.pathname,
-              });
-            }}
-          >
-            {NO_PAGES_ACTION}
-          </Button>
+          <NotionConnectAction label={NO_PAGES_ACTION} />
         </div>
       ) : (
         <div className="flex flex-wrap items-end gap-3">

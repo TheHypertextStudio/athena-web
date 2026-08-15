@@ -33,6 +33,16 @@ export interface CardAlertProps {
   message: string;
   /** A quieter follow-up line (e.g. the recommended recovery action). */
   detail: ReactNode;
+  /**
+   * The recovery control, when the surface can actually offer one.
+   *
+   * @remarks
+   * Optional because not every caller can. The Connections list owns the reconnect ceremony inline,
+   * so its alert describes a button the reader can see; a surface that cannot reach that ceremony
+   * has to describe the path instead. Passing the control lets an alert stop being a set of
+   * directions and start being the repair.
+   */
+  action?: ReactNode;
 }
 
 /**
@@ -42,11 +52,12 @@ export interface CardAlertProps {
  * Used for server-truth connection errors that survive reload (never ephemeral state). The copy
  * differs per surface, so callers pass it in; only the two-tone layout is shared here.
  */
-export function CardAlert({ message, detail }: CardAlertProps): JSX.Element {
+export function CardAlert({ message, detail, action }: CardAlertProps): JSX.Element {
   return (
     <div role="alert" className="bg-surface-container px-4 py-2 text-xs">
       <p className="text-error">{message}</p>
       <p className="text-on-surface-variant mt-1">{detail}</p>
+      {action ? <div className="mt-2 flex flex-wrap items-center gap-2">{action}</div> : null}
     </div>
   );
 }

@@ -19,16 +19,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryWrapper, okResponse } from '../../support/query';
 
 // Hoisted so the mock factory (lifted above imports) can reference them.
-const { integrationsGet, databasesGet, peopleGet, unmatchedGet, runsGet, syncPost } = vi.hoisted(
-  () => ({
+const { integrationsGet, databasesGet, peopleGet, unmatchedGet, runsGet, syncPost, linkSocial } =
+  vi.hoisted(() => ({
     integrationsGet: vi.fn(),
     databasesGet: vi.fn(),
     peopleGet: vi.fn(),
     unmatchedGet: vi.fn(),
     runsGet: vi.fn(),
     syncPost: vi.fn(),
-  }),
-);
+    linkSocial: vi.fn(),
+  }));
 
 vi.mock('../../../src/lib/api', () => ({
   api: {
@@ -56,9 +56,16 @@ vi.mock('../../../src/lib/api', () => ({
   },
 }));
 
+vi.mock('../../../src/lib/auth-client', () => ({ authClient: { linkSocial } }));
+
 import { NotionMirrorPanel } from '../../../src/components/settings/notion/notion-mirror-panel';
 // Imported rather than spelled out, so the wording stays a product decision the copy module owns.
-import { SYNC_ACTION } from '../../../src/components/settings/notion/notion-copy';
+import {
+  RECONNECT_ACTION,
+  SETUP_ACTION,
+  SETUP_TITLE,
+  SYNC_ACTION,
+} from '../../../src/components/settings/notion/notion-copy';
 
 const ORG_ID = 'org_1';
 
@@ -291,5 +298,53 @@ describe('NotionMirrorPanel — saying whether the sync actually works', () => {
 
     await screen.findByRole('link', { name: 'Configure' });
     expect(screen.queryByRole('button', { name: SYNC_ACTION })).not.toBeInTheDocument();
+  });
+
+  it('withholds the run action while the connection itself is broken', async () => {
+    // A pass against a rejected credential cannot succeed, and the sync spine records every
+    // failure — so pressing it would re-demote the connection and notify its owner about a
+    // breakage they are already looking at.
+    integrationsGet.mockResolvedValue(
+      okResponse({ items: [{ ...integration(withPage), status: 'error' }] }),
+    );
+    renderPanel();
+
+    await screen.findByRole('link', { name: 'Configure' });
+    expect(screen.queryByRole('button', { name: SYNC_ACTION })).not.toBeInTheDocument();
+  });
+});
+
+describe('NotionMirrorPanel — a broken connection with nothing provisioned', () => {
+  // The state in the reported screenshot: the credential is dead, nothing has been built yet, and
+  // the page offered to build it anyway.
+  beforeEach(() => {
+    integrationsGet.mockResolvedValue(
+      okResponse({ items: [{ ...integration(), status: 'error' }] }),
+    );
+    databasesGet.mockResolvedValue(okResponse({ items: [database()] }));
+  });
+
+  it('withholds the setup card rather than offering a build that cannot work', async () => {
+    // Provisioning creates the databases and then projects rows through the same credential, so
+    // starting one here fails partway and leaves empty tables behind.
+    renderPanel();
+
+    await screen.findByRole('alert');
+    expect(screen.queryByText(SETUP_TITLE)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: SETUP_ACTION })).not.toBeInTheDocument();
+  });
+
+  it('offers the repair on the page instead of directions to another one', async () => {
+    // The alert used to name a Reconnect button that only existed one level up, in Connections.
+    renderPanel();
+
+    expect(await screen.findByRole('button', { name: RECONNECT_ACTION })).toBeInTheDocument();
+  });
+
+  it('still shows what it would create, so the page is not a dead end', async () => {
+    renderPanel();
+
+    await screen.findByRole('alert');
+    expect(screen.getByText(/What Docket will create/)).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 ---
 title: "Errors"
-description: "RFC 9457 problem documents, the closed code taxonomy to branch on, and the two codes that need special handling."
+description: "Branch on the code, and handle the two that behave differently than they look."
 ---
 
 Every failure returns an RFC 9457 problem document:
@@ -31,76 +31,14 @@ Content-Type: application/problem+json
   The live catalog: each code, its status, and what to do. Any `type` URI resolves into it.
 </Card>
 
-## The taxonomy
+## Two that will catch you
 
-<AccordionGroup>
-  <Accordion title="Ordinary HTTP failures" defaultOpen>
-    | Code | Status | Means |
-    | --- | --- | --- |
-    | `validation_error` | 422 | Schema validation failed. See `fieldErrors`. |
-    | `unauthorized` | 401 | No session, or an invalid or expired one. |
-    | `forbidden` | 403 | Signed in, missing the capability, grant, or scope. |
-    | `not_found` | 404 | Gone, **or hidden from you.** |
-    | `conflict` | 409 | Conflicts with current state. |
-    | `internal` | 500 | Server error. Safe to retry. |
-  </Accordion>
+**`not_found` also means "you may not see this."** A 404 from `/v1/orgs/{orgId}/tasks` can mean the
+workspace exists and you are not a member. Never treat it as proof of absence.
 
-  <Accordion title="Protocol failures">
-    | Code | Status | Means |
-    | --- | --- | --- |
-    | `method_not_allowed` | 405 | Wrong verb for that path. |
-    | `not_acceptable` | 406 | Your `Accept` header excludes JSON. |
-    | `precondition_failed` | 412 | `If-Match` lost. Someone changed the resource. Re-read and retry. |
-    | `payload_too_large` | 413 | Body over the limit. |
-    | `unsupported_media_type` | 415 | Declare `application/json`. The response names what works. |
-  </Accordion>
-
-  <Accordion title="Two codes that need special handling">
-    **`not_found` also means "you may not see this."** A 404 from `/v1/orgs/{orgId}/tasks` can mean
-    the workspace exists and you are not a member. Never treat it as proof of absence.
-
-    **`reauth_required` returns 401 without signing anyone out.** The session is too old for a
-    high-risk action. Prompt for a passkey step-up and retry the same request. Clear the session
-    here and you log someone out for no reason.
-  </Accordion>
-
-  <Accordion title="Writes that the model refuses">
-    | Code | Status | Means |
-    | --- | --- | --- |
-    | `dependency_cycle` | 409 | The edge would loop the task graph. |
-    | `idempotency_key_reuse` | 422 | Same `Idempotency-Key`, different payload. |
-    | `task_already_linked` | 409 | The relationship already exists. |
-    | `deletion_blocked` | 409 | Transfer or delete sole-owner shared workspaces first. |
-  </Accordion>
-
-  <Accordion title="Membership and ownership guards">
-    | Code | Status | Means |
-    | --- | --- | --- |
-    | `last_owner_guard` | 409 | Would leave a workspace or resource ownerless. |
-    | `self_escalation` | 403 | An actor tried to raise its own privileges. |
-    | `current_session` | 409 | The target is this request's own session. |
-    | `personal_org_no_invites` | 409 | Personal workspaces cannot invite. |
-  </Accordion>
-
-  <Accordion title="Identity and connectors">
-    | Code | Status | Means |
-    | --- | --- | --- |
-    | `identity_in_use` | 409 | The identity still funds external connections. |
-    | `account_selection_required` | 409 | Several identities are eligible. The person picks. |
-    | `linear_workspace_already_connected` | 409 | That Linear workspace is already connected. |
-    | `linear_write_scope_required` | 409 | Reconnect Linear with the write scope. |
-  </Accordion>
-
-  <Accordion title="Billing and naming">
-    | Code | Status | Means |
-    | --- | --- | --- |
-    | `card_required` | 402 | Needs payment details or an active subscription. |
-    | `billing_frozen` | 402 | Billing blocks writes. **Reads still work.** |
-    | `agent_plan_required` | 402 | Needs a plan that includes agents. |
-    | `domain_already_claimed` | 409 | One host, one workspace. |
-    | `public_name_taken` | 409 | The name or brief path is taken. |
-  </Accordion>
-</AccordionGroup>
+**`reauth_required` returns 401 without signing anyone out.** The session is too old for a
+high-risk action. Prompt for a passkey step-up and retry the same request. Clear the session here
+and you log someone out for no reason.
 
 ## Errors over MCP
 

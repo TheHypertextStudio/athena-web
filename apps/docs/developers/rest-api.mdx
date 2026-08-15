@@ -29,63 +29,17 @@ Authorization: Bearer <token>
 **Only `GET /v1/config` works without one.** See [Authentication](/developers/authentication) to
 get one.
 
-## Conventions
+## What shapes your client
 
-<AccordionGroup>
-  <Accordion title="Identifiers are ULIDs" defaultOpen>
-    26 Crockford base-32 characters, matching `^[0-9A-HJKMNP-TV-Z]{26}$`.
+Four things decide how you build against `/v1`. The reference spells out the rest, including
+idempotency, conditional requests with `ETag`, content negotiation, and caching.
 
-    IDs are branded per entity type: a `TaskId` fails where a `ProjectId` belongs. Never parse
-    one.
-  </Accordion>
-  <Accordion title="Pagination is keyset, never offset">
-    Pass `cursor` and `limit`. Read `nextCursor`; it is `null` on the last page.
-
-    ```http
-    GET /v1/orgs/{orgId}/tasks?limit=50&cursor=<opaque>
-    ```
-  </Accordion>
-  <Accordion title="Errors are RFC 9457 problem documents">
-    `application/problem+json`, carrying a `code` such as `dependency_cycle`, an HTTP `status`, and
-    per-field `fieldErrors`.
-
-    **Branch on `code`.** See [Errors](/developers/errors).
-  </Accordion>
-  <Accordion title="Any POST accepts an Idempotency-Key">
-    ```http
-    Idempotency-Key: <your-unique-key>
-    ```
-
-    Docket dedupes per user for 24 hours. A replay returns the recorded response with
-    `Idempotency-Replayed: true`. Send the same key with a different body and you get
-    `422 idempotency_key_reuse`.
-  </Accordion>
-  <Accordion title="Use ETags to make writes conditional">
-    Every `GET` returns a strong `ETag`. Send it back as `If-None-Match` and an unchanged resource
-    answers `304`.
-
-    Send it as `If-Match` on a write and Docket rejects the write with `412` if someone changed the
-    resource since you read it. Re-read and retry. Omit the header and the write is
-    last-writer-wins.
-  </Accordion>
-  <Accordion title="Creates answer 201, queued work answers 202">
-    A create returns `201` with a `Location` naming the new resource. Work that Docket queues
-    rather than finishes returns `202` with the `Location` of a status monitor.
-  </Accordion>
-  <Accordion title="Declare a Content-Type Docket reads">
-    Send `application/json`, or a form encoding where a file belongs. Anything else answers `415`
-    with an `Accept` header naming what would work. An `Accept` header that excludes JSON answers
-    `406`.
-  </Accordion>
-  <Accordion title="Responses are private and revalidated">
-    Docket answers `private, no-cache` and varies on your credentials. Store a response, then
-    revalidate it against its `ETag` before reuse.
-  </Accordion>
-  <Accordion title="Request and response bodies share one schema">
-    Docket validates both against the schemas `/v1/docs` renders. A response that does not match
-    is a bug.
-  </Accordion>
-</AccordionGroup>
+- **IDs are ULIDs, branded per entity type.** A `TaskId` fails where a `ProjectId` belongs. Never
+  parse one.
+- **Pagination is keyset.** Pass `cursor` and `limit`, read `nextCursor`, stop when it is `null`.
+- **Failures are RFC 9457 problem documents.** Branch on `code`. See [Errors](/developers/errors).
+- **Requests and responses share one schema.** A response that does not match what `/v1/docs`
+  renders is a bug.
 
 ## Permissions
 

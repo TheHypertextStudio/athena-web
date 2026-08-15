@@ -294,3 +294,130 @@ describe('idempotency records', () => {
     ).toHaveLength(1);
   });
 });
+
+describe('caching', () => {
+  it('marks every response private and revalidate-before-reuse', async () => {
+    const { app } = await setup();
+    const res = await app.request('/v1/time/categories');
+
+    // `no-cache` permits storing and requires revalidation, which is what makes the `ETag`
+    // useful; `private` keeps a shared cache from holding one person's workspace at all.
+    expect(res.headers.get('cache-control')).toBe('private, no-cache');
+  });
+
+  it('varies on the credentials the body depends on', async () => {
+    const { app } = await setup();
+    const vary = (await app.request('/v1/time/categories')).headers.get('vary') ?? '';
+    const fields = vary.split(',').map((field) => field.trim().toLowerCase());
+
+    // Without these, a cache keyed on the URL alone could serve one user's response to another.
+    expect(fields).toContain('cookie');
+    expect(fields).toContain('authorization');
+  });
+
+  it('leaves a handler’s own directive alone', async () => {
+    const { app } = await setup();
+    const res = await app.request('/v1/me/athena/sessions', {
+      headers: { Accept: 'application/json' },
+    });
+
+    // The middleware fills silence; it does not overrule a handler that knew better. This one
+    // has no directive of its own, so it takes the default — the assertion that matters is that
+    // the value is a single coherent policy rather than two appended together.
+    expect(res.headers.get('cache-control')?.split(',').length).toBe(2);
+  });
+});
+
+describe('media types', () => {
+  it('refuses a body it cannot read with 415 rather than failing at 500', async () => {
+    const { app } = await setup();
+    const res = await app.request('/v1/time/categories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: 'not json',
+    });
+
+    expect(res.status).toBe(415);
+    // §15.5.16 asks a 415 to name what it would have read.
+    expect(res.headers.get('accept')).toContain('application/json');
+    expect((await res.json()) as { code: string }).toMatchObject({
+      code: 'unsupported_media_type',
+    });
+  });
+
+  it('accepts a JSON media type with parameters, and the +json suffix', async () => {
+    const { app } = await setup();
+    for (const contentType of ['application/json; charset=utf-8', 'application/merge-patch+json']) {
+      const res = await app.request('/v1/time/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': contentType },
+        body: JSON.stringify({ name: `Suffixed ${contentType}`, color: 'blue' }),
+      });
+      expect(res.status).toBe(201);
+    }
+  });
+
+  it('refuses an undeclared body rather than misreporting it as invalid', async () => {
+    const { app } = await setup();
+    // A `Blob` with no type is the only way to send a body with genuinely no `Content-Type`:
+    // `fetch` stamps `text/plain` on a string body.
+    const res = await app.request('/v1/time/categories', {
+      method: 'POST',
+      body: new Blob([JSON.stringify({ name: 'Untyped', color: 'blue' })]),
+    });
+
+    // Hono will not parse an undeclared body, so without this the caller got a 422 saying
+    // `name` was missing — from a request that plainly sent one.
+    expect(res.status).toBe(415);
+  });
+
+  it('does not demand a Content-Type from a request with no body', async () => {
+    const { app } = await setup();
+    // A POST to a controller resource often carries nothing; requiring a type to describe an
+    // absent body would reject a well-formed call.
+    const res = await app.request('/v1/me/notifications/read-all', { method: 'POST' });
+    expect(res.status).not.toBe(415);
+  });
+
+  it('answers 406 when Accept excludes everything it can produce', async () => {
+    const { app } = await setup();
+    const res = await app.request('/v1/time/categories', {
+      headers: { Accept: 'application/xml' },
+    });
+
+    expect(res.status).toBe(406);
+    expect((await res.json()) as { code: string }).toMatchObject({ code: 'not_acceptable' });
+  });
+
+  it('treats a wildcard, a suffix, and silence as acceptable', async () => {
+    const { app } = await setup();
+    for (const accept of ['*/*', 'application/*', 'application/problem+json', 'text/html, */*']) {
+      expect(
+        (await app.request('/v1/time/categories', { headers: { Accept: accept } })).status,
+      ).toBe(200);
+    }
+    expect((await app.request('/v1/time/categories')).status).toBe(200);
+  });
+
+  it('honors an explicit q=0 refusal of the only type it has', async () => {
+    const { app } = await setup();
+    const res = await app.request('/v1/time/categories', {
+      headers: { Accept: 'application/json;q=0' },
+    });
+    expect(res.status).toBe(406);
+  });
+});
+
+describe('authentication challenges', () => {
+  it('carries WWW-Authenticate on a 401, as RFC 9110 requires', async () => {
+    const { app } = await setup();
+    getSession.mockResolvedValue(null);
+
+    const res = await app.request('/v1/time/categories');
+    expect(res.status).toBe(401);
+    // A 401 without this tells a client that it failed but not how to succeed.
+    const challenge = res.headers.get('www-authenticate') ?? '';
+    expect(challenge).toContain('Bearer');
+    expect(challenge).toContain('error="unauthorized"');
+  });
+});

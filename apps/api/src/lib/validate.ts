@@ -8,6 +8,9 @@
  * (`openAPIRouteHandler` in {@link ./../openapi}). The inline failure hook routes
  * validation failures through the Problem error model — and we validate with the app's
  * own zod 4 (which `hono-openapi` 1.x reads via the Standard Schema interface).
+ *
+ * Request media types are policed separately, in {@link ./media-types} — Hono's route chain
+ * takes one handler per position, so a validator cannot also carry a guard in front of itself.
  */
 import { validator } from 'hono-openapi';
 import type { z } from 'zod';

@@ -95,8 +95,21 @@ approval gate layered on top.
   \`code\` (e.g. \`unauthorized\`, \`forbidden\`, \`not_found\`, \`validation_error\`,
   \`dependency_cycle\`, \`card_required\`), an HTTP \`status\`, and (for validation) per-field
   \`fieldErrors\`.
-- **Idempotency** — creates accept an \`Idempotency-Key\` header so a retried request never
-  duplicates a resource.
+- **Idempotency** — any \`POST\` accepts an \`Idempotency-Key\` header, deduplicated per user for
+  24 hours. A replay returns the recorded response with \`Idempotency-Replayed: true\`; the same
+  key against a different body is \`422 idempotency_key_reuse\`.
+- **Status codes** — a create answers \`201\` with a \`Location\` naming the new resource; work
+  that is queued rather than finished answers \`202\` with the \`Location\` of a status monitor.
+- **Conditional requests** — every \`GET\` carries a strong \`ETag\`, and \`If-None-Match\` gets
+  \`304\`. Send that tag back as \`If-Match\` on a write to make it conditional: a \`412\` means
+  someone changed the resource since you read it, so re-read and retry. Omit the header and the
+  write is last-writer-wins.
+- **Negotiation** — a body must declare a \`Content-Type\` this API reads (\`application/json\`,
+  or a form encoding where a file is expected); anything else, including an undeclared body, is
+  \`415\` with an \`Accept\` header naming what would work. An \`Accept\` header excluding JSON is
+  \`406\`.
+- **Caching** — responses are \`private, no-cache\` and vary on the caller's credentials: store
+  them, but revalidate against the \`ETag\` before reuse.
 - **Validation** — request *and* response bodies are validated against the same Zod schemas
   rendered here, so the documented shape is the runtime shape.
 

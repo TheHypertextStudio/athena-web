@@ -35,7 +35,9 @@ export const ProblemCode = z
     'domain_already_claimed',
     'public_name_taken',
     'method_not_allowed',
+    'not_acceptable',
     'precondition_failed',
+    'unsupported_media_type',
     'internal',
   ])
   .describe(
@@ -65,6 +67,8 @@ export const ProblemCode = z
       '- `domain_already_claimed` (HTTP 409): the custom domain is already claimed by a workspace, so it cannot be claimed again — one host belongs to exactly one workspace.',
       '- `public_name_taken` (HTTP 409): the requested public name (a workspace name or a brief path) is already in use or is a reserved system name.',
       '- `method_not_allowed` (HTTP 405): the path exists but does not support this method; the `Allow` response header lists the methods it does support.',
+      '- `not_acceptable` (HTTP 406): the request `Accept` header excludes every media type this endpoint can produce. Every endpoint here answers `application/json` (errors as `application/problem+json`), so accept one of those or omit the header.',
+      '- `unsupported_media_type` (HTTP 415): the request body arrived under a `Content-Type` the endpoint does not read. Send `application/json` for a JSON body, or `multipart/form-data` where a file is expected.',
       '- `precondition_failed` (HTTP 412): the `If-Match` entity tag did not match the current representation, so the write was refused to avoid overwriting a concurrent change — re-read the resource and retry against the new `ETag`.',
       '- `internal` (HTTP 500): an unexpected server error; safe to retry.',
     ].join('\n'),
@@ -116,7 +120,9 @@ export const PUBLIC_PROBLEM_TITLES = {
   domain_already_claimed: 'That domain is already claimed by a workspace.',
   public_name_taken: 'That name is already taken.',
   method_not_allowed: 'That action is not available on this address.',
+  not_acceptable: 'That response format is not available.',
   precondition_failed: 'Someone else changed this first.',
+  unsupported_media_type: 'That file or format cannot be read.',
   internal: 'Something went wrong on our side.',
 } as const satisfies Record<ProblemCode, string>;
 
@@ -160,7 +166,9 @@ const PROBLEM_RECOVERY: Record<ProblemCode, ProblemRecovery> = {
   domain_already_claimed: 'review',
   public_name_taken: 'review',
   method_not_allowed: 'return',
+  not_acceptable: 'review',
   precondition_failed: 'retry',
+  unsupported_media_type: 'review',
   internal: 'retry',
 };
 
@@ -190,7 +198,9 @@ const PROBLEM_STATUS: Record<ProblemCode, number> = {
   domain_already_claimed: 409,
   public_name_taken: 409,
   method_not_allowed: 405,
+  not_acceptable: 406,
   precondition_failed: 412,
+  unsupported_media_type: 415,
   internal: 500,
 };
 

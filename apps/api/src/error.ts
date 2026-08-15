@@ -127,6 +127,38 @@ export class MethodNotAllowedError extends ApiError {
 }
 
 /**
+ * 415 — the request body arrived under a media type the endpoint does not read.
+ *
+ * @remarks
+ * Previously this was a `500`: `c.req.json()` threw on a body that was not JSON, nothing
+ * caught it, and a client that set the wrong `Content-Type` was told the server had failed.
+ * RFC 9110 §15.5.16 has a status for exactly this, and it is the client's to fix.
+ */
+export class UnsupportedMediaTypeError extends ApiError {
+  /** The media types the endpoint does read, for the `Accept` response header. */
+  readonly accepts: readonly string[];
+
+  constructor(accepts: readonly string[], message = 'Unsupported media type') {
+    super(415, 'unsupported_media_type', message);
+    this.accepts = accepts;
+  }
+}
+
+/**
+ * 406 — the caller's `Accept` excludes everything this endpoint can produce.
+ *
+ * @remarks
+ * Only raised when `Accept` is present and definitively excludes JSON. An absent header, a
+ * wildcard range, or `application` with a wildcard subtype all mean "anything will do", which is
+ * what almost every real client sends.
+ */
+export class NotAcceptableError extends ApiError {
+  constructor(message = 'No acceptable representation available') {
+    super(406, 'not_acceptable', message);
+  }
+}
+
+/**
  * 412 — an `If-Match` entity tag did not match the resource's current state.
  *
  * @remarks
@@ -347,6 +379,14 @@ export function onError(err: Error, c: Context) {
     );
   }
 
+  // RFC 9110 §15.5.2 makes `WWW-Authenticate` mandatory on a 401 — it is how a client learns
+  // which scheme to authenticate with rather than merely that it failed. The MCP surface built
+  // its own richer challenges (`mcp/scope.ts`); the product API sent none at all.
+  const challenge =
+    apiErr.status === 401
+      ? { 'WWW-Authenticate': `Bearer realm="docket", error="${apiErr.code}"` }
+      : {};
+
   const problem = {
     type: problemTypeUrl(apiErr.code),
     // `title` stays derived from the closed code catalog — never `apiErr.message`, which can
@@ -363,6 +403,9 @@ export function onError(err: Error, c: Context) {
   // tells a client the body is a problem document, missing from every problem document.
   return c.body(JSON.stringify(problem), apiErr.status, {
     'Content-Type': 'application/problem+json',
+    ...challenge,
     ...(apiErr instanceof MethodNotAllowedError ? { Allow: apiErr.allow.join(', ') } : {}),
+    // §15.5.16 asks a 415 to name what it would have read, and `Accept` is that list.
+    ...(apiErr instanceof UnsupportedMediaTypeError ? { Accept: apiErr.accepts.join(', ') } : {}),
   });
 }

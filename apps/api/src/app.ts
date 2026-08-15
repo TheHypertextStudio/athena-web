@@ -27,6 +27,8 @@ import { PhoneVerificationService } from './routes/phone-verification';
 import { createVoiceRoutes } from './routes/voice-sessions';
 import { getContainer } from './container';
 import type { AppEnv } from './context';
+import { cachePolicy } from './lib/cache-policy';
+import { mediaTypes } from './lib/media-types';
 import { idempotency } from './lib/idempotency';
 import { preconditions } from './lib/preconditions';
 import dailyPlan from './routes/daily-plan';
@@ -81,6 +83,15 @@ for (const path of [
 ]) {
   app.use(path, authoritativeSessionMiddleware);
 }
+
+// Negotiate before doing any work: a body this API cannot read, or an `Accept` it cannot
+// satisfy, is the client's to fix and should not reach a handler as a 500.
+app.use('*', mediaTypes);
+
+// Every `/v1` body is one person's view of one workspace, and now carries an `ETag`. Saying so
+// — `private, no-cache` plus a `Vary` naming the credentials — is what stops a cache from
+// applying a heuristic lifetime to a validator-bearing response and reusing it for someone else.
+app.use('*', cachePolicy);
 
 // Defense-in-depth authentication: gate EVERY `/v1` route on a session (except the public
 // allowlist) before the route chain, so auth is opt-out, not opt-in. Registered before the
@@ -169,6 +180,11 @@ export type AppType = typeof routes;
  * Mounted on the root server in `server.ts`; excluded from the public `/v1` spec.
  */
 export const adminApp = new Hono<AppEnv>();
+
+// Staff-scoped back-office data is no more cacheable than a tenant's own, and its request
+// negotiation is no different either.
+adminApp.use('*', mediaTypes);
+adminApp.use('*', cachePolicy);
 
 /** The type of the {@link adminApp} instance (used to type its own OpenAPI generator input). */
 export type AdminInstance = typeof adminApp;

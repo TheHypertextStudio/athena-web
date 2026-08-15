@@ -105,6 +105,56 @@ Two deliberate limits:
 
 The cost is one extra read, paid only by a request that opted in.
 
+## Content negotiation
+
+Every endpoint produces `application/json`, and errors the `application/problem+json` flavour of
+it. Two checks run before any handler, in `src/lib/media-types.ts`:
+
+- A request that carries a body must declare a `Content-Type` this API reads —
+  `application/json` (or any `+json` suffix), `multipart/form-data`, or
+  `application/x-www-form-urlencoded`. Anything else is `415` with an `Accept` response header
+  naming what would have worked. **A body with no `Content-Type` at all is also `415`**, because
+  Hono's validator declines to parse an undeclared body and hands the schema an empty object —
+  which used to surface as a `422` complaining that fields were missing from a request that
+  plainly sent them. A request with no body is never asked for a type.
+- An `Accept` header that excludes everything this API produces is `406`. A missing header, a
+  wildcard, or a `+json` suffix all mean "anything will do". A range marked `q=0` is an explicit
+  refusal and does not count as coverage.
+
+## Caching
+
+Every `/v1` and `/admin` response is one person's view of one workspace, and now carries an
+`ETag`. A validator with no freshness directive invites a cache to apply a _heuristic_ lifetime
+(RFC 9111 §4.2.2) and reuse the stored response, so silence here is not neutral. The default,
+applied by `src/lib/cache-policy.ts`, is:
+
+```
+Cache-Control: private, no-cache
+Vary: Cookie, Authorization
+```
+
+`no-cache` does not mean "do not store". It means "do not reuse without revalidating", which is
+exactly what an `ETag` is for: the browser keeps the body, sends `If-None-Match`, and gets a
+`304`. `private` keeps shared caches out entirely, and `Vary` is the defence in depth that stops
+a misconfigured one keying an entry by URL alone. A handler that has said something more
+specific — the immutable document-image URL, the SSE streams — keeps its own answer.
+
+## What a browser can actually see
+
+CORS is part of the contract, not a deployment detail. A response header absent from
+`exposeHeaders` is on the wire and invisible to script, and a request header absent from
+`allowHeaders` fails preflight and is never sent at all. So `src/cors.ts` is where `Location`,
+`ETag`, `Allow`, `Idempotency-Replayed`, and `Retry-After` become readable, and where `If-Match`,
+`If-None-Match`, and `Idempotency-Key` become sendable. **Adding a header to the protocol without
+adding it there ships a feature no browser client can use.**
+
+## Authentication challenges
+
+RFC 9110 §15.5.2 makes `WWW-Authenticate` mandatory on `401`, and `onError` emits
+`Bearer realm="docket", error="<code>"` on every one. The `error` parameter carries the problem
+code, so `unauthorized` and `reauth_required` are distinguishable from the header alone — a
+client that must re-verify a passkey should not treat it as a sign-out.
+
 ## Pagination and filtering
 
 List endpoints are keyset-paginated through the shared `ListQuery` / `Page<T>` pair: pass `cursor` and `limit`, read `nextCursor` (null on the last page). Filters are typed query parameters, documented per resource. Never accept a filter in a `POST` body to work around a long query string — that turns a read into an unsafe, uncacheable request.

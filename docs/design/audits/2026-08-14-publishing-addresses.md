@@ -95,9 +95,8 @@ None open. Both findings this review raised are closed; each is recorded below w
   shows one view at a time: the section list fills it, choosing from the list replaces it with that
   section, and an `All settings` control goes back. The mobile captures above show all three
   symptoms gone. Because the rail belongs to the shell, this was never fixable inside
-  `publishing-settings.tsx`; it landed on `claude/amazing-bardeen-d0cff1` as
-  `fix(web): Make every settings section usable on a phone`, which is **not merged yet** — the gates
-  above describe the surface as captured with that change applied.
+  `publishing-settings.tsx`; it landed on `main` as `dd86a2a2`,
+  `fix(web): Make every settings section usable on a phone`.
 
   A dropdown picker was tried first and rejected on review: 19 sections in a floating overlay
   scrolled past the viewport, hid the four-group structure the rail makes legible at a glance,
@@ -112,6 +111,5 @@ None open. Both findings this review raised are closed; each is recorded below w
   it the chip stretched the full header and pushed its own chevron under the close button at every
   width, desktop included. It now sits in a `min-w-0 max-w-64` box and truncates.
 
-Verdict: **SHIP** — five green gates and every dimension at the bar. Conditional on the shell fix
-landing: revert to below-bar if `claude/amazing-bardeen-d0cff1` does not merge, since Responsive and
-A11y depend on it.
+Verdict: **SHIP** — five green gates and every dimension at the bar, with the shell fix Responsive
+and A11y depend on now on `main`.

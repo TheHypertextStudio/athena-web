@@ -80,6 +80,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   agentRuntime = await import('@docket/athena/turn');
   ({
     driveSession,
@@ -1366,3 +1367,4 @@ describe('approveGroupAndResume with an explicit activity subset', () => {
     expect(decided?.status).toBe('applied');
   });
 });
+import { installTestProductFixture } from '../support/db';

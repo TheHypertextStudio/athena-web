@@ -47,7 +47,7 @@ const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 describe('billing lifecycle: GET /lifecycle', () => {
   it('returns the org lifecycle status (active, no timestamps) for a member', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
+    const { orgId } = await seedBaseOrg(db, schema, false);
     const app = appWithActor(billing, orgId, ['view']);
     const res = await app.request('/lifecycle', { method: 'GET' });
     expect(res.status).toBe(200);
@@ -67,6 +67,49 @@ describe('billing lifecycle: GET /lifecycle', () => {
     const app = appWithActor(billing, MISSING_ULID, ['view']);
     const res = await app.request('/lifecycle', { method: 'GET' });
     expect(res.status).toBe(404);
+  });
+});
+
+describe('billing: GET /', () => {
+  it('returns active products and the caller billing-management permission', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      status: 'trialing',
+      source: 'stripe',
+      trialEndsAt: new Date('2026-08-25T00:00:00.000Z'),
+      currentPeriodEnd: new Date('2026-08-25T00:00:00.000Z'),
+    });
+
+    const app = appWithActor(billing, orgId, ['view']);
+    const res = await app.request('/', { method: 'GET' });
+    expect(res.status).toBe(200);
+    expect(await json(res)).toEqual({
+      organizationId: orgId,
+      canManageBilling: false,
+      products: [
+        {
+          productKey: 'docket_pro',
+          name: 'Docket Pro',
+          status: 'trialing',
+          source: 'stripe',
+          trialEndsAt: '2026-08-25T00:00:00.000Z',
+          renewalDate: '2026-08-25T00:00:00.000Z',
+        },
+      ],
+    });
+  });
+
+  it('represents baseline Docket with no paid products', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    const app = appWithActor(billing, orgId, ['manage']);
+    const res = await app.request('/', { method: 'GET' });
+    expect(await json(res)).toEqual({
+      organizationId: orgId,
+      canManageBilling: true,
+      products: [],
+    });
   });
 });
 
@@ -108,6 +151,34 @@ describe('billing lifecycle: POST /lifecycle/start-export-window', () => {
     const app = appWithActor(billing, MISSING_ULID, ['manage']);
     const res = await app.request('/lifecycle/start-export-window', { method: 'POST' });
     expect(res.status).toBe(404);
+  });
+
+  it('cancels Docket Pro on a personal organization without starting deletion', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db
+      .update(schema.organization)
+      .set({ isPersonal: true })
+      .where(eq(schema.organization.id, orgId));
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'stripe',
+    });
+
+    const app = appWithActor(billing, orgId, ['manage']);
+    const res = await app.request('/lifecycle/start-export-window', { method: 'POST' });
+    expect(res.status).toBe(200);
+    expect(await json(res)).toMatchObject({
+      lifecycleState: 'active',
+      exportReadyAt: null,
+      deleteAfterAt: null,
+    });
+    const [product] = await db
+      .select({ status: schema.organizationProductEntitlement.status })
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(product?.status).toBe('canceled');
   });
 });
 

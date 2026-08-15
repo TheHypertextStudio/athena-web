@@ -5,7 +5,7 @@
  * Both channels call {@link openVoiceSession}. It is the single place that:
  *
  * - resolves the person's **one** canonical Athena conversation (never a voice-only thread),
- * - checks the plan entitlement for the workspace that conversation belongs to,
+ * - checks the Docket Pro capability for the workspace that conversation belongs to,
  * - writes the `voice_session` row that records which call this was,
  * - and constructs the {@link VoiceSessionEngine} both channels then drive.
  *
@@ -20,8 +20,8 @@ import { actor, db, organization, sessionActivity, user, voiceSession } from '@d
 import type { VoiceChannel, VoiceEndReason, VoiceTurnOut } from '@docket/athena/voice';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 
-import { assertAgentSessionsEntitled } from '../agent/entitlement';
-import { AgentPlanRequiredError, NotFoundError } from '../error';
+import { assertProductCapability } from '../product-capability';
+import { NotFoundError, ProductRequiredError } from '../error';
 
 import { markProvenanceInline } from '../agent/provenance';
 import { loadTranscript } from '../agent/transcript';
@@ -136,25 +136,25 @@ async function resolveVoiceWorkspaceActor(
 }
 
 /**
- * Whether a workspace's plan entitles it to Athena, without throwing.
+ * Whether a workspace has the Docket Pro voice capability, without throwing.
  *
  * @remarks
  * The phone channel needs the *answer*, not an exception: an unentitled caller is routed to a
  * friendly announcement, which is a normal outcome rather than an error. The web channel wants
  * the throw, because a 402 is what the upsell renders from. Both read the same rule — this
- * wraps {@link assertAgentSessionsEntitled} rather than reimplementing the lifecycle states, so
+ * uses {@link assertProductCapability} rather than inferring access from lifecycle state, so
  * the two can never drift.
  *
- * @param organizationId - The workspace whose plan is being checked.
+ * @param organizationId - The organization whose Athena capability is being checked.
  * @returns `true` when Athena may run.
  */
 export async function isAthenaEntitled(organizationId: string | null): Promise<boolean> {
   if (!organizationId) return false;
   try {
-    await assertAgentSessionsEntitled(organizationId);
+    await assertProductCapability(organizationId, 'voice');
     return true;
   } catch (error) {
-    if (error instanceof AgentPlanRequiredError || error instanceof NotFoundError) return false;
+    if (error instanceof ProductRequiredError || error instanceof NotFoundError) return false;
     throw error;
   }
 }
@@ -168,13 +168,13 @@ export async function isAthenaEntitled(organizationId: string | null): Promise<b
  *
  * @param input - Who is calling, on which channel, from where.
  * @returns the opened session plus the material a greeting and instructions are built from.
- * @throws {AgentPlanRequiredError} When the workspace's plan does not entitle Athena.
+ * @throws {ProductRequiredError} When the workspace does not have the voice capability.
  */
 export async function openVoiceSession(input: OpenVoiceSessionInput): Promise<OpenedVoiceSession> {
   const workspace = await resolveVoiceWorkspaceActor(input.userId, input.organizationId);
   if (!workspace) throw new NotFoundError('No workspace to talk about');
   const { organizationId, actorId } = workspace;
-  await assertAgentSessionsEntitled(organizationId);
+  await assertProductCapability(organizationId, 'voice');
 
   const conversation = await resolveCanonicalConversation(input.userId, organizationId);
   const [row] = await db

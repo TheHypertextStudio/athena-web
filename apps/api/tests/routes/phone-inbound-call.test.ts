@@ -57,6 +57,17 @@ async function seedCaller(options: {
     .update(schema.organization)
     .set({ lifecycleState: options.lifecycleState ?? 'active' })
     .where(eq(schema.organization.id, orgId));
+  await db
+    .update(schema.organizationProductEntitlement)
+    .set({
+      status:
+        options.lifecycleState === 'past_due'
+          ? 'past_due'
+          : options.lifecycleState === 'trialing'
+            ? 'trialing'
+            : 'active',
+    })
+    .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
   await addMember(db, schema, orgId, userId, 'owner');
   await db.insert(schema.team).values({
     organizationId: orgId,
@@ -199,7 +210,7 @@ describe('inbound call disposition', () => {
 
     const decision = await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_gated_1' });
 
-    expect(decision.disposition).toBe('plan-required');
+    expect(decision.disposition).toBe('product-required');
     expect(decision.twiml).toContain('<Say');
     expect(decision.twiml).toContain('<Hangup/>');
     expect(decision.twiml).not.toContain('<ConversationRelay');
@@ -211,16 +222,16 @@ describe('inbound call disposition', () => {
     expect(after.activities).toBe(0);
   });
 
-  it('lifts the gate once the plan is active, on the very next call', async () => {
+  it('lifts the gate once Docket Pro is active, on the very next call', async () => {
     const caller = await seedCaller({ lifecycleState: 'past_due' });
     expect(
       (await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_cycle_1' })).disposition,
-    ).toBe('plan-required');
+    ).toBe('product-required');
 
     await db
-      .update(schema.organization)
-      .set({ lifecycleState: 'active' })
-      .where(eq(schema.organization.id, caller.orgId));
+      .update(schema.organizationProductEntitlement)
+      .set({ status: 'active' })
+      .where(eq(schema.organizationProductEntitlement.organizationId, caller.orgId));
     const second = await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_cycle_2' });
     expect(second.disposition).toBe('connected');
     if (second.voiceSessionId) {
@@ -229,12 +240,12 @@ describe('inbound call disposition', () => {
 
     // …and drops again when the plan lapses.
     await db
-      .update(schema.organization)
-      .set({ lifecycleState: 'past_due' })
-      .where(eq(schema.organization.id, caller.orgId));
+      .update(schema.organizationProductEntitlement)
+      .set({ status: 'past_due' })
+      .where(eq(schema.organizationProductEntitlement.organizationId, caller.orgId));
     expect(
       (await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_cycle_3' })).disposition,
-    ).toBe('plan-required');
+    ).toBe('product-required');
   });
 
   it('announces without reaching any account when the number is unrecognized', async () => {

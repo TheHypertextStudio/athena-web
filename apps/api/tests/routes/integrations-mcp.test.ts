@@ -17,7 +17,7 @@ import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import type { sealCredential as Seal, unsealCredential as Unseal } from '../../src/lib/credentials';
 import type { getContainer as GetContainer } from '../../src/container';
-import { fakeSession, one } from '../support/routes-harness';
+import { fakeSession, grantDocketPro, one } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 vi.hoisted(() => {
@@ -48,6 +48,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   agentRuntime = await import('@docket/athena/turn');
   integrations = await import('@docket/integrations');
   integrationsMcp = (await import('../../src/routes/integrations-mcp')).default;
@@ -79,6 +80,7 @@ async function seedOrg(): Promise<Seed> {
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id }),
   );
+  await grantDocketPro(db, schema, org.id);
   // Work needs a status set: the Tasks the agent's capture tool lands each point at one of this
   // workspace's statuses, so give it the defaults before any tool creates work here.
   await schema.seedWorkspaceStatuses(db, org.id);
@@ -517,3 +519,4 @@ describe('the union toolbox: remote read + local writes in one session', () => {
     ]);
   });
 });
+import { installTestProductFixture } from '../support/db';

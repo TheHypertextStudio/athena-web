@@ -1,63 +1,74 @@
-/**
- * `@docket/billing/application/entitlement` — paid-feature eligibility rules.
- *
- * @remarks
- * Billing decides whether an organization may start an Athena session from durable
- * lifecycle state and an active staff-issued exemption. It returns a domain outcome
- * rather than throwing HTTP errors so every delivery surface can present the result
- * in its own language: the API maps it to a 402, while voice can give a helpful
- * spoken response.
- */
-import { billingExemption, organization } from '@docket/db';
+/** `@docket/billing/application/entitlement` — paid product capability resolution. */
+import { organization, organizationProductEntitlement } from '@docket/db';
 import type { Database } from '@docket/db';
-import { and, eq, isNull } from 'drizzle-orm';
+import {
+  productGrantsCapability,
+  type ProductCapability,
+  type ProductEntitlementSource,
+  type ProductEntitlementStatus,
+  type ProductKey,
+} from '@docket/types';
+import { eq } from 'drizzle-orm';
 
-/** Lifecycle states that include Athena access without a staff exemption. */
-export const AGENT_SESSION_ENTITLED_LIFECYCLE_STATES = ['trialing', 'active'] as const;
+/** Product states that grant their catalogued capabilities. */
+const ACCESS_STATUSES = new Set<ProductEntitlementStatus>(['trialing', 'active']);
 
-/** One resolved answer to whether an organization may start a new Athena session. */
-export type AgentSessionEntitlement =
-  | { readonly kind: 'entitled'; readonly source: 'subscription' | 'exemption' }
+/** A delivery-neutral product capability decision. */
+export type ProductCapabilityEntitlement =
+  | {
+      readonly kind: 'entitled';
+      readonly productKey: ProductKey;
+      readonly source: ProductEntitlementSource;
+    }
   | { readonly kind: 'organization-not-found' }
-  | { readonly kind: 'plan-required' };
-
-const ENTITLED_STATES = new Set<string>(AGENT_SESSION_ENTITLED_LIFECYCLE_STATES);
+  | { readonly kind: 'product-required' };
 
 /**
- * Resolve whether an organization may start a new Athena session.
+ * Resolve whether an organization owns an active product granting a capability.
  *
  * @remarks
- * The query deliberately reads the Docket lifecycle projection instead of making a
- * live Stripe request. A trial is part of the paid-feature funnel, while `past_due`
- * and every wind-down state require an active billing exemption. Resuming a session
- * is intentionally not decided here; callers apply this policy only before its first
- * provider turn.
+ * Baseline Docket has no entitlement row. Organization lifecycle state is deliberately absent
+ * from this decision: data retention and paid-product ownership are independent facts.
  *
- * @param db - The organization and exemption store.
- * @param organizationId - The workspace whose plan is being evaluated.
- * @returns A delivery-neutral entitlement outcome.
+ * @param db - Product-entitlement store.
+ * @param organizationId - Organization requesting access.
+ * @param capability - Paid capability required by the action.
+ * @returns A delivery-neutral access outcome.
  */
-export async function resolveAgentSessionEntitlement(
+export async function resolveProductCapability(
   db: Database,
   organizationId: string,
-): Promise<AgentSessionEntitlement> {
+  capability: ProductCapability,
+): Promise<ProductCapabilityEntitlement> {
   const rows = await db
     .select({
-      lifecycleState: organization.lifecycleState,
-      exemptionId: billingExemption.id,
+      organizationId: organization.id,
+      productKey: organizationProductEntitlement.productKey,
+      status: organizationProductEntitlement.status,
+      source: organizationProductEntitlement.source,
     })
     .from(organization)
     .leftJoin(
-      billingExemption,
-      and(eq(billingExemption.organizationId, organization.id), isNull(billingExemption.revokedAt)),
+      organizationProductEntitlement,
+      eq(organizationProductEntitlement.organizationId, organization.id),
     )
-    .where(eq(organization.id, organizationId))
-    .limit(1);
-  const row = rows[0];
-  if (!row) return { kind: 'organization-not-found' };
-  if (row.exemptionId) return { kind: 'entitled', source: 'exemption' };
-  if (ENTITLED_STATES.has(row.lifecycleState)) {
-    return { kind: 'entitled', source: 'subscription' };
+    .where(eq(organization.id, organizationId));
+
+  if (rows.length === 0) return { kind: 'organization-not-found' };
+  for (const row of rows) {
+    if (
+      row.productKey &&
+      row.status &&
+      row.source &&
+      ACCESS_STATUSES.has(row.status) &&
+      productGrantsCapability(row.productKey, capability)
+    ) {
+      return {
+        kind: 'entitled',
+        productKey: row.productKey,
+        source: row.source,
+      };
+    }
   }
-  return { kind: 'plan-required' };
+  return { kind: 'product-required' };
 }

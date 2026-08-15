@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, fakeSession, getDb } from '../support/routes-harness';
+import { appWithActor, fakeSession, getDb, grantDocketPro } from '../support/routes-harness';
 import type membersRouter from '../../src/routes/members';
 import { assertDefined } from '@docket/test-utils';
 
@@ -36,6 +36,7 @@ async function seedOrgWithOwner(opts: { personal?: boolean } = {}) {
     .values({ name: slug, slug, lifecycleState: 'active', isPersonal: opts.personal ?? false })
     .returning({ id: schema.organization.id });
   const orgId = assertDefined(org).id;
+  await grantDocketPro(db, schema, orgId);
   const [ownerRole] = await db
     .insert(schema.role)
     .values({
@@ -382,6 +383,7 @@ describe('members router — member removal', () => {
       .values({ name: slug, slug, lifecycleState: 'active' })
       .returning({ id: schema.organization.id });
     const orgId = assertDefined(org).id;
+    await grantDocketPro(db, schema, orgId);
     const [member] = await db
       .insert(schema.actor)
       .values({ organizationId: orgId, kind: 'human', displayName: 'Solo' })

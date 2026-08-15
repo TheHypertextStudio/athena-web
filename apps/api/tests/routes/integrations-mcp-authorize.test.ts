@@ -50,6 +50,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   integrationsMcp = (await import('../../src/routes/integrations-mcp')).default;
 });
 
@@ -256,3 +257,4 @@ describe('POST /:id/authorize — starting a remote MCP OAuth approval', () => {
     });
   });
 });
+import { installTestProductFixture } from '../support/db';

@@ -50,6 +50,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   integrationsMcpOauth = (await import('../../src/routes/integrations-mcp-oauth')).default;
   ({ sealCredential, unsealCredential } = await import('../../src/lib/credentials'));
   ({ signConnectState } = await import('../../src/lib/oauth-state'));
@@ -454,3 +455,4 @@ describe('remote MCP OAuth callback', () => {
     });
   });
 });
+import { installTestProductFixture } from '../support/db';

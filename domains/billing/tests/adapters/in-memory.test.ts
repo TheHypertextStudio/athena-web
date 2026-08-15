@@ -3,6 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { InMemoryBillingGateway } from '../../src/adapters/in-memory';
 
 describe('InMemoryBillingGateway', () => {
+  it('starts an existing customer without a second trial when trialDays is zero', async () => {
+    const gateway = new InMemoryBillingGateway();
+    await gateway.createCheckoutSession({
+      referenceId: 'org_returning',
+      priceKey: 'docket_pro_monthly',
+      successUrl: 'https://app/ok',
+      cancelUrl: 'https://app/no',
+      trialDays: 0,
+    });
+
+    const subscription = await gateway.getSubscription('org_returning');
+    expect(subscription).toMatchObject({ status: 'active' });
+    expect(subscription).not.toHaveProperty('trialEnd');
+  });
+
   describe('createCheckoutSession', () => {
     it('creates a trialing subscription and emits a checkout.completed event', async () => {
       const gw = new InMemoryBillingGateway();

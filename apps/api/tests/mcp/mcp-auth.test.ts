@@ -7,6 +7,7 @@ import type * as AuthModule from '../../src/mcp/auth';
 import type * as ResultModule from '../../src/mcp/result';
 import { getSession, resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { clearDocketPro } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -15,8 +16,6 @@ let authMod!: typeof AuthModule;
 let resultMod!: typeof ResultModule;
 
 beforeAll(async () => {
-  // Configure an allowed origin before importing modules that read the API env slice.
-  vi.stubEnv('MCP_ALLOWED_ORIGINS', 'https://app.example.com, https://admin.example.com');
   schema = await getMigratedDb();
   db = schema.db;
   authMod = await import('../../src/mcp/auth');
@@ -39,8 +38,9 @@ describe('isOriginAllowed', () => {
     expect(authMod.isOriginAllowed(hdrs())).toBe(true);
   });
 
-  it('allows a configured origin', () => {
+  it('allows any exact HTTPS origin without a vendor list', () => {
     expect(authMod.isOriginAllowed(hdrs('https://app.example.com'))).toBe(true);
+    expect(authMod.isOriginAllowed(hdrs('https://outside.example'))).toBe(true);
   });
 
   it('allows localhost in non-production', () => {
@@ -52,16 +52,16 @@ describe('isOriginAllowed', () => {
     expect(authMod.isOriginAllowed(hdrs('::::not a url'))).toBe(false);
   });
 
-  it('rejects a non-localhost, non-configured origin', () => {
-    expect(authMod.isOriginAllowed(hdrs('https://evil.example.com'))).toBe(false);
+  it('rejects non-HTTPS remote origins', () => {
+    expect(authMod.isOriginAllowed(hdrs('http://outside.example'))).toBe(false);
   });
 });
 
 describe('resolveMcpContext', () => {
   it('throws on a rejected origin', async () => {
-    await expect(authMod.resolveMcpContext(hdrs('https://evil.example.com'))).rejects.toMatchObject(
-      { status: 401 },
-    );
+    await expect(authMod.resolveMcpContext(hdrs('http://outside.example'))).rejects.toMatchObject({
+      status: 403,
+    });
   });
 
   it('throws when there is no session', async () => {
@@ -69,23 +69,10 @@ describe('resolveMcpContext', () => {
     await expect(authMod.resolveMcpContext(hdrs())).rejects.toMatchObject({ status: 401 });
   });
 
-  it('resolves a cookie-session context with the full scope set, mapping an empty name to null', async () => {
+  it('ignores browser sessions on the public MCP resource', async () => {
     getSession.mockResolvedValueOnce({ user: { id: 'u1', name: '', email: 'u1@e.com' } });
-    const ctx = await authMod.resolveMcpContext(hdrs());
-    // A consented first-party cookie session is granted the full scope set (the per-org
-    // grant cascade remains the binding layer for it).
-    expect(ctx).toEqual({
-      principal: { kind: 'user', userId: 'u1', userName: null, userEmail: 'u1@e.com' },
-      scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
-    });
-  });
-
-  it('keeps a present name', async () => {
-    getSession.mockResolvedValueOnce({
-      user: { id: 'u2', name: 'Ada', email: 'u2@e.com' },
-    });
-    const ctx = await authMod.resolveMcpContext(hdrs());
-    expect(ctx.principal.kind === 'user' && ctx.principal.userName).toBe('Ada');
+    await expect(authMod.resolveMcpContext(hdrs())).rejects.toMatchObject({ status: 401 });
+    expect(getSession).not.toHaveBeenCalled();
   });
 
   it('rejects a Bearer token when the RS is not configured for OAuth (no issuer/resource)', async () => {
@@ -132,6 +119,40 @@ describe('resolveActor', () => {
       assertDefined(org).id,
     );
     expect(actor).toEqual({ orgId: assertDefined(org).id, actorId: assertDefined(a).id });
+  });
+
+  it('requires Docket Pro after membership is established', async () => {
+    const slug = `ra-pro-${Math.random().toString(36).slice(2, 10)}`;
+    const [org] = await db
+      .insert(schema.organization)
+      .values({ name: slug, slug, lifecycleState: 'active' })
+      .returning({ id: schema.organization.id });
+    const [u] = await db
+      .insert(schema.user)
+      .values({ name: 'A', email: `${slug}@e.com` })
+      .returning({ id: schema.user.id });
+    await db.insert(schema.actor).values({
+      organizationId: assertDefined(org).id,
+      kind: 'human',
+      displayName: 'A',
+      userId: assertDefined(u).id,
+    });
+    await clearDocketPro(db, schema, assertDefined(org).id);
+
+    await expect(
+      authMod.resolveActor(
+        {
+          principal: {
+            kind: 'user',
+            userId: assertDefined(u).id,
+            userName: 'A',
+            userEmail: 'a@e.com',
+          },
+          scopes: ['work:read'],
+        },
+        assertDefined(org).id,
+      ),
+    ).rejects.toMatchObject({ status: 402, code: 'product_required' });
   });
 
   it('404s when the caller is not a member', async () => {
@@ -192,11 +213,10 @@ describe('isOriginAllowed in production', () => {
   it('rejects localhost when NODE_ENV is production', async () => {
     vi.resetModules();
     vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('MCP_ALLOWED_ORIGINS', 'https://app.example.com, https://admin.example.com');
     try {
       const fresh = await import('../../src/mcp/auth');
       expect(fresh.isOriginAllowed(hdrs('http://localhost:3000'))).toBe(false);
-      // A configured origin is still allowed in production.
+      // Exact HTTPS origins remain vendor-neutral in production.
       expect(fresh.isOriginAllowed(hdrs('https://app.example.com'))).toBe(true);
     } finally {
       vi.resetModules();

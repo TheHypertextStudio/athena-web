@@ -68,24 +68,23 @@ export function speakableUrl(url: string): string {
 }
 
 /**
- * What a caller hears when their account has no entitled plan.
+ * What a caller hears when their organization does not have Docket Pro.
  *
  * @remarks
- * Opens with a greeting, states the one fact that matters (a plan is needed, and sign-up is on the
+ * Opens with a greeting, states the one fact that matters (Docket Pro is needed, and purchase is on the
  * web), dictates the address twice — once spoken for the ear, once written for the transcript and
  * for any provider that renders it — and closes with a next step. Nothing about what went wrong,
  * because nothing went wrong.
  *
  * @returns the announcement script.
  */
-export function planRequiredAnnouncement(): string {
+export function productRequiredAnnouncement(): string {
   const url = plansUrl();
   return [
     'Hi, this is Athena from Docket.',
-    'Calling me is part of a Docket subscription plan, and it looks like your account is not on one yet.',
-    `You can sign up on the web at ${speakableUrl(url)}. That is ${url}.`,
-    'Once your plan is active, call this number back and we can pick up right where you left off.',
-    'Talk soon.',
+    'Phone access is part of Docket Pro, and this organization does not have Docket Pro.',
+    `You can add Docket Pro at ${speakableUrl(url)}. That is ${url}.`,
+    'After Docket Pro is active, call this number again.',
   ].join(' ');
 }
 

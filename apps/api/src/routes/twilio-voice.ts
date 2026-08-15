@@ -13,8 +13,9 @@
  * 2. **Do we recognize the number?** {@link resolveCaller} matches the caller id against numbers
  *    that are verified *and* calling-enabled. Anything else hears
  *    {@link unrecognizedCallerAnnouncement} and reaches no account.
- * 3. **Does that account have a plan?** {@link isAthenaEntitled}. An unentitled caller hears
- *    {@link planRequiredAnnouncement} — which names the exact sign-up URL — and the call ends.
+ * 3. **Does that organization have Athena access?** {@link isAthenaEntitled}. An organization
+ *    without access hears {@link productRequiredAnnouncement} — which names the exact purchase URL
+ *    — and the call ends.
  *    **No voice session is opened and no conversation turn is written**, which is the property
  *    that makes "gated before reaching the agent" true rather than merely intended.
  * 4. Only then is a session opened and the call connected to the live agent.
@@ -37,7 +38,7 @@ import { env } from '../env';
 import { recordCallFrom, resolveCaller } from './phone-directory';
 import {
   callerGreeting,
-  planRequiredAnnouncement,
+  productRequiredAnnouncement,
   unrecognizedCallerAnnouncement,
 } from './voice-announcements';
 import { TWILIO_RELAY_PROVIDER_ID } from './voice-provider';
@@ -142,7 +143,7 @@ export function relaySocketUrl(): string {
 /** How an inbound call was answered, for tests and for metrics. */
 export type InboundCallDisposition =
   | 'connected'
-  | 'plan-required'
+  | 'product-required'
   | 'unrecognized-caller'
   | 'forged-request';
 
@@ -186,8 +187,8 @@ export async function decideInboundCall(
   const entitled = await isAthenaEntitledForCaller(caller.userId);
   if (!entitled) {
     return {
-      disposition: 'plan-required',
-      twiml: announcementTwiml(planRequiredAnnouncement()),
+      disposition: 'product-required',
+      twiml: announcementTwiml(productRequiredAnnouncement()),
       status: 200,
     };
   }
@@ -210,7 +211,7 @@ export async function decideInboundCall(
   };
 }
 
-/** Resolve the caller's workspace and ask whether its plan entitles Athena. */
+/** Resolve the caller's organization and ask whether an active product grants Athena. */
 async function isAthenaEntitledForCaller(userId: string): Promise<boolean> {
   return isAthenaEntitled(await resolveVoiceWorkspace(userId));
 }

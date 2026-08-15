@@ -274,6 +274,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
 
   await db.insert(schema.user).values({
     id: USER_ID,
@@ -498,3 +499,4 @@ describe('the bring-your-own-Lattice flow', () => {
     expect(await db.select().from(schema.latticeConnection)).toHaveLength(0);
   });
 });
+import { installTestProductFixture } from '../support/db';

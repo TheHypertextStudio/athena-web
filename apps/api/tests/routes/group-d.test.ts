@@ -9,6 +9,7 @@ import { onError } from '../../src/error';
 import {
   appWithActor as mountActorApp,
   appWithSession,
+  clearDocketPro,
   fakeSession,
   getDb,
   one,
@@ -320,6 +321,49 @@ describe('orgs router', () => {
     expect(rows[0]?.isPersonal).toBe(true);
     expect(result.defaultTeam.id).toBeTruthy();
     expect(result.ownerActorId).toBeTruthy();
+  });
+
+  it('keeps personal task planning available without a paid product', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+    const created = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ isPersonal: true }),
+    });
+    const { organization } = await body<{ organization: { id: string } }>(created);
+
+    const tasks = await app.request(`/${organization.id}/tasks`);
+    expect(tasks.status).toBe(200);
+  });
+
+  it('keeps shared billing reachable while Docket Pro gates shared work', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+    const created = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Shared work' }),
+    });
+    const { organization } = await body<{ organization: { id: string } }>(created);
+    await clearDocketPro(db, schema, organization.id);
+
+    const blocked = await app.request(`/${organization.id}/tasks`);
+    expect(blocked.status).toBe(402);
+    expect(await body<{ code: string }>(blocked)).toMatchObject({ code: 'product_required' });
+
+    const billing = await app.request(`/${organization.id}/billing`);
+    expect(billing.status).toBe(200);
+    expect(await body<{ products: unknown[] }>(billing)).toMatchObject({ products: [] });
+
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: organization.id,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'stripe',
+    });
+    const tasks = await app.request(`/${organization.id}/tasks`);
+    expect(tasks.status).toBe(200);
   });
 
   it('POST / isPersonal:true is idempotent per user: a second call returns the existing personal space', async () => {

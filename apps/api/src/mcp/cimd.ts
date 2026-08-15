@@ -99,26 +99,6 @@ function parseRedirectUri(value: string): URL {
   throw new CimdError('invalid_redirect_uri', 'redirect_uri must use HTTPS or localhost');
 }
 
-function allowlistHosts(): readonly string[] {
-  return (
-    env.MCP_CIMD_TRUST_ALLOWLIST?.split(',')
-      .map((entry) => entry.trim().toLowerCase())
-      .filter(Boolean) ?? []
-  );
-}
-
-function isAllowlisted(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return allowlistHosts().some((entry) => host === entry || host.endsWith(`.${entry}`));
-}
-
-function assertTrustAllowed(url: URL): void {
-  if (!env.MCP_CIMD_STRICT) return;
-  if (!isAllowlisted(url.hostname)) {
-    throw new CimdError('invalid_client', 'client_id metadata host is not trusted for CIMD');
-  }
-}
-
 function ipv4Parts(address: string): readonly number[] | null {
   const parts = address.split('.').map((part) => Number(part));
   if (
@@ -330,7 +310,6 @@ export async function resolveCimdClient(
   deps: CimdDeps = defaultDeps,
 ): Promise<CimdClient> {
   const url = parseHttpsUrl(clientId, 'client_id', 'invalid_client');
-  assertTrustAllowed(url);
 
   const addresses = await deps.resolveHost(url.hostname);
   assertPublicDnsResolution(url, addresses, 'client_id');

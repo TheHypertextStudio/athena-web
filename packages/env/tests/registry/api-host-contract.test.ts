@@ -27,7 +27,6 @@ function validApiEnv(): Record<string, string> {
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
     MCP_TASKS_ENABLED: 'false',
-    MCP_CIMD_STRICT: 'true',
   };
 }
 

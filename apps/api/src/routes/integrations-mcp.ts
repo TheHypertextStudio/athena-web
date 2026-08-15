@@ -16,6 +16,7 @@ import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { productCapabilityGuard } from '../product-capability';
 
 /** The db row shape this router serializes. */
 type IntegrationRow = typeof integration.$inferSelect;
@@ -145,6 +146,7 @@ function mcpOAuthClientMetadataUrl(): string | undefined {
 }
 
 const router = new Hono<AppEnv>()
+  .use('*', productCapabilityGuard('integrations'))
   .get(
     '/',
     apiDoc({

@@ -30,6 +30,8 @@ export interface ActorCtx {
   readonly roleId: string | null;
   /** The capabilities the actor's role confers org-wide. */
   readonly capabilities: readonly string[];
+  /** Whether this is the caller's baseline personal workspace. */
+  readonly isPersonal?: boolean;
 }
 
 /** The Hono generic for Docket routes: the session + (within org routes) the actor context. */

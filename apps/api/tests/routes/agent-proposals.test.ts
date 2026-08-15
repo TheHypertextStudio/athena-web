@@ -36,6 +36,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   agentRuntime = await import('@docket/athena/turn');
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   ({ getContainer } = await import('../../src/container'));
@@ -371,3 +372,4 @@ describe('SSE live tail', () => {
     expect(resumedText).not.toContain(`id: ${lastId}`);
   });
 });
+import { installTestProductFixture } from '../support/db';

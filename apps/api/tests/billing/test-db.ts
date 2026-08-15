@@ -29,6 +29,8 @@ export async function createBillingLifecycleDb(): Promise<BillingLifecycleDbFixt
       'deleted'
     );
     create type estimation_scale as enum ('none', 'exponential', 'fibonacci', 'linear', 't_shirt');
+    create type product_entitlement_source as enum ('stripe', 'complimentary');
+    create type product_entitlement_status as enum ('trialing', 'active', 'past_due', 'canceled');
 
     create table "organization" (
       id text primary key,
@@ -51,6 +53,20 @@ export async function createBillingLifecycleDb(): Promise<BillingLifecycleDbFixt
       created_at timestamp not null default now(),
       updated_at timestamp not null default now(),
       archived_at timestamp
+    );
+
+    create table "organization_product_entitlement" (
+      organization_id text not null references organization(id) on delete cascade,
+      product_key text not null,
+      status product_entitlement_status not null,
+      source product_entitlement_source not null,
+      stripe_subscription_id text,
+      trial_ends_at timestamp,
+      current_period_end timestamp,
+      canceled_at timestamp,
+      created_at timestamp not null default now(),
+      updated_at timestamp not null default now(),
+      primary key (organization_id, product_key)
     );
   `);
 

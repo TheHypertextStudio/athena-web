@@ -14,6 +14,7 @@ export * from './joins';
 export * from './agents';
 export * from './elicitation';
 export * from './admin';
+export * from './billing';
 export * from './infra';
 export * from './work-location';
 export * from './calendar';

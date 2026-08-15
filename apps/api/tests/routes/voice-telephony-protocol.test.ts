@@ -24,7 +24,7 @@ import {
 import { announcementTwiml, escapeXml, relayTwiml } from '../../src/routes/twilio-voice';
 import {
   forbiddenAnnouncementWords,
-  planRequiredAnnouncement,
+  productRequiredAnnouncement,
   plansUrl,
   speakableUrl,
   unrecognizedCallerAnnouncement,
@@ -243,24 +243,23 @@ describe('websocket frame codec', () => {
 });
 
 describe('announcements', () => {
-  it('tells a caller without a plan that a plan is needed and where to get it', () => {
-    const script = planRequiredAnnouncement();
-    expect(script.toLowerCase()).toContain('subscription plan');
-    expect(script.toLowerCase()).toContain('on the web');
+  it('tells a caller without Docket Pro what is required and where to add it', () => {
+    const script = productRequiredAnnouncement();
+    expect(script).toContain('Phone access is part of Docket Pro');
     // The exact URL, dictated — not "our website".
     expect(script).toContain(plansUrl());
     expect(script).toContain(speakableUrl(plansUrl()));
     expect(script.toLowerCase()).not.toContain('our website');
   });
 
-  it('opens with a greeting and closes with a next step', () => {
-    const script = planRequiredAnnouncement();
+  it('opens with a greeting and closes with a specific next step', () => {
+    const script = productRequiredAnnouncement();
     expect(script.startsWith('Hi,')).toBe(true);
-    expect(script.trimEnd().endsWith('Talk soon.')).toBe(true);
+    expect(script.trimEnd().endsWith('call this number again.')).toBe(true);
   });
 
   it('contains no error vocabulary, status text, or codes', () => {
-    for (const script of [planRequiredAnnouncement(), unrecognizedCallerAnnouncement()]) {
+    for (const script of [productRequiredAnnouncement(), unrecognizedCallerAnnouncement()]) {
       const lower = script.toLowerCase();
       for (const word of forbiddenAnnouncementWords) {
         expect(lower).not.toContain(word);

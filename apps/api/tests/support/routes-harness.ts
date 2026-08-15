@@ -170,10 +170,45 @@ export async function seedStatuses(
   return statusIdLookup(statuses, schema);
 }
 
-/** Seed a base org with a team, a human actor, and its default status sets. */
+/** Grant an organization active complimentary Docket Pro for product-surface tests. */
+export async function grantDocketPro(
+  db: Db,
+  schema: typeof DbModule,
+  organizationId: string,
+): Promise<void> {
+  await db
+    .insert(schema.organizationProductEntitlement)
+    .values({
+      organizationId,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'complimentary',
+    })
+    .onConflictDoUpdate({
+      target: [
+        schema.organizationProductEntitlement.organizationId,
+        schema.organizationProductEntitlement.productKey,
+      ],
+      set: { status: 'active', source: 'complimentary' },
+    });
+}
+
+/** Remove the test fixture's complimentary product so a test can exercise baseline Docket. */
+export async function clearDocketPro(
+  db: Db,
+  schema: typeof DbModule,
+  organizationId: string,
+): Promise<void> {
+  await db
+    .delete(schema.organizationProductEntitlement)
+    .where(eq(schema.organizationProductEntitlement.organizationId, organizationId));
+}
+
+/** Seed a base org, optionally with Docket Pro, plus a team, human actor, and default statuses. */
 export async function seedBaseOrg(
   db: Db,
   schema: typeof DbModule,
+  withDocketPro = true,
 ): Promise<{
   orgId: string;
   teamId: string;
@@ -188,6 +223,8 @@ export async function seedBaseOrg(
     .returning({ id: schema.organization.id });
   if (!org) throw new Error('seedBaseOrg failed to create an organization');
   const orgId = org.id;
+  if (withDocketPro) await grantDocketPro(db, schema, orgId);
+  else await clearDocketPro(db, schema, orgId);
 
   // Statuses come before any work: a Task, Project, Program, or Initiative points at one, and
   // the database refuses the row without it.
@@ -315,6 +352,7 @@ export async function seedOrg(
   db: Db,
   schema: typeof DbModule,
   isPersonal = false,
+  withDocketPro = true,
 ): Promise<string> {
   const slug = `org-${Math.random().toString(36).slice(2, 10)}`;
   const o = one(
@@ -323,6 +361,8 @@ export async function seedOrg(
       .values({ name: slug, slug, isPersonal })
       .returning({ id: schema.organization.id }),
   );
+  if (withDocketPro) await grantDocketPro(db, schema, o.id);
+  else await clearDocketPro(db, schema, o.id);
   await schema.seedWorkspaceStatuses(db, o.id);
   return o.id;
 }

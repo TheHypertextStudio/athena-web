@@ -8,6 +8,13 @@
 
 > **Superseded (2026-08-14).** The historical `@docket/types/api` RPC-path guidance below is superseded by [ARCH-001](../WORKLOG.md#arch-001-domain-first-repository-reorganization): use the API-owned `@docket/api/rpc-contract` transport contract.
 
+> **Superseded (2026-08-15).** Historical MCP decisions below that bind access to first-party
+> clients, vendor domains, or a CIMD host allowlist are void. MCP clients establish trust through
+> OAuth registration, explicit user consent, scopes, audience binding, organization grants, and
+> Docket Pro capabilities. URL-form client metadata is accepted or rejected by protocol validation
+> and public-network safety rules, never by vendor identity. See
+> [`specs/mcp-surface.md`](./specs/mcp-surface.md) and [`mcp-access.md`](./mcp-access.md).
+
 _Resolved 105 open items across 7 areas._
 
 ## data-model

@@ -292,7 +292,8 @@ Before a session exists:
 1. signature check — a forged request gets `403` and no TwiML at all;
 2. caller resolution — unrecognized hears `unrecognizedCallerAnnouncement`;
 3. `isAthenaEntitled(workspace)` — which wraps the _same_ `assertAgentSessionsEntitled` the web
-   path uses, so the two can never drift. Unentitled hears `planRequiredAnnouncement`;
+   path uses, so the two can never drift. An organization without the product hears
+   `productRequiredAnnouncement`;
 4. only then `openVoiceSession`.
 
 A gated caller creates **no** voice session, **no** conversation turn, and **no** model call. The
@@ -302,9 +303,9 @@ test asserts a before/after footprint of zero.
 
 ```
 Hi, this is Athena from Docket.
-Calling me is part of a Docket subscription plan, and it looks like your account is not on one yet.
+Phone access is part of Docket Pro, and this organization does not have Docket Pro.
 You can sign up on the web at docket.place slash pricing. That is https://docket.place/pricing.
-Once your plan is active, call this number back and we can pick up right where you left off.
+After Docket Pro is active, call this number again.
 Talk soon.
 ```
 

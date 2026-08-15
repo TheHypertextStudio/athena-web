@@ -52,7 +52,6 @@ function validApiEnv(): Record<string, string> {
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
     MCP_TASKS_ENABLED: 'false',
-    MCP_CIMD_STRICT: 'true',
   };
 }
 
@@ -149,8 +148,6 @@ describe('slices', () => {
     expect(stripeServer.BILLING_ENABLED.parse('true')).toBe(true);
     expect(stripeServer.BILLING_ENABLED.parse('false')).toBe(false);
 
-    expect(() => mcpServer.MCP_CIMD_STRICT.parse(undefined)).toThrow();
-    expect(mcpServer.MCP_CIMD_STRICT.parse('true')).toBe(true);
     expect(mcpServer.MCP_TASKS_ENABLED.parse('false')).toBe(false);
 
     // Anything outside the enum is rejected.
@@ -297,7 +294,6 @@ describe('api composition', () => {
     expect(mod.env.NODE_ENV).toBe('development');
     expect(mod.env.BILLING_ENABLED).toBe(false);
     expect(mod.env.STRIPE_PUBLISHABLE_KEY).toBeUndefined();
-    expect(mod.env.MCP_CIMD_STRICT).toBe(true);
     expect(mod.env.MCP_ISSUER_URL).toBe('http://localhost:4000');
     expect(mod.env.MCP_RESOURCE_URL).toBe('http://localhost:4000/mcp');
     expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('http://localhost:3000/sign-in');
@@ -317,14 +313,6 @@ describe('api composition', () => {
     expect(mod.env.MCP_ISSUER_URL).toBe('https://issuer.example.com');
     expect(mod.env.MCP_RESOURCE_URL).toBe('https://api.example.com/mcp');
     expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('https://login.example.com/start');
-  });
-
-  it('does not derive MCP_ALLOWED_ORIGINS from the base web URL', async () => {
-    for (const [key, value] of Object.entries(validApiEnv())) {
-      vi.stubEnv(key, value);
-    }
-    const mod = await import('../../src/api');
-    expect(mod.env.MCP_ALLOWED_ORIGINS).toBeUndefined();
   });
 
   it('throws fail-fast when a required var is missing', async () => {
@@ -424,13 +412,19 @@ describe('api composition', () => {
     expect(mod.env).toBeDefined();
   });
 
-  describe('cross-field: BILLING_ENABLED requires stripe key + price', () => {
+  describe('cross-field: BILLING_ENABLED requires complete Stripe configuration', () => {
+    const requiredStripeRuntime = {
+      STRIPE_SECRET_KEY: 'sk_test_123',
+      STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+      STRIPE_WEBHOOK_SECRET: 'whsec_123',
+    } as const;
+
     it('passes with secret key + price id', async () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
-        STRIPE_SECRET_KEY: 'sk_test_123',
-        STRIPE_PRICE_TEAM: 'price_123',
+        ...requiredStripeRuntime,
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
       })) {
         vi.stubEnv(key, value);
       }
@@ -442,8 +436,8 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
-        STRIPE_SECRET_KEY: 'sk_test_123',
-        DOCKET_PRICE_LOOKUP_TEAM: 'team_monthly',
+        ...requiredStripeRuntime,
+        DOCKET_PRICE_LOOKUP_DOCKET_PRO: 'docket_pro_monthly',
       })) {
         vi.stubEnv(key, value);
       }
@@ -455,7 +449,9 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
-        STRIPE_PRICE_TEAM: 'price_123',
+        STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
       })) {
         vi.stubEnv(key, value);
       }
@@ -468,12 +464,42 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
-        STRIPE_SECRET_KEY: 'sk_test_123',
+        ...requiredStripeRuntime,
       })) {
         vi.stubEnv(key, value);
       }
       await expect(import('../../src/api')).rejects.toThrow(
-        'BILLING_ENABLED=true requires STRIPE_PRICE_TEAM or DOCKET_PRICE_LOOKUP_TEAM',
+        'BILLING_ENABLED=true requires STRIPE_PRICE_DOCKET_PRO or DOCKET_PRICE_LOOKUP_DOCKET_PRO',
+      );
+    });
+
+    it('throws when the publishable key is missing', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'true',
+        STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_ENABLED=true requires STRIPE_PUBLISHABLE_KEY',
+      );
+    });
+
+    it('throws when the webhook secret is missing', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'true',
+        STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_ENABLED=true requires STRIPE_WEBHOOK_SECRET',
       );
     });
   });
@@ -570,14 +596,6 @@ describe('api composition', () => {
       expect(mod.env.OIDC_LOGIN_PAGE_URL).toBe('https://custom.example.com/login');
       // The un-overridden URL still derives.
       expect(mod.env.MCP_RESOURCE_URL).toBe(`${validApiEnv()['API_URL']}/mcp`);
-    });
-
-    it('never derives MCP_ALLOWED_ORIGINS (it is a security allowlist, set explicitly)', async () => {
-      for (const [key, value] of Object.entries(validApiEnv())) {
-        vi.stubEnv(key, value);
-      }
-      const mod = await import('../../src/api');
-      expect(mod.env.MCP_ALLOWED_ORIGINS).toBeUndefined();
     });
   });
 });

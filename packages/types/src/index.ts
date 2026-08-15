@@ -5,6 +5,7 @@
 export * from './primitives';
 export * from './capability';
 export * from './errors';
+export * from './billing';
 export * from './passkey-errors';
 export * from './settings-image';
 export * from './pagination';

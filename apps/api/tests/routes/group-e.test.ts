@@ -190,7 +190,7 @@ describe('billing checkout/portal defaults (no urls/price/email provided)', () =
     const res = await w.request('/checkout', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ customerEmail: 'a@e.com', priceKey: 'docket_team' }),
+      body: JSON.stringify({ customerEmail: 'a@e.com' }),
     });
     expect(res.status).toBe(200);
   });

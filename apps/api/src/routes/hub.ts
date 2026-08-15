@@ -2,7 +2,7 @@
  * `@docket/api` — hub aggregation router (TOP-LEVEL, mounted at `/v1/hub`).
  *
  * @remarks
- * The caller's cross-org command center. Every route resolves the orgs the session user is
+ * The caller's cross-organization view. Every route resolves the organizations the session user is
  * an active human Actor in and aggregates across them. Read-only projections only — never
  * merges tenant data (fan-out queries per membership, each item carries its own org id).
  */

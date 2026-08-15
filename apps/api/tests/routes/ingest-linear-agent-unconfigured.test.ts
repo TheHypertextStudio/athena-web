@@ -23,6 +23,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   ingestLinearAgent = (await import('../../src/routes/ingest-linear-agent')).default;
 });
 
@@ -47,3 +48,4 @@ describe('POST /internal/ingest/linear-agent (Linear Agent app not configured)',
     expect(rows).toHaveLength(0);
   });
 });
+import { installTestProductFixture } from '../support/db';

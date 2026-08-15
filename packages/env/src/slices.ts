@@ -204,8 +204,13 @@ export const stripeServer = {
   /** Browser-safe Stripe key returned through `/v1/config`; stored server-side for runtime deploys. */
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  DOCKET_PRICE_LOOKUP_DOCKET_PRO: z.string().optional(),
+  STRIPE_PRICE_DOCKET_PRO: z.string().optional(),
+  /** @deprecated One-release compatibility for the former Docket Team product name. */
   DOCKET_PRICE_LOOKUP_TEAM: z.string().optional(),
+  /** @deprecated The annual Team product is no longer sold. */
   DOCKET_PRICE_LOOKUP_TEAM_ANNUAL: z.string().optional(),
+  /** @deprecated One-release compatibility for the former Docket Team product name. */
   STRIPE_PRICE_TEAM: z.string().optional(),
   STRIPE_BILLING_PORTAL_CONFIG_ID: z.string().optional(),
   BILLING_ENABLED: boolFromString(),
@@ -215,11 +220,8 @@ export const stripeServer = {
 export const mcpServer = {
   MCP_ISSUER_URL: z.string().optional(),
   MCP_RESOURCE_URL: z.string().optional(),
-  MCP_ALLOWED_ORIGINS: z.string().optional(),
   OIDC_LOGIN_PAGE_URL: z.string().optional(),
   MCP_TASKS_ENABLED: boolFromString(),
-  MCP_CIMD_TRUST_ALLOWLIST: z.string().optional(),
-  MCP_CIMD_STRICT: boolFromString(),
   MCP_SESSION_STORE_URL: z.string().optional(),
 };
 

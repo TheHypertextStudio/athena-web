@@ -176,8 +176,22 @@ guided GitHub App flow rotates them to canonical secret names.
 
 **From Cloud Run env vars** (set at deploy time from GitHub `vars.*`):
 
-`NODE_ENV`, `APP_MODE`, `API_URL`, `WEB_URL`, `BETTER_AUTH_URL`, `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS`, `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`, `GOOGLE_CALENDAR_WEBHOOK_URL`, `GOOGLE_OAUTH_PUBLIC`, `GOOGLE_OAUTH_TEST_EMAILS`, `BILLING_ENABLED`, `MCP_ALLOWED_ORIGINS`, `MCP_TASKS_ENABLED`, `MCP_CIMD_STRICT`.
-The MCP OAuth authorization server is **on by default in every deploy** — it needs no MCP-specific vars. `MCP_ISSUER_URL`, `MCP_RESOURCE_URL`, and `OIDC_LOGIN_PAGE_URL` derive mechanically from `API_URL`/`WEB_URL` (`packages/env/src/api.ts`); set one only to override its derivation (e.g. a non-standard sign-in route).
+`NODE_ENV`, `APP_MODE`, `API_URL`, `WEB_URL`, `BETTER_AUTH_URL`,
+`BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS`,
+`BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`,
+`GOOGLE_CALENDAR_WEBHOOK_URL`, `GOOGLE_OAUTH_PUBLIC`, `GOOGLE_OAUTH_TEST_EMAILS`,
+`BILLING_ENABLED`, `DOCKET_PRICE_LOOKUP_DOCKET_PRO`, `STRIPE_PRICE_DOCKET_PRO`, and
+`MCP_TASKS_ENABLED`.
+
+The MCP OAuth authorization server is **on by default in every deploy** — it needs no MCP-specific
+client-list variables. `MCP_ISSUER_URL`, `MCP_RESOURCE_URL`, and `OIDC_LOGIN_PAGE_URL` derive
+mechanically from `API_URL`/`WEB_URL` (`packages/env/src/api.ts`); set one only to override its
+derivation (for example, a non-standard sign-in route). When a request includes an `Origin`, the
+protocol boundary validates the origin itself; client vendors are not configured in deployment.
+
+Stripe product, price, portal, and webhook configuration is reconciled by `pnpm integrations` in
+test mode before production. The same standard workflow writes the reviewed live credentials and
+non-secret product values to the production targets; there is no manual Vercel configuration path.
 
 ### Transactional email and notification delivery providers
 

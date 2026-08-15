@@ -25,6 +25,10 @@
     "./application/entitlement": {
       "types": "./src/application/entitlement.ts",
       "default": "./src/application/entitlement.ts"
+    },
+    "./provision": {
+      "types": "./src/provision.ts",
+      "default": "./src/provision.ts"
     }
   },
   "scripts": {
@@ -37,6 +41,7 @@
   },
   "dependencies": {
     "@docket/db": "workspace:*",
+    "@docket/types": "workspace:*",
     "drizzle-orm": "catalog:",
     "stripe": "catalog:"
   },

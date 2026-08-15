@@ -29,10 +29,10 @@ import { env } from './env';
  * cross-cutting conventions every endpoint shares.
  */
 const PRODUCT_OVERVIEW = `
-Docket is the calm command center for work — a multi-tenant platform where people **and AI
-agents** plan, track, and ship work together. This reference is the complete, authoritative
-description of the product: every resource, field, permission, and side effect lives here, so
-you can understand the whole system from the API alone.
+Docket keeps planning, scheduling, and tracked time in one work system. People and software
+clients act through explicit identities and permissions. One person can work across multiple
+organizations while each organization's data remains separate. This reference documents the
+resources, fields, permissions, and side effects exposed by the API.
 
 ## The domain model
 

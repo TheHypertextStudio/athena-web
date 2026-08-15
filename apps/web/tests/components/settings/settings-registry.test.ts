@@ -116,6 +116,7 @@ describe('shared workspace sections', () => {
     expect(orgSections.map((section) => section.key)).toEqual([
       'general',
       'members',
+      'billing',
       'statuses',
       'work-structure',
       'labels',
@@ -143,7 +144,7 @@ describe('shared workspace sections', () => {
   it('does not expose the retired vocabulary picker or unfinished destinations', () => {
     const keys = orgSections.map((section) => section.key);
     expect(keys).not.toContain('vocabulary');
-    expect(keys).not.toEqual(expect.arrayContaining(['teams', 'roles', 'billing', 'agents']));
+    expect(keys).not.toEqual(expect.arrayContaining(['teams', 'roles', 'agents']));
   });
 });
 
@@ -165,6 +166,7 @@ describe('personal workspace sections', () => {
   it('keeps the rest of the shared work-configuration set', () => {
     expect(keys).toEqual([
       'general',
+      'billing',
       'statuses',
       'work-structure',
       'labels',

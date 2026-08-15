@@ -54,6 +54,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   ({ buildLinearAgentPortForIntegration } = await import('../../src/lib/linear-agent-credential'));
   ({ sealCredential } = await import('../../src/lib/credentials'));
 });
@@ -176,3 +177,4 @@ describe('buildLinearAgentPortForIntegration', () => {
     expect(row?.lastError).toBe('invalid_grant');
   });
 });
+import { installTestProductFixture } from '../support/db';

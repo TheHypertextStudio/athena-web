@@ -47,11 +47,13 @@ import {
 import { findVar } from '../packages/env/src/registry';
 import type { VarSpec } from '../packages/env/src/registry';
 import { isRealValue } from '../packages/env/src';
+import { provisionDocketStripe } from '../domains/billing/src/provision';
 import {
   PROVIDER_GROUPS,
   providerVars,
   DEFAULT_LOCAL_API_URL,
   copyToClipboard,
+  fetchStripeCliWebhookSecret,
   type Environment,
   type ProviderGroup,
   type ProviderId,
@@ -354,11 +356,12 @@ export function setupProviderVars(
   env: Environment,
   includeOptional: boolean,
 ): readonly string[] {
+  const managed = new Set(group.managedVars ?? []);
   return [
     ...requiredProviderVars(group, env),
     ...policyProviderVars(group, env),
     ...(includeOptional ? optionalProviderVars(group, env) : []),
-  ].filter((name, index, all) => all.indexOf(name) === index);
+  ].filter((name, index, all) => !managed.has(name) && all.indexOf(name) === index);
 }
 
 /** Classify primary capability readiness, or coherent optional-only capabilities. */
@@ -653,6 +656,8 @@ interface CloudConfigurationState {
   readonly configuredVars: Set<string>;
   readonly secretNames: Set<string>;
   readonly variableValues: Map<string, string>;
+  /** Secret values held only in memory so managed provisioners can repair partial setup. */
+  readonly secretValues: Map<string, string>;
   readonly fieldStatuses: Map<string, CredentialStatus>;
   /** Secret objects whose latest versions contain usable values. */
   readonly usableSecretNames: Set<string>;
@@ -679,6 +684,7 @@ function readCloudConfiguration(
   const secretNames = new Set<string>();
   const usableSecretNames = new Set<string>();
   const variableValues = readGitHubVariables(target.repo);
+  const secretValues = new Map<string, string>();
   for (const [name, value] of readGitHubVariables(target.repo, env)) {
     variableValues.set(name, value);
   }
@@ -724,10 +730,18 @@ function readCloudConfiguration(
         configuredVars.add(varName);
         secretNames.add(source);
         usableSecretNames.add(source);
+        if (value) secretValues.set(varName, value);
       }
     }
   }
-  return { configuredVars, secretNames, variableValues, fieldStatuses, usableSecretNames };
+  return {
+    configuredVars,
+    secretNames,
+    variableValues,
+    secretValues,
+    fieldStatuses,
+    usableSecretNames,
+  };
 }
 
 /** Verify the selected gcloud session before the wizard asks the operator for any credentials. */
@@ -763,6 +777,14 @@ export function normalizeCloudSecret(value: string): string {
   const normalized = value.trim();
   if (!normalized) throw new Error('Cloud secret value must not be empty.');
   return normalized;
+}
+
+/** Remove credential-shaped values from provider errors before terminal output. */
+export function redactIntegrationError(value: unknown): string {
+  const message = value instanceof Error ? value.message : String(value);
+  return message
+    .replace(/(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9_*]+/gu, '[Stripe key redacted]')
+    .replace(/whsec_[A-Za-z0-9]+/gu, '[Stripe webhook secret redacted]');
 }
 
 /** Build the least-privilege Secret Manager binding for the default Cloud Run runtime identity. */
@@ -862,6 +884,17 @@ export interface IntegrationCliOptions {
   readonly environments?: Environment[];
   readonly providers?: ProviderId[];
   readonly help: boolean;
+}
+
+/** Operator action for one provider in the guided setup flow. */
+export type ProviderSetupAction = 'keep' | 'configure' | 'replace' | 'skip' | 'exit';
+
+/** Whether a provider action must reconcile its managed external resources. */
+export function shouldRunProviderProvisioner(
+  group: ProviderGroup,
+  action: ProviderSetupAction,
+): boolean {
+  return group.provisioner !== undefined && action !== 'skip' && action !== 'exit';
 }
 
 const ENVIRONMENTS: readonly Environment[] = ['local', 'staging', 'production'];
@@ -1043,6 +1076,12 @@ async function runGuidedSteps(
   setupUrl?: string,
   project?: string,
 ): Promise<GuidedResult> {
+  const autoFetcher = (
+    varName: string,
+  ): NonNullable<ProviderGroup['autoFetch']>[string] | undefined => {
+    if (group.id === 'stripe' && env === 'production') return undefined;
+    return group.autoFetch?.[varName];
+  };
   let index = 0;
   while (index < steps.length) {
     const current = steps[index];
@@ -1072,7 +1111,7 @@ async function runGuidedSteps(
     if (current.var && shouldCollect && !generated) {
       const spec = findVar(current.var);
       if (!spec) throw new Error(`${group.title} references unknown variable ${current.var}.`);
-      const fetcher = group.autoFetch?.[current.var];
+      const fetcher = autoFetcher(current.var);
       const fetched = fetcher ? await tryAutoFetch(fetcher, env, project, current.var) : undefined;
       const value =
         fetched ??
@@ -1140,7 +1179,7 @@ async function runGuidedSteps(
         collected[current.var] = generated;
         ok(`${current.var} generated and copied without being displayed`);
       } else {
-        const fetcher = group.autoFetch?.[current.var];
+        const fetcher = autoFetcher(current.var);
         const fetched = fetcher
           ? await tryAutoFetch(fetcher, env, project, current.var)
           : undefined;
@@ -1184,9 +1223,52 @@ function readLocalConfiguration(
     configuredVars,
     secretNames: new Set(),
     variableValues,
+    secretValues: new Map(),
     fieldStatuses,
     usableSecretNames: new Set(),
   };
+}
+
+/** Run a provider's reusable managed-resource reconciler. */
+async function runProviderProvisioner(
+  group: ProviderGroup,
+  env: Environment,
+  urls: SetupUrls,
+  collected: Readonly<Record<string, string>>,
+  state: CloudConfigurationState,
+): Promise<Record<string, string>> {
+  if (!group.provisioner) return {};
+  const current = (name: string): string | undefined =>
+    collected[name] ?? state.secretValues.get(name) ?? state.variableValues.get(name);
+  const secretKey = current('STRIPE_SECRET_KEY');
+  const publishableKey = current('STRIPE_PUBLISHABLE_KEY');
+  if (!secretKey || !publishableKey) {
+    throw new Error('Stripe provisioning requires both secret and publishable API keys.');
+  }
+  const mode = env === 'production' ? 'live' : 'test';
+  const publishablePrefix = mode === 'live' ? 'pk_live_' : 'pk_test_';
+  if (!publishableKey.startsWith(publishablePrefix)) {
+    throw new Error(`${mode} Stripe provisioning requires a ${publishablePrefix} publishable key.`);
+  }
+  const stripeCliWebhookSecret = env === 'local' ? fetchStripeCliWebhookSecret() : undefined;
+  if (env === 'local' && !stripeCliWebhookSecret) {
+    throw new Error(
+      'Stripe sandbox provisioning requires a signed Stripe CLI session. Run `stripe login`, then retry.',
+    );
+  }
+  const result = await provisionDocketStripe({
+    mode,
+    secretKey,
+    apiOrigin: urls.apiBase,
+    webOrigin: urls.webBases[0] ?? urls.apiBase,
+    ...(env === 'local'
+      ? { webhookTransport: 'stripe-cli' as const, existingWebhookSecret: stripeCliWebhookSecret }
+      : current('STRIPE_WEBHOOK_SECRET')
+        ? { existingWebhookSecret: current('STRIPE_WEBHOOK_SECRET') }
+        : {}),
+  });
+  for (const action of result.actions) ok(`Stripe: ${action}`);
+  return { ...result.values };
 }
 
 function providerFieldNote(group: ProviderGroup, varName: string): readonly string[] {
@@ -1324,7 +1406,7 @@ async function setupEnvironment(
     const optionalVars = optionalProviderVars(group, env);
     const optionalOnly = primaryVars.length === 0 && optionalVars.length > 0;
     const action = unwrap(
-      await select<'keep' | 'configure' | 'replace' | 'skip' | 'exit'>({
+      await select<ProviderSetupAction>({
         message:
           primaryStatus === 'configured'
             ? optionalOnly
@@ -1334,7 +1416,14 @@ async function setupEnvironment(
         initialValue: primaryStatus === 'configured' ? 'keep' : 'configure',
         options: [
           ...(primaryStatus === 'configured'
-            ? [{ value: 'keep' as const, label: 'Keep existing' }]
+            ? [
+                {
+                  value: 'keep' as const,
+                  label: group.provisioner
+                    ? 'Reconcile using existing credentials'
+                    : 'Keep existing',
+                },
+              ]
             : [{ value: 'configure' as const, label: 'Set up or repair missing fields' }]),
           ...(primaryStatus === 'configured'
             ? [
@@ -1545,6 +1634,27 @@ async function setupEnvironment(
       }
     }
 
+    if (shouldRunProviderProvisioner(group, action)) {
+      const provisioned = await runProviderProvisioner(group, env, urls, collected, state);
+      const managed = new Set(group.managedVars ?? []);
+      for (const [varName, value] of Object.entries(provisioned)) {
+        if (!managed.has(varName)) {
+          throw new Error(`${group.title} provisioner returned unmanaged variable ${varName}.`);
+        }
+        const spec = findVar(varName);
+        const parsed = spec?.zod.safeParse(value);
+        if (!spec || !parsed?.success) {
+          throw new Error(`${group.title} provisioner returned an invalid value for ${varName}.`);
+        }
+        collected[varName] = value;
+      }
+      for (const varName of managed) {
+        if (!(varName in collected) && state.fieldStatuses.get(varName) !== 'ready') {
+          throw new Error(`${group.title} provisioner did not produce required ${varName}.`);
+        }
+      }
+    }
+
     if (Object.keys(collected).length === 0) {
       ok(`${group.label}: no values changed`);
       continue;
@@ -1572,6 +1682,7 @@ async function setupEnvironment(
           pushSecret(env, cloud, name, value);
           state.secretNames.add(secretName(env, name));
           state.usableSecretNames.add(secretName(env, name));
+          state.secretValues.set(name, value);
         }
         state.variableValues.set(name, value);
         const status = classifyCredentialValue(value);
@@ -1645,7 +1756,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     note(integrationHelp(), 'Docket integrations');
   } else {
     runIntegrationSetup(cli).catch((err: unknown) => {
-      log.error(`Integration setup failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`Integration setup failed: ${redactIntegrationError(err)}`);
       process.exit(1);
     });
   }

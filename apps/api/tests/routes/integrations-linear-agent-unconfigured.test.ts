@@ -27,6 +27,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   integrationsLinearAgent = (await import('../../src/routes/integrations-linear-agent')).default;
 });
 
@@ -84,3 +85,4 @@ describe('GET /install (Linear Agent app not configured)', () => {
     expect(rows).toHaveLength(0);
   });
 });
+import { installTestProductFixture } from '../support/db';

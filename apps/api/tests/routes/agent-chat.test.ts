@@ -36,6 +36,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   agentRuntime = await import('@docket/athena/turn');
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   ({ getContainer } = await import('../../src/container'));
@@ -218,3 +219,4 @@ describe('the Athena chat thread', () => {
     expect(originalDetail.activities.map((a) => a.body['text'])).toContain('Remember this thread.');
   });
 });
+import { installTestProductFixture } from '../support/db';

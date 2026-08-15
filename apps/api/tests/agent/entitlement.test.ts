@@ -2,19 +2,20 @@ import { resolve } from 'node:path';
 
 import { eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
+import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-
-import { billingExemption } from '@docket/db';
 
 const getSession = vi.fn(async () => null);
 vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 
 import type * as DbModule from '@docket/db';
 import type * as AgentRuntimeModule from '@docket/athena/turn';
-import type { resolveAgentSessionEntitlement as ResolveAgentSessionEntitlement } from '@docket/billing/application/entitlement';
+import type { resolveProductCapability as ResolveProductCapability } from '@docket/billing/application/entitlement';
 
 import type { driveSession as DriveSession } from '../../src/agent/loop';
-import type { assertAgentSessionsEntitled as Assert } from '../../src/agent/entitlement';
+import type { assertProductCapability as Assert } from '../../src/product-capability';
+import type { sharedWorkCapabilityGuard as SharedWorkGuard } from '../../src/product-capability';
+import type { AppEnv } from '../../src/context';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import { assertDefined } from '@docket/test-utils';
 
@@ -32,18 +33,20 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let agentRuntime!: typeof AgentRuntimeModule;
 let driveSession!: typeof DriveSession;
-let assertAgentSessionsEntitled!: typeof Assert;
+let assertProductCapability!: typeof Assert;
+let sharedWorkCapabilityGuard!: typeof SharedWorkGuard;
 let ensureDefaultAgent!: typeof EnsureDefaultAgent;
-let resolveAgentSessionEntitlement!: typeof ResolveAgentSessionEntitlement;
+let resolveProductCapability!: typeof ResolveProductCapability;
 
 beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
   agentRuntime = await import('@docket/athena/turn');
-  ({ resolveAgentSessionEntitlement } = await import('@docket/billing/application/entitlement'));
+  ({ resolveProductCapability } = await import('@docket/billing/application/entitlement'));
   ({ driveSession } = await import('../../src/agent/loop'));
-  ({ assertAgentSessionsEntitled } = await import('../../src/agent/entitlement'));
+  ({ assertProductCapability, sharedWorkCapabilityGuard } =
+    await import('../../src/product-capability'));
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
 });
 
@@ -95,74 +98,115 @@ const TEXT_ONLY: readonly AgentRuntimeModule.ScriptedTurn[] = [
   },
 ];
 
-describe('resolveAgentSessionEntitlement', () => {
-  it('returns portable subscription, plan-required, and missing-workspace outcomes', async () => {
-    const trialing = await seedOrg('trialing');
-    await expect(resolveAgentSessionEntitlement(db, trialing.orgId)).resolves.toEqual({
-      kind: 'entitled',
-      source: 'subscription',
-    });
+async function grantDocketPro(
+  orgId: string,
+  status: 'trialing' | 'active' | 'past_due' | 'canceled' = 'active',
+  source: 'stripe' | 'complimentary' = 'stripe',
+): Promise<void> {
+  await db.insert(schema.organizationProductEntitlement).values({
+    organizationId: orgId,
+    productKey: 'docket_pro',
+    status,
+    source,
+  });
+}
 
-    const lapsed = await seedOrg('past_due');
-    await expect(resolveAgentSessionEntitlement(db, lapsed.orgId)).resolves.toEqual({
-      kind: 'plan-required',
-    });
-
-    await expect(resolveAgentSessionEntitlement(db, 'org_does_not_exist')).resolves.toEqual({
-      kind: 'organization-not-found',
+describe('resolveProductCapability', () => {
+  it('does not infer paid capability access from an organization lifecycle state', async () => {
+    const active = await seedOrg('active');
+    await expect(resolveProductCapability(db, active.orgId, 'athena')).resolves.toEqual({
+      kind: 'product-required',
     });
   });
 
-  it('reports an active staff exemption without an HTTP-specific error', async () => {
-    const lapsed = await seedOrg('export_window');
-    await db.insert(billingExemption).values({
-      organizationId: lapsed.orgId,
-      reason: 'internal free use',
-    });
-
-    await expect(resolveAgentSessionEntitlement(db, lapsed.orgId)).resolves.toEqual({
+  it('returns a delivery-neutral outcome for an active product grant', async () => {
+    const org = await seedOrg('export_window');
+    await grantDocketPro(org.orgId, 'active', 'complimentary');
+    await expect(resolveProductCapability(db, org.orgId, 'athena')).resolves.toEqual({
       kind: 'entitled',
-      source: 'exemption',
+      productKey: 'docket_pro',
+      source: 'complimentary',
+    });
+    await expect(resolveProductCapability(db, 'org_does_not_exist', 'athena')).resolves.toEqual({
+      kind: 'organization-not-found',
     });
   });
 });
 
-describe('assertAgentSessionsEntitled', () => {
-  it('allows trialing and active; refuses everything else with the typed 402', async () => {
-    const trialing = await seedOrg('trialing');
-    await expect(assertAgentSessionsEntitled(trialing.orgId)).resolves.toBeUndefined();
+describe('assertProductCapability', () => {
+  it.each(['shared_work', 'integrations', 'mcp', 'athena', 'voice'] as const)(
+    'requires an active product that grants %s',
+    async (capability) => {
+      const org = await seedOrg('active');
+      await expect(assertProductCapability(org.orgId, capability)).rejects.toMatchObject({
+        status: 402,
+        code: 'product_required',
+      });
 
-    const active = await seedOrg('active');
-    await expect(assertAgentSessionsEntitled(active.orgId)).resolves.toBeUndefined();
+      await grantDocketPro(org.orgId);
+      await expect(assertProductCapability(org.orgId, capability)).resolves.toBeUndefined();
+    },
+  );
 
-    const lapsed = await seedOrg('export_window');
-    await expect(assertAgentSessionsEntitled(lapsed.orgId)).rejects.toMatchObject({
-      status: 402,
-      code: 'agent_plan_required',
-    });
+  it.each(['trialing', 'active'] as const)('accepts a %s Docket Pro grant', async (status) => {
+    const org = await seedOrg('export_window');
+    await grantDocketPro(org.orgId, status);
+    await expect(assertProductCapability(org.orgId, 'athena')).resolves.toBeUndefined();
   });
 
-  it('an active exemption entitles a non-entitled org; revoking it removes entitlement', async () => {
-    const lapsed = await seedOrg('export_window');
-    await expect(assertAgentSessionsEntitled(lapsed.orgId)).rejects.toMatchObject({
+  it.each(['past_due', 'canceled'] as const)('refuses a %s Docket Pro grant', async (status) => {
+    const org = await seedOrg('active');
+    await grantDocketPro(org.orgId, status);
+    await expect(assertProductCapability(org.orgId, 'athena')).rejects.toMatchObject({
       status: 402,
-      code: 'agent_plan_required',
+      code: 'product_required',
     });
+  });
+});
 
-    const [grant] = await db
-      .insert(billingExemption)
-      .values({ organizationId: lapsed.orgId, reason: 'internal free use' })
-      .returning({ id: billingExemption.id });
-    await expect(assertAgentSessionsEntitled(lapsed.orgId)).resolves.toBeUndefined();
-
-    await db
-      .update(billingExemption)
-      .set({ revokedAt: new Date() })
-      .where(eq(billingExemption.id, assertDefined(grant).id));
-    await expect(assertAgentSessionsEntitled(lapsed.orgId)).rejects.toMatchObject({
-      status: 402,
-      code: 'agent_plan_required',
+describe('sharedWorkCapabilityGuard', () => {
+  function guardedApp(orgId: string, isPersonal: boolean): Hono<AppEnv> {
+    const app = new Hono<AppEnv>()
+      .use('*', async (c, next) => {
+        c.set('actorCtx', {
+          orgId,
+          actorId: 'actor_test',
+          roleId: null,
+          capabilities: [],
+          isPersonal,
+        });
+        await next();
+      })
+      .use('*', sharedWorkCapabilityGuard)
+      .get('/', (c) => c.json({ ok: true }));
+    app.onError((error, c) => {
+      const productError = error as { status?: number; code?: string };
+      return c.json(
+        { code: productError.code ?? 'internal_error' },
+        productError.status === 402 ? 402 : 500,
+      );
     });
+    return app;
+  }
+
+  it('keeps baseline work available in a personal workspace without a product record', async () => {
+    const org = await seedOrg('active');
+    const response = await guardedApp(org.orgId, true).request('/');
+    expect(response.status).toBe(200);
+  });
+
+  it('requires Docket Pro for shared organization work', async () => {
+    const org = await seedOrg('active');
+    const response = await guardedApp(org.orgId, false).request('/');
+    expect(response.status).toBe(402);
+    await expect(response.json()).resolves.toMatchObject({ code: 'product_required' });
+  });
+
+  it('allows shared organization work with active Docket Pro', async () => {
+    const org = await seedOrg('active');
+    await grantDocketPro(org.orgId);
+    const response = await guardedApp(org.orgId, false).request('/');
+    expect(response.status).toBe(200);
   });
 });
 
@@ -173,11 +217,12 @@ describe('the gate at driveSession first run', () => {
       driveSession(seed.orgId, seed.sessionId, {
         turnRuntime: new agentRuntime.MockAgentTurnRuntime({ script: TEXT_ONLY }),
       }),
-    ).rejects.toMatchObject({ status: 402, code: 'agent_plan_required' });
+    ).rejects.toMatchObject({ status: 402, code: 'product_required' });
   });
 
   it('does not re-gate a resume: a started session finishes despite a lapse', async () => {
     const seed = await seedOrg('active');
+    await grantDocketPro(seed.orgId);
     // Mark the session as already started (a resume, not a first run), then lapse the plan.
     await db
       .update(schema.agentSession)

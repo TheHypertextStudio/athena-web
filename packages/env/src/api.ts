@@ -59,9 +59,9 @@ const stripSlash = (url: string): string => url.replace(/\/$/, '');
  * - `OIDC_LOGIN_PAGE_URL` ⇒ `${WEB_URL}/sign-in` (the product sign-in route)
  *
  * Setting a var overrides its derivation (e.g. a non-standard sign-in route).
- * `MCP_ALLOWED_ORIGINS` is deliberately NOT derived: it is the /mcp DNS-rebinding
- * security allowlist, a distinct semantic from any other origin list — it stays
- * explicit per environment. The conditional spreads keep `SKIP_ENV_VALIDATION` runs
+ * The public MCP resource uses standards-based OAuth client registration and does not
+ * carry deployment-time client or Origin allowlists. The conditional spreads keep
+ * `SKIP_ENV_VALIDATION` runs
  * (tests) faithful: absent base config derives nothing, so unconfigured-branch tests
  * still exercise those paths.
  */
@@ -156,8 +156,19 @@ function assertCrossFieldRules(e: typeof env): void {
 
   if (e.BILLING_ENABLED) {
     if (!e.STRIPE_SECRET_KEY) fail('BILLING_ENABLED=true requires STRIPE_SECRET_KEY.');
-    if (!e.STRIPE_PRICE_TEAM && !e.DOCKET_PRICE_LOOKUP_TEAM) {
-      fail('BILLING_ENABLED=true requires STRIPE_PRICE_TEAM or DOCKET_PRICE_LOOKUP_TEAM.');
+    if (!e.STRIPE_PUBLISHABLE_KEY) fail('BILLING_ENABLED=true requires STRIPE_PUBLISHABLE_KEY.');
+    if (!e.STRIPE_WEBHOOK_SECRET) fail('BILLING_ENABLED=true requires STRIPE_WEBHOOK_SECRET.');
+    if (
+      !e.STRIPE_PRICE_DOCKET_PRO &&
+      !e.DOCKET_PRICE_LOOKUP_DOCKET_PRO &&
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- required one-release compatibility read
+      !e.STRIPE_PRICE_TEAM &&
+      // eslint-disable-next-line @typescript-eslint/no-deprecated -- required one-release compatibility read
+      !e.DOCKET_PRICE_LOOKUP_TEAM
+    ) {
+      fail(
+        'BILLING_ENABLED=true requires STRIPE_PRICE_DOCKET_PRO or DOCKET_PRICE_LOOKUP_DOCKET_PRO.',
+      );
     }
   }
 

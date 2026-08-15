@@ -1,14 +1,15 @@
 import { Hono } from 'hono';
 import { and, eq, sql } from 'drizzle-orm';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import { assertDefined } from '@docket/test-utils';
 
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
 import type { resetNotifications as ResetNotifications } from '../../src/mcp/notify';
-import { getSession, resetAuthMocks } from '../support/auth-mock';
+import { resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedSkipConsentClient } from '../support/oauth-grant';
 import { appWithActor, seedStatuses } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
@@ -17,6 +18,8 @@ let mcpHandler!: typeof McpHandler;
 let resetNotifications!: typeof ResetNotifications;
 
 beforeAll(async () => {
+  vi.stubEnv('MCP_ISSUER_URL', 'https://auth.docket.test');
+  vi.stubEnv('MCP_RESOURCE_URL', 'https://api.docket.test/mcp');
   schema = await getMigratedDb();
   db = schema.db;
   mcpHandler = (await import('../../src/mcp/server')).mcpHandler;
@@ -30,6 +33,7 @@ interface Seed {
   actorId: string;
   roleId: string;
   taskId: string;
+  clientId: string;
 }
 
 /** Seed an org whose human actor holds `view` org-wide. */
@@ -93,7 +97,8 @@ async function seedOrg(): Promise<Seed> {
     })
     .returning({ id: schema.task.id });
 
-  return { userId, orgId, teamId, actorId, roleId, taskId: assertDefined(task).id };
+  const { clientId } = await seedSkipConsentClient(schema);
+  return { userId, orgId, teamId, actorId, roleId, taskId: assertDefined(task).id, clientId };
 }
 
 function app(): Hono {
@@ -104,7 +109,16 @@ function app(): Hono {
 
 /** Authenticate the next `mcpHandler` call as `seed`'s user. */
 function authAs(seed: Seed): void {
-  getSession.mockResolvedValue({ user: { id: seed.userId, name: 'Ada', email: 'a@e.com' } });
+  verifyAccessToken.mockResolvedValue({
+    sub: seed.userId,
+    azp: seed.clientId,
+    scope: 'work:read work:write agents:run connectors:link',
+  });
+}
+
+function authorization(seed: Seed): string {
+  authAs(seed);
+  return 'Bearer test-token';
 }
 
 /** Complete `initialize` and return the minted session id. */
@@ -112,7 +126,11 @@ async function openSession(seed: Seed): Promise<string> {
   authAs(seed);
   const res = await app().request('/mcp', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+    headers: {
+      authorization: authorization(seed),
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+    },
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
@@ -154,6 +172,7 @@ async function rpc(
   const res = await app().request('/mcp', {
     method: 'POST',
     headers: {
+      authorization: authorization(seed),
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
       'mcp-session-id': sessionId,
@@ -187,7 +206,11 @@ async function openStream(
   const controller = new AbortController();
   const res = await app().request('/mcp', {
     method: 'GET',
-    headers: { accept: 'text/event-stream', 'mcp-session-id': sessionId },
+    headers: {
+      authorization: authorization(seed),
+      accept: 'text/event-stream',
+      'mcp-session-id': sessionId,
+    },
     signal: controller.signal,
   });
   expect(res.status).toBe(200);
@@ -337,7 +360,7 @@ describe('MCP notification channel', () => {
     authAs(seed);
     const deleted = await app().request('/mcp', {
       method: 'DELETE',
-      headers: { 'mcp-session-id': sessionId },
+      headers: { authorization: authorization(seed), 'mcp-session-id': sessionId },
     });
     expect(deleted.status).toBe(204);
 
@@ -362,7 +385,11 @@ describe('MCP notification channel', () => {
       authAs(seed);
       const second = await app().request('/mcp', {
         method: 'GET',
-        headers: { accept: 'text/event-stream', 'mcp-session-id': sessionId },
+        headers: {
+          authorization: authorization(seed),
+          accept: 'text/event-stream',
+          'mcp-session-id': sessionId,
+        },
       });
       expect(second.status).toBe(409);
     } finally {

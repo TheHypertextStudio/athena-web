@@ -207,9 +207,16 @@ export class BillingFrozenError extends ApiError {
   }
 }
 
-/** 402 — Athena sessions require an entitled plan (`trialing`/`active`). */
+/** 402 — the requested capability belongs to an organization product. */
+export class ProductRequiredError extends ApiError {
+  constructor(message = 'Docket Pro is required') {
+    super(402, 'product_required', message);
+  }
+}
+
+/** 402 — legacy compatibility for clients that predate product-capability errors. */
 export class AgentPlanRequiredError extends ApiError {
-  constructor(message = 'Athena requires an active plan') {
+  constructor(message = 'Docket Pro is required to use Athena') {
     super(402, 'agent_plan_required', message);
   }
 }

@@ -51,6 +51,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   ingestLinearAgent = (await import('../../src/routes/ingest-linear-agent')).default;
   ({ sealCredential } = await import('../../src/lib/credentials'));
   ({ MockLinearAgent } = await import('@docket/integrations'));
@@ -659,3 +660,4 @@ describe('POST /internal/ingest/linear-agent', () => {
     });
   });
 });
+import { installTestProductFixture } from '../support/db';

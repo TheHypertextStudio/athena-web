@@ -6,8 +6,10 @@ import { describe, expect, it } from 'vitest';
 import { parseBootstrapFlags } from '../../scripts/bootstrap';
 import {
   linearOAuthAppManifestUrl,
+  parseStripeCliProfile,
   PROVIDER_GROUPS,
   providerVars,
+  stripeCliCredential,
 } from '../../scripts/integration-providers';
 import {
   buildApiSecretBindings,
@@ -15,8 +17,10 @@ import {
   normalizeCloudSecret,
   parseIntegrationArgs,
   policyProviderVars,
+  redactIntegrationError,
   requiredProviderVars,
   runtimeSecretAccessorBindingArgs,
+  shouldRunProviderProvisioner,
   setupProviderVars,
   splitInstructionSteps,
   wrapLines,
@@ -47,6 +51,14 @@ describe('bootstrap phase flags', () => {
     expect(() => parseBootstrapFlags(['--skip-production', '--skip-infrastructure'])).toThrow(
       /has no effect/,
     );
+  });
+
+  it('seeds every required local feature control with its safe default', () => {
+    const bootstrap = readFileSync(
+      resolve(import.meta.dirname, '../../scripts/bootstrap.ts'),
+      'utf8',
+    );
+    expect(bootstrap).toContain('WORK_LOCATION_PROJECTION_ENABLED=false');
   });
 });
 
@@ -143,6 +155,86 @@ describe('mandatory production provider catalog', () => {
     expect(classifyCredentialValue('')).toBe('missing');
     expect(classifyCredentialValue('your-client-id...')).toBe('placeholder');
     expect(classifyCredentialValue('real-value')).toBe('ready');
+  });
+
+  it('provisions Stripe resources instead of prompting for generated bindings', () => {
+    const stripe = PROVIDER_GROUPS.find((group) => group.id === 'stripe');
+    if (!stripe?.instructions) throw new Error('Stripe provider flow is incomplete');
+
+    expect(stripe.provisioner).toBe('docket-stripe');
+    expect(setupProviderVars(stripe, 'production', false)).toEqual([
+      'STRIPE_SECRET_KEY',
+      'STRIPE_PUBLISHABLE_KEY',
+    ]);
+    expect(stripe.managedVars).toEqual([
+      'STRIPE_WEBHOOK_SECRET',
+      'DOCKET_PRICE_LOOKUP_DOCKET_PRO',
+      'STRIPE_PRICE_DOCKET_PRO',
+      'STRIPE_BILLING_PORTAL_CONFIG_ID',
+      'BILLING_ENABLED',
+    ]);
+    const guide = stripe
+      .instructions('production', {
+        apiBase: 'https://docket-api.hypertext.studio',
+        webBases: ['https://docket.hypertext.studio'],
+      })
+      .join('\n');
+    expect(guide).toContain('/internal/billing/webhook');
+    expect(guide).toContain('Docket Pro');
+    expect(guide).toContain('test mode before live mode');
+    expect(guide).not.toContain('/api/auth/stripe/webhook');
+    expect(guide).not.toContain('created separately');
+  });
+
+  it('reconciles managed Stripe resources when configured credentials are kept', () => {
+    const stripe = PROVIDER_GROUPS.find((group) => group.id === 'stripe');
+    const google = PROVIDER_GROUPS.find((group) => group.id === 'google');
+    if (!stripe || !google) throw new Error('provider catalog is incomplete');
+
+    expect(shouldRunProviderProvisioner(stripe, 'keep')).toBe(true);
+    expect(shouldRunProviderProvisioner(stripe, 'configure')).toBe(true);
+    expect(shouldRunProviderProvisioner(stripe, 'replace')).toBe(true);
+    expect(shouldRunProviderProvisioner(stripe, 'skip')).toBe(false);
+    expect(shouldRunProviderProvisioner(google, 'keep')).toBe(false);
+  });
+
+  it('parses only the selected Stripe CLI profile', () => {
+    const profile = parseStripeCliProfile(`
+project-name = 'default'
+
+[default]
+account_id = 'acct_docket'
+test_mode_api_key = 'sk_test_docket'
+test_mode_pub_key = 'pk_test_docket'
+
+['another account']
+test_mode_api_key = 'sk_test_other'
+test_mode_pub_key = 'pk_test_other'
+`);
+
+    expect(profile).toEqual({
+      accountId: 'acct_docket',
+      testSecretKey: 'sk_test_docket',
+      testPublishableKey: 'pk_test_docket',
+    });
+  });
+
+  it('does not import live Stripe credentials from the CLI', () => {
+    const profile = {
+      testSecretKey: 'sk_test_docket',
+      testPublishableKey: 'pk_test_docket',
+      liveSecretKey: 'rk_live_************1234',
+      livePublishableKey: 'pk_live_docket',
+    };
+    expect(stripeCliCredential(profile, 'local', 'secret')).toBe('sk_test_docket');
+    expect(stripeCliCredential(profile, 'production', 'secret')).toBeUndefined();
+    expect(stripeCliCredential(profile, 'production', 'publishable')).toBeUndefined();
+  });
+
+  it('redacts Stripe credential shapes from provider errors', () => {
+    expect(
+      redactIntegrationError(new Error('Invalid rk_live_********1234 and webhook whsec_signing')),
+    ).toBe('Invalid [Stripe key redacted] and webhook [Stripe webhook secret redacted]');
   });
 
   it('keeps GitHub identity setup separate from optional Permissions & events setup', () => {

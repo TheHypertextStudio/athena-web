@@ -155,19 +155,24 @@ tunnel that `pnpm bootstrap` (Phase 1) sets up.
 
 ### 1.4 Stripe (billing + data lifecycle)
 
-Billing subject = Organization (`referenceId = Organization.id`). Stripe SDK pinned `stripe@^22`; API version `2026-03-25.dahlia`. Webhook path = `${API_URL}/api/auth/stripe/webhook`. Keys/secret are **per-mode** (test for dev, live for prod) — same variable names, different values (parity).
+Billing subject = Organization (`referenceId = Organization.id`). Stripe SDK pinned `stripe@^22`;
+API version `2026-03-25.dahlia`. Webhook path = `${API_URL}/internal/billing/webhook`. Keys and
+secrets are **per-mode** (test for development and sandbox verification, live for production) —
+the same variable names hold mode-matched values.
 
-| Name                              | Apps       | Scope  | D/P            | What it is                                                                                                                                                                                                           | Where to obtain                                                                                                                                                                                            |
-| --------------------------------- | ---------- | ------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `STRIPE_SECRET_KEY`               | api (auth) | server | D=P            | Secret API key. Dev = `sk_test_…`, prod = `sk_live_…`.                                                                                                                                                               | Stripe Dashboard → Developers → API keys (toggle Test/Live), or `stripe config --list` for the test key after `stripe login`.                                                                              |
-| `STRIPE_WEBHOOK_SECRET`           | api (auth) | server | D=P            | Signing secret for the webhook endpoint hitting `/api/auth/stripe/webhook`. **Dev** = the `whsec_…` printed by `stripe listen`; **prod** = the endpoint's secret from the Dashboard/CLI. **Per-endpoint, per-mode.** | Dev: `stripe listen --print-secret`. Prod: created when bootstrap registers the live webhook endpoint (`stripe webhook_endpoints create` returns it; or Dashboard → Webhooks → endpoint → Signing secret). |
-| `STRIPE_PUBLISHABLE_KEY`          | api        | server | D=P            | Browser-safe publishable key returned at runtime by `GET /v1/config`. Dev = `pk_test_…`, prod = `pk_live_…`; avoids a Vercel build-time configuration dependency.                                                    | Stripe Dashboard → API keys (publishable).                                                                                                                                                                 |
-| `DOCKET_PRICE_LOOKUP_TEAM`        | api (auth) | server | D=P            | **Primary** plan→price resolution: the `lookup_key` for the Team plan price. Mode-agnostic name; resolved at runtime to the active price in the current mode.                                                        | Set by bootstrap when it creates prices with `--lookup-key team_monthly`.                                                                                                                                  |
-| `DOCKET_PRICE_LOOKUP_TEAM_ANNUAL` | api (auth) | server | D=P            | `lookup_key` for the annual Team price (if annual offered).                                                                                                                                                          | `--lookup-key team_annual`.                                                                                                                                                                                |
-| `STRIPE_PRICE_TEAM`               | api (auth) | server | D=P (fallback) | **Fallback/override** explicit price ID per env (`price_…`). Used only if `authorize`-by-lookup is disabled. Never hardcode in code.                                                                                 | Output of `stripe prices create` (see §3.4).                                                                                                                                                               |
-| `STRIPE_BILLING_PORTAL_CONFIG_ID` | api (auth) | server | D=P (optional) | Customer Portal configuration ID, if a non-default portal config is used.                                                                                                                                            | `stripe billing_portal configurations create` or Dashboard → Customer portal.                                                                                                                              |
+| Name                              | Apps       | Scope  | D/P            | What it is                                                                                                                                                        | Where to obtain                                                                                                               |
+| --------------------------------- | ---------- | ------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `STRIPE_SECRET_KEY`               | api (auth) | server | D=P            | Secret API key. Dev = `sk_test_…`, prod = `sk_live_…`.                                                                                                            | Stripe Dashboard → Developers → API keys (toggle Test/Live), or `stripe config --list` for the test key after `stripe login`. |
+| `STRIPE_WEBHOOK_SECRET`           | api        | server | D=P            | Signing secret for `/internal/billing/webhook`. It is created or reconciled by `pnpm integrations` for the selected Stripe mode.                                  | Standard integration bootstrap output; local forwarding uses the Stripe CLI.                                                  |
+| `STRIPE_PUBLISHABLE_KEY`          | api        | server | D=P            | Browser-safe publishable key returned at runtime by `GET /v1/config`. Dev = `pk_test_…`, prod = `pk_live_…`; avoids a Vercel build-time configuration dependency. | Stripe Dashboard → API keys (publishable).                                                                                    |
+| `DOCKET_PRICE_LOOKUP_DOCKET_PRO`  | api        | server | D=P            | Primary Docket Pro price lookup key. The standard value is `docket_pro_monthly`.                                                                                  | Set by `pnpm integrations` when it reconciles the product and price.                                                          |
+| `STRIPE_PRICE_DOCKET_PRO`         | api        | server | D=P (fallback) | Explicit Docket Pro price ID for the selected Stripe mode.                                                                                                        | Set by `pnpm integrations` from the reconciled monthly price.                                                                 |
+| `DOCKET_PRICE_LOOKUP_TEAM`        | api        | server | D=P (legacy)   | One-release compatibility alias for `DOCKET_PRICE_LOOKUP_DOCKET_PRO`.                                                                                             | Existing deployments only; do not add to new environments.                                                                    |
+| `STRIPE_PRICE_TEAM`               | api        | server | D=P (legacy)   | One-release compatibility alias for `STRIPE_PRICE_DOCKET_PRO`.                                                                                                    | Existing deployments only; do not add to new environments.                                                                    |
+| `STRIPE_BILLING_PORTAL_CONFIG_ID` | api (auth) | server | D=P (optional) | Customer Portal configuration ID, if a non-default portal config is used.                                                                                         | `stripe billing_portal configurations create` or Dashboard → Customer portal.                                                 |
 
-> Personal/solo tier is **no-card** (product decision), so no price is required to _create_ a personal org; the Team price set above gates shared/team orgs and invites.
+> Baseline Docket requires no billing record. Docket Pro is purchased separately for an
+> organization and is the only product configured by the Stripe bootstrap.
 
 ### 1.5 MCP server / OIDC provider
 
@@ -180,14 +185,19 @@ this spec (a design doc predating the build), the derivation itself lives in
 write into `.env` — a deploy with only the required `API_URL`/`WEB_URL` set mounts the MCP OAuth
 server with no MCP-specific config at all.
 
-| Name                  | Apps | Scope  | D/P            | What it is                                                                                                                                                                                 | Where to obtain                                       |
-| --------------------- | ---- | ------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| `MCP_ISSUER_URL`      | api  | server | D=P (optional) | OIDC/OAuth 2.1 issuer (Authorization Server). **= `API_URL`** (single AS, Better Auth `mcp()`).                                                                                            | Derived from `API_URL` at boot; set only to override. |
-| `MCP_RESOURCE_URL`    | api  | server | D=P (optional) | Canonical MCP resource identifier for audience binding (`resource=` param; tokens whose `aud` ≠ this are rejected). **= `${API_URL}/mcp`**.                                                | Derived from `API_URL` at boot; set only to override. |
-| `MCP_ALLOWED_ORIGINS` | api  | server | D=P            | Comma-separated `Origin` allowlist for DNS-rebinding protection on `/mcp` (the app origins + any first-party agent host). **Never derived** — a security allowlist, always set explicitly. | Composed from §0 domains; set per environment.        |
-| `OIDC_LOGIN_PAGE_URL` | api  | server | D=P (optional) | Where `mcp()` redirects for the consent/login UI (a route in `apps/web`). **= `${WEB_URL}/sign-in`** (the consent screen itself lives at `/oauth/authorize`, reached after sign-in).       | Derived from `WEB_URL` at boot; set only to override. |
+| Name                  | Apps | Scope  | D/P            | What it is                                                                                                                                                                           | Where to obtain                                       |
+| --------------------- | ---- | ------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `MCP_ISSUER_URL`      | api  | server | D=P (optional) | OIDC/OAuth 2.1 issuer (Authorization Server). **= `API_URL`** (single AS, Better Auth `mcp()`).                                                                                      | Derived from `API_URL` at boot; set only to override. |
+| `MCP_RESOURCE_URL`    | api  | server | D=P (optional) | Canonical MCP resource identifier for audience binding (`resource=` param; tokens whose `aud` ≠ this are rejected). **= `${API_URL}/mcp`**.                                          | Derived from `API_URL` at boot; set only to override. |
+| `OIDC_LOGIN_PAGE_URL` | api  | server | D=P (optional) | Where `mcp()` redirects for the consent/login UI (a route in `apps/web`). **= `${WEB_URL}/sign-in`** (the consent screen itself lives at `/oauth/authorize`, reached after sign-in). | Derived from `WEB_URL` at boot; set only to override. |
 
-> Downstream connector tokens (GitHub/Drive/Linear) are **separately issued** and **never** the client's MCP token (engineering §4 MUST). Those connector OAuth credentials reuse the §1.3 provider apps — no additional MCP-specific env beyond the above.
+When an MCP request includes an `Origin`, the server validates that it is an exact HTTPS origin, or
+local HTTP loopback outside production. Native clients may omit `Origin`. This rule is implemented
+in the protocol boundary and does not require a client or vendor list in environment configuration.
+
+> Downstream connector tokens (GitHub/Drive/Linear) are **separately issued** and **never** the
+> client's MCP token (engineering §4 MUST). Those connector OAuth credentials reuse the §1.3
+> provider apps — no additional MCP-specific env beyond the above.
 
 ### 1.6 First-party agent (Athena) — minimal, provider-owned compute
 
@@ -387,7 +397,7 @@ export const env = createEnv({
 ```
 pnpm bootstrap
   ├─ 0. Preflight: check CLIs installed + authed (neonctl, stripe, vercel)
-  ├─ 1. Target: choose `dev` (writes apps/*/.env) and/or `prod` (writes Vercel env)
+  ├─ 1. Target: choose `local`, `staging`, or `production`
   ├─ 2. Domains: confirm/enter the §0 domain table → derive *_URL, BETTER_AUTH_URL, MCP_*
   ├─ 3. Secrets: generate BETTER_AUTH_SECRET, CRON_SECRET
   ├─ 4. Neon: provision project/branches → DATABASE_URL (+ unpooled) → run migrations
@@ -395,7 +405,7 @@ pnpm bootstrap
   ├─ 6. Stripe: products + prices (lookup keys), webhook endpoint(s) + secret
   ├─ 7. Athena: prompt for ATHENA_AGENT_ENDPOINT + key (optional ANTHROPIC_API_KEY)
   ├─ 8. Write dev: assemble per-app .env files
-  ├─ 9. Configure prod: vercel link + vercel env add for each app/target
+  ├─ 9. Configure cloud: GCP Secret Manager + GitHub environment variables
   ├─ 10. Verify: re-run @docket/env validation for every app; smoke-check connections
   └─ 11. Summary: print what was created, what needs manual console steps, next commands
 ```
@@ -409,16 +419,21 @@ pnpm bootstrap -- --skip-local --production --skip-infrastructure
 
 ### 3.1 Step 0 — Preflight
 
-For each of `neonctl`, `stripe`, `vercel`: detect presence (`--version`); if missing, print the install command (`npm i -g neonctl`, Stripe CLI install per OS, `npm i -g vercel`) and offer to continue with that provider skipped. Detect auth state:
+For each selected provider, detect its CLI and authentication before making changes. Stripe test
+mode may use the local Stripe CLI profile. Production Stripe credentials are never imported from a
+profile and must be provided explicitly. Cloud writes confirm the selected `gcloud` account, GCP
+project, `gh` account, and GitHub environment before any mutation.
 
 - Neon: `neonctl projects list --output json` succeeds → authed; else `neonctl auth` (browser) or prompt for `NEON_API_KEY`.
 - Stripe: `stripe config --list` shows a key → authed; else `stripe login`.
-- Vercel: `vercel whoami` → authed; else `vercel login` or prompt for `VERCEL_TOKEN`.
 
 ### 3.2 Step 1–3 — Target, domains, secrets
 
 - **Target multiselect:** `dev` and/or `prod`. Dev is the default for first run.
-- **Domains:** show the §0 defaults; allow overrides. From the API origin derive `BETTER_AUTH_URL`, `MCP_ISSUER_URL = API_URL`, `MCP_RESOURCE_URL = ${API_URL}/mcp`, `OIDC_LOGIN_PAGE_URL`, and the `BETTER_AUTH_TRUSTED_ORIGINS`/`MCP_ALLOWED_ORIGINS` CSVs from the web/marketing/admin origins. Set `BETTER_AUTH_PASSKEY_RP_ID` = `localhost` (dev) or the apex of the prod web origin.
+- **Domains:** show the §0 defaults; allow overrides. From the API origin derive `BETTER_AUTH_URL`,
+  `MCP_ISSUER_URL = API_URL`, `MCP_RESOURCE_URL = ${API_URL}/mcp`, `OIDC_LOGIN_PAGE_URL`, and
+  `BETTER_AUTH_TRUSTED_ORIGINS` from the web/admin origins. Set `BETTER_AUTH_PASSKEY_RP_ID` =
+  `localhost` (development) or the apex of the production web origin.
 - **Secrets:** generate `BETTER_AUTH_SECRET` (`crypto.randomBytes(32).toString("base64")`) and `CRON_SECRET` (`randomBytes(32).toString("hex")`). **Different value per target** (dev secret ≠ prod secret).
 
 ### 3.3 Step 4 — Neon Postgres (automated via `neonctl`)
@@ -473,21 +488,31 @@ schema-validated and sensitive values are masked.
 
 Each pasted value is validated against its own `@docket/env` registry schema before being accepted (invalid values re-prompt rather than abort).
 
-### 3.5 Step 6 — Stripe (automated via Stripe CLI)
+### 3.5 Step 6 — Stripe product reconciliation
 
-Verified commands; run against **test mode** for dev and **live mode** for prod (the CLI uses the active key; bootstrap can pass `--api-key` per mode).
+Stripe is configured through the same `pnpm integrations` workflow as every other external
+provider. The wizard invokes the shared Docket billing reconciler; there is no separate setup
+script and no required dashboard-only step.
 
-1. Authenticate: `stripe login` (or pass `--api-key`).
-2. Create product + prices with stable lookup keys (idempotent: list first, reuse if present):
-   - `stripe products create --name "Docket Team" --output json` → capture product id.
-   - `stripe prices create --product <prod_id> --currency usd --unit-amount <amount> --recurring.interval month --lookup-key team_monthly --output json` → sets `DOCKET_PRICE_LOOKUP_TEAM = team_monthly`, captures `price_…` → `STRIPE_PRICE_TEAM` (fallback).
-   - Optional annual: `--recurring.interval year --lookup-key team_annual`.
-3. Webhook endpoints:
-   - **Dev:** do **not** create a Dashboard endpoint; instead instruct the operator to run `stripe listen --forward-to localhost:8787/api/auth/stripe/webhook` in a side terminal, and capture `STRIPE_WEBHOOK_SECRET` via `stripe listen --print-secret`.
-   - **Prod:** create the real endpoint → `stripe webhook_endpoints create --url https://docket-api.hypertext.studio/api/auth/stripe/webhook --enabled-events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_failed,invoice.paid,invoice.payment_action_required,customer.subscription.trial_will_end --output json` → capture the returned signing secret into prod `STRIPE_WEBHOOK_SECRET`.
-4. Prompt for the runtime publishable key (`STRIPE_PUBLISHABLE_KEY`, mode-matched) and secret key
-   (`STRIPE_SECRET_KEY`). The API returns only the publishable key through `GET /v1/config`.
-5. Offer to seed test data for the e2e flow with `stripe trigger checkout.session.completed` (dev only) so the billing path can be smoke-tested immediately.
+For the selected Stripe mode it lists before creating and converges on this desired state:
+
+- Product: `Docket Pro` (an existing legacy product named `Docket Team` is reused and renamed).
+- Price: USD $8, recurring monthly, lookup key `docket_pro_monthly`.
+- Billing portal: cancellation and payment-method management enabled, returning to
+  `${WEB_URL}/billing/return`.
+- Webhook: `${API_URL}/internal/billing/webhook` with the billing lifecycle event set.
+
+The reconciler reuses matching resources. Because Stripe price amount, currency, and recurrence are
+immutable, it deactivates a drifted price before creating the required replacement. If a webhook
+already exists but its signing secret can no longer be retrieved, the wizard rotates that endpoint
+so the runtime receives a usable secret.
+
+For sandbox use, the wizard can read test keys from an authenticated Stripe CLI profile and can
+configure CLI forwarding to the local API without creating a localhost webhook endpoint. For
+production, it requires explicit live credentials and validates that every key matches live mode.
+The resulting `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`,
+`DOCKET_PRICE_LOOKUP_DOCKET_PRO`, `STRIPE_PRICE_DOCKET_PRO`, and optional portal configuration ID
+flow through the standard local or cloud writer only after operator review.
 
 ### 3.6 Step 7 — Athena agent
 

@@ -46,6 +46,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   ({ internalAgentContext, AGENT_SESSION_SCOPES } = await import('../../src/mcp/internal-session'));
   ({ resolveActor } = await import('../../src/mcp/auth'));
   ({ buildServer } = await import('../../src/mcp/server'));
@@ -244,3 +245,4 @@ describe('in-process MCP as the agent principal', () => {
     expect(text).toMatch(/insufficient_scope|scope/i);
   });
 });
+import { installTestProductFixture } from '../support/db';

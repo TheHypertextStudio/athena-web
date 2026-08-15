@@ -4,7 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { Capability } from '@docket/types';
@@ -13,8 +13,9 @@ import type { McpContext } from '../../src/mcp/auth';
 import type { registerTools as RegisterTools } from '../../src/mcp/tools';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { mcpHandler as McpHandler } from '../../src/mcp/server';
-import { getSession, resetAuthMocks } from '../support/auth-mock';
+import { resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedSkipConsentClient } from '../support/oauth-grant';
 import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
@@ -25,6 +26,8 @@ let registerResources!: typeof RegisterResources;
 let mcpHandler!: typeof McpHandler;
 
 beforeAll(async () => {
+  vi.stubEnv('MCP_ISSUER_URL', 'https://auth.docket.test');
+  vi.stubEnv('MCP_RESOURCE_URL', 'https://api.docket.test/mcp');
   schema = await getMigratedDb();
   db = schema.db;
   registerTools = (await import('../../src/mcp/tools')).registerTools;
@@ -44,6 +47,7 @@ interface Seed {
   agentId: string;
   integrationId: string;
   statusId: StatusIdLookup;
+  clientId: string;
   ctx: McpContext;
 }
 
@@ -179,6 +183,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     principal: { kind: 'user', userId, userName: 'Ada', userEmail: email },
     scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
   };
+  const { clientId } = await seedSkipConsentClient(schema);
   return {
     userId,
     orgId,
@@ -191,6 +196,7 @@ async function seedOrg(capabilities: readonly Capability[]): Promise<Seed> {
     agentId,
     integrationId,
     statusId,
+    clientId,
     ctx,
   };
 }
@@ -653,16 +659,23 @@ describe('resources', () => {
 });
 
 describe('mcpHandler success path (authenticated)', () => {
+  function authorization(seed: Seed): string {
+    verifyAccessToken.mockResolvedValue({
+      sub: seed.userId,
+      azp: seed.clientId,
+      scope: 'work:read work:write agents:run connectors:link',
+    });
+    return 'Bearer test-token';
+  }
+
   it('processes an initialize request through a fresh transport', async () => {
     const s = await seedOrg(['view']);
-    getSession.mockResolvedValueOnce({
-      user: { id: s.userId, name: 'Ada', email: 'a@e.com' },
-    });
     const app = new Hono();
     app.on(['POST', 'GET'], '/mcp', mcpHandler);
     const res = await app.request('/mcp', {
       method: 'POST',
       headers: {
+        authorization: authorization(s),
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
       },
@@ -682,14 +695,12 @@ describe('mcpHandler success path (authenticated)', () => {
 
   it('advertises the notification capabilities it now delivers', async () => {
     const s = await seedOrg(['view']);
-    getSession.mockResolvedValueOnce({
-      user: { id: s.userId, name: 'Ada', email: 'a@e.com' },
-    });
     const app = new Hono();
     app.on(['POST', 'GET'], '/mcp', mcpHandler);
     const res = await app.request('/mcp', {
       method: 'POST',
       headers: {
+        authorization: authorization(s),
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
       },
@@ -729,14 +740,12 @@ describe('mcpHandler success path (authenticated)', () => {
 
   it('hands back a session id on initialize so a client can open the stream', async () => {
     const s = await seedOrg(['view']);
-    getSession.mockResolvedValueOnce({
-      user: { id: s.userId, name: 'Ada', email: 'a@e.com' },
-    });
     const app = new Hono();
     app.on(['POST', 'GET', 'DELETE'], '/mcp', mcpHandler);
     const res = await app.request('/mcp', {
       method: 'POST',
       headers: {
+        authorization: authorization(s),
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
       },
@@ -755,20 +764,21 @@ describe('mcpHandler success path (authenticated)', () => {
     expect(res.headers.get('Mcp-Session-Id')).toEqual(expect.any(String));
   });
 
-  it('returns a 500 problem when a non-ApiError escapes auth resolution', async () => {
-    getSession.mockRejectedValueOnce(new Error('boom'));
+  it('returns a 401 problem without exposing token-verification failures', async () => {
+    verifyAccessToken.mockRejectedValueOnce(new Error('boom'));
     const app = new Hono();
     app.on(['POST', 'GET'], '/mcp', mcpHandler);
     const res = await app.request('/mcp', {
       method: 'POST',
       headers: {
+        authorization: 'Bearer invalid-token',
         'content-type': 'application/json',
         accept: 'application/json, text/event-stream',
       },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
     });
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(401);
     const prob = (await res.json()) as { code: string };
-    expect(prob.code).toBe('internal');
+    expect(prob.code).toBe('unauthorized');
   });
 });

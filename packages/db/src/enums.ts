@@ -654,6 +654,18 @@ export const orgLifecycleState = pgEnum('org_lifecycle_state', [
   'pending_deletion',
   'deleted',
 ]);
+/** Lifecycle of one paid organization-product entitlement. */
+export const productEntitlementStatus = pgEnum('product_entitlement_status', [
+  'trialing',
+  'active',
+  'past_due',
+  'canceled',
+]);
+/** Whether an organization product was purchased or granted by an operator. */
+export const productEntitlementSource = pgEnum('product_entitlement_source', [
+  'stripe',
+  'complimentary',
+]);
 /** Service-operator staff tiers. */
 export const staffRole = pgEnum('staff_role', ['support', 'finance', 'superadmin']);
 

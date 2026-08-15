@@ -1,4 +1,10 @@
-import { billingExemption, db, lifecycleHold, organization } from '@docket/db';
+import {
+  billingExemption,
+  db,
+  lifecycleHold,
+  organization,
+  organizationProductEntitlement,
+} from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 
@@ -160,6 +166,26 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       const exemption = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
       if (!exemption) throw new NotFoundError('Exemption insert returned no row');
+      await db
+        .insert(organizationProductEntitlement)
+        .values({
+          organizationId: id,
+          productKey: 'docket_pro',
+          status: 'active',
+          source: 'complimentary',
+        })
+        .onConflictDoUpdate({
+          target: [
+            organizationProductEntitlement.organizationId,
+            organizationProductEntitlement.productKey,
+          ],
+          set: {
+            status: 'active',
+            source: 'complimentary',
+            canceledAt: null,
+            updatedAt: new Date(),
+          },
+        });
       await audit(db, staffUserId, 'billing.exemption_granted', 'organization', id, {
         exemptionId: exemption.id,
         reason,
@@ -195,6 +221,16 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         .returning();
       const exemption = revoked[0];
       if (!exemption) throw new NotFoundError('Active billing exemption not found');
+      await db
+        .update(organizationProductEntitlement)
+        .set({ status: 'canceled', canceledAt: new Date() })
+        .where(
+          and(
+            eq(organizationProductEntitlement.organizationId, id),
+            eq(organizationProductEntitlement.productKey, 'docket_pro'),
+            eq(organizationProductEntitlement.source, 'complimentary'),
+          ),
+        );
       await audit(db, staffUserId, 'billing.exemption_revoked', 'organization', id, {
         exemptionId: exemption.id,
       });

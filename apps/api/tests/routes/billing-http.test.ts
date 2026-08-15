@@ -2,19 +2,26 @@ import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { db as DbType, organization as OrgTable } from '@docket/db';
+import type {
+  db as DbType,
+  organization as OrgTable,
+  organizationProductEntitlement as ProductTable,
+} from '@docket/db';
 
 import type { ActorCtx, AppEnv } from '../../src/context';
+import { getContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import type billingRouter from '../../src/routes/billing';
 import type cronRouter from '../../src/routes/cron';
 import type webhooksRouter from '../../src/routes/webhooks';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { clearDocketPro } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
+let organizationProductEntitlement!: typeof ProductTable;
 let webhooks!: typeof webhooksRouter;
 let cron!: typeof cronRouter;
 let billing!: typeof billingRouter;
@@ -36,6 +43,7 @@ beforeAll(async () => {
   const dbmod = await getMigratedDb();
   db = dbmod.db;
   organization = dbmod.organization;
+  organizationProductEntitlement = dbmod.organizationProductEntitlement;
   webhooks = (await import('../../src/routes/webhooks')).default;
   cron = (await import('../../src/routes/cron')).default;
   billing = (await import('../../src/routes/billing')).default;
@@ -56,7 +64,9 @@ async function makeOrg(
       ...(deleteAfterAt ? { deleteAfterAt } : {}),
     })
     .returning({ id: organization.id });
-  return assertDefined(rows[0]).id;
+  const id = assertDefined(rows[0]).id;
+  await clearDocketPro(db, await import('@docket/db'), id);
+  return id;
 }
 
 /** Read an org's lifecycle state. */
@@ -171,11 +181,15 @@ describe('POST /cron/lifecycle-sweep', () => {
 describe('billing router (org-scoped, via the BillingGateway port)', () => {
   const ORG = 'org_billing_router';
 
-  it('GET / returns null before any subscription exists', async () => {
+  it('GET / returns baseline Docket before any paid product exists', async () => {
     const app = billingApp(`${ORG}_none`, ['view']);
     const res = await app.request('/', { method: 'GET' });
     expect(res.status).toBe(200);
-    expect(await res.json()).toBeNull();
+    expect(await res.json()).toEqual({
+      organizationId: `${ORG}_none`,
+      products: [],
+      canManageBilling: false,
+    });
   });
 
   it('POST /checkout requires manage (403 for a view-only member)', async () => {
@@ -188,22 +202,54 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('POST /checkout returns a hosted url, after which GET / reflects the trialing sub', async () => {
+  it('POST /checkout returns a hosted URL without treating the redirect as activation', async () => {
     const app = billingApp(ORG, ['manage']);
     const checkout = await app.request('/checkout', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ successUrl: 'https://app/ok', cancelUrl: 'https://app/no' }),
+      body: JSON.stringify({}),
     });
     expect(checkout.status).toBe(200);
     const created = (await checkout.json()) as { url: string };
     expect(created.url).toMatch(/^https?:\/\//);
 
-    // The memoized container shares one InMemoryBillingGateway, so the status read sees it.
+    // Product access is webhook-driven. A checkout redirect alone does not write an entitlement.
     const status = await app.request('/', { method: 'GET' });
-    const sub = (await status.json()) as { referenceId: string; status: string } | null;
-    expect(sub?.referenceId).toBe(ORG);
-    expect(sub?.status).toBe('trialing');
+    expect(await status.json()).toEqual({
+      organizationId: ORG,
+      products: [],
+      canManageBilling: true,
+    });
+  });
+
+  it('does not accept caller-controlled checkout return URLs', async () => {
+    const app = billingApp(`${ORG}_redirect`, ['manage']);
+    const res = await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ successUrl: 'https://attacker.example', cancelUrl: 'https://x.test' }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('does not grant a second trial after the organization has owned Docket Pro', async () => {
+    const orgId = await makeOrg('active');
+    await db.insert(organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      status: 'canceled',
+      source: 'stripe',
+    });
+    const app = billingApp(orgId, ['manage']);
+    const res = await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+    const subscription = await getContainer().billing.getSubscription(orgId);
+    expect(subscription).toMatchObject({ status: 'active' });
+    expect(subscription).not.toHaveProperty('trialEnd');
   });
 
   it('POST /portal returns a hosted portal url for a manager', async () => {

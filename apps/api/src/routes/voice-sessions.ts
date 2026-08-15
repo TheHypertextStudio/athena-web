@@ -12,7 +12,7 @@
  * The browser holds the audio link directly to the speech model (WebRTC, using an ephemeral
  * credential this route mints) and relays only *events* here — transcripts, tool calls, speech
  * boundaries. Audio never traverses Docket, so Docket adds no latency to the thing that is
- * latency-critical; and every decision with authority behind it (does this person's plan allow
+ * latency-critical; and every decision with authority behind it (does this organization have
  * this, may this tool run, what gets written to the conversation) still happens on the server,
  * where the authority actually is. A browser that lies about its events can only lie about its
  * own conversation.

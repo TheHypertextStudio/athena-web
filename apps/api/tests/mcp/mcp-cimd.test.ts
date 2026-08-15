@@ -14,8 +14,6 @@ let cimd!: typeof CimdModule;
 let serverMod!: typeof McpServerModule;
 
 beforeAll(async () => {
-  vi.stubEnv('MCP_CIMD_STRICT', 'true');
-  vi.stubEnv('MCP_CIMD_TRUST_ALLOWLIST', 'allowed.example');
   vi.stubEnv('WEB_URL', 'https://docket.test');
   await getMigratedDb();
   cimd = await import('../../src/mcp/cimd');
@@ -203,7 +201,7 @@ describe('CIMD client metadata validation', () => {
     });
   });
 
-  it('rejects non-allowlisted hosts when strict mode is enabled', async () => {
+  it('accepts any public HTTPS metadata host without a vendor allowlist', async () => {
     await expect(
       cimd.resolveCimdClient(
         'https://outside.example/client.json',
@@ -212,7 +210,7 @@ describe('CIMD client metadata validation', () => {
           redirect_uris: ['https://outside.example/callback'],
         }),
       ),
-    ).rejects.toMatchObject({ code: 'invalid_client' });
+    ).resolves.toMatchObject({ clientId: 'https://outside.example/client.json' });
   });
 
   it('rejects a redirect_uris entry that does not parse as a URL', async () => {

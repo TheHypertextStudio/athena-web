@@ -45,6 +45,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   ({ relayLinearAgentActivity } = await import('../../src/lib/linear-agent-relay'));
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
   ({ sealCredential } = await import('../../src/lib/credentials'));
@@ -332,3 +333,4 @@ describe('relayLinearAgentActivity', () => {
     expect(final.lastRelayedActivityUpdatedAt).toEqual(at(2000));
   });
 });
+import { installTestProductFixture } from '../support/db';

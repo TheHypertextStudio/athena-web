@@ -62,7 +62,11 @@ export interface AppRuntimeEnv {
   readonly APP_MODE?: 'local' | 'test' | 'production';
   readonly STRIPE_SECRET_KEY?: string;
   readonly STRIPE_WEBHOOK_SECRET?: string;
+  readonly STRIPE_PRICE_DOCKET_PRO?: string;
+  readonly DOCKET_PRICE_LOOKUP_DOCKET_PRO?: string;
+  /** @deprecated One-release compatibility alias for Docket Pro. */
   readonly STRIPE_PRICE_TEAM?: string;
+  /** @deprecated One-release compatibility alias for Docket Pro. */
   readonly DOCKET_PRICE_LOOKUP_TEAM?: string;
   readonly STRIPE_BILLING_PORTAL_CONFIG_ID?: string;
   readonly ANTHROPIC_API_KEY?: string;
@@ -160,9 +164,18 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     APP_MODE: env.APP_MODE,
     ...(env.STRIPE_SECRET_KEY ? { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY } : {}),
     ...(env.STRIPE_WEBHOOK_SECRET ? { STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET } : {}),
+    ...(env.STRIPE_PRICE_DOCKET_PRO
+      ? { STRIPE_PRICE_DOCKET_PRO: env.STRIPE_PRICE_DOCKET_PRO }
+      : {}),
+    ...(env.DOCKET_PRICE_LOOKUP_DOCKET_PRO
+      ? { DOCKET_PRICE_LOOKUP_DOCKET_PRO: env.DOCKET_PRICE_LOOKUP_DOCKET_PRO }
+      : {}),
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
     ...(env.STRIPE_PRICE_TEAM ? { STRIPE_PRICE_TEAM: env.STRIPE_PRICE_TEAM } : {}),
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
     ...(env.DOCKET_PRICE_LOOKUP_TEAM
-      ? { DOCKET_PRICE_LOOKUP_TEAM: env.DOCKET_PRICE_LOOKUP_TEAM }
+      ? // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
+        { DOCKET_PRICE_LOOKUP_TEAM: env.DOCKET_PRICE_LOOKUP_TEAM }
       : {}),
     ...(env.STRIPE_BILLING_PORTAL_CONFIG_ID
       ? { STRIPE_BILLING_PORTAL_CONFIG_ID: env.STRIPE_BILLING_PORTAL_CONFIG_ID }
@@ -394,7 +407,13 @@ function buildPushSender(runtimeEnv: AppRuntimeEnv): PushSender {
  */
 export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
   const mock = localMode(runtimeEnv);
-  const priceKey = runtimeEnv.STRIPE_PRICE_TEAM ?? runtimeEnv.DOCKET_PRICE_LOOKUP_TEAM;
+  const priceKey =
+    runtimeEnv.STRIPE_PRICE_DOCKET_PRO ??
+    runtimeEnv.DOCKET_PRICE_LOOKUP_DOCKET_PRO ??
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
+    runtimeEnv.STRIPE_PRICE_TEAM ??
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
+    runtimeEnv.DOCKET_PRICE_LOOKUP_TEAM;
   const billing = lazyValue(() =>
     mock
       ? new InMemoryBillingGateway()

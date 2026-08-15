@@ -45,6 +45,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   agentRuntime = await import('@docket/athena/turn');
   ({ driveSession, approveAndResume, resumeSessionExecution } =
     await import('../../src/agent/loop'));
@@ -498,3 +499,4 @@ describe('driveSession — bounds and failure surfaces', () => {
     expect(acts.some((a) => a.type === 'error' && /turn/i.test(a.body.text ?? ''))).toBe(true);
   });
 });
+import { installTestProductFixture } from '../support/db';

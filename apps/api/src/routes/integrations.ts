@@ -28,6 +28,7 @@ import { buildInstallUrl, githubAppConfigFromEnv, signInstallState } from '../li
 import { seedDefaultAutomationRules } from '../lib/automation/rules-store';
 import { deferAfterResponse } from '../lib/after-response';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { productCapabilityGuard } from '../product-capability';
 
 import {
   DIRECTORY_PROVIDERS,
@@ -263,6 +264,7 @@ async function validateTeamMappings(
 
 /** Integrations router: org-scoped CRUD over external migrations + connectors. */
 const integrations = new Hono<AppEnv>()
+  .use('*', productCapabilityGuard('integrations'))
   .get(
     '/',
     apiDoc({

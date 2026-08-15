@@ -43,6 +43,7 @@ beforeAll(async () => {
   client = new PGlite('memory://');
   db = drizzle(client, { schema: fullSchema });
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   organizationId = assertDefined(
     (
       await db
@@ -450,3 +451,4 @@ describe('rolling recurrence sweep', () => {
     expect(result.failedSeriesIds).toEqual([]);
   });
 });
+import { installTestProductFixture } from '../support/db';

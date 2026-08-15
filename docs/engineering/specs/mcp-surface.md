@@ -39,7 +39,11 @@
 - **One endpoint, `/mcp`**, supporting `POST` (JSON-RPC requests/notifications, may upgrade to SSE) and `GET` (server→client SSE stream). The deprecated HTTP+SSE (two-endpoint) transport is **forbidden**.
 - **Session mode:** ~~stateful~~ **RESOLVED: shipped stateless.** The implementation uses `sessionIdGenerator: undefined` — one fresh server + transport per request, no `Mcp-Session-Id`, no Redis event store (`apps/api/src/mcp/server.ts`). Cross-request `resources/subscribe` notifications therefore cannot exist; long agent runs use the Tasks capability (behind `MCP_TASKS_ENABLED` + `MCP_SESSION_STORE_URL`) and clients poll resources. The original stateful+Redis design remains a possible future upgrade if resumable SSE becomes a requirement.
 - **Protocol version header:** the RS MUST honor `MCP-Protocol-Version: 2025-11-25` on every non-initialize request; reject unknown versions with HTTP 400 (SDK handles this).
-- **Origin validation (MUST, DNS-rebinding):** reject requests whose `Origin` is not in an allowlist (`https://app.docket.*`, `https://*.docket.*`, and configured client origins) before any auth work. Bind the listener to the platform host only.
+- **Origin validation (MUST, DNS-rebinding):** a missing `Origin` is valid for native clients. When
+  an `Origin` is present, accept an exact HTTPS origin, or local HTTP loopback outside production;
+  reject malformed values and non-loopback HTTP before auth work. This is a protocol safety check,
+  not a deployment-time client or vendor approval list. Bind the listener to the platform host
+  only.
 - **CORS:** registered **before** the Better Auth handler (engineering plan §2); expose `Authorization`, `WWW-Authenticate`, `Mcp-Session-Id`, `MCP-Protocol-Version`.
 
 ---
@@ -142,11 +146,20 @@ app.get('/.well-known/oauth-protected-resource/mcp', (c) =>
 
 Per spec §"Client Registration Approaches", the priority order is pre-registration → **CIMD** → **DCR** → manual. Docket:
 
-- **Advertises CIMD** via `client_id_metadata_document_supported: true` in AS metadata. The AS fetches the client's HTTPS `client_id` document, validates `client_id` === URL exactly, validates `redirect_uris`, and applies an **SSRF guard + domain trust policy** (allowlist for known clients; reject private/link-local hosts). DCR has been downgraded to MAY in 2025-11-25 (engineering plan §0).
+- **Advertises CIMD** via `client_id_metadata_document_supported: true` in AS metadata. The AS
+  fetches the client's HTTPS `client_id` document, validates `client_id` === URL exactly, validates
+  `redirect_uris`, rejects private/link-local/non-public destinations, caps time and response size,
+  disables redirects, and pins the validated address for the fetch. Any client that satisfies the
+  protocol and network rules can register; no vendor or hostname list grants trust. DCR has been
+  downgraded to MAY in 2025-11-25 (engineering plan §0).
 - **Keeps DCR (`/register`, RFC 7591)** enabled as a MAY-level fallback for backwards compatibility (Better Auth `oidcProvider` provides it).
 - First-party clients (Athena planner, Docket web) are **pre-registered** with fixed `client_id`s.
 
-> **RESOLVED:** Better Auth 1.6.14 does NOT validate URL-form `client_id`s — its authorize handler resolves clients by exact `client_id` lookup only. The thin CIMD shim exists (`apps/api/src/mcp/cimd.ts`: fetch + validate + SSRF/allowlist guard + upsert into `oauth_application`) and `cimdAuthorizeMiddleware` is mounted ahead of `/api/auth/mcp/authorize` in `apps/api/src/server.ts`.
+> **RESOLVED:** Better Auth 1.6.14 does NOT validate URL-form `client_id`s — its authorize handler
+> resolves clients by exact `client_id` lookup only. The thin CIMD shim exists
+> (`apps/api/src/mcp/cimd.ts`: fetch + validate + SSRF guard + upsert into `oauth_application`) and
+> `cimdAuthorizeMiddleware` is mounted ahead of `/api/auth/mcp/authorize` in
+> `apps/api/src/server.ts`.
 >
 > **Consent enforcement (net-new, discovered live):** Better Auth's `mcp()` authorize only routes through the consent page when the client sends `prompt=consent` — otherwise it silently mints a code for any registered client. `mcpConsentGuard` (`apps/api/src/mcp/consent-guard.ts`, mounted beside the CIMD preflight) 302s consent-less authorize requests back with `prompt=consent` unless a stored `oauth_consent` row already covers the requested scopes, restoring consent-once-per-scope-set semantics.
 
@@ -432,13 +445,21 @@ On `initialize`, the RS advertises:
 
 ## 6. Build Checklist (this area)
 
-1. Mount `StreamableHTTPServerTransport` at `/mcp` in `apps/api` — **per-request, not stateful**: session and subscription state lives in Postgres and the notify hop rides `LISTEN/NOTIFY`, because Cloud Run runs `--max-instances=10` with no session affinity and there is no Redis (see `mcp-notifications.md`); wire `withMcpAuth(auth, …)`; register CORS + Origin allowlist **before** the handler.
+1. Mount `StreamableHTTPServerTransport` at `/mcp` in `apps/api` — **per-request, not stateful**:
+   session and subscription state lives in Postgres and the notify hop rides `LISTEN/NOTIFY`,
+   because Cloud Run runs `--max-instances=10` with no session affinity and there is no Redis (see
+   `mcp-notifications.md`); wire `withMcpAuth(auth, …)`; register CORS + vendor-neutral Origin
+   validation **before** the handler.
 2. Serve PRM at `/.well-known/oauth-protected-resource` **and** `/.well-known/oauth-protected-resource/mcp`. AS metadata: Better Auth serves the live document at `<issuer>/api/auth/.well-known/oauth-authorization-server` (relative to its base path, NOT the RFC 8414 root); the RS-level `/.well-known/oauth-authorization-server` 307-redirects there. Confirm `code_challenge_methods_supported:["S256"]` and `client_id_metadata_document_supported:true` appear.
 3. Register the 4 scopes in `mcp().oidcConfig.scopes`; implement the token-validation middleware: bearer → `getMcpSession` → audience(`aud`==RS URI) → issuer → scope → principal(`sub`→User→Actor) → grant cascade. Emit the two `WWW-Authenticate` challenge forms.
 4. Author every tool's Zod input/output + annotations; register with `outputSchema` (JSON Schema 2020-12) and `structuredContent`+text results; gate each by scope (table §3.2) AND grant.
 5. Implement the `docket://` resource reader (Zod read DTOs), `resources/list`, `resources/templates/list`, `resources/read`, `resources/subscribe`, and the `updated`/`list_changed` notification fan-out from the service-layer event bus.
 6. Implement `completion/complete`, `logging`, `ping`/progress/cancel; gate `tasks` behind `MCP_TASKS_ENABLED`.
 7. Enforce **no downstream token passthrough**: connector resolution in `link_external` uses `Integration.credentials_ref`, never the inbound token.
-8. Env contract (validated in `@docket/env`, dev mirrors prod): **DONE, on-by-default.** `MCP_ISSUER_URL`/`MCP_RESOURCE_URL`/`OIDC_LOGIN_PAGE_URL` derive automatically from the required `API_URL`/`WEB_URL` (`packages/env/src/api.ts`) — no MCP-specific setup needed for the AS/RS to mount in any deploy. Only `MCP_ALLOWED_ORIGINS` (a security allowlist) and, if using Tasks, `MCP_SESSION_STORE_URL` (Redis) + `MCP_TASKS_ENABLED` are set explicitly per environment, plus the shared `BETTER_AUTH_URL`/secret/DB vars.
+8. Env contract (validated in `@docket/env`, dev mirrors prod): **DONE, on-by-default.**
+   `MCP_ISSUER_URL`/`MCP_RESOURCE_URL`/`OIDC_LOGIN_PAGE_URL` derive automatically from the required
+   `API_URL`/`WEB_URL` (`packages/env/src/api.ts`) — no client-list configuration is needed for the
+   AS/RS to mount in any deploy. If using Tasks, `MCP_SESSION_STORE_URL` (Redis) and
+   `MCP_TASKS_ENABLED` are explicit, along with the shared `BETTER_AUTH_URL`/secret/DB vars.
 9. Playwright/integration: **DONE** — `apps/web/e2e/mcp-connect.spec.ts` (discover PRM/AS → DCR register → consent → PKCE token → Bearer read → 403 step-up → `capture`) and `apps/web/e2e/mcp-session.spec.ts` (`run_agent` → observe the approval gate on the session resource → `manage_session` with `action: 'approve'`; polling instead of subscribe, per the per-request transport). Both run in the CI `e2e` job.
 10. **Open:** no rate limit on `/mcp`. The API has no rate-limiting infrastructure and the deployment has no shared store, so a per-instance limiter would give false assurance; it needs its own design pass.

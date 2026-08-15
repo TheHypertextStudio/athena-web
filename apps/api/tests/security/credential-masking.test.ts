@@ -62,6 +62,7 @@ beforeAll(async () => {
   schema = await import('@docket/db');
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
+  await installTestProductFixture(db);
   integrationsMcp = (await import('../../src/routes/integrations-mcp')).default;
   personalAthena = (await import('../../src/routes/personal-athena')).default;
   ({ unsealCredential } = await import('../../src/lib/credentials'));
@@ -420,3 +421,4 @@ describe('the published contract never declares a credential-bearing response fi
     expect(names.filter((name) => CREDENTIAL_NAME_PATTERN.test(name))).toEqual(['apiKey']);
   });
 });
+import { installTestProductFixture } from '../support/db';

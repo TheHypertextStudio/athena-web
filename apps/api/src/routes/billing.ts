@@ -22,7 +22,12 @@
  * `/portal`, `/export`, the lifecycle transitions) requires the `manage` capability via
  * {@link capabilityGuard}.
  */
-import { db, genId, organization } from '@docket/db';
+import { db, genId, organization, organizationProductEntitlement } from '@docket/db';
+import {
+  PRODUCT_ENTITLEMENT_SOURCES,
+  PRODUCT_ENTITLEMENT_STATUSES,
+  PRODUCT_KEYS,
+} from '@docket/types';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -68,37 +73,39 @@ export const SubscriptionOut = z
 /** Subscription status response value. */
 export type SubscriptionOut = z.infer<typeof SubscriptionOut>;
 
-/** Body for `POST /checkout`: redirect URLs (price + trial come from policy/env). */
-export const CheckoutBody = z.object({
-  successUrl: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      'Absolute URL the provider redirects to after a successful checkout. Defaults to the app `/billing/return?org=…&status=success` page.',
-    ),
-  cancelUrl: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      'Absolute URL the provider redirects to if the buyer abandons checkout. Defaults to the app `/billing/return?org=…&status=cancel` page.',
-    ),
-  priceKey: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      'The price lookup key / price id to subscribe to. Defaults to the configured team price (env `STRIPE_PRICE_TEAM` / `DOCKET_PRICE_LOOKUP_TEAM`, else `docket_team`). The amount and trial come from policy/env, never the client.',
-    ),
-  customerEmail: z
-    .string()
-    .min(1)
-    .optional()
-    .describe(
-      'Email to pre-fill on the hosted checkout page; omit to let the provider collect it.',
-    ),
+/** One paid product owned by an organization. */
+export const BillingProductOut = z.object({
+  productKey: z.enum(PRODUCT_KEYS),
+  name: z.literal('Docket Pro'),
+  status: z.enum(PRODUCT_ENTITLEMENT_STATUSES),
+  source: z.enum(PRODUCT_ENTITLEMENT_SOURCES),
+  trialEndsAt: z.string().nullable(),
+  renewalDate: z.string().nullable(),
 });
+/** Organization product response value. */
+export type BillingProductOut = z.infer<typeof BillingProductOut>;
+
+/** Organization billing summary. Baseline Docket is represented by an empty products array. */
+export const BillingSummaryOut = z.object({
+  organizationId: z.string(),
+  products: z.array(BillingProductOut),
+  canManageBilling: z.boolean(),
+});
+/** Organization billing summary response value. */
+export type BillingSummaryOut = z.infer<typeof BillingSummaryOut>;
+
+/** Body for `POST /checkout`; product, price, redirects, and trial are server policy. */
+export const CheckoutBody = z
+  .object({
+    customerEmail: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Email to pre-fill on the hosted checkout page; omit to let the provider collect it.',
+      ),
+  })
+  .strict();
 /** Validated checkout-body value. */
 export type CheckoutBody = z.infer<typeof CheckoutBody>;
 
@@ -183,12 +190,20 @@ const EXPORT_TTL_MS = EXPORT_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 /** Resolve the configured default price lookup key / price id for new subscriptions. */
 function defaultPriceKey(): string {
-  return env.STRIPE_PRICE_TEAM ?? env.DOCKET_PRICE_LOOKUP_TEAM ?? 'docket_team';
+  return (
+    env.STRIPE_PRICE_DOCKET_PRO ??
+    env.DOCKET_PRICE_LOOKUP_DOCKET_PRO ??
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
+    env.STRIPE_PRICE_TEAM ??
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
+    env.DOCKET_PRICE_LOOKUP_TEAM ??
+    'docket_pro_monthly'
+  );
 }
 
 /** Build an absolute app URL for the given path (checkout success/cancel defaults). */
 function appUrl(path: string): string {
-  return `${env.API_URL}${path}`;
+  return `${env.WEB_URL}${path}`;
 }
 
 /** Load the org row for the actor's org, or 404 if it is missing/already purged. */
@@ -215,23 +230,29 @@ const billing = new Hono<AppEnv>()
     '/',
     apiDoc({
       tag: 'Billing',
-      summary: 'Get the org subscription',
-      response: SubscriptionOut,
-      description: `Return the organization's current subscription as {@link SubscriptionOut}, or \`null\` when the org has never subscribed. The read goes through the \`@docket/billing\` BillingGateway **port** (resolved from the container), never the Stripe SDK directly - so local/test runs serve deterministic in-memory state while production reads Stripe. The org id is the gateway \`referenceId\`. \`status\` is one of \`trialing\` | \`active\` | \`past_due\` | \`canceled\`, with \`currentPeriodEnd\` and an optional \`trialEnd\`. Open to any org member (a read). This reports the *provider* subscription; the Docket-side data-lifecycle state derived from it lives at \`GET /lifecycle\`. Related: \`POST /checkout\` (start a subscription), \`POST /portal\` (manage it).`,
+      summary: 'Get organization products',
+      response: BillingSummaryOut,
+      description:
+        'Returns the organization products recorded by Docket and whether this member may manage billing. An empty products array means the organization has baseline Docket only.',
     }),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
-      const sub = await getContainer().billing.getSubscription(orgId);
-      const body: z.input<typeof SubscriptionOut> = sub
-        ? {
-            id: sub.id,
-            referenceId: sub.referenceId,
-            status: sub.status,
-            currentPeriodEnd: sub.currentPeriodEnd,
-            ...(sub.trialEnd ? { trialEnd: sub.trialEnd } : {}),
-          }
-        : null;
-      return ok(c, SubscriptionOut, body);
+      const actorCtx = c.get('actorCtx');
+      const products = await db
+        .select()
+        .from(organizationProductEntitlement)
+        .where(eq(organizationProductEntitlement.organizationId, actorCtx.orgId));
+      return ok(c, BillingSummaryOut, {
+        organizationId: actorCtx.orgId,
+        canManageBilling: actorCtx.capabilities.includes('manage'),
+        products: products.map((product) => ({
+          productKey: product.productKey,
+          name: 'Docket Pro' as const,
+          status: product.status,
+          source: product.source,
+          trialEndsAt: product.trialEndsAt?.toISOString() ?? null,
+          renewalDate: product.currentPeriodEnd?.toISOString() ?? null,
+        })),
+      });
     },
   )
   .post(
@@ -242,19 +263,25 @@ const billing = new Hono<AppEnv>()
       summary: 'Open a checkout session',
       capability: 'manage',
       response: RedirectOut,
-      description: `Open a hosted provider checkout session and return {@link RedirectOut} \`{ url }\` — the Stripe-hosted URL the client redirects the buyer to in order to start (or restart) the org's subscription. Goes through the BillingGateway port (in-memory in local/test, Stripe in production) with the org id as \`referenceId\`. The body fields are all optional: \`successUrl\`/\`cancelUrl\` default to the app's \`/billing/return\` page stamped with the org and outcome; \`priceKey\` defaults to the configured team price (env \`STRIPE_PRICE_TEAM\` / \`DOCKET_PRICE_LOOKUP_TEAM\`, else \`docket_team\`); \`customerEmail\` pre-fills checkout when supplied (the price and trial otherwise come from policy/env, never the client).
+      description: `Open a hosted Stripe checkout session for Docket Pro and return {@link RedirectOut} \`{ url }\`. The server selects the Docket Pro price, the app's \`/billing/return\` URLs, and whether this organization receives its first 14-day trial. The optional \`customerEmail\` only pre-fills the hosted checkout page.
 
-Side effect: creates a checkout session with the provider; the actual subscription state only changes once the buyer completes checkout and the provider's webhook lands (which drives the lifecycle transitions). Requires \`manage\` — committing the org to a paid plan is an administrative act. Related: \`POST /portal\` (manage an existing subscription), \`GET /\` (current subscription), \`GET /lifecycle\` (derived lifecycle state).`,
+Side effect: creates a checkout session. Docket Pro ownership changes only after a signed Stripe webhook records the subscription state; returning from checkout does not grant access. Requires \`manage\` because adding a paid product is an organization billing action. Related: \`POST /portal\` (manage Docket Pro), \`GET /\` (owned products), \`GET /lifecycle\` (data lifecycle).`,
     }),
     zJson(CheckoutBody),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const input = c.req.valid('json');
+      const existing = await db
+        .select({ productKey: organizationProductEntitlement.productKey })
+        .from(organizationProductEntitlement)
+        .where(eq(organizationProductEntitlement.organizationId, orgId))
+        .limit(1);
       const result = await getContainer().billing.createCheckoutSession({
         referenceId: orgId,
-        priceKey: input.priceKey ?? defaultPriceKey(),
-        successUrl: input.successUrl ?? appUrl(`/billing/return?org=${orgId}&status=success`),
-        cancelUrl: input.cancelUrl ?? appUrl(`/billing/return?org=${orgId}&status=cancel`),
+        priceKey: defaultPriceKey(),
+        successUrl: appUrl(`/billing/return?org=${orgId}&status=success`),
+        cancelUrl: appUrl(`/billing/return?org=${orgId}&status=cancel`),
+        trialDays: existing.length === 0 ? 14 : 0,
         ...(input.customerEmail ? { customerEmail: input.customerEmail } : {}),
       });
       return ok(c, RedirectOut, { url: result.url });
@@ -268,7 +295,7 @@ Side effect: creates a checkout session with the provider; the actual subscripti
       summary: 'Open the billing portal',
       capability: 'manage',
       response: RedirectOut,
-      description: `Open the provider's hosted billing portal and return {@link RedirectOut} \`{ url }\` — the Stripe customer-portal URL where an admin manages the existing subscription (update the payment method, change/cancel the plan, view invoices). Goes through the BillingGateway port with the org id as \`referenceId\`. Side effect: any change the admin makes in the portal flows back via the provider webhook, which drives Docket's subscription + lifecycle state — this route only mints the portal link. Requires \`manage\`. Related: \`POST /checkout\` (start a subscription), \`GET /\` (current state), \`POST /lifecycle/reactivate\` (rescue an org out of the export window once billing is healthy).`,
+      description: `Open the provider's hosted billing portal and return {@link RedirectOut} \`{ url }\` — the Stripe customer-portal URL where an admin manages Docket Pro (update the payment method, cancel Docket Pro, or view invoices). Goes through the BillingGateway port with the org id as \`referenceId\`. Side effect: any change the admin makes in the portal flows back via the provider webhook, which drives Docket's product entitlement and lifecycle state — this route only mints the portal link. Requires \`manage\`. Related: \`POST /checkout\` (add Docket Pro), \`GET /\` (current state), \`POST /lifecycle/reactivate\` (rescue an org out of the export window once billing is healthy).`,
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -305,13 +332,24 @@ Side effects: the subscription cancel is best-effort against the gateway (a neve
     async (c) => {
       const { orgId } = c.get('actorCtx');
       // Existence-check first so a missing org 404s instead of silently no-op'ing.
-      await loadOrg(orgId);
+      const currentOrg = await loadOrg(orgId);
       // Cancel the provider subscription, then open the org's export window. The cancel
       // is best-effort against the gateway (a never-subscribed org has nothing to cancel);
       // the lifecycle transition is the source of truth Docket acts on.
       await getContainer().billing.cancelSubscription(orgId);
       const now = new Date().toISOString();
-      await onTrialOrPaymentTerminal(db, orgId, now);
+      await db
+        .update(organizationProductEntitlement)
+        .set({ status: 'canceled', canceledAt: new Date(now) })
+        .where(eq(organizationProductEntitlement.organizationId, orgId));
+      if (currentOrg.isPersonal) {
+        await db
+          .update(organization)
+          .set({ lifecycleState: 'active', exportReadyAt: null, deleteAfterAt: null })
+          .where(eq(organization.id, orgId));
+      } else {
+        await onTrialOrPaymentTerminal(db, orgId, now);
+      }
       const org = await loadOrg(orgId);
       return ok(c, LifecycleOut, toLifecycleOut(org));
     },

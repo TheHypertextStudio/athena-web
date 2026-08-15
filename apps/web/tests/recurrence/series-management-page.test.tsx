@@ -1,7 +1,7 @@
 /** Repeating-work management keeps lifecycle, missed dates, and future edits on one surface. */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const calls = vi.hoisted(() => ({ detail: vi.fn(), lifecycle: vi.fn(), edit: vi.fn() }));
 
@@ -32,7 +32,27 @@ vi.mock('../../src/lib/api', () => ({
 
 import RecurrenceSeriesPage from '../../src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page';
 
+/**
+ * A moment before the fixture's `2026-08-12` revision boundary, so `today` in the page (line 129,
+ * `new Date().toISOString().slice(0, 10)`) is fixed rather than the real clock.
+ *
+ * @remarks
+ * Every fixture date below — the missed `2026-08-10` occurrence, the needs-decision `2026-08-14`
+ * one, the `earliest` fallback of `2026-08-13` — is written relative to "today" being before
+ * 2026-08-12. Without pinning the clock, this test only held on the days it was written for: once
+ * the real date passed 2026-08-14, the page's own `scheduledFor >= today` filter dropped the
+ * `2026-08-14` occurrence from the needs-decision list, and its "Change Aug 14, 2026" button
+ * stopped rendering.
+ */
+const BEFORE_REVISION_BOUNDARY = new Date('2026-08-11T12:00:00.000Z');
+
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(BEFORE_REVISION_BOUNDARY);
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   calls.detail.mockReset();
   calls.lifecycle.mockReset();

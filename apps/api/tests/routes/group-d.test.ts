@@ -658,7 +658,7 @@ describe('daily-plan router', () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     const artifacts = await db
       .select({ id: schema.dailyPlanItem.id })
       .from(schema.dailyPlanItem)

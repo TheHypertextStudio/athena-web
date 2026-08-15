@@ -137,7 +137,7 @@ describe('personal Athena query definitions', () => {
     await personalAthenaTransport.decide('session_1', 'activity_1', 'approve');
 
     expect(requested).toEqual([
-      '/v1/me/athena/sessions/session_1/activity/activity_1/approve',
+      '/v1/me/athena/sessions/session_1/activity/activity_1/decision',
       '/v1/me/athena/sessions/session_1?',
     ]);
   });

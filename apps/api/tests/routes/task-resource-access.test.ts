@@ -231,7 +231,7 @@ describe('task resource delivery', () => {
           }),
         })
       ).status,
-    ).toBe(200);
+    ).toBe(201);
   });
 
   it('keeps visible private tasks reachable across a cursor page separated by a hidden task', async () => {
@@ -423,7 +423,7 @@ describe('task resource delivery', () => {
           body: JSON.stringify({ blockedTaskId: otherId }),
         })
       ).status,
-    ).toBe(200);
+    ).toBe(201);
     expect(
       (
         await caller.request(`/${targetId}`, {

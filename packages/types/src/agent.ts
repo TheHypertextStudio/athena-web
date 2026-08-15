@@ -658,6 +658,14 @@ export const ApprovalDecisionBody = z
 /** Approval-decision body value. */
 export type ApprovalDecisionBody = z.infer<typeof ApprovalDecisionBody>;
 
+/**
+ * A decision recorded against a proposal group, optionally narrowed to some of its activities.
+ *
+ * @remarks
+ * The body of `PUT /…/proposals/:groupId/decision`, which replaced the `approve` and `reject`
+ * verb pair. One resource carrying the decision as state means a client reads back what it
+ * wrote, and a replayed request is idempotent rather than a second review.
+ */
 export const ProposalGroupDecision = z
   .object({
     decision: ApprovalDecision.describe('Whether the named actions are approved or rejected.'),

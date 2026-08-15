@@ -11,10 +11,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { listGet, acceptPost, dismissPost, threadGet } = vi.hoisted(() => ({
+const { listGet, dispositionPut, threadGet } = vi.hoisted(() => ({
   listGet: vi.fn(),
-  acceptPost: vi.fn(),
-  dismissPost: vi.fn(),
+  dispositionPut: vi.fn(),
   threadGet: vi.fn(),
 }));
 
@@ -26,8 +25,7 @@ vi.mock('../../../src/lib/api', () => ({
           'email-suggestions': {
             $get: listGet,
             ':id': {
-              accept: { $post: acceptPost },
-              dismiss: { $post: dismissPost },
+              disposition: { $put: dispositionPut },
               thread: { $get: threadGet },
             },
           },
@@ -79,21 +77,21 @@ afterEach(() => {
 describe('SuggestionsLane', () => {
   it('plain Accept submits an empty override object', async () => {
     listGet.mockResolvedValue(jsonResponse({ items: [SUGGESTION] }));
-    acceptPost.mockResolvedValue(jsonResponse({ ...SUGGESTION, status: 'accepted' }));
+    dispositionPut.mockResolvedValue(jsonResponse({ ...SUGGESTION, status: 'accepted' }));
     renderLane();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Accept' }));
     await waitFor(() => {
-      expect(acceptPost).toHaveBeenCalledWith({
+      expect(dispositionPut).toHaveBeenCalledWith({
         param: { orgId: 'org_1', id: 'sugg_1' },
-        json: {},
+        json: { decision: 'accepted', overrides: {} },
       });
     });
   });
 
   it('edit-then-accept submits only the changed fields as overrides', async () => {
     listGet.mockResolvedValue(jsonResponse({ items: [SUGGESTION] }));
-    acceptPost.mockResolvedValue(jsonResponse({ ...SUGGESTION, status: 'accepted' }));
+    dispositionPut.mockResolvedValue(jsonResponse({ ...SUGGESTION, status: 'accepted' }));
     renderLane();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
@@ -103,9 +101,12 @@ describe('SuggestionsLane', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Accept edits' }));
 
     await waitFor(() => {
-      expect(acceptPost).toHaveBeenCalledWith({
+      expect(dispositionPut).toHaveBeenCalledWith({
         param: { orgId: 'org_1', id: 'sugg_1' },
-        json: { title: 'Schedule the interview — Thursday slot' },
+        json: {
+          decision: 'accepted',
+          overrides: { title: 'Schedule the interview — Thursday slot' },
+        },
       });
     });
   });

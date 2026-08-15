@@ -48,7 +48,7 @@ export function workLocationAssertionsDef() {
 export function workLocationSyncDef() {
   return apiQueryOptions(
     queryKeys.workLocationSync(),
-    () => api.v1.me['work-location'].sync.$get(),
+    () => api.v1.me['work-location']['sync-state'].$get(),
     'Could not load work-location sync status.',
     { staleTime: STALE.volatile },
   );

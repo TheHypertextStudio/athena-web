@@ -77,7 +77,7 @@ describe('/v1/me/work-location routes', () => {
       fakeSession(userId, 'WorkLocationNoAccounts', 'no-accounts@example.com'),
     );
 
-    const response = await app.request('/sync');
+    const response = await app.request('/sync-state');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ready: true, accounts: [] });
   });
@@ -103,7 +103,7 @@ describe('/v1/me/work-location routes', () => {
       items: [expect.objectContaining({ id: created.place.id, name: 'North branch library' })],
       profile: { homePlaceId: created.place.id },
     });
-    const sync = await app.request('/sync');
+    const sync = await app.request('/sync-state');
     expect(await sync.json()).toMatchObject({
       ready: false,
       accounts: [expect.objectContaining({ provider: 'google', state: 'pending' })],

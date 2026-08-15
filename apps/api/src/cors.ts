@@ -104,6 +104,22 @@ const EXPOSED_RESPONSE_HEADERS = [
   'Retry-After',
 ];
 
+/**
+ * Build the CORS middleware, which answers differently for credentialed and public routes.
+ *
+ * @remarks
+ * A browser only reads a response header the server names in `Access-Control-Expose-Headers`,
+ * so `Location`, `ETag`, and `Allow` are unreadable from script unless they are listed — the
+ * HTTP contract exists, but a cross-origin client cannot see it. The same holds inbound for
+ * `If-Match` and `Idempotency-Key`, which a preflight rejects unless `allowHeaders` names them.
+ *
+ * The OAuth discovery documents are public and unauthenticated, so they answer `*` rather than
+ * the trusted-origin list; a wildcard origin and `credentials: true` are mutually exclusive per
+ * the Fetch standard, which is why these are two middlewares rather than one.
+ *
+ * @param trustedOrigins - Origins allowed to send credentialed requests.
+ * @returns middleware that dispatches to the credentialed or public policy per request.
+ */
 export function buildCorsMiddleware(trustedOrigins: readonly string[]): MiddlewareHandler<AppEnv> {
   const sessionCors = cors({
     origin: [...trustedOrigins],

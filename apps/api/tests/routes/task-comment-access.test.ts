@@ -179,10 +179,10 @@ describe('task comment authorization', () => {
     // the persisted task grant, rather than injected org capability, authorizes the task write.
     const directContributor = appWithActor(comments, orgId, [], humanActorId);
     const created = await postTaskComment(directContributor, taskId, 'direct contributor comment');
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const createdComment = (await created.json()) as CommentOut;
     const reply = await postTaskComment(directContributor, taskId, 'reply', createdComment.id);
-    expect(reply.status).toBe(200);
+    expect(reply.status).toBe(201);
     const replyComment = (await reply.json()) as CommentOut;
     expect(
       (

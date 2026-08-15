@@ -484,7 +484,7 @@ describe('roles router', () => {
       }),
     });
 
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const { id: roleId } = await body<{ id: string }>(created);
     await db.update(schema.actor).set({ roleId }).where(eq(schema.actor.id, humanActorId));
 

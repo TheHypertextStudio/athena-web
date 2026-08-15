@@ -38,9 +38,7 @@ vi.mock('../../src/lib/api', () => ({
         records: {
           $post: recordsPost,
           ':id': {
-            start: { $post: recordAction },
-            pause: { $post: recordAction },
-            stop: { $post: recordAction },
+            status: { $put: recordAction },
             $patch: recordPatch,
           },
         },
@@ -497,7 +495,10 @@ describe('FocusPanel', () => {
 
     fireEvent.click(await screen.findByTestId('timer-resume'));
     await waitFor(() => {
-      expect(recordAction).toHaveBeenCalledWith({ param: { id: 'rec_1' } });
+      expect(recordAction).toHaveBeenCalledWith({
+        param: { id: 'rec_1' },
+        json: { status: 'running' },
+      });
     });
     expect(screen.queryByTestId('timer-pause')).toBeNull();
   });
@@ -603,7 +604,7 @@ describe('FocusPanel', () => {
     });
     expect(recordAction).toHaveBeenCalledWith({
       param: { id: 'rec_1' },
-      json: { title: 'Fixing the drag handles' },
+      json: { status: 'stopped', title: 'Fixing the drag handles' },
     });
     expect(recordPatch).not.toHaveBeenCalled();
   });
@@ -623,7 +624,7 @@ describe('FocusPanel', () => {
     await waitFor(() => {
       expect(recordAction).toHaveBeenCalledWith({
         param: { id: 'rec_1' },
-        json: { title: 'Prepare the board brief' },
+        json: { status: 'stopped', title: 'Prepare the board brief' },
       });
     });
     expect(recordPatch).not.toHaveBeenCalled();

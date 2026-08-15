@@ -379,7 +379,7 @@ const workLocation = new Hono<AppEnv>()
     },
   )
   .get(
-    '/sync',
+    '/sync-state',
     apiDoc({
       tag: 'Work location',
       summary: 'Get linked-account work-location sync state',

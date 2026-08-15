@@ -188,7 +188,7 @@ export const queryKeys = {
     ['me', 'work-location', 'range', start, end] as const,
   workLocationPlaces: () => ['me', 'work-location', 'places'] as const,
   workLocationAssertions: () => ['me', 'work-location', 'assertions'] as const,
-  workLocationSync: () => ['me', 'work-location', 'sync'] as const,
+  workLocationSync: () => ['me', 'work-location', 'sync-state'] as const,
   hubPreferences: () => ['me', 'hub-preferences'] as const,
   athena: () => ['me', 'athena'] as const,
   athenaPulse: () => ['me', 'athena', 'pulse'] as const,

@@ -107,9 +107,10 @@ Present, and strong: linear-history enforcement with native git hooks, conventio
 validation, a scoped commit vocabulary, migrations applied from the exact image being deployed,
 Workload Identity Federation with no long-lived cloud key, and pre-deploy secret validation.
 
-Missing: a written change-management policy, and a resolution of the two-tracker problem —
-`TASKS.yaml` is dated 2026-01-04 and references deleted paths while `docs/WORKLOG.md` is live.
-Two trackers disagreeing is itself a change-management finding.
+Missing: a written change-management policy.
+
+Resolved: the two-tracker problem. `TASKS.yaml` was deleted 2026-08-15; `docs/WORKLOG.md` is now
+the only task tracker in the repository.
 
 ### A1.2 — Availability, backup, recovery
 

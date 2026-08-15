@@ -1,7 +1,7 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 1.1.1
-> **Last Updated**: 2026-07-12
+> **Version**: 2.0.0
+> **Last Updated**: 2026-08-15
 > **Applies To**: All AI coding agents working on Project Athena
 
 This document defines the operational framework for AI agents contributing to Project Athena. All agents MUST adhere to these guidelines to ensure consistent, high-quality, autonomous development.
@@ -10,7 +10,7 @@ This document defines the operational framework for AI agents contributing to Pr
 
 ## Table of Contents
 
-1. [Agent State Machine](#agent-state-machine)
+1. [Workflow](#workflow)
 2. [Documentation Requirements](#documentation-requirements)
 3. [Version Control Protocol](#version-control-protocol)
 4. [Work Tracking System](#work-tracking-system)
@@ -25,72 +25,25 @@ This document defines the operational framework for AI agents contributing to Pr
 
 ---
 
-## Agent State Machine
+## Workflow
 
-Agents operate in a defined state machine to ensure predictable, autonomous behavior. The agent MUST always be in exactly one of these states:
+For any non-trivial task, move through these states in order — skip PLANNING/RESEARCHING only for
+genuinely trivial changes (a typo fix, a one-line rename):
 
-```
-┌─────────────┐
-│   IDLE      │◄────────────────────────────────────────┐
-└──────┬──────┘                                         │
-       │ receive task                                   │
-       ▼                                                │
-┌─────────────┐                                         │
-│  PLANNING   │◄──────────────────────┐                 │
-└──────┬──────┘                       │                 │
-       │ plan approved                │ need more info  │
-       ▼                              │                 │
-┌─────────────┐    blocked     ┌──────┴──────┐          │
-│ RESEARCHING │───────────────►│  CLARIFYING │          │
-└──────┬──────┘                └─────────────┘          │
-       │ research complete                              │
-       ▼                                                │
-┌─────────────┐                                         │
-│ IMPLEMENTING│◄──────────────────────┐                 │
-└──────┬──────┘                       │                 │
-       │ implementation complete      │ tests fail     │
-       ▼                              │                 │
-┌─────────────┐                       │                 │
-│  VALIDATING │───────────────────────┘                 │
-└──────┬──────┘                                         │
-       │ validation passed                              │
-       ▼                                                │
-┌─────────────┐                                         │
-│ DOCUMENTING │                                         │
-└──────┬──────┘                                         │
-       │ docs complete                                  │
-       ▼                                                │
-┌─────────────┐                                         │
-│ COMMITTING  │                                         │
-└──────┬──────┘                                         │
-       │ changes committed                              │
-       ▼                                                │
-┌─────────────┐                                         │
-│RETROSPECTING│─────────────────────────────────────────┘
-└─────────────┘
-```
+IDLE → PLANNING → RESEARCHING (or CLARIFYING, if blocked) → IMPLEMENTING → VALIDATING →
+DOCUMENTING → COMMITTING → RETROSPECTING → IDLE
 
-### State Definitions
-
-| State             | Description                                         | Exit Criteria                 |
-| ----------------- | --------------------------------------------------- | ----------------------------- |
-| **IDLE**          | Awaiting new task or user input                     | Task received                 |
-| **PLANNING**      | Analyzing requirements, breaking down work          | Plan documented in WORKLOG.md |
-| **RESEARCHING**   | Gathering information, reading code, web searches   | Sufficient context obtained   |
-| **CLARIFYING**    | Awaiting user input for ambiguous requirements      | User response received        |
-| **IMPLEMENTING**  | Writing code, creating files, making changes        | All code changes complete     |
-| **VALIDATING**    | Running tests, linting, type-checking               | All validations pass          |
-| **DOCUMENTING**   | Writing/updating documentation                      | Docs reflect changes          |
-| **COMMITTING**    | Staging and committing changes (with user approval) | Changes committed             |
-| **RETROSPECTING** | Reviewing work, updating WORKLOG.md                 | Entry complete                |
-
-### State Transition Rules
-
-1. **NEVER skip states** - Each state serves a purpose
-2. **Always enter PLANNING before IMPLEMENTING** for non-trivial tasks
-3. **VALIDATING failures return to IMPLEMENTING** - Fix issues, don't ignore them
-4. **CLARIFYING returns to the previous state** once resolved
-5. **Document state transitions** in WORKLOG.md for complex tasks
+| State         | Exit criteria                                                      |
+| ------------- | ------------------------------------------------------------------ |
+| IDLE          | Task received                                                      |
+| PLANNING      | Plan documented in `docs/WORKLOG.md`                               |
+| RESEARCHING   | Sufficient context obtained                                        |
+| CLARIFYING    | User response received; returns to whichever state triggered it    |
+| IMPLEMENTING  | All code changes complete                                          |
+| VALIDATING    | All checks pass — a failure returns to IMPLEMENTING, never past it |
+| DOCUMENTING   | Docs reflect the change                                            |
+| COMMITTING    | Changes committed                                                  |
+| RETROSPECTING | `docs/WORKLOG.md` entry complete                                   |
 
 ---
 
@@ -118,25 +71,9 @@ Every significant piece of work MUST include:
 
 ### Documentation Standards
 
-````typescript
-/**
- * Brief description of what this does.
- *
- * @remarks
- * Additional context, usage notes, or implementation details.
- *
- * @param paramName - Description of parameter
- * @returns Description of return value
- *
- * @example
- * ```typescript
- * const result = myFunction('input');
- * ``
- *
- * @see {@link RelatedFunction} for related functionality
- * @throws {ErrorType} When this error condition occurs
- */
-````
+Document every exported function, class, and type with TSDoc: a one-line summary, `@param`/`@returns`
+for anything not obvious from the signature, and `@throws` when a call can throw. Skip `@example` and
+`@remarks` blocks that just restate the code below them.
 
 ### Documentation Locations
 
@@ -148,6 +85,8 @@ Every significant piece of work MUST include:
 | Work history         | `docs/WORKLOG.md`                 |
 | Agent guidelines     | `AGENTS.md` (this file)           |
 | Repo-specific config | `.claude/`                        |
+| Scripts              | `scripts/`                        |
+| Shared packages      | `packages/`                       |
 
 ---
 
@@ -266,7 +205,7 @@ Commit behavior:
 
 ### WORKLOG.md Structure
 
-All work MUST be tracked in `docs/WORKLOG.md`:
+All work MUST be tracked in `docs/WORKLOG.md`. The base shape for every task:
 
 ```markdown
 # Project Athena Work Log
@@ -292,29 +231,18 @@ All work MUST be tracked in `docs/WORKLOG.md`:
 ### [TASK-ID] Task Title
 
 - **Completed**: YYYY-MM-DD
-- **Duration**: X hours/days
 - **Summary**: What was accomplished
 - **Files Changed**: List of modified files
 - **Learnings**: What was learned
-
----
-
-## Backlog
-
-### [TASK-ID] Task Title
-
-- **Priority**: P0 | P1 | P2 | P3
-- **Description**: Brief description
-- **Dependencies**: Required prior work
 ```
 
-### Task Lifecycle
+For substantial tasks, add sections as needed rather than forcing everything into **Notes** — recent
+entries in `docs/WORKLOG.md` use **Files changed**, **Validation**, **Learnings**, and **Blockers for
+launch** as their own subsections. Read a recent entry there before writing a large one; it's the
+canonical example, not this template.
 
-```
-BACKLOG → ACTIVE (IN_PROGRESS) → ACTIVE (REVIEW) → COMPLETED
-                ↓
-            ACTIVE (BLOCKED) → ACTIVE (IN_PROGRESS)
-```
+Tasks move `backlog` → `active (in_progress)` → `active (review)` → `completed`, with `blocked` as a
+detour back to `in_progress` once unblocked.
 
 ### Work Tracking Rules
 
@@ -373,13 +301,14 @@ BACKLOG → ACTIVE (IN_PROGRESS) → ACTIVE (REVIEW) → COMPLETED
 
 A task is ONLY complete when:
 
-1. **Code is implemented** - All functionality works
-2. **Tests pass** - Unit, integration, and E2E
-3. **Types check** - `tsc --noEmit` succeeds
-4. **Linting passes** - No ESLint errors
-5. **Documentation updated** - TSDoc, README if needed
-6. **WORKLOG.md updated** - Task marked complete
-7. **Code reviewed** - Self-review or peer review
+- [ ] Code implements all requirements
+- [ ] Tests cover the happy path and edge cases, and pass (unit, integration, E2E)
+- [ ] `tsc --noEmit` succeeds and ESLint is clean
+- [ ] Error handling is complete and no security vulnerabilities were introduced
+- [ ] Performance and accessibility requirements are met
+- [ ] Documentation is updated (TSDoc, README if needed)
+- [ ] `docs/WORKLOG.md` is updated
+- [ ] Code has been self-reviewed or peer reviewed
 
 ### NO Stubs or TODOs
 
@@ -483,7 +412,6 @@ These sections MUST NOT be weakened:
 
 - Task Completion Standards
 - NO Stubs or TODOs
-- Commit Approval requirement
 
 ---
 
@@ -637,50 +565,3 @@ Validate against specifications:
 2. **Check implementation** matches spec
 3. **Verify edge cases** from user stories
 4. **Test user journeys** end-to-end
-
-### Self-Review Checklist
-
-Before considering work complete:
-
-- [ ] Code implements all requirements
-- [ ] Tests cover happy path AND edge cases
-- [ ] Error handling is comprehensive
-- [ ] Documentation is complete and accurate
-- [ ] No security vulnerabilities introduced
-- [ ] Performance is acceptable
-- [ ] Accessibility requirements met
-- [ ] WORKLOG.md is updated
-
----
-
-## Quick Reference
-
-### State Commands
-
-| Current State | Action            | Next State    |
-| ------------- | ----------------- | ------------- |
-| IDLE          | Receive task      | PLANNING      |
-| PLANNING      | Plan complete     | RESEARCHING   |
-| RESEARCHING   | Research complete | IMPLEMENTING  |
-| IMPLEMENTING  | Code complete     | VALIDATING    |
-| VALIDATING    | Tests pass        | DOCUMENTING   |
-| DOCUMENTING   | Docs complete     | COMMITTING    |
-| COMMITTING    | Committed         | RETROSPECTING |
-| RETROSPECTING | Complete          | IDLE          |
-
-### File Locations
-
-| Purpose           | Path                |
-| ----------------- | ------------------- |
-| Agent guidelines  | `AGENTS.md`         |
-| Work tracking     | `docs/WORKLOG.md`   |
-| Product specs     | `docs/core/`        |
-| Engineering specs | `docs/engineering/` |
-| Research notes    | `docs/research/`    |
-| Claude config     | `.claude/`          |
-| Scripts           | `scripts/`          |
-| Shared packages   | `packages/`         |
-
----
-
-_This document is self-governing. Agents are encouraged to propose improvements through the established modification protocol._

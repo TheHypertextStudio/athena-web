@@ -157,6 +157,11 @@ import {
   workspaceDomain,
 } from '../../src/schema';
 import {
+  seedWorkspaceStatuses,
+  statusLookupKey,
+  type SeededStatuses,
+} from '../../src/seed-statuses';
+import {
   defaultWorkflowStates,
   presetStartup,
   type AgentConnection,
@@ -726,16 +731,36 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
     ).id;
 
     // --- work island ---
+    // A workspace's statuses exist before any of its work does — every kind of work points at one.
+    const statuses: SeededStatuses = await seedWorkspaceStatuses(db, ids['org'] as string);
+    const statusId = (entityType: 'task' | 'project' | 'program' | 'initiative', key: string) => {
+      const id = statuses.get(statusLookupKey(entityType, key));
+      if (id === undefined) throw new Error(`no seeded ${entityType} status ${key}`);
+      return id;
+    };
     ids['initiative'] = assertDefined(
       (
         await db
           .insert(initiative)
-          .values({ organizationId: ids['org'], name: 'Vision' })
+          .values({
+            organizationId: ids['org'],
+            name: 'Vision',
+            statusId: statusId('initiative', 'active'),
+          })
           .returning()
       )[0],
     ).id;
     ids['program'] = assertDefined(
-      (await db.insert(program).values({ organizationId: ids['org'], name: 'Ops' }).returning())[0],
+      (
+        await db
+          .insert(program)
+          .values({
+            organizationId: ids['org'],
+            name: 'Ops',
+            statusId: statusId('program', 'active'),
+          })
+          .returning()
+      )[0],
     ).id;
     ids['project'] = assertDefined(
       (
@@ -747,6 +772,7 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
             programId: ids['program'],
             teamId: ids['team'],
             leadId: ids['actor'],
+            statusId: statusId('project', 'planned'),
           })
           .returning()
       )[0],
@@ -782,6 +808,7 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
             title: 'Do the thing',
             teamId: ids['team'],
             state: 'backlog',
+            statusId: statusId('task', 'backlog'),
             projectId: ids['project'],
             milestoneId: ids['milestone'],
             cycleId: ids['cycle'],
@@ -799,6 +826,7 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
             title: 'Second',
             teamId: ids['team'],
             state: 'backlog',
+            statusId: statusId('task', 'backlog'),
           })
           .returning()
       )[0],

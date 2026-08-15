@@ -26,3 +26,4 @@ export {
   type GrantStaffOptions,
   type GrantStaffResult,
 } from './seed';
+export { seedWorkspaceStatuses, statusLookupKey, type SeededStatuses } from './seed-statuses';

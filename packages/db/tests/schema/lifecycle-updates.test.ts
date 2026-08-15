@@ -56,6 +56,8 @@ import {
 } from '../../src/schema';
 import { assertDefined } from '@docket/test-utils';
 
+import { seedWorkspaceStatuses, statusLookupKey } from '../../src/seed-statuses';
+
 /**
  * Update-path coverage for every schema table whose `updatedAt` column carries a
  * `.$onUpdate(() => new Date())` callback and is not already exercised by an update
@@ -128,6 +130,13 @@ beforeAll(async () => {
   ids['hub'] = assertDefined(
     (await db.insert(hub).values({ userId: ids['user'] }).returning())[0],
   ).id;
+  // A workspace's statuses exist before any of its work does — every kind of work points at one.
+  const statuses = await seedWorkspaceStatuses(db, ids['org']);
+  const statusId = (entityType: 'task' | 'project' | 'program' | 'initiative', key: string) => {
+    const id = statuses.get(statusLookupKey(entityType, key));
+    if (id === undefined) throw new Error(`no seeded ${entityType} status ${key}`);
+    return id;
+  };
   ids['task'] = assertDefined(
     (
       await db
@@ -137,6 +146,7 @@ beforeAll(async () => {
           title: 'Ship the feature',
           teamId: ids['team'],
           state: 'backlog',
+          statusId: statusId('task', 'backlog'),
         })
         .returning()
     )[0],
@@ -157,7 +167,6 @@ beforeAll(async () => {
         .returning()
     )[0],
   ).id;
-
   // --- calendar chain: account -> connection -> list/event, layer -> item -> task-link/write ---
   await db
     .insert(account)
@@ -346,7 +355,11 @@ beforeAll(async () => {
     (
       await db
         .insert(initiative)
-        .values({ organizationId: ids['org'], name: 'Parent Vision' })
+        .values({
+          organizationId: ids['org'],
+          name: 'Parent Vision',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning()
     )[0],
   ).id;
@@ -354,7 +367,11 @@ beforeAll(async () => {
     (
       await db
         .insert(initiative)
-        .values({ organizationId: ids['org'], name: 'Child Vision' })
+        .values({
+          organizationId: ids['org'],
+          name: 'Child Vision',
+          statusId: statusId('initiative', 'active'),
+        })
         .returning()
     )[0],
   ).id;

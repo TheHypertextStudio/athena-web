@@ -8,6 +8,7 @@ export * from './auth';
 export * from './identity';
 export * from './crosscutting';
 export * from './notion-mirror';
+export * from './work-status';
 export * from './work';
 export * from './joins';
 export * from './agents';

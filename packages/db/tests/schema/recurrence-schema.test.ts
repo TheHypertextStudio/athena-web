@@ -24,6 +24,8 @@ import {
 } from '../../src/schema';
 import { assertDefined } from '@docket/test-utils';
 
+import { seedWorkspaceStatuses, statusLookupKey } from '../../src/seed-statuses';
+
 let client!: PGlite;
 let db!: Database;
 let orgId!: string;
@@ -366,11 +368,20 @@ describe('recurrence schema', () => {
       teamId,
       priority: 'none',
     });
+    const seeded = await seedWorkspaceStatuses(db, orgId);
+    const taskBacklogStatusId = seeded.get(statusLookupKey('task', 'backlog'));
+    if (taskBacklogStatusId === undefined) throw new Error('no seeded task status backlog');
     const taskId = assertDefined(
       (
         await db
           .insert(task)
-          .values({ organizationId: orgId, teamId, title: 'Mapped task', state: 'backlog' })
+          .values({
+            organizationId: orgId,
+            teamId,
+            title: 'Mapped task',
+            state: 'backlog',
+            statusId: taskBacklogStatusId,
+          })
           .returning()
       )[0],
     ).id;

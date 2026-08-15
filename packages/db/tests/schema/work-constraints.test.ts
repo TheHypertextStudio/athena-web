@@ -24,15 +24,41 @@ import { fullSchema, type Database } from '../../src/client';
 import { cycle, milestone, organization, project, task, team } from '../../src/schema';
 import { assertDefined } from '@docket/test-utils';
 
+import {
+  seedWorkspaceStatuses,
+  statusLookupKey,
+  type SeededStatuses,
+} from '../../src/seed-statuses';
+
 let client!: PGlite;
 let db!: Database;
 let orgId!: string;
 let teamId!: string;
 let projectId!: string;
+let statuses!: SeededStatuses;
+
+/** The id of a seeded status, or a failure naming the one that was missing. */
+function statusId(entityType: 'task' | 'project' | 'program' | 'initiative', key: string): string {
+  const id = statuses.get(statusLookupKey(entityType, key));
+  if (id === undefined) throw new Error(`no seeded ${entityType} status ${key}`);
+  return id;
+}
 
 /** The columns every `task` insert must supply; tests override the field under examination. */
-function baseTask(): { organizationId: string; title: string; teamId: string; state: string } {
-  return { organizationId: orgId, title: 'A task', teamId, state: 'backlog' };
+function baseTask(): {
+  organizationId: string;
+  title: string;
+  teamId: string;
+  state: string;
+  statusId: string;
+} {
+  return {
+    organizationId: orgId,
+    title: 'A task',
+    teamId,
+    state: 'backlog',
+    statusId: statusId('task', 'backlog'),
+  };
 }
 
 /**
@@ -74,8 +100,19 @@ describe('work island constraints', () => {
           .returning()
       )[0],
     ).id;
+    // A workspace's statuses exist before any of its work does — every kind of work points at one.
+    statuses = await seedWorkspaceStatuses(db, orgId);
     projectId = assertDefined(
-      (await db.insert(project).values({ organizationId: orgId, name: 'Redesign' }).returning())[0],
+      (
+        await db
+          .insert(project)
+          .values({
+            organizationId: orgId,
+            name: 'Redesign',
+            statusId: statusId('project', 'planned'),
+          })
+          .returning()
+      )[0],
     ).id;
   });
 
@@ -109,6 +146,7 @@ describe('work island constraints', () => {
         db.insert(project).values({
           organizationId: orgId,
           name: 'Ancient',
+          statusId: statusId('project', 'planned'),
           targetDate: new Date('0500-01-01T00:00:00Z'),
         }),
         'project_target_date_range',
@@ -202,7 +240,9 @@ describe('work island constraints', () => {
 
     it('refuses blank names across the containment hierarchy', async () => {
       await expectRefusedBy(
-        db.insert(project).values({ organizationId: orgId, name: '  ' }),
+        db
+          .insert(project)
+          .values({ organizationId: orgId, name: '  ', statusId: statusId('project', 'planned') }),
         'project_name_not_blank',
       );
       await expectRefusedBy(

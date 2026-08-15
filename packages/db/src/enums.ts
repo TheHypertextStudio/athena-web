@@ -32,7 +32,45 @@ export const actorStatus = pgEnum('actor_status', ['active', 'suspended']);
  */
 export const teamMemberRole = pgEnum('team_member_role', ['manager', 'member', 'guest']);
 
-/** Initiative (theme) status. */
+/**
+ * The canonical category every workspace-defined status maps onto.
+ *
+ * @remarks
+ * Fixed and not user-definable. A workspace names, describes, orders, and counts its own
+ * statuses; each one declares which of these five it behaves as, and the category is what
+ * carries meaning outside the workspace that named it. Status glyphs, cross-team grouping,
+ * progress, capacity, and every integration mapping read the category — never the key.
+ *
+ * Mirrors `WorkStatusCategory` in `@docket/types`, the one declaration of the union.
+ */
+export const workStatusCategory = pgEnum('work_status_category', [
+  'backlog',
+  'unstarted',
+  'started',
+  'completed',
+  'canceled',
+]);
+
+/**
+ * The kinds of work that carry a workspace-defined status set.
+ *
+ * @remarks
+ * Cycles are absent deliberately: a Cycle's status follows its window rather than a choice
+ * anyone makes, so there is nothing for a workspace to configure.
+ */
+export const workStatusEntity = pgEnum('work_status_entity', [
+  'task',
+  'project',
+  'program',
+  'initiative',
+]);
+
+/**
+ * Initiative (theme) status.
+ *
+ * @deprecated Initiative status is now a key into the workspace's `work_status` set. Retained
+ * only so drizzle-kit does not emit a `DROP TYPE` before the follow-up migration drops it.
+ */
 export const initiativeStatus = pgEnum('initiative_status', [
   'proposed',
   'active',
@@ -49,9 +87,20 @@ export const initiativeUpdateCadence = pgEnum('initiative_update_cadence', [
   'quarterly',
   'none',
 ]);
-/** Program status — Programs are ongoing, so there is intentionally NO `completed`. */
+/**
+ * Program status.
+ *
+ * @deprecated Program status is now a key into the workspace's `work_status` set, which also
+ * lets a Program reach an end — a Program usually runs on, and now it can also finish. Retained
+ * only so drizzle-kit does not emit a `DROP TYPE` before the follow-up migration drops it.
+ */
 export const programStatus = pgEnum('program_status', ['active', 'paused', 'archived']);
-/** Project status (bounded effort lifecycle). */
+/**
+ * Project status (bounded effort lifecycle).
+ *
+ * @deprecated Project status is now a key into the workspace's `work_status` set. Retained
+ * only so drizzle-kit does not emit a `DROP TYPE` before the follow-up migration drops it.
+ */
 export const projectStatus = pgEnum('project_status', [
   'planned',
   'active',

@@ -610,6 +610,20 @@
       "when": 1786744023862,
       "tag": "0086_nostalgic_brood",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1786753277676,
+      "tag": "0087_sour_post",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1786753801122,
+      "tag": "0088_shiny_prima",
+      "breakpoints": true
     }
   ]
 }

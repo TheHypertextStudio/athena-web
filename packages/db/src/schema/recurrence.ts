@@ -30,7 +30,6 @@ import {
   processStepKind,
   processStepTimingKind,
   processTriggerKind,
-  projectStatus,
   recurrenceCalendarOverflow,
   recurrenceEndKind,
   recurrenceExceptionKind,
@@ -134,7 +133,10 @@ export const processProjectSpec = pgTable(
     leadId: text('lead_id').references(() => actor.id, { onDelete: 'set null' }),
     teamId: text('team_id').references(() => team.id, { onDelete: 'set null' }),
     programId: text('program_id').references(() => program.id, { onDelete: 'set null' }),
-    status: projectStatus('status').notNull().default('planned'),
+    // A Project status key, mirroring `project.status`. No composite FK: a template is
+    // org-wide and may be applied long after a workspace reshaped its statuses, so the
+    // key is resolved when the Project is created rather than held to a status now.
+    status: text('status').notNull().default('planned'),
     health: health('health'),
     startOffsetDays: integer('start_offset_days'),
     targetOffsetDays: integer('target_offset_days'),

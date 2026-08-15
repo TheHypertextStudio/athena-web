@@ -15,16 +15,22 @@
  * {@link TASK_DATE_FLOOR}.
  */
 import { sql, type SQLWrapper } from 'drizzle-orm';
-import { check, index, integer, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  check,
+  foreignKey,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 import {
   cycleStatus,
   health,
   initiativePriority,
-  initiativeStatus,
   initiativeUpdateCadence,
-  programStatus,
-  projectStatus,
   provenanceSource,
   sourceSystem,
   syncMode,
@@ -34,6 +40,26 @@ import {
 import { notBlank } from './constraints';
 import { actor, auditColumns, organization, team } from './identity';
 import { integration } from './crosscutting';
+import { workStatus } from './work-status';
+
+/**
+ * How every table on this island points at its status.
+ *
+ * @remarks
+ * A row that carries a status stores two things: `status_id`, which is the authority, and the
+ * `status`/`state` key string that every reader, connector, saved view, and API response has
+ * always used. Each table declares a composite foreign key over
+ * `(status_id, <key column>, organization_id)` referencing
+ * `work_status (id, key, organization_id)`.
+ *
+ * Referencing the triple rather than `id` alone is what makes the pair provably consistent: the
+ * key column cannot drift from the status it names, because a row where they disagree does not
+ * store. Including the organization makes a cross-tenant status unrepresentable for the same
+ * reason.
+ *
+ * `ON UPDATE CASCADE` turns a key rewrite into one statement instead of a cross-table backfill.
+ * `ON DELETE RESTRICT` is what requires a status deletion to remap its work first.
+ */
 
 /**
  * The earliest instant any planning date on this island may name.
@@ -75,7 +101,8 @@ export const initiative = pgTable(
     summary: text('summary'),
     description: text('description'),
     ownerId: text('owner_id').references(() => actor.id, { onDelete: 'set null' }),
-    status: initiativeStatus('status').notNull().default('active'),
+    status: text('status').notNull().default('active'),
+    statusId: text('status_id').notNull(),
     priority: initiativePriority('priority').notNull().default('none'),
     updateCadence: initiativeUpdateCadence('update_cadence').notNull().default('monthly'),
     targetDate: timestamp('target_date'),
@@ -83,7 +110,16 @@ export const initiative = pgTable(
   },
   (t) => [
     index('initiative_org_idx').on(t.organizationId),
+    index('initiative_status_idx').on(t.statusId),
+    foreignKey({
+      name: 'initiative_status_fk',
+      columns: [t.statusId, t.status, t.organizationId],
+      foreignColumns: [workStatus.id, workStatus.key, workStatus.organizationId],
+    })
+      .onUpdate('cascade')
+      .onDelete('restrict'),
     notBlank('initiative_name_not_blank', t.name),
+    notBlank('initiative_status_not_blank', t.status),
     dateInRange('initiative_target_date_range', t.targetDate),
   ],
 );
@@ -97,7 +133,8 @@ export const program = pgTable(
     description: text('description'),
     summary: text('summary'),
     ownerId: text('owner_id').references(() => actor.id, { onDelete: 'set null' }),
-    status: programStatus('status').notNull().default('active'),
+    status: text('status').notNull().default('active'),
+    statusId: text('status_id').notNull(),
     health: health('health'),
     visibility: visibility('visibility').notNull().default('public'),
     ancestorPath: text('ancestor_path')
@@ -107,8 +144,17 @@ export const program = pgTable(
   },
   (t) => [
     index('program_org_idx').on(t.organizationId),
+    index('program_status_idx').on(t.statusId),
     index('program_ancestor_path_gin').using('gin', t.ancestorPath),
+    foreignKey({
+      name: 'program_status_fk',
+      columns: [t.statusId, t.status, t.organizationId],
+      foreignColumns: [workStatus.id, workStatus.key, workStatus.organizationId],
+    })
+      .onUpdate('cascade')
+      .onDelete('restrict'),
     notBlank('program_name_not_blank', t.name),
+    notBlank('program_status_not_blank', t.status),
   ],
 );
 
@@ -123,7 +169,8 @@ export const project = pgTable(
     leadId: text('lead_id').references(() => actor.id, { onDelete: 'set null' }),
     programId: text('program_id').references(() => program.id, { onDelete: 'set null' }),
     teamId: text('team_id').references(() => team.id, { onDelete: 'set null' }),
-    status: projectStatus('status').notNull().default('planned'),
+    status: text('status').notNull().default('planned'),
+    statusId: text('status_id').notNull(),
     health: health('health'),
     startDate: timestamp('start_date'),
     targetDate: timestamp('target_date'),
@@ -144,11 +191,20 @@ export const project = pgTable(
   },
   (t) => [
     index('project_org_idx').on(t.organizationId),
+    index('project_status_idx').on(t.statusId),
     index('project_ancestor_path_gin').using('gin', t.ancestorPath),
     uniqueIndex('project_source_uq')
       .on(t.sourceIntegrationId, t.externalId)
       .where(sql`${t.source} = 'linked'`),
+    foreignKey({
+      name: 'project_status_fk',
+      columns: [t.statusId, t.status, t.organizationId],
+      foreignColumns: [workStatus.id, workStatus.key, workStatus.organizationId],
+    })
+      .onUpdate('cascade')
+      .onDelete('restrict'),
     notBlank('project_name_not_blank', t.name),
+    notBlank('project_status_not_blank', t.status),
     dateInRange('project_start_date_range', t.startDate),
     dateInRange('project_target_date_range', t.targetDate),
   ],
@@ -225,6 +281,7 @@ export const task = pgTable(
       .notNull()
       .references(() => team.id, { onDelete: 'cascade' }),
     state: text('state').notNull(),
+    statusId: text('status_id').notNull(),
     priority: taskPriority('priority').notNull().default('none'),
     assigneeId: text('assignee_id').references(() => actor.id, { onDelete: 'set null' }),
     delegateId: text('delegate_id').references(() => actor.id, { onDelete: 'set null' }),
@@ -264,17 +321,23 @@ export const task = pgTable(
   (t) => [
     index('task_org_idx').on(t.organizationId),
     index('task_team_state_idx').on(t.teamId, t.state),
+    index('task_status_idx').on(t.statusId),
     index('task_project_idx').on(t.projectId),
     index('task_ancestor_path_gin').using('gin', t.ancestorPath),
     uniqueIndex('task_source_uq')
       .on(t.sourceIntegrationId, t.externalId)
       .where(sql`${t.source} = 'linked'`),
+    foreignKey({
+      name: 'task_status_fk',
+      columns: [t.statusId, t.state, t.organizationId],
+      foreignColumns: [workStatus.id, workStatus.key, workStatus.organizationId],
+    })
+      .onUpdate('cascade')
+      .onDelete('restrict'),
     notBlank('task_title_not_blank', t.title),
-    // `state` is a per-team workflow key, so its domain is data (`team.workflow_states`), not a
-    // fixed enum — a pg enum here would be wrong, and the FK that would be right does not exist
-    // because workflow states are stored as jsonb on the team. What is checkable without that
-    // refactor is that the key is a key: an empty state silently drops a task out of every board
-    // column, which is worse than an unknown one.
+    // `state` is the key of the status in `status_id`, held to it by `task_status_fk`. The two
+    // cannot disagree, so a reader that has only ever known `state` keeps working while
+    // `status_id` carries the authority. The blank check predates that FK and stays as the floor.
     notBlank('task_state_not_blank', t.state),
     // A task is not its own subtask. The deeper acyclicity invariant is enforced in the write
     // transaction (`wouldCreateSubtaskCycle`); this is the one case a constraint can see.

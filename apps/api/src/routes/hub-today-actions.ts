@@ -1,4 +1,4 @@
-import { type Capability, satisfies } from '@docket/authz';
+import { satisfies } from '@docket/authz';
 import { actor, dailyPlanItem, db, hub, role, task, team } from '@docket/db';
 import type { HubTodayCompleteOut } from '@docket/types';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -55,7 +55,7 @@ export async function completeTodayItem(
   if (access.get(resourceAccessKey(ref))?.canView !== true || !membership) {
     throw new NotFoundError('Today item not found');
   }
-  const capabilities = (membership.role?.capabilities ?? []) as Capability[];
+  const capabilities = membership.role?.capabilities ?? [];
   if (!capabilities.some((capability) => satisfies(capability, 'contribute'))) {
     throw new CapabilityError();
   }

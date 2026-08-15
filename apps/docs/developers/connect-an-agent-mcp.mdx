@@ -1,15 +1,15 @@
 ---
 title: "Connect an AI agent"
-description: "Docket ships a first-party MCP server. Point any MCP-capable agent at it and let it read and act on your workspace."
+description: "Point any MCP-capable agent at Docket's first-party MCP server and let it read and act on your workspace."
 ---
 
 Docket ships a first-party [Model Context Protocol](https://modelcontextprotocol.io) server. Any
-MCP-capable agent — Claude Code, Claude Desktop, claude.ai, Codex, Cursor, Windsurf, or anything
-else speaking Streamable HTTP and OAuth 2.1 — can read and act on your workspace.
+MCP-capable agent that speaks Streamable HTTP and OAuth 2.1 can read and act on your workspace,
+including Claude Code, Claude Desktop, claude.ai, Codex, Cursor, and Windsurf.
 
 <Tip>
-  The in-app version of this page is **Settings → Connected apps**, which shows the same snippets
-  with your deployment's URL already filled in.
+  **Settings → Connected apps** inside Docket shows the same snippets with your deployment's URL
+  already filled in.
 </Tip>
 
 ## The endpoint
@@ -18,12 +18,12 @@ else speaking Streamable HTTP and OAuth 2.1 — can read and act on your workspa
 https://docket-api.hypertext.studio/mcp
 ```
 
-Note the **API** origin rather than the web app origin. Substitute your own deployment's MCP URL
-throughout this page if you self-host.
+Use the **API** origin here, not the web app origin. If you self-host, substitute your own
+deployment's MCP URL in the snippets below.
 
 The endpoint speaks MCP Streamable HTTP: `POST` for messages, `GET` for the server-to-client
 stream, `DELETE` to end a session. Requests are stateless, so a client can work without ever
-holding a session. `initialize` returns an `Mcp-Session-Id` anyway, and presenting it unlocks the
+holding a session. `initialize` returns an `Mcp-Session-Id` anyway, and presenting it opens the
 notification channel described below.
 
 ## Client setup
@@ -41,7 +41,7 @@ notification channel described below.
     1. In the chat bar, open the menu (**+**) and select **Connectors → Manage Connectors**.
     2. Click **+** and select **Add custom connector**.
     3. Enter "Docket" as the name and paste the MCP URL.
-    4. Click **Add** — your browser opens to complete authorization.
+    4. Click **Add**. Your browser opens to complete authorization.
     5. Sign in to Docket and approve the requested permissions.
   </Tab>
   <Tab title="claude.ai">
@@ -72,7 +72,8 @@ notification channel described below.
     ```
   </Tab>
   <Tab title="Windsurf">
-    Add to `~/.codeium/windsurf/mcp_config.json` — note `serverUrl` rather than `url`:
+    Add to `~/.codeium/windsurf/mcp_config.json`. This file uses the key `serverUrl` in place of
+    `url`:
 
     ```json
     { "mcpServers": { "docket": { "serverUrl": "https://docket-api.hypertext.studio/mcp" } } }
@@ -88,26 +89,26 @@ specification handle registration, consent, and token refresh on their own throu
 
 ## Authorization, briefly
 
-The server is an OAuth 2.1 resource server. A connecting client registers (via DCR or a URL-form
-client ID), sends you to Docket's consent screen, and exchanges the code with PKCE for a token
-audience-bound to the `/mcp` resource URL.
+The server is an OAuth 2.1 resource server. A connecting client registers through DCR or a
+URL-form client ID, sends you to Docket's consent screen, and exchanges the code with PKCE for a
+token audience-bound to the `/mcp` resource URL.
 
-Scopes are the first gate; your own roles and grants remain binding underneath. **A token can
+Scopes are the first gate, and your own roles and grants stay binding underneath. **A token can
 never do more than you can.**
 
 Full detail in [Authentication](/developers/authentication).
 
 ## Names work anywhere IDs do
 
-This is the single most useful thing to know when writing prompts against this server.
+Every tool that accepts an ID also accepts a name.
 
 ```json
 { "teamId": "Platform", "assigneeId": "Sarah", "state": "In Review" }
 ```
 
-All three resolve server-side. Matching runs exact → prefix → substring and accepts only an
-unambiguous hit. An ambiguous name comes back listing the candidates rather than guessing, and an
-unknown workflow state comes back listing the team's legal ones.
+All three resolve server-side. Matching runs exact, then prefix, then substring, and accepts only
+an unambiguous hit. An ambiguous name comes back listing the candidates, and an unknown workflow
+state comes back listing the team's legal ones.
 
 Agents therefore rarely need to look an ID up before acting.
 
@@ -121,28 +122,27 @@ open to receive:
 - `notifications/message` at whatever level it sets via `logging/setLevel`
 
 <Note>
-  Delivery is best-effort and never replayed. Treat an update as a prompt to re-read rather than as
-  the data itself.
+  Delivery is best-effort and never replayed. Treat an update as a prompt to re-read.
 </Note>
 
 `DELETE /mcp` ends the session.
 
 ## Letting Athena use another MCP server
 
-The relationship runs both ways. Athena can act as an MCP **client** for a workspace.
+Athena can also act as an MCP **client** for a workspace.
 
 Go to **Settings → Connections → MCP connectors**, enter the server URL, choose **Sign in and
 approve access**, and finish the provider's browser approval. Docket verifies `tools/list` before
 Athena receives any of that server's tools, and namespaces them as `<connector>__<tool>` so
 external tools cannot collide with Docket's own.
 
-The connection follows the current MCP OAuth flow — protected-resource discovery, authorization-
+The connection follows the current MCP OAuth flow: protected-resource discovery, authorization-
 server discovery, PKCE, the RFC 8707 resource indicator, and URL-form client IDs where the
 provider advertises them. Docket falls back to dynamic client registration only when a server does
 not advertise CIMD.
 
-Credentials, registration state, and PKCE state are encrypted at rest. Athena receives the
-resulting server tools, never a raw user token.
+Docket encrypts credentials, registration state, and PKCE state at rest. Athena receives the
+resulting server tools and never a raw user token.
 
 <Warning>
   External tools do not bypass Docket's approval policy. A tool's declared annotations and the
@@ -158,21 +158,21 @@ minutes, and refresh tokens after 30 days.
 
 ## Self-hosting
 
-The OAuth authorization and resource server is core functionality — always on, in every deploy,
-with no MCP-specific configuration required.
+The OAuth authorization and resource server is core functionality. It runs in every deploy and
+needs no MCP-specific configuration.
 
 Its URLs derive from configuration every deploy already sets: the issuer from the API URL, the
 resource from `${API_URL}/mcp`, and the login page from `${WEB_URL}/sign-in`. Override one only to
 change its derivation, such as a non-standard sign-in route.
 
-Registration, token exchange, introspection, revocation, the JWKS, and both discovery documents
-are public by design under RFC 7591, 6749, 7662, 7009, 8414, and 9728 — a client authenticates
-itself rather than carrying a session cookie. They run under an open, credential-free CORS policy,
-so any MCP client's web UI can call them with nothing added to an allowlist.
+RFC 7591, 6749, 7662, 7009, 8414, and 9728 make registration, token exchange, introspection,
+revocation, the JWKS, and both discovery documents public: a client authenticates itself and
+carries no session cookie. They run under an open, credential-free CORS policy, so any MCP client's
+web UI can call them with nothing added to an allowlist.
 
 ## Next
 
 <Card title="Tools, resources, and prompts" icon="wrench" href="/developers/mcp-tools-and-resources">
-  What the server actually exposes — all 25 tools, the `docket://` resource scheme, and the
-  bootstrap prompts.
+  What the server exposes: all 25 tools, the `docket://` resource scheme, and the bootstrap
+  prompts.
 </Card>

@@ -3,8 +3,7 @@ title: "Initiatives and programs"
 description: "The theme that gathers work, and the ongoing area of operations that holds it."
 ---
 
-These are the two concepts above a Project, and they solve different problems. Most tools ship
-one of them and make you bend the other to fit.
+Initiatives and Programs both sit above a Project, and they do different jobs.
 
 <CardGroup cols={2}>
   <Card title="Program" icon="rotate">
@@ -12,26 +11,25 @@ one of them and make you bend the other to fit.
     "Customer Support." "After-School Program." "Donor relations."
   </Card>
   <Card title="Initiative" icon="flag">
-    A **strategic theme**. It holds no work of its own and gathers other things under a banner.
+    A **strategic theme**. It holds no work of its own and gathers other things under one heading.
     "Grow revenue." "Expand to a second city."
   </Card>
 </CardGroup>
 
-## Program — continuous work with a home
+## Program: continuous work
 
 A Program is the continuous counterpart to the bounded [Project](/guides/concepts/projects).
 
 Real organizations run work that keeps going after each deliverable inside it lands. Support
 tickets keep arriving. Books keep needing to be current. A tutoring program runs every term. A
-Project ends, and an Initiative holds no work, which leaves all of that homeless. A Program is
-where it lives.
+Project ends and an Initiative holds no work, so a Program holds work of this kind.
 
-**A Program contains work directly.** It can hold Projects — a bounded push inside a continuous
-area, like "Fall term enrolment" inside "After-School Program" — and it can hold Tasks with no
-project at all, which is what ongoing and recurring work usually looks like.
+**A Program contains work directly.** It can hold Projects, such as the bounded push "Fall term
+enrolment" inside the continuous "After-School Program". It can also hold Tasks with no project at
+all, which is the usual shape of ongoing and recurring work.
 
-A Program is read through **health and flow** rather than a progress bar, because a percentage
-complete means very little for something designed to keep going.
+You read a Program through its **health and flow** instead of a progress bar. A percentage
+complete means very little for work designed to keep going.
 
 ### Programs can end
 
@@ -39,18 +37,18 @@ Most run on indefinitely. A real after-school program can still be wound down at
 last term, and an operations function can be retired.
 
 The seeded program statuses are `Proposed · Active · Paused · Completed · Archived`, where
-`Archived` means retired and kept for history. Statuses are workspace-defined, so a workspace that
-wants programs which only ever end by being archived can delete `Completed` from its program set.
-See [Labels and statuses](/guides/concepts/labels-and-statuses).
+`Archived` means retired and kept for history. Statuses are workspace-defined, so a workspace whose
+programs only ever end by being archived can delete `Completed` from its program set. See
+[Labels and statuses](/guides/concepts/labels-and-statuses).
 
-## Initiative — a theme, holding no work
+## Initiative: a theme that holds no work
 
-An Initiative is a strategic banner. "Grow revenue" is not a thing anyone does on a Tuesday; it is
-the reason several things that *are* done on a Tuesday belong together.
+An Initiative names a strategic theme. "Grow revenue" is the reason several separate efforts
+belong together, and nobody works on it directly.
 
 **Initiatives contain no work themselves.** Programs and Projects *associate* with them, and the
-relationship is many-to-many, because themes genuinely cut across structure. One project can
-serve both "Grow revenue" and "Expand to a second city", and neither theme owns it.
+relationship is many-to-many, because themes cut across structure. One project can serve both
+"Grow revenue" and "Expand to a second city", and neither theme owns it.
 
 An initiative reports rolled-up health and the mix of what sits under it.
 
@@ -59,12 +57,12 @@ An initiative reports rolled-up health and the mix of what sits under it.
 Workspaces can arrange Initiatives into a shallow hierarchy. The maximum depth defaults to two
 total levels and is configurable in **Settings → Work structure**.
 
-Hierarchy links are contextual references. One may point at an Initiative in another workspace,
-and doing so grants no access to it — the link records a relationship without opening a door.
+Hierarchy links are contextual references. One may point at an Initiative in another workspace.
+The link records a relationship and grants no access to what it points at.
 
 ## Containment and association, side by side
 
-This is the distinction the whole model rests on.
+Docket keeps two kinds of relationship apart.
 
 | | Containment | Association |
 | --- | --- | --- |
@@ -72,9 +70,8 @@ This is the distinction the whole model rests on.
 | **Examples** | A workspace contains its work. A project contains its tasks. | An initiative themes a project. A cycle schedules a task. A task blocks a task. |
 | **Cardinality** | One parent. | Many-to-many. |
 
-Most planning tools flatten both into one tree and then force structure where none belongs.
-Keeping them apart is what lets a task be themed by two initiatives, scheduled into a cycle, and
-blocked by something in a different project, all at once.
+Because the two stay separate, one task can be themed by two initiatives, scheduled into a cycle,
+and blocked by something in a different project, all at once.
 
 ## Choosing between them
 

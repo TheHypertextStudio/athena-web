@@ -1,67 +1,63 @@
 ---
 title: "Calendar and scheduling"
-description: "Where planned work meets real time — layered calendars, two-way Google sync, and automatic weekly scheduling."
+description: "Layered calendars, two-way Google sync, and automatic weekly scheduling."
 ---
 
-Docket's calendar holds your meetings and your work in the same grid. A task with a duration can
-be placed on it like anything else, which is what keeps the plan and the week from being two
-different documents that disagree.
+Docket's calendar holds your meetings and your work in one grid. Any task with a duration sits on
+it the same way an event does, so your plan and your week stay a single picture.
 
 ## Layers
 
-The calendar is layered. Each source — your Google calendar, a workspace's shared schedule, your
-own scheduled work — is a layer you can show, hide, and share independently.
+Each source of time is a layer you can show, hide, and share on its own:
 
-Layers can be shared with other people, so a team can see the shape of your week without seeing
-the contents of every event in it.
+- Your Google calendar
+- A workspace's shared schedule
+- Your own scheduled work
+
+Share a layer with other people and they see the shape of your week without seeing the contents of
+every event in it.
 
 ## Two-way Google sync
 
-Connect Google Calendar and its events appear as ordinary rows here. Work you schedule in Docket
-is written back to Google, so the rest of your life sees the time you have committed.
+Connect Google Calendar and its events appear as ordinary rows here. Docket writes the work you
+schedule back to Google, so the rest of your life sees the time you have committed.
 
-Event times preserve the source calendar's own zone, so nothing drifts when you and the calendar
-disagree about where you are.
+Every event keeps its source calendar's time zone.
 
 See [Connect your calendar and mail](/guides/connect-calendar-and-mail).
 
 ## Scheduling a week
 
-Docket can lay out a week for you from the work you have and the time you actually have free.
+Docket can lay out a week from the work you have and the time you have free.
 
-The important part of how it does this: **time is not fungible.** Filming a session, sitting in a
-community meeting, writing something long, reading on a bus, and debriefing after an event are
-five qualitatively different kinds of time. A scheduler that treats them as interchangeable
-cheerfully puts a three-hour shoot into a 25-minute bus ride, produces a week that is technically
-full, and gets abandoned on day two.
-
-So the kind of time is part of the model. Work is placed into time that suits it.
+Kinds of time differ. Filming a session, sitting in a community meeting, writing something long,
+reading on a bus, and debriefing after an event each need different conditions. Docket models the
+kind of time each open block offers and places work into time that suits it, so a three-hour shoot
+never lands in a 25-minute bus ride.
 
 <Steps>
   <Step title="Estimates come first">
-    Scheduling reads each task's [time estimate](/guides/concepts/tasks). Unestimated work cannot
-    be placed honestly.
+    Scheduling reads each task's [time estimate](/guides/concepts/tasks). Docket cannot place work
+    that has no estimate.
   </Step>
-  <Step title="Your real calendar is the constraint">
-    Existing meetings and events are fixed. Scheduling fills what is left.
+  <Step title="Your real calendar sets the limits">
+    Existing meetings and events stay fixed. Scheduling fills the time around them.
   </Step>
   <Step title="You approve the week">
-    The result is a proposal you accept, edit, or reject — the same
+    The result arrives as a proposal you accept, edit, or reject, under the same
     [approval model](/guides/athena/proposals-and-approvals) everything else uses.
   </Step>
-  <Step title="It learns from what actually happened">
-    The [time ledger](/guides/daily/time) records how long work really took, which is what makes
-    the next week's estimates better than the last.
+  <Step title="Next week's estimates improve">
+    The [time ledger](/guides/daily/time) records how long work really took, and scheduling reads
+    that history.
   </Step>
 </Steps>
 
 ## The daily loop
 
-Weekly scheduling sets the shape; [Home](/guides/daily/home-today) adjusts it each morning against
-what actually happened yesterday. Neither replaces the other — the week is a plan, and the day is
-where the plan meets reality.
+Weekly scheduling sets the shape of the week. Each morning, [Home](/guides/daily/home-today)
+adjusts that shape against what actually happened the day before.
 
 ## Scheduling defaults
 
-Working hours, default durations, and how your calendar is shared live in
-**Settings → Calendar**.
+Working hours, default durations, and calendar sharing live in **Settings → Calendar**.

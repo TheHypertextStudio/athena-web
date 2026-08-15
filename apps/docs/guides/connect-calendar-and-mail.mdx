@@ -3,12 +3,12 @@ title: "Connect your calendar and mail"
 description: "What each connector brings into Docket, and the difference between a one-time import and an ongoing sync."
 ---
 
-Your work already lives somewhere. Docket connects to those tools one workspace at a time, so a
-workspace can hold real tasks and deadlines from the first morning.
+Docket connects to the tools your work already lives in, one workspace at a time, so a workspace
+can hold real tasks and deadlines from the first morning.
 
-## Two different things, kept apart
+## Connections and imports
 
-Docket separates these on purpose, and they live on separate screens.
+Docket keeps these two separate, on separate screens.
 
 <CardGroup cols={2}>
   <Card title="Connections" icon="arrows-rotate">
@@ -21,8 +21,7 @@ Docket separates these on purpose, and they live on separate screens.
   </Card>
 </CardGroup>
 
-Reach for Import when you are migrating off a tool. Reach for Connections when you intend to keep
-using both.
+Use Import when you are migrating off a tool. Use Connections when you intend to keep using both.
 
 ## What you can connect
 
@@ -36,31 +35,30 @@ using both.
 | **GitHub** | Issues and pull requests, linkable onto Docket work. |
 | **Notion** | A two-way mirror of designated databases. |
 
-A connector appears as available only when it is genuinely connectable in your deployment. A tool
-whose credentials are not configured is shown as unavailable rather than offered and then failing.
+A connector appears as available only when it is genuinely connectable in your deployment. Docket
+marks a tool whose credentials are not configured as unavailable instead of offering a connection
+that would fail.
 
 ## Personal connections and workspace connections
 
-The distinction matters and is easy to trip over.
+**Personal connections** live in **Settings → Connections**, under the Personal group. They are
+the data sources Athena reads on your behalf. Your Gmail and your calendar are yours, and no one
+else in a workspace sees them.
 
-**Personal connections** (**Settings → Connections**, under the Personal group) are the data
-sources Athena reads on your behalf. Your Gmail and your calendar are yours; no one else in a
-workspace sees them.
-
-**Workspace connections** (**Settings → Connections**, inside a shared workspace) are
-admin-managed and shared by everyone in that workspace. A Linear connection belongs to the team,
-not to whoever set it up.
+**Workspace connections** live in **Settings → Connections** inside a shared workspace. An admin
+manages them, and everyone in that workspace shares them. A Linear connection belongs to the team
+itself.
 
 Your personal space has no separate workspace connections, because its data sources are already
 your personal ones.
 
 ## Google Calendar, specifically
 
-The calendar connection is two-way. Events from Google appear on Docket's calendar, and work you
-schedule in Docket is written back to Google so the rest of your life sees it.
+The calendar connection runs in both directions. Events from Google appear on Docket's calendar,
+and work you schedule in Docket is written back to Google so the rest of your life sees it.
 
-Time-zone handling preserves the source calendar's zone, so an event does not drift when you and
-the calendar disagree about where you are.
+Docket preserves the source calendar's time zone, so an event keeps its intended time when your
+own time zone differs.
 
 See [Calendar and scheduling](/guides/daily/calendar-and-scheduling) for what happens once the
 events are in.
@@ -68,17 +66,16 @@ events are in.
 ## Gmail, specifically
 
 Mail is the input to Athena's task suggestions. She reads a message, decides what work it implies,
-and drafts a Task with the original email attached as context. Nothing is created behind your
-back — a suggestion waits for you to accept, edit, or dismiss it.
+and drafts a Task with the original email attached as context. Every suggestion waits for you to
+accept, edit, or dismiss it.
 
 Turn this on and tune its rules under **Settings → Connections → Email to task**. See
 [Athena and your mail](/guides/athena/athena-and-your-mail).
 
 ## When a connection breaks
 
-Access tokens expire and get revoked. When that happens the connection is marked as needing
-re-authorization and the owner is notified. A connection never reports success while doing
-nothing — a failure surfaces rather than being swallowed, so a quiet connector means a quiet
-source.
+Access tokens expire and get revoked. When that happens, Docket marks the connection as needing
+re-authorization and notifies the owner. A connection never reports success while doing nothing,
+and Docket records and displays every failure.
 
 Re-authorize from the same Connections screen.

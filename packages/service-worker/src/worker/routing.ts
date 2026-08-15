@@ -36,16 +36,23 @@ export type CacheStrategy =
  * different application, so origin alone cannot exclude them.
  *
  * @remarks
- * Two reasons, both load-bearing. `/api/auth` and `/v1` carry authenticated data that must never
- * enter Cache Storage. `/docs` is Mintlify: a navigation there would be stored under the *shell*
- * key, and the shell is only interchangeable across routes because `(app)/layout.tsx` renders the
- * same chrome for all of them — so the next offline navigation would boot a docs page with no
- * `RouteSlot` and no way back.
+ * Two reasons, both load-bearing. `/api/auth`, `/v1`, and the GitHub App install callback carry
+ * authenticated data or a redirect that must not be raced against a cache. `/docs` is Mintlify: a
+ * navigation there would be stored under the *shell* key, and the shell is only interchangeable
+ * across routes because `(app)/layout.tsx` renders the same chrome for all of them — so the next
+ * offline navigation would boot a docs page with no `RouteSlot` and no way back.
  *
  * The two `mintlify` asset prefixes already reach the terminal `passthrough`, being non-navigation
  * GETs; listing them keeps that a decision rather than an accident.
  */
-const PROXIED_PREFIXES = ['/api/auth', '/v1', '/docs', '/_mintlify', '/mintlify-assets'] as const;
+const PROXIED_PREFIXES = [
+  '/api/auth',
+  '/v1',
+  '/internal/integrations/github',
+  '/docs',
+  '/_mintlify',
+  '/mintlify-assets',
+] as const;
 
 /** The inputs the routing decision depends on. */
 export interface RouteRequest {

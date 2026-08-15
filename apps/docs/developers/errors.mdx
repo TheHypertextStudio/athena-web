@@ -1,6 +1,6 @@
 ---
 title: "Errors"
-description: "RFC 9457 problem documents, the closed code taxonomy to branch on, and the ones that surprise people."
+description: "RFC 9457 problem documents, the closed code taxonomy to branch on, and the two codes that need special handling."
 ---
 
 Every failure returns an RFC 9457 problem document:
@@ -22,7 +22,7 @@ Content-Type: application/problem+json
 
 <Warning>
   **Branch on `code`, never on `title` or `detail`.** The code is a closed, stable taxonomy. The
-  human-readable strings are product copy and are rewritten freely.
+  human-readable strings are product copy, and Docket rewrites them freely.
 </Warning>
 
 `validation_error` additionally carries `fieldErrors`, mapping each failing field to a stable
@@ -31,7 +31,7 @@ reason code.
 ## The live catalog
 
 <Card title="Browse every problem code" icon="triangle-exclamation" href="https://docket.hypertext.studio/problems" horizontal>
-  Each code with its HTTP status, what it means, and what to do about it — rendered from the same
+  Each code with its HTTP status, its meaning, and what to do about it. Rendered from the same
   definitions the API uses.
 </Card>
 
@@ -47,19 +47,19 @@ response resolves to the page explaining it.
     | `validation_error` | 422 | Body, params, or query failed schema validation. See `fieldErrors`. |
     | `unauthorized` | 401 | No session, or an invalid or expired one. Sign in. |
     | `forbidden` | 403 | Authenticated, lacking the required capability, grant, or OAuth scope. |
-    | `not_found` | 404 | The resource does not exist — **or is hidden from a caller who may not see it.** |
+    | `not_found` | 404 | The resource does not exist, **or Docket is hiding it from a caller who may not see it.** |
     | `conflict` | 409 | The request conflicts with current state. |
     | `internal` | 500 | An unexpected server error. Safe to retry. |
   </Accordion>
 
-  <Accordion title="The two that catch people out">
-    **`not_found` is also the answer for "you may not see this."** Docket hides existence rather
-    than confirming it with a 403. A 404 from a workspace route can mean the workspace exists and
-    you are not a member of it. Do not treat 404 as proof of absence.
+  <Accordion title="Two codes that need special handling">
+    **`not_found` also means "you may not see this."** Docket hides existence instead of
+    confirming it with a 403. A 404 from a workspace route can mean the workspace exists and you
+    are not a member of it. Do not treat 404 as proof of absence.
 
-    **`reauth_required` (401) is not a sign-out.** The caller is signed in, and the session is too
-    old for a high-risk action. Prompt for a passkey step-up and retry the same request. Clearing
-    the session here logs people out for no reason.
+    **`reauth_required` returns 401 without signing anyone out.** The caller is signed in, and the
+    session is too old for a high-risk action. Prompt for a passkey step-up and retry the same
+    request. Clearing the session here logs people out for no reason.
   </Accordion>
 
   <Accordion title="Writes that the model refuses">
@@ -118,5 +118,5 @@ The `title` and `detail` fields are Docket's own copy, written for Docket's surf
 building a product on top of this API, write your own messages and branch on `code` to decide
 which one to show.
 
-That is the rule Docket's own applications follow — a source-policy test in the repository fails
-the build on any UI that renders a provider or exception string directly.
+Docket's own applications follow that rule. A source-policy test in the repository fails the build
+on any UI that renders a provider or exception string directly.

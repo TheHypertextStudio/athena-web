@@ -5,14 +5,13 @@ description: "The 25 tools, the docket:// resource scheme, the bootstrap prompts
 
 The MCP server exposes **25 tools**, a set of `docket://` resources, and 3 prompts.
 
-Tools are named for what someone is trying to do rather than for the table underneath. That is
-what makes them stable while the schema moves, and it is why an agent rarely needs to know
-Docket's data model to be useful in it.
+Every tool carries the name of what someone is trying to do. Tool names therefore hold still while
+the schema moves, and an agent can work usefully in Docket without knowing its data model.
 
 ## Tools
 
 <AccordionGroup>
-  <Accordion title="Reading — 5 tools" defaultOpen>
+  <Accordion title="Reading: 5 tools" defaultOpen>
     | Tool | Does |
     | --- | --- |
     | `workspaces` | Lists the workspaces you belong to. Usually the first call. |
@@ -21,24 +20,24 @@ Docket's data model to be useful in it.
     | `get` | Reads one or more entities in full, by ID or by name. |
     | `brief` | What needs me today. |
 
-    **`find` versus `list_work`** is the distinction worth internalising.
+    **`find` and `list_work` answer different questions.**
 
-    `find` is ranked search over tasks, projects, programs, initiatives, cycles, milestones,
-    comments, updates, attachments, calendar events, agent sessions, teams, members, and labels.
-    It reads the same permission-filtered index the web app uses, so results are trimmed to what
-    the caller may actually see — and it trails writes by a moment.
+    `find` runs ranked search over tasks, projects, programs, initiatives, cycles, milestones,
+    comments, updates, attachments, calendar events, agent sessions, teams, members, and labels. It
+    reads the same permission-filtered index the web app uses, so results are trimmed to what the
+    caller may actually see. The index trails writes by a moment.
 
     `list_work` enumerates live rows by exact criteria: team, project, assignee, delegate, state,
-    priority, label, cycle, due window, blocked-ness, and unfiled (the triage queue). A filter the
-    chosen entity has no column for is **rejected, naming the ones it does**, rather than silently
-    ignored.
+    priority, label, cycle, due window, blocked-ness, and unfiled work in the triage queue. Pass a
+    filter the chosen entity has no column for and the call **fails, naming the filters that entity
+    does support**.
 
-    `get` reads entities in full — a task with its dependencies and subtasks, a project with its
-    milestones and latest update. References you cannot see come back in `missing` rather than
-    failing the whole batch.
+    `get` reads entities in full: a task with its dependencies and subtasks, a project with its
+    milestones and latest update. References you cannot see come back in `missing`, and the rest of
+    the batch still succeeds.
   </Accordion>
 
-  <Accordion title="Writing — 9 tools">
+  <Accordion title="Writing: 9 tools">
     | Tool | Does |
     | --- | --- |
     | `capture` | A sentence becomes a task. |
@@ -51,37 +50,36 @@ Docket's data model to be useful in it.
     | `plan_day` | Builds a day's plan. |
     | `undo` | Reverses a previous change set. |
 
-    **Every write records an undoable change set.** `undo` is a first-class tool rather than a
-    recovery procedure, which is what makes an agent safe to let loose on a batch.
+    **Every write records an undoable change set**, and `undo` reverses it in one call. An agent
+    can safely apply a batch, because a single call takes the batch back.
 
-    `organize` is the one to reach for when applying a plan rather than a single edit. It
-    reconciles against what already exists, so running it twice produces one result.
+    Reach for `organize` when you are applying a plan instead of a single edit. It reconciles
+    against what already exists, so running it twice produces one result.
   </Accordion>
 
-  <Accordion title="Time and reflection — 2 tools">
+  <Accordion title="Time and reflection: 2 tools">
     | Tool | Does |
     | --- | --- |
     | `track` | Records time against work. See [Time](/guides/daily/time). |
     | `retrospect` | Produces a retrospective over a period of work. |
   </Accordion>
 
-  <Accordion title="Repeating work and processes — 3 tools">
+  <Accordion title="Repeating work and processes: 3 tools">
     | Tool | Does |
     | --- | --- |
     | `define_process` | Defines a repeatable process. |
     | `schedule_process` | Puts a defined process on a schedule. |
     | `repeat_task` | Makes a task recur. |
 
-    These three enforce `work:write` inline rather than through the shared scope table. The
-    behaviour you observe is identical; it matters only if you are reading the source.
+    All three need `work:write`.
   </Accordion>
 
-  <Accordion title="Agents, sessions, and connectors — 6 tools">
+  <Accordion title="Agents, sessions, and connectors: 6 tools">
     | Tool | Does |
     | --- | --- |
     | `run_agent` | Triggers an agent session. |
-    | `manage_session` | Manages a running session — approve, reject, steer. |
-    | `link_external` | Links an external item (GitHub, Linear) onto Docket work. |
+    | `manage_session` | Manages a running session: approve, reject, steer. |
+    | `link_external` | Links an external item from GitHub or Linear onto Docket work. |
     | `acknowledge_directive` | Acknowledges a scheduling directive. |
     | `pause_athena_assignment_trigger` | Pauses one trigger on your personal Athena assignment. |
     | `remove_athena_assignment_trigger` | Removes one trigger on your personal Athena assignment. |
@@ -94,16 +92,16 @@ Docket's data model to be useful in it.
 | --- | --- |
 | `work:read` | `workspaces`, `find`, `list_work`, `get`, `brief`, and every resource read |
 | `work:write` | `capture`, `organize`, `update`, `comment`, `report_status`, `link`, `archive`, `plan_day`, `undo`, `track`, `retrospect`, `acknowledge_directive`, `define_process`, `schedule_process`, `repeat_task` |
-| `agents:run` | `run_agent`, `manage_session`, and the two Athena trigger tools |
+| `agents:run` | `run_agent`, `manage_session`, `pause_athena_assignment_trigger`, `remove_athena_assignment_trigger` |
 | `connectors:link` | `link_external` |
 
-See [Authentication](/developers/authentication#scopes) for how scopes are requested and stepped
-up.
+See [Authentication](/developers/authentication#scopes) for how clients request scopes and step
+them up.
 
 ## Resources
 
-Reads are also modelled as resources, all permission-gated with existence-hiding — an item you
-cannot see is indistinguishable from one that does not exist.
+Reads are also modelled as resources. Every one is permission-gated and hides existence: an item
+you cannot see looks the same as one that does not exist.
 
 ### Static
 
@@ -128,11 +126,11 @@ Where `type` is one of `task`, `project`, `program`, `initiative`, `cycle`, `tea
 
 Resources support `resources/subscribe`. A subscribed client holding the `GET /mcp` stream open
 gets `notifications/resources/updated` when something changes. Delivery is best-effort and never
-replayed — re-read on notification rather than treating the notification as data.
+replayed, so treat a notification as a prompt to re-read the resource.
 
 ## Prompts
 
-Three, for bootstrapping an agent with workspace context.
+Three prompts bootstrap an agent with workspace context.
 
 | Prompt | Purpose |
 | --- | --- |
@@ -156,6 +154,6 @@ behind a deployment flag.
 
 <Note>
   `tools/list` reflects **your** grants. Two people connecting the same client can legitimately see
-  different tool lists, and a grant change fires `notifications/tools/list_changed` rather than
-  waiting for a reconnect.
+  different tool lists. A grant change fires `notifications/tools/list_changed` immediately, with
+  no reconnect needed.
 </Note>

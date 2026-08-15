@@ -6,10 +6,10 @@ description: "Why the words in these docs may differ from the words on your scre
 These docs call the six units of work **Initiative**, **Program**, **Project**, **Task**,
 **Cycle**, and **Team**. Your workspace may show different words for the same six things.
 
-That is a setting. Each workspace picks a **terminology preset**, and the preset relabels the
-work hierarchy to language that fits the kind of organization you run. The data model underneath
-is identical in every case — a Cycle called a Season is the same object with the same behaviour,
-wearing a different label.
+Each workspace picks a **terminology preset**, and the preset relabels the work hierarchy to
+language that fits the kind of organization you run. The data model underneath is identical in
+every case: a Cycle called a Season is the same object with the same behaviour and a different
+label.
 
 ## The three presets
 
@@ -27,7 +27,7 @@ wearing a different label.
     | Team | Team |
   </Tab>
   <Tab title="Nonprofit">
-    Mission-oriented labels, where the ongoing program is the hero term and work is planned in
+    Mission-oriented labels. The ongoing program is the leading term, and work is planned in
     seasons.
 
     | Concept in these docs | Shown in your workspace |
@@ -40,8 +40,8 @@ wearing a different label.
     | Team | **Chapter** |
   </Tab>
   <Tab title="Agency">
-    Client-services labels, where an ongoing relationship is a retainer and a body of client work
-    is an engagement.
+    Client-services labels. An ongoing relationship is a retainer, and a body of client work is an
+    engagement.
 
     | Concept in these docs | Shown in your workspace |
     | --- | --- |
@@ -54,14 +54,14 @@ wearing a different label.
   </Tab>
 </Tabs>
 
-`Project` and `Task` read the same across every sector, so they are the same word in all three
+`Project` and `Task` read the same across every sector, so they keep the same word in all three
 presets. If you only ever meet those two, the preset makes no visible difference.
 
 ## Per-word overrides
 
 A workspace can also override any single word on top of its preset. A nonprofit running the
-Nonprofit preset can still rename `Program` to `Service` and leave everything else alone, so
-the words on your screen may not match any preset exactly.
+Nonprofit preset can rename `Program` to `Service` and leave everything else alone, so the words
+on your screen may not match any preset exactly.
 
 Set the preset and any overrides in **Settings → General → Terminology**. In a shared workspace
 that is an admin setting, so the whole workspace reads the same words.
@@ -71,16 +71,15 @@ that is an admin setting, so the whole workspace reads the same words.
 Changing the preset changes labels. It leaves everything else where it was:
 
 - No work is moved, renamed, or re-parented.
-- Every rule in [Core concepts](/guides/concepts/workspaces) still holds — a Cycle called a
-  Sprint is still team-scoped, still a fixed window of time, still schedules Tasks rather than
+- Every rule in [Core concepts](/guides/concepts/workspaces) still holds. A Cycle called a
+  Sprint is still team-scoped, still a fixed window of time, and still schedules Tasks without
   containing them.
 - The API, the MCP tools, and the [REST reference](/developers/rest-api) always use the
   default words. `project`, `cycle`, and `initiative` are the field names regardless of what
   your workspace displays.
 
-That last point is the practical one: if you are reading these docs beside the API, the API
-agrees with the docs. If you are reading these docs beside the app, translate through the table
-above.
+So when you read these docs beside the API, the two agree. When you read these docs beside the
+app, translate through the tables above.
 
 <Note>
   Terminology is set per workspace, so each of yours can differ. Your personal space keeps its own

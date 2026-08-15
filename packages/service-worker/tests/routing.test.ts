@@ -33,6 +33,16 @@ describe('service worker routing', () => {
       expect(route(`${ORIGIN}/api/auth`)).toBe('passthrough');
     });
 
+    it('never intercepts the GitHub App install callback', () => {
+      // A top-level browser navigation that proxies to the API and ends in a redirect. Racing it
+      // against NAVIGATION_TIMEOUT_MS can serve the app shell in place of the redirect.
+      expect(
+        route(`${ORIGIN}/internal/integrations/github/callback?installation_id=1`, {
+          isNavigation: true,
+        }),
+      ).toBe('passthrough');
+    });
+
     it('does not treat a lookalike path as the API', () => {
       // `/v1x` and `/api/authz` are ordinary app routes, so the guard must key on a segment
       // boundary rather than a bare prefix. Asserted as navigations: a non-navigation request to an

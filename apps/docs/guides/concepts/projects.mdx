@@ -1,35 +1,34 @@
 ---
 title: "Projects"
-description: "A bounded effort with an outcome — something you finish and close."
+description: "A bounded effort with an outcome that you finish and close."
 ---
 
 A Project is a bounded body of work with an outcome and often a deadline. "Launch v2."
 "Spring Gala." "Rebuild the donor page." You finish it, and then it closes.
 
-That boundedness is the whole distinction. Work that keeps going after each deliverable inside it
-lands belongs in a [Program](/guides/concepts/initiatives-and-programs) instead.
+Work that continues after each deliverable inside it lands belongs in a
+[Program](/guides/concepts/initiatives-and-programs).
 
 ## What a project carries
 
-- A **lead** — the Actor accountable for it.
-- **Dates** — a start and a target, either of which may be absent.
-- A **status**, from the workspace's own project statuses.
-- A **health signal** — `on_track`, `at_risk`, or `off_track` — driven by the
-  [updates](/guides/concepts/updates-and-health) posted on it.
-- **Milestones**, **tasks**, **attachments**, and threaded discussion.
+| Field | What it holds |
+| --- | --- |
+| **Lead** | The Actor accountable for the project. |
+| **Dates** | A start and a target. Either one can be left empty. |
+| **Status** | One of the workspace's own project statuses. |
+| **Health** | `on_track`, `at_risk`, or `off_track`, set by the [updates](/guides/concepts/updates-and-health) posted on the project. |
+| **Contents** | Milestones, Tasks, attachments, and threaded discussion. |
 
-A project reports **weighted progress** alongside its health, so a reader gets both "how much is
-done" and "how is it actually going" without opening it.
+A project also reports **weighted progress**. A reader sees how much of the work is done and how
+the work is going without opening the project.
 
 ## Milestones
 
-A Milestone is an attribute of a project, rather than a thing of its own. It is a dated checkpoint
-that groups some of the project's tasks toward a deliverable — "Beta to design partners",
-"Invitations mailed".
+A Milestone is an attribute of a Project. It is a dated checkpoint that groups some of the
+project's tasks toward a deliverable: "Beta to design partners", "Invitations mailed".
 
-Use them when a project has real internal checkpoints. Skip them when it does not; a project with
-no milestones is completely ordinary. See
-[Cycles and milestones](/guides/concepts/cycles-and-milestones).
+Add milestones when a project has real internal checkpoints. A project with no milestones is
+completely ordinary. See [Cycles and milestones](/guides/concepts/cycles-and-milestones).
 
 ## Where a project sits
 
@@ -43,35 +42,35 @@ Workspace
   └─ Project "Website rebuild"
 ```
 
-Separately, any number of [Initiatives](/guides/concepts/initiatives-and-programs) can *theme* a
-project. That is an association rather than containment: an initiative gathers projects under a
-strategic banner without owning them, and a project can carry several.
+Any number of [Initiatives](/guides/concepts/initiatives-and-programs) can also *theme* a project.
+Theming is an association: an initiative gathers projects under a shared strategic theme without
+containing them, and one project can carry several themes at once.
 
-## Project resources and dependencies
+## Dependencies and resources
 
-Projects can **depend on** other projects, which is how a delivery order gets recorded when two
-bounded efforts are genuinely sequential.
+A project can **depend on** another project, which records the delivery order when two bounded
+efforts run in sequence.
 
-They also hold **resources** — links, documents, and references to items in connected tools —
-so the material a project runs on has a home beside the work.
+A project also holds **resources**: links, documents, and references to items in connected tools.
+The material a project runs on sits beside the work.
 
 ## Publishing a project
 
-A project can be published as a **brief**: a read-only public page at a web address you control,
+You can publish a project as a **brief**: a read-only public page at a web address you control,
 for people who need to see where something stands without an account.
 
-Configure the address under **Settings → Publishing**, which an admin owns. A workspace can point
-a custom domain at its briefs.
+An admin configures the address under **Settings → Publishing**. A workspace can point a custom
+domain at its briefs.
 
 ## Templates
 
-If you start the same shape of project repeatedly — every client engagement, every event —
-save it as a template. A template is a named, reusable pre-filled draft, scoped to you, a team, or
-the whole workspace.
+Save a template when you create the same kind of project repeatedly, such as every client
+engagement or every event. A template is a named, reusable pre-filled draft, scoped to you, a
+Team, or the whole workspace.
 
-Manage them in **Settings → Templates**.
+Manage templates in **Settings → Templates**.
 
 <Note>
-  Tasks, Projects, Initiatives, and Programs are all templatable. Cycles and Teams are not — a
-  cycle is a window of time and a team is structural, so neither has a document to seed.
+  Tasks, Projects, Initiatives, and Programs are all templatable. Cycles and Teams are not: a
+  Cycle is a span of time and a Team is a group of people, so neither has a document to seed.
 </Note>

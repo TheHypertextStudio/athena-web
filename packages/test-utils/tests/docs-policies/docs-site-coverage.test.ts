@@ -51,9 +51,16 @@ const LEGACY_APEX = ['hypertext', 'studio'].join('.');
  *
  * @remarks
  * `legacy-host-policy.test.ts` bans this hostname but scans only each workspace's `src` tree, which
- * `apps/docs` does not have. A ban is wrong here — a reader copying `claude mcp add` needs a URL
- * that answers — so this is a ratchet: may shrink, never grow. Per file, so a URL moving between
- * pages cannot hide under an unchanged total.
+ * `apps/docs` does not have. A ban is wrong here, since a reader copying `claude mcp add` needs a
+ * URL that answers. So this is a ratchet: it may shrink, never grow. Counted per file, so a URL
+ * moving between pages cannot hide under an unchanged total.
+ *
+ * Mintlify `docs.json` variables retire part of this. Verified against `mint dev`: `{{camelCase}}`
+ * substitutes in prose, inline code, and fenced code blocks, and names must be camelCase because a
+ * hyphen makes MDX parse `{{a-b}}` as a JS expression and fail the page. It does NOT substitute in
+ * a markdown link destination, which renders the braces URL-encoded, and `docs.json` cannot
+ * reference its own variables. That leaves the 14 hits in `rest-api.mdx` (link destinations) and
+ * the 8 in `docs.json`.
  */
 const LEGACY_APEX_INVENTORY: Readonly<Record<string, number>> = {
   'developers/connect-an-agent-mcp.mdx': 5,

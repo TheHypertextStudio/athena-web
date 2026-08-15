@@ -3,8 +3,8 @@ title: "Labels and statuses"
 description: "Your workspace's own words for how far along work is, and for everything else you need to say about it."
 ---
 
-Two workspace-owned vocabularies, doing different jobs. A **status** answers "how far along is
-this?" A **label** is everything else you want to say.
+Your workspace owns two vocabularies. A **status** answers "how far along is this?" A **label**
+covers everything else you want to say.
 
 ## Statuses
 
@@ -12,14 +12,14 @@ A status is a stage work moves through. Your workspace names its own: how many t
 they are called, what each one means, what order they read in, and which one new work starts in.
 
 A grant-making nonprofit can run `Drafting → Submitted → Under review → Awarded`. A studio can run
-`Idea → Booked → Shot → Delivered`. Each is describing its real process in its own words.
+`Idea → Booked → Shot → Delivered`. Each workspace describes its real process in its own words.
 
 Set them up in **Settings → Statuses**.
 
 ### The five categories
 
-Every status a workspace invents declares one of five categories. That much is Docket's, and it is
-what makes the rest yours.
+Every status a workspace invents declares one of five categories. Docket defines these five, and
+your workspace defines everything else.
 
 | Category | Means |
 | --- | --- |
@@ -29,16 +29,20 @@ what makes the rest yours.
 | `completed` | Finished successfully. |
 | `canceled` | Ended without being finished. |
 
-The category is what draws a status glyph, what a board groups by, what a progress percentage
-counts, what a connector maps a Linear or Jira state onto, and what tells Docket that a piece of
-work just finished.
+The category drives:
+
+- the status glyph Docket draws
+- how a board groups work
+- what a progress percentage counts
+- how a connector maps a Linear or Jira state onto your status
+- when Docket knows a piece of work has just finished
 
 Two workspaces calling the same stage `Shipped` and `Awarded` are both saying `completed`, so
 their numbers, their icons, and their integrations still line up.
 
 <Note>
-  This is also what agents rely on. An agent comparing work across two teams reads the category
-  rather than the label, so it never has to learn your words to know that something is done.
+  Agents rely on the same categories. An agent comparing work across two teams reads the category
+  instead of the label, so it never has to learn your words to know that something is done.
 </Note>
 
 ### Statuses are per team and per kind of work
@@ -47,7 +51,7 @@ A team owns the workflow states its Tasks move through, so two teams in the same
 genuinely different processes.
 
 Projects, Programs, and Initiatives carry their own status sets, because "how far along is this
-project" and "how far along is this task" are not the same question. The seeded Program set is
+project" and "how far along is this task" are different questions. The seeded Program set is
 `Proposed · Active · Paused · Completed · Archived`.
 
 ## Labels
@@ -55,9 +59,9 @@ project" and "how far along is this task" are not the same question. The seeded 
 A label is free-form workspace vocabulary that you attach to work. `needs-legal`. `Q3`.
 `grant-funded`. `flaky`.
 
-Labels carry no behaviour. They do not gate anything, order anything, or mean anything to Docket
-beyond being a thing you can filter and search on. That is the point — statuses have rules, and
-labels are where you put everything that should not.
+Labels carry no behaviour. They gate nothing, order nothing, and mean nothing to Docket beyond
+being something you can filter and search on. Statuses carry the rules, and labels hold everything
+you want to record without rules.
 
 Manage them in **Settings → Labels**, described there as "the words this workspace uses that
 Docket does not ship."
@@ -73,7 +77,6 @@ Docket does not ship."
 | That this needs a lawyer to look at it | A **label** |
 
 <Tip>
-  Keep the status set short. Every status is a decision someone has to make every time they touch
-  a piece of work, and a seven-stage workflow usually means two of the stages are labels wearing a
-  disguise.
+  Keep the status set short. Every status is a decision someone has to make each time they touch a
+  piece of work, and a seven-stage workflow usually contains two stages that should be labels.
 </Tip>

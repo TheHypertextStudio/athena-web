@@ -214,6 +214,17 @@ export function useRegisterTaskActions(): void {
             (object): object is ObjectRef & { readonly kind: 'task' } => object.kind === 'task',
           );
           if (subjects.length === 0) return;
+          if (context.target?.kind === 'task') {
+            reparentHierarchy({
+              organizationId: context.organizationId,
+              moves: subjects.map(({ id }) => ({
+                taskId: id,
+                parentTaskId: context.target?.id ?? null,
+              })),
+              preserveSelectedSubtrees: true,
+            });
+            return;
+          }
           pickerOverlay.open({
             kind: 'task-hierarchy',
             organizationId: context.organizationId,

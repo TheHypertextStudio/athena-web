@@ -33,6 +33,8 @@ import type { ObjectRef } from '@/lib/actions/object';
 export interface DragState {
   /** The object being dragged, or `null` when nothing is. */
   readonly object: ObjectRef | null;
+  /** Ordered objects carried by the gesture; first is the primary object. */
+  readonly objects: readonly ObjectRef[];
   /** The selection surface the drag started from, when it started in one. */
   readonly sourceSurfaceId: string | null;
 }
@@ -40,12 +42,16 @@ export interface DragState {
 /** Imperative control over the in-flight drag, used by {@link ./use-draggable}. */
 export interface DragController {
   /** Record the start of a gesture. */
-  readonly begin: (object: ObjectRef, sourceSurfaceId: string | null) => void;
+  readonly begin: (
+    object: ObjectRef,
+    sourceSurfaceId: string | null,
+    objects?: readonly ObjectRef[],
+  ) => void;
   /** Record the end of a gesture, whether it dropped or was cancelled. */
   readonly end: () => void;
 }
 
-const IDLE: DragState = { object: null, sourceSurfaceId: null };
+const IDLE: DragState = { object: null, objects: [], sourceSurfaceId: null };
 
 const DragStateContext = createContext<DragState>(IDLE);
 const DragControllerContext = createContext<DragController | null>(null);
@@ -72,8 +78,8 @@ export function DragProvider({ children }: DragProviderProps): JSX.Element {
 
   const controller = useMemo<DragController>(
     () => ({
-      begin: (object, sourceSurfaceId) => {
-        setState({ object, sourceSurfaceId });
+      begin: (object, sourceSurfaceId, objects = [object]) => {
+        setState({ object, objects, sourceSurfaceId });
       },
       end: () => {
         setState(IDLE);

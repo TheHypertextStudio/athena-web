@@ -27,7 +27,7 @@ import type { DragEvent as ReactDragEvent } from 'react';
 
 import { CURSOR_DROP_STATE } from '@/lib/actions/cursor';
 import type { ObjectKind, ObjectRef } from '@/lib/actions/object';
-import { useActionDispatch } from '@/lib/actions/registry-context';
+import { useOptionalActionDispatch } from '@/lib/actions/registry-context';
 import type { ActionContext, ActionId, ActionInvocationResult } from '@/lib/actions/types';
 
 import { useDragState } from './drag-context';
@@ -134,7 +134,7 @@ function matchesAccepts(accepts: UseDropTargetOptions['accepts'], object: Object
  */
 export function useDropTarget(options: UseDropTargetOptions): DropTargetBinding {
   const { accepts, action, resolveContext, effect = 'move', disabled = false, onResult } = options;
-  const dispatch = useActionDispatch();
+  const dispatch = useOptionalActionDispatch();
   const dragged = useDragState().object;
   const [isOver, setIsOver] = useState(false);
   // `dragenter`/`dragleave` fire for every descendant the pointer crosses, so a naive boolean
@@ -143,6 +143,7 @@ export function useDropTarget(options: UseDropTargetOptions): DropTargetBinding 
 
   const canDrop =
     !disabled &&
+    dispatch !== null &&
     dragged !== null &&
     matchesAccepts(accepts, dragged) &&
     resolveContext(dragged) !== null;
@@ -184,7 +185,7 @@ export function useDropTarget(options: UseDropTargetOptions): DropTargetBinding 
     (event: ReactDragEvent) => {
       depth.current = 0;
       setIsOver(false);
-      if (disabled) return;
+      if (disabled || dispatch === null) return;
       const object = readObjectPayload(event.dataTransfer);
       if (object === null || !matchesAccepts(accepts, object)) return;
       const context = resolveContext(object);

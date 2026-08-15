@@ -7,6 +7,7 @@ import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 
 import type { Column, EntityTableRowLinkProps } from './entity-table-columns';
+import type { EntityTableRowInteraction } from './EntityTable';
 import { columnClassName, columnStyle } from './entity-table-columns';
 
 /** The shared row chrome (density + dividers + the named container) — matches {@link ListRow}. */
@@ -33,6 +34,10 @@ export interface EntityTableRowProps<T> {
   onSelect?: (() => void) | undefined;
   /** Makes the whole row a drag source (bound to this row by EntityTable's `rowDrag`). */
   drag?: DragSource | undefined;
+  /** Application-owned row selection/focus binding. */
+  interaction?: EntityTableRowInteraction | undefined;
+  /** When set, only this column renders the row href. */
+  linkColumnKey?: string | undefined;
 }
 
 /**
@@ -55,6 +60,8 @@ export function EntityTableRow<T>({
   onActivate,
   onSelect,
   drag,
+  interaction,
+  linkColumnKey,
 }: EntityTableRowProps<T>): React.JSX.Element {
   const dragProps = dragSourceProps(drag);
   const rowClassName = cn(
@@ -85,21 +92,65 @@ export function EntityTableRow<T>({
 
   const cells = (
     <>
-      {columns.map((column) => (
-        <span
-          key={column.key}
-          role="gridcell"
-          data-col={column.key}
-          style={columnStyle(column)}
-          className={columnClassName(column)}
-        >
-          {column.render(row)}
-        </span>
-      ))}
+      {columns.map((column) => {
+        const content = column.render(row);
+        const linked = href !== undefined && column.key === linkColumnKey;
+        const link = linked
+          ? renderRowLink
+            ? renderRowLink({
+                href,
+                className: 'min-w-0 truncate rounded-sm outline-none focus-visible:ring-2',
+                onClick: () => {
+                  onActivate?.();
+                },
+                onMouseEnter: onRowPrefetch,
+                onFocus: onRowPrefetch,
+                tabIndex: 0,
+                'aria-current': undefined,
+                children: content,
+              })
+            : React.createElement(
+                'a',
+                {
+                  href,
+                  className: 'min-w-0 truncate rounded-sm outline-none focus-visible:ring-2',
+                  onClick: () => onActivate?.(),
+                  onMouseEnter: onRowPrefetch,
+                  onFocus: onRowPrefetch,
+                },
+                content,
+              )
+          : content;
+        return (
+          <span
+            key={column.key}
+            role="gridcell"
+            data-col={column.key}
+            style={columnStyle(column)}
+            className={columnClassName(column)}
+          >
+            {link}
+          </span>
+        );
+      })}
     </>
   );
 
   const ariaCurrent: 'true' | undefined = active ? 'true' : undefined;
+
+  if (linkColumnKey !== undefined) {
+    return (
+      <div
+        role="row"
+        aria-current={ariaCurrent}
+        {...interaction?.rowProps}
+        {...dragProps}
+        className={cn(rowClassName, 'group/row', interaction?.className)}
+      >
+        {cells}
+      </div>
+    );
+  }
 
   if (renderRowLink && href !== undefined) {
     return (

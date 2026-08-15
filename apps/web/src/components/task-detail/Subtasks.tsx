@@ -9,9 +9,16 @@ import { type JSX, useMemo, useState } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import { useTaskHierarchyDrop } from '@/components/tasks/task-hierarchy-drop';
+import type { ObjectRef } from '@/lib/actions';
+import type { CategoryOfState } from '@/lib/work-category';
 
 /** Props for {@link Subtasks}. */
 interface SubtasksProps {
+  /** Workspace that owns the parent and every subtask. */
+  organizationId: string;
+  /** Parent task whose children are listed. */
+  parentTaskId: string;
   /** The parent task's subtask refs (carry id/title/state). */
   subtasks: readonly TaskRef[];
   /** Add a subtask by title; resolves when the create round-trip completes. */
@@ -41,6 +48,8 @@ interface SubtasksProps {
  * title. Optimism is owned by the parent screen, which re-reads after each mutation.
  */
 export function Subtasks({
+  organizationId,
+  parentTaskId,
   subtasks,
   onAdd,
   onToggle,
@@ -97,61 +106,31 @@ export function Subtasks({
         <p className="text-on-surface-variant text-body-medium">No subtasks yet.</p>
       ) : (
         <ul className="flex flex-col">
-          {subtasks.map((subtask) => {
-            const type = categoryOf(subtask.state);
-            const done = type === 'completed';
-            return (
-              <li
-                key={subtask.id}
-                className="group hover:bg-surface-container-high -mx-2 flex items-center gap-2 rounded-md px-2 py-1.5"
-              >
-                <button
-                  type="button"
-                  aria-label={
-                    done ? `Mark “${subtask.title}” as todo` : `Mark “${subtask.title}” as done`
-                  }
-                  aria-pressed={done}
-                  disabled={!canEdit || busyId === subtask.id}
-                  onClick={() => {
-                    void toggle(subtask);
-                  }}
-                  className="focus-visible:ring-ring rounded-full focus-visible:ring-1 focus-visible:outline-none disabled:opacity-50"
-                >
-                  <StatusIcon type={type} />
-                </button>
-                {canEdit && onRename ? (
-                  <EditableTitle
-                    value={subtask.title}
-                    onSave={(title) => {
+          {subtasks.map((subtask) => (
+            <SubtaskRow
+              key={subtask.id}
+              subtask={subtask}
+              subtasks={subtasks}
+              organizationId={organizationId}
+              parentTaskId={parentTaskId}
+              canEdit={canEdit}
+              busy={busyId === subtask.id}
+              categoryOf={categoryOf}
+              onToggle={() => {
+                void toggle(subtask);
+              }}
+              onOpen={() => {
+                onOpen(subtask.id);
+              }}
+              {...(onRename
+                ? {
+                    onRename: (title: string) => {
                       onRename(subtask.id, title);
-                    }}
-                    canEdit
-                    activate="doubleClick"
-                    onActivate={() => {
-                      onOpen(subtask.id);
-                    }}
-                    ariaLabel="Subtask title"
-                    className={cn(
-                      'text-body-medium min-w-0 flex-1 truncate',
-                      done ? 'text-on-surface-variant line-through' : 'text-on-surface',
-                    )}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpen(subtask.id);
-                    }}
-                    className="focus-visible:ring-ring text-body-medium min-w-0 flex-1 truncate rounded text-left hover:underline focus-visible:ring-1 focus-visible:outline-none"
-                  >
-                    <span className={done ? 'text-on-surface-variant line-through' : ''}>
-                      {subtask.title}
-                    </span>
-                  </button>
-                )}
-              </li>
-            );
-          })}
+                    },
+                  }
+                : {})}
+            />
+          ))}
         </ul>
       )}
 
@@ -185,5 +164,101 @@ export function Subtasks({
         </form>
       ) : null}
     </section>
+  );
+}
+
+/** One inline subtask row that can accept another task as its child. */
+function SubtaskRow({
+  subtask,
+  subtasks,
+  organizationId,
+  parentTaskId,
+  canEdit,
+  busy,
+  categoryOf,
+  onToggle,
+  onOpen,
+  onRename,
+}: {
+  readonly subtask: TaskRef;
+  readonly subtasks: readonly TaskRef[];
+  readonly organizationId: string;
+  readonly parentTaskId: string;
+  readonly canEdit: boolean;
+  readonly busy: boolean;
+  readonly categoryOf: CategoryOfState;
+  readonly onToggle: () => void;
+  readonly onOpen: () => void;
+  readonly onRename?: (title: string) => void;
+}): JSX.Element {
+  const object = {
+    kind: 'task' as const,
+    id: subtask.id,
+    organizationId,
+    title: subtask.title,
+    meta: { parentTaskId },
+  } satisfies ObjectRef;
+  const hierarchyRows = [
+    { id: parentTaskId, parentTaskId: null },
+    ...subtasks.map(({ id }) => ({ id, parentTaskId })),
+  ];
+  const drop = useTaskHierarchyDrop(object, hierarchyRows);
+  const type = categoryOf(subtask.state);
+  const done = type === 'completed';
+  return (
+    <li
+      {...drop.rowProps}
+      className={cn(
+        'group hover:bg-surface-container-high -mx-2 flex items-center gap-2 rounded-md px-2 py-1.5',
+        drop.rowProps.className,
+        drop.className,
+      )}
+    >
+      <button
+        type="button"
+        aria-label={done ? `Mark “${subtask.title}” as todo` : `Mark “${subtask.title}” as done`}
+        aria-pressed={done}
+        disabled={!canEdit || busy}
+        onClick={onToggle}
+        className="focus-visible:ring-ring rounded-full focus-visible:ring-1 focus-visible:outline-none disabled:opacity-50"
+      >
+        <StatusIcon type={type} />
+      </button>
+      {canEdit && onRename ? (
+        <EditableTitle
+          value={subtask.title}
+          onSave={(title) => {
+            onRename(title);
+          }}
+          canEdit
+          activate="doubleClick"
+          onActivate={() => {
+            onOpen();
+          }}
+          ariaLabel="Subtask title"
+          className={cn(
+            'text-body-medium min-w-0 flex-1 truncate',
+            done ? 'text-on-surface-variant line-through' : 'text-on-surface',
+          )}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            onOpen();
+          }}
+          className="focus-visible:ring-ring text-body-medium min-w-0 flex-1 truncate rounded text-left hover:underline focus-visible:ring-1 focus-visible:outline-none"
+        >
+          <span className={done ? 'text-on-surface-variant line-through' : ''}>
+            {subtask.title}
+          </span>
+        </button>
+      )}
+      {drop.status ? (
+        <span className="sr-only" role="status">
+          {drop.status}
+        </span>
+      ) : null}
+    </li>
   );
 }

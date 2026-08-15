@@ -38,6 +38,13 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DragProvider } from '../../../src/components/dnd/drag-context';
+import { readObjectSetPayload } from '../../../src/components/dnd/drag-payload';
+import { InteractionProvider } from '../../../src/lib/actions/interaction-provider';
+import { createActionRegistry, defineActionDomain } from '../../../src/lib/actions/registry';
+import type { ActionContext } from '../../../src/lib/actions/types';
+import { fakeDataTransfer } from '../../interactivity/harness';
+
 import { buildTaskCatalog } from '../../../src/components/views/task-catalog';
 import {
   buildTaskColumns,
@@ -207,6 +214,107 @@ describe('buildTaskColumns', () => {
 });
 
 describe('TaskTable', () => {
+  it('selects rows without hijacking title navigation and drags the ordered selection', () => {
+    const registry = createActionRegistry();
+    const first = task({ id: TASK_1, title: 'First' });
+    const second = task({ id: TASK_2, title: 'Second' });
+    const third = task({ id: TASK_3, title: 'Third' });
+    render(
+      withQueryClient(
+        <InteractionProvider registry={registry}>
+          <DragProvider>
+            <TaskTable
+              label="Tasks"
+              columns={columns}
+              tasks={[first, second, third]}
+              taskHref={(item) => `/orgs/${ORG_ID}/tasks/${item.id}`}
+            />
+          </DragProvider>
+        </InteractionProvider>,
+      ),
+    );
+    const row = (id: string) =>
+      document.querySelector<HTMLElement>(`[role="row"][data-object-id="${id}"]`)!;
+
+    fireEvent.click(row(TASK_1));
+    fireEvent.click(row(TASK_2), { metaKey: true });
+    expect(row(TASK_1)).toHaveAttribute('aria-selected', 'true');
+    expect(row(TASK_2)).toHaveAttribute('aria-selected', 'true');
+
+    const titleLink = screen.getByRole('link', { name: 'Third' });
+    titleLink.addEventListener(
+      'click',
+      (event) => {
+        event.preventDefault();
+      },
+      { once: true },
+    );
+    fireEvent.click(titleLink);
+    expect(row(TASK_1)).toHaveAttribute('aria-selected', 'true');
+    expect(row(TASK_2)).toHaveAttribute('aria-selected', 'true');
+
+    const transfer = fakeDataTransfer();
+    fireEvent.dragStart(row(TASK_2), { dataTransfer: transfer });
+    expect(readObjectSetPayload(transfer).map(({ id }) => id)).toEqual([TASK_1, TASK_2]);
+  });
+
+  it('previews and dispatches a selected-root hierarchy drop onto another task', async () => {
+    const seen: ActionContext[] = [];
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        {
+          id: 'task.makeSubtaskOf',
+          label: 'Make subtask of',
+          objectKinds: ['task'],
+          multi: true,
+          run: (context) => {
+            seen.push(context);
+          },
+        },
+      ]),
+    );
+    render(
+      withQueryClient(
+        <InteractionProvider registry={registry}>
+          <DragProvider>
+            <TaskTable
+              label="Tasks"
+              columns={columns}
+              tasks={[
+                task({ id: TASK_1, title: 'First' }),
+                task({ id: TASK_2, title: 'Second' }),
+                task({ id: TASK_3, title: 'Target' }),
+              ]}
+              taskHref={(item) => `/orgs/${ORG_ID}/tasks/${item.id}`}
+            />
+          </DragProvider>
+        </InteractionProvider>,
+      ),
+    );
+    const row = (id: string) =>
+      document.querySelector<HTMLElement>(`[role="row"][data-object-id="${id}"]`)!;
+    fireEvent.click(row(TASK_1));
+    fireEvent.click(row(TASK_2), { metaKey: true });
+    const transfer = fakeDataTransfer();
+    fireEvent.dragStart(row(TASK_1), { dataTransfer: transfer });
+
+    fireEvent.dragEnter(row(TASK_3), { dataTransfer: transfer });
+    expect(row(TASK_3)).toHaveAttribute('data-drop-state', 'accept');
+    expect(await screen.findByText('Move 2 tasks under Target')).toBeInTheDocument();
+    fireEvent.drop(row(TASK_3), { dataTransfer: transfer });
+
+    await waitFor(() => {
+      expect(seen).toHaveLength(1);
+    });
+    expect(seen[0]).toMatchObject({
+      objects: [{ id: TASK_1 }, { id: TASK_2 }],
+      target: { id: TASK_3 },
+      source: 'drag',
+    });
+  });
+
   it('renders the status glyph, title, assignee, formatted estimate, and a task-detail link', () => {
     render(
       withQueryClient(
@@ -228,7 +336,8 @@ describe('TaskTable', () => {
       ),
     );
 
-    const row = screen.getByText('Wire the table').closest('a') as HTMLElement;
+    const titleLink = screen.getByRole('link', { name: 'Wire the table' });
+    const row = titleLink.closest('[role="row"]')!;
     expect(row).not.toBeNull();
     // The leading status glyph reads as the `started` category for an in-progress task, and names
     // itself with the workspace's own word for that status rather than the field's header.
@@ -241,7 +350,7 @@ describe('TaskTable', () => {
     expect(within(row).getByText('1h 30m')).toBeInTheDocument();
     expect(within(row).getByText('Jun 21')).toBeInTheDocument();
     // The row is a real link to the task detail.
-    expect(row).toHaveAttribute('href', `/orgs/${ORG_ID}/tasks/${TASK_1}`);
+    expect(titleLink).toHaveAttribute('href', `/orgs/${ORG_ID}/tasks/${TASK_1}`);
   });
 
   it('renders neutral placeholders for an unassigned task with no estimate or due date', () => {
@@ -256,7 +365,7 @@ describe('TaskTable', () => {
       ),
     );
 
-    const row = screen.getByText('Bare task').closest('a');
+    const row = screen.getByText('Bare task').closest('[role="row"]');
     expect(row).not.toBeNull();
     // Labels, assignee, due, and estimate each fall back to the em-dash placeholder.
     expect(within(row as HTMLElement).getAllByText('—')).toHaveLength(4);
@@ -297,7 +406,8 @@ describe('TaskTable', () => {
       ),
     );
 
-    const row = screen.getByText('Wire the table').closest('a') as HTMLElement;
+    const titleLink = screen.getByRole('link', { name: 'Wire the table' });
+    const row = titleLink.closest('[role="row"]')!;
     const timerButton = await within(row).findByTestId(`task-timer-${TASK_1}`);
 
     fireEvent.click(timerButton);
@@ -310,7 +420,7 @@ describe('TaskTable', () => {
     // The row's own `<a>` was never followed — jsdom does not navigate on click, but a real
     // navigation attempt would have thrown/warned here; asserting the row is still on screen
     // with its href intact is the reachable proxy for "did not activate the row".
-    expect(row).toHaveAttribute('href', `/orgs/${ORG_ID}/tasks/${TASK_1}`);
+    expect(titleLink).toHaveAttribute('href', `/orgs/${ORG_ID}/tasks/${TASK_1}`);
   });
 
   it('opens the label picker for the focused row on L, with its current labels attached', () => {
@@ -340,6 +450,7 @@ describe('TaskTable', () => {
           id: fixtureTask.id,
           organizationId: fixtureTask.organizationId,
           title: fixtureTask.title,
+          meta: { parentTaskId: null },
         },
       ],
       current: new Map([[`task:${fixtureTask.id}`, fixtureTask.labels.map((l) => l.id)]]),

@@ -30,6 +30,8 @@ import { isObjectKind, type ObjectMeta, type ObjectRef } from '@/lib/actions/obj
 
 /** The data-transfer type carrying a full {@link ObjectRef}. */
 export const OBJECT_DRAG_MIME = 'application/x-docket-object';
+/** Versioned data-transfer type carrying an ordered multi-object drag. */
+export const OBJECT_SET_DRAG_MIME = 'application/x-docket-object-set+json;version=1';
 
 /** The kinds `@/lib/entity-drag` understands, and so the kinds worth mirroring for. */
 const LEGACY_MIRROR_KINDS: readonly EntityDragItem['kind'][] = [
@@ -66,6 +68,16 @@ export function writeObjectPayload(transfer: DataTransfer, object: ObjectRef): v
   }
 
   transfer.effectAllowed = 'all';
+}
+
+/** Write an ordered object selection while preserving every single-object compatibility flavor. */
+export function writeObjectSetPayload(
+  transfer: DataTransfer,
+  objects: readonly ObjectRef[],
+  primary: ObjectRef,
+): void {
+  writeObjectPayload(transfer, primary);
+  transfer.setData(OBJECT_SET_DRAG_MIME, JSON.stringify({ version: 1, objects }));
 }
 
 /** Project an {@link ObjectRef} onto the legacy `entity-drag` shape. */
@@ -137,4 +149,30 @@ export function readObjectPayload(transfer: DataTransfer): ObjectRef | null {
   } catch {
     return null;
   }
+}
+
+/** Read an ordered object set, falling back to the legacy primary object when necessary. */
+export function readObjectSetPayload(transfer: DataTransfer): readonly ObjectRef[] {
+  const raw = transfer.getData(OBJECT_SET_DRAG_MIME);
+  if (raw !== '') {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      const candidate = parsed as { version?: unknown; objects?: unknown };
+      if (candidate.version === 1 && Array.isArray(candidate.objects)) {
+        const objects = candidate.objects
+          .map((object) => {
+            const scratch = {
+              getData: (type: string) => (type === OBJECT_DRAG_MIME ? JSON.stringify(object) : ''),
+            } as DataTransfer;
+            return readObjectPayload(scratch);
+          })
+          .filter((object): object is ObjectRef => object !== null);
+        if (objects.length === candidate.objects.length) return objects;
+      }
+    } catch {
+      // Fall through to the single-object compatibility payload.
+    }
+  }
+  const primary = readObjectPayload(transfer);
+  return primary === null ? [] : [primary];
 }

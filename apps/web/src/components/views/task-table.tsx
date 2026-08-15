@@ -39,7 +39,7 @@ import {
   LabelChipRow,
 } from '@docket/ui/components';
 import Link from 'next/link';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
 import {
@@ -48,9 +48,19 @@ import {
   WorkStatusIcon,
 } from '@/components/entity-display/work-status';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
+import { useDragController } from '@/components/dnd/drag-context';
+import { writeObjectSetPayload } from '@/components/dnd/drag-payload';
+import {
+  SelectAllCheckbox,
+  SelectionCheckbox,
+  SelectionProvider,
+  useSelectableRow,
+  useSelection,
+  useSelectionContainerRef,
+} from '@/components/selection';
+import { useTaskHierarchyDrop } from '@/components/tasks/task-hierarchy-drop';
 import { TaskTimerButton } from '@/components/time-tracking';
-import { objectKey, type ObjectRef } from '@/lib/actions';
-import { entityDragSource } from '@/lib/entity-drag';
+import { objectKey, objectTargetProps, type ObjectRef } from '@/lib/actions';
 import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -320,16 +330,144 @@ export function TaskTable({
   defaultCollapsed,
   className,
 }: TaskTableProps): JSX.Element {
+  const visibleTasks = groups ? groups.flatMap((group) => group.rows) : (tasks ?? []);
+  const objects = visibleTasks.map(taskObject);
+
+  return (
+    <SelectionProvider
+      items={objects}
+      organizationId={objects[0]?.organizationId ?? null}
+      onActivate={(object) => {
+        const task = visibleTasks.find(({ id }) => id === object.id);
+        if (task) onOpenTask?.(task);
+      }}
+    >
+      <SelectableTaskTable
+        columns={columns}
+        {...(groups ? { groups } : { tasks: tasks ?? [] })}
+        taskHref={taskHref}
+        onOpenTask={onOpenTask}
+        onRowPrefetch={onRowPrefetch}
+        label={label}
+        defaultCollapsed={defaultCollapsed}
+        className={className}
+      />
+    </SelectionProvider>
+  );
+}
+
+/** Row render-prop bridge that binds the application selection model inside generic UI. */
+function TaskRowInteraction({
+  row,
+  tasks,
+  children,
+}: {
+  readonly row: TaskOut;
+  readonly tasks: readonly TaskOut[];
+  readonly children: (
+    binding: ReturnType<typeof useSelectableRow> & { readonly className?: string },
+  ) => ReactNode;
+}): JSX.Element {
+  const object = taskObject(row);
+  const binding = useSelectableRow(object);
+  const drop = useTaskHierarchyDrop(object, tasks);
+  return (
+    <>
+      {children({
+        ...binding,
+        rowProps: { ...binding.rowProps, ...objectTargetProps(object), ...drop.rowProps },
+        className: drop.className,
+      })}
+      {drop.status ? (
+        <span className="sr-only" role="status">
+          {drop.status}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/** The table body rendered inside its selection provider. */
+function SelectableTaskTable({
+  columns,
+  tasks,
+  groups,
+  taskHref,
+  onOpenTask,
+  onRowPrefetch,
+  label,
+  defaultCollapsed,
+  className,
+}: TaskTableProps): JSX.Element {
   const pickerOverlay = usePickerOverlay();
+  const selection = useSelection();
+  const selectionRef = useSelectionContainerRef();
+  const dragController = useDragController();
+  const visibleTasks = groups ? groups.flatMap((group) => group.rows) : (tasks ?? []);
+  const selectableColumns: readonly Column<TaskOut>[] = [
+    {
+      key: 'selection',
+      header: <SelectAllCheckbox />,
+      width: '1rem',
+      priority: 'always',
+      render: (task) => <SelectionCheckbox object={taskObject(task)} />,
+    },
+    ...columns,
+  ];
+  const openLabels = (task: TaskOut, anchor: HTMLElement | null): void => {
+    const object = taskObject(task);
+    pickerOverlay.open({
+      kind: 'labels',
+      organizationId: task.organizationId,
+      objects: [object],
+      current: new Map([[objectKey(object), task.labels.map((label) => label.id)]]),
+      anchor,
+    });
+  };
 
   return (
     <EntityTable<TaskOut>
       aria-label={label}
-      columns={columns}
+      columns={selectableColumns}
       {...(groups ? { groups } : { rows: tasks ?? [] })}
       getRowKey={(task) => task.id}
       rowHref={(task) => taskHref(task)}
-      rowDrag={(task) => entityDragSource(taskObject(task))}
+      rowLinkColumnKey="title"
+      containerInteraction={{
+        ...selection.containerProps,
+        ref: selectionRef,
+        onKeyDown: (event) => {
+          selection.containerProps.onKeyDown(event);
+          if (event.defaultPrevented || event.key.toLowerCase() !== 'l') return;
+          const activeId = selection.activeKey?.replace(/^task:/, '');
+          const task = [...(tasks ?? []), ...(groups?.flatMap((group) => group.rows) ?? [])].find(
+            ({ id }) => id === activeId,
+          );
+          if (!task) return;
+          event.preventDefault();
+          openLabels(task, event.currentTarget.querySelector<HTMLElement>('[data-active="true"]'));
+        },
+      }}
+      renderRowInteraction={({ row, children }) => (
+        <TaskRowInteraction row={row} tasks={visibleTasks}>
+          {children}
+        </TaskRowInteraction>
+      )}
+      rowDrag={(task) => {
+        const object = taskObject(task);
+        return {
+          onDragStart: (event) => {
+            const objects = selection.isSelected(objectKey(object))
+              ? selection.selectedObjects
+              : [object];
+            writeObjectSetPayload(event.dataTransfer, objects, object);
+            dragController.begin(object, selection.surfaceId, objects);
+          },
+          onDragEnd: () => {
+            dragController.end();
+          },
+        };
+      }}
       renderRowLink={({ children, ...linkProps }) => (
         // Spread rather than cherry-pick: a dropped `draggable`/`onDragStart` would silently turn
         // the row back into an undraggable one with no type error. `withoutUndefinedValues` keeps
@@ -347,14 +485,7 @@ export function TaskTable({
         : {})}
       onRowPropertyKey={(key, task, anchor) => {
         if (key !== 'l') return false;
-        const object = taskObject(task);
-        pickerOverlay.open({
-          kind: 'labels',
-          organizationId: task.organizationId,
-          objects: [object],
-          current: new Map([[objectKey(object), task.labels.map((l) => l.id)]]),
-          anchor,
-        });
+        openLabels(task, anchor);
         return true;
       }}
       {...(defaultCollapsed !== undefined ? { defaultCollapsed } : {})}

@@ -176,6 +176,21 @@ export function useActionDispatch(): (
   );
 }
 
+/** Optional action dispatch for interaction affordances that degrade inertly in isolation. */
+export function useOptionalActionDispatch():
+  | ((id: ActionId, resolveContext: ActionContextResolver) => Promise<ActionInvocationResult>)
+  | null {
+  const value = useContext(ActionRegistryContext);
+  return useMemo(() => {
+    if (value === null) return null;
+    return async (id: ActionId, resolveContext: ActionContextResolver) => {
+      const result = await value.registry.invoke(id, resolveContext);
+      value.onResult?.(id, result);
+      return result;
+    };
+  }, [value]);
+}
+
 /**
  * Every registered action applicable to a context, ready to render.
  *

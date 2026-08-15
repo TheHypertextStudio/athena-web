@@ -260,6 +260,55 @@ describe('EntityTable — rows + chrome', () => {
 });
 
 describe('EntityTable — selection', () => {
+  it('binds injected row refs and DOM interaction while keeping navigation on the title column', () => {
+    const onRowClick = vi.fn();
+    const register = vi.fn();
+    const columns: Column<Row>[] = [
+      { key: 'select', header: 'Select', width: '1rem', render: () => <input type="checkbox" /> },
+      ...COLUMNS,
+    ];
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={columns}
+        rows={[ROWS[0]!]}
+        getRowKey={getRowKey}
+        rowHref={(row) => `/items/${row.id}`}
+        rowLinkColumnKey="name"
+        onRowClick={onRowClick}
+        renderRowInteraction={({ children }) =>
+          children({
+            selected: true,
+            active: true,
+            rowProps: {
+              ref: register,
+              tabIndex: 0,
+              'aria-selected': true,
+              'data-selected': true,
+              'data-active': true,
+              onClick: onRowClick,
+            },
+            className: 'ring-primary',
+          })
+        }
+      />,
+    );
+
+    const row = screen.getByRole('row', { name: /Billing revamp/ });
+    expect(row.tagName).toBe('DIV');
+    expect(row).toHaveAttribute('aria-selected', 'true');
+    expect(row).toHaveAttribute('tabindex', '0');
+    expect(row).toHaveClass('bg-secondary-container', 'ring-primary');
+    expect(register).toHaveBeenCalledWith(row);
+    expect(within(row).getByRole('checkbox')).toBeInTheDocument();
+    expect(within(row).getByRole('link', { name: 'Billing revamp' })).toHaveAttribute(
+      'href',
+      '/items/r1',
+    );
+    fireEvent.click(row);
+    expect(onRowClick).toHaveBeenCalled();
+  });
+
   it('adopts the MD3 selected tone for rows in the selected set and toggles via onSelect', () => {
     const onSelect = vi.fn<(row: Row, next: boolean) => void>();
     render(

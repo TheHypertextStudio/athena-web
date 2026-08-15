@@ -41,6 +41,28 @@ export interface EntityTableGroup<T> {
   rows: readonly T[];
 }
 
+/** Selection/focus props an application can inject without coupling `@docket/ui` to its model. */
+export interface EntityTableRowInteraction {
+  readonly selected: boolean;
+  readonly active: boolean;
+  readonly rowProps: React.HTMLAttributes<HTMLElement> & {
+    readonly 'aria-selected': boolean;
+    readonly 'data-selected': boolean;
+    readonly 'data-active': boolean;
+    readonly tabIndex: number;
+    readonly ref: (element: HTMLElement | null) => void;
+    readonly onClick: (event: React.MouseEvent) => void;
+  };
+  /** State classes contributed by the interaction (selection/drop preview). */
+  readonly className?: string;
+}
+
+/** Render-prop bridge from an application-owned row model into the generic table. */
+export interface EntityTableRowInteractionProps<T> {
+  readonly row: T;
+  readonly children: (interaction: EntityTableRowInteraction) => React.ReactNode;
+}
+
 /** Props for {@link EntityTable}. */
 export interface EntityTableProps<T> {
   /** The column specification (declaration order = visual order). */
@@ -84,6 +106,18 @@ export interface EntityTableProps<T> {
    * rows that must not be dragged (a read-only projection, a cross-workspace reference).
    */
   rowDrag?: ((row: T) => DragSource | undefined) | undefined;
+  /** Inject application-owned row selection/focus behavior. */
+  renderRowInteraction?:
+    | ((props: EntityTableRowInteractionProps<T>) => React.ReactNode)
+    | undefined;
+  /** Restrict `rowHref` navigation to this column instead of making the whole row a link. */
+  rowLinkColumnKey?: string | undefined;
+  /** Application-owned props/ref merged onto the grid container. */
+  containerInteraction?:
+    | (React.HTMLAttributes<HTMLDivElement> & {
+        readonly ref?: ((element: HTMLElement | null) => void) | undefined;
+      })
+    | undefined;
   /** The currently selected row keys (controlled). */
   selected?: ReadonlySet<string> | undefined;
   /** Toggle a row's selection (controlled). */
@@ -136,6 +170,9 @@ export function EntityTable<T>({
   onRowPropertyKey,
   onRowPrefetch,
   rowDrag,
+  renderRowInteraction,
+  rowLinkColumnKey,
+  containerInteraction,
   selected,
   onSelect,
   collapsed: collapsedProp,
@@ -230,14 +267,31 @@ export function EntityTable<T>({
     [onSelect, selected, getRowKey],
   );
 
+  const setScrollElement = React.useCallback(
+    (element: HTMLDivElement | null) => {
+      scrollRef.current = element;
+      containerInteraction?.ref?.(element);
+    },
+    [containerInteraction],
+  );
+
+  const handleGridKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      containerInteraction?.onKeyDown?.(event);
+      if (!event.defaultPrevented) onKeyDown(event);
+    },
+    [containerInteraction, onKeyDown],
+  );
+
   return (
     <div
-      ref={scrollRef}
+      {...containerInteraction}
+      ref={setScrollElement}
       role="grid"
       aria-label={ariaLabel}
       aria-rowcount={flat.length}
       tabIndex={0}
-      onKeyDown={onKeyDown}
+      onKeyDown={handleGridKeyDown}
       className={cn(
         'border-outline-variant bg-surface @container/table flex w-full flex-col overflow-x-auto overflow-y-hidden rounded-xl border outline-none',
         focusRingInset,
@@ -281,16 +335,18 @@ export function EntityTable<T>({
           );
         }
         const key = getRowKey(entry.row);
-        return (
+        const renderRow = (interaction?: EntityTableRowInteraction): React.ReactNode => (
           <EntityTableRow
             key={entry.key}
             columns={columns}
             row={entry.row}
-            active={activeIndex === index}
-            selected={selected?.has(key) ?? false}
+            active={interaction?.active ?? activeIndex === index}
+            selected={interaction?.selected ?? selected?.has(key) ?? false}
             href={rowHref?.(entry.row)}
             renderRowLink={renderRowLink}
             drag={rowDrag?.(entry.row)}
+            interaction={interaction}
+            linkColumnKey={rowLinkColumnKey}
             onRowPrefetch={
               onRowPrefetch
                 ? () => {
@@ -313,6 +369,13 @@ export function EntityTable<T>({
                 : undefined
             }
           />
+        );
+        return renderRowInteraction ? (
+          <React.Fragment key={entry.key}>
+            {renderRowInteraction({ row: entry.row, children: renderRow })}
+          </React.Fragment>
+        ) : (
+          renderRow()
         );
       })}
     </div>

@@ -20,7 +20,7 @@ import { CURSOR_DRAGGABLE } from '@/lib/actions/cursor';
 import { describeObject, type ObjectRef } from '@/lib/actions/object';
 
 import { useDragController } from './drag-context';
-import { writeObjectPayload } from './drag-payload';
+import { writeObjectPayload, writeObjectSetPayload } from './drag-payload';
 
 /** Options for {@link useDraggable}. */
 export interface UseDraggableOptions {
@@ -42,6 +42,8 @@ export interface UseDraggableOptions {
   readonly disabled?: boolean | undefined;
   /** The selection surface this row belongs to, recorded on the drag for targets that care. */
   readonly surfaceId?: string | undefined;
+  /** Ordered selection to carry when this object is one of the selected rows. */
+  readonly objects?: readonly ObjectRef[] | undefined;
   /** Run as the gesture starts, after the payload is written (e.g. to dim the row). */
   readonly onDragStart?: (() => void) | undefined;
   /** Run once the gesture ends, dropped or cancelled. */
@@ -84,7 +86,7 @@ export interface DraggableBinding {
  * reports `pointer`.
  */
 export function useDraggable(options: UseDraggableOptions): DraggableBinding {
-  const { object, disabled = false, surfaceId, onDragStart, onDragEnd } = options;
+  const { object, objects, disabled = false, surfaceId, onDragStart, onDragEnd } = options;
   const controller = useDragController();
 
   const canDrag = object !== null && !disabled && describeObject(object.kind).draggable;
@@ -92,11 +94,12 @@ export function useDraggable(options: UseDraggableOptions): DraggableBinding {
   const handleDragStart = useCallback(
     (event: ReactDragEvent) => {
       if (object === null || !canDrag) return;
-      writeObjectPayload(event.dataTransfer, object);
-      controller.begin(object, surfaceId ?? null);
+      if (objects && objects.length > 0) writeObjectSetPayload(event.dataTransfer, objects, object);
+      else writeObjectPayload(event.dataTransfer, object);
+      controller.begin(object, surfaceId ?? null, objects);
       onDragStart?.();
     },
-    [object, canDrag, controller, surfaceId, onDragStart],
+    [object, objects, canDrag, controller, surfaceId, onDragStart],
   );
 
   const handleDragEnd = useCallback(() => {

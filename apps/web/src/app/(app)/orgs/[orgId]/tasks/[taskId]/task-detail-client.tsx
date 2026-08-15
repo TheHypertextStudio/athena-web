@@ -394,6 +394,8 @@ export default function TaskDetailPage(): JSX.Element {
           </section>
 
           <Subtasks
+            organizationId={orgId}
+            parentTaskId={taskId}
             subtasks={task.subtasks}
             onAdd={addSubtask}
             onToggle={(subtask, done) => toggleSubtask(subtask.id, done)}

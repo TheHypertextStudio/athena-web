@@ -122,6 +122,36 @@ function newTab(ref: TabRef, title: string | null): OpenTab {
   };
 }
 
+/** Whether a keydown selects an adjacent open document. */
+function tabNavigationDirection(event: KeyboardEvent): -1 | 1 | null {
+  if (
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.repeat ||
+    event.shiftKey ||
+    !event.altKey ||
+    event.metaKey === event.ctrlKey
+  ) {
+    return null;
+  }
+  if (event.key === 'ArrowLeft') return -1;
+  if (event.key === 'ArrowRight') return 1;
+  return null;
+}
+
+/** Whether a keydown closes the currently active open document. */
+function isCloseTabShortcut(event: KeyboardEvent): boolean {
+  return (
+    !event.defaultPrevented &&
+    !event.isComposing &&
+    !event.repeat &&
+    !event.shiftKey &&
+    !event.altKey &&
+    event.metaKey !== event.ctrlKey &&
+    event.key.toLowerCase() === 'w'
+  );
+}
+
 /**
  * Provide the open-documents store and keep it synced with the route.
  *
@@ -265,6 +295,41 @@ export function OpenDocumentsProvider({
     },
     [tabs, activeKey, router],
   );
+
+  const navigateAdjacentTab = useCallback(
+    (direction: -1 | 1): void => {
+      if (tabs.length === 0) return;
+      const activeIndex = tabs.findIndex((tab) => tab.key === activeKey);
+      const targetIndex =
+        activeIndex === -1
+          ? direction === 1
+            ? 0
+            : tabs.length - 1
+          : (activeIndex + direction + tabs.length) % tabs.length;
+      const target = tabs[targetIndex];
+      if (target) router.push(target.href);
+    },
+    [tabs, activeKey, router],
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const direction = tabNavigationDirection(event);
+      if (direction !== null) {
+        if (tabs.length === 0) return;
+        event.preventDefault();
+        navigateAdjacentTab(direction);
+        return;
+      }
+      if (!isCloseTabShortcut(event) || activeKey === undefined) return;
+      event.preventDefault();
+      closeTab(activeKey);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [tabs.length, activeKey, closeTab, navigateAdjacentTab]);
 
   const value = useMemo<OpenDocumentsValue>(
     () => ({ tabs, activeKey, closeTab, registerTitle }),

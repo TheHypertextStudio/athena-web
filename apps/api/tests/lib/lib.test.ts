@@ -23,23 +23,37 @@ describe('ok', () => {
     expect(await res.json()).toEqual({ name: 'a' });
   });
 
-  it('throws on contract drift in non-production (schema.parse path)', async () => {
+  it('answers a contract drift with a 500 that names nothing internal', async () => {
     vi.stubEnv('NODE_ENV', 'test');
     const app = new Hono().get('/', (c) => ok(c, Schema, contractDriftBody())).onError(onError);
     const res = await app.request('/');
-    // The parse failure is a ZodError, mapped by onError to a 422 problem.
-    expect(res.status).toBe(422);
+    // A response that does not match its own schema is a server bug, not the caller's fault. It
+    // used to escape as a bare ZodError, which `onError` renders as a 422 whose `fieldErrors` are
+    // keyed by the *output* schema's internal paths — misleading and disclosive at once.
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body['code']).toBe('internal');
+    expect(body).not.toHaveProperty('fieldErrors');
+    expect(JSON.stringify(body)).not.toContain('name');
   });
 
-  it('trusts the data without parsing in production', async () => {
+  it('validates in production too, so extra fields cannot ride along', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     const app = new Hono().get('/', (c) =>
-      // A value the schema would reject; production skips the parse and returns it raw.
-      ok(c, Schema, contractDriftBody()),
+      ok(c, Schema, { name: 'a', secret: 'leaked' } as z.input<typeof Schema>),
     );
     const res = await app.request('/');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ name: 123 });
+    // Production used to skip the parse entirely. Because the `*Out` schemas are non-strict, the
+    // dev and test path *stripped* undeclared keys and passed, so a handler that had accidentally
+    // been given a raw database row was green in CI and served the whole row in production.
+    expect(await res.json()).toEqual({ name: 'a' });
+  });
+
+  it('rejects a production response that does not satisfy its schema', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const app = new Hono().get('/', (c) => ok(c, Schema, contractDriftBody())).onError(onError);
+    expect((await app.request('/')).status).toBe(500);
   });
 });
 

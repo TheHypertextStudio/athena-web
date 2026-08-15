@@ -346,29 +346,50 @@ describe('VapidWebPushSender', () => {
     });
   });
 
-  it('defaults to the platform fetch when no http transport is injected', async () => {
+  it('does not fall through to the bare platform fetch when no transport is injected', async () => {
+    // `subscription.endpoint` is attacker-chosen: a browser hands it over and the server stores it,
+    // then POSTs to it. On the bare `fetch` this used to be a server-side request forgery primitive
+    // with no scheme check, no address check, no redirect cap, and no timeout — and the
+    // prune-on-410 behaviour in `elicitation-notify` returned the outcome, which made it an
+    // internal port scanner. The default transport is now the shared pinned-address guard.
     const { subscription } = makeSubscription();
     const originalFetch = globalThis.fetch;
-    const calls: { url: string; init: RequestInit | undefined }[] = [];
-    globalThis.fetch = async (input: unknown, init?: RequestInit) => {
-      calls.push({ url: String(input), init });
+    let bareFetchCalls = 0;
+    globalThis.fetch = async () => {
+      bareFetchCalls += 1;
       return new Response(null, { status: 201 });
     };
 
     try {
       const sender = new VapidWebPushSender(makeVapidKeys());
-      const sent = await sender.send(subscription, message);
-
-      expect(sent.status).toBe(201);
-      expect(calls).toHaveLength(1);
-      expect(calls[0]?.url).toBe(subscription.endpoint);
-      expect(calls[0]?.init?.method).toBe('POST');
-      expect(
-        (calls[0]?.init?.headers as Record<string, string> | undefined)?.['Content-Encoding'],
-      ).toBe('aes128gcm');
+      // `push.example` does not resolve, so this rejects — the point is *how*: it never reached
+      // the stubbed global, because the guard does its own resolution and connects to the address
+      // it validated rather than handing a hostname to the platform.
+      await expect(sender.send(subscription, message)).rejects.toThrow();
+      expect(bareFetchCalls).toBe(0);
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  it('refuses an endpoint that is not an https URL on a named host', () => {
+    // The address-level guarantee comes from the transport; these are the checks that cost nothing
+    // in compatibility, applied at registration so a hostile subscription is never even stored.
+    for (const endpoint of [
+      'http://push.example/ep/1',
+      'https://127.0.0.1/ep/1',
+      'https://[::1]/ep/1',
+      'https://169.254.169.254/latest/meta-data/',
+      'https://user:pass@push.example/ep/1',
+    ]) {
+      expect(() => makeSubscription(endpoint)).toThrow();
+    }
+  });
+
+  it('still accepts a real push-service endpoint', () => {
+    expect(() =>
+      makeSubscription('https://updates.push.services.mozilla.com/wpush/v2/abc'),
+    ).not.toThrow();
   });
 });
 

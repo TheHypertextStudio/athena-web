@@ -14,11 +14,46 @@
  */
 import { z } from 'zod';
 
+/** Hostnames that are a bare IPv4/IPv6 literal rather than a resolvable push-service name. */
+const IP_LITERAL = /^(\[.*\]|\d{1,3}(\.\d{1,3}){3})$/;
+
+/**
+ * Whether a push endpoint is shaped like a real push service rather than an internal address.
+ *
+ * @remarks
+ * The server POSTs to this URL, so an unconstrained value is a server-side request forgery
+ * primitive: the subscription is attacker-chosen and the 404/410-prunes-the-row behavior in
+ * `elicitation-notify` leaks the outcome back as a three-state oracle.
+ *
+ * These are the checks that cost nothing in compatibility — every shipping push service is HTTPS
+ * on a named host. The address-level guarantee (no private/loopback/link-local resolution, no
+ * redirect off a public address) comes from `mcpSafeFetch` in the sender, not from here, because
+ * resolving DNS at registration time would be checked at the wrong moment. A hostname allowlist
+ * was considered and rejected: it breaks whenever a browser vendor adds an endpoint, and the
+ * pinned-address fetch already makes it redundant.
+ *
+ * @param value - The candidate endpoint URL.
+ * @returns whether the endpoint may be stored and later posted to.
+ */
+export function isDeliverablePushEndpoint(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:') return false;
+  if (url.username || url.password) return false;
+  return !IP_LITERAL.test(url.hostname);
+}
+
 /** The subscription a browser hands back from `PushManager.subscribe`. */
 export const WebPushSubscription = z
   .object({
     /** The user agent's push service URL; also the uniqueness key for a subscription. */
-    endpoint: z.url(),
+    endpoint: z.url().refine(isDeliverablePushEndpoint, {
+      error: 'endpoint must be an https URL on a named host',
+    }),
     /** Milliseconds since epoch after which the subscription is dead, when the browser says. */
     expirationTime: z.number().nullable().default(null),
     keys: z.object({

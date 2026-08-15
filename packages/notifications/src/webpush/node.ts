@@ -29,6 +29,8 @@ import {
   sign as signOneShot,
 } from 'node:crypto';
 
+import { mcpSafeFetch } from '@docket/integrations';
+
 import {
   WebPushSendError,
   type SentWebPush,
@@ -256,8 +258,19 @@ export type WebPushHttpClient = (
   init: { method: string; headers: Record<string, string>; body: Buffer },
 ) => Promise<{ status: number; ok: boolean }>;
 
+/**
+ * The default transport: the shared pinned-address fetch, never the bare platform one.
+ *
+ * @remarks
+ * `subscription.endpoint` is attacker-chosen — a browser hands it over and the server stores it —
+ * so a plain `fetch` here is a server-side request forgery primitive aimed at whatever the API can
+ * reach, with `elicitation-notify`'s prune-on-410 behavior leaking the result back as an oracle.
+ * `mcpSafeFetch` resolves the host, refuses any non-public address, connects to the address it
+ * validated so a rebind cannot swap it, caps redirects, and bounds the request in time. It is the
+ * repo's one outbound guard; a second implementation is how the first one stops being true.
+ */
 const defaultHttpClient: WebPushHttpClient = async (url, init) => {
-  const response = await fetch(url, {
+  const response = await mcpSafeFetch(url, {
     method: init.method,
     headers: init.headers,
     body: new Uint8Array(init.body),

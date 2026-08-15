@@ -1,7 +1,6 @@
 'use client';
 
-import { PublicSlug, type OrgOut, type OrgUpdate, type VocabularyPreset } from '@docket/types';
-import { env } from '@docket/env/web';
+import type { OrgOut, OrgUpdate, VocabularyPreset } from '@docket/types';
 import { Input, Select, Skeleton } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
@@ -24,7 +23,6 @@ export interface WorkspaceGeneralSettingsProps {
 interface WorkspaceDraft {
   readonly name: string;
   readonly purpose: string;
-  readonly slug: string;
   readonly avatar: string;
   readonly vocabulary: VocabularyPreset;
 }
@@ -34,7 +32,6 @@ function draftFromWorkspace(workspace: OrgOut): WorkspaceDraft {
   return {
     name: workspace.name,
     purpose: workspace.purpose ?? '',
-    slug: workspace.slug,
     avatar: workspace.avatar ?? '',
     vocabulary: workspace.vocabulary.preset,
   };
@@ -44,6 +41,10 @@ function draftFromWorkspace(workspace: OrgOut): WorkspaceDraft {
  * Edit every safe, user-facing workspace identity attribute.
  *
  * @remarks
+ * Identity here means how the workspace *appears*: its name, what it is for, how its work is
+ * named, and its logo. Its public web address is not appearance — it is an address, and it lives
+ * with the other addresses the workspace answers on, in Settings → Publishing.
+ *
  * Each field autosaves independently through {@link useDebouncedAutosave} — the shared seam
  * behind every autosaving field in the app, rather than a page-local reimplementation of it (this
  * page used to carry its own ~90-line `fieldPatch`/`fieldUnchanged`/`commitField` dirty-check,
@@ -112,14 +113,6 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
     },
   });
   useDebouncedAutosave({
-    value: draft?.slug.trim() ?? '',
-    baseline: current?.slug,
-    ready: canEdit && current !== null,
-    save: (slug) => {
-      if (PublicSlug.safeParse(slug).success) save.mutate({ slug });
-    },
-  });
-  useDebouncedAutosave({
     value: draft?.vocabulary,
     baseline: current?.vocabulary,
     ready: canEdit && current !== null,
@@ -130,8 +123,6 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
   });
 
   const nameInvalid = draft !== null && draft.name.trim() === '';
-  const slugInvalid = draft !== null && !PublicSlug.safeParse(draft.slug.trim()).success;
-  const briefHost = env.NEXT_PUBLIC_BRIEF_HOST;
 
   return (
     <div className="flex flex-col gap-6">
@@ -145,7 +136,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
           Workspace settings are temporarily unavailable. We&apos;ll keep checking automatically.
         </p>
       ) : workspaceQ.isPending || draft === null ? (
-        /* placeholder: this workspace's saved name, slug and work-vocabulary overrides — the values
+        /* placeholder: this workspace's saved name, purpose and work-vocabulary overrides — the values
            the form's fields are *for*. The section heading and description render above it. */
         <Skeleton className="h-[34rem] max-w-2xl rounded-lg" />
       ) : (
@@ -185,33 +176,6 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 }}
                 className="border-outline-variant bg-surface text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
               />
-            </label>
-
-            <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">
-              Workspace address
-              <Input
-                value={draft.slug}
-                disabled={readOnly}
-                maxLength={64}
-                aria-describedby="workspace-slug-help"
-                {...(briefHost === undefined ? {} : { prefix: `${briefHost}/` })}
-                onChange={(event) => {
-                  update('slug', event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'));
-                }}
-              />
-              <span
-                id="workspace-slug-help"
-                className="text-on-surface-variant text-xs font-normal"
-              >
-                {briefHost === undefined
-                  ? "Your workspace's one identifier — lowercase letters, numbers, and hyphens."
-                  : 'Also where your published pages answer by default, unless you set up a custom domain in Settings → Publishing.'}
-              </span>
-              {slugInvalid ? (
-                <span className="text-error text-xs font-normal">
-                  Use lowercase letters and numbers, separated by hyphens, and not a reserved name.
-                </span>
-              ) : null}
             </label>
 
             <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">

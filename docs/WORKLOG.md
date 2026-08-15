@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-13
+> **Last Updated**: 2026-08-14
 
 ---
 
@@ -5091,6 +5091,34 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [PUBLISH-ADDR-001] Every address a workspace answers on is one list
+
+- **Completed**: 2026-08-14
+- **Summary**: The publishing surface stated the same host twice — once as a "Workspace address"
+  summary section, once as the custom-domain card that produced it — and rendered the default
+  address as a read-only box whose only affordance was a button to Settings → General. Where the
+  shared brief host is unset, that box degraded to a bare slug (`lvbt`) with nothing on screen
+  saying what it was part of. Addresses are now rows of one list: the default address and each
+  custom domain, with `Primary` marking the one visitors land on, which is what the deleted summary
+  section had existed to say. The default address states its whole URL and is renamed in its own
+  row, so the slug editor moved out of General settings and the cross-page button is gone. Domain
+  rows took the notification contact-point shape — status badges, icon actions, ask-before-removing
+  — and DNS records became aligned label/value columns whose every field is a copy control.
+- **Files Changed**: `apps/web/src/components/publishing/publishing-settings.tsx`, new
+  `address-rows.tsx`, `dns-record.tsx` and `copy-value.tsx` under the same directory,
+  `use-publishing.ts` (gained the rename write), `apps/web/src/components/settings/workspace-general-settings.tsx`
+  (lost the slug field and its autosave), and the publishing settings test.
+- **Validation**: Publishing settings tests pass 11 of 11, including new coverage for the `Primary`
+  hand-off from default address to verified domain, in-row renaming, remove confirmation, and each
+  DNS field reaching the clipboard verbatim. The full web suite passes 2,473 tests across 303
+  files; root typecheck passes 21 tasks; root lint passes 21 tasks; Prettier reports every file
+  clean.
+- **Learnings**: A summary section above a list is a duplicate waiting to happen — the moment the
+  list can answer the question the summary was written to answer, the summary starts restating a
+  row. A badge on the row it describes says the same thing once. Related: a read-only field with a
+  button to another page is two controls spent saying "not here"; moving the editor to where the
+  value is displayed removes both and the caption between them.
 
 ### [OBJECT-SURFACES-001] Make a thing behave like itself everywhere
 

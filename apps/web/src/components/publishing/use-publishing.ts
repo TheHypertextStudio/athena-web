@@ -10,14 +10,15 @@
  * shared `['org', orgId, 'publishing', …]` key prefix rather than from either surface knowing
  * the other exists.
  *
- * The workspace's default brief address is its own identity slug (`organization.slug`) — edited
- * via `useOrgQuery`/`PATCH /v1/orgs/:orgId` in Settings → General, not here. This module only
- * covers what's genuinely publishing-specific: publications themselves and custom domains.
+ * The workspace's default brief address is its own identity slug (`organization.slug`). It is
+ * renamed here too — every address the workspace answers on is one list on one surface, so the
+ * write that renames the default sits beside the writes that add and verify the custom ones.
  *
  * Every call goes through the typed RPC client and the shared query layer — no hand-rolled
  * `useEffect` + `fetch`, per the data-layer standard.
  */
 import type {
+  OrgOut,
   PublicationOut,
   PublicationSubjectKind,
   WorkspaceDomainOut,
@@ -125,6 +126,28 @@ export function usePublicationsQuery(orgId: string, enabled: boolean) {
       { enabled },
     ),
   );
+}
+
+/**
+ * Rename the workspace's default published address.
+ *
+ * @remarks
+ * The slug is the workspace's one public identity, and every address the workspace answers on is
+ * listed and edited on the publishing surface — so the write lives here beside the domain writes
+ * rather than in a general-settings form that happened to own the field first.
+ *
+ * @param orgId - The workspace being renamed.
+ * @returns The rename mutation.
+ */
+export function useRenameAddressMutation(orgId: string) {
+  return useApiMutation<OrgOut, string>({
+    mutationFn: (slug) =>
+      unwrap(
+        () => api.v1.orgs[':orgId'].$patch({ param: { orgId }, json: { slug } }),
+        'Could not change this address.',
+      ),
+    invalidateKeys: [queryKeys.organization(orgId), queryKeys.orgs(), ['org', orgId, 'publishing']],
+  });
 }
 
 /** Every custom domain claimed by the workspace. */

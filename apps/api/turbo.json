@@ -44,6 +44,9 @@
     },
     "test": {
       "dependsOn": ["build"]
+    },
+    "test:coverage": {
+      "dependsOn": ["build"]
     }
   }
 }

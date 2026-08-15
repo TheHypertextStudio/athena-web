@@ -115,6 +115,9 @@ describe('env + RPC transport contract', () => {
 
   it('builds declarations before direct API and delivery-app workflows', () => {
     expect(packageScripts(apiRoot)['pretest']).toBe('tsc -p tsconfig.build.json');
+    expect(packageScripts(apiRoot)['pretest:coverage']).toBe('tsc -p tsconfig.build.json');
+    expect(turboDependencies(apiRoot, 'test')).toContain('build');
+    expect(turboDependencies(apiRoot, 'test:coverage')).toContain('build');
 
     for (const app of ['admin', 'web']) {
       const scripts = packageScripts(`${appsRoot}/${app}`);

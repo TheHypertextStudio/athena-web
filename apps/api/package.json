@@ -27,6 +27,7 @@
     "test:watch": "vitest",
     "openapi:export": "tsx scripts/export-openapi.ts",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
+    "pretest:coverage": "tsc -p tsconfig.build.json",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {

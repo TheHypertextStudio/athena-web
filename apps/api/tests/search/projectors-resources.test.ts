@@ -12,7 +12,36 @@ import { describe, expect, it } from 'vitest';
 
 import { externalResourceSearchProjector } from '../../src/search/projectors/resources';
 
-const BASE_ROW = {
+/**
+ * The row shape, spelled out so the nullable columns stay nullable.
+ *
+ * @remarks
+ * Inferring this from the literal below would narrow `title` to `string` and `siteName` to `null`,
+ * and the cases worth testing here are exactly the ones that flip those.
+ */
+interface ResourceRow {
+  id: string;
+  organizationId: string;
+  provider: string;
+  canonicalKey: string;
+  canonicalUrl: string;
+  externalId: string | null;
+  resourceType: string;
+  title: string | null;
+  description: string | null;
+  siteName: string | null;
+  iconUrl: string | null;
+  thumbnailUrl: string | null;
+  mimeType: string | null;
+  ownerLabel: string | null;
+  externalUpdatedAt: Date | null;
+  unfurlStatus: string;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+  archivedAt?: Date | null;
+}
+
+const BASE_ROW: ResourceRow = {
   id: 'res-1',
   organizationId: 'org-1',
   provider: 'figma',
@@ -32,7 +61,7 @@ const BASE_ROW = {
 };
 
 /** Project one row, asserting the projector produced a document at all. */
-async function project(over: Partial<typeof BASE_ROW> & Record<string, unknown> = {}) {
+async function project(over: Partial<ResourceRow> = {}) {
   const doc = await externalResourceSearchProjector.project({
     entityId: 'res-1',
     row: { ...BASE_ROW, ...over },

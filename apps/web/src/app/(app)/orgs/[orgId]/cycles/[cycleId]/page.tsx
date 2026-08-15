@@ -316,7 +316,7 @@ export default function CycleDetailPage(): JSX.Element {
           canEdit={canEditCycle}
           ariaLabel={`${cycleNoun} name`}
           placeholder={cycle.displayName}
-          className="text-on-surface text-headline-medium font-medium"
+          className="text-on-surface text-headline-medium"
         />
       }
       subtitle={cycleSubtitle(cycle.name, cycle.startsAt, cycle.endsAt)}
@@ -365,14 +365,14 @@ export default function CycleDetailPage(): JSX.Element {
               </Button>
             </div>
             {backfillResult !== null ? (
-              <p className="text-on-surface-variant text-xs">
+              <p className="text-on-surface-variant text-body-small">
                 {backfillResult === 0
                   ? `No open ${taskNounPlural} were waiting for a cycle.`
                   : `${backfillResult} ${backfillResult === 1 ? taskNoun : taskNounPlural} assigned.`}
               </p>
             ) : null}
             {backfillError ? (
-              <p role="alert" className="text-error text-xs">
+              <p role="alert" className="text-error text-body-small">
                 {backfillError}
               </p>
             ) : null}

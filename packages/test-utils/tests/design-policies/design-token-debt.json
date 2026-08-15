@@ -45,9 +45,6 @@
   "apps/web/src/app/(app)/inbox/inbox-client.tsx": {
     "raw-type-utility": 5
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/cycles/[cycleId]/page.tsx": {
-    "raw-type-utility": 1
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx": {
     "raw-type-utility": 15
   },

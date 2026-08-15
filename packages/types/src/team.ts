@@ -297,12 +297,6 @@ export type TeamMemberOut = z.infer<typeof TeamMemberOut>;
 /** Body for adding someone to a team, or changing their standing on it. */
 export const TeamMemberUpsert = z
   .object({
-    actorId: z
-      .string()
-      .min(1)
-      .describe(
-        'The actor to place on the team. Any human actor in the org is eligible, whether or not they hold a Docket account — a volunteer who never signs in joins a team on the same terms as staff.',
-      ),
     role: TeamMemberRole.optional().describe("The member's standing. Defaults to 'member'."),
   })
   .meta({ id: 'TeamMemberUpsert', description: 'Add or re-role a team member.' });

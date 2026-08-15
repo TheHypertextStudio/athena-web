@@ -146,15 +146,13 @@ const LEGACY_ACTION_PATHS: readonly string[] = [
  * `PUT` routes that address a collection but write only one member of it.
  *
  * @remarks
- * Frozen, for the same reason as {@link LEGACY_ACTION_PATHS}. These upsert a single member
- * while claiming, by method and URI, to replace the entire collection — so a client cannot
- * tell from the contract that the other members survive. Each should move to
- * `PUT <collection>/:memberId`; `rest-conventions.md` §"Known exceptions" records the target.
+ * Frozen, for the same reason as {@link LEGACY_ACTION_PATHS}, and currently empty. A `PUT` to a
+ * collection upserting one member claims, by method and URI, to replace the whole collection,
+ * so a client cannot tell from the contract that the other members survive. Adding an entry
+ * here is not a way to ship one — it exists so a route that cannot yet move has somewhere to be
+ * recorded, and so this file states the rule rather than implying it by silence.
  */
-const LEGACY_MEMBER_UPSERT_PUTS: readonly string[] = [
-  'PUT /v1/orgs/:orgId/grants',
-  'PUT /v1/orgs/:orgId/teams/:teamId/members',
-];
+const LEGACY_MEMBER_UPSERT_PUTS: readonly string[] = [];
 
 /**
  * Member writes whose resource is deliberately readable only through its parent.

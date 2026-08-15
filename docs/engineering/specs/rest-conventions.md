@@ -119,7 +119,7 @@ List endpoints are keyset-paginated through the shared `ListQuery` / `Page<T>` p
 - **Verification and authorization ceremonies** — `contact-points/:id/verify`, `integrations/mcp/:id/authorize`, `publishing/domains/:id/verify` — which want to become a `verifications` or `authorizations` sub-collection, so an attempt is a resource with a result rather than a fire-and-forget call.
 - **Genuine controller actions** with no resource behind them, such as `me/calendar/sync` and `mentions/hydrate`. REST tolerates a controller resource; these are the ones likeliest to stay.
 
-`LEGACY_MEMBER_UPSERT_PUTS` holds `PUT /orgs/:orgId/grants` and `PUT /orgs/:orgId/teams/:teamId/members`. Both upsert a single member while addressing the collection. Each should move to `PUT <collection>/:memberId`, which is also where the member's `DELETE` already lives.
+`LEGACY_MEMBER_UPSERT_PUTS` is empty. It held two entries and both are fixed: team membership moved to `PUT /orgs/:orgId/teams/:teamId/members/:actorId`, where the member's `DELETE` already lived, and the grant upsert became `POST /orgs/:orgId/grants` — the right method there, because a grant is keyed by a natural tuple with a server-assigned id, so a caller has no address to `PUT` to until it exists. That one answers `201` with a `Location` for a new tuple and `200` when it overwrote, which needs a read before the write since the table carries no `updatedAt` to tell the two apart.
 
 ## What this document does not cover
 

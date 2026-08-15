@@ -63,6 +63,8 @@ function toOut(t: TeamRow): z.input<typeof TeamDetail> {
 }
 
 const idParam = z.object({ teamId: z.string() });
+/** Path params addressing one membership: the team, and the person on it. */
+const memberParam = z.object({ teamId: z.string(), actorId: z.string() });
 
 /**
  * Assert that `key` is not already used by another active team in the org.
@@ -333,24 +335,24 @@ Requires only org membership. Unknown or archived team → **404**.`,
     },
   )
   .put(
-    '/:teamId/members',
+    '/:teamId/members/:actorId',
     capabilityGuard('manage'),
     apiDoc({
       tag: 'Teams',
       summary: 'Add someone to a team, or change their standing on it',
       capability: 'manage',
       response: TeamMemberOut,
-      description: `Place a human actor on this team, or re-role somebody already on it — one idempotent upsert rather than separate add and update calls, since "make sure this person is a manager here" is the operation callers actually have.
+      description: `Place a human actor on this team, or re-role somebody already on it — one idempotent write at the membership's own address, since "make sure this person is a manager here" is the operation callers actually have. Sending the same body twice leaves the same membership, which is why this is a \`PUT\` to \`/members/{actorId}\` rather than a post to the collection: the URI names the one membership being written, and \`DELETE\` on that same URI removes it.
 
 \`role\` defaults to \`member\`. The role labels who runs the team; it grants nothing, because permissions resolve through grants and a role that quietly widened capability is the kind of thing nobody audits.
 
 **Any human actor in the org is eligible, account or not.** A volunteer who never signs in joins on exactly the same terms as staff — the handler checks \`kind = 'human'\` and tenancy, and nothing else (see \`docs/engineering/specs/people.md\`). An agent or team actor is rejected with **404**, as is an actor from another org.`,
     }),
-    zParam(idParam),
+    zParam(memberParam),
     zJson(TeamMemberUpsert),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
-      const { teamId } = c.req.valid('param');
+      const { orgId, actorId: viewerActorId } = c.get('actorCtx');
+      const { teamId, actorId } = c.req.valid('param');
       const body = c.req.valid('json');
       if (!(await teamExists(orgId, teamId))) throw new NotFoundError('Team not found');
 
@@ -359,7 +361,7 @@ Requires only org membership. Unknown or archived team → **404**.`,
         .from(actor)
         .where(
           and(
-            eq(actor.id, body.actorId),
+            eq(actor.id, actorId),
             eq(actor.organizationId, orgId),
             eq(actor.kind, 'human'),
             isNull(actor.archivedAt),
@@ -371,14 +373,14 @@ Requires only org membership. Unknown or archived team → **404**.`,
       const role = body.role ?? 'member';
       await db
         .insert(teamMember)
-        .values({ teamId, actorId: body.actorId, organizationId: orgId, role })
+        .values({ teamId, actorId, organizationId: orgId, role })
         .onConflictDoUpdate({
           target: [teamMember.teamId, teamMember.actorId],
           set: { role },
         });
 
-      const members = await loadTeamMembers(orgId, teamId, actorId);
-      const added = members.find((m) => m.actorId === body.actorId);
+      const members = await loadTeamMembers(orgId, teamId, viewerActorId);
+      const added = members.find((m) => m.actorId === actorId);
       /* v8 ignore next -- @preserve defensive: the row was just written */
       if (!added) throw new NotFoundError('Person not found');
       return ok(c, TeamMemberOut, added);

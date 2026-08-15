@@ -79,7 +79,7 @@ describe('grants router', () => {
     expect((await body<{ items: unknown[] }>(await w.request('/'))).items).toHaveLength(0);
 
     const upsert = await w.request('/', {
-      method: 'PUT',
+      method: 'POST',
       headers: J,
       body: JSON.stringify({
         subjectKind: 'actor',
@@ -93,11 +93,17 @@ describe('grants router', () => {
         expiresAt: '2030-01-01T00:00:00.000Z',
       }),
     });
-    expect(upsert.status).toBe(200);
+    // A tuple that did not exist yet: created, so 201 and a Location naming the new grant. The
+    // router is mounted bare here, so that URL resolves against the root rather than the
+    // `/v1/orgs/{orgId}/grants` it carries on the real server.
+    expect(upsert.status).toBe(201);
+    expect(upsert.headers.get('location')).toContain(
+      (await body<{ id: string }>(upsert.clone())).id,
+    );
 
     // Upsert again with the same unique key → onConflictDoUpdate branch.
     const upsert2 = await w.request('/', {
-      method: 'PUT',
+      method: 'POST',
       headers: J,
       body: JSON.stringify({
         subjectKind: 'actor',
@@ -107,6 +113,8 @@ describe('grants router', () => {
         capabilities: ['view'],
       }),
     });
+    // Same tuple: overwritten rather than created, so 200 — a retry must not be told it made
+    // something new.
     expect(upsert2.status).toBe(200);
     const grantId = (await body<{ id: string }>(upsert2)).id;
 
@@ -116,16 +124,16 @@ describe('grants router', () => {
     expect((await w.request(`/${MISSING}`, { method: 'DELETE' })).status).toBe(404);
 
     const v = appWithActor(grants, orgId, ['view']);
-    expect((await v.request('/', { method: 'PUT', headers: J, body: '{}' })).status).toBe(403);
+    expect((await v.request('/', { method: 'POST', headers: J, body: '{}' })).status).toBe(403);
     expect((await v.request(`/${grantId}`, { method: 'DELETE' })).status).toBe(403);
   });
 
   it('403s on the capability guard for a contribute-only writer', async () => {
     const { orgId, ownerActorId } = await seedOrgWithOwner();
-    // Writer holds only `contribute` but the PUT requires `manage` → 403 at the guard.
+    // Writer holds only `contribute` but the write requires `manage` → 403 at the guard.
     const w = appWithActor(grants, orgId, ['contribute'], ownerActorId);
     const res = await w.request('/', {
-      method: 'PUT',
+      method: 'POST',
       headers: J,
       body: JSON.stringify({
         subjectKind: 'actor',
@@ -142,7 +150,7 @@ describe('grants router', () => {
     const { orgId, ownerActorId } = await seedOrgWithOwner();
     const w = appWithActor(grants, orgId, ['manage'], ownerActorId);
     const res = await w.request('/', {
-      method: 'PUT',
+      method: 'POST',
       headers: J,
       body: JSON.stringify({
         subjectKind: 'role',
@@ -152,7 +160,7 @@ describe('grants router', () => {
         capabilities: [],
       }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
   });
 });
 

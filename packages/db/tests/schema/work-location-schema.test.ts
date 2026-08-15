@@ -27,6 +27,12 @@ let db!: Database;
 let hubId!: string;
 let connectionId!: string;
 
+function firstRow<T>(rows: readonly T[], operation: string): T {
+  const row = rows[0];
+  if (!row) throw new Error(`Expected ${operation} to return a row`);
+  return row;
+}
+
 describe('work-location schema', () => {
   beforeAll(async () => {
     client = new PGlite('memory://');
@@ -34,20 +40,22 @@ describe('work-location schema', () => {
     await migrate(migrated, { migrationsFolder: resolve(import.meta.dirname, '../../drizzle') });
     db = migrated;
 
-    const userId = (
+    const userId = firstRow(
       await db
         .insert(user)
         .values({ name: 'Ada', email: `work-location-${Date.now()}@example.com` })
-        .returning()
-    )[0]!.id;
-    hubId = (await db.insert(hub).values({ userId }).returning())[0]!.id;
+        .returning(),
+      'user insertion',
+    ).id;
+    hubId = firstRow(await db.insert(hub).values({ userId }).returning(), 'hub insertion').id;
     await db.insert(account).values({ accountId: 'google-ada', providerId: 'google', userId });
-    connectionId = (
+    connectionId = firstRow(
       await db
         .insert(calendarConnection)
         .values({ userId, externalAccountId: 'google-ada', accountEmail: 'ada@example.com' })
-        .returning()
-    )[0]!.id;
+        .returning(),
+      'calendar connection insertion',
+    ).id;
   });
 
   afterAll(async () => {
@@ -65,9 +73,13 @@ describe('work-location schema', () => {
 
     expect(places[0]?.address).toBe('100 Main Street');
     expect(places[1]?.address).toBeNull();
-    await db.insert(workLocationProfile).values({ hubId, homePlaceId: places[1]!.id });
+    await db
+      .insert(workLocationProfile)
+      .values({ hubId, homePlaceId: firstRow(places.slice(1), 'second place insertion').id });
     await expect(
-      db.insert(workLocationProfile).values({ hubId, homePlaceId: places[0]!.id }),
+      db
+        .insert(workLocationProfile)
+        .values({ hubId, homePlaceId: firstRow(places, 'first place insertion').id }),
     ).rejects.toMatchObject({ cause: { constraint: 'work_location_profile_hub_uq' } });
   });
 
@@ -104,7 +116,10 @@ describe('work-location schema', () => {
   });
 
   it('persists one-off and weekly assertion payloads without provider event ownership', async () => {
-    const place = (await db.insert(workPlace).values({ hubId, name: 'Library' }).returning())[0]!;
+    const place = firstRow(
+      await db.insert(workPlace).values({ hubId, name: 'Library' }).returning(),
+      'place insertion',
+    );
     const rows = await db
       .insert(workLocationAssertion)
       .values([
@@ -139,10 +154,13 @@ describe('work-location schema', () => {
   });
 
   it('stores only matched place, accuracy, and freshness for device observations', async () => {
-    const place = (await db.insert(workPlace).values({ hubId, name: 'Library' }).returning())[0]!;
+    const place = firstRow(
+      await db.insert(workPlace).values({ hubId, name: 'Library' }).returning(),
+      'place insertion',
+    );
     const observedAt = new Date('2026-08-13T17:00:00.000Z');
     const expiresAt = new Date('2026-08-13T17:15:00.000Z');
-    const row = (
+    const row = firstRow(
       await db
         .insert(workLocationObservation)
         .values({
@@ -153,8 +171,9 @@ describe('work-location schema', () => {
           observedAt,
           expiresAt,
         })
-        .returning()
-    )[0]!;
+        .returning(),
+      'observation insertion',
+    );
 
     expect(row.placeId).toBe(place.id);
     expect(row.expiresAt).toEqual(expiresAt);
@@ -163,7 +182,7 @@ describe('work-location schema', () => {
   });
 
   it('keeps location sync independent of ordinary calendar-layer visibility', async () => {
-    const row = (
+    const row = firstRow(
       await db
         .insert(workLocationSyncAccount)
         .values({
@@ -181,8 +200,9 @@ describe('work-location schema', () => {
             writes: true,
           },
         })
-        .returning()
-    )[0]!;
+        .returning(),
+      'sync account insertion',
+    );
 
     expect(row.connectionId).toBe(connectionId);
     expect(getTableColumns(workLocationSyncAccount)).not.toHaveProperty('calendarLayerId');

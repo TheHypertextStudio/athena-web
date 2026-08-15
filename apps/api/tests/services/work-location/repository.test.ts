@@ -37,6 +37,12 @@ let hubId!: string;
 let otherHubId!: string;
 let connectionId!: ReturnType<typeof CalendarConnectionId.parse>;
 
+function firstRow<T>(rows: readonly T[], operation: string): T {
+  const row = rows[0];
+  if (!row) throw new Error(`Expected ${operation} to return a row`);
+  return row;
+}
+
 describe('work-location repository', () => {
   beforeAll(async () => {
     client = new PGlite('memory://');
@@ -46,32 +52,38 @@ describe('work-location repository', () => {
     });
     database = migrated;
 
-    const owner = (
+    const owner = firstRow(
       await database
         .insert(user)
         .values({ name: 'Ada', email: `work-location-owner-${Date.now()}@example.com` })
-        .returning()
-    )[0]!;
-    const other = (
+        .returning(),
+      'owner insertion',
+    );
+    const other = firstRow(
       await database
         .insert(user)
         .values({ name: 'Grace', email: `work-location-other-${Date.now()}@example.com` })
-        .returning()
-    )[0]!;
-    hubId = (
+        .returning(),
+      'other user insertion',
+    );
+    hubId = firstRow(
       await database
         .insert(hub)
         .values({ userId: owner.id, preferences: { timezone: 'America/Los_Angeles' } })
-        .returning()
-    )[0]!.id;
-    otherHubId = (await database.insert(hub).values({ userId: other.id }).returning())[0]!.id;
+        .returning(),
+      'owner hub insertion',
+    ).id;
+    otherHubId = firstRow(
+      await database.insert(hub).values({ userId: other.id }).returning(),
+      'other hub insertion',
+    ).id;
     await database.insert(account).values({
       accountId: 'google-ada-work-location',
       providerId: 'google',
       userId: owner.id,
     });
     connectionId = CalendarConnectionId.parse(
-      (
+      firstRow(
         await database
           .insert(calendarConnection)
           .values({
@@ -79,8 +91,9 @@ describe('work-location repository', () => {
             externalAccountId: 'google-ada-work-location',
             accountEmail: 'ada@example.com',
           })
-          .returning()
-      )[0]!.id,
+          .returning(),
+        'calendar connection insertion',
+      ).id,
     );
   });
 

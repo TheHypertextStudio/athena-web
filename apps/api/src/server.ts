@@ -23,6 +23,7 @@ import { flushDeferredWork } from './lib/after-response';
 import { startDevScheduler } from './dev-scheduler';
 import { env } from './env';
 import { onError } from './error';
+import { unmatchedRoute } from './lib/unmatched-route';
 import { cimdAuthorizeMiddleware } from './mcp/cimd';
 import { mcpAppSandboxHandler } from './mcp/apps/sandbox';
 import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
@@ -159,6 +160,10 @@ server.route('/', adminApp);
 server.route('/', app);
 server.get('/v1/health', (c) => c.json({ status: 'ok' as const }));
 registerOpenapi(server, app, adminApp);
+// Registered after every route so it can ask the finished router which methods a path does
+// accept, and turn Hono's plain-text default 404 into the Problem shape every other failure
+// on this API already uses.
+server.notFound(unmatchedRoute(server));
 server.onError(onError);
 
 // `getContainer()` is memoized-lazy, so `configureNotificationTransports` (a container-build side

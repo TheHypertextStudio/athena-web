@@ -15,7 +15,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { CapabilityError, ConflictError, NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { notifyGrantsChanged } from '../mcp/notify';
@@ -91,6 +91,7 @@ Requires only org membership to read (no \`manage\`) — members need to see the
     '/',
     capabilityGuard('manage'),
     apiDoc({
+      status: 201,
       tag: 'Roles',
       summary: 'Create a role',
       capability: 'manage',
@@ -135,7 +136,7 @@ Returns the created \`RoleOut\`. Assign the role to members via the invitation \
       // A base grant changes the live MCP surface for every actor assigned this role. Delivery is
       // best-effort, like grant writes: the persisted transaction must not fail on a missed frame.
       await notifyGrantsChanged(orgId, 'role', row.id).catch(() => undefined);
-      return ok(c, RoleOut, toOut(row));
+      return created(c, RoleOut, toOut(row));
     },
   )
   .get(

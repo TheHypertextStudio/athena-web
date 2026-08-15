@@ -29,7 +29,7 @@ import { CycleError, NotFoundError, ValidationError } from '../error';
 import { deferAfterResponse } from '../lib/after-response';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { labelsForSubject, labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../lib/task-audit';
 import { setTaskState } from '../lib/task-state';
 import { encodeListCursor, pageResult, seekAfter } from '../lib/list-cursor';
@@ -119,6 +119,7 @@ const tasks = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Tasks',
       summary: 'Create a task',
       capability: 'contribute',
@@ -251,7 +252,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       // No creation entry is written: the row's own `createdAt`/`createdBy` are that record, and
       // the activity endpoint projects the entry from them (see `lib/task-audit.ts`).
       deferAfterResponse('task-created-search-index', () => enqueueTaskSearchIndex(orgId, row.id));
-      return ok(c, TaskOut, toOut(row, await labelsForSubject('task', orgId, row.id)));
+      return created(c, TaskOut, toOut(row, await labelsForSubject('task', orgId, row.id)));
     },
   )
   .get(

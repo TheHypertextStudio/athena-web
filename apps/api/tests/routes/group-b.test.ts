@@ -46,7 +46,7 @@ describe('labels router', () => {
       headers: J,
       body: JSON.stringify({ name: 'bug', color: 'coral' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await body<{ id: string }>(created)).id;
     expect((await m.request(`/${id}`)).status).toBe(200);
     const patched = await m.request(`/${id}`, {
@@ -86,7 +86,7 @@ describe('labels router', () => {
       headers: J,
       body: JSON.stringify({ name: 'onboarding' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await body<{ id: string }>(created)).id;
 
     for (const req of [
@@ -288,7 +288,7 @@ describe('saved-views router', () => {
       headers: J,
       body: JSON.stringify({ name: 'My view' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await body<{ id: string }>(created)).id;
 
     // Explicit fields path.
@@ -305,7 +305,7 @@ describe('saved-views router', () => {
         sort: [],
       }),
     });
-    expect(created2.status).toBe(200);
+    expect(created2.status).toBe(201);
 
     expect((await w.request(`/${id}`)).status).toBe(200);
     const patched = await w.request(`/${id}`, {
@@ -358,7 +358,7 @@ describe('comments router', () => {
       headers: J,
       body: JSON.stringify({ subjectType: 'project', subjectId, body: 'hi' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await body<{ id: string }>(created)).id;
 
     expect((await w.request(`/${id}`)).status).toBe(200);
@@ -408,7 +408,7 @@ describe('roles router', () => {
       headers: J,
       body: JSON.stringify({ key: 'lead', name: 'Lead' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await body<{ id: string }>(created)).id;
 
     // Explicit fields path.
@@ -423,7 +423,7 @@ describe('roles router', () => {
         defaultVisibility: 'private',
       }),
     });
-    expect(created2.status).toBe(200);
+    expect(created2.status).toBe(201);
 
     expect((await w.request(`/${id}`)).status).toBe(200);
     const patched = await w.request(`/${id}`, {
@@ -732,7 +732,7 @@ describe('agents router', () => {
       headers: J,
       body: JSON.stringify({ displayName: 'Athena', guidance: 'be calm' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const ag = await body<{ id: string }>(created);
 
     // Conflict: neither actorId nor displayName.
@@ -750,7 +750,7 @@ describe('agents router', () => {
       headers: J,
       body: JSON.stringify({ actorId: assertDefined(agentActor).id }),
     });
-    expect(created2.status).toBe(200);
+    expect(created2.status).toBe(201);
 
     // Conflict: that actor already has an agent.
     expect(
@@ -809,7 +809,7 @@ describe('tasks router', () => {
       headers: J,
       body: JSON.stringify({ title: 'Do it', teamId }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
 
     // Explicit state path + dueDate (covers the dueDate truthy branch).
     const created2 = await w.request('/', {
@@ -824,7 +824,7 @@ describe('tasks router', () => {
         dueDate: '2026-12-01',
       }),
     });
-    expect(created2.status).toBe(200);
+    expect(created2.status).toBe(201);
 
     expect(
       (await body<{ items: unknown[] }>(await w.request('/'))).items.length,
@@ -866,7 +866,7 @@ describe('tasks router', () => {
       headers: J,
       body: JSON.stringify({ title: 'No states', teamId: assertDefined(t).id }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     expect((await body<{ state: string }>(created)).state).toBe('backlog');
   });
 });
@@ -886,14 +886,14 @@ describe('projects router', () => {
         targetDate: '2026-03-01',
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
 
     const created2 = await w.request('/', {
       method: 'POST',
       headers: J,
       body: JSON.stringify({ name: 'Proj2' }),
     });
-    expect(created2.status).toBe(200);
+    expect(created2.status).toBe(201);
 
     expect(
       (await body<{ items: unknown[] }>(await w.request('/'))).items.length,
@@ -940,7 +940,7 @@ describe('updates router', () => {
         body: 'update',
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
 
     // Verify the project health was written.
     const updatedProj = await db
@@ -956,7 +956,7 @@ describe('updates router', () => {
       headers: J,
       body: JSON.stringify({ subjectType: 'project', subjectId, body: 'no health' }),
     });
-    expect(created2.status).toBe(200);
+    expect(created2.status).toBe(201);
 
     const v = appWithActor(r['updates'], orgId, ['view']);
     expect((await v.request('/', { method: 'POST', headers: J, body: '{}' })).status).toBe(403);
@@ -1002,7 +1002,7 @@ describe('integrations router (CRUD; import covered elsewhere)', () => {
       headers: J,
       body: JSON.stringify({ provider: 'github', pattern: 'connector' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await body<{ id: string }>(created)).id;
 
     // Explicit fields path.
@@ -1018,7 +1018,7 @@ describe('integrations router (CRUD; import covered elsewhere)', () => {
         syncMode: 'mirror',
       }),
     });
-    expect(created2.status).toBe(200);
+    expect(created2.status).toBe(201);
 
     expect((await w.request(`/${id}`)).status).toBe(200);
     const patched = await w.request(`/${id}`, {
@@ -1164,7 +1164,7 @@ describe('project + initiative labels obey group exclusivity', () => {
       headers: J,
       body: JSON.stringify({ name: 'P', teamId, labelIds: [featureId, bugId] }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const projectId = (await body<{ id: string }>(created)).id;
 
     const attached = await db
@@ -1197,7 +1197,7 @@ describe('project + initiative labels obey group exclusivity', () => {
       headers: J,
       body: JSON.stringify({ name: 'I', labelIds: [featureId, bugId] }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const initiativeId = (await body<{ id: string }>(created)).id;
 
     const attached = await db

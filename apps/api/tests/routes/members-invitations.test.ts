@@ -116,7 +116,7 @@ describe('members router — invitation flow', () => {
       headers: J,
       body: JSON.stringify({ email: 'new@e.com', roleId: memberRoleId, asGuest: true }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const inv = await body<{ id: string; status: string; asGuest: boolean }>(created);
     expect(inv.status).toBe('pending');
     expect(inv.asGuest).toBe(true);

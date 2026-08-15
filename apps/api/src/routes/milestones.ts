@@ -15,7 +15,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -63,6 +63,7 @@ const milestones = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Milestones',
       summary: 'Create a milestone',
       capability: 'contribute',
@@ -97,7 +98,7 @@ const milestones = new Hono<AppEnv>()
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('milestone insert returned no row');
       await enqueueSearchUpsert(orgId, 'milestone', row.id);
-      return ok(c, MilestoneOut, toOut(row));
+      return created(c, MilestoneOut, toOut(row));
     },
   )
   .get(

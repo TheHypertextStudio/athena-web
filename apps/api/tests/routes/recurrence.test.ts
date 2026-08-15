@@ -88,7 +88,7 @@ describe('process definitions routes', () => {
       headers: JSON_HEADERS,
       body: JSON.stringify(workshopDefinition(org.teamId)),
     });
-    expect(createResponse.status).toBe(200);
+    expect(createResponse.status).toBe(201);
     const created = await body<ProcessDefinitionDetailOut>(createResponse);
     expect(created.revision.number).toBe(1);
     expect(created.revision.tasks.map((task) => task.key)).toEqual([
@@ -189,7 +189,7 @@ describe('recurrence series routes', () => {
         trigger: { kind: 'manual' },
       }),
     });
-    expect(createdResponse.status).toBe(200);
+    expect(createdResponse.status).toBe(201);
     const created = await body<RecurrenceSeriesOut>(createdResponse);
     expect(created.trigger).toEqual({ kind: 'manual' });
 
@@ -548,7 +548,7 @@ describe('recurrence series routes', () => {
           ...(testCase.effectiveFrom ? { effectiveFrom: testCase.effectiveFrom } : {}),
         }),
       });
-      expect(response.status, testCase.name).toBe(200);
+      expect(response.status, testCase.name).toBe(201);
       const created = await body<RecurrenceSeriesOut>(response);
       createdIds.push(created.id);
       expect(created.trigger, testCase.name).toEqual(testCase.trigger);

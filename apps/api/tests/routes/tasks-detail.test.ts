@@ -43,7 +43,7 @@ async function createTask(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title: 'T', teamId, ...body }),
   });
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(201);
   return (await json<{ id: string }>(res)).id;
 }
 
@@ -176,7 +176,7 @@ describe('tasks startDate (create + patch)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'T', teamId, startDate: '2026-09-01' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     expect((await json<{ startDate: string | null }>(created)).startDate).toBe(
       '2026-09-01T00:00:00.000Z',
     );
@@ -736,7 +736,7 @@ describe('tasks subtasks (GET + POST /:id/subtasks)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'Sub' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const sub = await json<{
       id: string;
       projectId: string | null;
@@ -766,7 +766,7 @@ describe('tasks subtasks (GET + POST /:id/subtasks)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'Sub', dueDate: '2027-03-04' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     expect((await json<{ dueDate: string | null }>(created)).dueDate).toBe(
       '2027-03-04T00:00:00.000Z',
     );
@@ -939,7 +939,7 @@ describe('task labels', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'sub', labels: [labelId] }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const created = await json<{ id: string; labels: { id: string }[] }>(res);
     expect(created.labels.map((l) => l.id)).toEqual([labelId]);
 

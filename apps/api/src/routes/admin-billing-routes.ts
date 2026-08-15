@@ -14,7 +14,7 @@ import {
 import type { AppEnv } from '../context';
 import { onReactivated, onTrialOrPaymentTerminal } from '@docket/billing/application/lifecycle';
 import { ConflictError, NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { hasSqlState } from '../lib/sql-state';
 import { zJson, zParam } from '../lib/validate';
@@ -47,6 +47,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
   .post(
     '/:id/holds',
     apiDoc({
+      status: 201,
       tag: 'Admin',
       summary: 'Place a lifecycle hold on an org',
       response: AdminHoldOut,
@@ -78,7 +79,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         holdId: hold.id,
         reason,
       });
-      return ok(c, AdminHoldOut, toHoldOut(hold));
+      return created(c, AdminHoldOut, toHoldOut(hold));
     },
   )
   .delete(

@@ -158,7 +158,7 @@ describe('milestones detail: description field', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ projectId, name: 'Beta', description: 'Some notes' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const body = await json<{ id: string; description: string | null }>(created);
     expect(body.description).toBe('Some notes');
 

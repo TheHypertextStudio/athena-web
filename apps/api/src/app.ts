@@ -27,6 +27,7 @@ import { PhoneVerificationService } from './routes/phone-verification';
 import { createVoiceRoutes } from './routes/voice-sessions';
 import { getContainer } from './container';
 import type { AppEnv } from './context';
+import { idempotency } from './lib/idempotency';
 import dailyPlan from './routes/daily-plan';
 import scheduleWeek from './routes/schedule-week';
 import directiveFeed from './routes/schedule-week-directive';
@@ -85,6 +86,12 @@ for (const path of [
 // `.route()` chain so it applies to all children; it does not participate in the `AppType`
 // chain (membership/capability authz still layer on top per-route).
 app.use('*', requireAuth);
+
+// Retry safety for creates. Registered after `requireAuth` because keys are scoped to the
+// authenticated user, and before the route chain so every `POST` on `/v1` honors the
+// `Idempotency-Key` header the published reference has always promised. A request without the
+// header is unaffected.
+app.use('*', idempotency);
 
 const notificationInbox = new NotificationInboxService(db);
 const notificationIntents = new NotificationIntentService(db);

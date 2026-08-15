@@ -728,6 +728,25 @@ export async function updateTimeRecord(
   return toTimeRecordOut(updated, userId);
 }
 
+/**
+ * Read one Time Record the caller owns.
+ *
+ * @remarks
+ * The reader that makes a Time Record an addressable resource. Every other command here
+ * returns the hydrated record as a by-product of writing it, which left the only way to see a
+ * record's current state being to write to it again — and left `Location`, `ETag`, and the
+ * retry-after-a-lost-response story with nowhere to point.
+ *
+ * @param userId - The caller, whose Hub bounds what is visible.
+ * @param id - The record to read.
+ * @returns the hydrated record.
+ * @throws {NotFoundError} When no such record exists under the caller's Hub.
+ */
+export async function getTimeRecord(userId: string, id: string): Promise<TimeRecordInput> {
+  const hubId = await resolveTimeHubId(userId);
+  return toTimeRecordOut(await getOwnedRecord(id, hubId), userId);
+}
+
 /** Add one explicitly manual/reconstructed exact interval to a record. */
 export async function addHistoricalInterval(
   userId: string,

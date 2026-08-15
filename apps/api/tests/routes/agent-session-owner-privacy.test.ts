@@ -427,7 +427,7 @@ describe('owner-private Athena compatibility routes', () => {
       prompt: 'Keep the conventional agent synchronous',
       agentId: seed.agentId,
     });
-    expect(registered.status).toBe(200);
+    expect(registered.status).toBe(201);
 
     const registeredActivityApproval = await seedRegistered(seed, 'awaiting_approval');
     const registeredActivityApprovalId = await seedActivity(

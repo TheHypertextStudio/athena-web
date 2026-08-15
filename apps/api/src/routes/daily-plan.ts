@@ -17,7 +17,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError, NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { buildTaskViewFilter } from './task-helpers';
@@ -125,6 +125,7 @@ Session-only, no capability. 401 when unauthenticated; **404 (Hub not found)** i
   .post(
     '/',
     apiDoc({
+      status: 201,
       tag: 'DailyPlan',
       summary: 'Add a daily-plan item',
       response: DailyPlanItemOut,
@@ -160,7 +161,7 @@ The owning \`hubId\` is resolved server-side from the session user and is never 
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('daily plan item insert returned no row');
-      return ok(c, DailyPlanItemOut, toOut(row));
+      return created(c, DailyPlanItemOut, toOut(row));
     },
   )
   .patch(

@@ -20,7 +20,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok, resourceUrl } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
 import { zJson, zParam } from '../lib/validate';
@@ -58,6 +58,20 @@ const ImportBody = z.object({
 const idParam = z.object({ id: z.string() });
 /** Path params for a single external-actor mapping nested under an integration. */
 const externalActorParam = z.object({ id: z.string(), externalActorId: z.string() });
+/** Path params for a single sync run nested under an integration. */
+const runParam = z.object({ id: z.string(), runId: z.string() });
+
+/**
+ * The status-monitor URL a queued sync pass reports through.
+ *
+ * @remarks
+ * The `Location` of a `202`. Every kickoff on this router hands back the run it started, so
+ * they all resolve to the same shape of address; centralizing it keeps the header and
+ * `GET /:id/runs/:runId` from drifting apart.
+ */
+export function syncRunUrl(orgId: string, integrationId: string, runId: string): string {
+  return resourceUrl(`/v1/orgs/${orgId}/integrations/${integrationId}/runs/${runId}`);
+}
 
 /** Update an integration's mutable health/sync fields, returning the fresh row. */
 async function setIntegration(
@@ -267,6 +281,7 @@ const integrations = new Hono<AppEnv>()
     '/',
     capabilityGuard('manage'),
     apiDoc({
+      status: 201,
       tag: 'Integrations',
       summary: 'Connect an integration',
       capability: 'manage',
@@ -347,7 +362,7 @@ Requires \`manage\` — wiring an external data source into the org is an admini
           lastError: null,
           lastErrorAt: null,
         });
-        return ok(c, IntegrationOut, toOut(row));
+        return created(c, IntegrationOut, toOut(row));
       }
 
       const inserted = await db
@@ -363,7 +378,7 @@ Requires \`manage\` — wiring an external data source into the org is an admini
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('integration insert returned no row');
-      return ok(c, IntegrationOut, toOut(row));
+      return created(c, IntegrationOut, toOut(row));
     },
   )
   .get(
@@ -458,6 +473,37 @@ Requires \`manage\` — it touches live provider credentials and configures sync
         .orderBy(desc(syncRun.startedAt))
         .limit(20);
       return ok(c, pageOf(SyncRunOut), { items: runs.map(toSyncRunOut) });
+    },
+  )
+  .get(
+    '/:id/runs/:runId',
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Read one integration sync run',
+      response: SyncRunOut,
+      description: `Read a single {@link SyncRunOut} by id — the status monitor for one sync pass. \`POST /:id/sync\`, \`POST /:id/import\`, and \`POST /:id/notion/sync\` all answer **202 Accepted** with a \`Location\` header naming this URL, because the pass they start is deliberately *not* awaited: it paces writes against the provider's rate limit for minutes, far past any gateway or browser timeout. Poll here until \`status\` leaves \`running\`.
+
+Unlike \`GET /:id/runs\`, which is capped at the 20 most recent runs, this addresses a run directly and keeps working after it has aged out of that window. A run id belonging to another integration or org 404s. A read; org membership suffices.`,
+    }),
+    zParam(runParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id, runId } = c.req.valid('param');
+      await loadIntegration(orgId, id);
+      const rows = await db
+        .select()
+        .from(syncRun)
+        .where(
+          and(
+            eq(syncRun.id, runId),
+            eq(syncRun.integrationId, id),
+            eq(syncRun.organizationId, orgId),
+          ),
+        )
+        .limit(1);
+      const run = rows[0];
+      if (!run) throw new NotFoundError('Sync run not found');
+      return ok(c, SyncRunOut, toSyncRunOut(run));
     },
   )
   .patch(

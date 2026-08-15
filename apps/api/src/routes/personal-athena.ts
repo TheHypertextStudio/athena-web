@@ -34,7 +34,7 @@ import { env } from '../env';
 import { AuthError, ConflictError, NotFoundError } from '../error';
 import { sealCredential, unsealCredential } from '../lib/credentials';
 import { signConnectState } from '../lib/oauth-state';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import {
@@ -265,6 +265,7 @@ const personalAthena = new Hono<AppEnv>()
   .post(
     '/connections',
     apiDoc({
+      status: 201,
       tag: 'Athena',
       summary: 'Connect a personal MCP server',
       response: PersonalMcpConnectionOut,
@@ -290,7 +291,7 @@ const personalAthena = new Hono<AppEnv>()
         .limit(1);
       if (duplicate[0]) throw new ConflictError('This personal MCP connection already exists');
       const ciphertext = body.bearerToken ? sealCredential(body.bearerToken) : null;
-      const created = await db.transaction(async (tx) => {
+      const connectionRow = await db.transaction(async (tx) => {
         const [row] = await tx
           .insert(personalMcpConnection)
           .values({
@@ -314,8 +315,10 @@ const personalAthena = new Hono<AppEnv>()
         return row;
       });
       const output =
-        body.authMode === 'oauth' ? created : await verifyPersonalMcpConnection(created);
-      return ok(c, PersonalMcpConnectionOut, toPersonalMcpOut(output));
+        body.authMode === 'oauth'
+          ? connectionRow
+          : await verifyPersonalMcpConnection(connectionRow);
+      return created(c, PersonalMcpConnectionOut, toPersonalMcpOut(output));
     },
   )
   .patch(
@@ -451,6 +454,7 @@ const personalAthena = new Hono<AppEnv>()
   .post(
     '/assignments',
     apiDoc({
+      status: 201,
       tag: 'Athena',
       summary: 'Assign personal Athena to work',
       response: AthenaAssignmentOut,
@@ -461,7 +465,7 @@ const personalAthena = new Hono<AppEnv>()
     async (c) => {
       const body = c.req.valid('json');
       const row = await createAthenaAssignment({ ownerUserId: requestOwner(c), ...body });
-      return ok(c, AthenaAssignmentOut, toAssignmentOut(row));
+      return created(c, AthenaAssignmentOut, toAssignmentOut(row));
     },
   )
   .get(
@@ -559,6 +563,7 @@ const personalAthena = new Hono<AppEnv>()
   .post(
     '/assignments/:id/triggers',
     apiDoc({
+      status: 201,
       tag: 'Athena',
       summary: 'Add an assignment trigger',
       response: AthenaTriggerOut,
@@ -572,7 +577,7 @@ const personalAthena = new Hono<AppEnv>()
       const assignment = await loadAssignment(ownerUserId, c.req.valid('param').id);
       const body = c.req.valid('json');
       const now = new Date();
-      const [created] = await db
+      const [triggerRow] = await db
         .insert(athenaTrigger)
         .values({
           assignmentId: assignment.id,
@@ -588,8 +593,8 @@ const personalAthena = new Hono<AppEnv>()
         })
         .returning();
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
-      if (!created) throw new Error('trigger insert returned no row');
-      return ok(c, AthenaTriggerOut, toTriggerOut(created));
+      if (!triggerRow) throw new Error('trigger insert returned no row');
+      return created(c, AthenaTriggerOut, toTriggerOut(triggerRow));
     },
   )
   .patch(

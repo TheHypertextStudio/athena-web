@@ -58,7 +58,7 @@ describe('initiatives router', () => {
         health: 'on_track',
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const initiative = await json<{
       id: string;
       summary: string | null;
@@ -128,7 +128,7 @@ describe('initiatives router', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'No date' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     expect((await json<{ targetDate: string | null }>(created)).targetDate).toBeNull();
   });
 
@@ -215,7 +215,7 @@ describe('programs router', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Platform' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await json<{ id: string }>(created)).id;
 
     expect((await writer.request(`/${id}`)).status).toBe(200);
@@ -292,7 +292,7 @@ describe('cycles router', () => {
         endsAt: '2026-01-14',
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await json<{ id: string }>(created)).id;
 
     expect((await writer.request(`/${id}`)).status).toBe(200);
@@ -393,7 +393,7 @@ describe('milestones router', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ projectId, name: 'M1', targetDate: '2026-06-01', sort: 1 }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await json<{ id: string }>(created)).id;
 
     // List with the project filter branch.
@@ -442,7 +442,7 @@ describe('milestones router', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ projectId: assertDefined(proj).id, name: 'M-nodate' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     expect((await json<{ targetDate: string | null }>(created)).targetDate).toBeNull();
   });
 

@@ -96,7 +96,7 @@ describe('minimal patches cover the "field-absent" spread branches', () => {
       headers: J,
       body: JSON.stringify({ name: 'plain', color: 'slate' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await body<{ id: string }>(created)).id;
     expect(
       (
@@ -117,7 +117,7 @@ describe('minimal patches cover the "field-absent" spread branches', () => {
       headers: J,
       body: JSON.stringify({ displayName: 'NoPolicy' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await body<{ id: string }>(created)).id;
     expect(
       (

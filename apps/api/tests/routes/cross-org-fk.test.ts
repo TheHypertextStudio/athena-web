@@ -121,7 +121,7 @@ async function createTask(
     headers: JSON_HEADERS,
     body: JSON.stringify({ title: 'T', teamId, ...body }),
   });
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(201);
   return (await json<{ id: string }>(res)).id;
 }
 
@@ -158,7 +158,7 @@ describe('project create cross-org FK hardening', () => {
       headers: JSON_HEADERS,
       body: JSON.stringify({ name: 'P', leadId: a.humanActorId, teamId: a.teamId }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const body = await json<{ leadId: string | null; teamId: string | null }>(res);
     expect(body.leadId).toBe(a.humanActorId);
     expect(body.teamId).toBe(a.teamId);
@@ -349,7 +349,7 @@ describe('task create cross-org FK hardening', () => {
         parentTaskId: parent,
       }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const sub = await json<{ id: string; assigneeId: string | null; projectId: string | null }>(
       res,
     );
@@ -605,7 +605,7 @@ describe('subtask create cross-org FK hardening', () => {
         cycleId: cycle,
       }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const sub = await json<{ id: string; projectId: string | null; assigneeId: string | null }>(
       res,
     );

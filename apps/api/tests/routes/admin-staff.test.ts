@@ -147,7 +147,7 @@ describe('staff management', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ userId: target, role: 'finance' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const staff = await json<{ id: string; userId: string; role: string; userEmail: string }>(
       created,
     );
@@ -266,7 +266,7 @@ describe('audit feed (superadmin-only, filterable)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ reason: 'audit-filter seed' }),
     });
-    expect(placed.status).toBe(200);
+    expect(placed.status).toBe(201);
 
     // Filter by type — every returned row matches.
     const byType = await app.request('/audit?type=lifecycle_hold.placed&limit=200', {
@@ -306,7 +306,7 @@ describe('metrics queues (agent health, mvp-plan §8.9)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ reason: 'queue-metric seed' }),
     });
-    expect(placed.status).toBe(200);
+    expect(placed.status).toBe(201);
 
     const res = await app.request('/metrics', { method: 'GET' });
     expect(res.status).toBe(200);

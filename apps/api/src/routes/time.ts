@@ -36,7 +36,7 @@ import { z } from 'zod';
 
 import type { AppEnv, AuthSession } from '../context';
 import { AuthError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { SHARED_TIMER_STATUS_PATH, sharedTimerEmbedSnippet } from './time-public';
@@ -49,6 +49,7 @@ import {
   createTimeSubmission,
   getActiveTime,
   getTimeBreakdown,
+  getTimeRecord,
   getTimeSummary,
   getTimeSubmission,
   getTimeTimeline,
@@ -155,6 +156,7 @@ const time = new Hono<AppEnv>()
   .post(
     '/categories',
     apiDoc({
+      status: 201,
       tag: 'Time',
       summary: 'Create a personal time category',
       response: TimeCategoryOut,
@@ -164,12 +166,13 @@ const time = new Hono<AppEnv>()
     zJson(TimeCategoryCreate),
     async (c) => {
       const { user } = requireSession(c);
-      return ok(c, TimeCategoryOut, await createTimeCategory(user.id, c.req.valid('json')));
+      return created(c, TimeCategoryOut, await createTimeCategory(user.id, c.req.valid('json')));
     },
   )
   .post(
     '/submissions',
     apiDoc({
+      status: 201,
       tag: 'Time',
       summary: 'Submit an explicit time report snapshot',
       response: TimeSubmissionOut,
@@ -179,7 +182,11 @@ const time = new Hono<AppEnv>()
     zJson(TimeSubmissionCreate),
     async (c) => {
       const { user } = requireSession(c);
-      return ok(c, TimeSubmissionOut, await createTimeSubmission(user.id, c.req.valid('json')));
+      return created(
+        c,
+        TimeSubmissionOut,
+        await createTimeSubmission(user.id, c.req.valid('json')),
+      );
     },
   )
   .get(
@@ -210,6 +217,21 @@ const time = new Hono<AppEnv>()
     async (c) => {
       const { user } = requireSession(c);
       return ok(c, TimeRecordOut, await createTimeRecord(user.id, c.req.valid('json')));
+    },
+  )
+  .get(
+    '/records/:id',
+    apiDoc({
+      tag: 'Time',
+      summary: 'Read a Time Record',
+      response: TimeRecordOut,
+      description:
+        'Read one Time Record by id, hydrated exactly as the write endpoints return it — status, elapsed time from its interval rows, category, and typed context. This is what `Location` points at after a create, and what to re-read after a `412` when a concurrent edit invalidated an `If-Match`. A record outside the caller’s Hub is 404, not 403, so ownership is never disclosed.',
+    }),
+    zParam(recordParam),
+    async (c) => {
+      const { user } = requireSession(c);
+      return ok(c, TimeRecordOut, await getTimeRecord(user.id, c.req.valid('param').id));
     },
   )
   .patch(
@@ -305,6 +327,7 @@ const time = new Hono<AppEnv>()
   .post(
     '/records/:id/contexts',
     apiDoc({
+      status: 201,
       tag: 'Time',
       summary: 'Attach context to a Time Record',
       response: TimeRecordOut,
@@ -315,7 +338,7 @@ const time = new Hono<AppEnv>()
     zJson(TimeContextCreate),
     async (c) => {
       const { user } = requireSession(c);
-      return ok(
+      return created(
         c,
         TimeRecordOut,
         await addTimeContext(user.id, c.req.valid('param').id, c.req.valid('json')),
@@ -354,6 +377,7 @@ const time = new Hono<AppEnv>()
   .post(
     '/share-tokens',
     apiDoc({
+      status: 201,
       tag: 'Time',
       summary: 'Mint a current-task share token',
       response: TimeShareTokenCreated,
@@ -369,7 +393,7 @@ const time = new Hono<AppEnv>()
       // `API_URL` to their own origin anyway, so the fallback could only ever have restated it.
       const origin = apiHosts.api;
       const statusUrl = `${origin}${SHARED_TIMER_STATUS_PATH}`;
-      return ok(c, TimeShareTokenCreated, {
+      return created(c, TimeShareTokenCreated, {
         ...minted.stored,
         token: minted.token,
         statusUrl,

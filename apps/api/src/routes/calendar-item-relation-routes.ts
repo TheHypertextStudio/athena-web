@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 
@@ -53,6 +53,7 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
   .post(
     '/items/:id/relations',
     apiDoc({
+      status: 201,
       tag: 'Me',
       summary: 'Relate two calendar items',
       response: CalendarItemRelationOut,
@@ -108,7 +109,7 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
         .returning();
       const relation = rows[0];
       if (!relation) throw new ConflictError('Calendar items are already related');
-      return ok(c, CalendarItemRelationOut, toCalendarItemRelationOut(relation));
+      return created(c, CalendarItemRelationOut, toCalendarItemRelationOut(relation));
     },
   )
   .get(

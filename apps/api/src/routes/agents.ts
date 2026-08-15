@@ -15,7 +15,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -59,6 +59,7 @@ const agents = new Hono<AppEnv>()
     '/',
     capabilityGuard('manage'),
     apiDoc({
+      status: 201,
       tag: 'Agents',
       summary: 'Register an agent',
       capability: 'manage',
@@ -74,7 +75,7 @@ The \`manage\` capability is required because registering an agent grants a new 
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
 
-      const created = await db.transaction(async (tx) => {
+      const agentRow = await db.transaction(async (tx) => {
         let agentActorId: string;
         if (body.actorId) {
           const actorRows = await tx
@@ -127,8 +128,8 @@ The \`manage\` capability is required because registering an agent grants a new 
         return agentRow;
       });
 
-      await enqueueSearchUpsert(orgId, 'agent', created.id);
-      return ok(c, AgentOut, toOut(created));
+      await enqueueSearchUpsert(orgId, 'agent', agentRow.id);
+      return created(c, AgentOut, toOut(agentRow));
     },
   )
   .get(

@@ -79,7 +79,7 @@ describe('calendar item relations', () => {
       targetItemId: target.body.id,
       role: 'follow_up',
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     expect(created.body).toMatchObject({
       sourceItemId: source.body.id,
       targetItemId: target.body.id,
@@ -125,7 +125,7 @@ describe('calendar item relations', () => {
       targetItemId: goodTarget.body.id,
       role: 'related',
     });
-    expect(good.status).toBe(200);
+    expect(good.status).toBe(201);
 
     // Bypass the API to simulate a row whose role predates the current schema.
     await schema.db.insert(schema.calendarItemRelation).values({

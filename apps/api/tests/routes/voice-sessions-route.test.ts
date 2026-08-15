@@ -101,7 +101,7 @@ describe('browser voice routes', () => {
       headers: J,
       body: JSON.stringify({ workspaceId: orgId }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const started = await body<VoiceSessionWire>(res);
     expect(started.channel).toBe('web');
     expect(started.credential.transport).toBe('mock');

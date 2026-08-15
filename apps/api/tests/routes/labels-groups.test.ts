@@ -57,7 +57,7 @@ async function mkLabel(
     headers: J,
     body: JSON.stringify({ name, ...(groupId ? { groupId } : {}) }),
   });
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(201);
   return (await body<{ id: string }>(res)).id;
 }
 
@@ -72,7 +72,7 @@ async function mkGroup(
     headers: J,
     body: JSON.stringify({ name, ...(exclusive === undefined ? {} : { exclusive }) }),
   });
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(201);
   return (await body<{ id: string }>(res)).id;
 }
 

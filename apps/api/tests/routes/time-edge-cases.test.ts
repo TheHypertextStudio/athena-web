@@ -137,7 +137,7 @@ describe('Time Ledger command edge cases', () => {
         },
       }),
     });
-    expect(contextRes.status).toBe(200);
+    expect(contextRes.status).toBe(201);
     const [contextRow] = await db
       .select({ id: schema.timeContext.id })
       .from(schema.timeContext)
@@ -174,7 +174,7 @@ describe('Time Ledger command edge cases', () => {
       headers: J,
       body: JSON.stringify({ name: 'Deep work', parentId: parent.id }),
     });
-    expect(child.status).toBe(200);
+    expect(child.status).toBe(201);
   });
 
   /** Push a just-stopped record's interval out of the auto-rejoin window, so /start is a real resume attempt. */

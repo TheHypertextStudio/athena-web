@@ -41,7 +41,7 @@ import { ConflictError, NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { replaceLabels, resolveLabelSet } from '../lib/labels';
 import { deferAfterResponse } from '../lib/after-response';
-import { ok } from '../lib/ok';
+import { created, memberUrl, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -102,6 +102,7 @@ const initiatives = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Initiatives',
       summary: 'Create an initiative',
       capability: 'contribute',
@@ -162,7 +163,7 @@ const initiatives = new Hono<AppEnv>()
       deferAfterResponse('initiative-created-search-upsert', () =>
         enqueueSearchUpsert(orgId, 'initiative', row.id),
       );
-      return ok(c, InitiativeOut, toOut(row));
+      return created(c, InitiativeOut, toOut(row));
     },
   )
   .get(
@@ -411,6 +412,7 @@ const initiatives = new Hono<AppEnv>()
     '/:id/projects',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Initiatives',
       summary: 'Link a project to an initiative',
       capability: 'contribute',
@@ -449,7 +451,12 @@ const initiatives = new Hono<AppEnv>()
       await db
         .insert(initiativeProject)
         .values({ initiativeId: id, projectId, organizationId: orgId });
-      return ok(c, InitiativeProjectLinked, { initiativeId: id, projectId, linked: true });
+      return created(
+        c,
+        InitiativeProjectLinked,
+        { initiativeId: id, projectId, linked: true },
+        memberUrl(c, projectId),
+      );
     },
   )
   .delete(
@@ -486,6 +493,7 @@ const initiatives = new Hono<AppEnv>()
     '/:id/programs',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Initiatives',
       summary: 'Link a program to an initiative',
       capability: 'contribute',
@@ -523,7 +531,12 @@ const initiatives = new Hono<AppEnv>()
       await db
         .insert(initiativeProgram)
         .values({ initiativeId: id, programId, organizationId: orgId });
-      return ok(c, InitiativeProgramLinked, { initiativeId: id, programId, linked: true });
+      return created(
+        c,
+        InitiativeProgramLinked,
+        { initiativeId: id, programId, linked: true },
+        memberUrl(c, programId),
+      );
     },
   )
   .delete(

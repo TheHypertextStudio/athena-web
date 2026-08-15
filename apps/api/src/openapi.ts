@@ -193,10 +193,13 @@ const TAGS = [
     description:
       'Saved views persist a filter/grouping/sort configuration over work items, scoped to an org (and optionally a team or person), so a team can return to a curated slice of work.',
   },
+  // One entry, not two. OpenAPI keys tags by name, so the second `Athena` block that used to
+  // sit below `Agents` was not a second section — it was a silent overwrite, and whichever
+  // description lost was unreachable from the rendered reference.
   {
     name: 'Athena',
     description:
-      'Athena is the signed-in person’s private operating assistant across Docket. These owner-only routes expose the current persistent chat, grouped personal work, replayable activity, steering, lifecycle controls, proposals, and approvals. Optional workspace/source context is validated at invocation but never grants authority; every tool call resolves the owner’s current permission again.',
+      'Athena is the signed-in person’s private, cross-workspace operating assistant. These owner-only routes expose the current persistent chat, grouped personal work, replayable activity, steering, lifecycle controls, proposals, and approvals, and they manage personal remote MCP connections and user-owned delegations without creating a workspace Actor. Optional workspace/source context is validated at invocation but never grants authority: no route here changes a human owner or assignee, and every tool call resolves the owner’s current permission again rather than carrying stale workspace authority across runs.',
   },
   {
     name: 'Agents',
@@ -204,9 +207,14 @@ const TAGS = [
       'Registered third-party agents are workspace-scoped Actors (`kind: agent`) that perform work through explicit grants. This compatibility surface registers them and drives Agent Sessions against a subject, streaming activity over SSE and gating proposed mutations through approve/reject review. Personal Athena work uses the separate owner-only `/v1/me/athena` surface.',
   },
   {
-    name: 'Athena',
+    name: 'Automations',
     description:
-      'Athena is the signed-in person’s private, cross-workspace assistant. This surface manages personal remote MCP connections and user-owned delegations without creating a workspace Actor, changing a human owner or assignee, or carrying stale workspace authority across runs.',
+      'Automation rules are workspace-owned `on → when → then` records the engine consults whenever an observation fires: `on` matches the event, `when` narrows it, `then` names the actions to take. Enabling email-to-task on a connector seeds a default set once, and those seeded rows come back with `isSeed: true` so a client can present them as defaults rather than as something the workspace authored. Reading requires org membership; every mutation requires `manage`, because a rule acts on work its author may never look at again.',
+  },
+  {
+    name: 'Suggestions',
+    description:
+      'Email suggestions are proposed tasks the email-to-task ingest derived from a connected mailbox, held for a person to confirm rather than written straight into the workspace. Each carries the source thread it came from, so the decision can be made against the original message. Accepting one creates the task and links it back to that thread; dismissing one closes it without a write. Both decisions require `contribute` — the suggestion is a proposal, and only a person acting under their own capability turns it into work.',
   },
   {
     name: 'Capture',

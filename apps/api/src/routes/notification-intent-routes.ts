@@ -11,7 +11,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import {
@@ -27,6 +27,7 @@ export function createNotificationIntentRoutes(intents: NotificationIntentServic
     .post(
       '/',
       apiDoc({
+        status: 201,
         tag: 'Notification Intents',
         summary: 'Create a notification intent',
         response: NotificationIntentOut,
@@ -35,7 +36,7 @@ export function createNotificationIntentRoutes(intents: NotificationIntentServic
       }),
       zJson(NotificationIntentCreate),
       async (c) => {
-        return ok(
+        return created(
           c,
           NotificationIntentOut,
           await intents.create(requireUserId(c), c.req.valid('json')),

@@ -67,7 +67,7 @@ import {
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError, ValidationError } from '../error';
 import { labelsForSubject } from '../lib/labels';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { landingStatus } from '../lib/work-status';
@@ -434,6 +434,7 @@ const meCalendar = new Hono<AppEnv>()
   .post(
     '/items',
     apiDoc({
+      status: 201,
       tag: 'Me',
       summary: 'Create a calendar item',
       response: CalendarItemOut,
@@ -444,12 +445,12 @@ const meCalendar = new Hono<AppEnv>()
     async (c) => {
       const userId = requireUserId(c);
       const body = c.req.valid('json');
-      const created = await createCalendarItem(db, {
+      const item = await createCalendarItem(db, {
         userId,
         input: body,
         syncModules: createDefaultCalendarSyncModules(),
       });
-      return ok(c, CalendarItemOut, toCalendarItemOut(created, { linkedTasks: [] }));
+      return created(c, CalendarItemOut, toCalendarItemOut(item, { linkedTasks: [] }));
     },
   )
   .get(

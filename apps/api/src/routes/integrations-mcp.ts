@@ -12,7 +12,7 @@ import { env } from '../env';
 import { ConflictError, NotFoundError } from '../error';
 import { sealCredential, unsealCredential } from '../lib/credentials';
 import { signConnectState } from '../lib/oauth-state';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -190,6 +190,7 @@ const router = new Hono<AppEnv>()
     '/',
     capabilityGuard('manage'),
     apiDoc({
+      status: 201,
       tag: 'Integrations',
       summary: 'Connect a remote MCP server',
       capability: 'manage',
@@ -221,7 +222,7 @@ const router = new Hono<AppEnv>()
       // Seal BEFORE the insert so a missing key aborts cleanly with nothing stored.
       const ciphertext = body.bearerToken ? sealCredential(body.bearerToken) : null;
 
-      const created = await db.transaction(async (tx) => {
+      const integrationRow = await db.transaction(async (tx) => {
         const [row] = await tx
           .insert(integration)
           .values({
@@ -250,8 +251,9 @@ const router = new Hono<AppEnv>()
 
       // OAuth servers need a browser approval before the first health check. Public and
       // bearer-backed servers still receive the existing immediate live verification.
-      const output = authMode === 'oauth' ? created : await verifyIntegration(created);
-      return ok(c, McpIntegrationOut, toMcpOut(output));
+      const output =
+        authMode === 'oauth' ? integrationRow : await verifyIntegration(integrationRow);
+      return created(c, McpIntegrationOut, toMcpOut(output));
     },
   )
   .post(

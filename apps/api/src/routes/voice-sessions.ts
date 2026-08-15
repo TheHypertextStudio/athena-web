@@ -35,7 +35,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError, NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 
@@ -66,6 +66,7 @@ export function createVoiceRoutes(createProvider: () => VoiceRealtimeProvider) {
     .post(
       '/',
       apiDoc({
+        status: 201,
         tag: 'Athena Voice',
         summary: 'Start a voice session on the caller’s conversation',
         response: VoiceSessionOut,
@@ -89,7 +90,7 @@ export function createVoiceRoutes(createProvider: () => VoiceRealtimeProvider) {
           tools: VOICE_TOOL_DEFINITIONS,
           greeting,
         });
-        return ok(c, VoiceSessionOut, {
+        return created(c, VoiceSessionOut, {
           id: opened.voiceSessionId,
           conversationId: opened.conversationId,
           channel: 'web',

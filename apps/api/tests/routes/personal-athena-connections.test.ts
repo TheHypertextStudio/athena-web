@@ -93,7 +93,7 @@ async function connect(
       ...input,
     }),
   });
-  expect(response.status).toBe(200);
+  expect(response.status).toBe(201);
   return (await response.json()) as PersonalMcpConnectionOut;
 }
 
@@ -281,7 +281,7 @@ describe('personal Athena MCP connections', () => {
         authMode: 'none',
       }),
     });
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     const body = (await response.json()) as PersonalMcpConnectionOut;
     expect(body.status).toBe('error');
     expect(body.lastError).toContain('No MCP server reachable');
@@ -452,7 +452,7 @@ describe('personal Athena MCP connections', () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     expect((await response.json()) as PersonalMcpConnectionOut).toMatchObject({
       status: 'error',
       lastError: 'Connection failed',

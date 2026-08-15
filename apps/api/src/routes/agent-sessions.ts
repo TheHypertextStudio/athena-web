@@ -25,7 +25,7 @@ import {
 } from '../agent/async-runner';
 import type { AppEnv } from '../context';
 import { ConflictError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -164,6 +164,7 @@ const agentSessions = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Start an agent session from a prompt',
       capability: 'contribute',
@@ -184,7 +185,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
       if (settled.executorKind === 'athena' && asynchronousRunnerEnabled()) {
         return accepted(c, AgentSessionOut, toSessionOut(settled));
       }
-      return ok(c, AgentSessionOut, toSessionOut(settled));
+      return created(c, AgentSessionOut, toSessionOut(settled));
     },
   )
   .get(
@@ -304,6 +305,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
   .post(
     '/:id/run',
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Run an agent session',
       response: AgentSessionOut,
@@ -431,6 +433,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
   .post(
     '/:id/proposals/:groupId/approve',
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Approve a proposal group (batch)',
       response: AgentSessionOut,
@@ -465,6 +468,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
   .post(
     '/:id/proposals/:groupId/reject',
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Reject a proposal group (batch)',
       response: AgentSessionOut,
@@ -545,6 +549,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
   .post(
     '/:id/activity/:activityId/approve',
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Approve a gated session activity',
       response: SessionActivityOut,
@@ -581,6 +586,7 @@ Athena approval requires the authenticated owner; registered-agent approval requ
   .post(
     '/:id/activity/:activityId/reject',
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Reject a gated session activity',
       response: SessionActivityOut,
@@ -617,6 +623,7 @@ Athena rejection requires the authenticated owner; registered-agent rejection re
   .post(
     '/:id/activity/:activityId/reply',
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Reply to a session elicitation',
       response: SessionActivityOut,
@@ -676,6 +683,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
   .post(
     '/:id/resume',
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Resume an agent session',
       response: AgentSessionOut,
@@ -704,6 +712,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
   .post(
     '/:id/cancel',
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Cancel an agent session',
       response: AgentSessionOut,
@@ -737,6 +746,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
     // decisions retain the assign-level compatibility policy.
     '/:id/approve',
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Approve a session-level proposed action',
       response: AgentSessionOut,
@@ -775,6 +785,7 @@ Athena requires its authenticated owner and reauthorizes the stored tool with th
     // See `/:id/approve` for the executor-specific decision policy.
     '/:id/reject',
     apiDoc({
+      status: 202,
       tag: 'Agents',
       summary: 'Reject a session-level proposed action',
       response: AgentSessionOut,

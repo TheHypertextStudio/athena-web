@@ -44,7 +44,7 @@ async function createTask(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title, teamId }),
   });
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(201);
   return (await json<{ id: string }>(res)).id;
 }
 
@@ -70,7 +70,7 @@ describe('task dependencies create + read', () => {
 
     // B is blocked by A (edge A → B).
     const created = await addEdge(app, b, a);
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const ack = await json<{ created: boolean; blockingTaskId: string; blockedTaskId: string }>(
       created,
     );
@@ -111,7 +111,7 @@ describe('task dependencies create + read', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ blockedTaskId: b }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const ack = await json<{ blockingTaskId: string; blockedTaskId: string }>(created);
     expect(ack.blockingTaskId).toBe(a);
     expect(ack.blockedTaskId).toBe(b);
@@ -158,8 +158,8 @@ describe('task dependencies acyclic enforcement', () => {
     const cTask = await createTask(app, teamId, 'C');
 
     // A → B, B → C.
-    expect((await addEdge(app, b, a)).status).toBe(200);
-    expect((await addEdge(app, cTask, b)).status).toBe(200);
+    expect((await addEdge(app, b, a)).status).toBe(201);
+    expect((await addEdge(app, cTask, b)).status).toBe(201);
 
     // Adding C → A (A blocked by C) closes the cycle A→B→C→A.
     const res = await addEdge(app, a, cTask);
@@ -173,7 +173,7 @@ describe('task dependencies acyclic enforcement', () => {
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const a = await createTask(app, teamId, 'A');
     const b = await createTask(app, teamId, 'B');
-    expect((await addEdge(app, b, a)).status).toBe(200); // A → B
+    expect((await addEdge(app, b, a)).status).toBe(201); // A → B
     expect((await addEdge(app, a, b)).status).toBe(409); // B → A would cycle
   });
 
@@ -190,7 +190,7 @@ describe('task dependencies acyclic enforcement', () => {
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const a = await createTask(app, teamId, 'A');
     const b = await createTask(app, teamId, 'B');
-    expect((await addEdge(app, b, a)).status).toBe(200);
+    expect((await addEdge(app, b, a)).status).toBe(201);
     expect((await addEdge(app, b, a)).status).toBe(409);
   });
 });

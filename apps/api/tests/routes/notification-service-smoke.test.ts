@@ -73,7 +73,7 @@ describe('notification service smoke', () => {
         idempotencyKey: run,
       }),
     });
-    expect(createdRes.status).toBe(200);
+    expect(createdRes.status).toBe(201);
     const created = await json<{ id: string; status: string; createdBy: string }>(createdRes);
     expect(created).toMatchObject({ status: 'draft', createdBy: staff.userId });
 

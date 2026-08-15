@@ -64,7 +64,7 @@ async function createTask(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title: 'T', teamId, ...body }),
   });
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(201);
   return ((await res.json()) as { id: string }).id;
 }
 

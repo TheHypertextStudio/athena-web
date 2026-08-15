@@ -31,7 +31,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { labelUsageCounts, mergeLabelAttachments } from '../lib/labels';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -118,6 +118,7 @@ const labels = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Labels',
       summary: 'Create a label',
       capability: 'contribute',
@@ -163,7 +164,7 @@ const labels = new Hono<AppEnv>()
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('label insert returned no row');
       await enqueueSearchUpsert(orgId, 'label', row.id);
-      return ok(c, LabelOut, toOut(row, 0));
+      return created(c, LabelOut, toOut(row, 0));
     },
   )
   // Registered before `/:id` so the literal path is not swallowed by the parameter.
@@ -189,6 +190,7 @@ const labels = new Hono<AppEnv>()
     '/groups',
     capabilityGuard('manage'),
     apiDoc({
+      status: 201,
       tag: 'Labels',
       summary: 'Create a label group',
       capability: 'manage',
@@ -211,7 +213,7 @@ const labels = new Hono<AppEnv>()
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('label group insert returned no row');
-      return ok(c, LabelGroupOut, groupToOut(row));
+      return created(c, LabelGroupOut, groupToOut(row));
     },
   )
   .patch(

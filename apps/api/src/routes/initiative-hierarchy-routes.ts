@@ -11,7 +11,7 @@ import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -34,6 +34,7 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
     '/hierarchy-links',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Initiatives',
       summary: 'Create an Initiative hierarchy link',
       description:
@@ -73,7 +74,7 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
       });
       /* v8 ignore next -- @preserve defensive: insert always returns one row */
       if (!row) throw new Error('Initiative hierarchy insert returned no row');
-      return ok(c, InitiativeHierarchyLinkOut, hierarchyOut(row));
+      return created(c, InitiativeHierarchyLinkOut, hierarchyOut(row));
     },
   )
   .patch(

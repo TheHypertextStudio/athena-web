@@ -149,7 +149,7 @@ describe('people — an actor with no Docket account', () => {
         roleId: seeded.memberRoleId,
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const person = await body<{
       actorId: string;
       organizationId: string;
@@ -198,7 +198,7 @@ describe('people — an actor with no Docket account', () => {
       headers: J,
       body: JSON.stringify({ displayName: 'Sam Steward' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     expect((await body<{ roleId: string | null }>(created)).roleId).toBe(seeded.memberRoleId);
   });
 
@@ -257,7 +257,7 @@ describe('people — an actor with no Docket account', () => {
         headers: J,
         body: JSON.stringify({ displayName: name }),
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
     }
 
     const listed = await w.request('/');
@@ -419,7 +419,7 @@ describe('people — assigning work to someone with no account (ENT-45)', () => 
       headers: J,
       body: JSON.stringify({ displayName: 'Rae Volunteer' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const volunteerId = (await body<{ actorId: string }>(created)).actorId;
 
     // A task, through the same POST /tasks body a member assignment uses.
@@ -439,7 +439,7 @@ describe('people — assigning work to someone with no account (ENT-45)', () => 
         assigneeId: volunteerId,
       }),
     });
-    expect(taskRes.status).toBe(200);
+    expect(taskRes.status).toBe(201);
     const task = await body<{ id: string; assigneeId: string | null }>(taskRes);
     expect(task.assigneeId).toBe(volunteerId);
 
@@ -456,7 +456,7 @@ describe('people — assigning work to someone with no account (ENT-45)', () => 
       headers: J,
       body: JSON.stringify({ name: 'Food drive' }),
     });
-    expect(projectRes.status).toBe(200);
+    expect(projectRes.status).toBe(201);
     const projectId = (await body<{ id: string }>(projectRes)).id;
     const leadRes = await projectsApp.request(`/${projectId}`, {
       method: 'PATCH',
@@ -479,7 +479,7 @@ describe('people — assigning work to someone with no account (ENT-45)', () => 
       headers: J,
       body: JSON.stringify({ name: 'Feed the valley', ownerId: volunteerId }),
     });
-    expect(initiativeRes.status).toBe(200);
+    expect(initiativeRes.status).toBe(201);
     const initiative = await body<{ id: string; ownerId: string | null }>(initiativeRes);
     expect(initiative.ownerId).toBe(volunteerId);
 

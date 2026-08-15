@@ -513,7 +513,7 @@ describe('projects progress (weighted completion)', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ title: 'T', teamId, projectId: id, state }),
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
     }
 
     const res = await projectWriter.request(`/${id}/progress`, { method: 'GET' });
@@ -569,7 +569,7 @@ describe('projects create with initiative associations', () => {
       headers: J,
       body: JSON.stringify({ name: 'Linked', teamId, initiativeIds: [initA, initB] }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const created = await json<{ id: string }>(res);
 
     expect(await linkedInitiatives(created.id)).toEqual([initA, initB].sort());
@@ -585,7 +585,7 @@ describe('projects create with initiative associations', () => {
       headers: J,
       body: JSON.stringify({ name: 'Dup', teamId, initiativeIds: [init, init] }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const created = await json<{ id: string }>(res);
     expect(await linkedInitiatives(created.id)).toEqual([init]);
   });
@@ -599,7 +599,7 @@ describe('projects create with initiative associations', () => {
       headers: J,
       body: JSON.stringify({ name: 'None', teamId }),
     });
-    expect(omitted.status).toBe(200);
+    expect(omitted.status).toBe(201);
     expect(await linkedInitiatives((await json<{ id: string }>(omitted)).id)).toEqual([]);
 
     const empty = await writer.request('/', {
@@ -607,7 +607,7 @@ describe('projects create with initiative associations', () => {
       headers: J,
       body: JSON.stringify({ name: 'Empty', teamId, initiativeIds: [] }),
     });
-    expect(empty.status).toBe(200);
+    expect(empty.status).toBe(201);
     expect(await linkedInitiatives((await json<{ id: string }>(empty)).id)).toEqual([]);
   });
 

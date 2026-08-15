@@ -587,7 +587,7 @@ describe('Time Ledger routes', () => {
         },
       }),
     });
-    expect(contextResponse.status).toBe(200);
+    expect(contextResponse.status).toBe(201);
     const contextualized = await json<TimeRecordOut>(contextResponse);
     expect(contextualized.contexts).toHaveLength(1);
     // The calendar link earns no credit; the anchor task remains the only allocation.
@@ -755,7 +755,7 @@ describe('Time Ledger routes', () => {
         timeRecordIds: [record.id],
       }),
     });
-    expect(submission.status).toBe(200);
+    expect(submission.status).toBe(201);
     const snapshot = await json<{ id: string; status: string; items: { durationMs: number }[] }>(
       submission,
     );

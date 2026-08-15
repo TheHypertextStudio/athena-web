@@ -26,7 +26,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError, ValidationError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
@@ -204,6 +204,7 @@ const comments = new Hono<AppEnv>()
     '/',
     taskAwareCreateGuard(),
     apiDoc({
+      status: 201,
       tag: 'Comments',
       summary: 'Add a comment',
       response: CommentOut,
@@ -281,7 +282,7 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
         subject: { type: row.subjectType, id: row.subjectId },
       });
       await enqueueSearchUpsert(orgId, 'comment', row.id);
-      return ok(c, CommentOut, toOut(row));
+      return created(c, CommentOut, toOut(row));
     },
   )
   .get(

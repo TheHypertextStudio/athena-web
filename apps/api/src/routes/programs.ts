@@ -23,7 +23,7 @@ import { NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { labelsForSubjects, type LabelRefRow } from '../lib/labels';
 import { deferAfterResponse } from '../lib/after-response';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -128,6 +128,7 @@ const programs = new Hono<AppEnv>()
     '/',
     capabilityGuard('manage'),
     apiDoc({
+      status: 201,
       tag: 'Programs',
       summary: 'Create a program',
       capability: 'manage',
@@ -177,7 +178,7 @@ const programs = new Hono<AppEnv>()
       deferAfterResponse('program-created-search-upsert', () =>
         enqueueSearchUpsert(orgId, 'program', row.id),
       );
-      return ok(c, ProgramOut, toOut(row));
+      return created(c, ProgramOut, toOut(row));
     },
   )
   .get(

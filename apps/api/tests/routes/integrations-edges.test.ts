@@ -168,7 +168,7 @@ describe('validateTeamMappings — shape failure and empty-array no-op', () => {
         config: { teamMappings: [] },
       }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
   });
 });
 

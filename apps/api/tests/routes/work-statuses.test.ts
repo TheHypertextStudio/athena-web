@@ -119,7 +119,7 @@ describe('adding a status', () => {
       headers: J,
       body: JSON.stringify({ entityType: 'task', name: 'In Review', category: 'started' }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect((await body<StatusOut>(res)).key).toBe('in_review');
   });
 
@@ -173,7 +173,7 @@ describe('adding a status', () => {
       headers: J,
       body: JSON.stringify({ entityType: 'task', name: '???', category: 'started' }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect((await body<StatusOut>(res)).key).toMatch(/\S/);
   });
 

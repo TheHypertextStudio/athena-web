@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -54,6 +54,7 @@ const savedViews = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Views',
       summary: 'Create a saved view',
       capability: 'contribute',
@@ -82,7 +83,7 @@ const savedViews = new Hono<AppEnv>()
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('saved_view insert returned no row');
       await enqueueSearchUpsert(orgId, 'saved_view', row.id);
-      return ok(c, SavedViewOut, toOut(row));
+      return created(c, SavedViewOut, toOut(row));
     },
   )
   .get(

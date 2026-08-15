@@ -139,7 +139,7 @@ async function connectSunsama(seed: Seed, bearerToken?: string): Promise<McpInte
       ...(bearerToken ? { bearerToken } : {}),
     }),
   });
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(201);
   return (await res.json()) as McpIntegrationOut;
 }
 
@@ -170,7 +170,7 @@ describe('remote MCP integrations', () => {
         authMode: 'oauth',
       }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const out = (await res.json()) as McpIntegrationOut;
     expect(out).toMatchObject({ status: 'pending', authMode: 'oauth', toolCount: null });
   });
@@ -210,7 +210,7 @@ describe('remote MCP integrations', () => {
         bearerToken: 'legacy-org-token',
       }),
     });
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     expect((await response.json()) as McpIntegrationOut).toMatchObject({
       authMode: 'bearer',
       status: 'connected',
@@ -247,7 +247,7 @@ describe('remote MCP integrations', () => {
         authMode: 'none',
       }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const out = (await res.json()) as McpIntegrationOut;
     expect(out.status).toBe('error');
     expect(out.lastError).toMatch(/No MCP server reachable/);
@@ -311,7 +311,7 @@ describe('remote MCP integrations', () => {
       }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const out = (await res.json()) as McpIntegrationOut;
     expect(out.authMode).toBe('oauth');
     expect(out.status).toBe('pending'); // OAuth servers wait for browser approval, never auto-verified
@@ -455,7 +455,7 @@ describe('the union toolbox: remote read + local writes in one session', () => {
         agentId: seed.agentId,
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const session = (await created.json()) as { id: string; status: string };
     // Both the remote call and the local creates hold the gate.
     expect(session.status).toBe('awaiting_approval');

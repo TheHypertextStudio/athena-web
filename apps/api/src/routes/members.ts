@@ -39,7 +39,7 @@ import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -88,6 +88,7 @@ Requires only org membership (no \`manage\`): any member, resolved by \`orgConte
     '/',
     capabilityGuard('manage'),
     apiDoc({
+      status: 201,
       tag: 'Members',
       summary: 'Add a person without an account',
       capability: 'manage',
@@ -153,7 +154,7 @@ Adding a person to a **personal organization** is rejected with **409**, matchin
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('person actor insert returned no row');
       await enqueueSearchUpsert(orgId, 'actor', row.id);
-      return ok(c, MemberOut, toMemberOut(row));
+      return created(c, MemberOut, toMemberOut(row));
     },
   )
   .post(
@@ -222,6 +223,7 @@ Requires only org membership (no \`manage\`) to read — any member can see who'
     '/invitations',
     capabilityGuard('manage'),
     apiDoc({
+      status: 201,
       tag: 'Members',
       summary: 'Create an invitation',
       capability: 'manage',
@@ -236,7 +238,7 @@ Inviting into a **personal organization** is rejected with **409** (org-of-one).
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const row = await createInvitation(orgId, actorId, c.req.valid('json'));
-      return ok(c, InvitationOut, toInvitationOut(row));
+      return created(c, InvitationOut, toInvitationOut(row));
     },
   )
   .post(

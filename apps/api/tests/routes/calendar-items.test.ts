@@ -50,7 +50,7 @@ describe('native calendar block CRUD', () => {
       startsAt: '2026-07-01T14:00:00.000Z',
       endsAt: '2026-07-01T15:00:00.000Z',
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     expect(created.body.kind).toBe('native_block');
     expect(created.body.provider).toBe('docket');
     expect(created.body.syncState).toBe('clean');
@@ -80,7 +80,7 @@ describe('native calendar block CRUD', () => {
       allDayStartDate: '2026-07-10',
       allDayEndDate: '2026-07-12',
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     expect(created.body.allDayStartDate).toBe('2026-07-10');
     expect(created.body.allDayEndDate).toBe('2026-07-12');
     expect(created.body.startsAt).toBeNull();
@@ -112,8 +112,8 @@ describe('native calendar block CRUD', () => {
       startsAt: '2026-07-02T10:00:00.000Z',
       endsAt: '2026-07-02T11:00:00.000Z',
     });
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(200);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
     expect(first.body.layerId).toBe(second.body.layerId);
 
     const layerCount = one(

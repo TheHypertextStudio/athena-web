@@ -45,7 +45,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -216,8 +216,7 @@ Requires \`manage\`.`,
         const row = rows[0];
         /* v8 ignore next -- @preserve defensive: insert always returns one row */
         if (!row) throw new Error('workspace domain insert returned no row');
-        c.status(201);
-        return ok(c, WorkspaceDomainOut, toDomainOut(row));
+        return created(c, WorkspaceDomainOut, toDomainOut(row));
       },
     )
     .post(

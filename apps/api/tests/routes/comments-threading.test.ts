@@ -92,7 +92,7 @@ describe('comments router', () => {
     const { orgId, humanActorId } = await seedOrg();
     const w = appWithActor(comments, orgId, ['comment'], humanActorId);
     const res = await createComment(w, { body: 'authored' });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const created = await body<CommentOut>(res);
     expect(created.authorId).toBe(humanActorId);
     expect(created.organizationId).toBe(orgId);
@@ -106,7 +106,7 @@ describe('comments router', () => {
 
     const root = await body<CommentOut>(await createComment(w, { body: 'root' }));
     const replyRes = await createComment(w, { body: 'reply', parentCommentId: root.id });
-    expect(replyRes.status).toBe(200);
+    expect(replyRes.status).toBe(201);
     const reply = await body<CommentOut>(replyRes);
     expect(reply.parentCommentId).toBe(root.id);
 

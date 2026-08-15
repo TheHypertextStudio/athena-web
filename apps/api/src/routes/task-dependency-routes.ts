@@ -16,7 +16,7 @@ import type { AppEnv } from '../context';
 import { ConflictError, CycleError, NotFoundError, ValidationError } from '../error';
 import { serializableTx } from '../lib/serializable-tx';
 import { labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
-import { ok } from '../lib/ok';
+import { created, ok, resourceUrl } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -72,6 +72,7 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
   .post(
     '/:id/subtasks',
     apiDoc({
+      status: 201,
       tag: 'Tasks',
       summary: 'Create a subtask',
       capability: 'contribute',
@@ -135,7 +136,12 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
         await db.transaction((tx) => replaceLabels(tx, 'task', row.id, orgId, resolvedLabels));
       }
       await enqueueSearchUpsert(orgId, 'task', row.id);
-      return ok(c, TaskOut, toOut(row, resolvedLabels));
+      return created(
+        c,
+        TaskOut,
+        toOut(row, resolvedLabels),
+        resourceUrl(`/v1/orgs/${orgId}/tasks/${row.id}`),
+      );
     },
   )
   .get(
@@ -205,6 +211,7 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
   .post(
     '/:id/dependencies',
     apiDoc({
+      status: 201,
       tag: 'Tasks',
       summary: 'Add a task dependency',
       capability: 'contribute',
@@ -275,7 +282,7 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
           .values({ blockingTaskId, blockedTaskId, organizationId: orgId });
       });
 
-      return ok(c, TaskDependencyCreated, { created: true, blockingTaskId, blockedTaskId });
+      return created(c, TaskDependencyCreated, { created: true, blockingTaskId, blockedTaskId });
     },
   )
   .delete(

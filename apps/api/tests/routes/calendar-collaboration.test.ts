@@ -61,7 +61,7 @@ describe('calendar item creation intents', () => {
         endsAt: '2026-08-04T10:00:00.000Z',
       }),
     });
-    expect(eventResponse.status).toBe(200);
+    expect(eventResponse.status).toBe(201);
     expect((await body<CalendarItemOut>(eventResponse)).kind).toBe('native_event');
 
     const timeboxResponse = await app.request('/items', {
@@ -74,7 +74,7 @@ describe('calendar item creation intents', () => {
         endsAt: '2026-08-04T11:00:00.000Z',
       }),
     });
-    expect(timeboxResponse.status).toBe(200);
+    expect(timeboxResponse.status).toBe(201);
     expect((await body<CalendarItemOut>(timeboxResponse)).kind).toBe('timebox');
   });
 });
@@ -95,7 +95,7 @@ describe('calendar item relationships', () => {
       headers: JSON_HEADERS,
       body: JSON.stringify({ targetItemId: target.id, role: 'contained' }),
     });
-    expect(createdResponse.status).toBe(200);
+    expect(createdResponse.status).toBe(201);
     expect(await body<CalendarItemRelationOut>(createdResponse)).toMatchObject({
       sourceItemId: source.id,
       targetItemId: target.id,

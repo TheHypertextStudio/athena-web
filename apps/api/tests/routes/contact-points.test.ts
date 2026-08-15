@@ -85,7 +85,7 @@ describe('contact point routes', () => {
         purpose: 'sms_notifications',
       }),
     });
-    expect(createdRes.status).toBe(200);
+    expect(createdRes.status).toBe(201);
     const created = await body<ContactPointWire>(createdRes);
     expect(created).toMatchObject({
       userId,

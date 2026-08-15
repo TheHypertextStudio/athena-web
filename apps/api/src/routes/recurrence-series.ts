@@ -19,7 +19,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { createScheduledProcess } from '../lib/recurrence/authoring';
 import { bindProcessToCalendarItem } from '../lib/recurrence/calendar-binding';
@@ -63,6 +63,7 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Recurrence',
       summary: 'Create a recurrence series',
       capability: 'contribute',
@@ -79,13 +80,14 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
         actorId,
         series: body,
       });
-      return ok(c, RecurrenceSeriesOut, detail);
+      return created(c, RecurrenceSeriesOut, detail);
     },
   )
   .post(
     '/calendar-bindings',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Recurrence',
       summary: 'Add process work for a calendar event',
       capability: 'contribute',
@@ -106,7 +108,7 @@ const recurrenceSeriesRoutes = new Hono<AppEnv>()
         calendarItemId: selected.calendarItemId,
         processDefinitionId: selected.processDefinitionId,
       });
-      return ok(c, CalendarProcessBindingOut, binding);
+      return created(c, CalendarProcessBindingOut, binding);
     },
   )
   .get(

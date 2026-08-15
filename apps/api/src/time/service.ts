@@ -12,6 +12,7 @@ export {
   addTimeContext,
   createTimeCategory,
   createTimeRecord,
+  getTimeRecord,
   pauseTimeRecord,
   removeTimeContext,
   replaceTimeAllocations,

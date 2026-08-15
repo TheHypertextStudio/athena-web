@@ -508,7 +508,7 @@ describe('attaching a received message to work', () => {
           organizationId: fixture.organizationId,
         }),
       });
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(201);
     }
 
     // It really is the generic table every other attachable resource uses.
@@ -572,7 +572,7 @@ describe('attaching a received message to work', () => {
           body,
         })
       ).status,
-    ).toBe(200);
+    ).toBe(201);
     expect(
       (
         await app.request(`/${assertDefined(message).id}/attachments`, {

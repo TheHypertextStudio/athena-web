@@ -24,7 +24,7 @@ import type { AppEnv } from '../context';
 import { NotFoundError, ValidationError } from '../error';
 import { isWithinWindow, normalizeCadenceWeeks } from '../lib/cycle-window';
 import { labelsForSubjects } from '../lib/labels';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -142,6 +142,7 @@ const cycles = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Cycles',
       summary: 'Create a cycle',
       capability: 'contribute',
@@ -177,7 +178,7 @@ const cycles = new Hono<AppEnv>()
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('cycle insert returned no row');
       await enqueueSearchUpsert(orgId, 'cycle', row.id);
-      return ok(c, CycleOut, toOut(row));
+      return created(c, CycleOut, toOut(row));
     },
   )
   .get(

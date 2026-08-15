@@ -28,7 +28,7 @@ import { z } from 'zod';
 import { getContainer } from '../container';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zForm, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -103,6 +103,7 @@ const documentImages = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Organizations',
       summary: 'Upload an inline image',
       capability: 'contribute',
@@ -147,7 +148,7 @@ const documentImages = new Hono<AppEnv>()
       }
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('document image insert returned no row');
-      return ok(c, DocumentImageOut, toOut(row));
+      return created(c, DocumentImageOut, toOut(row));
     },
   )
   .get(

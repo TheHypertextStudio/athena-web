@@ -10,7 +10,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { CapabilityError, NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -177,6 +177,7 @@ const updates = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Updates',
       summary: 'Post an update',
       capability: 'contribute',
@@ -233,7 +234,7 @@ Key side effect: when the post includes a \`health\`, the same transaction write
       });
       await enqueueSearchUpsert(orgId, 'update', row.id);
       await enqueueSearchUpsert(orgId, row.subjectType, row.subjectId);
-      return ok(c, UpdateOut, toOut(row));
+      return created(c, UpdateOut, toOut(row));
     },
   )
   .get(

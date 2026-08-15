@@ -35,7 +35,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -268,8 +268,7 @@ Publishing a record that was previously withdrawn restores it at its **original*
       /* v8 ignore next -- @preserve defensive: insert/update always returns one row */
       if (!row) throw new Error('publication write returned no row');
 
-      c.status(201);
-      return ok(c, PublicationOut, await toOut(row, await workspaceSlug(orgId)));
+      return created(c, PublicationOut, await toOut(row, await workspaceSlug(orgId)));
     },
   )
   .patch(

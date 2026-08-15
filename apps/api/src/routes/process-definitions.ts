@@ -21,7 +21,7 @@ import {
   loadProcessDefinitionDetail,
   updateProcessDefinitionMetadata,
 } from '../lib/recurrence/process-definition';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -72,6 +72,7 @@ const processDefinitions = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Processes',
       summary: 'Create a process definition',
       capability: 'contribute',
@@ -82,13 +83,13 @@ const processDefinitions = new Hono<AppEnv>()
     zJson(ProcessDefinitionCreate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const created = await createPublishedProcessDefinition(db, {
+      const published = await createPublishedProcessDefinition(db, {
         organizationId: orgId,
         actorId,
         definition: c.req.valid('json'),
       });
-      const detail = await loadProcessDefinitionDetail(db, orgId, created.definitionId);
-      return ok(c, ProcessDefinitionDetailOut, detail);
+      const detail = await loadProcessDefinitionDetail(db, orgId, published.definitionId);
+      return created(c, ProcessDefinitionDetailOut, detail);
     },
   )
   .get(

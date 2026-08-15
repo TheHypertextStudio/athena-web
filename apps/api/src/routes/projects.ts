@@ -34,7 +34,7 @@ import { deferAfterResponse } from '../lib/after-response';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { replaceLabels, resolveLabelSet } from '../lib/labels';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -180,6 +180,7 @@ const projects = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Projects',
       summary: 'Create a project',
       capability: 'contribute',
@@ -280,7 +281,7 @@ const projects = new Hono<AppEnv>()
       deferAfterResponse('project-created-search-upsert', () =>
         enqueueSearchUpsert(orgId, 'project', row.id),
       );
-      return ok(c, ProjectOut, toOut(row));
+      return created(c, ProjectOut, toOut(row));
     },
   )
   .get(

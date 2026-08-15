@@ -56,7 +56,7 @@ describe('document image routes', () => {
     const w = appWithActor(documentImages, orgId, ['contribute'], humanActorId);
 
     const res = await upload(w, imageOfSize('screenshot.png', 12));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
 
     const created = await body<DocumentImageOut>(res);
     expect(created.mimeType).toBe('image/png');
@@ -78,7 +78,7 @@ describe('document image routes', () => {
     const w = appWithActor(documentImages, orgId, ['contribute'], humanActorId);
 
     const res = await upload(w, imageOfSize('image', 4, type));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect((await body<DocumentImageOut>(res)).mimeType).toBe(type);
   });
 

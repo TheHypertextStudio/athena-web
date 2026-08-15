@@ -29,7 +29,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -112,6 +112,7 @@ Requires only org membership to read (the \`view\` capability is satisfied by an
     '/',
     capabilityGuard('manage'),
     apiDoc({
+      status: 201,
       tag: 'Teams',
       summary: 'Create a team',
       capability: 'manage',
@@ -153,7 +154,7 @@ Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state
         return created;
       });
       await enqueueSearchUpsert(orgId, 'team', row.id);
-      return ok(c, TeamDetail, toOut(row));
+      return created(c, TeamDetail, toOut(row));
     },
   )
   .get(

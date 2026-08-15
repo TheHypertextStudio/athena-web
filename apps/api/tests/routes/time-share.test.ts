@@ -85,7 +85,7 @@ describe('Time share tokens', () => {
       headers: JSON_HEADERS,
       body: JSON.stringify(body),
     });
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(201);
     return json<TimeShareTokenCreated>(response);
   }
 

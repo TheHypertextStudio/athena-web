@@ -195,7 +195,7 @@ async function createAssignment(seedData: Seed, entityType: 'project' | 'task' =
       objective: 'Keep this moving and report meaningful changes.',
     }),
   });
-  expect(response.status).toBe(200);
+  expect(response.status).toBe(201);
   return (await response.json()) as { id: string; activeSessionId: string; status: string };
 }
 
@@ -268,7 +268,7 @@ describe('personal Athena assignments', () => {
       headers: JSON_HEADERS,
       body: JSON.stringify({ type: 'event', eventKinds: ['status_change'], cooldownMinutes: 5 }),
     });
-    expect(triggerResponse.status).toBe(200);
+    expect(triggerResponse.status).toBe(201);
     const firedAt = new Date('2026-07-15T20:00:00.000Z');
     await handleAthenaAssignmentEvent(
       {
@@ -359,7 +359,7 @@ describe('personal Athena assignments', () => {
         objective: 'Watch this theme.',
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const assignment = (await created.json()) as { id: string };
     expect(
       (
@@ -369,7 +369,7 @@ describe('personal Athena assignments', () => {
           body: JSON.stringify({ type: 'event', eventKinds: ['status_change'] }),
         })
       ).status,
-    ).toBe(200);
+    ).toBe(201);
 
     const denied = await handleAthenaAssignmentEvent({
       organizationId: seedData.orgId,
@@ -458,7 +458,7 @@ describe('personal Athena assignments', () => {
       headers: JSON_HEADERS,
       body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
     });
-    expect(scheduled.status).toBe(200);
+    expect(scheduled.status).toBe(201);
     await db
       .update(schema.actor)
       .set({ status: 'suspended' })
@@ -542,7 +542,7 @@ describe('personal Athena assignments', () => {
         objective: 'Keep this queued through the durable runner.',
       }),
     });
-    expect(assignmentResponse.status, await assignmentResponse.clone().text()).toBe(200);
+    expect(assignmentResponse.status, await assignmentResponse.clone().text()).toBe(201);
     const assignment = (await assignmentResponse.json()) as {
       id: string;
       activeSessionId: string;

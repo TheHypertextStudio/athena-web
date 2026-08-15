@@ -1181,6 +1181,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/activity/:activityId/approve',
     apiDoc({
+      status: 202,
       tag: 'Athena',
       summary: 'Approve a personal Athena action',
       response: SessionActivityOut,
@@ -1216,6 +1217,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/activity/:activityId/reject',
     apiDoc({
+      status: 202,
       tag: 'Athena',
       summary: 'Reject a personal Athena action',
       response: SessionActivityOut,
@@ -1251,6 +1253,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/activity/:activityId/reply',
     apiDoc({
+      status: 202,
       tag: 'Athena',
       summary: 'Reply to a personal Athena question',
       response: SessionActivityOut,
@@ -1282,6 +1285,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/proposals/:groupId/approve',
     apiDoc({
+      status: 202,
       tag: 'Athena',
       summary: 'Approve a personal proposal group',
       response: AthenaSessionDetailOut,
@@ -1321,6 +1325,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/proposals/:groupId/reject',
     apiDoc({
+      status: 202,
       tag: 'Athena',
       summary: 'Reject a personal proposal group',
       response: AthenaSessionDetailOut,
@@ -1379,6 +1384,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/resume',
     apiDoc({
+      status: 202,
       tag: 'Athena',
       summary: 'Resume personal Athena work',
       response: AthenaSessionSummaryOut,
@@ -1406,6 +1412,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/cancel',
     apiDoc({
+      status: 202,
       tag: 'Athena',
       summary: 'Cancel personal Athena work',
       response: AthenaSessionSummaryOut,
@@ -1441,6 +1448,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/approve',
     apiDoc({
+      status: 202,
       tag: 'Athena',
       summary: 'Approve the latest personal action',
       response: AthenaSessionSummaryOut,
@@ -1481,6 +1489,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/reject',
     apiDoc({
+      status: 202,
       tag: 'Athena',
       summary: 'Reject the latest personal action',
       response: AthenaSessionSummaryOut,

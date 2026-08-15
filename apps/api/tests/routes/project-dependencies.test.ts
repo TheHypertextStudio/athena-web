@@ -55,7 +55,7 @@ describe('project dependencies', () => {
     const blocker = await createProject(statusId, orgId, teamId, humanActorId, 'Platform work');
     const blocked = await createProject(statusId, orgId, teamId, humanActorId, 'Launch work');
 
-    expect((await addEdge(app, blocked, blocker)).status).toBe(200);
+    expect((await addEdge(app, blocked, blocker)).status).toBe(201);
 
     const blocking = (await (await app.request(`/${blocker}/dependencies`)).json()) as {
       blocking: { id: string; name: string }[];
@@ -79,8 +79,8 @@ describe('project dependencies', () => {
     const b = await createProject(statusId, orgId, teamId, humanActorId, 'B');
     const c = await createProject(statusId, orgId, teamId, humanActorId, 'C');
 
-    expect((await addEdge(app, b, a)).status).toBe(200);
-    expect((await addEdge(app, c, b)).status).toBe(200);
+    expect((await addEdge(app, b, a)).status).toBe(201);
+    expect((await addEdge(app, c, b)).status).toBe(201);
     expect((await addEdge(app, a, c)).status).toBe(409);
   });
 });

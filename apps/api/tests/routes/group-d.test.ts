@@ -185,7 +185,7 @@ describe('orgs router', () => {
       headers: J,
       body: JSON.stringify({ name: 'Acme Inc', slug: 'acme-inc', vocabulary: 'startup' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const result = await body<{
       organization: { id: string };
       defaultTeam: { id: string };
@@ -283,14 +283,14 @@ describe('orgs router', () => {
       headers: J,
       body: JSON.stringify({ name: 'My Cool Org!', vocabulary: 'startup' }),
     });
-    expect(a.status).toBe(200);
+    expect(a.status).toBe(201);
     // A name with no alphanumerics falls back to the literal 'org' slug.
     const b = await app.request('/', {
       method: 'POST',
       headers: J,
       body: JSON.stringify({ name: '!!!', vocabulary: 'startup' }),
     });
-    expect(b.status).toBe(200);
+    expect(b.status).toBe(201);
   });
 
   it('POST / isPersonal:true creates a personal space (org-of-one) with no name, defaulting to "Personal"', async () => {
@@ -302,7 +302,7 @@ describe('orgs router', () => {
       headers: J,
       body: JSON.stringify({ isPersonal: true }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const result = await body<{
       organization: { id: string; name: string; isPersonal: boolean };
       defaultTeam: { id: string };
@@ -331,7 +331,7 @@ describe('orgs router', () => {
       headers: J,
       body: JSON.stringify({ isPersonal: true }),
     });
-    expect(first.status).toBe(200);
+    expect(first.status).toBe(201);
     const firstId = (await body<{ organization: { id: string } }>(first)).organization.id;
 
     const second = await app.request('/', {
@@ -339,7 +339,7 @@ describe('orgs router', () => {
       headers: J,
       body: JSON.stringify({ isPersonal: true, name: 'Ignored' }),
     });
-    expect(second.status).toBe(200);
+    expect(second.status).toBe(201);
     const secondResult = await body<{
       organization: { id: string };
       defaultTeam: { id: string };
@@ -375,13 +375,13 @@ describe('orgs router', () => {
           body: JSON.stringify({ isPersonal: true }),
         })
       ).status,
-    ).toBe(200);
+    ).toBe(201);
     const team = await app.request('/', {
       method: 'POST',
       headers: J,
       body: JSON.stringify({ name: 'Team Org' }),
     });
-    expect(team.status).toBe(200);
+    expect(team.status).toBe(201);
     expect(
       (await body<{ organization: { isPersonal: boolean } }>(team)).organization.isPersonal,
     ).toBe(false);
@@ -409,7 +409,7 @@ describe('orgs router', () => {
       headers: J,
       body: JSON.stringify({ name: 'Acme Robotics' }),
     });
-    expect(first.status).toBe(200);
+    expect(first.status).toBe(201);
     const firstSlug = (await body<{ organization: { slug: string } }>(first)).organization.slug;
     expect(firstSlug).toBe('acme-robotics');
 
@@ -418,7 +418,7 @@ describe('orgs router', () => {
       headers: J,
       body: JSON.stringify({ name: 'Acme Robotics' }),
     });
-    expect(second.status).toBe(200);
+    expect(second.status).toBe(201);
     const secondSlug = (await body<{ organization: { slug: string } }>(second)).organization.slug;
     // Same readable base, but disambiguated (a suffix appended) so it is globally unique.
     expect(secondSlug).not.toBe(firstSlug);
@@ -433,7 +433,7 @@ describe('orgs router', () => {
       headers: J,
       body: JSON.stringify({ name: 'Beta Org', slug: 'beta-team' }),
     });
-    expect(first.status).toBe(200);
+    expect(first.status).toBe(201);
 
     const second = await orgsApp(fakeSession(b.userId)).request('/', {
       method: 'POST',
@@ -459,7 +459,7 @@ describe('orgs router', () => {
       headers: J,
       body: JSON.stringify({ name: 'API' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const slug = (await body<{ organization: { slug: string } }>(created)).organization.slug;
     expect(slug).not.toBe('api');
     expect(slug.startsWith('api-')).toBe(true);
@@ -491,7 +491,7 @@ describe('orgs router', () => {
       headers: J,
       body: JSON.stringify({ name: 'NoName Org', vocabulary: 'startup' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const result = await body<{ ownerActorId: string }>(created);
     const rows = await db
       .select({ displayName: schema.actor.displayName })
@@ -592,7 +592,7 @@ describe('daily-plan router', () => {
         timeboxEndsAt: '2026-02-01T10:00:00.000Z',
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const itemId = (await body<{ id: string }>(created)).id;
 
     // List now has it.
@@ -730,7 +730,7 @@ describe('daily-plan router', () => {
         date: '2026-03-01',
       }),
     });
-    expect(made.status).toBe(200);
+    expect(made.status).toBe(201);
 
     expect(
       (

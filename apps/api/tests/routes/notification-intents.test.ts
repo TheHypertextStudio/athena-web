@@ -82,7 +82,7 @@ describe('notification intent routes', () => {
       body: JSON.stringify(serviceAnnouncementInput(recipientId)),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const intent = await body<{ id: string; status: string; createdBy: string }>(res);
     expect(intent).toMatchObject({ status: 'draft', createdBy: staff.userId });
 

@@ -19,7 +19,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, CycleError, NotFoundError, ValidationError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { rawResultRowCount } from '../lib/raw-result';
 import { serializableTx } from '../lib/serializable-tx';
@@ -117,6 +117,7 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
     '/:id/dependencies',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Projects',
       summary: 'Add a project dependency',
       description:
@@ -170,7 +171,7 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
           blockedProjectId,
         });
       });
-      return ok(c, ProjectDependencyCreated, {
+      return created(c, ProjectDependencyCreated, {
         created: true,
         blockingProjectId,
         blockedProjectId,

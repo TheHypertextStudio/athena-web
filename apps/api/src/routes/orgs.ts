@@ -35,7 +35,7 @@ import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok, resourceUrl } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { deleteSettingsImage, storeSettingsImage } from '../lib/settings-image';
 import { zJson } from '../lib/validate';
@@ -119,6 +119,7 @@ const orgs = new Hono<AppEnv>()
   .post(
     '/',
     apiDoc({
+      status: 201,
       tag: 'Orgs',
       summary: 'Create an organization',
       response: OrgCreateResult,
@@ -197,7 +198,7 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
               >,
               ownerActorId: owner.id,
             };
-            return ok(c, OrgCreateResult, payload);
+            return created(c, OrgCreateResult, payload, resourceUrl(`/v1/orgs/${existingOrg.id}`));
           }
         }
       }
@@ -307,7 +308,7 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
         enqueueSearchUpsert(result.org.id, 'actor', result.ownerActor.id),
         enqueueSearchUpsert(result.org.id, 'team', result.defaultTeam.id),
       ]);
-      return ok(c, OrgCreateResult, payload);
+      return created(c, OrgCreateResult, payload, resourceUrl(`/v1/orgs/${result.org.id}`));
     },
   )
   .get(

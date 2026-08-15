@@ -65,7 +65,7 @@ async function postUpdate(
   payload: Record<string, unknown>,
 ): Promise<string> {
   const res = await app.request('/', { method: 'POST', headers: J, body: JSON.stringify(payload) });
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(201);
   return (await json<{ id: string }>(res)).id;
 }
 

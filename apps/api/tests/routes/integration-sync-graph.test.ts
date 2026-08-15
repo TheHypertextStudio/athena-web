@@ -308,7 +308,7 @@ describe('verify persists the provider workspace id (Linear webhook routing key)
       headers: J,
       body: JSON.stringify({ provider: 'linear', pattern: 'connector', roles: ['work'] }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const createdRow = await jsonBody<IntegrationStateRes>(created);
     // Default-seeded read-only (write-back is opted into later via PATCH, scope-gated).
     expect(createdRow.writeBack).toBe(false);

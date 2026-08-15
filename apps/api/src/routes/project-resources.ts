@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -77,6 +77,7 @@ const projectResources = new Hono<AppEnv>()
     '/:id/resources',
     capabilityGuard('contribute'),
     apiDoc({
+      status: 201,
       tag: 'Projects',
       summary: 'Attach a Project URL resource',
       description: 'Attaches a titled external URL to the selected Project.',
@@ -105,7 +106,7 @@ const projectResources = new Hono<AppEnv>()
       const row = rows[0];
       /* v8 ignore next -- @preserve the insert returns its single created row */
       if (!row) throw new Error('Project resource insert returned no row');
-      return ok(c, AttachmentOut, attachmentOut(row));
+      return created(c, AttachmentOut, attachmentOut(row));
     },
   )
   .delete(

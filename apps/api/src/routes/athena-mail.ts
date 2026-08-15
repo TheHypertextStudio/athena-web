@@ -31,7 +31,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 
@@ -220,6 +220,7 @@ const athenaMail = new Hono<AppEnv>()
   .post(
     '/:id/attachments',
     apiDoc({
+      status: 201,
       tag: 'Athena',
       summary: 'Attach a received message to a Docket entity',
       response: AthenaMailAttachmentTargetOut,
@@ -276,10 +277,10 @@ const athenaMail = new Hono<AppEnv>()
       if (!row) throw new Error('attachment insert returned no row');
 
       const targets = await listAttachmentTargets(message.id);
-      const created = targets.find((target) => target.attachmentId === row.id);
+      const attached = targets.find((target) => target.attachmentId === row.id);
       /* v8 ignore next -- @preserve the row was just written and its subject was just verified */
-      if (!created) throw new Error('attachment target read back empty');
-      return ok(c, AthenaMailAttachmentTargetOut, created);
+      if (!attached) throw new Error('attachment target read back empty');
+      return created(c, AthenaMailAttachmentTargetOut, attached);
     },
   )
   .delete(

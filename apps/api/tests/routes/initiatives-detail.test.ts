@@ -179,14 +179,14 @@ describe('initiatives detail roll-up', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ projectId }),
       });
-      expect(linked.status).toBe(200);
+      expect(linked.status).toBe(201);
     }
     const linkedProg = await writer.request(`/${id}/programs`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ programId: prog }),
     });
-    expect(linkedProg.status).toBe(200);
+    expect(linkedProg.status).toBe(201);
 
     const res = await writer.request(`/${id}`, { method: 'GET' });
     const d = await json<Detail>(res);
@@ -262,7 +262,7 @@ describe('initiatives context hierarchy', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: child }),
     });
-    expect(linked.status).toBe(200);
+    expect(linked.status).toBe(201);
     const overview = await writer.request('/overview');
     expect(overview.status).toBe(200);
     expect((await json<{ items: { id: string; depth: number }[] }>(overview)).items).toEqual(
@@ -322,7 +322,7 @@ describe('initiatives context hierarchy', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: foreignChild }),
     });
-    expect(linked.status).toBe(200);
+    expect(linked.status).toBe(201);
     expect(
       (await json<{ items: { id: string }[] }>(await writer.request('/overview'))).items.some(
         (item) => item.id === foreignChild,
@@ -389,7 +389,7 @@ describe('initiatives context hierarchy', () => {
           }),
         })
       ).status,
-    ).toBe(200);
+    ).toBe(201);
 
     expect(
       (await writer.request(`/hierarchy-links/${rootLink.id}`, { method: 'DELETE' })).status,
@@ -430,7 +430,7 @@ describe('initiatives context hierarchy', () => {
           body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: foreignChild }),
         })
       ).status,
-    ).toBe(200);
+    ).toBe(201);
     expect(
       (
         await writer.request('/hierarchy-links', {
@@ -442,7 +442,7 @@ describe('initiatives context hierarchy', () => {
           }),
         })
       ).status,
-    ).toBe(200);
+    ).toBe(201);
 
     expect((await writer.request(`/${root}`, { method: 'DELETE' })).status).toBe(200);
     expect(
@@ -500,7 +500,7 @@ describe('initiatives context hierarchy', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'Board packet', url: 'https://example.com/packet' }),
     });
-    expect(resource.status).toBe(200);
+    expect(resource.status).toBe(201);
 
     const aggregate = await writer.request(`/${root}/aggregate`);
     expect(aggregate.status).toBe(200);
@@ -542,7 +542,7 @@ describe('initiatives context hierarchy', () => {
             body: JSON.stringify({ projectId }),
           })
         ).status,
-      ).toBe(200);
+      ).toBe(201);
     }
     const aggregate = await json<{
       connectedWork: { id: string; direct: boolean; inheritedThroughInitiativeId: string | null }[];
@@ -590,7 +590,7 @@ describe('initiatives project associations', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ projectId }),
     });
-    expect(linked.status).toBe(200);
+    expect(linked.status).toBe(201);
     const body = await json<{ initiativeId: string; projectId: string; linked: boolean }>(linked);
     expect(body).toEqual({ initiativeId: id, projectId, linked: true });
 
@@ -691,7 +691,7 @@ describe('initiatives program associations', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ programId }),
     });
-    expect(linked.status).toBe(200);
+    expect(linked.status).toBe(201);
     expect(
       await json<{ initiativeId: string; programId: string; linked: boolean }>(linked),
     ).toEqual({ initiativeId: id, programId, linked: true });
@@ -975,7 +975,7 @@ describe('initiatives ownerId in-org validation', () => {
       headers: J,
       body: JSON.stringify({ name: 'Owned', ownerId }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect((await json<{ ownerId: string }>(res)).ownerId).toBe(ownerId);
   });
 
@@ -1176,7 +1176,7 @@ describe('initiatives overview edge cases', () => {
         childInitiativeId: assertDefined(foreignChild).id,
       }),
     });
-    expect(linked.status).toBe(200);
+    expect(linked.status).toBe(201);
 
     // Two genuine updates on the foreign child — only the latest surfaces.
     await db.insert(schema.update).values({
@@ -1384,7 +1384,7 @@ describe('initiatives aggregate — connected work dedup and cross-org filtering
             body: JSON.stringify({ programId: directWins }),
           })
         ).status,
-      ).toBe(200);
+      ).toBe(201);
     }
 
     const duplicateInherited = await mkProgram(orgId, humanActorId, 'Duplicate inherited');
@@ -1399,7 +1399,7 @@ describe('initiatives aggregate — connected work dedup and cross-org filtering
             body: JSON.stringify({ programId: duplicateInherited }),
           })
         ).status,
-      ).toBe(200);
+      ).toBe(201);
     }
 
     // The identical dedup logic is duplicated for projects — exercise both skip paths there too.
@@ -1413,7 +1413,7 @@ describe('initiatives aggregate — connected work dedup and cross-org filtering
             body: JSON.stringify({ projectId: directProject }),
           })
         ).status,
-      ).toBe(200);
+      ).toBe(201);
     }
     const duplicateInheritedProject = await seedProject(orgId, humanActorId, {
       name: 'Duplicate inherited project',
@@ -1427,7 +1427,7 @@ describe('initiatives aggregate — connected work dedup and cross-org filtering
             body: JSON.stringify({ projectId: duplicateInheritedProject }),
           })
         ).status,
-      ).toBe(200);
+      ).toBe(201);
     }
 
     const aggregate = await json<{

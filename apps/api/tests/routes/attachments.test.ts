@@ -129,7 +129,7 @@ describe('attachment routes', () => {
     const w = appWithActor(attachments, orgId, ['contribute'], humanActorId);
 
     const res = await createUrl(w, taskId);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const created = await body<AttachmentOut>(res);
     expect(created.kind).toBe('url');
     expect(created.subjectType).toBe('task');
@@ -248,7 +248,7 @@ describe('attachment routes', () => {
         externalId: 'thread_xyz',
       }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const created = await body<AttachmentOut>(res);
     expect(created.sourceIntegrationId).toBe(integrationRow.id);
   });

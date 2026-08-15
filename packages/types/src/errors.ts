@@ -34,6 +34,8 @@ export const ProblemCode = z
     'agent_plan_required',
     'domain_already_claimed',
     'public_name_taken',
+    'method_not_allowed',
+    'precondition_failed',
     'internal',
   ])
   .describe(
@@ -62,6 +64,8 @@ export const ProblemCode = z
       "- `billing_frozen` (HTTP 402): the org's billing lifecycle currently blocks writes (e.g. past-due/export-window) — reads still work.",
       '- `domain_already_claimed` (HTTP 409): the custom domain is already claimed by a workspace, so it cannot be claimed again — one host belongs to exactly one workspace.',
       '- `public_name_taken` (HTTP 409): the requested public name (a workspace name or a brief path) is already in use or is a reserved system name.',
+      '- `method_not_allowed` (HTTP 405): the path exists but does not support this method; the `Allow` response header lists the methods it does support.',
+      '- `precondition_failed` (HTTP 412): the `If-Match` entity tag did not match the current representation, so the write was refused to avoid overwriting a concurrent change — re-read the resource and retry against the new `ETag`.',
       '- `internal` (HTTP 500): an unexpected server error; safe to retry.',
     ].join('\n'),
   );
@@ -111,6 +115,8 @@ export const PUBLIC_PROBLEM_TITLES = {
   agent_plan_required: 'An active plan is required to use Athena.',
   domain_already_claimed: 'That domain is already claimed by a workspace.',
   public_name_taken: 'That name is already taken.',
+  method_not_allowed: 'That action is not available on this address.',
+  precondition_failed: 'Someone else changed this first.',
   internal: 'Something went wrong on our side.',
 } as const satisfies Record<ProblemCode, string>;
 
@@ -153,6 +159,8 @@ const PROBLEM_RECOVERY: Record<ProblemCode, ProblemRecovery> = {
   agent_plan_required: 'billing',
   domain_already_claimed: 'review',
   public_name_taken: 'review',
+  method_not_allowed: 'return',
+  precondition_failed: 'retry',
   internal: 'retry',
 };
 
@@ -181,6 +189,8 @@ const PROBLEM_STATUS: Record<ProblemCode, number> = {
   agent_plan_required: 402,
   domain_already_claimed: 409,
   public_name_taken: 409,
+  method_not_allowed: 405,
+  precondition_failed: 412,
   internal: 500,
 };
 

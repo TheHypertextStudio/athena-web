@@ -178,7 +178,7 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ prompt: 'plan outreach strategy' }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const body = (await res.json()) as {
       id: string;
       status: string;
@@ -231,7 +231,7 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ prompt: 'plan the launch roadmap' }),
       });
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(201);
       expect(spy).toHaveBeenCalledTimes(1);
       const firstMessage = spy.mock.calls[0]?.[0]?.messages[0];
       expect(firstMessage?.content).toContainEqual({
@@ -265,7 +265,7 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ prompt: 'do the thing', agentId: assertDefined(ag).id }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const body = (await res.json()) as { agentId: string };
     expect(body.agentId).toBe(assertDefined(ag).id);
     // No default agent was created — the explicit one was used.

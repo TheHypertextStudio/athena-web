@@ -108,6 +108,39 @@ export class ConflictError extends ApiError {
   }
 }
 
+/**
+ * 405 — the path exists but not for this method.
+ *
+ * @remarks
+ * Carries the methods the path *does* accept so {@link onError} can emit the `Allow` header
+ * RFC 9110 §15.5.6 requires on every 405. Without it a client learns only that its request
+ * failed, not which method would have worked.
+ */
+export class MethodNotAllowedError extends ApiError {
+  /** The methods this path accepts, for the `Allow` response header. */
+  readonly allow: readonly string[];
+
+  constructor(allow: readonly string[], message = 'Method not allowed') {
+    super(405, 'method_not_allowed', message);
+    this.allow = allow;
+  }
+}
+
+/**
+ * 412 — an `If-Match` entity tag did not match the resource's current state.
+ *
+ * @remarks
+ * The optimistic-concurrency refusal: the caller read a representation, someone else wrote,
+ * and applying this request would silently discard that write. Distinct from
+ * {@link ConflictError}, which is about the request disagreeing with domain state rather than
+ * with a version the caller was holding.
+ */
+export class PreconditionFailedError extends ApiError {
+  constructor(message = 'The resource changed since it was read') {
+    super(412, 'precondition_failed', message);
+  }
+}
+
 /** 409 — a dependency edge would create a cycle. */
 export class CycleError extends ApiError {
   constructor(message = 'Operation would create a dependency cycle') {
@@ -315,6 +348,7 @@ export function onError(err: Error, c: Context) {
   }
 
   c.header('Content-Type', 'application/problem+json');
+  if (apiErr instanceof MethodNotAllowedError) c.header('Allow', apiErr.allow.join(', '));
   return c.json(
     {
       type: problemTypeUrl(apiErr.code),

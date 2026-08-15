@@ -272,7 +272,7 @@ describe('lifecycle holds', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ reason: 'billing dispute' }),
     });
-    expect(placed.status).toBe(200);
+    expect(placed.status).toBe(201);
     const hold = await json<{ id: string; releasedAt: string | null }>(placed);
     expect(hold.releasedAt).toBeNull();
     expect(await auditCount('lifecycle_hold.placed', orgId)).toBe(1);
@@ -587,7 +587,7 @@ describe('impersonation', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ targetUserId: target, reason: 'support ticket #42', ttlMinutes: 30 }),
     });
-    expect(started.status).toBe(200);
+    expect(started.status).toBe(201);
     const sess = await json<{
       id: string;
       targetUserId: string;
@@ -619,7 +619,7 @@ describe('impersonation', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ targetUserId: target, reason: 'default ttl' }),
     });
-    expect(started.status).toBe(200);
+    expect(started.status).toBe(201);
     const sess = await json<{ expiresAt: string }>(started);
     expect(new Date(sess.expiresAt).getTime()).toBeGreaterThan(Date.now());
   });

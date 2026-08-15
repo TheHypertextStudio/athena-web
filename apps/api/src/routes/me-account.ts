@@ -26,7 +26,6 @@ import {
 } from '@docket/types';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
-import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import type { z } from 'zod';
 
 import { findOwnershipBlockers } from '../account/blockers';
@@ -36,7 +35,6 @@ import { exportScope, FULL_ACCOUNT_EXPORT_SCOPE } from '../account/export';
 import { cancelAccountDeletion, scheduleAccountDeletion } from '../account/lifecycle';
 import { getContainer } from '../container';
 import type { AppEnv, AuthSession } from '../context';
-import { env } from '../env';
 import {
   AuthError,
   ConflictError,
@@ -44,22 +42,12 @@ import {
   NotFoundError,
   ReauthRequiredError,
 } from '../error';
-import { ok } from '../lib/ok';
+import { accepted, created, memberUrl, ok } from '../lib/ok';
 import { one } from '../lib/one';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { deleteSettingsImage, storeSettingsImage } from '../lib/settings-image';
 import { zJson } from '../lib/validate';
 import { dispatchSystemUserNotification } from '../services/notifications/system';
-
-/** Like {@link ok} but with an explicit status (e.g. 201 Created, 202 Accepted). */
-function okWith<T extends z.ZodType>(
-  c: Context<AppEnv>,
-  schema: T,
-  data: z.input<T>,
-  status: ContentfulStatusCode,
-) {
-  return c.json(schema.parse(data), status);
-}
 
 /** Seconds a session stays "fresh" for high-risk actions (account deletion). */
 const FRESH_SESSION_MAX_AGE_S = 300;
@@ -348,7 +336,7 @@ Computed by scanning the caller's Hub deletion fields, recomputing ownership blo
           body: { html: email.html, text: email.text },
         });
       }
-      return okWith(c, AccountStatusOut, status, 202);
+      return accepted(c, AccountStatusOut, status);
     },
   )
   // Recover a scheduled deletion during its grace window (the inverse of DELETE /me/account).
@@ -434,9 +422,15 @@ This route only *records intent* — the actual archive generation runs in a cro
     async (c) => {
       const { user } = requireSession(c);
       const scope = await resolveExportScope(user.id, c.req.valid('json'));
-      const { export: created, created: isNew } = await enqueueExport(user.id, scope);
-      c.header('Location', `${env.API_URL}/v1/me/account/exports/${created.id}`);
-      return okWith(c, AccountExportOut, created, isNew ? 201 : 200);
+      const { export: job, created: isNew } = await enqueueExport(user.id, scope);
+      const location = memberUrl(c, job.id);
+      // A repeat request that found a pending job did not create anything, so it answers 200
+      // with the job that already exists rather than claiming a second one was made.
+      if (!isNew) {
+        c.header('Location', location);
+        return ok(c, AccountExportOut, job);
+      }
+      return created(c, AccountExportOut, job, location);
     },
   )
   .get(

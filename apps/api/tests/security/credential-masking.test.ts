@@ -166,7 +166,7 @@ describe('stored credential masking', () => {
       method: 'POST',
     });
     const createdText = await created.text();
-    expect(created.status, createdText).toBe(200);
+    expect(created.status, createdText).toBe(201);
     expect(createdText).not.toContain(PROBE_SECRET);
 
     // The connector really connected — this is a stored, healthy credential, not a dead row.
@@ -203,7 +203,7 @@ describe('stored credential masking', () => {
       method: 'POST',
     });
     const createdText = await created.text();
-    expect(created.status, createdText).toBe(200);
+    expect(created.status, createdText).toBe(201);
     expect(createdText).not.toContain(PROBE_SECRET);
 
     const listed = await app.request('/connections');
@@ -247,7 +247,7 @@ describe('stored credential masking', () => {
         headers: JSON_HEADERS,
         method: 'POST',
       });
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(201);
     } finally {
       for (const spy of spies) spy.mockRestore();
     }

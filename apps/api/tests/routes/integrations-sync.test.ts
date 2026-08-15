@@ -433,7 +433,7 @@ describe('onboarding connect + import (the exact path the connect step calls)', 
       headers: J,
       body: JSON.stringify({ provider, pattern: 'connector', roles: ['work'] }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     return body<IntegrationRes>(res);
   }
 
@@ -635,7 +635,7 @@ describe('integrations connect lifecycle (validate before connected)', () => {
         syncMode: 'mirror',
       }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const created = await body<IntegrationStateRes>(res);
     expect(created.status).toBe('pending');
   });

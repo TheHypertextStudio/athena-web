@@ -20,7 +20,7 @@ import { z } from 'zod';
 import { getContainer } from '../container';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zForm, zJson, zParam } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
@@ -134,6 +134,7 @@ export const attachmentRoutes = new Hono<AppEnv>()
   .post(
     '/:id/attachments',
     apiDoc({
+      status: 201,
       tag: 'Tasks',
       summary: 'Add a task attachment',
       capability: 'contribute',
@@ -188,7 +189,7 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       if (!row) throw new Error('attachment insert returned no row');
       await enqueueSearchUpsert(orgId, 'attachment', row.id);
       await enqueueSearchUpsert(orgId, 'task', id);
-      return ok(c, AttachmentOut, toOut(row));
+      return created(c, AttachmentOut, toOut(row));
     },
   )
   .post(

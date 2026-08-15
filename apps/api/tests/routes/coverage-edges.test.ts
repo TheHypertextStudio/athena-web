@@ -57,7 +57,7 @@ describe('agents: create with approvalPolicy + a patch omitting guidance', () =>
       headers: J,
       body: JSON.stringify({ displayName: 'Pol', approvalPolicy: 'autonomous' }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
   });
 
   it('patch sets connection only (every other field absent)', async () => {
@@ -173,7 +173,7 @@ describe('daily-plan: null timeboxes on create + a minimal patch', () => {
         timeboxEndsAt: null,
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const id = (await body<{ id: string }>(created)).id;
 
     // Patch with a single field (status) → other fields absent.

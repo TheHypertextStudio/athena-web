@@ -41,7 +41,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError, ValidationError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { loadStatusSets, terminalStampsFor, type ResolvedStatus } from '../lib/work-status';
@@ -243,6 +243,7 @@ const workStatuses = new Hono<AppEnv>()
     '/',
     capabilityGuard('manage'),
     apiDoc({
+      status: 201,
       tag: 'Statuses',
       summary: 'Add a status',
       capability: 'manage',
@@ -257,7 +258,7 @@ const workStatuses = new Hono<AppEnv>()
       const teamId = body.teamId ?? null;
       assertTeamScope(body.entityType, teamId);
 
-      const created = await db.transaction(async (tx) => {
+      const statusRow = await db.transaction(async (tx) => {
         const existing = await lockSet(tx, orgId, body.entityType, teamId);
         if (teamId !== null) {
           // A team-scoped status only means something inside a set the team already owns: written
@@ -294,8 +295,8 @@ const workStatuses = new Hono<AppEnv>()
         return inserted[0];
       });
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
-      if (!created) throw new Error('status insert returned no row');
-      return ok(c, WorkStatusOut, toOut(created));
+      if (!statusRow) throw new Error('status insert returned no row');
+      return created(c, WorkStatusOut, toOut(statusRow));
     },
   )
   .patch(

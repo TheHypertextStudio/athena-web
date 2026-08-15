@@ -189,7 +189,7 @@ describe('the batch proposal flow (import-shaped)', () => {
       headers: J,
       body: JSON.stringify({ prompt: 'Import my Sunsama backlog' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const session = (await created.json()) as { id: string; status: string };
     expect(session.status).toBe('awaiting_approval');
     expect(await orgTasks(seed.orgId)).toHaveLength(0);

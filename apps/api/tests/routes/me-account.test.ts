@@ -126,7 +126,10 @@ describe('POST /me/account/exports', () => {
       workspaces: [],
       allWorkspaces: false,
     });
-    expect(res.headers.get('location')).toContain(`/v1/me/account/exports/${created.id}`);
+    // The router is mounted bare here, so `Location` is derived against `/exports` rather than
+    // the `/v1/me/account/exports` it carries on the real server. `rest-conformance.test.ts`
+    // asserts the fully-prefixed header through the composed app.
+    expect(res.headers.get('location')).toContain(`/exports/${created.id}`);
 
     // A second request returns the existing pending export (200, no duplicate).
     const again = await app.request('/exports', {

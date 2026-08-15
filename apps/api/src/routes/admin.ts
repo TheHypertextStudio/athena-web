@@ -35,7 +35,7 @@ import {
 } from '../admin-dto';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { requireStaffRole, staffMiddleware } from '../permissions/staff-guard';
@@ -256,6 +256,7 @@ export function createAdminRoutes<
       .post(
         '/impersonations',
         apiDoc({
+          status: 201,
           tag: 'Admin',
           summary: 'Start an impersonation session',
           response: AdminImpersonationOut,
@@ -292,7 +293,7 @@ export function createAdminRoutes<
             reason,
             ttlMinutes,
           });
-          return ok(c, AdminImpersonationOut, toImpersonationOut(sess));
+          return created(c, AdminImpersonationOut, toImpersonationOut(sess));
         },
       )
       .post(

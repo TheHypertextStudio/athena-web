@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { AdminStaffListQuery, AdminStaffOut, AdminStaffPage, CreateStaffBody } from '../admin-dto';
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
@@ -57,6 +57,7 @@ export const adminStaffRoutes = new Hono<AppEnv>()
     '/',
     requireStaffRole('superadmin'),
     apiDoc({
+      status: 201,
       tag: 'Admin',
       summary: 'Grant staff access',
       response: AdminStaffOut,
@@ -95,7 +96,7 @@ export const adminStaffRoutes = new Hono<AppEnv>()
         targetUserId: userId,
         role,
       });
-      return ok(c, AdminStaffOut, toStaffOut(staff, u));
+      return created(c, AdminStaffOut, toStaffOut(staff, u));
     },
   )
   .delete(

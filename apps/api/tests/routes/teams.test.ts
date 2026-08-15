@@ -56,7 +56,7 @@ describe('teams router', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Engineering', key }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const team = await json<TeamBody>(created);
     expect(team.key).toBe(key);
     expect(team.triageEnabled).toBe(true); // default
@@ -130,7 +130,7 @@ describe('teams router', () => {
         workflowStates: [{ key: 'wip', name: 'WIP', type: 'started', position: 0 }],
       }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const team = await json<TeamBody>(created);
     expect(team.triageEnabled).toBe(false);
     expect(team.description).toBe('Design team');
@@ -146,7 +146,7 @@ describe('teams router', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'First', key }),
     });
-    expect(first.status).toBe(200);
+    expect(first.status).toBe(201);
     const dup = await writer.request('/', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -257,7 +257,7 @@ describe('teams router', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'AlsoOnlyA', key: createdInA.key }),
     });
-    expect(reuse.status).toBe(200);
+    expect(reuse.status).toBe(201);
   });
 
   it('403s on create/patch/delete for a view-only actor', async () => {
@@ -375,7 +375,7 @@ describe('teams router', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Comms Committee', key: uniqueKey() }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const teamId = (await json<TeamBody>(created)).id;
 
     expect(await shadow(teamId)).toEqual({

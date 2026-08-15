@@ -41,7 +41,7 @@ describe('Project resources', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: 'Campaign brief', url: 'https://example.com/brief' }),
     });
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(201);
     const resource = (await created.json()) as { id: string; subjectType: string; title: string };
     expect(resource).toMatchObject({ subjectType: 'project', title: 'Campaign brief' });
 

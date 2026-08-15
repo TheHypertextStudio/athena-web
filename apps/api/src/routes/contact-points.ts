@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError } from '../error';
-import { ok } from '../lib/ok';
+import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import type { NotificationContactPointService } from '../services/notifications/contact-point-service';
@@ -33,6 +33,7 @@ export function createContactPointRoutes(contactPoints: NotificationContactPoint
     .post(
       '/',
       apiDoc({
+        status: 201,
         tag: 'Me Contact Points',
         summary: 'Create a notification contact point',
         response: ContactPointOut,
@@ -42,7 +43,7 @@ export function createContactPointRoutes(contactPoints: NotificationContactPoint
       zJson(ContactPointCreate),
       async (c) => {
         const userId = requireUserId(c);
-        return ok(c, ContactPointOut, await contactPoints.create(userId, c.req.valid('json')));
+        return created(c, ContactPointOut, await contactPoints.create(userId, c.req.valid('json')));
       },
     )
     .post(

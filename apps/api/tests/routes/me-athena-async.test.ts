@@ -474,8 +474,12 @@ describe('personal Athena asynchronous acknowledgement', () => {
     const activityId = await seedProposedAction(sessionId, ws.orgId, 'Async approve target');
 
     const response = await appFor(assertDefined(owner).id).request(
-      `/sessions/${sessionId}/activity/${activityId}/approve`,
-      { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
+      `/sessions/${sessionId}/activity/${activityId}/decision`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'approved' }),
+      },
     );
 
     expect(response.status).toBe(202);
@@ -497,8 +501,12 @@ describe('personal Athena asynchronous acknowledgement', () => {
     const activityId = await seedProposedAction(sessionId, ws.orgId, 'Async reject target');
 
     const response = await appFor(assertDefined(owner).id).request(
-      `/sessions/${sessionId}/activity/${activityId}/reject`,
-      { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
+      `/sessions/${sessionId}/activity/${activityId}/decision`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'rejected' }),
+      },
     );
 
     expect(response.status).toBe(202);
@@ -521,11 +529,11 @@ describe('personal Athena asynchronous acknowledgement', () => {
     const second = await seedProposedAction(sessionId, ws.orgId, 'Second in group', groupId);
 
     const response = await appFor(assertDefined(owner).id).request(
-      `/sessions/${sessionId}/proposals/${groupId}/approve`,
+      `/sessions/${sessionId}/proposals/${groupId}/decision`,
       {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ decision: 'approved' }),
       },
     );
 
@@ -557,11 +565,11 @@ describe('personal Athena asynchronous acknowledgement', () => {
     await seedProposedAction(sessionId, ws.orgId, 'Only in group', groupId);
 
     const response = await appFor(assertDefined(owner).id).request(
-      `/sessions/${sessionId}/proposals/${groupId}/reject`,
+      `/sessions/${sessionId}/proposals/${groupId}/decision`,
       {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ decision: 'rejected' }),
       },
     );
 
@@ -580,11 +588,11 @@ describe('personal Athena asynchronous acknowledgement', () => {
     await seedProposedAction(sessionId, ws.orgId, 'Latest action');
 
     const response = await appFor(assertDefined(owner).id).request(
-      `/sessions/${sessionId}/approve`,
+      `/sessions/${sessionId}/decision`,
       {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify({ decision: 'approved' }),
       },
     );
 
@@ -603,11 +611,11 @@ describe('personal Athena asynchronous acknowledgement', () => {
     await seedProposedAction(sessionId, ws.orgId, 'Latest action to reject');
 
     const response = await appFor(assertDefined(owner).id).request(
-      `/sessions/${sessionId}/reject`,
+      `/sessions/${sessionId}/decision`,
       {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify({ decision: 'rejected' }),
       },
     );
 

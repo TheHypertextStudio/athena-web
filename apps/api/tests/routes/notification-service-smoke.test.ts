@@ -101,8 +101,10 @@ describe('notification service smoke', () => {
       subject: `[Test] ${subject}`,
     });
 
-    const approvedRes = await staffAdmin.request(`/notifications/${created.id}/approve`, {
-      method: 'POST',
+    const approvedRes = await staffAdmin.request(`/notifications/${created.id}/decision`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ decision: 'approved' }),
     });
     expect(approvedRes.status).toBe(200);
     expect(await json<{ id: string; status: string }>(approvedRes)).toMatchObject({

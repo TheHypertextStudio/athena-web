@@ -83,8 +83,8 @@ export function GhostProposals({ orgId, onApplied }: GhostProposalsProps): JSX.E
       setError(null);
       setPendingGroupId(groupId);
       try {
-        const res = await api.v1.orgs[':orgId'].sessions[':id'].proposals[':groupId'].approve.$post(
-          { param: { orgId, id: sessionId, groupId }, json: {} },
+        const res = await api.v1.orgs[':orgId'].sessions[':id'].proposals[':groupId'].decision.$put(
+          { param: { orgId, id: sessionId, groupId }, json: { decision: 'approved' } },
         );
         if (!res.ok) {
           setError(

@@ -339,6 +339,35 @@ export const TimeRecordStop = z
 /** Time-record-stop value. */
 export type TimeRecordStop = z.infer<typeof TimeRecordStop>;
 
+/**
+ * The state a Time Record's timer is being moved to.
+ *
+ * @remarks
+ * A record's timer is at any moment running, paused, or finished, and those are the only
+ * three values it takes — so the timer is a piece of state the caller sets, not three separate
+ * commands. `title` is only read on the way to `stopped`, where an unanchored record must
+ * finally name the task it is credited to.
+ */
+export const TimeRecordStatusUpdate = z
+  .object({
+    status: z
+      .enum(['running', 'paused', 'stopped'])
+      .describe('The timer state to move the record into.'),
+    title: z
+      .string()
+      .trim()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe('Names an unanchored record as it stops; ignored for the other states.'),
+  })
+  .meta({
+    id: 'TimeRecordStatusUpdate',
+    description: 'Move a Time Record’s timer between running, paused, and stopped.',
+  });
+/** Time-record-status value. */
+export type TimeRecordStatusUpdate = z.infer<typeof TimeRecordStatusUpdate>;
+
 /** Body for a deliberate historical/reconstructed interval. */
 export const TimeIntervalCreate = z
   .object({

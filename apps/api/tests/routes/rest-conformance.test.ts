@@ -110,6 +110,8 @@ const LEGACY_ACTION_PATHS: readonly string[] = [
   'POST /v1/notifications/:id/send',
   'POST /v1/notifications/:id/test',
   'POST /v1/me/notifications/:id/act',
+  'POST /v1/me/calendar/sync',
+  'POST /v1/orgs/:orgId/billing/lifecycle/reactivate',
   'POST /v1/orgs/:orgId/cycles/:id/backfill',
   'POST /v1/orgs/:orgId/cycles/:id/close',
   'POST /v1/orgs/:orgId/integrations/:id/import',
@@ -138,20 +140,6 @@ const LEGACY_ACTION_PATHS: readonly string[] = [
   'POST /admin/impersonations/:id/end',
   'POST /admin/orgs/:id/extend-trial',
   'POST /admin/orgs/:id/reactivate',
-];
-
-/**
- * `PUT` routes to a non-member path that genuinely replace everything at that path.
- *
- * @remarks
- * Correct, not grandfathered. `PUT` replaces the resource identified by the request URI, and
- * for these the request URI *is* the whole resource: a singleton settings document, or the
- * complete allocation set for one time record. Sending a smaller set deletes the rest, which
- * is exactly what `PUT` promises.
- */
-const WHOLE_RESOURCE_PUTS: readonly string[] = [
-  'PUT /v1/schedule-week/preferences',
-  'PUT /v1/time/records/:id/allocations',
 ];
 
 /**
@@ -187,6 +175,12 @@ const PARENT_READ_ONLY_MEMBERS: readonly string[] = [
 /** Segments that are path parameters rather than literals. */
 function isParam(segment: string): boolean {
   return segment.startsWith(':');
+}
+
+/** A path and every prefix of it, longest first. */
+function ancestors(path: string): string[] {
+  const segments = path.split('/').filter(Boolean);
+  return segments.map((_, i) => `/${segments.slice(0, segments.length - i).join('/')}`);
 }
 
 let endpoints: Endpoint[];
@@ -255,32 +249,38 @@ describe('URL design', () => {
 });
 
 describe('method semantics', () => {
-  it('sends PUT only to a member, a singleton, or a fully-replaced set', () => {
-    const accounted = [...WHOLE_RESOURCE_PUTS, ...LEGACY_MEMBER_UPSERT_PUTS];
+  it('never sends PUT to a collection, only to a member or a singleton', () => {
+    // A path is a collection when some other route addresses a member below it. That is read
+    // off the route table rather than guessed from pluralisation, so `/decision` and
+    // `/preferences` — singletons with no members — are correctly left alone, while `/grants`
+    // is caught because `DELETE /grants/:grantId` proves it has members.
+    const hasMembers = (path: string) =>
+      endpoints.some((o) => {
+        const rest = o.path.startsWith(`${path}/`) ? o.path.slice(path.length + 1) : null;
+        return rest !== null && isParam(rest);
+      });
     const offenders = endpoints
-      .filter((e) => e.method === 'PUT' && !isParam(e.path.split('/').filter(Boolean).at(-1) ?? ''))
+      .filter((e) => e.method === 'PUT' && hasMembers(e.path))
       .map((e) => `${e.method} ${e.path}`)
-      .filter((key) => !accounted.includes(key));
+      .filter((key) => !LEGACY_MEMBER_UPSERT_PUTS.includes(key));
 
     expect(offenders).toEqual([]);
   });
 
-  it('keeps every PUT classification tied to a route that still exists', () => {
+  it('keeps every collection-PUT exception tied to a route that still exists', () => {
     const live = new Set(endpoints.map((e) => `${e.method} ${e.path}`));
-    const stale = [...WHOLE_RESOURCE_PUTS, ...LEGACY_MEMBER_UPSERT_PUTS].filter(
-      (key) => !live.has(key),
-    );
 
-    expect(stale).toEqual([]);
+    expect(LEGACY_MEMBER_UPSERT_PUTS.filter((key) => !live.has(key))).toEqual([]);
   });
 
   it('gives every member path a reader, so nothing is write-only', () => {
     const readable = new Set(endpoints.filter((e) => e.method === 'GET').map((e) => e.path));
     const orphans = endpoints
       .filter((e) => e.method === 'PATCH' || e.method === 'PUT')
-      // A write implies the written state is readable — at the same address, or at the parent
-      // whose representation contains it when the facet has no standalone URL of its own.
-      .filter((e) => !readable.has(e.path) && !readable.has(e.path.replace(/\/[^/]+$/, '')))
+      // A write implies the written state is readable — at the same address, or at some
+      // ancestor whose representation contains it when the facet has no URL of its own. A
+      // session activity's decision, for instance, is read back through the activity list.
+      .filter((e) => !ancestors(e.path).some((path) => readable.has(path)))
       .map((e) => `${e.method} ${e.path}`)
       .filter((key) => !PARENT_READ_ONLY_MEMBERS.includes(key));
 

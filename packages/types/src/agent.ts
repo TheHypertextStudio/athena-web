@@ -636,8 +636,31 @@ export type SessionApprovalDecision = z.infer<typeof SessionApprovalDecision>;
  * 40 tasks"). `activityIds` narrows the decision to a subset ("approve selected");
  * omitted means the whole group.
  */
+/**
+ * The two answers a reviewer can give a gated action.
+ *
+ * @remarks
+ * One vocabulary for every level a decision can be made at — a single activity, a proposal
+ * group, or a whole session — so a client that renders an approve/reject control does not
+ * have to know which of the three it is talking to.
+ */
+export const ApprovalDecision = z
+  .enum(['approved', 'rejected'])
+  .describe('A reviewer’s answer to a gated action.')
+  .meta({ id: 'ApprovalDecision', description: 'Approve or reject a gated action.' });
+/** Approval-decision value. */
+export type ApprovalDecision = z.infer<typeof ApprovalDecision>;
+
+/** A decision recorded against one gated activity or a whole session. */
+export const ApprovalDecisionBody = z
+  .object({ decision: ApprovalDecision })
+  .meta({ id: 'ApprovalDecisionBody', description: 'A reviewer decision on a gated action.' });
+/** Approval-decision body value. */
+export type ApprovalDecisionBody = z.infer<typeof ApprovalDecisionBody>;
+
 export const ProposalGroupDecision = z
   .object({
+    decision: ApprovalDecision.describe('Whether the named actions are approved or rejected.'),
     activityIds: z
       .array(SessionActivityId)
       .optional()

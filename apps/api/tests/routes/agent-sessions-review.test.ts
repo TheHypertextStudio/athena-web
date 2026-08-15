@@ -68,6 +68,20 @@ function post(app: ReturnType<typeof appFor>, path: string, body: unknown = {}) 
   });
 }
 
+/** `PUT` a decision to an approval resource — the session, a proposal group, or one activity. */
+function decide(
+  app: ReturnType<typeof appFor>,
+  path: string,
+  decision: 'approved' | 'rejected',
+  extra: Record<string, unknown> = {},
+) {
+  return app.request(path, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ decision, ...extra }),
+  });
+}
+
 beforeAll(async () => {
   const dbmod = await getMigratedDb();
   schema = dbmod;
@@ -221,7 +235,7 @@ describe('GET /:id/activity', () => {
   });
 });
 
-describe('POST /:id/activity/:activityId/approve', () => {
+describe('PUT /:id/activity/:activityId/decision — approving', () => {
   it('requires assign (403 for a contribute-only member)', async () => {
     const s = await seedOrg();
     const sessionId = await seedSession(s, 'awaiting_approval');
@@ -231,7 +245,7 @@ describe('POST /:id/activity/:activityId/approve', () => {
       approvalStatus: 'proposed',
     });
     const app = appFor(s.orgId, ['contribute']);
-    const res = await post(app, `/${sessionId}/activity/${activityId}/approve`);
+    const res = await decide(app, `/${sessionId}/activity/${activityId}/decision`, 'approved');
     expect(res.status).toBe(403);
   });
 
@@ -245,7 +259,7 @@ describe('POST /:id/activity/:activityId/approve', () => {
     });
     const app = appFor(s.orgId, ['assign'], s.humanActorId);
 
-    const res = await post(app, `/${sessionId}/activity/${activityId}/approve`);
+    const res = await decide(app, `/${sessionId}/activity/${activityId}/decision`, 'approved');
     expect(res.status).toBe(200);
     const json = (await res.json()) as { id: string; approvalStatus: string };
     expect(json.approvalStatus).toBe('applied');
@@ -285,7 +299,7 @@ describe('POST /:id/activity/:activityId/approve', () => {
     });
     const app = appFor(s.orgId, ['assign'], s.humanActorId);
 
-    const res = await post(app, `/${sessionId}/activity/${first}/approve`, {
+    const res = await decide(app, `/${sessionId}/activity/${first}/decision`, 'approved', {
       scope: 'all_in_session',
     });
     expect(res.status).toBe(200);
@@ -312,7 +326,7 @@ describe('POST /:id/activity/:activityId/approve', () => {
       body: { text: 'just thinking' },
     });
     const app = appFor(s.orgId, ['assign']);
-    const res = await post(app, `/${sessionId}/activity/${thoughtId}/approve`);
+    const res = await decide(app, `/${sessionId}/activity/${thoughtId}/decision`, 'approved');
     expect(res.status).toBe(409);
   });
 
@@ -326,19 +340,19 @@ describe('POST /:id/activity/:activityId/approve', () => {
       approvalStatus: 'proposed',
     });
     const app = appFor(s.orgId, ['assign']);
-    const res = await post(app, `/${sessionId}/activity/${otherActivity}/approve`);
+    const res = await decide(app, `/${sessionId}/activity/${otherActivity}/decision`, 'approved');
     expect(res.status).toBe(404);
   });
 
   it('404s for an unknown session', async () => {
     const s = await seedOrg();
     const app = appFor(s.orgId, ['assign']);
-    const res = await post(app, `/sess_missing/activity/act_missing/approve`);
+    const res = await decide(app, `/sess_missing/activity/act_missing/decision`, 'approved');
     expect(res.status).toBe(404);
   });
 });
 
-describe('POST /:id/activity/:activityId/reject', () => {
+describe('PUT /:id/activity/:activityId/decision — rejecting', () => {
   it('rejects the action, writes a rejected audit event, and returns the session to running', async () => {
     const s = await seedOrg();
     const sessionId = await seedSession(s, 'awaiting_approval');
@@ -349,7 +363,7 @@ describe('POST /:id/activity/:activityId/reject', () => {
     });
     const app = appFor(s.orgId, ['assign'], s.humanActorId);
 
-    const res = await post(app, `/${sessionId}/activity/${activityId}/reject`);
+    const res = await decide(app, `/${sessionId}/activity/${activityId}/decision`, 'rejected');
     expect(res.status).toBe(200);
     expect(((await res.json()) as { approvalStatus: string }).approvalStatus).toBe('rejected');
 
@@ -376,7 +390,7 @@ describe('POST /:id/activity/:activityId/reject', () => {
       approvalStatus: 'proposed',
     });
     const app = appFor(s.orgId, ['view']);
-    const res = await post(app, `/${sessionId}/activity/${activityId}/reject`);
+    const res = await decide(app, `/${sessionId}/activity/${activityId}/decision`, 'rejected');
     expect(res.status).toBe(403);
   });
 });

@@ -142,15 +142,10 @@ export const personalAthenaTransport: PersonalAthenaTransport = {
             param,
             json: { body: input?.body ?? '' },
           })
-        : decision === 'reject'
-          ? await api.v1.me.athena.sessions[':id'].activity[':activityId'].reject.$post({
-              param,
-              json: {},
-            })
-          : await api.v1.me.athena.sessions[':id'].activity[':activityId'].approve.$post({
-              param,
-              json: {},
-            });
+        : await api.v1.me.athena.sessions[':id'].activity[':activityId'].decision.$put({
+            param,
+            json: { decision: decision === 'reject' ? 'rejected' : 'approved' },
+          });
     if (!response.ok) return rpcErrorResponse(response);
     return detailRequest(sessionId);
   },

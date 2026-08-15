@@ -221,10 +221,11 @@ describe('the batch proposal flow (import-shaped)', () => {
     expect(patched.status).toBe(200);
 
     // 4) Approve a subset: two land, one stays proposed, the session stays parked.
-    const subset = await app.request(`/${session.id}/proposals/${group.proposalGroupId}/approve`, {
-      method: 'POST',
+    const subset = await app.request(`/${session.id}/proposals/${group.proposalGroupId}/decision`, {
+      method: 'PUT',
       headers: J,
       body: JSON.stringify({
+        decision: 'approved',
         activityIds: [
           assertDefined(group.items[0]).activityId,
           assertDefined(group.items[1]).activityId,
@@ -239,10 +240,10 @@ describe('the batch proposal flow (import-shaped)', () => {
     ]);
 
     // 5) Approve the remainder: the EDITED input executes and the session completes.
-    const rest = await app.request(`/${session.id}/proposals/${group.proposalGroupId}/approve`, {
-      method: 'POST',
+    const rest = await app.request(`/${session.id}/proposals/${group.proposalGroupId}/decision`, {
+      method: 'PUT',
       headers: J,
-      body: JSON.stringify({}),
+      body: JSON.stringify({ decision: 'approved' }),
     });
     expect(rest.status).toBe(200);
     expect(((await rest.json()) as { status: string }).status).toBe('completed');
@@ -266,8 +267,12 @@ describe('the batch proposal flow (import-shaped)', () => {
     const groups = (await listed.json()) as ProposalGroupOut[];
 
     const rejected = await app.request(
-      `/${session.id}/proposals/${assertDefined(groups[0]).proposalGroupId}/reject`,
-      { method: 'POST', headers: J, body: JSON.stringify({}) },
+      `/${session.id}/proposals/${assertDefined(groups[0]).proposalGroupId}/decision`,
+      {
+        method: 'PUT',
+        headers: J,
+        body: JSON.stringify({ decision: 'rejected' }),
+      },
     );
     expect(rejected.status).toBe(200);
     // Reject-and-continue: the agent hears three vetoes and finishes without retrying.
@@ -285,10 +290,10 @@ describe('the batch proposal flow (import-shaped)', () => {
       body: JSON.stringify({ prompt: 'Import my Sunsama backlog' }),
     });
     const session = (await created.json()) as { id: string };
-    const res = await app.request(`/${session.id}/proposals/does-not-exist/approve`, {
-      method: 'POST',
+    const res = await app.request(`/${session.id}/proposals/does-not-exist/decision`, {
+      method: 'PUT',
       headers: J,
-      body: JSON.stringify({}),
+      body: JSON.stringify({ decision: 'approved' }),
     });
     expect(res.status).toBe(404);
   });
@@ -307,10 +312,10 @@ describe('the batch proposal flow (import-shaped)', () => {
       await app.request(`/${session.id}/proposals`, { method: 'GET' })
     ).json()) as ProposalGroupOut[];
     const group = assertDefined(groups[0]);
-    await app.request(`/${session.id}/proposals/${group.proposalGroupId}/approve`, {
-      method: 'POST',
+    await app.request(`/${session.id}/proposals/${group.proposalGroupId}/decision`, {
+      method: 'PUT',
       headers: J,
-      body: JSON.stringify({}),
+      body: JSON.stringify({ decision: 'approved' }),
     });
 
     const res = await app.request(
@@ -336,11 +341,11 @@ describe('SSE live tail', () => {
       await app.request(`/${session.id}/proposals`, { method: 'GET' })
     ).json()) as ProposalGroupOut[];
     await app.request(
-      `/${session.id}/proposals/${assertDefined(groups[0]).proposalGroupId}/approve`,
+      `/${session.id}/proposals/${assertDefined(groups[0]).proposalGroupId}/decision`,
       {
-        method: 'POST',
+        method: 'PUT',
         headers: J,
-        body: JSON.stringify({}),
+        body: JSON.stringify({ decision: 'approved' }),
       },
     );
 

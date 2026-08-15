@@ -191,7 +191,10 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
       try {
         const res = await api.v1.orgs[':orgId'].sessions[':id'].activity[
           ':activityId'
-        ].approve.$post({ param: { orgId, id: sessionId, activityId }, json: {} });
+        ].decision.$put({
+          param: { orgId, id: sessionId, activityId },
+          json: { decision: 'approved' },
+        });
         if (!res.ok) {
           setActionError(
             userErrorMessage(
@@ -218,7 +221,10 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
       try {
         const res = await api.v1.orgs[':orgId'].sessions[':id'].activity[
           ':activityId'
-        ].reject.$post({ param: { orgId, id: sessionId, activityId }, json: {} });
+        ].decision.$put({
+          param: { orgId, id: sessionId, activityId },
+          json: { decision: 'rejected' },
+        });
         if (!res.ok) {
           setActionError(
             userErrorMessage(
@@ -318,17 +324,15 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
       setControlPending(true);
       try {
         const param = { orgId, id: sessionId, groupId };
-        const json = activityIds ? { activityIds: [...activityIds] } : {};
-        const res =
-          decision === 'approve'
-            ? await api.v1.orgs[':orgId'].sessions[':id'].proposals[':groupId'].approve.$post({
-                param,
-                json,
-              })
-            : await api.v1.orgs[':orgId'].sessions[':id'].proposals[':groupId'].reject.$post({
-                param,
-                json,
-              });
+        const res = await api.v1.orgs[':orgId'].sessions[':id'].proposals[':groupId'].decision.$put(
+          {
+            param,
+            json: {
+              decision: decision === 'approve' ? 'approved' : 'rejected',
+              ...(activityIds ? { activityIds: [...activityIds] } : {}),
+            },
+          },
+        );
         if (!res.ok) {
           setActionError(
             userErrorMessage(

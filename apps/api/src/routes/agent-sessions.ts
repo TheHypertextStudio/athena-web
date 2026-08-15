@@ -5,6 +5,8 @@ import {
   AgentSessionOut,
   pageOf,
   ProposalEditBody,
+  ApprovalDecision,
+  ApprovalDecisionBody,
   ProposalGroupDecision,
   ProposalGroupOut,
   SessionActivityOut,
@@ -13,7 +15,6 @@ import {
 } from '@docket/types';
 import { and, asc, desc, eq, gt } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 
@@ -25,7 +26,7 @@ import {
 } from '../agent/async-runner';
 import type { AppEnv } from '../context';
 import { ConflictError } from '../error';
-import { created, ok } from '../lib/ok';
+import { accepted, created, ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
@@ -118,10 +119,22 @@ const STREAM_HEARTBEAT_MS = 15_000;
 /** Route params for the proposal-group routes. */
 const groupParam = z.object({ id: z.string(), groupId: z.string() });
 
-/** Validate and return an asynchronous mutation acknowledgement. */
-function accepted<T extends z.ZodType>(c: Context<AppEnv>, schema: T, data: z.input<T>) {
-  return c.json(schema.parse(data), 202);
-}
+/**
+ * A decision on one gated activity, optionally widened to the whole session.
+ *
+ * @remarks
+ * Local rather than shared: `scope` only means something where activities are decided one at
+ * a time, and the group and session decisions carry their own breadth in the URL instead.
+ */
+const ActivityDecisionBody = z
+  .object({
+    decision: ApprovalDecision,
+    scope: z
+      .enum(['this', 'all_in_session'])
+      .optional()
+      .describe('Apply the decision to just this activity (default) or every proposed one.'),
+  })
+  .meta({ id: 'ActivityDecisionBody', description: 'A decision on one gated session activity.' });
 
 /** Load the latest still-proposed action for a session-level compatibility decision. */
 async function latestProposedAction(
@@ -164,7 +177,7 @@ const agentSessions = new Hono<AppEnv>()
     '/',
     capabilityGuard('contribute'),
     apiDoc({
-      status: 202,
+      status: [201, 202],
       tag: 'Agents',
       summary: 'Start an agent session from a prompt',
       capability: 'contribute',
@@ -305,7 +318,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
   .post(
     '/:id/run',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Agents',
       summary: 'Run an agent session',
       response: AgentSessionOut,
@@ -430,24 +443,31 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
       return ok(c, z.array(ProposalGroupOut), groups);
     },
   )
-  .post(
-    '/:id/proposals/:groupId/approve',
+  .put(
+    '/:id/proposals/:groupId/decision',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Agents',
-      summary: 'Approve a proposal group (batch)',
+      summary: 'Decide a proposal group (batch)',
       response: AgentSessionOut,
-      description: `Approve every still-\`proposed\` action of one proposal group — or the subset named by \`activityIds\` — then execute each stored tool call through the persisted executor and resume the session. Athena requires its authenticated owner and re-resolves that owner's current human Actor and permissions for every call; registered-agent work requires \`assign\`. Approval never supplies missing authority. Execution stores the real result and returns the session after any resume.`,
+      description: `Record one decision across every still-\`proposed\` action of a proposal group — or the subset named by \`activityIds\` — and return the {@link AgentSessionOut} after any resume.
+
+\`decision: "approved"\` executes each stored tool call through the persisted executor and resumes the session. Approval never supplies missing authority: Athena requires its authenticated owner and re-resolves that owner's current human Actor and permissions for every call, and registered-agent work requires \`assign\`. Execution stores the real result.
+
+\`decision: "rejected"\` executes nothing and writes a per-action \`rejected\` audit row, in one transaction. The session still resumes — reject-and-continue — so the agent hears each veto as an error result and adapts rather than being canceled. 404 when the group has no proposed member.
+
+Answers **202** when Athena's durable runner takes the work rather than finishing inline; the body is the same session either way, and the difference is only how much has already happened. A group carries one disposition, which is why this is a \`PUT\` to the decision rather than a \`POST\` to a verb.`,
     }),
     zParam(groupParam),
-    zJson(ProposalGroupDecision.optional()),
+    zJson(ProposalGroupDecision),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, groupId } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'assign');
-      const body = c.req.valid('json');
+      const { decision, activityIds } = c.req.valid('json');
+      const verdict = decision === 'approved' ? 'approve' : 'reject';
       if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
-        await decideProposalGroup(orgId, null, id, groupId, 'approve', body?.activityIds, {
+        await decideProposalGroup(orgId, null, id, groupId, verdict, activityIds, {
           queueWake: true,
         });
         await wakeWaitingAthenaGeneration(id);
@@ -459,43 +479,8 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
         actorId,
         id,
         groupId,
-        'approve',
-        body?.activityIds,
-      );
-      return ok(c, AgentSessionOut, toSessionOut(settled));
-    },
-  )
-  .post(
-    '/:id/proposals/:groupId/reject',
-    apiDoc({
-      status: 202,
-      tag: 'Agents',
-      summary: 'Reject a proposal group (batch)',
-      response: AgentSessionOut,
-      description: `Reject every still-\`proposed\` action of one proposal group (or the \`activityIds\` subset) in one transaction. Nothing executes; per-action \`rejected\` audit rows are written, and — reject-and-continue — the session resumes so the agent hears each veto as an error result and adapts instead of being canceled. Athena requires its authenticated owner; registered-agent work requires \`assign\`. Returns the {@link AgentSessionOut} after any resume. 404 when the group has no proposed member.`,
-    }),
-    zParam(groupParam),
-    zJson(ProposalGroupDecision.optional()),
-    async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
-      const { id, groupId } = c.req.valid('param');
-      const { session } = await loadSessionAccess(c, id, 'assign');
-      const body = c.req.valid('json');
-      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
-        await decideProposalGroup(orgId, null, id, groupId, 'reject', body?.activityIds, {
-          queueWake: true,
-        });
-        await wakeWaitingAthenaGeneration(id);
-        const { session: current } = await loadSessionAccess(c, id, 'assign');
-        return accepted(c, AgentSessionOut, toSessionOut(current));
-      }
-      const settled = await approveGroupAndResume(
-        orgId,
-        actorId,
-        id,
-        groupId,
-        'reject',
-        body?.activityIds,
+        verdict,
+        activityIds,
       );
       return ok(c, AgentSessionOut, toSessionOut(settled));
     },
@@ -546,66 +531,33 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
       return ok(c, pageOf(SessionActivityOut), { items: activities.map(toActivityOut) });
     },
   )
-  .post(
-    '/:id/activity/:activityId/approve',
+  .put(
+    '/:id/activity/:activityId/decision',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Agents',
-      summary: 'Approve a gated session activity',
+      summary: 'Decide a gated session activity',
       response: SessionActivityOut,
-      description: `Approve a single gated \`action\` the agent has proposed, clearing the approval gate so the mutation may apply. Returns the decided {@link SessionActivityOut} (the one named by \`:activityId\`), now \`applied\`. The target must belong to this org-scoped session, be \`type='action'\`, and currently be \`proposed\` — otherwise 404 (\`Activity not found\` / \`Session not found\`) or 409 (\`Activity is not a proposed action\`).
+      description: `Decide a single gated \`action\` the agent has proposed, and return the decided {@link SessionActivityOut} named by \`:activityId\`.
 
-Side effects (transactional): the activity advances \`proposed → applied\` (the gate's terminal applied state) and an \`audit_event\` (\`type='approved'\`, \`subjectType='agent_session'\`) is written with the **agent's** Actor as \`actorId\`, the session \`initiatorId\` as \`initiatorId\`, and the approved activity id + approver recorded in \`metadata\` — so the feed always shows both who acted (the agent) and who authorized it. Pass body \`{ scope: 'all_in_session' }\` to approve every still-\`proposed\` action in the session in one transaction (default \`{ scope: 'this' }\`, just the target). Once no proposed action remains, the session advances from \`awaiting_approval\` back to \`running\` so the agent can continue.
+\`decision: "approved"\` clears the gate so the mutation may apply, advancing the activity \`proposed → applied\`. \`decision: "rejected"\` leaves it \`rejected\` and the mutation is **never applied**. Either way an \`audit_event\` (\`type='approved'\`/\`'rejected'\`, \`subjectType='agent_session'\`) is written in the same transaction, attributing the **agent's** Actor as \`actorId\`, the session \`initiatorId\` as \`initiatorId\`, and the deciding approver in \`metadata\` — so the feed always shows both who acted and who authorized it.
 
-Athena approval requires the authenticated owner; registered-agent approval requires \`assign\`. The stored tool still rechecks the Athena owner's current permissions when it executes. Related: \`/reject\` (deny), \`/reply\` (answer an elicitation instead of a gated action), and the session-level \`POST /:id/approve\` shortcut.`,
+The two decisions differ in what happens to the run once no proposed action remains: an approval returns the session from \`awaiting_approval\` to \`running\` so the agent continues, while a rejection moves it to \`canceled\` and stamps \`endedAt\`.
+
+Pass \`scope: "all_in_session"\` to apply the same decision to every still-\`proposed\` action in the session in one transaction; the default \`"this"\` decides only the target. The target must belong to this org-scoped session, be \`type='action'\`, and currently be \`proposed\` — otherwise 404 (\`Activity not found\` / \`Session not found\`) or 409 (\`Activity is not a proposed action\`).
+
+Athena decisions require the authenticated owner; registered-agent decisions require \`assign\`. Approval never supplies missing authority — the stored tool rechecks the Athena owner's current permissions when it executes. Answers **202** when the durable runner takes the work rather than finishing inline. Related: \`/reply\` (answer an elicitation rather than a gated action) and the session-level \`PUT /:id/decision\`.`,
     }),
     zParam(activityParam),
-    zJson(z.object({ scope: z.enum(['this', 'all_in_session']).optional() }).optional()),
+    zJson(ActivityDecisionBody),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
       const decision = {
-        decision: 'approve',
-        ...(body?.scope ? { scope: body.scope } : {}),
-      } as const;
-      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
-        await decideActivity(orgId, null, id, activityId, decision, { queueWake: true });
-        await wakeWaitingAthenaGeneration(id);
-        const updated = await loadActivity(id, activityId);
-        await enqueueSearchUpsert(orgId, 'agent_session', id);
-        return accepted(c, SessionActivityOut, toActivityOut(updated));
-      }
-      await approveAndResume(orgId, actorId, id, activityId, decision);
-      const updated = await loadActivity(id, activityId);
-      await enqueueSearchUpsert(orgId, 'agent_session', id);
-      return ok(c, SessionActivityOut, toActivityOut(updated));
-    },
-  )
-  .post(
-    '/:id/activity/:activityId/reject',
-    apiDoc({
-      status: 202,
-      tag: 'Agents',
-      summary: 'Reject a gated session activity',
-      response: SessionActivityOut,
-      description: `Reject a single gated \`action\` the agent has proposed, so the mutation is **never applied**. Returns the decided {@link SessionActivityOut} (named by \`:activityId\`), now \`rejected\`. Same preconditions as approve: the target must belong to the org-scoped session, be \`type='action'\`, and be \`proposed\` (else 404 or 409 \`Activity is not a proposed action\`).
-
-Side effects (transactional): the activity becomes \`rejected\` (no apply) and a \`type='rejected'\` \`audit_event\` is written attributing the agent as \`actorId\`, the session \`initiatorId\`, and the rejecting approver in \`metadata\`. Pass \`{ scope: 'all_in_session' }\` to reject every still-\`proposed\` action at once (default \`{ scope: 'this' }\`). When no proposed action remains after a rejection, the session is moved to \`canceled\` (stamping \`endedAt\`) — a rejection ends the run rather than resuming it.
-
-Athena rejection requires the authenticated owner; registered-agent rejection requires \`assign\`. Related: \`/approve\` (allow), \`/reply\` (answer an elicitation), and the session-level \`POST /:id/reject\` shortcut.`,
-    }),
-    zParam(activityParam),
-    zJson(z.object({ scope: z.enum(['this', 'all_in_session']).optional() }).optional()),
-    async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
-      const { id, activityId } = c.req.valid('param');
-      const { session } = await loadSessionAccess(c, id, 'assign');
-      const body = c.req.valid('json');
-      const decision = {
-        decision: 'reject',
-        ...(body?.scope ? { scope: body.scope } : {}),
+        decision: body.decision === 'approved' ? 'approve' : 'reject',
+        ...(body.scope ? { scope: body.scope } : {}),
       } as const;
       if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
         await decideActivity(orgId, null, id, activityId, decision, { queueWake: true });
@@ -623,7 +575,7 @@ Athena rejection requires the authenticated owner; registered-agent rejection re
   .post(
     '/:id/activity/:activityId/reply',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Agents',
       summary: 'Reply to a session elicitation',
       response: SessionActivityOut,
@@ -683,7 +635,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
   .post(
     '/:id/resume',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Agents',
       summary: 'Resume an agent session',
       response: AgentSessionOut,
@@ -712,7 +664,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
   .post(
     '/:id/cancel',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Agents',
       summary: 'Cancel an agent session',
       response: AgentSessionOut,
@@ -741,26 +693,32 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
   )
-  .post(
+  .put(
     // Athena decisions belong only to the authenticated owner; conventional registered-agent
-    // decisions retain the assign-level compatibility policy.
-    '/:id/approve',
+    // decisions retain the assign-level compatibility policy. This is the coarse shortcut —
+    // see `/:id/activity/:activityId/decision` for the precise form.
+    '/:id/decision',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Agents',
-      summary: 'Approve a session-level proposed action',
+      summary: 'Decide a session’s latest proposed action',
       response: AgentSessionOut,
-      description: `Legacy session-level approval shortcut: approve the session's **latest** \`proposed\` action and move the session forward, returning the updated {@link AgentSessionOut}. Unlike the activity-scoped \`/activity/:activityId/approve\`, this does not name a specific activity — it flips the most recent proposed action to \`approved\` and transitions the session from \`awaiting_approval\` to \`running\`. The session must be \`awaiting_approval\` (else 409 \`Session is not awaiting approval\`) with a proposed action present (else 409 \`No proposed action awaiting approval\`); a missing/cross-tenant id 404. The body is an empty object.
+      description: `Decide the session's **latest** \`proposed\` action without naming it, and return the updated {@link AgentSessionOut}. This is the coarse shortcut: unlike \`PUT /:id/activity/:activityId/decision\` it does not identify which activity it decided, so it records less and cannot narrow scope.
 
-Athena requires its authenticated owner and reauthorizes the stored tool with that owner's current permissions; registered-agent work requires \`assign\`. Prefer the activity-scoped \`/activity/:activityId/approve\` for richer audit data and scope control. Related: \`POST /:id/reject\`.`,
+\`decision: "approved"\` flips that action to approved and moves the session from \`awaiting_approval\` back to \`running\`. \`decision: "rejected"\` moves the session to \`canceled\` and stamps \`endedAt\` — at this level a rejection ends the run rather than letting the agent adapt.
+
+The session must be \`awaiting_approval\` (else 409 \`Session is not awaiting approval\`) with a proposed action present (else 409 \`No proposed action awaiting approval\`); a missing or cross-tenant id 404s.
+
+Athena requires its authenticated owner and reauthorizes the stored tool with that owner's current permissions; registered-agent work requires \`assign\`. Answers **202** when the durable runner takes the work rather than finishing inline. Prefer the activity-scoped decision for richer audit data and scope control.`,
     }),
     zParam(idParam),
-    zJson(z.object({})),
+    zJson(ApprovalDecisionBody),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const { actorId } = c.get('actorCtx');
+      const { decision } = c.req.valid('json');
       const { session } = await loadSessionAccess(c, id, 'assign');
+      const approving = decision === 'approved';
       if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
         const action = await latestProposedAction(id);
         await decideActivity(
@@ -768,53 +726,17 @@ Athena requires its authenticated owner and reauthorizes the stored tool with th
           null,
           id,
           action.id,
-          { decision: 'approve' },
-          { queueWake: true },
+          { decision: approving ? 'approve' : 'reject' },
+          { queueWake: true, ...(approving ? {} : { cancelSession: true }) },
         );
         await wakeWaitingAthenaGeneration(id);
         const { session: current } = await loadSessionAccess(c, id, 'assign');
         await enqueueSearchUpsert(orgId, 'agent_session', current.id);
         return accepted(c, AgentSessionOut, toSessionOut(current));
       }
-      const updated = await approveLatestAndResume(orgId, actorId, id);
-      await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
-      return ok(c, AgentSessionOut, toSessionOut(updated));
-    },
-  )
-  .post(
-    // See `/:id/approve` for the executor-specific decision policy.
-    '/:id/reject',
-    apiDoc({
-      status: 202,
-      tag: 'Agents',
-      summary: 'Reject a session-level proposed action',
-      response: AgentSessionOut,
-      description: `Legacy session-level rejection shortcut: reject the session's **latest** \`proposed\` action and move the session to \`canceled\` (stamping \`endedAt\`), returning the updated {@link AgentSessionOut}. The session must be \`awaiting_approval\` (else 409 \`Session is not awaiting approval\`) with a proposed action present (else 409 \`No proposed action awaiting approval\`); a missing/cross-tenant id 404. The body is an empty object.
-
-Athena requires its authenticated owner; registered-agent work requires \`assign\`. Prefer the activity-scoped \`/activity/:activityId/reject\` for richer audit data and scope control. Related: \`POST /:id/approve\`.`,
-    }),
-    zParam(idParam),
-    zJson(z.object({})),
-    async (c) => {
-      const { orgId } = c.get('actorCtx');
-      const { id } = c.req.valid('param');
-      const { session } = await loadSessionAccess(c, id, 'assign');
-      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
-        const action = await latestProposedAction(id);
-        await decideActivity(
-          orgId,
-          null,
-          id,
-          action.id,
-          { decision: 'reject' },
-          { queueWake: true, cancelSession: true },
-        );
-        const { session: updated } = await loadSessionAccess(c, id, 'assign');
-        await wakeWaitingAthenaGeneration(id);
-        await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
-        return accepted(c, AgentSessionOut, toSessionOut(updated));
-      }
-      const updated = await resolveAction(orgId, id, 'rejected');
+      const updated = approving
+        ? await approveLatestAndResume(orgId, actorId, id)
+        : await resolveAction(orgId, id, 'rejected');
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },

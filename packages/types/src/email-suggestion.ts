@@ -114,12 +114,24 @@ export const SuggestionAcceptBody = z
 /** Accept-body value. */
 export type SuggestionAcceptBody = z.infer<typeof SuggestionAcceptBody>;
 
-/** Acknowledgement returned when a suggestion is dismissed. */
-export const SuggestionDismissed = z
+/**
+ * The decision a person records on a pending suggestion.
+ *
+ * @remarks
+ * One body for both outcomes, because they are one decision with two answers rather than two
+ * operations. `overrides` is only meaningful alongside `accepted` — there is no draft to
+ * correct on the way to a dismissal — and is ignored otherwise.
+ */
+export const SuggestionDisposition = z
   .object({
-    id: EmailSuggestionId,
-    status: z.literal('dismissed'),
+    decision: z.enum(['accepted', 'dismissed']).describe('What the reviewer decided.'),
+    overrides: SuggestionAcceptBody.optional().describe(
+      'Last-mile corrections to the synthesized draft, applied when accepting.',
+    ),
   })
-  .meta({ id: 'SuggestionDismissed', description: 'A dismissed-suggestion acknowledgement.' });
-/** Dismissal acknowledgement value. */
-export type SuggestionDismissed = z.infer<typeof SuggestionDismissed>;
+  .meta({
+    id: 'SuggestionDisposition',
+    description: 'A reviewer’s decision on a pending email suggestion.',
+  });
+/** Suggestion-decision value. */
+export type SuggestionDisposition = z.infer<typeof SuggestionDisposition>;

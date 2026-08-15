@@ -326,14 +326,14 @@ const CREDENTIAL_NAME_ALLOWLIST = new Set([
  * exposure; a minted credential that is never shown is one that cannot be used.
  */
 const MINTED_CREDENTIAL_RESPONSES: ReadonlySet<string> = new Set([
-  'POST /v1/time/share-tokens 200 → token',
+  'POST /v1/time/share-tokens 201 → token',
   // Starting a voice session mints an EPHEMERAL client secret (minutes, one session) so the
   // browser can hold its own audio link to the speech model. Returning it is the entire point of
   // the operation, and it is deliberately not Docket's provider key — that never leaves the
   // server. Scoped to this one operation so a later route on this path cannot inherit the
   // exemption.
-  'POST /v1/me/athena/voice 200 → credential',
-  'POST /v1/me/athena/voice 200 → clientSecret',
+  'POST /v1/me/athena/voice 201 → credential',
+  'POST /v1/me/athena/voice 201 → clientSecret',
 ]);
 
 /** Recursively collect every property name reachable from a JSON-Schema node. */

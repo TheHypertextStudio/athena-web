@@ -30,6 +30,15 @@ import { useNow } from '@/lib/use-now';
 import { STALE, apiQueryOptions, queryKeys, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
 /** How often the shell re-reads the tracker. Focus-gated by {@link useLiveApiQuery}. */
+/**
+ * The timer state each control moves the record into.
+ *
+ * @remarks
+ * The buttons are named for what pressing them does; the API is named for the state the record
+ * ends up in. This is the one place those two vocabularies meet.
+ */
+const TIMER_STATE = { start: 'running', pause: 'paused', stop: 'stopped' } as const;
+
 const TIMER_POLL_MS = 30_000;
 
 /** Cross-window signal that one Focus surface changed the personal timer. */
@@ -263,15 +272,15 @@ export function useTimerControls(recordId: string | null): TimerControls {
       action: 'pause' | 'start' | 'stop';
       title?: string;
     }) => {
-      // Only `stop` carries a body, and only to name a session that has none. The other two are
-      // pure state changes with nothing to say.
-      const response =
-        input.action === 'stop'
-          ? await api.v1.time.records[':id'].stop.$post({
-              param: { id: input.id },
-              json: input.title ? { title: input.title } : {},
-            })
-          : await api.v1.time.records[':id'][input.action].$post({ param: { id: input.id } });
+      // One address for the timer's state. `title` only matters on the way to `stopped`, where
+      // it names a session that has no task of its own yet.
+      const response = await api.v1.time.records[':id'].status.$put({
+        param: { id: input.id },
+        json: {
+          status: TIMER_STATE[input.action],
+          ...(input.action === 'stop' && input.title ? { title: input.title } : {}),
+        },
+      });
       if (!response.ok) throw await toUserError(response, 'Could not update the timer.');
       return await response.json();
     },

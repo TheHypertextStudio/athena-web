@@ -231,10 +231,10 @@ describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
     });
     expect(((await ran.json()) as { status: string }).status).toBe('awaiting_approval');
 
-    const approved = await app.request(`/${sessionId}/approve`, {
-      method: 'POST',
+    const approved = await app.request(`/${sessionId}/decision`, {
+      method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ decision: 'approved' }),
     });
     expect(approved.status).toBe(200);
     expect(((await approved.json()) as { status: string }).status).toBe('completed');

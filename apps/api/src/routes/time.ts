@@ -19,7 +19,7 @@ import {
   TimeIntervalCreate,
   TimeMeasuresOut,
   TimeRecordCreate,
-  TimeRecordStop,
+  TimeRecordStatusUpdate,
   TimeRecordOut,
   TimeRecordUpdate,
   TimeShareTokenCreate,
@@ -254,53 +254,31 @@ const time = new Hono<AppEnv>()
       );
     },
   )
-  .post(
-    '/records/:id/start',
+  .put(
+    '/records/:id/status',
     apiDoc({
       tag: 'Time',
-      summary: 'Start or resume a Time Record',
+      summary: 'Move a Time Record’s timer',
       response: TimeRecordOut,
       description:
-        'Start or resume a paused record with the server clock. The command atomically closes any other active human interval in the caller’s Hub, preserving an exact handoff.',
+        'Set the record’s timer state and return the refreshed record. `running` starts or resumes it on the server clock, atomically closing any other active human interval in the caller’s Hub so a handoff stays exact. `paused` closes the current interval and leaves the record open. `stopped` closes both the interval and the record; an unanchored record must supply `title` here, which creates the task the time is finally credited to. Stopping never changes a linked Task, Daily Plan Item, or Calendar Item state — the ledger records what happened and does not move work on its own. A record outside the caller’s Hub is 404.',
     }),
     zParam(recordParam),
+    zJson(TimeRecordStatusUpdate),
     async (c) => {
       const { user } = requireSession(c);
-      return ok(c, TimeRecordOut, await startTimeRecord(user.id, c.req.valid('param').id));
-    },
-  )
-  .post(
-    '/records/:id/pause',
-    apiDoc({
-      tag: 'Time',
-      summary: 'Pause a Time Record',
-      response: TimeRecordOut,
-      description:
-        'Close the caller’s active human interval while preserving the record for a later resume. Agent executions remain independently measured.',
-    }),
-    zParam(recordParam),
-    async (c) => {
-      const { user } = requireSession(c);
-      return ok(c, TimeRecordOut, await pauseTimeRecord(user.id, c.req.valid('param').id));
-    },
-  )
-  .post(
-    '/records/:id/stop',
-    apiDoc({
-      tag: 'Time',
-      summary: 'Stop a Time Record',
-      response: TimeRecordOut,
-      description:
-        'Close the caller’s human interval and record. An unanchored session must supply `title`, which creates the task it is finally credited to. Stopping time never changes a linked Task, Daily Plan Item, or Calendar Item state.',
-    }),
-    zParam(recordParam),
-    zJson(TimeRecordStop),
-    async (c) => {
-      const { user } = requireSession(c);
+      const { id } = c.req.valid('param');
+      const body = c.req.valid('json');
+      if (body.status === 'running') {
+        return ok(c, TimeRecordOut, await startTimeRecord(user.id, id));
+      }
+      if (body.status === 'paused') {
+        return ok(c, TimeRecordOut, await pauseTimeRecord(user.id, id));
+      }
       return ok(
         c,
         TimeRecordOut,
-        await stopTimeRecord(user.id, c.req.valid('param').id, c.req.valid('json')),
+        await stopTimeRecord(user.id, id, body.title === undefined ? {} : { title: body.title }),
       );
     },
   )

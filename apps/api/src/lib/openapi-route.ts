@@ -35,8 +35,17 @@ export interface ApiDocOptions {
    * documented with its tag, summary, and capability.
    */
   response?: z.ZodType;
-  /** Success status code (default 200). */
-  status?: StatusCode;
+  /**
+   * Success status code(s) this route can answer with (default 200).
+   *
+   * @remarks
+   * Pass an array when the handler genuinely branches — an agent session that answers `201`
+   * when it ran inline and `202` when the durable runner took it is two documented outcomes,
+   * not one. Declaring only the branch you happened to write first tells a client the other
+   * one is an error. Each listed code is documented with the same response schema, which is
+   * the case here: the branches differ in how much work has finished, not in what comes back.
+   */
+  status?: StatusCode | readonly StatusCode[];
   /**
    * Operation-level description — the main prose Scalar renders for the endpoint (purpose,
    * behavior, side effects, capability rationale, errors, related routes). Markdown.
@@ -64,7 +73,7 @@ export interface ApiDocOptions {
  * ```
  */
 export function apiDoc(opts: ApiDocOptions) {
-  const status = opts.status ?? 200;
+  const statuses = opts.status === undefined ? [200] : [opts.status].flat();
   const response = opts.response;
   const spec: DescribeRouteOptions = {
     summary: opts.summary,
@@ -74,12 +83,15 @@ export function apiDoc(opts: ApiDocOptions) {
     ...(opts.capability ? { 'x-docket-capability': opts.capability } : {}),
     ...(response
       ? {
-          responses: {
-            [status]: {
-              description: opts.responseDescription ?? 'Success.',
-              content: { 'application/json': { schema: resolver(response) } },
-            },
-          },
+          responses: Object.fromEntries(
+            statuses.map((status) => [
+              status,
+              {
+                description: opts.responseDescription ?? 'Success.',
+                content: { 'application/json': { schema: resolver(response) } },
+              },
+            ]),
+          ),
         }
       : {}),
     ...opts.extra,

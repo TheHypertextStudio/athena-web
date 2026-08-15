@@ -1049,12 +1049,23 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
     // holds `assign` to reach the conflict paths below.
     const w = appWithActor(agentSessions, pending.orgId, ['assign']);
     expect(
-      (await w.request(`/${MISSING}/approve`, { method: 'POST', headers: J, body: '{}' })).status,
+      (
+        await w.request(`/${MISSING}/decision`, {
+          method: 'PUT',
+          headers: J,
+          body: JSON.stringify({ decision: 'approved' }),
+        })
+      ).status,
     ).toBe(404);
     // Session not awaiting approval (pending) → 409.
     expect(
-      (await w.request(`/${pending.sessionId}/approve`, { method: 'POST', headers: J, body: '{}' }))
-        .status,
+      (
+        await w.request(`/${pending.sessionId}/decision`, {
+          method: 'PUT',
+          headers: J,
+          body: JSON.stringify({ decision: 'approved' }),
+        })
+      ).status,
     ).toBe(409);
 
     // Awaiting approval but no proposed action row → 409.
@@ -1062,10 +1073,10 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
     const wa = appWithActor(agentSessions, awaiting.orgId, ['assign']);
     expect(
       (
-        await wa.request(`/${awaiting.sessionId}/reject`, {
-          method: 'POST',
+        await wa.request(`/${awaiting.sessionId}/decision`, {
+          method: 'PUT',
           headers: J,
-          body: '{}',
+          body: JSON.stringify({ decision: 'rejected' }),
         })
       ).status,
     ).toBe(409);
@@ -1077,12 +1088,22 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
         .status,
     ).toBe(403);
     expect(
-      (await v.request(`/${pending.sessionId}/approve`, { method: 'POST', headers: J, body: '{}' }))
-        .status,
+      (
+        await v.request(`/${pending.sessionId}/decision`, {
+          method: 'PUT',
+          headers: J,
+          body: JSON.stringify({ decision: 'approved' }),
+        })
+      ).status,
     ).toBe(403);
     expect(
-      (await v.request(`/${pending.sessionId}/reject`, { method: 'POST', headers: J, body: '{}' }))
-        .status,
+      (
+        await v.request(`/${pending.sessionId}/decision`, {
+          method: 'PUT',
+          headers: J,
+          body: JSON.stringify({ decision: 'rejected' }),
+        })
+      ).status,
     ).toBe(403);
 
     // 403 for a contribute-only member: approve/reject sit above `contribute` at `assign`
@@ -1090,19 +1111,19 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
     const cont = appWithActor(agentSessions, pending.orgId, ['contribute']);
     expect(
       (
-        await cont.request(`/${pending.sessionId}/approve`, {
-          method: 'POST',
+        await cont.request(`/${pending.sessionId}/decision`, {
+          method: 'PUT',
           headers: J,
-          body: '{}',
+          body: JSON.stringify({ decision: 'approved' }),
         })
       ).status,
     ).toBe(403);
     expect(
       (
-        await cont.request(`/${pending.sessionId}/reject`, {
-          method: 'POST',
+        await cont.request(`/${pending.sessionId}/decision`, {
+          method: 'PUT',
           headers: J,
-          body: '{}',
+          body: JSON.stringify({ decision: 'rejected' }),
         })
       ).status,
     ).toBe(403);
@@ -1120,10 +1141,10 @@ describe('agent-sessions router (list/get + approve/reject conflict paths)', () 
     });
     // Rejecting is an `assign`-level act (permissions §9.3).
     const w = appWithActor(agentSessions, awaiting.orgId, ['assign']);
-    const res = await w.request(`/${awaiting.sessionId}/reject`, {
-      method: 'POST',
+    const res = await w.request(`/${awaiting.sessionId}/decision`, {
+      method: 'PUT',
       headers: J,
-      body: '{}',
+      body: JSON.stringify({ decision: 'rejected' }),
     });
     expect(res.status).toBe(200);
     expect((await body<{ status: string }>(res)).status).toBe('canceled');

@@ -193,7 +193,11 @@ describe('Time share tokens', () => {
         body: JSON.stringify({ context: { label: 'Stepped away', organizationId } }),
       }),
     );
-    await app.request(`/records/${record.id}/pause`, { method: 'POST' });
+    await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paused' }),
+    });
     await expect(json<PublicTimerStatusOut>(await readPublic(minted.token))).resolves.toEqual(
       expect.objectContaining({ state: 'paused', taskTitle: 'Stepped away' }),
     );

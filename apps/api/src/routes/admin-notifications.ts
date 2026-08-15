@@ -8,7 +8,7 @@ import { AdminAuditPage } from '../admin-dto';
 import type { AppEnv } from '../context';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { zParam, zQuery } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { pageOf } from '@docket/types';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -16,6 +16,22 @@ import { z } from 'zod';
 import type { AdminNotificationService } from '../services/notifications/admin-service';
 
 const idParam = z.object({ id: z.string() });
+/**
+ * An operator's review decision on a notification intent.
+ *
+ * @remarks
+ * Local to this staff surface rather than shared through `@docket/types`: the public product
+ * API never exposes intent review, so a shared schema would advertise a decision no product
+ * client can make.
+ */
+const NotificationDecision = z
+  .object({
+    decision: z.enum(['approved', 'rejected']).describe('What the reviewing operator decided.'),
+  })
+  .meta({
+    id: 'AdminNotificationDecision',
+    description: 'A staff review decision on a notification intent.',
+  });
 const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
@@ -91,41 +107,27 @@ export function createAdminNotificationRoutes(notifications: AdminNotificationSe
         );
       },
     )
-    .post(
-      '/:id/approve',
+    .put(
+      '/:id/decision',
       apiDoc({
         tag: 'Admin Notifications',
-        summary: 'Approve a notification intent',
+        summary: 'Decide a notification intent',
         response: NotificationIntentOut,
         description:
-          'Approve a draft or scheduled notification by moving it into the queued state and recording operator audit.',
+          'Record the operator’s review decision on a not-yet-delivered notification and return the updated intent. `decision: "approved"` moves a draft or scheduled intent into the queued state; `decision: "rejected"` cancels it. Either way an operator audit event is written, because the decision — including the decision not to send — is the record of what staff did. One address for one decision: an intent holds exactly one, and re-sending the same value names the same end state.',
       }),
       zParam(idParam),
-      async (c) => {
-        const { staffUserId } = c.get('staffCtx');
-        return ok(
-          c,
-          NotificationIntentOut,
-          await notifications.approve(staffUserId, c.req.valid('param').id),
-        );
-      },
-    )
-    .post(
-      '/:id/reject',
-      apiDoc({
-        tag: 'Admin Notifications',
-        summary: 'Reject a notification intent',
-        response: NotificationIntentOut,
-        description:
-          'Reject a not-yet-delivered notification by canceling it and recording operator audit.',
-      }),
-      zParam(idParam),
+      zJson(NotificationDecision),
       async (c) => {
         const { staffUserId, userId } = c.get('staffCtx');
+        const { id } = c.req.valid('param');
+        const { decision } = c.req.valid('json');
         return ok(
           c,
           NotificationIntentOut,
-          await notifications.reject(userId, staffUserId, c.req.valid('param').id),
+          decision === 'approved'
+            ? await notifications.approve(staffUserId, id)
+            : await notifications.reject(userId, staffUserId, id),
         );
       },
     )

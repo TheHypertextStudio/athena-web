@@ -188,8 +188,9 @@ export default function NotificationsPage(): JSX.Element {
   async function approve(): Promise<void> {
     if (!selectedIntent) return;
     await runAction('approve', async () => {
-      const res = await api.admin.notifications[':id'].approve.$post({
+      const res = await api.admin.notifications[':id'].decision.$put({
         param: { id: selectedIntent.id },
+        json: { decision: 'approved' },
       });
       if (!res.ok) throw await readProblemError(res, 'Could not approve notification.');
       await loadIntent(selectedIntent.id);

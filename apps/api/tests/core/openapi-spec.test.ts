@@ -45,8 +45,8 @@ describe('openapi spec generation', () => {
     expect(paths).toContain('/v1/me/athena/chat/messages');
     expect(paths).toContain('/v1/me/athena/sessions');
     expect(paths).toContain('/v1/me/athena/sessions/{id}/stream');
-    expect(paths).toContain('/v1/me/athena/sessions/{id}/activity/{activityId}/approve');
-    expect(paths).toContain('/v1/me/athena/sessions/{id}/proposals/{groupId}/reject');
+    expect(paths).toContain('/v1/me/athena/sessions/{id}/activity/{activityId}/decision');
+    expect(paths).toContain('/v1/me/athena/sessions/{id}/proposals/{groupId}/decision');
 
     const personalAthena = spec.paths['/v1/me/athena']?.['get'];
     expect(personalAthena?.tags).toContain('Athena');

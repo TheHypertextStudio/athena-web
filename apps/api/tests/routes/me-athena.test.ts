@@ -951,8 +951,8 @@ describe('personal Athena routes', () => {
     );
     expect(edited.status).toBe(200);
     const rejected = await app.request(
-      `/sessions/${proposalSession}/proposals/group_personal/reject`,
-      { method: 'POST', headers: JSON_HEADERS, body: '{}' },
+      `/sessions/${proposalSession}/proposals/group_personal/decision`,
+      { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ decision: 'rejected' }) },
     );
     expect(rejected.status).toBe(200);
     expect((await loadApproval(proposalId)).approvalStatus).toBe('rejected');
@@ -1011,10 +1011,10 @@ describe('personal Athena routes', () => {
     expect(stored?.organizationId).toBe(seed.orgB);
     expect(stored?.body.action?.toolCall?.input).toMatchObject({ orgId: seed.orgB });
 
-    const approved = await app.request(`/sessions/${sessionId}/activity/${activityId}/approve`, {
-      method: 'POST',
+    const approved = await app.request(`/sessions/${sessionId}/activity/${activityId}/decision`, {
+      method: 'PUT',
       headers: JSON_HEADERS,
-      body: '{}',
+      body: JSON.stringify({ decision: 'approved' }),
     });
     expect(approved.status).toBe(200);
     const betaTasks = await db
@@ -1249,10 +1249,10 @@ describe('personal Athena routes', () => {
       });
     }
 
-    const response = await app.request(`/sessions/${sessionId}/proposals/${groupId}/approve`, {
-      method: 'POST',
+    const response = await app.request(`/sessions/${sessionId}/proposals/${groupId}/decision`, {
+      method: 'PUT',
       headers: JSON_HEADERS,
-      body: '{}',
+      body: JSON.stringify({ decision: 'approved' }),
     });
     expect(response.status).toBe(200);
     const approvals = await db
@@ -1769,13 +1769,13 @@ describe('personal Athena routes', () => {
     });
 
     const otherAttempt = await appFor(seed.other).request(
-      `/sessions/${sessionId}/activity/${actionId}/approve`,
-      { method: 'POST', headers: JSON_HEADERS, body: '{}' },
+      `/sessions/${sessionId}/activity/${actionId}/decision`,
+      { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ decision: 'approved' }) },
     );
     expect(otherAttempt.status).toBe(404);
     const approved = await appFor(seed.owner).request(
-      `/sessions/${sessionId}/activity/${actionId}/approve`,
-      { method: 'POST', headers: JSON_HEADERS, body: '{}' },
+      `/sessions/${sessionId}/activity/${actionId}/decision`,
+      { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ decision: 'approved' }) },
     );
     expect(approved.status).toBe(200);
     expect(
@@ -1840,10 +1840,10 @@ describe('personal Athena routes', () => {
     });
     mockCompletion('Cross-workspace work created', 1);
 
-    const approved = await appFor(seed.owner).request(`/sessions/${sessionId}/approve`, {
-      method: 'POST',
+    const approved = await appFor(seed.owner).request(`/sessions/${sessionId}/decision`, {
+      method: 'PUT',
       headers: JSON_HEADERS,
-      body: '{}',
+      body: JSON.stringify({ decision: 'approved' }),
     });
 
     expect(approved.status).toBe(200);
@@ -1872,10 +1872,10 @@ describe('personal Athena routes', () => {
       body: { action: { kind: 'capture', summary: 'Do not create this task' } },
     });
 
-    const rejected = await appFor(seed.owner).request(`/sessions/${sessionId}/reject`, {
-      method: 'POST',
+    const rejected = await appFor(seed.owner).request(`/sessions/${sessionId}/decision`, {
+      method: 'PUT',
       headers: JSON_HEADERS,
-      body: '{}',
+      body: JSON.stringify({ decision: 'rejected' }),
     });
 
     expect(rejected.status).toBe(200);
@@ -2027,16 +2027,16 @@ describe('personal Athena routes', () => {
   it('refuses to approve or reject the latest action when none is proposed', async () => {
     const seed = await seedPeople();
     const sessionId = await seedSession(seed, seed.owner, 'running');
-    const approve = await appFor(seed.owner).request(`/sessions/${sessionId}/approve`, {
-      method: 'POST',
+    const approve = await appFor(seed.owner).request(`/sessions/${sessionId}/decision`, {
+      method: 'PUT',
       headers: JSON_HEADERS,
-      body: '{}',
+      body: JSON.stringify({ decision: 'approved' }),
     });
     expect(approve.status).toBe(409);
-    const reject = await appFor(seed.owner).request(`/sessions/${sessionId}/reject`, {
-      method: 'POST',
+    const reject = await appFor(seed.owner).request(`/sessions/${sessionId}/decision`, {
+      method: 'PUT',
       headers: JSON_HEADERS,
-      body: '{}',
+      body: JSON.stringify({ decision: 'rejected' }),
     });
     expect(reject.status).toBe(409);
   });
@@ -2126,8 +2126,8 @@ describe('personal Athena routes', () => {
       });
 
       const response = await appFor(seed.owner).request(
-        `/sessions/${sessionId}/activity/${actionId}/approve`,
-        { method: 'POST', headers: JSON_HEADERS, body: '{}' },
+        `/sessions/${sessionId}/activity/${actionId}/decision`,
+        { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ decision: 'approved' }) },
       );
       expect(response.status).toBe(200);
       expect((await loadApproval(actionId)).approvalStatus).toBe('applied');
@@ -2144,8 +2144,8 @@ describe('personal Athena routes', () => {
       });
 
       const response = await appFor(seed.owner).request(
-        `/sessions/${sessionId}/activity/${actionId}/reject`,
-        { method: 'POST', headers: JSON_HEADERS, body: '{}' },
+        `/sessions/${sessionId}/activity/${actionId}/decision`,
+        { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ decision: 'rejected' }) },
       );
       expect(response.status).toBe(200);
       expect((await loadApproval(actionId)).approvalStatus).toBe('rejected');
@@ -2164,8 +2164,12 @@ describe('personal Athena routes', () => {
       });
 
       const response = await appFor(seed.owner).request(
-        `/sessions/${sessionId}/proposals/${groupId}/approve`,
-        { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({}) },
+        `/sessions/${sessionId}/proposals/${groupId}/decision`,
+        {
+          method: 'PUT',
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ decision: 'approved' }),
+        },
       );
       expect(response.status).toBe(200);
       expect((await loadApproval(actionId)).approvalStatus).toBe('applied');
@@ -2184,8 +2188,12 @@ describe('personal Athena routes', () => {
       });
 
       const response = await appFor(seed.owner).request(
-        `/sessions/${sessionId}/proposals/${groupId}/reject`,
-        { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({}) },
+        `/sessions/${sessionId}/proposals/${groupId}/decision`,
+        {
+          method: 'PUT',
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ decision: 'rejected' }),
+        },
       );
       expect(response.status).toBe(200);
       expect((await loadApproval(actionId)).approvalStatus).toBe('rejected');
@@ -2217,10 +2225,10 @@ describe('personal Athena routes', () => {
         body: { action: { kind: 'capture', summary: 'Contextless shortcut approve' } },
       });
 
-      const response = await appFor(seed.owner).request(`/sessions/${sessionId}/approve`, {
-        method: 'POST',
+      const response = await appFor(seed.owner).request(`/sessions/${sessionId}/decision`, {
+        method: 'PUT',
         headers: JSON_HEADERS,
-        body: '{}',
+        body: JSON.stringify({ decision: 'approved' }),
       });
       expect(response.status).toBe(200);
       expect((await loadApproval(actionId)).approvalStatus).toBe('applied');

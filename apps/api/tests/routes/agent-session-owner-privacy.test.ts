@@ -251,6 +251,20 @@ function post(app: ReturnType<typeof appFor>, path: string, body: unknown = {}) 
   });
 }
 
+/** `PUT` a decision to an approval resource — the session, a group, or one activity. */
+function decide(
+  app: ReturnType<typeof appFor>,
+  path: string,
+  decision: 'approved' | 'rejected',
+  extra: Record<string, unknown> = {},
+) {
+  return app.request(path, {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ decision, ...extra }),
+  });
+}
+
 describe('owner-private Athena compatibility routes', () => {
   it('returns asynchronous acceptance across the personal compatibility mutation matrix', async () => {
     runnerMocks.enabled = true;
@@ -339,9 +353,9 @@ describe('owner-private Athena compatibility routes', () => {
       body: { action: { kind: 'note', summary: 'Approve asynchronously' } },
     });
     const wakesBeforeShortcutIntrusion = runnerMocks.wake.mock.calls.length;
-    expect((await post(otherApp, `/${approval}/approve`)).status).toBe(404);
+    expect((await decide(otherApp, `/${approval}/decision`, 'approved')).status).toBe(404);
     expect(runnerMocks.wake).toHaveBeenCalledTimes(wakesBeforeShortcutIntrusion);
-    expect((await post(ownerApp, `/${approval}/approve`)).status).toBe(202);
+    expect((await decide(ownerApp, `/${approval}/decision`, 'approved')).status).toBe(202);
 
     const rejection = await seedAthena(seed, seed.owner, 'awaiting_approval');
     await seedWaitingRun(seed.owner, rejection);
@@ -350,7 +364,7 @@ describe('owner-private Athena compatibility routes', () => {
       approvalStatus: 'proposed',
       body: { action: { kind: 'note', summary: 'Reject asynchronously' } },
     });
-    expect((await post(ownerApp, `/${rejection}/reject`)).status).toBe(202);
+    expect((await decide(ownerApp, `/${rejection}/decision`, 'rejected')).status).toBe(202);
 
     const activityApproval = await seedAthena(seed, seed.owner, 'awaiting_approval');
     await seedWaitingRun(seed.owner, activityApproval);
@@ -361,11 +375,23 @@ describe('owner-private Athena compatibility routes', () => {
     });
     const wakesBeforeActivityIntrusion = runnerMocks.wake.mock.calls.length;
     expect(
-      (await post(otherApp, `/${activityApproval}/activity/${activityApprovalId}/approve`)).status,
+      (
+        await decide(
+          otherApp,
+          `/${activityApproval}/activity/${activityApprovalId}/decision`,
+          'approved',
+        )
+      ).status,
     ).toBe(404);
     expect(runnerMocks.wake).toHaveBeenCalledTimes(wakesBeforeActivityIntrusion);
     expect(
-      (await post(ownerApp, `/${activityApproval}/activity/${activityApprovalId}/approve`)).status,
+      (
+        await decide(
+          ownerApp,
+          `/${activityApproval}/activity/${activityApprovalId}/decision`,
+          'approved',
+        )
+      ).status,
     ).toBe(202);
 
     const activityRejection = await seedAthena(seed, seed.owner, 'awaiting_approval');
@@ -376,7 +402,13 @@ describe('owner-private Athena compatibility routes', () => {
       body: { action: { kind: 'note', summary: 'Reject one asynchronously' } },
     });
     expect(
-      (await post(ownerApp, `/${activityRejection}/activity/${activityRejectionId}/reject`)).status,
+      (
+        await decide(
+          ownerApp,
+          `/${activityRejection}/activity/${activityRejectionId}/decision`,
+          'rejected',
+        )
+      ).status,
     ).toBe(202);
 
     const groupApproval = await seedAthena(seed, seed.owner, 'awaiting_approval');
@@ -389,11 +421,23 @@ describe('owner-private Athena compatibility routes', () => {
     });
     const wakesBeforeGroupIntrusion = runnerMocks.wake.mock.calls.length;
     expect(
-      (await post(otherApp, `/${groupApproval}/proposals/group_async_approve/approve`)).status,
+      (
+        await decide(
+          otherApp,
+          `/${groupApproval}/proposals/group_async_approve/decision`,
+          'approved',
+        )
+      ).status,
     ).toBe(404);
     expect(runnerMocks.wake).toHaveBeenCalledTimes(wakesBeforeGroupIntrusion);
     expect(
-      (await post(ownerApp, `/${groupApproval}/proposals/group_async_approve/approve`)).status,
+      (
+        await decide(
+          ownerApp,
+          `/${groupApproval}/proposals/group_async_approve/decision`,
+          'approved',
+        )
+      ).status,
     ).toBe(202);
 
     const groupRejection = await seedAthena(seed, seed.owner, 'awaiting_approval');
@@ -405,7 +449,13 @@ describe('owner-private Athena compatibility routes', () => {
       body: { action: { kind: 'note', summary: 'Reject the group asynchronously' } },
     });
     expect(
-      (await post(ownerApp, `/${groupRejection}/proposals/group_async_reject/reject`)).status,
+      (
+        await decide(
+          ownerApp,
+          `/${groupRejection}/proposals/group_async_reject/decision`,
+          'rejected',
+        )
+      ).status,
     ).toBe(202);
 
     const asking = await seedAthena(seed, seed.owner, 'awaiting_input');
@@ -442,9 +492,10 @@ describe('owner-private Athena compatibility routes', () => {
     );
     expect(
       (
-        await post(
+        await decide(
           otherApp,
-          `/${registeredActivityApproval}/activity/${registeredActivityApprovalId}/approve`,
+          `/${registeredActivityApproval}/activity/${registeredActivityApprovalId}/decision`,
+          'approved',
         )
       ).status,
     ).toBe(200);
@@ -462,9 +513,10 @@ describe('owner-private Athena compatibility routes', () => {
     );
     expect(
       (
-        await post(
+        await decide(
           otherApp,
-          `/${registeredActivityRejection}/activity/${registeredActivityRejectionId}/reject`,
+          `/${registeredActivityRejection}/activity/${registeredActivityRejectionId}/decision`,
+          'rejected',
         )
       ).status,
     ).toBe(200);
@@ -478,9 +530,10 @@ describe('owner-private Athena compatibility routes', () => {
     });
     expect(
       (
-        await post(
+        await decide(
           otherApp,
-          `/${registeredGroupApproval}/proposals/registered_group_approve/approve`,
+          `/${registeredGroupApproval}/proposals/registered_group_approve/decision`,
+          'approved',
         )
       ).status,
     ).toBe(200);
@@ -494,9 +547,10 @@ describe('owner-private Athena compatibility routes', () => {
     });
     expect(
       (
-        await post(
+        await decide(
           otherApp,
-          `/${registeredGroupRejection}/proposals/registered_group_reject/reject`,
+          `/${registeredGroupRejection}/proposals/registered_group_reject/decision`,
+          'rejected',
         )
       ).status,
     ).toBe(200);
@@ -727,8 +781,14 @@ describe('owner-private Athena compatibility routes', () => {
       },
     });
 
-    expect((await post(intruder, `/${sessionId}/activity/${actionId}/approve`)).status).toBe(404);
-    const approved = await post(ownerApp, `/${sessionId}/activity/${actionId}/approve`);
+    expect(
+      (await decide(intruder, `/${sessionId}/activity/${actionId}/decision`, 'approved')).status,
+    ).toBe(404);
+    const approved = await decide(
+      ownerApp,
+      `/${sessionId}/activity/${actionId}/decision`,
+      'approved',
+    );
     expect(approved.status).toBe(200);
     const created = await db
       .select({ id: schema.task.id })
@@ -758,7 +818,11 @@ describe('owner-private Athena compatibility routes', () => {
         },
       },
     });
-    const denied = await post(ownerApp, `/${deniedSession}/activity/${deniedId}/approve`);
+    const denied = await decide(
+      ownerApp,
+      `/${deniedSession}/activity/${deniedId}/decision`,
+      'approved',
+    );
     expect(denied.status).toBe(200);
     const deniedBody = (await denied.json()) as {
       approvalStatus: string;
@@ -785,12 +849,14 @@ describe('owner-private Athena compatibility routes', () => {
       proposalGroupId: 'group_owner',
       body: { action: { kind: 'note', summary: 'Review this batch' } },
     });
-    expect((await post(otherApp, `/${groupSession}/proposals/group_owner/reject`)).status).toBe(
-      404,
-    );
-    expect((await post(ownerApp, `/${groupSession}/proposals/group_owner/reject`)).status).toBe(
-      200,
-    );
+    expect(
+      (await decide(otherApp, `/${groupSession}/proposals/group_owner/decision`, 'rejected'))
+        .status,
+    ).toBe(404);
+    expect(
+      (await decide(ownerApp, `/${groupSession}/proposals/group_owner/decision`, 'rejected'))
+        .status,
+    ).toBe(200);
 
     const shortcut = await seedAthena(seed, seed.owner, 'awaiting_approval');
     await seedActivity(seed, shortcut, 'athena', {
@@ -798,8 +864,8 @@ describe('owner-private Athena compatibility routes', () => {
       approvalStatus: 'proposed',
       body: { action: { kind: 'note', summary: 'Owner decision' } },
     });
-    expect((await post(otherApp, `/${shortcut}/reject`)).status).toBe(404);
-    expect((await post(ownerApp, `/${shortcut}/reject`)).status).toBe(200);
+    expect((await decide(otherApp, `/${shortcut}/decision`, 'rejected')).status).toBe(404);
+    expect((await decide(ownerApp, `/${shortcut}/decision`, 'rejected')).status).toBe(200);
 
     const registered = await seedRegistered(seed, 'awaiting_approval');
     await seedActivity(seed, registered, 'registered_agent', {
@@ -807,7 +873,7 @@ describe('owner-private Athena compatibility routes', () => {
       approvalStatus: 'proposed',
       body: { action: { kind: 'note', summary: 'Registered decision' } },
     });
-    expect((await post(ownerApp, `/${registered}/approve`)).status).toBe(403);
-    expect((await post(otherApp, `/${registered}/approve`)).status).toBe(200);
+    expect((await decide(ownerApp, `/${registered}/decision`, 'approved')).status).toBe(403);
+    expect((await decide(otherApp, `/${registered}/decision`, 'approved')).status).toBe(200);
   });
 });

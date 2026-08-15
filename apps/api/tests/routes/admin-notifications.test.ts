@@ -39,7 +39,11 @@ describe('admin notification routes', () => {
     const intent = await seedIntent(staff.userId, 'Approve this notification');
     const app = appWithSession(admin, fakeSession(staff.userId));
 
-    const res = await app.request(`/notifications/${intent.id}/approve`, { method: 'POST' });
+    const res = await app.request(`/notifications/${intent.id}/decision`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision: 'approved' }),
+    });
 
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ id: intent.id, status: 'queued' });
@@ -51,7 +55,11 @@ describe('admin notification routes', () => {
     const intent = await seedIntent(staff.userId, 'Reject this notification');
     const app = appWithSession(admin, fakeSession(staff.userId));
 
-    const res = await app.request(`/notifications/${intent.id}/reject`, { method: 'POST' });
+    const res = await app.request(`/notifications/${intent.id}/decision`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision: 'rejected' }),
+    });
 
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ id: intent.id, status: 'canceled' });

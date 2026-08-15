@@ -15,6 +15,8 @@ import {
   AthenaSessionSummaryOut,
   pageOf,
   ProposalEditBody,
+  ApprovalDecision,
+  ApprovalDecisionBody,
   ProposalGroupDecision,
   ProposalGroupOut,
   SessionActivityOut,
@@ -44,7 +46,7 @@ import { editProposalInput, listProposalGroups } from '../agent/proposals';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
-import { ok } from '../lib/ok';
+import { accepted, ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 
@@ -90,18 +92,16 @@ const ACTIVITY_HISTORY_LIMIT = 100;
 /** Route params for proposal-group decisions. */
 const groupParam = z.object({ id: z.string(), groupId: z.string() });
 /** Optional activity decision scope. */
-const activityDecisionBody = z.object({ scope: z.enum(['this', 'all_in_session']).optional() });
+const activityDecisionBody = z.object({
+  decision: ApprovalDecision,
+  scope: z.enum(['this', 'all_in_session']).optional(),
+});
 
 /** Return the request-authenticated owner id; bodies never participate in ownership. */
 function requestOwner(c: Context<AppEnv>): string {
   const userId = c.get('session')?.user.id;
   if (!userId) throw new AuthError();
   return userId;
-}
-
-/** Validate and return an asynchronous mutation acknowledgement. */
-function accepted<T extends z.ZodType>(c: Context<AppEnv>, schema: T, data: z.input<T>) {
-  return c.json(schema.parse(data), 202);
 }
 
 /** Load one personal Athena session by persisted owner, hiding every mismatch. */
@@ -1178,62 +1178,26 @@ const meAthena = new Hono<AppEnv>()
       );
     },
   )
-  .post(
-    '/sessions/:id/activity/:activityId/approve',
+  .put(
+    '/sessions/:id/activity/:activityId/decision',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Athena',
-      summary: 'Approve a personal Athena action',
+      summary: 'Decide a personal Athena action',
       response: SessionActivityOut,
       description:
-        'Let the authenticated owner clear the approval policy gate without assign capability; the stored tool still reauthorizes the owner before applying.',
+        'Record the owner’s decision on one gated action in their private session, and return the decided activity. `decision: "approved"` clears the approval-policy gate — the owner needs no assign capability here, and the stored tool still reauthorizes them before it applies. `decision: "rejected"` leaves the stored mutation unapplied. Pass `scope: "all_in_session"` to decide every pending action at once. Only the authenticated owner may decide; the session is private, so another user’s request is 404 rather than 403. Answers 202 when the durable runner takes the work.',
     }),
     zParam(activityParam),
-    zJson(activityDecisionBody.optional()),
+    zJson(activityDecisionBody),
     async (c) => {
       const owner = requestOwner(c);
       const { id, activityId } = c.req.valid('param');
       const session = await loadOwnedSession(owner, id);
       const body = c.req.valid('json');
       const decision = {
-        decision: 'approve' as const,
-        ...(body?.scope ? { scope: body.scope } : {}),
-      };
-      if (asynchronousRunnerEnabled()) {
-        await decideActivity(session.contextOrganizationId ?? '', null, id, activityId, decision, {
-          queueWake: true,
-        });
-        await wakeWaitingAthenaGeneration(id);
-        return accepted(
-          c,
-          SessionActivityOut,
-          toPersonalActivityOut(await loadActivity(id, activityId)),
-        );
-      }
-      await approveAndResume(session.contextOrganizationId ?? '', null, id, activityId, decision);
-      return ok(c, SessionActivityOut, toPersonalActivityOut(await loadActivity(id, activityId)));
-    },
-  )
-  .post(
-    '/sessions/:id/activity/:activityId/reject',
-    apiDoc({
-      status: 202,
-      tag: 'Athena',
-      summary: 'Reject a personal Athena action',
-      response: SessionActivityOut,
-      description:
-        'Let only the authenticated owner reject one or every proposed action in the private session without applying the stored mutation.',
-    }),
-    zParam(activityParam),
-    zJson(activityDecisionBody.optional()),
-    async (c) => {
-      const owner = requestOwner(c);
-      const { id, activityId } = c.req.valid('param');
-      const session = await loadOwnedSession(owner, id);
-      const body = c.req.valid('json');
-      const decision = {
-        decision: 'reject' as const,
-        ...(body?.scope ? { scope: body.scope } : {}),
+        decision: body.decision === 'approved' ? ('approve' as const) : ('reject' as const),
+        ...(body.scope ? { scope: body.scope } : {}),
       };
       if (asynchronousRunnerEnabled()) {
         await decideActivity(session.contextOrganizationId ?? '', null, id, activityId, decision, {
@@ -1253,7 +1217,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/activity/:activityId/reply',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Athena',
       summary: 'Reply to a personal Athena question',
       response: SessionActivityOut,
@@ -1282,83 +1246,33 @@ const meAthena = new Hono<AppEnv>()
       return ok(c, SessionActivityOut, toPersonalActivityOut(created));
     },
   )
-  .post(
-    '/sessions/:id/proposals/:groupId/approve',
+  .put(
+    '/sessions/:id/proposals/:groupId/decision',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Athena',
-      summary: 'Approve a personal proposal group',
+      summary: 'Decide a personal proposal group',
       response: AthenaSessionDetailOut,
       description:
-        'Approve all or selected pending actions in one caller-owned proposal group, reauthorize each tool, and return freshly settled work.',
+        'Record one decision across every pending action in a caller-owned proposal group — or the subset named by `activityIds` — and return the freshly settled private work. `decision: "approved"` reauthorizes each stored tool against the owner’s current permissions before applying it; `decision: "rejected"` applies none of them. Only the authenticated owner may decide. Answers 202 when the durable runner takes the work rather than finishing inline.',
     }),
     zParam(groupParam),
     zJson(ProposalGroupDecision),
     async (c) => {
       const owner = requestOwner(c);
       const { id, groupId } = c.req.valid('param');
+      const { decision, activityIds } = c.req.valid('json');
       const session = await loadOwnedSession(owner, id);
+      const verdict = decision === 'approved' ? 'approve' : 'reject';
+      const orgId = session.contextOrganizationId ?? '';
       if (asynchronousRunnerEnabled()) {
-        await decideProposalGroup(
-          session.contextOrganizationId ?? '',
-          null,
-          id,
-          groupId,
-          'approve',
-          c.req.valid('json').activityIds,
-          { queueWake: true },
-        );
+        await decideProposalGroup(orgId, null, id, groupId, verdict, activityIds, {
+          queueWake: true,
+        });
         await wakeWaitingAthenaGeneration(id);
         return accepted(c, AthenaSessionDetailOut, await personalDetail(owner, id));
       }
-      await approveGroupAndResume(
-        session.contextOrganizationId ?? '',
-        null,
-        id,
-        groupId,
-        'approve',
-        c.req.valid('json').activityIds,
-      );
-      return ok(c, AthenaSessionDetailOut, await personalDetail(owner, id));
-    },
-  )
-  .post(
-    '/sessions/:id/proposals/:groupId/reject',
-    apiDoc({
-      status: 202,
-      tag: 'Athena',
-      summary: 'Reject a personal proposal group',
-      response: AthenaSessionDetailOut,
-      description:
-        'Reject all or selected pending actions in one caller-owned proposal group and return the private work after durable reconciliation.',
-    }),
-    zParam(groupParam),
-    zJson(ProposalGroupDecision),
-    async (c) => {
-      const owner = requestOwner(c);
-      const { id, groupId } = c.req.valid('param');
-      const session = await loadOwnedSession(owner, id);
-      if (asynchronousRunnerEnabled()) {
-        await decideProposalGroup(
-          session.contextOrganizationId ?? '',
-          null,
-          id,
-          groupId,
-          'reject',
-          c.req.valid('json').activityIds,
-          { queueWake: true },
-        );
-        await wakeWaitingAthenaGeneration(id);
-        return accepted(c, AthenaSessionDetailOut, await personalDetail(owner, id));
-      }
-      await approveGroupAndResume(
-        session.contextOrganizationId ?? '',
-        null,
-        id,
-        groupId,
-        'reject',
-        c.req.valid('json').activityIds,
-      );
+      await approveGroupAndResume(orgId, null, id, groupId, verdict, activityIds);
       return ok(c, AthenaSessionDetailOut, await personalDetail(owner, id));
     },
   )
@@ -1384,7 +1298,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/resume',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Athena',
       summary: 'Resume personal Athena work',
       response: AthenaSessionSummaryOut,
@@ -1412,7 +1326,7 @@ const meAthena = new Hono<AppEnv>()
   .post(
     '/sessions/:id/cancel',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Athena',
       summary: 'Cancel personal Athena work',
       response: AthenaSessionSummaryOut,
@@ -1445,66 +1359,51 @@ const meAthena = new Hono<AppEnv>()
       return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
     },
   )
-  .post(
-    '/sessions/:id/approve',
+  .put(
+    '/sessions/:id/decision',
     apiDoc({
-      status: 202,
+      status: [200, 202],
       tag: 'Athena',
-      summary: 'Approve the latest personal action',
+      summary: 'Decide the latest personal action',
       response: AthenaSessionSummaryOut,
       description:
-        'Compatibility shortcut that lets only the owner approve the latest pending action while the underlying tool remains independently authorized.',
+        'The coarse shortcut: decide the session’s latest pending action without naming it, and return the private session summary. `decision: "approved"` lets the run continue, with the underlying tool still independently authorized against the owner’s current permissions. `decision: "rejected"` cancels the private session outright. Only the authenticated owner may decide. Prefer `PUT /sessions/{id}/activity/{activityId}/decision`, which records which action was decided and can widen scope deliberately. Answers 202 when the durable runner takes the work.',
     }),
     zParam(idParam),
-    zJson(z.object({})),
+    zJson(ApprovalDecisionBody),
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
-      if (asynchronousRunnerEnabled()) {
-        const action = await latestProposedAction(session.id);
-        await decideActivity(
-          session.contextOrganizationId ?? '',
-          null,
-          session.id,
-          action.id,
-          { decision: 'approve' },
-          { queueWake: true },
-        );
-        await wakeWaitingAthenaGeneration(session.id);
-        const current = await loadOwnedSession(owner, session.id);
-        return accepted(
-          c,
-          AthenaSessionSummaryOut,
-          await personalSummaryForSession(owner, current),
-        );
-      }
-      const updated = await approveLatestAndResume(
-        session.contextOrganizationId ?? '',
-        null,
-        session.id,
-      );
-      return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
-    },
-  )
-  .post(
-    '/sessions/:id/reject',
-    apiDoc({
-      status: 202,
-      tag: 'Athena',
-      summary: 'Reject the latest personal action',
-      response: AthenaSessionSummaryOut,
-      description:
-        'Compatibility shortcut that lets only the owner reject the latest pending action and cancel the private session.',
-    }),
-    zParam(idParam),
-    zJson(z.object({})),
-    async (c) => {
-      const owner = requestOwner(c);
-      const session = await loadOwnedSession(owner, c.req.valid('param').id);
-      const action = await latestProposedAction(session.id);
+      const approving = c.req.valid('json').decision === 'approved';
+      const orgId = session.contextOrganizationId ?? '';
       const asynchronous = asynchronousRunnerEnabled();
+
+      if (approving) {
+        if (asynchronous) {
+          const action = await latestProposedAction(session.id);
+          await decideActivity(
+            orgId,
+            null,
+            session.id,
+            action.id,
+            { decision: 'approve' },
+            { queueWake: true },
+          );
+          await wakeWaitingAthenaGeneration(session.id);
+          const current = await loadOwnedSession(owner, session.id);
+          return accepted(
+            c,
+            AthenaSessionSummaryOut,
+            await personalSummaryForSession(owner, current),
+          );
+        }
+        const updated = await approveLatestAndResume(orgId, null, session.id);
+        return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
+      }
+
+      const action = await latestProposedAction(session.id);
       await decideActivity(
-        session.contextOrganizationId ?? '',
+        orgId,
         null,
         session.id,
         action.id,

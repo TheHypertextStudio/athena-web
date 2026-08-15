@@ -6,7 +6,7 @@
  * closes three narrower gaps it (and the rest of the suite) never reaches: refocusing an existing
  * chat session onto a different workspace, editing a proposal on a REGISTERED (non-Athena)
  * session, and rejecting an entire proposal batch (`scope: 'all_in_session'`) through the
- * activity-scoped reject route.
+ * activity-scoped decision route.
  */
 import { Hono } from 'hono';
 import { and, eq } from 'drizzle-orm';
@@ -34,14 +34,6 @@ function appFor(orgId: string, capabilities: readonly string[], actorId: string,
   app.route('/', agentSessions);
   app.onError(onError);
   return app;
-}
-
-function post(app: ReturnType<typeof appFor>, path: string, body: unknown = {}) {
-  return app.request(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
 }
 
 beforeAll(async () => {
@@ -222,7 +214,7 @@ describe('PATCH /:id/activity/:activityId/proposal — registered-agent path', (
   });
 });
 
-describe('POST /:id/activity/:activityId/reject — scope=all_in_session', () => {
+describe('PUT /:id/activity/:activityId/decision — rejecting with scope=all_in_session', () => {
   it('rejects every still-proposed action in the session, not just the named one', async () => {
     const s = await seedOrg();
     const sessionId = await seedRegisteredSession(s);
@@ -230,8 +222,10 @@ describe('POST /:id/activity/:activityId/reject — scope=all_in_session', () =>
     const other = await seedProposedAction(sessionId, s.orgId, 'second');
     const app = appFor(s.orgId, ['assign'], s.humanActorId, `user_${s.humanActorId}`);
 
-    const res = await post(app, `/${sessionId}/activity/${named}/reject`, {
-      scope: 'all_in_session',
+    const res = await app.request(`/${sessionId}/activity/${named}/decision`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ decision: 'rejected', scope: 'all_in_session' }),
     });
     expect(res.status).toBe(200);
 

@@ -81,10 +81,10 @@ describe('email-suggestions router', () => {
     const { orgId, humanActorId, suggestion } = await seedSuggestion();
     const w = appWithActor(router, orgId, ['contribute'], humanActorId);
 
-    const res = await w.request(`/${suggestion.id}/accept`, {
-      method: 'POST',
+    const res = await w.request(`/${suggestion.id}/disposition`, {
+      method: 'PUT',
       headers: J,
-      body: '{}',
+      body: JSON.stringify({ decision: 'accepted' }),
     });
     expect(res.status).toBe(200);
     const accepted = await body<EmailSuggestionOut>(res);
@@ -139,10 +139,13 @@ describe('email-suggestions router', () => {
   it('accept honors title/priority overrides', async () => {
     const { orgId, humanActorId, suggestion } = await seedSuggestion();
     const w = appWithActor(router, orgId, ['contribute'], humanActorId);
-    const res = await w.request(`/${suggestion.id}/accept`, {
-      method: 'POST',
+    const res = await w.request(`/${suggestion.id}/disposition`, {
+      method: 'PUT',
       headers: J,
-      body: JSON.stringify({ title: 'Reply to Google recruiter', priority: 'urgent' }),
+      body: JSON.stringify({
+        decision: 'accepted',
+        overrides: { title: 'Reply to Google recruiter', priority: 'urgent' },
+      }),
     });
     const accepted = await body<EmailSuggestionOut>(res);
     const taskRow = one(
@@ -158,24 +161,26 @@ describe('email-suggestions router', () => {
   it('rejects accepting an already-resolved suggestion (409)', async () => {
     const { orgId, humanActorId, suggestion } = await seedSuggestion();
     const w = appWithActor(router, orgId, ['contribute'], humanActorId);
-    await w.request(`/${suggestion.id}/accept`, { method: 'POST', headers: J, body: '{}' });
-    const second = await w.request(`/${suggestion.id}/accept`, {
-      method: 'POST',
-      headers: J,
-      body: '{}',
-    });
+    const accept = { method: 'PUT', headers: J, body: JSON.stringify({ decision: 'accepted' }) };
+    await w.request(`/${suggestion.id}/disposition`, accept);
+    const second = await w.request(`/${suggestion.id}/disposition`, accept);
     expect(second.status).toBe(409);
   });
 
   it('dismiss marks the suggestion dismissed and drops it from the pending list', async () => {
     const { orgId, humanActorId, suggestion } = await seedSuggestion();
     const w = appWithActor(router, orgId, ['contribute'], humanActorId);
-    const res = await w.request(`/${suggestion.id}/dismiss`, { method: 'POST' });
-    expect(res.status).toBe(200);
-    expect(await body<{ id: string; status: string }>(res)).toEqual({
-      id: suggestion.id,
-      status: 'dismissed',
+    const res = await w.request(`/${suggestion.id}/disposition`, {
+      method: 'PUT',
+      headers: J,
+      body: JSON.stringify({ decision: 'dismissed' }),
     });
+    expect(res.status).toBe(200);
+    const dismissed = await body<EmailSuggestionOut>(res);
+    expect(dismissed.id).toBe(suggestion.id);
+    expect(dismissed.status).toBe('dismissed');
+    // A dismissal returns the whole suggestion, like an acceptance does — one decision, one shape.
+    expect(dismissed.createdTaskId).toBeNull();
     expect((await body<Page<EmailSuggestionOut>>(await w.request('/'))).items).toHaveLength(0);
   });
 
@@ -183,22 +188,32 @@ describe('email-suggestions router', () => {
     const a = await seedSuggestion();
     const b = await seedBaseOrg(db, schema);
     const wb = appWithActor(router, b.orgId, ['contribute'], b.humanActorId);
-    expect(
-      (await wb.request(`/${a.suggestion.id}/accept`, { method: 'POST', headers: J, body: '{}' }))
-        .status,
-    ).toBe(404);
-    expect((await wb.request(`/${a.suggestion.id}/dismiss`, { method: 'POST' })).status).toBe(404);
+    const decide = (decision: string) => ({
+      method: 'PUT',
+      headers: J,
+      body: JSON.stringify({ decision }),
+    });
+    expect((await wb.request(`/${a.suggestion.id}/disposition`, decide('accepted'))).status).toBe(
+      404,
+    );
+    expect((await wb.request(`/${a.suggestion.id}/disposition`, decide('dismissed'))).status).toBe(
+      404,
+    );
   });
 
-  it('enforces the `contribute` capability on accept/dismiss (403)', async () => {
+  it('enforces the `contribute` capability on the disposition (403)', async () => {
     const { orgId, humanActorId, suggestion } = await seedSuggestion();
     const viewer = appWithActor(router, orgId, ['view'], humanActorId);
-    expect(
-      (await viewer.request(`/${suggestion.id}/accept`, { method: 'POST', headers: J, body: '{}' }))
-        .status,
-    ).toBe(403);
-    expect((await viewer.request(`/${suggestion.id}/dismiss`, { method: 'POST' })).status).toBe(
+    const decide = (decision: string) => ({
+      method: 'PUT',
+      headers: J,
+      body: JSON.stringify({ decision }),
+    });
+    expect((await viewer.request(`/${suggestion.id}/disposition`, decide('accepted'))).status).toBe(
       403,
     );
+    expect(
+      (await viewer.request(`/${suggestion.id}/disposition`, decide('dismissed'))).status,
+    ).toBe(403);
   });
 });

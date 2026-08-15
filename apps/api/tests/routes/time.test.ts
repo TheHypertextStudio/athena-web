@@ -130,7 +130,11 @@ describe('Time Ledger routes', () => {
   // disappear from `/active` and fall back to the idle "Start a timer" state client-side.
   it('keeps a paused record as the active tracker instead of reporting no tracker at all', async () => {
     const record = await startTracking({ context: { label: 'Untangle deployment access' } });
-    const paused = await app.request(`/records/${record.id}/pause`, { method: 'POST' });
+    const paused = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paused' }),
+    });
     expect(paused.status).toBe(200);
     expect((await json<TimeRecordOut>(paused)).status).toBe('paused');
 
@@ -238,11 +242,15 @@ describe('Time Ledger routes', () => {
   // CORE-37: the acceptance sequence, exactly as written.
   it('persists start/pause/resume/pause/resume/stop as exactly three bounded segments', async () => {
     const record = await startTracking({ context: { label: 'Segmented work' } });
-    for (const step of ['pause', 'start', 'pause', 'start', 'stop']) {
+    for (const status of ['paused', 'running', 'paused', 'running', 'stopped']) {
       // Each transition is separated by more than the join window so the acceptance's THREE
       // segments are what the ledger holds; see the sub-minute join test for the other case.
       await advanceStoredClock(record.id, 5 * 60_000);
-      const response = await app.request(`/records/${record.id}/${step}`, { method: 'POST' });
+      const response = await app.request(`/records/${record.id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
       expect(response.status).toBe(200);
     }
     const schema = await getDb();
@@ -296,7 +304,11 @@ describe('Time Ledger routes', () => {
   it('joins a restart under a minute and records a break at or beyond one minute', async () => {
     const taskId = await seedTask('Continuous work');
     const record = await startTracking({ context: { label: 'Continuous work', taskId } });
-    await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
 
     // 59 seconds later: one segment spanning the whole span, no break recorded.
     await rewindLastSegment(record.id, 59_000);
@@ -306,7 +318,11 @@ describe('Time Ledger routes', () => {
     expect(rejoined.intervals.filter((interval) => interval.endedAt === null)).toHaveLength(1);
 
     // 61 seconds later: a genuinely separate segment on the same task.
-    await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
     await rewindLastSegment(record.id, 61_000);
     await startTracking({ context: { label: 'Continuous work', taskId } });
     expect(await segmentCountForTask(taskId)).toBe(2);
@@ -316,7 +332,11 @@ describe('Time Ledger routes', () => {
     const alpha = await seedTask('Alpha');
     const beta = await seedTask('Beta');
     const first = await startTracking({ context: { label: 'Alpha', taskId: alpha } });
-    await app.request(`/records/${first.id}/stop`, { method: 'POST' });
+    await app.request(`/records/${first.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
     await rewindLastSegment(first.id, 1_000);
     const second = await startTracking({ context: { label: 'Beta', taskId: beta } });
     expect(second.id).not.toBe(first.id);
@@ -343,7 +363,11 @@ describe('Time Ledger routes', () => {
       .set({ title: '   ' })
       .where(eq(schema.timeRecord.id, record.id));
 
-    const refused = await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    const refused = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
     expect(refused.status).toBe(422);
     const problem = await json<{ code: string; fieldErrors: Record<string, unknown> }>(refused);
     expect(problem.code).toBe('validation_error');
@@ -362,7 +386,11 @@ describe('Time Ledger routes', () => {
       .update(schema.timeRecord)
       .set({ title: 'Named at last' })
       .where(eq(schema.timeRecord.id, record.id));
-    const stopped = await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    const stopped = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
     expect(stopped.status).toBe(200);
     expect((await json<TimeRecordOut>(stopped)).status).toBe('closed');
   });
@@ -408,10 +436,10 @@ describe('Time Ledger routes', () => {
 
   it('refuses to finish an unnamed session, and leaves it running', async () => {
     const record = await startTracking({ context: {} });
-    const refused = await app.request(`/records/${record.id}/stop`, {
-      method: 'POST',
+    const refused = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
       headers: JSON_HEADERS,
-      body: JSON.stringify({}),
+      body: JSON.stringify({ status: 'stopped' }),
     });
     expect(refused.status).toBe(422);
     expect((await json<{ code: string }>(refused)).code).toBe('validation_error');
@@ -428,10 +456,10 @@ describe('Time Ledger routes', () => {
 
   it('anchors the record, its segments and its allocation when the stop carries a name', async () => {
     const record = await startTracking({ context: {} });
-    const stopped = await app.request(`/records/${record.id}/stop`, {
-      method: 'POST',
+    const stopped = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
       headers: JSON_HEADERS,
-      body: JSON.stringify({ title: 'Fixing the drag handles' }),
+      body: JSON.stringify({ status: 'stopped', title: 'Fixing the drag handles' }),
     });
     expect(stopped.status).toBe(200);
     const closed = await json<TimeRecordOut>(stopped);
@@ -474,10 +502,10 @@ describe('Time Ledger routes', () => {
   // would silently weld them into one continuous stretch nobody worked.
   it('never joins two unnamed sessions, however brief the gap', async () => {
     const first = await startTracking({ context: {} });
-    await app.request(`/records/${first.id}/stop`, {
-      method: 'POST',
+    await app.request(`/records/${first.id}/status`, {
+      method: 'PUT',
       headers: JSON_HEADERS,
-      body: JSON.stringify({ title: 'First thing' }),
+      body: JSON.stringify({ status: 'stopped', title: 'First thing' }),
     });
     await rewindLastSegment(first.id, 1_000);
     const second = await startTracking({ context: {} });
@@ -503,13 +531,25 @@ describe('Time Ledger routes', () => {
     const taskId = await seedTask('Observable work');
     const record = await startTracking({ context: { label: 'Observable work', taskId } });
     await advanceStoredClock(record.id, 5 * 60_000);
-    await app.request(`/records/${record.id}/pause`, { method: 'POST' });
+    await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paused' }),
+    });
     await advanceStoredClock(record.id, 5 * 60_000);
-    await app.request(`/records/${record.id}/start`, { method: 'POST' });
+    await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'running' }),
+    });
     const other = await seedTask('Something else');
     await advanceStoredClock(record.id, 5 * 60_000);
     const switched = await startTracking({ context: { label: 'Something else', taskId: other } });
-    await app.request(`/records/${switched.id}/stop`, { method: 'POST' });
+    await app.request(`/records/${switched.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
 
     const schema = await getDb();
     const events = await schema.db

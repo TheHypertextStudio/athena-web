@@ -492,8 +492,8 @@ describe('the union toolbox: remote read + local writes in one session', () => {
         .limit(1);
       if (!pending?.groupId) break;
       const approved = await sessions.request(
-        `/${session.id}/proposals/${pending.groupId}/approve`,
-        { method: 'POST', headers: J, body: JSON.stringify({}) },
+        `/${session.id}/proposals/${pending.groupId}/decision`,
+        { method: 'PUT', headers: J, body: JSON.stringify({ decision: 'approved' }) },
       );
       settled = ((await approved.json()) as { status: string }).status;
     }

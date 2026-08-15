@@ -187,7 +187,11 @@ describe('Time Ledger command edge cases', () => {
 
   it('refuses to start, add time to, or reallocate a submitted record (but still allows renaming)', async () => {
     const record = await startRecord();
-    await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
     await pastJoinWindow(record.id);
     await db
       .update(schema.timeRecord)
@@ -205,7 +209,15 @@ describe('Time Ledger command edge cases', () => {
         })
       ).status,
     ).toBe(200);
-    expect((await app.request(`/records/${record.id}/start`, { method: 'POST' })).status).toBe(409);
+    expect(
+      (
+        await app.request(`/records/${record.id}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'running' }),
+        })
+      ).status,
+    ).toBe(409);
     expect(
       (
         await app.request(`/records/${record.id}/intervals`, {
@@ -231,20 +243,36 @@ describe('Time Ledger command edge cases', () => {
 
   it('refuses to resume a closed record once it is past the auto-rejoin window', async () => {
     const record = await startRecord();
-    await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
     await pastJoinWindow(record.id);
 
-    const resumed = await app.request(`/records/${record.id}/start`, { method: 'POST' });
+    const resumed = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'running' }),
+    });
     expect(resumed.status).toBe(409);
   });
 
   it('rejoins the same segment when resuming within the auto-rejoin window', async () => {
     const record = await startRecord();
-    await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
 
     // No time manipulation: resuming immediately after stopping the same task rejoins the prior
     // segment rather than refusing it as "closed".
-    const resumed = await app.request(`/records/${record.id}/start`, { method: 'POST' });
+    const resumed = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'running' }),
+    });
     expect(resumed.status).toBe(200);
     expect((await body<{ id: string; status: string }>(resumed)).status).toBe('open');
   });
@@ -252,7 +280,11 @@ describe('Time Ledger command edge cases', () => {
   it('resuming an already-active record is a no-op that returns the current state', async () => {
     const record = await startRecord();
     // The record is already active immediately after creation; starting it again should not error.
-    const res = await app.request(`/records/${record.id}/start`, { method: 'POST' });
+    const res = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'running' }),
+    });
     expect(res.status).toBe(200);
     expect((await body<{ id: string }>(res)).id).toBe(record.id);
   });
@@ -260,9 +292,30 @@ describe('Time Ledger command edge cases', () => {
   it('hides a record owned by another Hub as not found, for every command', async () => {
     const missingId = '00000000-0000-0000-0000-000000000000';
     for (const [path, init] of [
-      [`/records/${missingId}/start`, { method: 'POST' }],
-      [`/records/${missingId}/pause`, { method: 'POST' }],
-      [`/records/${missingId}/stop`, { method: 'POST' }],
+      [
+        `/records/${missingId}/status`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'running' }),
+        },
+      ],
+      [
+        `/records/${missingId}/status`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'paused' }),
+        },
+      ],
+      [
+        `/records/${missingId}/status`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'stopped' }),
+        },
+      ],
       [
         `/records/${missingId}`,
         { method: 'PATCH', headers: J, body: JSON.stringify({ title: 'x' }) },
@@ -275,22 +328,38 @@ describe('Time Ledger command edge cases', () => {
 
   it('refuses to stop an already-submitted record', async () => {
     const record = await startRecord();
-    await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
     await db
       .update(schema.timeRecord)
       .set({ status: 'submitted' })
       .where(eq(schema.timeRecord.id, record.id));
 
-    const res = await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    const res = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'stopped' }),
+    });
     expect(res.status).toBe(409);
   });
 
   it('refuses to pause a record that is not actively tracking', async () => {
     const record = await startRecord();
-    const paused = await app.request(`/records/${record.id}/pause`, { method: 'POST' });
+    const paused = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paused' }),
+    });
     expect(paused.status).toBe(200);
     // The active human interval is already closed; pausing again finds nothing to close.
-    const again = await app.request(`/records/${record.id}/pause`, { method: 'POST' });
+    const again = await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paused' }),
+    });
     expect(again.status).toBe(409);
   });
 
@@ -321,7 +390,11 @@ describe('Time Ledger command edge cases', () => {
 
   it('keeps a paused record’s status closed when a historical interval is added to it', async () => {
     const record = await startRecord();
-    await app.request(`/records/${record.id}/pause`, { method: 'POST' });
+    await app.request(`/records/${record.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paused' }),
+    });
     const res = await app.request(`/records/${record.id}/intervals`, {
       method: 'POST',
       headers: J,
@@ -347,14 +420,22 @@ describe('Time Ledger command edge cases', () => {
 
     // Resuming the first, still inside the auto-rejoin window, both rejoins its segment AND
     // switches away from whatever is currently tracking (the second record).
-    const resumed = await app.request(`/records/${first.id}/start`, { method: 'POST' });
+    const resumed = await app.request(`/records/${first.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'running' }),
+    });
     expect(resumed.status).toBe(200);
     expect((await body<{ status: string }>(resumed)).status).toBe('open');
   });
 
   it('announces a switch when resuming a paused record past the join window pulls tracking away from another', async () => {
     const first = await startRecord();
-    await app.request(`/records/${first.id}/pause`, { method: 'POST' });
+    await app.request(`/records/${first.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paused' }),
+    });
     await pastJoinWindow(first.id);
     const second = await app.request('/records', {
       method: 'POST',
@@ -365,7 +446,11 @@ describe('Time Ledger command edge cases', () => {
 
     // The first record's own last segment is past its join window, so this takes the ordinary
     // (non-joined) resume path — which still switches away from the currently active second record.
-    const resumed = await app.request(`/records/${first.id}/start`, { method: 'POST' });
+    const resumed = await app.request(`/records/${first.id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'running' }),
+    });
     expect(resumed.status).toBe(200);
     expect((await body<{ status: string }>(resumed)).status).toBe('open');
   });

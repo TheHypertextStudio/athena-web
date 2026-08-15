@@ -53,9 +53,9 @@ export function useEmailSuggestions(orgId: string): EmailSuggestionsData {
     mutationFn: ({ id, overrides }: AcceptSuggestionArgs) =>
       unwrap(
         () =>
-          api.v1.orgs[':orgId']['email-suggestions'][':id'].accept.$post({
+          api.v1.orgs[':orgId']['email-suggestions'][':id'].disposition.$put({
             param: { orgId, id },
-            json: overrides,
+            json: { decision: 'accepted', overrides },
           }),
         'Could not accept the suggestion.',
       ),
@@ -67,7 +67,10 @@ export function useEmailSuggestions(orgId: string): EmailSuggestionsData {
     mutationFn: (id: string) =>
       unwrap(
         () =>
-          api.v1.orgs[':orgId']['email-suggestions'][':id'].dismiss.$post({ param: { orgId, id } }),
+          api.v1.orgs[':orgId']['email-suggestions'][':id'].disposition.$put({
+            param: { orgId, id },
+            json: { decision: 'dismissed' },
+          }),
         'Could not dismiss the suggestion.',
       ),
     invalidateKeys: [key],

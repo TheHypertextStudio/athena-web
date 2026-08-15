@@ -12,7 +12,10 @@ A path segment names a **thing**, never an operation. `POST /tasks/:id/state` sa
 
 - Collections are plural nouns (`/tasks`, `/statuses`), members sit one segment below (`/tasks/:taskId`).
 - Segments are lower-kebab-case (`/saved-views`, `/recurrence-series`). No camelCase, no underscores.
-- No trailing slash. `/tasks/` and `/tasks` would be two resources, and only one of them exists.
+- No trailing slash. `/tasks/` and `/tasks` would be two resources, and only one of them exists —
+  a request for the slashed form gets a `301` to the canonical path, via Hono's
+  `trimTrailingSlash`. The conformance test asserting that no route ends in a slash is what makes
+  that redirect unconditionally safe.
 - Org-scoped resources nest under `/orgs/:orgId`, so the tenant key is always a path parameter and never a body field.
 
 When an operation genuinely is not CRUD, model it as the **state it sets** rather than the verb that sets it:

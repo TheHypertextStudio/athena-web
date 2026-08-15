@@ -15,6 +15,7 @@ import { auth } from '@docket/auth';
 import { Hono } from 'hono';
 import { requestId } from 'hono/request-id';
 import { secureHeaders } from 'hono/secure-headers';
+import { trimTrailingSlash } from 'hono/trailing-slash';
 
 import { adminApp, app } from './app';
 import { sessionMiddleware } from './auth/session-middleware';
@@ -80,6 +81,14 @@ server.use('*', requestId());
 //   `frame-ancestors` naming the web app; a blanket `SAMEORIGIN` would overwrite that and break
 //   it. Framing a JSON response is not an attack this header meaningfully prevents.
 server.use('*', secureHeaders({ crossOriginResourcePolicy: 'cross-origin', xFrameOptions: false }));
+
+// One resource, one URI. A trailing slash used to 404; it now redirects permanently to the
+// canonical path, which is what a client following a hand-written or copy-pasted URL deserves.
+// `alwaysRedirect` (rather than the default, which only rewrites an existing 404) is safe here
+// precisely because `rest-conformance.test.ts` proves no route on either surface ends in a
+// slash — and it is also the only form that works, since an unmatched request on this server
+// throws rather than returning a 404 the middleware could inspect afterwards.
+server.use('*', trimTrailingSlash({ alwaysRedirect: true }));
 
 server.use('*', buildCorsMiddleware(trustedOrigins));
 server.use('*', sessionMiddleware);

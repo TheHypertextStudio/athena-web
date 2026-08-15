@@ -540,3 +540,19 @@ describe('request size', () => {
     expect((await res.json()) as { code: string }).toMatchObject({ code: 'payload_too_large' });
   });
 });
+
+describe('canonical URLs', () => {
+  it('redirects a trailing slash to the one path that serves the resource', async () => {
+    const { trimTrailingSlash } = await import('hono/trailing-slash');
+    const { Hono } = await import('hono');
+    const probe = new Hono()
+      .use('*', trimTrailingSlash({ alwaysRedirect: true }))
+      .get('/things', (c) => c.json({ ok: true }));
+
+    const res = await probe.request('http://api.test/things/', { redirect: 'manual' });
+    // 301, not 404: the slashed form is not a different resource, and a permanent redirect lets
+    // a client — or a search engine — record the canonical one.
+    expect(res.status).toBe(301);
+    expect(res.headers.get('location')).toBe('http://api.test/things');
+  });
+});

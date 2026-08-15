@@ -72,7 +72,7 @@ function serialize<T extends z.ZodType>(c: Context, schema: T, data: z.input<T>)
     );
     throw new ApiError(500, 'internal', 'Response body did not match its declared schema');
   }
-  return result.data as z.output<T>;
+  return result.data;
 }
 
 /**

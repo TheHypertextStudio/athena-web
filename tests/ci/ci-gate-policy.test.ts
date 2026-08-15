@@ -530,7 +530,20 @@ describe('production carries every environment variable the API requires', () =>
     // the `API_SECRET_BINDINGS` repository variable, which lives outside the repo and so cannot be
     // read from a test; `scripts/production-secrets.ts` validates that mapping at deploy time.
     // `PORT` is injected by Cloud Run itself.
+    // Read the keys the env file actually assigns rather than searching the whole document. A
+    // substring search passes on any mention, including prose: deploy.yml's own comments name
+    // ATHENA_ASYNC_RUNNER_ENABLED, API_URL, and PORT, so deleting one of those assignments while
+    // leaving its comment would have satisfied the check and shipped the very outage this guards.
     const deploy = readFileSync(join(REPO_ROOT, '.github/workflows/deploy.yml'), 'utf8');
+    const envFile = /<<'EOF'\n([\s\S]*?)\n\s*EOF/.exec(deploy)?.[1] ?? '';
+    const assigned = new Set(
+      [...envFile.matchAll(/^\s*([A-Z][A-Z0-9_]*):/gm)].map(([, key]) => key),
+    );
+
+    // The env file must be found at all — an empty match would make every var look present-by-
+    // absence and quietly retire this gate.
+    expect(assigned.size).toBeGreaterThan(0);
+
     const providedByPlatform = new Set(['PORT']);
 
     const missing = VAR_REGISTRY.filter(
@@ -539,7 +552,7 @@ describe('production carries every environment variable the API requires', () =>
         entry.targets.includes('api') &&
         entry.sensitive !== true &&
         !providedByPlatform.has(entry.name) &&
-        !deploy.includes(entry.name),
+        !assigned.has(entry.name),
     ).map((entry) => entry.name);
 
     expect(missing, `deploy.yml is missing required API vars: ${missing.join(', ')}`).toEqual([]);

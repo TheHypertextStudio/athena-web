@@ -210,7 +210,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
               return (
                 <li
                   key={publication.id}
-                  className="bg-surface-container-low flex items-center gap-3 rounded-xl p-4"
+                  className="bg-surface-container-low flex min-h-14 items-center gap-3 rounded-xl px-4 py-2"
                 >
                   <Globe aria-hidden className="text-on-surface-variant size-4 shrink-0" />
                   <span className="min-w-0 flex-1">

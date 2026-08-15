@@ -32,16 +32,16 @@ through `e2e/tools/dev-session.ts` and `e2e/tools/capture-shots.ts`. States exer
 domains (empty), two claimed-but-unverified domains with their DNS records disclosed, and a default
 address on a deployment with no shared brief host configured.
 
-| Dimension                   | Score | Evidence                                                                                                                                                                                                                                     |
-| --------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Brand identity & voice   | 3     | Calm MD3 register throughout; copy is application-owned and specific ("Add this record at your DNS provider, then check it."). No provider or exception text reaches the surface — verification failures map through `VERIFY_FAILURE_COPY`.  |
-| 2. Typographic craft        | 3     | MD3 tokens only (`body-medium` for addresses, `label-small` for record labels, `title-*` via `SectionHeader`); `font-mono` reserved for the DNS record values, which are identifiers. Two levels of hierarchy per row, no arbitrary sizes.   |
-| 3. Spatial rhythm & density | 3     | One rhythm: `p-4` rows, `gap-3`/`gap-2` inside, and a single `ROW_INDENT` (`pl-7`) that lines every disclosed block up with the host text above it. Visible in the desktop shot as one continuous left edge down each expanded row.          |
-| 4. Hierarchy & information  | 3     | One primary action (`Add domain`) in the subsection header; `Check DNS` is a subordinate outline button; the destructive Remove is a ghost icon that asks before acting. Nothing on the surface competes with the address list.              |
-| 5. Color discipline         | 3     | Fully neutral, semantic tokens only. Depth is carried by a three-step surface-container ladder (row `-low` → record block `container` → copy hover `-high`) with no outline anywhere on the surface. Both themes verified.                   |
-| 6. Motion & feedback        | 2     | **No evidence captured.** Static screenshots say nothing about hover, focus, or the copy control's `idle → copied` transition. Unverified is not a pass — see finding 3.                                                                     |
-| 7. States completeness      | 3     | Empty, populated, unverified-with-records, and not-reachable-default all captured; loading renders `Skeleton` rows matching the final layout. No dead read-only rows remain — the read-only slug box and its "go elsewhere" button are gone. |
-| 8. Detail craft             | 3     | DNS records hold aligned label/value columns across both domain rows, with the copy controls forming their own aligned right column. A 51-character domain wraps inside its cell rather than overflowing. 320px overflow check passed.       |
+| Dimension                   | Score | Evidence                                                                                                                                                                                                                                           |
+| --------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Brand identity & voice   | 3     | Calm MD3 register throughout; copy is application-owned and specific ("Add this record at your DNS provider, then check it."). No provider or exception text reaches the surface — verification failures map through `VERIFY_FAILURE_COPY`.        |
+| 2. Typographic craft        | 3     | MD3 tokens only (`body-medium` for addresses, `label-small` for record labels, `title-*` via `SectionHeader`); `font-mono` reserved for the DNS record values, which are identifiers. Two levels of hierarchy per row, no arbitrary sizes.         |
+| 3. Spatial rhythm & density | 3     | A collapsed row measures 56px — MD3's one-line list item — from a 40px control line plus `py-2`, so height comes from the control scale rather than from padding. One `ROW_INDENT` (`pl-7`) lines every disclosed block up with the host above it. |
+| 4. Hierarchy & information  | 3     | One primary action (`Add domain`) in the subsection header; `Check DNS` is a subordinate outline button; the destructive Remove is a ghost icon that asks before acting. Nothing on the surface competes with the address list.                    |
+| 5. Color discipline         | 3     | Fully neutral, semantic tokens only. Depth is carried by a three-step surface-container ladder (row `-low` → record block `container` → copy hover `-high`) with no outline anywhere on the surface. Both themes verified.                         |
+| 6. Motion & feedback        | 2     | **No evidence captured.** Static screenshots say nothing about hover, focus, or the copy control's `idle → copied` transition. Unverified is not a pass — see finding 3.                                                                           |
+| 7. States completeness      | 3     | Empty, populated, unverified-with-records, and not-reachable-default all captured; loading renders `Skeleton` rows matching the final layout. No dead read-only rows remain — the read-only slug box and its "go elsewhere" button are gone.       |
+| 8. Detail craft             | 3     | DNS records hold aligned label/value columns across both domain rows, with the copy controls forming their own aligned right column. A 51-character domain wraps inside its cell rather than overflowing. 320px overflow check passed.             |
 
 Gates: A11y ❌ (see finding 1) · Responsive ❌ (see finding 1) · Theme parity ✅ · No placeholder ✅ · Screenshots ✅
 
@@ -77,6 +77,10 @@ Gates: A11y ❌ (see finding 1) · Responsive ❌ (see finding 1) · Theme parit
   was nowhere to paste it, and at three characters wide the control left its icon stranded at the
   far end of the aligned column. Type is now plain text; only Name and Value — the two fields
   anyone transcribes — are controls.
+- **Rows were 72px tall for one line of text** — MD3's _two-line_ height. Measured in the DOM: the
+  40px icon button set the line, and `p-4` added another 32px on top of it, so the row was sized by
+  its padding rather than by its control scale. The button stays 40px (the minimum touch target);
+  the padding came down to `py-2`, landing the row on 56px exactly.
 - **The surface reached for outlines where MD3 uses tint.** Both lists were bordered boxes with
   hairline dividers, and three badges carried the outline variant. Rows are now
   `surface-container-low` tiles in a spaced stack, each disclosed DNS block sits one tint step above

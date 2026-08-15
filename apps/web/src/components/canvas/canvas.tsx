@@ -21,6 +21,8 @@ import {
   type Node,
   type NodeTypes,
   type EdgeTypes,
+  type OnInit,
+  type OnNodeDrag,
   ReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react';
@@ -102,6 +104,12 @@ export interface CanvasProps extends GraphInteractionHandlers {
   onSelectNode?: ((id: string | null) => void) | undefined;
   /** Called when a node is double-clicked (navigate to it). */
   onNavigate?: ((id: string) => void) | undefined;
+  /** Receives the initialized xyflow instance for host-specific spatial interactions. */
+  onInit?: OnInit | undefined;
+  /** Generic node-drag lifecycle callbacks; hosts assign domain meaning. */
+  onNodeDragStart?: OnNodeDrag | undefined;
+  onNodeDrag?: OnNodeDrag | undefined;
+  onNodeDragStop?: OnNodeDrag | undefined;
   /** Overlays rendered inside the flow (e.g. `<Panel>` legend/toolbar/peek). */
   children?: ReactNode | undefined;
   /** Extra classes for the canvas container. */
@@ -128,6 +136,10 @@ function CanvasInner({
   onExpand,
   onSelectNode,
   onNavigate,
+  onInit,
+  onNodeDragStart,
+  onNodeDrag,
+  onNodeDragStop,
   onConnectEdge,
   onDeleteEdge,
   onReparentEdge,
@@ -159,6 +171,10 @@ function CanvasInner({
           {...(edgeTypes !== undefined ? { edgeTypes } : {})}
           onNodeClick={(_, node) => onSelectNode?.(node.id)}
           onNodeDoubleClick={(_, node) => onNavigate?.(node.id)}
+          onInit={onInit}
+          onNodeDragStart={onNodeDragStart}
+          onNodeDrag={onNodeDrag}
+          onNodeDragStop={onNodeDragStop}
           onPaneClick={() => onSelectNode?.(null)}
           onEdgeContextMenu={menus.onEdgeContextMenu}
           onPaneContextMenu={menus.onPaneContextMenu}

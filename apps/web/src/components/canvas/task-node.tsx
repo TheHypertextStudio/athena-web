@@ -113,6 +113,7 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
     dueDate,
     density,
     orgId,
+    parentTaskId,
   } = data as TaskNodeData;
   const compact = density === 'compact';
   const done = isEnded(stateType);
@@ -132,13 +133,16 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
         id,
         organizationId: orgId,
         title,
-        meta: { state },
+        meta: { state, parentTaskId },
       })}
       style={{ viewTransitionName: taskNodeTransitionName(id) }}
       className={cn(
         'task-branch-header group bg-surface-container-high border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',
         compact ? 'h-14 w-[240px] px-2.5 py-2' : 'h-[84px] w-[300px] px-3 py-2.5',
         selected && 'ring-primary ring-2',
+        data['hierarchyDropState'] === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
+        data['hierarchyDropState'] === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',
+        data['hierarchyDragOrigin'] === true && 'opacity-40',
       )}
     >
       {actions !== null ? (

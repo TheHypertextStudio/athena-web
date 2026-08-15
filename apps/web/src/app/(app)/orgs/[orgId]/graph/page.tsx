@@ -1,5 +1,5 @@
 /**
- * The dependency-graph focused view — server entry (SSR prefetch + hydration).
+ * The Task graph focused view — server entry (SSR prefetch + hydration).
  *
  * @remarks
  * The expand target for every canvas embed and the global "Graph" workspace destination. The
@@ -34,7 +34,7 @@ function endpointQuery(scope: TaskGraphScope): Record<string, string> {
 }
 
 /**
- * The dependency-graph page (Server Component).
+ * The Task graph page (Server Component).
  *
  * @param props - The route params + search params (async in Next 16).
  * @returns the hydrated focused canvas.
@@ -57,7 +57,7 @@ export default async function GraphPage({
     queryFn: () =>
       unwrap(
         () => api.v1.orgs[':orgId'].graph.$get({ param: { orgId }, query: endpointQuery(scope) }),
-        'Could not load the dependency graph.',
+        'Could not load the task graph.',
       ),
   });
 

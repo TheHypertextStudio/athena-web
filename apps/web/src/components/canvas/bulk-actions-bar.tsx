@@ -22,7 +22,7 @@ export default function BulkActionsBar(): React.JSX.Element | null {
   const [selected, setSelected] = useState<Node[]>([]);
   useOnSelectionChange({
     onChange: useCallback(({ nodes }: { nodes: Node[] }) => {
-      setSelected(nodes.filter((n) => n.type === 'task'));
+      setSelected(nodes.filter((n) => n.type === 'task' || n.type === 'taskBranch'));
     }, []),
   });
   const actions = useCanvasActions();

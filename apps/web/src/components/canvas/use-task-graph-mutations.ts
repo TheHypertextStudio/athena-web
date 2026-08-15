@@ -11,7 +11,7 @@
  * task's detail key, so every embed and the task page reconcile with the server. Server rejections
  * (cycle/duplicate/self) roll the optimistic patch back and surface a readable `error`.
  */
-import { dependencyEdgeId, type GraphOut, subtaskEdgeId, type TaskGraphEdge } from '@docket/types';
+import { dependencyEdgeId, type GraphOut, type TaskGraphEdge } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -57,8 +57,6 @@ export interface TaskGraphMutations {
   reverseDependency: (sourceTaskId: string, targetTaskId: string) => void;
   /** Set a task's workflow state. */
   setState: (taskId: string, state: string) => void;
-  /** Reparent a subtask edge's child under a new parent (RESTful `PATCH parentTaskId`). */
-  reparent: (childTaskId: string, newParentId: string) => void;
   /** Create a subtask under a parent, adding a child node + subtask edge. */
   createSubtask: (parentTaskId: string, title: string) => void;
   /** The last write error (cycle / duplicate / permission), or null. */
@@ -207,45 +205,6 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
     invalidateKeys,
   });
 
-  const reparentMutation = useApiMutation<
-    unknown,
-    { childTaskId: string; newParentId: string },
-    { rollback: () => void }
-  >({
-    mutationFn: ({ childTaskId, newParentId }) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].tasks[':id'].$patch({
-            param: { orgId, id: childTaskId },
-            json: { parentTaskId: newParentId },
-          }),
-        'Could not reparent the task.',
-      ),
-    onMutate: ({ childTaskId, newParentId }) => {
-      setError(null);
-      return optimisticPatch<GraphOut>(queryClient, scopeKey, (prev) => {
-        const edges = prev.edges.filter((e) => !(e.kind === 'subtask' && e.target === childTaskId));
-        const moved: TaskGraphEdge = {
-          id: subtaskEdgeId(newParentId, childTaskId),
-          source: newParentId,
-          target: childTaskId,
-          kind: 'subtask',
-        } as TaskGraphEdge;
-        return {
-          nodes: prev.nodes.map((n) =>
-            n.id === childTaskId ? { ...n, parentTaskId: newParentId } : n,
-          ),
-          edges: [...edges, moved],
-        } as GraphOut;
-      });
-    },
-    onError: (err, _vars, ctx) => {
-      ctx?.rollback();
-      setError(userErrorMessage(err, 'Could not reparent the task.'));
-    },
-    invalidateKeys,
-  });
-
   // Create-subtask has no optimistic patch (the server assigns the new id); invalidation reveals it.
   const createSubtaskMutation = useApiMutation<unknown, { parentTaskId: string; title: string }>({
     mutationFn: ({ parentTaskId, title }) =>
@@ -307,12 +266,6 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
     },
     [stateMutation],
   );
-  const reparent = useCallback(
-    (childTaskId: string, newParentId: string) => {
-      reparentMutation.mutate({ childTaskId, newParentId });
-    },
-    [reparentMutation],
-  );
   const createSubtask = useCallback(
     (parentTaskId: string, title: string) => {
       createSubtaskMutation.mutate({ parentTaskId, title });
@@ -328,7 +281,6 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
     removeDependency,
     reverseDependency,
     setState: setStateFn,
-    reparent,
     createSubtask,
     error,
     clearError,

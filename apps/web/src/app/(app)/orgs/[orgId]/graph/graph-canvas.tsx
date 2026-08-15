@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `graph-canvas` — the focused dependency-graph view (full density).
+ * `graph-canvas` — the focused Task graph view (full density).
  *
  * @remarks
  * The expand target for every embed and the global Graph workspace. It is a thin shell over
@@ -45,7 +45,7 @@ function backTarget(scope: TaskGraphScope): { href: string; label: string } {
   return { href: `/orgs/${scope.orgId}/my-work`, label: 'Back to workspace' };
 }
 
-/** The focused, filterable, editable dependency canvas (query + presentation persist to the URL). */
+/** The focused, filterable, editable Task graph (query + presentation persist to the URL). */
 export default function GraphCanvas({ scope }: GraphCanvasProps): JSX.Element {
   const { state, setFilters, setGroupBy } = useViewState();
   const { display, patchDisplay } = useGraphDisplay();
@@ -63,7 +63,7 @@ export default function GraphCanvas({ scope }: GraphCanvasProps): JSX.Element {
         className="min-h-0 flex-1"
         renderChrome={(bar) => (
           <AppBar
-            title="Dependency graph"
+            title="Task graph"
             navigation={
               <Tooltip>
                 <TooltipTrigger asChild>

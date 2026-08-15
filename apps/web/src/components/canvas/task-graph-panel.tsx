@@ -23,9 +23,9 @@ import { EmptyState } from '@docket/ui/components';
 import { Undo, Workflow, X } from '@docket/ui/icons';
 import { Button, Skeleton, Surface } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import { type Edge, type Node, Panel } from '@xyflow/react';
+import { type Edge, type Node, Panel, type ReactFlowInstance } from '@xyflow/react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type DragEventHandler } from 'react';
 
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { api } from '@/lib/api';
@@ -42,9 +42,13 @@ import {
   RESOLVING_LABEL,
 } from '@/components/views/field-catalog';
 import { filterRows } from '@/components/views/apply-view';
+import { SelectionProvider, useSelection } from '@/components/selection';
+import { useTaskHierarchyMutation } from '@/components/tasks/use-task-hierarchy-mutation';
+import type { ObjectRef } from '@/lib/actions';
 
 import BulkActionsBar from './bulk-actions-bar';
 import Canvas from './canvas';
+import CanvasSelectionBridge from './canvas-selection-bridge';
 import { type CanvasActions, CanvasActionsProvider } from './canvas-actions-context';
 import DependencyEdge from './dependency-edge';
 import { DEFAULT_GRAPH_DISPLAY, type GraphDisplayState } from './graph-display';
@@ -60,6 +64,7 @@ import { layoutTaskHierarchy, retainTaskHierarchyAncestors } from './task-hierar
 import { type CanvasDensity } from './use-dagre-layout';
 import { type TaskGraphScope, useTaskGraph } from './use-task-graph';
 import { useTaskGraphMutations } from './use-task-graph-mutations';
+import { useTaskHierarchyDrag } from './use-task-hierarchy-drag';
 
 /** Stable registries (must not be re-created per render — xyflow warns otherwise). */
 const NODE_TYPES = { task: TaskNode, taskBranch: TaskBranchNode, group: GroupNode };
@@ -99,6 +104,7 @@ export interface TaskGraphPanelProps {
 
 /** Minimap node color by status-category token (the canvas is generic; the host injects this). */
 function taskStateColor(node: Node): string {
+  if (node.type === 'group') return 'var(--color-surface-container-low)';
   return `var(--color-state-${taskData(node).stateType})`;
 }
 
@@ -106,6 +112,35 @@ function taskStateColor(node: Node): string {
 function pruneEdges(nodes: readonly Node[], edges: readonly Edge[]): Edge[] {
   const ids = new Set(nodes.map((n) => n.id));
   return edges.filter((e) => ids.has(e.source) && ids.has(e.target));
+}
+
+/** Bind the graph DOM to the shared selection registry and keyboard contract. */
+function TaskGraphSelectionFrame({
+  children,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: {
+  readonly children: React.ReactNode;
+  readonly onDragOver?: DragEventHandler<HTMLDivElement>;
+  readonly onDragLeave?: DragEventHandler<HTMLDivElement>;
+  readonly onDrop?: DragEventHandler<HTMLDivElement>;
+}): React.JSX.Element {
+  const { containerProps } = useSelection();
+  return (
+    <div
+      {...containerProps}
+      role="tree"
+      aria-label="Task graph"
+      tabIndex={0}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      className="size-full focus:outline-none"
+    >
+      {children}
+    </div>
+  );
 }
 
 /** A scoped, interactive dependency-graph canvas with peek, editing, and optional view bar. */
@@ -243,6 +278,9 @@ export default function TaskGraphPanel({
     resolveProjectName,
   });
   const mutations = useTaskGraphMutations(effectiveScope);
+  const hierarchyMutation = useTaskHierarchyMutation();
+  const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const [selectedFlowNodes, setSelectedFlowNodes] = useState<readonly Node[]>([]);
 
   const toOptions = useCallback(
     (items: readonly { id: string; name: string }[] | undefined): readonly FieldOption[] =>
@@ -386,6 +424,43 @@ export default function TaskGraphPanel({
     [groupSpec, filtered, density, display.direction],
   );
 
+  const selectionItems = useMemo<readonly ObjectRef[]>(
+    () =>
+      filtered.nodes.map((node) => {
+        const data = taskData(node);
+        return {
+          kind: 'task',
+          id: node.id,
+          title: data.title,
+          organizationId: orgId,
+          meta: { state: data.state, parentTaskId: data.parentTaskId },
+        };
+      }),
+    [filtered.nodes, orgId],
+  );
+  const commitHierarchy = useCallback(
+    (subjectIds: readonly string[], parentTaskId: string) => {
+      hierarchyMutation.reparent({
+        organizationId: orgId,
+        moves: subjectIds.map((taskId) => ({ taskId, parentTaskId })),
+        preserveSelectedSubtrees: true,
+      });
+    },
+    [hierarchyMutation.reparent, orgId],
+  );
+  const hierarchyDrag = useTaskHierarchyDrag({
+    nodes: canvasNodes,
+    selectedIds: selectedFlowNodes.map(({ id }) => id),
+    organizationId: orgId,
+    instance: flowInstance,
+    onCommit: commitHierarchy,
+  });
+  const activeError = hierarchyMutation.error ?? mutations.error;
+  const clearActiveError = hierarchyMutation.error
+    ? hierarchyMutation.clearError
+    : mutations.clearError;
+  const activeUndo = hierarchyMutation.undo ?? mutations.undo;
+
   const body = (() => {
     if (isLoading) {
       // placeholder: the graph itself — which tasks and dependencies exist, and therefore the
@@ -412,107 +487,122 @@ export default function TaskGraphPanel({
       );
     }
     return (
-      <CanvasActionsProvider value={canvasActions}>
-        <Canvas
-          nodes={canvasNodes}
-          edges={filtered.edges}
-          nodeTypes={NODE_TYPES}
-          edgeTypes={EDGE_TYPES}
-          density={density}
-          layoutDirection={display.direction}
-          disableLayout
-          nodeColor={taskStateColor}
-          minimap={display.minimap}
-          interactive={canEdit}
-          highlightIds={display.critical ? criticalIds : null}
-          focusOn={focusOn}
-          onExpand={onExpand}
-          onSelectNode={handleSelect}
-          onNavigate={navigate}
-          onConnectEdge={mutations.addDependency}
-          onDeleteEdge={(edge) => {
-            mutations.removeDependency(edge.source, edge.target);
-          }}
-          onReparentEdge={mutations.reparent}
+      <SelectionProvider items={selectionItems} organizationId={orgId}>
+        <TaskGraphSelectionFrame
+          onDragOver={canEdit ? hierarchyDrag.onNativeDragOver : undefined}
+          onDragLeave={canEdit ? hierarchyDrag.onNativeDragLeave : undefined}
+          onDrop={canEdit ? hierarchyDrag.onNativeDrop : undefined}
         >
-          <BulkActionsBar />
-          {display.ready && readyNodes.length > 0 ? (
-            <Panel position="bottom-left">
-              <Surface tone="raised" pad="tight" className="max-h-56 w-56 overflow-auto">
-                <p className="text-on-surface-variant text-label-medium mb-1">Ready to start</p>
-                {readyNodes.map((n) => (
-                  <button
-                    key={n.id}
-                    type="button"
-                    onClick={() => {
-                      navigate(n.id);
+          <CanvasActionsProvider value={canvasActions}>
+            <Canvas
+              nodes={canvasNodes}
+              edges={filtered.edges}
+              nodeTypes={NODE_TYPES}
+              edgeTypes={EDGE_TYPES}
+              density={density}
+              layoutDirection={display.direction}
+              disableLayout
+              nodeColor={taskStateColor}
+              minimap={display.minimap}
+              interactive={canEdit}
+              highlightIds={display.critical ? criticalIds : null}
+              focusOn={focusOn}
+              onExpand={onExpand}
+              onSelectNode={handleSelect}
+              onNavigate={navigate}
+              onConnectEdge={mutations.addDependency}
+              onDeleteEdge={(edge) => {
+                mutations.removeDependency(edge.source, edge.target);
+              }}
+              onInit={setFlowInstance}
+              onNodeDragStart={canEdit ? hierarchyDrag.onNodeDragStart : undefined}
+              onNodeDrag={canEdit ? hierarchyDrag.onNodeDrag : undefined}
+              onNodeDragStop={canEdit ? hierarchyDrag.onNodeDragStop : undefined}
+            >
+              <CanvasSelectionBridge onChange={setSelectedFlowNodes} />
+              <div className="sr-only" aria-live="polite">
+                {hierarchyDrag.status}
+              </div>
+              <BulkActionsBar />
+              {display.ready && readyNodes.length > 0 ? (
+                <Panel position="bottom-left">
+                  <Surface tone="raised" pad="tight" className="max-h-56 w-56 overflow-auto">
+                    <p className="text-on-surface-variant text-label-medium mb-1">Ready to start</p>
+                    {readyNodes.map((n) => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => {
+                          navigate(n.id);
+                        }}
+                        className="hover:bg-surface-container-highest text-on-surface text-body-small block w-full truncate rounded px-1.5 py-1 text-left"
+                      >
+                        {taskData(n).title}
+                      </button>
+                    ))}
+                  </Surface>
+                </Panel>
+              ) : null}
+              {selectedNode !== null ? (
+                <Panel position="top-right">
+                  <NodePeek
+                    node={selectedNode}
+                    nodes={filtered.nodes}
+                    edges={filtered.edges}
+                    canEdit={canEdit}
+                    onNavigate={navigate}
+                    onSetState={mutations.setState}
+                    onClose={() => {
+                      setSelectedId(null);
                     }}
-                    className="hover:bg-surface-container-highest text-on-surface text-body-small block w-full truncate rounded px-1.5 py-1 text-left"
-                  >
-                    {taskData(n).title}
-                  </button>
-                ))}
-              </Surface>
-            </Panel>
-          ) : null}
-          {selectedNode !== null ? (
-            <Panel position="top-right">
-              <NodePeek
-                node={selectedNode}
-                nodes={filtered.nodes}
-                edges={filtered.edges}
-                canEdit={canEdit}
-                onNavigate={navigate}
-                onSetComplete={setComplete}
-                onClose={() => {
-                  setSelectedId(null);
-                }}
-              />
-            </Panel>
-          ) : null}
-          {/*
+                  />
+                </Panel>
+              ) : null}
+              {/*
             One strip, two messages. A write that failed and an edit that can be taken back both
             want the same place — under the graph, out of the way of the nodes — and only one of
             them is ever live, because a successful removal clears the error and a failure never
             offers an undo.
           */}
-          {mutations.error !== null ? (
-            <Panel position="bottom-center">
-              <Surface
-                tone="prominent"
-                shape="pill"
-                className="text-state-canceled text-body-medium flex items-center gap-2 py-1.5 pr-2 pl-4"
-              >
-                {mutations.error}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  iconOnly
-                  onClick={mutations.clearError}
-                  aria-label="Dismiss"
-                >
-                  <X className="size-4" />
-                </Button>
-              </Surface>
-            </Panel>
-          ) : mutations.undo !== null ? (
-            <Panel position="bottom-center">
-              <Surface
-                tone="prominent"
-                shape="pill"
-                className="text-body-medium flex items-center gap-2 py-1.5 pr-2 pl-4"
-              >
-                {mutations.undo.label}
-                <Button type="button" variant="ghost" size="sm" onClick={mutations.undo.undo}>
-                  <Undo className="size-4" />
-                  Undo
-                </Button>
-              </Surface>
-            </Panel>
-          ) : null}
-        </Canvas>
-      </CanvasActionsProvider>
+              {activeError !== null ? (
+                <Panel position="bottom-center">
+                  <Surface
+                    tone="prominent"
+                    shape="pill"
+                    className="text-state-canceled text-body-medium flex items-center gap-2 py-1.5 pr-2 pl-4"
+                  >
+                    {activeError}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      onClick={clearActiveError}
+                      aria-label="Dismiss"
+                    >
+                      <X className="size-4" />
+                    </Button>
+                  </Surface>
+                </Panel>
+              ) : activeUndo !== null ? (
+                <Panel position="bottom-center">
+                  <Surface
+                    tone="prominent"
+                    shape="pill"
+                    className="text-body-medium flex items-center gap-2 py-1.5 pr-2 pl-4"
+                  >
+                    {activeUndo.label}
+                    <Button type="button" variant="ghost" size="sm" onClick={activeUndo.undo}>
+                      <Undo className="size-4" />
+                      Undo
+                    </Button>
+                  </Surface>
+                </Panel>
+              ) : null}
+            </Canvas>
+          </CanvasActionsProvider>
+        </TaskGraphSelectionFrame>
+      </SelectionProvider>
     );
   })();
 

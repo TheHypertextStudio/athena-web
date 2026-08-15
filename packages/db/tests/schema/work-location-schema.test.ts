@@ -58,11 +58,13 @@ describe('work-location schema', () => {
     const places = await db
       .insert(workPlace)
       .values([
-        { hubId, name: 'Downtown office', sort: 0 },
+        { hubId, name: 'Downtown office', address: '100 Main Street', sort: 0 },
         { hubId, name: 'Tuesday client site', sort: 1 },
       ])
       .returning();
 
+    expect(places[0]?.address).toBe('100 Main Street');
+    expect(places[1]?.address).toBeNull();
     await db.insert(workLocationProfile).values({ hubId, homePlaceId: places[1]!.id });
     await expect(
       db.insert(workLocationProfile).values({ hubId, homePlaceId: places[0]!.id }),

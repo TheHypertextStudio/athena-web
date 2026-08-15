@@ -35,6 +35,7 @@ export const workPlace = pgTable(
       .notNull()
       .references(() => hub.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
+    address: text('address'),
     geofenceLatitude: doublePrecision('geofence_latitude'),
     geofenceLongitude: doublePrecision('geofence_longitude'),
     geofenceRadiusMeters: doublePrecision('geofence_radius_meters'),

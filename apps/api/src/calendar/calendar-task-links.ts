@@ -12,7 +12,7 @@
  */
 import { and, eq, isNull } from 'drizzle-orm';
 
-import { type Capability, satisfies } from '@docket/authz';
+import { satisfies } from '@docket/authz';
 import {
   actor,
   calendarItem,
@@ -89,7 +89,7 @@ async function requireContributingActor(
   const row = rows[0];
   if (row === undefined) throw new NotFoundError('Organization not found');
 
-  const capabilities = (row.role !== null ? row.role.capabilities : []) as Capability[];
+  const capabilities = row.role !== null ? row.role.capabilities : [];
   if (!capabilities.some((cap) => satisfies(cap, 'contribute'))) throw new CapabilityError();
 
   return { id: row.actor.id };

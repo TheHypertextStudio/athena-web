@@ -80,11 +80,11 @@ export interface StatusIconProps {
    */
   type: WorkflowStateType;
   /** Optional accessible label; defaults to the {@link WorkflowStateType} value. */
-  label?: string;
+  label?: string | undefined;
   /** Extra classes merged after the token color (size, spacing). */
-  className?: string;
+  className?: string | undefined;
   /** Inline style, e.g. to set a CSS custom property a `className` utility reads. */
-  style?: React.CSSProperties;
+  style?: React.CSSProperties | undefined;
 }
 
 /**

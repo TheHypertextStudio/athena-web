@@ -25,14 +25,14 @@ export interface EntityTableRowProps<T> {
   row: T;
   active: boolean;
   selected: boolean;
-  href?: string;
-  renderRowLink?: (props: EntityTableRowLinkProps) => React.ReactNode;
+  href?: string | undefined;
+  renderRowLink?: ((props: EntityTableRowLinkProps) => React.ReactNode) | undefined;
   /** Warm the row's destination cache on hover/focus (bound to this row by EntityTable). */
-  onRowPrefetch?: () => void;
-  onActivate?: () => void;
-  onSelect?: () => void;
+  onRowPrefetch?: (() => void) | undefined;
+  onActivate?: (() => void) | undefined;
+  onSelect?: (() => void) | undefined;
   /** Makes the whole row a drag source (bound to this row by EntityTable's `rowDrag`). */
-  drag?: DragSource;
+  drag?: DragSource | undefined;
 }
 
 /**

@@ -27,20 +27,20 @@ export interface ListRowProps extends React.ComponentPropsWithoutRef<'div'> {
   /** The row's cells, each typically a {@link ListCell} (`role="gridcell"`). */
   children: React.ReactNode;
   /** Whether the row is the active (keyboard-focused) row. */
-  active?: boolean;
+  active?: boolean | undefined;
   /** Whether the row is selected. */
-  selected?: boolean;
+  selected?: boolean | undefined;
   /** Activate the row (Enter / click). */
-  onActivate?: () => void;
+  onActivate?: (() => void) | undefined;
   /** Tab index for roving-tabindex keyboard navigation; defaults to `-1`. */
-  tabIndex?: number;
+  tabIndex?: number | undefined;
   /**
    * Makes the whole row a drag source — draggable from anywhere in its bounds, with text selection
    * suppressed so the gesture never paints a stray highlight.
    */
-  drag?: DragSource;
+  drag?: DragSource | undefined;
   /** Extra classes merged onto the row. */
-  className?: string;
+  className?: string | undefined;
 }
 
 /** Props for {@link ListCell}. */

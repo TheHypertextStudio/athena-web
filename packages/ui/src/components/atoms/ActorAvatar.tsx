@@ -56,11 +56,11 @@ export interface ActorAvatarProps {
   /** The actor's display name; used for the accessible label and initials fallback. */
   name: string;
   /** Optional avatar image URL. */
-  avatarUrl?: string | null;
+  avatarUrl?: string | null | undefined;
   /** Size in pixels for the square avatar box. Defaults to `24`. */
-  size?: number;
+  size?: number | undefined;
   /** Extra classes merged onto the avatar box. */
-  className?: string;
+  className?: string | undefined;
 }
 
 /**

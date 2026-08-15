@@ -242,9 +242,9 @@ const ControlSizeContext = React.createContext<ControlSize | undefined>(undefine
 /** Props for {@link ControlGroup}. */
 export interface ControlGroupProps extends React.HTMLAttributes<HTMLElement> {
   /** The step every descendant control adopts unless it overrides `controlSize` itself. */
-  readonly controlSize?: ControlSize;
+  readonly controlSize?: ControlSize | undefined;
   /** The element to render (default `div`); use to keep semantics (`nav`, `header`, …). */
-  readonly as?: React.ElementType;
+  readonly as?: React.ElementType | undefined;
   /**
    * Lay the group out horizontally (default) or vertically.
    *
@@ -252,9 +252,9 @@ export interface ControlGroupProps extends React.HTMLAttributes<HTMLElement> {
    * A vertical group still shares one height step, which is what makes a stacked settings form's
    * fields agree with the buttons beneath it.
    */
-  readonly orientation?: 'horizontal' | 'vertical';
+  readonly orientation?: 'horizontal' | 'vertical' | undefined;
   /** Allow the row to wrap onto multiple lines. Wrapped lines keep the same height step. */
-  readonly wrap?: boolean;
+  readonly wrap?: boolean | undefined;
 }
 
 /**

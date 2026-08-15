@@ -139,7 +139,7 @@ export function ContextMenuSubTrigger({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubTrigger> & {
   /** Add left padding so the label aligns with checkable items. */
-  inset?: boolean;
+  inset?: boolean | undefined;
 }): React.JSX.Element {
   const variant = useContextMenuVariant();
   return (
@@ -199,18 +199,18 @@ export function ContextMenuContent({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
   /** Tonal family for this menu and all its rows. Defaults to the surface-based `'standard'`. */
-  variant?: MenuVariant;
+  variant?: MenuVariant | undefined;
   /**
    * How this menu separates its sections: a hairline `divider` (the default) or a `gap`, which
    * splits the menu into separately painted blocks. Pick one — they are alternatives, and a menu
    * that uses both reads as two competing groupings of the same rows.
    */
-  sections?: MenuSections;
+  sections?: MenuSections | undefined;
   /**
    * One of the four {@link MENU_WIDTH} steps. Defaults to `md` (224px). Pass a step rather than
    * a `min-w-*`/`w-*` class: the open set produced seven different widths across the product.
    */
-  width?: MenuWidth;
+  width?: MenuWidth | undefined;
 }): React.JSX.Element {
   return (
     <ContextMenuVariantContext.Provider value={variant}>
@@ -252,20 +252,20 @@ export function ContextMenuItem({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Item> & {
   /** Add left padding so the label aligns with checkable items. */
-  inset?: boolean;
+  inset?: boolean | undefined;
   /** Optional quieter second line rendered beneath the label (anatomy #10). */
-  supporting?: React.ReactNode;
+  supporting?: React.ReactNode | undefined;
   /** Optional trailing pill, e.g. a count or status (anatomy #5). */
-  badge?: React.ReactNode;
+  badge?: React.ReactNode | undefined;
   /** Optional trailing meta/shortcut hint (anatomy #6). */
-  trailingText?: React.ReactNode;
+  trailingText?: React.ReactNode | undefined;
   /**
    * Render the row in its selected state — the spec's `menu-item.selected.*` roles and its 12dp
    * corner. For rows whose selection the menu does not own itself: the active workspace, the
    * open tab, the current view. A call site that tints its own row instead is how a menu ends up
    * with two different selection colours.
    */
-  selected?: boolean;
+  selected?: boolean | undefined;
 }): React.JSX.Element {
   const variant = useContextMenuVariant();
   const hasRichAnatomy = supporting != null || badge != null || trailingText != null;
@@ -317,7 +317,7 @@ export function ContextMenuCheckboxItem({
         menuFocusRing,
         className,
       )}
-      checked={checked}
+      {...(checked !== undefined ? { checked } : {})}
       {...props}
     >
       <span className="absolute left-4 flex size-5 items-center justify-center">
@@ -365,7 +365,7 @@ export function ContextMenuLabel({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Label> & {
   /** Add left padding so the label aligns with checkable items. */
-  inset?: boolean;
+  inset?: boolean | undefined;
 }): React.JSX.Element {
   const variant = useContextMenuVariant();
   return (

@@ -24,9 +24,9 @@ export interface Workspace {
   /** The org's display name. */
   readonly name: string;
   /** Optional avatar image URL. */
-  readonly avatar?: string | null;
+  readonly avatar?: string | null | undefined;
   /** An attention count for this workspace, surfaced as a switcher badge. */
-  readonly attentionCount?: number;
+  readonly attentionCount?: number | undefined;
 }
 
 /**

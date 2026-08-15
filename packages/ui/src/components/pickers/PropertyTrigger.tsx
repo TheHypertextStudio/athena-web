@@ -37,17 +37,17 @@ export interface PropertyTriggerProps {
    * (e.g. a calendar for a date, a person for an assignee) so a row communicates *what it sets*
    * before it has a value. Falls back to a bare {@link Plus} when empty and no icon is given.
    */
-  icon?: React.ReactNode;
+  icon?: React.ReactNode | undefined;
   /** The current value's label, or `null`/`undefined` when the property is unset. */
-  label?: React.ReactNode;
+  label?: React.ReactNode | undefined;
   /** The calm empty prompt shown when `label` is absent (e.g. "Set lead", "Add project"). */
   placeholder: string;
   /** Hide the leading icon on the empty prompt entirely, including the {@link Plus} fallback. */
-  hidePlaceholderIcon?: boolean;
+  hidePlaceholderIcon?: boolean | undefined;
   /** Accessible label for the trigger (e.g. "Lead — currently Ada Lovelace"). */
-  ariaLabel?: string;
+  ariaLabel?: string | undefined;
   /** Disable the trigger (e.g. while a mutation is in flight). */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   /**
    * Render the value as plain, non-interactive text instead of a button.
    *
@@ -55,11 +55,11 @@ export interface PropertyTriggerProps {
    * Used when the actor lacks edit capability: the row still shows its value (or a muted
    * em-dash when unset) so the panel reads as complete, but offers no clickable affordance.
    */
-  readOnly?: boolean;
+  readOnly?: boolean | undefined;
   /** Trigger weight: `ghost` (quiet, for panel rows) or `outline` (boxed, for composers). */
-  variant?: 'ghost' | 'outline';
+  variant?: 'ghost' | 'outline' | undefined;
   /** Extra classes merged onto the trigger. */
-  className?: string;
+  className?: string | undefined;
   /**
    * Mark the trigger invalid.
    *
@@ -69,9 +69,9 @@ export interface PropertyTriggerProps {
    * a sentence somewhere on the form. Rendered straight onto the button, alongside
    * {@link PropertyTriggerProps.'aria-describedby'} pointing at that message.
    */
-  'aria-invalid'?: boolean;
+  'aria-invalid'?: boolean | undefined;
   /** Id of the element carrying the host's validation message for this control. */
-  'aria-describedby'?: string;
+  'aria-describedby'?: string | undefined;
 }
 
 /**

@@ -125,18 +125,18 @@ export function buttonVariants(options?: ButtonVariantsOptions): string {
 /** Props for {@link Button}. */
 export interface ButtonProps extends Omit<React.ComponentProps<'button'>, 'color'> {
   /** The colour treatment. Default `default`. */
-  readonly variant?: ButtonVariant | null;
+  readonly variant?: ButtonVariant | null | undefined;
   /** Legacy size name. Prefer {@link ButtonProps.controlSize}. See {@link LegacyButtonSize}. */
-  readonly size?: LegacyButtonSize | null;
+  readonly size?: LegacyButtonSize | null | undefined;
   /**
    * The height step. Omit to inherit from the enclosing `ControlGroup`, which is how a button ends
    * up the same height as the chips and selects beside it without anyone measuring.
    */
-  readonly controlSize?: ControlSize;
+  readonly controlSize?: ControlSize | undefined;
   /** Render a square, label-less button sized to the resolved control step. */
-  readonly iconOnly?: boolean;
+  readonly iconOnly?: boolean | undefined;
   /** When `true`, render styling onto the single child element via Radix `Slot`. */
-  readonly asChild?: boolean;
+  readonly asChild?: boolean | undefined;
 }
 
 /**

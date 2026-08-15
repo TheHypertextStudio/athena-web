@@ -82,11 +82,11 @@ export type FieldVariant = (typeof FIELD_VARIANTS)[number];
 /** Options accepted by {@link fieldSurface}. */
 export interface FieldSurfaceOptions {
   /** The treatment. Default `outlined`. */
-  readonly variant?: FieldVariant;
+  readonly variant?: FieldVariant | undefined;
   /** The height step. Resolve it with `useControlSize` before calling. */
   readonly controlSize: ControlSize;
   /** Render the error treatment (also set `aria-invalid` on the element). */
-  readonly invalid?: boolean;
+  readonly invalid?: boolean | undefined;
   /**
    * Let the field grow with its content (`min-h-*` instead of `h-*`) and pad vertically.
    *
@@ -94,7 +94,7 @@ export interface FieldSurfaceOptions {
    * Textareas only. A single-line field keeps a fixed height so it cannot disagree with the button
    * beside it.
    */
-  readonly multiline?: boolean;
+  readonly multiline?: boolean | undefined;
   /**
    * Which interaction triggers the focus ring. Default `'self'` rings the element this string is
    * applied to, correct for every ordinary field. Use `'within'` when this string is applied to a
@@ -102,7 +102,7 @@ export interface FieldSurfaceOptions {
    * only caller today: the box is a `<span>`, so the ring has to key off the nested `<input>`
    * gaining focus instead.
    */
-  readonly ringOn?: 'self' | 'within';
+  readonly ringOn?: 'self' | 'within' | undefined;
 }
 
 /**

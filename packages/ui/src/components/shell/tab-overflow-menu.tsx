@@ -22,7 +22,7 @@ import { TYPE_ICON, tabLabel } from './tab-types';
 
 interface OverflowMenuProps {
   readonly tabs: readonly OpenTab[];
-  readonly activeKey?: string;
+  readonly activeKey?: string | undefined;
   readonly renderLink: TabRenderLink;
   readonly onClose: (key: string) => void;
 }

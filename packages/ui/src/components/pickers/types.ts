@@ -28,9 +28,9 @@ export interface PickerOption<TValue extends string = string> {
   /** The human-readable text shown and matched against the search query. */
   label: string;
   /** Optional leading glyph or avatar node. */
-  icon?: ReactNode;
+  icon?: ReactNode | undefined;
   /** Optional muted trailing hint (e.g. a count, a date, an email). */
-  hint?: string;
+  hint?: string | undefined;
   /**
    * Optional quieter second line under the label, for a choice that needs explaining.
    *
@@ -41,11 +41,11 @@ export interface PickerOption<TValue extends string = string> {
    * *consequence*, and a person choosing between them deserves to be told what it is at the
    * moment of choosing rather than after the fact.
    */
-  supporting?: string;
+  supporting?: string | undefined;
   /** Extra non-displayed terms folded into search matching. */
-  keywords?: readonly string[];
+  keywords?: readonly string[] | undefined;
   /** When `true`, the option renders muted and cannot be selected. */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
 }
 
 /**

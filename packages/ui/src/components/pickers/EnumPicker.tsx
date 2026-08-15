@@ -29,40 +29,40 @@ export interface EnumPickerProps<TValue extends string = string> {
   /** The calm empty prompt shown when unset (only reachable for nullable enums). */
   placeholder: string;
   /** The field's semantic icon shown on the empty prompt in place of the default `+`. */
-  triggerIcon?: React.ReactNode;
+  triggerIcon?: React.ReactNode | undefined;
   /** When set, render a top "clear" row (for nullable enums like health). */
-  clearLabel?: string;
+  clearLabel?: string | undefined;
   /** Placeholder for the search input, when `searchable`. */
-  searchPlaceholder?: string;
+  searchPlaceholder?: string | undefined;
   /** Text shown when no option matches a typed query. */
-  emptyText?: string;
+  emptyText?: string | undefined;
   /**
    * Remote-search passthrough. Supply `query` + `onQueryChange` to own the search text, and
    * `filter="none"` when the options are already narrowed by the server. See {@link OptionPicker}.
    */
-  query?: string;
+  query?: string | undefined;
   /** Report typing; pair with `query`. */
-  onQueryChange?: (query: string) => void;
+  onQueryChange?: ((query: string) => void) | undefined;
   /** Who narrows the options — `'local'` (default) or `'none'` when the caller already did. */
-  filter?: 'local' | 'none';
+  filter?: 'local' | 'none' | undefined;
   /** True while the caller is fetching options; renders placeholder rows, not an empty state. */
-  loading?: boolean;
+  loading?: boolean | undefined;
   /** Text shown when the list is empty and nothing has been typed. */
-  idleText?: string;
+  idleText?: string | undefined;
   /** Observe the popover opening and closing (e.g. to stop searching for a shut list). */
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: ((open: boolean) => void) | undefined;
   /** Accessible label prefix (e.g. "Status", "Priority", "Health"). */
-  ariaLabel?: string;
+  ariaLabel?: string | undefined;
   /** Enable search (off by default — enum lists are short). */
-  searchable?: boolean;
+  searchable?: boolean | undefined;
   /** Disable the trigger (e.g. while a mutation is in flight). */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   /** Render as plain text with no affordance (actor lacks edit capability). */
-  readOnly?: boolean;
+  readOnly?: boolean | undefined;
   /** Trigger weight: `ghost` (panel rows) or `outline` (composer strip). */
-  triggerVariant?: 'ghost' | 'outline';
+  triggerVariant?: 'ghost' | 'outline' | undefined;
   /** Extra classes for the trigger. */
-  triggerClassName?: string;
+  triggerClassName?: string | undefined;
 }
 
 /**

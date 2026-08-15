@@ -45,9 +45,9 @@ const BADGE_COLOR: Readonly<Record<BadgeVariant, string>> = {
 /** Options accepted by {@link badgeVariants}. */
 export interface BadgeVariantsOptions {
   /** The colour treatment. Default `default`. */
-  readonly variant?: BadgeVariant | null;
+  readonly variant?: BadgeVariant | null | undefined;
   /** Extra classes appended last. */
-  readonly className?: string;
+  readonly className?: string | undefined;
 }
 
 /**

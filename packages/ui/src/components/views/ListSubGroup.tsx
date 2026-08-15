@@ -24,16 +24,16 @@ export interface ListSubGroupProps {
   /** Toggle the sub-group's collapse state. */
   onToggle: () => void;
   /** Optional number of rows in the sub-group, rendered as a trailing count. */
-  count?: number;
+  count?: number | undefined;
   /**
    * When the sub-grouping is by workflow state, the canonical type for this sub-group;
    * renders a {@link StatusIcon} as the header decoration.
    */
-  stateType?: WorkflowStateType;
+  stateType?: WorkflowStateType | undefined;
   /** Optional explicit decoration; overrides the {@link StatusIcon} derived from `stateType`. */
-  decoration?: React.ReactNode;
+  decoration?: React.ReactNode | undefined;
   /** Extra classes merged onto the header row. */
-  className?: string;
+  className?: string | undefined;
 }
 
 /**

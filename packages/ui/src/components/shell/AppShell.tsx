@@ -297,7 +297,7 @@ export interface AppShellProps {
   /** The single integrated navigation {@link Sidebar} (host-wired). */
   sidebar: React.ReactNode;
   /** The optional multi-document {@link TabBar}, rendered above the content. */
-  tabBar?: React.ReactNode;
+  tabBar?: React.ReactNode | undefined;
   /**
    * Optional shell-level banner (e.g. an account nudge), rendered between the tab bar and
    * `<main>` — a sibling of the scrollable content, not part of it.
@@ -310,7 +310,7 @@ export interface AppShellProps {
    * the initial view. Passing it here keeps `<main>`'s `flex-1` sizing already net of the banner,
    * so every page's `h-full` continues to mean "all of the space `<main>` actually has left."
    */
-  banner?: React.ReactNode;
+  banner?: React.ReactNode | undefined;
   /**
    * Optional overlay pinned to the top of the content column, above the tab strip and main panel.
    *
@@ -320,18 +320,18 @@ export interface AppShellProps {
    * tab bar and `<main>` keep the exact geometry they have without it, and nothing shifts when it
    * appears or goes away.
    */
-  contentOverlay?: React.ReactNode;
+  contentOverlay?: React.ReactNode | undefined;
   /**
    * Optional brand content for the **mobile top bar** (shown below `lg`), e.g. the active
    * workspace name/avatar. Rendered between the hamburger and the trailing actions; defaults to
    * the product name when omitted.
    */
-  mobileBrand?: React.ReactNode;
+  mobileBrand?: React.ReactNode | undefined;
   /**
    * Optional trailing actions for the **mobile top bar** (shown below `lg`), e.g. a search
    * affordance. Rendered at the bar's right edge.
    */
-  mobileActions?: React.ReactNode;
+  mobileActions?: React.ReactNode | undefined;
   /**
    * The optional right-hand **rail** — a curated set of Docket-native supplemental panels plus a
    * default. On `lg` and up it renders as a thin always-visible {@link ShellActivityBar} switcher
@@ -345,9 +345,9 @@ export interface AppShellProps {
    * `<main>`'s guaranteed share. Panels get a `@container` context instead and lay out against the
    * rail's real inline size.
    */
-  aside?: AppShellAside;
+  aside?: AppShellAside | undefined;
   /** Extra class names for the root shell element. */
-  className?: string;
+  className?: string | undefined;
   /** The main-area content. */
   children: React.ReactNode;
 }

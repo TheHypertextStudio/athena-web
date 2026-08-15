@@ -81,11 +81,11 @@ export interface SidebarProps {
   /** Every workspace the caller can switch into (drives the switcher). */
   readonly workspaces: readonly Workspace[];
   /** The active Home destination (highlights Today/Inbox/Portfolio), if any. */
-  readonly activeHomeKey?: HomeNavKey;
+  readonly activeHomeKey?: HomeNavKey | undefined;
   /** The active Workspace nav key (highlights the org-scoped row), if any. */
-  readonly activeWorkspaceKey?: WorkspaceNavKey;
+  readonly activeWorkspaceKey?: WorkspaceNavKey | undefined;
   /** The caller's cross-org unread count, surfaced on the Inbox row. */
-  readonly unreadCount?: number;
+  readonly unreadCount?: number | undefined;
   /** Build the href for a cross-org Home destination (Today/Inbox/Portfolio). */
   readonly hrefForHome: (key: Exclude<HomeNavKey, 'search'>) => string;
   /** Build the href for an org-scoped Workspace destination under the active org. */
@@ -108,7 +108,7 @@ export interface SidebarProps {
    * compile-time constants, so they render at `loading` too, merely non-navigable until an active
    * workspace exists.
    */
-  readonly loading?: boolean;
+  readonly loading?: boolean | undefined;
   /**
    * Whether the active workspace is the caller's personal space.
    *
@@ -121,13 +121,13 @@ export interface SidebarProps {
    * stays, as each is meaningful for a single person. Defaults to `false` (a shared org), so
    * existing consumers are unaffected.
    */
-  readonly personalWorkspace?: boolean;
+  readonly personalWorkspace?: boolean | undefined;
   /**
    * Optional content pinned to the bottom of the sidebar, below the nav (e.g. the account menu with
    * sign-out). Rendered as a fixed sibling after the scrolling nav region, so it stays pinned to
    * the foot of the rail regardless of how much the Workspace section scrolls above it.
    */
-  readonly footer?: React.ReactNode;
+  readonly footer?: React.ReactNode | undefined;
 }
 
 /** A resolved nav row descriptor (label is already vocabulary-resolved). */

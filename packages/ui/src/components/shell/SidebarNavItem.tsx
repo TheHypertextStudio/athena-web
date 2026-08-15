@@ -29,29 +29,29 @@ export interface SidebarNavItemProps {
   /** The resolved, display-ready label for this nav row. */
   label: string;
   /** Optional leading icon component (ignored when `asChild`, where `children` owns content). */
-  icon?: LucideIcon;
+  icon?: LucideIcon | undefined;
   /** Whether this row is the active route. */
-  active?: boolean;
+  active?: boolean | undefined;
   /**
    * An attention count to surface as a trailing pill. When `> 0` a count is shown and folded
    * into the accessible name; `0`/`undefined` shows nothing.
    */
-  badge?: number;
+  badge?: number | undefined;
   /** A type-specific suffix for the badge's accessible name (default `unread`). */
-  badgeLabel?: string;
+  badgeLabel?: string | undefined;
   /**
    * When `true`, render the row styling onto the single child element (e.g. a router
    * `Link`) instead of a native `<button>`.
    */
-  asChild?: boolean;
+  asChild?: boolean | undefined;
   /** Click handler used when not rendering `asChild`. */
-  onSelect?: () => void;
+  onSelect?: (() => void) | undefined;
   /** Disable a button-backed row while its action is unavailable. */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   /** Render as a square icon-only glyph, with the label moved into a tooltip. */
-  collapsed?: boolean;
+  collapsed?: boolean | undefined;
   /** The child element to style when `asChild` is set. */
-  children?: React.ReactNode;
+  children?: React.ReactNode | undefined;
 }
 
 /** Clamp a raw attention count to a compact label (`99+` ceiling). */

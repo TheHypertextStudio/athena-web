@@ -37,7 +37,7 @@ type RadixPopoverAnchorProps = React.ComponentPropsWithoutRef<typeof PopoverPrim
 
 /** Props for a positioning anchor decoupled from the popover trigger. */
 export interface PopoverAnchorProps extends Omit<RadixPopoverAnchorProps, 'virtualRef'> {
-  readonly virtualRef?: PopoverVirtualAnchorRef;
+  readonly virtualRef?: PopoverVirtualAnchorRef | undefined;
 }
 
 /** Optional positioning anchor decoupled from the trigger. */
@@ -46,7 +46,9 @@ export const PopoverAnchor = React.forwardRef<HTMLDivElement, PopoverAnchorProps
     <PopoverPrimitive.Anchor
       {...props}
       ref={forwardedRef}
-      virtualRef={virtualRef as RadixPopoverAnchorProps['virtualRef']}
+      {...(virtualRef !== undefined
+        ? { virtualRef: virtualRef as NonNullable<RadixPopoverAnchorProps['virtualRef']> }
+        : {})}
     />
   ),
 );

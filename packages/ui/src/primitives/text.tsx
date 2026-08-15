@@ -170,13 +170,13 @@ export interface TextProps extends React.HTMLAttributes<HTMLElement> {
    * `<Text as="h3" token="label-medium">`, which keeps the document outline correct without
    * bending the type scale to match it.
    */
-  readonly as?: React.ElementType;
+  readonly as?: React.ElementType | undefined;
   /** The MD3 type role. Required — there is no default, because "whatever" is not a size. */
   readonly token: TypeToken;
   /** The colour role. Default `default`. */
-  readonly tone?: TextTone;
+  readonly tone?: TextTone | undefined;
   /** Clamp to one line with an ellipsis. */
-  readonly truncate?: boolean;
+  readonly truncate?: boolean | undefined;
   /**
    * Render digits at a fixed width (`tabular-nums`).
    *
@@ -185,7 +185,7 @@ export interface TextProps extends React.HTMLAttributes<HTMLElement> {
    * so the text does not jitter as the value updates. This is a typographic feature of the role,
    * not a new size, which is why it lives here rather than as a raw utility at the callsite.
    */
-  readonly numeric?: boolean;
+  readonly numeric?: boolean | undefined;
 }
 
 /**

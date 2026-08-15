@@ -61,13 +61,13 @@ export interface PickerListProps<TValue extends string = string> {
   /** Report a chosen option's value (multi-select toggles; single-select sets). */
   onSelect: (value: TValue) => void;
   /** When `true`, render trailing checks and keep selection open for multiple picks. */
-  multiple?: boolean;
+  multiple?: boolean | undefined;
   /** Hide the search input (for short, unsearchable lists). Defaults to showing it. */
-  searchable?: boolean;
+  searchable?: boolean | undefined;
   /** Placeholder for the search input. */
-  searchPlaceholder?: string;
+  searchPlaceholder?: string | undefined;
   /** Text shown when no option matches a *typed* query. */
-  emptyText?: string;
+  emptyText?: string | undefined;
   /**
    * Text shown when the list is empty and nothing has been typed yet.
    *
@@ -78,11 +78,11 @@ export interface PickerListProps<TValue extends string = string> {
    * the second just needs a shorter query. Collapsing them into one string sends people looking
    * for a fault that isn't there.
    */
-  idleText?: string;
+  idleText?: string | undefined;
   /** The search text, when the caller owns it. Supplying this makes the field controlled. */
-  query?: string;
+  query?: string | undefined;
   /** Report typing. Pair with {@link PickerListProps.query} for a controlled search field. */
-  onQueryChange?: (query: string) => void;
+  onQueryChange?: ((query: string) => void) | undefined;
   /**
    * Who narrows `options` against the query. Defaults to `'local'`.
    *
@@ -97,7 +97,7 @@ export interface PickerListProps<TValue extends string = string> {
    * URL state, or to clear it when a popover closes, must not silently lose filtering — a failure
    * with no type error and no runtime signal.
    */
-  filter?: 'local' | 'none';
+  filter?: 'local' | 'none' | undefined;
   /**
    * True while the caller is fetching options.
    *
@@ -106,12 +106,12 @@ export interface PickerListProps<TValue extends string = string> {
    * it a remote picker says "No matches" during every request — an answer it does not have yet,
    * and the one thing a search box must never claim prematurely.
    */
-  loading?: boolean;
+  loading?: boolean | undefined;
   /**
    * An optional "clear / none" affordance rendered at the top of the list (single-select):
    * its label and the callback to invoke when chosen (e.g. "No lead", "No project").
    */
-  clear?: { label: string; onClear: () => void } | null;
+  clear?: { label: string; onClear: () => void } | null | undefined;
   /**
    * An optional "create what you just typed" row, rendered last.
    *
@@ -125,13 +125,16 @@ export interface PickerListProps<TValue extends string = string> {
    * case-insensitive existence check here so typing `Bug` when `bug` exists offers the existing
    * label instead of a near-duplicate beside it.
    */
-  create?: {
-    render: (query: string) => string;
-    canCreate: (query: string, options: readonly PickerOption<TValue>[]) => boolean;
-    onCreate: (query: string) => void;
-  } | null;
+  create?:
+    | {
+        render: (query: string) => string;
+        canCreate: (query: string, options: readonly PickerOption<TValue>[]) => boolean;
+        onCreate: (query: string) => void;
+      }
+    | null
+    | undefined;
   /** Accessible label for the listbox. */
-  ariaLabel?: string;
+  ariaLabel?: string | undefined;
 }
 
 /** True when `value` is in the (single or array) `selected` set. */

@@ -68,25 +68,25 @@ export interface DatePickerProps {
   /** The calm empty prompt shown when unset (e.g. "Set due date"). */
   placeholder: string;
   /** Format an ISO date for the trigger; defaults to a short locale day. */
-  formatLabel?: (value: string | null) => string | undefined;
+  formatLabel?: ((value: string | null) => string | undefined) | undefined;
   /** Accessible label prefix (e.g. "Due date", "Target date"). */
-  ariaLabel?: string;
+  ariaLabel?: string | undefined;
   /** Disable the trigger (e.g. while a mutation is in flight). */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   /** Render as plain text with no affordance (actor lacks edit capability). */
-  readOnly?: boolean;
+  readOnly?: boolean | undefined;
   /** Trigger weight: `ghost` (panel rows) or `outline` (composer strip). */
-  triggerVariant?: 'ghost' | 'outline';
+  triggerVariant?: 'ghost' | 'outline' | undefined;
   /** Extra classes for the trigger. */
-  triggerClassName?: string;
+  triggerClassName?: string | undefined;
   /** Earliest selectable day, inclusive. Defaults to the product's 1970 floor. */
-  min?: string;
+  min?: string | undefined;
   /** Latest selectable day, inclusive. Defaults to the product's 2200 ceiling. */
-  max?: string;
+  max?: string | undefined;
   /** Mark the field invalid (the host is showing a validation message about it). */
-  invalid?: boolean;
+  invalid?: boolean | undefined;
   /** Id of the element carrying the host's validation message. */
-  describedBy?: string;
+  describedBy?: string | undefined;
 }
 
 /** The shared popover footer: a "Today" shortcut plus "Clear" when there is something to clear. */

@@ -32,13 +32,13 @@ export interface GroupHeaderProps {
   /** Toggle the group's collapse state. */
   onToggle: () => void;
   /** Optional number of rows in the group, rendered as a trailing count. */
-  count?: number;
+  count?: number | undefined;
   /** Nesting depth: `0` for a top-level group, `1` for a sub-group. Defaults to `0`. */
-  level?: number;
+  level?: number | undefined;
   /** Optional leading decoration rendered between the chevron and the label (e.g. a StatusIcon). */
-  decoration?: React.ReactNode;
+  decoration?: React.ReactNode | undefined;
   /** Extra classes merged onto the header row. */
-  className?: string;
+  className?: string | undefined;
 }
 
 /**

@@ -82,20 +82,20 @@ export interface LabelChipProps {
   /** The label's display text. */
   name: string;
   /** The label's stored colour; anything unrecognized renders as the neutral. */
-  color?: string | null;
+  color?: string | null | undefined;
   /**
    * `read` renders the non-interactive Badge shape (list rows, detail summaries); `action`
    * renders the pressable Chip shape. Defaults to `read`.
    */
-  variant?: 'read' | 'action';
+  variant?: 'read' | 'action' | undefined;
   /** Press handler — `action` only. Typically "filter this list by this label". */
-  onActivate?: () => void;
+  onActivate?: (() => void) | undefined;
   /** Show a trailing remove affordance — `action` only. */
-  onRemove?: () => void;
+  onRemove?: (() => void) | undefined;
   /** Accessible name for the remove control, e.g. `Remove label design`. */
-  removeLabel?: string;
+  removeLabel?: string | undefined;
   /** Extra classes for the outer element. */
-  className?: string;
+  className?: string | undefined;
 }
 
 /** The saturated dot: the chip's leading mark and its only fully-saturated ink. */

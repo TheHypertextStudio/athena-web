@@ -11,7 +11,7 @@ export interface GroupKey {
    * When the (sub-)grouping is by workflow state, the canonical type — lets a sub-group
    * header render the matching status icon.
    */
-  stateType?: WorkflowStateType;
+  stateType?: WorkflowStateType | undefined;
 }
 
 /** The synthesized bucket id for items with no group. */
@@ -54,27 +54,27 @@ export interface ListViewProps<TItem> {
   /** Partition items into top-level groups; `null` routes to the no-group bucket. */
   groupBy: (item: TItem) => GroupKey | null;
   /** Optionally partition each group into sub-groups; omit for single-level grouping. */
-  subGroupBy?: (item: TItem) => GroupKey | null;
+  subGroupBy?: ((item: TItem) => GroupKey | null) | undefined;
   /** Render one data row. */
   renderRow: (item: TItem, ctx: RenderRowContext) => React.ReactNode;
   /** Stable React key for an item; falls back to the item's flat index when omitted. */
-  getItemKey?: (item: TItem) => string;
+  getItemKey?: ((item: TItem) => string) | undefined;
   /** Controlled set of collapsed bucket ids (group id or `${groupId}/${subGroupId}`). */
-  collapsed?: ReadonlySet<string>;
+  collapsed?: ReadonlySet<string> | undefined;
   /** Toggle a bucket's collapse state (controlled mode). */
-  onToggle?: (bucketId: string) => void;
+  onToggle?: ((bucketId: string) => void) | undefined;
   /** Initial collapsed bucket ids for uncontrolled mode. */
-  defaultCollapsed?: Iterable<string>;
+  defaultCollapsed?: Iterable<string> | undefined;
   /** Activate (open) a data item (Enter / click). */
-  onActivateItem?: (item: TItem) => void;
+  onActivateItem?: ((item: TItem) => void) | undefined;
   /**
    * Estimated pixel height of a single row; drives virtualization. Defaults to the active
    * density's row height (32 / 36 / 44 for compact / comfortable / spacious), mirroring the
    * `--row-h` CSS variable the row components consume.
    */
-  rowHeight?: number;
+  rowHeight?: number | undefined;
   /** Accessible label for the grid. */
-  label?: string;
+  label?: string | undefined;
   /** Extra classes merged onto the scroll container. */
-  className?: string;
+  className?: string | undefined;
 }

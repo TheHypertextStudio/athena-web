@@ -62,7 +62,7 @@ export interface TabBarProps {
   /** The caller's open documents, left-to-right. */
   readonly tabs: readonly OpenTab[];
   /** The key of the active (currently-viewed) tab, if any. */
-  readonly activeKey?: string;
+  readonly activeKey?: string | undefined;
   /** Render a routing link element around a tab's content (host's `Link`). */
   readonly renderLink: TabRenderLink;
   /** Close a tab by key (host removes it from the store and routes to a neighbor/base). */

@@ -131,15 +131,15 @@ export interface EntityListRowProps {
 /** The props an {@link EntityListRowProps.render} slot receives. */
 export interface EntityRowRenderProps {
   className: string;
-  href?: string;
+  href?: string | undefined;
   onClick: () => void;
   onKeyDown: (event: React.KeyboardEvent) => void;
   tabIndex: number;
   'aria-current': 'true' | undefined;
   /** Present when the row is a drag source; spread onto the rendered element. */
-  draggable?: boolean;
-  onDragStart?: (event: React.DragEvent) => void;
-  onDragEnd?: (event: React.DragEvent) => void;
+  draggable?: boolean | undefined;
+  onDragStart?: ((event: React.DragEvent) => void) | undefined;
+  onDragEnd?: ((event: React.DragEvent) => void) | undefined;
   children: React.ReactNode;
 }
 

@@ -38,26 +38,26 @@ export interface OptionPickerProps<TValue extends string = string> {
    * (e.g. a calendar for a date field). Ignored once a value is selected — the selected option's
    * own `icon` takes over then.
    */
-  triggerIcon?: React.ReactNode;
+  triggerIcon?: React.ReactNode | undefined;
   /** Whether the search input is shown. Defaults to `true`; pass `false` for short lists. */
-  searchable?: boolean;
+  searchable?: boolean | undefined;
   /** Placeholder for the search input. */
-  searchPlaceholder?: string;
+  searchPlaceholder?: string | undefined;
   /** Text shown when no option matches a *typed* query. */
-  emptyText?: string;
+  emptyText?: string | undefined;
   /** Text shown when the list is empty and nothing has been typed. See {@link PickerListProps}. */
-  idleText?: string;
+  idleText?: string | undefined;
   /** The search text, when the caller owns it. Supplying this makes the field controlled. */
-  query?: string;
+  query?: string | undefined;
   /** Report typing. Pair with `query` for a controlled search field. */
-  onQueryChange?: (query: string) => void;
+  onQueryChange?: ((query: string) => void) | undefined;
   /**
    * Who narrows `options` against the query. Defaults to `'local'`; pass `'none'` when the caller
    * has already filtered (e.g. at a provider). See {@link PickerListProps.filter}.
    */
-  filter?: 'local' | 'none';
+  filter?: 'local' | 'none' | undefined;
   /** True while the caller is fetching options; renders placeholder rows, not an empty state. */
-  loading?: boolean;
+  loading?: boolean | undefined;
   /**
    * Observe the popover opening and closing.
    *
@@ -65,19 +65,19 @@ export interface OptionPickerProps<TValue extends string = string> {
    * The open state stays owned here — this only reports it. A server-filtered picker needs it to
    * stop querying for a list nobody is looking at.
    */
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: ((open: boolean) => void) | undefined;
   /** When set, render a top "clear" row with this label that reports `null` through `onChange`. */
-  clearLabel?: string;
+  clearLabel?: string | undefined;
   /** Accessible label prefix for the trigger + listbox (e.g. "Lead", "Project"). */
-  ariaLabel?: string;
+  ariaLabel?: string | undefined;
   /** Disable the trigger (e.g. while a mutation is in flight). */
-  disabled?: boolean;
+  disabled?: boolean | undefined;
   /** Render the value as plain text with no affordance (actor lacks edit capability). */
-  readOnly?: boolean;
+  readOnly?: boolean | undefined;
   /** Trigger weight: `ghost` (panel rows) or `outline` (composer strip). */
-  triggerVariant?: 'ghost' | 'outline';
+  triggerVariant?: 'ghost' | 'outline' | undefined;
   /** Extra classes for the trigger. */
-  triggerClassName?: string;
+  triggerClassName?: string | undefined;
 }
 
 /**

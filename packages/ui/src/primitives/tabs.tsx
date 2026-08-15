@@ -153,11 +153,11 @@ export function Tabs({
 /** Props for {@link TabList}. */
 export interface TabListProps {
   /** Accessible label for the tablist (announced with the tab role). */
-  readonly label?: string;
+  readonly label?: string | undefined;
   /** Extra classes merged onto the resting track. */
-  readonly className?: string;
+  readonly className?: string | undefined;
   /** The {@link Tab} children. */
-  readonly children?: React.ReactNode;
+  readonly children?: React.ReactNode | undefined;
 }
 
 /** The set of keys the tablist handles for roving-tabindex navigation. */
@@ -235,13 +235,13 @@ export interface TabProps {
   /** Stable tab value (also the `aria-controls`/`id` stem). */
   readonly value: string;
   /** Optional count rendered as a trailing pill. */
-  readonly count?: number;
+  readonly count?: number | undefined;
   /** When `true`, the tab is present but not selectable. */
-  readonly disabled?: boolean;
+  readonly disabled?: boolean | undefined;
   /** Extra classes merged onto the tab button. */
-  readonly className?: string;
+  readonly className?: string | undefined;
   /** The visible tab label. */
-  readonly children?: React.ReactNode;
+  readonly children?: React.ReactNode | undefined;
 }
 
 /**

@@ -20,7 +20,12 @@
  * workspace's settings default section; because this component sits outside `children`, the modal
  * itself never unmounts across that navigation, so it stays visually open and in place.
  */
-import { Dialog, DialogTitle, SettingsDialogContent } from '@docket/ui/primitives';
+import {
+  Dialog,
+  DialogDescription,
+  DialogTitle,
+  SettingsDialogContent,
+} from '@docket/ui/primitives';
 import { type Workspace, WorkspaceSwitcher } from '@docket/ui/components';
 import { useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useEffect, useMemo, useRef } from 'react';
@@ -105,6 +110,9 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
       }}
     >
       <SettingsDialogContent className="p-0">
+        <DialogDescription className="sr-only">
+          Choose a section to update your personal or workspace settings.
+        </DialogDescription>
         {/* `pr-14` reserves the close button's absolute 48px so the switcher never runs under it. */}
         <div className="border-outline-variant flex shrink-0 items-center gap-3 border-b py-3 pr-14 pl-5">
           <DialogTitle className="text-title-medium shrink-0">Settings</DialogTitle>

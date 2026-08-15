@@ -9,7 +9,7 @@
 
 ### [WORK-LOCATION-002] Make work-location settings feel like a place list
 
-- **Status**: IN_PROGRESS
+- **Status**: REVIEW
 - **Started**: 2026-08-14
 - **Priority**: P1
 - **Description**: Replace the first-pass work-location settings control panel with a compact,
@@ -19,14 +19,20 @@
   primary action and contextual icon/overflow utilities.
 - **Subtasks**:
   - [x] Verify the current implementation and record the approved interaction design.
-  - [ ] Persist an optional private address without changing provider projection identity.
-  - [ ] Build the name-first add/edit place dialog and lazy map picker.
-  - [ ] Move schedule and occurrence editing behind dialogs and compact the remaining settings.
-  - [ ] Run focused/full validation and the Docket craft review at desktop/mobile in both themes.
+  - [x] Persist an optional private address without changing provider projection identity.
+  - [x] Build the name-first add/edit place dialog and lazy map picker.
+  - [x] Move schedule and occurrence editing behind dialogs and compact the remaining settings.
+  - [x] Run focused validation and the Docket craft review at desktop/mobile in both themes.
+  - [ ] Run the hosted full-repository gates, deploy, and verify the production surface.
 - **Blockers**: None.
 - **Notes**: The fixed 250 metre matching rule remains an implementation policy, not user
   configuration. Map rendering uses MapLibre with OpenFreeMap only after explicit disclosure;
-  address text is not sent to a third-party geocoder.
+  address text is not sent to a third-party geocoder. The branch was rebased onto `4b3fba7c` with
+  zero merge commits; the work-location migrations were regenerated as `0090` and `0091` from
+  main's current snapshots. Focused rebased-tree validation passes for types (14 tests), database
+  schema (6), API repository (5), and web work-location/calendar integration (37). The local
+  whole-API compiler reached the explicit 2 GB heap cap, so the full monorepo gate remains assigned
+  to hosted CI rather than running another unbounded local process.
 
 ### [STATUS-001] A workspace defines its own statuses for every kind of work
 

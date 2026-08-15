@@ -247,7 +247,9 @@ async function handleSessionPrompted(
   // person hasn't linked their Linear identity to Docket yet — wait for a later delivery.
   if (!initiatorActorId) return c.json({ received: true, processed: false }, 200);
 
-  await recordInboundReply(orgId, session.id, initiatorActorId, event.agentActivity.body);
+  // Third-party text: authored in a Linear workspace by whoever can comment there, which is not
+  // necessarily anyone Docket authenticated. It is enveloped before the model reads it.
+  await recordInboundReply(orgId, session.id, initiatorActorId, event.agentActivity.body, 'linear');
   await queueAgentSessionRun(orgId, session.id);
 
   return c.json({ received: true, processed: true, sessionId: session.id }, 200);

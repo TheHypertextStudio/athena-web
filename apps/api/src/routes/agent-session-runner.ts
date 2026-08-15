@@ -16,6 +16,7 @@ import {
   wakeWaitingAthenaGeneration,
 } from '../agent/async-runner';
 import { driveSession, driveSessionAfterMessage } from '../agent/loop';
+import { markProvenance, type TurnProvenance } from '../agent/provenance';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
 import { ensureDefaultAgent } from '../lib/default-agent';
 
@@ -272,10 +273,18 @@ export async function runSession(orgId: string, sessionId: string): Promise<Sess
  * the webhook door — because a personal Athena session belongs to a user rather than to the
  * workspace this function was handed, so an org-scoped lookup would reject its own owner.
  *
+ * `provenance` is required rather than defaulted because this function is the only place a
+ * `role: 'user'` turn is written, and a default would be a decision made once here on behalf of
+ * every future caller. A new door that relays text from somewhere else has to state where that
+ * text came from, and gets a compile error instead of the principal's authority by omission.
+ *
  * @param orgId - The workspace the reply arrived through; attribution only, not a filter.
  * @param sessionId - The session to reply to, already established as visible to the caller.
  * @param actorId - The reply's human author, or `null` when the caller cannot resolve one.
  * @param text - The reply's freeform text.
+ * @param provenance - Who wrote `text`. Anything but `principal` is enveloped before the model
+ *   sees it; see {@link markProvenance}.
+ * @param origin - Human-readable sender identity for the envelope, when the caller knows one.
  * @throws {NotFoundError} When no session exists with that id.
  */
 async function applyReplyToSession(
@@ -283,6 +292,8 @@ async function applyReplyToSession(
   sessionId: string,
   actorId: string | null,
   text: string,
+  provenance: TurnProvenance,
+  origin?: string,
 ): Promise<SessionRow> {
   return db.transaction(async (tx) => {
     // Locked for the whole write: the visible activity, the transcript turn, and the wake
@@ -300,18 +311,27 @@ async function applyReplyToSession(
     // and a null org even when the caller reached this route through one.
     const attributedOrgId = session.executorKind === 'athena' ? null : orgId;
 
+    // The activity keeps the raw text — a person reads this row in the timeline and should see
+    // what was actually sent — and carries the provenance so the UI can attribute it. The model
+    // reads the transcript, and that copy is enveloped.
     await tx.insert(sessionActivity).values({
       sessionId,
       organizationId: attributedOrgId,
       type: 'response',
-      body: { text, author: 'user' },
+      body: {
+        text,
+        author: 'user',
+        provenance,
+        ...(origin ? { origin } : {}),
+      },
     });
     const messages = await loadTranscript(tx, sessionId);
+    const modelText = markProvenance(text, provenance, origin);
     await saveTranscript(
       tx,
       sessionId,
       attributedOrgId,
-      [...messages, { role: 'user', content: [{ type: 'text', text }] }],
+      [...messages, { role: 'user', content: [{ type: 'text', text: modelText }] }],
       session.ownerUserId,
     );
     if (
@@ -342,6 +362,8 @@ async function applyReplyToSession(
  * @param sessionId - The org-scoped session to reply to and resume.
  * @param actorId - The reply's human author, or `null` when the caller cannot resolve one.
  * @param text - The reply's freeform text.
+ * @param provenance - Who wrote `text`; see {@link applyReplyToSession}.
+ * @param origin - Human-readable sender identity for the envelope, when known.
  * @returns the settled session row after the loop runs.
  * @throws {NotFoundError} When the session is not found in the org.
  */
@@ -350,8 +372,10 @@ export async function postReplyAndResume(
   sessionId: string,
   actorId: string | null,
   text: string,
+  provenance: TurnProvenance,
+  origin?: string,
 ): Promise<ReplyOutcome> {
-  const current = await applyReplyToSession(orgId, sessionId, actorId, text);
+  const current = await applyReplyToSession(orgId, sessionId, actorId, text, provenance, origin);
 
   // A parked or cancelled thread takes the message but starts nothing: approval is the only
   // thing that resumes the first, and nothing resumes the second.
@@ -409,8 +433,10 @@ export async function recordInboundReply(
   sessionId: string,
   actorId: string | null,
   text: string,
+  provenance: TurnProvenance,
+  origin?: string,
 ): Promise<void> {
-  await applyReplyToSession(orgId, sessionId, actorId, text);
+  await applyReplyToSession(orgId, sessionId, actorId, text, provenance, origin);
 }
 
 /** Input to {@link createLinearAgentSession}. */

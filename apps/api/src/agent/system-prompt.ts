@@ -11,6 +11,8 @@
  */
 import type { ApprovalPolicy, AthenaApprovalMode } from '@docket/types';
 
+import { PROVENANCE_SYSTEM_RULE } from './provenance';
+
 /** How each approval dial is explained to the model. */
 const POLICY_LINES: Readonly<Record<ApprovalPolicy, string>> = {
   suggest:
@@ -93,6 +95,8 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
     '',
     `When you are blocked on a decision only the human can make, call \`ask_user\` with ONE ` +
       `concise question and wait. Never invent facts about their work; look them up or ask.`,
+    '',
+    PROVENANCE_SYSTEM_RULE,
     '',
     'Finish with a short summary of what you did (or proposed) and why.',
   ];

@@ -344,6 +344,22 @@ export interface SessionActivityBody {
     | undefined;
   /** Application attribution for human-authored response rows. */
   readonly author?: 'user' | 'athena' | undefined;
+  /**
+   * Where a `author: 'user'` row's text actually came from.
+   *
+   * @remarks
+   * `author` answers "was this the agent or not", which is the question the timeline renders.
+   * It cannot answer "was this the account owner or a stranger who emailed them", and those need
+   * different treatment: the model must weigh the second as third-party material rather than
+   * direction. Absent means `principal` — every row written before this field existed came from
+   * an authenticated Docket surface.
+   *
+   * The text stored here stays raw so a person reads what was actually sent; the enveloping
+   * happens on the transcript the model reads. See `agent/provenance.ts`.
+   */
+  readonly provenance?: 'principal' | 'email' | 'linear' | undefined;
+  /** Display identity of a non-principal author, e.g. the sending email address. */
+  readonly origin?: string | undefined;
   /** For `action` activities: the proposed change + its approval linkage. */
   readonly action?:
     | {

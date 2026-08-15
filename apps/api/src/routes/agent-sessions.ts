@@ -227,6 +227,9 @@ Side effects: dispatches the executor against the runtime; each yielded activity
         session.id,
         actorId,
         body.body,
+        // The chat door: an authenticated member typing into their own session. This is the one
+        // ingress whose text carries the principal's authority.
+        'principal',
       );
 
       const activities = await db

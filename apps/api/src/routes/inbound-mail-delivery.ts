@@ -245,11 +245,17 @@ export async function deliverInboundMail(
   let sessionId: string | null = null;
   try {
     const conversation = await resolveCanonicalConversation(mailbox.ownerUserId, organizationId);
+    // Enveloped as `email`, and the *whole* briefing goes inside it: the sender controls not just
+    // the body but the display name, the subject, and the To line, so there is no part of this
+    // string except Docket's own opening sentence that an attacker cannot write. That sentence
+    // riding along inside the envelope costs nothing.
     await postReplyAndResume(
       organizationId,
       conversation.id,
       null,
       composeAthenaBriefing(message, stored.id),
+      'email',
+      message.fromAddress,
     );
     sessionId = conversation.id;
   } catch {

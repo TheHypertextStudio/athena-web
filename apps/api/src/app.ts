@@ -27,7 +27,11 @@ import { PhoneVerificationService } from './routes/phone-verification';
 import { createVoiceRoutes } from './routes/voice-sessions';
 import { getContainer } from './container';
 import type { AppEnv } from './context';
+import { bodyLimit } from 'hono/body-limit';
+import { etag } from 'hono/etag';
+
 import { cachePolicy } from './lib/cache-policy';
+import { MAX_REQUEST_BYTES, rejectOversizedBody, safeMethodsOnly } from './lib/http-limits';
 import { mediaTypes } from './lib/media-types';
 import { idempotency } from './lib/idempotency';
 import { preconditions } from './lib/preconditions';
@@ -83,6 +87,16 @@ for (const path of [
 ]) {
   app.use(path, authoritativeSessionMiddleware);
 }
+
+// Entity tags for every response, and `304` for a matching `If-None-Match`. Hono's own
+// middleware rather than a hand-rolled one in the output helper: it hashes the finished body so
+// it covers streaming and binary handlers too, and it strips the headers RFC 9110 §15.4.5 says a
+// `304` must not carry — which the version this replaced did not. Scoped to safe methods,
+// because `If-None-Match` on a `POST` must not turn a create into a `304`.
+app.use('*', safeMethodsOnly(etag()));
+
+// Reject a body larger than anything this API legitimately accepts, before it is buffered.
+app.use('*', bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: rejectOversizedBody }));
 
 // Negotiate before doing any work: a body this API cannot read, or an `Accept` it cannot
 // satisfy, is the client's to fix and should not reach a handler as a 500.
@@ -181,8 +195,10 @@ export type AppType = typeof routes;
  */
 export const adminApp = new Hono<AppEnv>();
 
-// Staff-scoped back-office data is no more cacheable than a tenant's own, and its request
-// negotiation is no different either.
+// The staff back-office gets the same protocol treatment as the product surface: its data is no
+// more cacheable than a tenant's own, and its requests negotiate the same way.
+adminApp.use('*', safeMethodsOnly(etag()));
+adminApp.use('*', bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: rejectOversizedBody }));
 adminApp.use('*', mediaTypes);
 adminApp.use('*', cachePolicy);
 

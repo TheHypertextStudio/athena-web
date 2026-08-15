@@ -462,3 +462,81 @@ describe('streaming responses', () => {
     expect(res.headers.get('x-accel-buffering')).toBe('no');
   });
 });
+
+describe('security headers', () => {
+  /** The root server's middleware stack, without booting a listener. */
+  async function hardened() {
+    const { secureHeaders } = await import('hono/secure-headers');
+    const { Hono } = await import('hono');
+    const probe = new Hono()
+      .use('*', secureHeaders({ crossOriginResourcePolicy: 'cross-origin', xFrameOptions: false }))
+      .get('/thing', (c) => c.json({ ok: true }))
+      // Stands in for the MCP Apps sandbox, which must be framable from the web origin.
+      .get('/framed', (c) => c.html('<p>widget</p>'));
+    return probe;
+  }
+
+  it('tells browsers not to guess at a response’s type', async () => {
+    const res = await (await hardened()).request('/thing');
+    // The one that matters most on an API that serves user-supplied file bytes: without it a
+    // stored upload can be re-interpreted as something executable.
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('referrer-policy')).toBeTruthy();
+    expect(res.headers.get('strict-transport-security')).toBeTruthy();
+  });
+
+  it('stays loadable from the product app, which is a different origin', async () => {
+    const res = await (await hardened()).request('/thing');
+    // `same-origin` — the library default — would stop the web app rendering an `<img>` served
+    // by this API. The two are separate origins by design.
+    expect(res.headers.get('cross-origin-resource-policy')).toBe('cross-origin');
+  });
+
+  it('leaves framing to the one document that decides it', async () => {
+    const res = await (await hardened()).request('/framed');
+    // `secureHeaders` applies its headers after the handler, so a blanket `SAMEORIGIN` would
+    // overwrite the MCP Apps sandbox's deliberate omission and break cross-origin framing. The
+    // sandbox constrains it precisely with `frame-ancestors` instead.
+    expect(res.headers.get('x-frame-options')).toBeNull();
+  });
+});
+
+describe('request correlation', () => {
+  it('returns an id a client can quote back', async () => {
+    const { requestId } = await import('hono/request-id');
+    const { Hono } = await import('hono');
+    const probe = new Hono().use('*', requestId()).get('/thing', (c) => c.json({ ok: true }));
+
+    const res = await probe.request('/thing');
+    expect(res.headers.get('x-request-id')).toBeTruthy();
+  });
+
+  it('honours an id the caller supplied, so a trace spans both sides', async () => {
+    const { requestId } = await import('hono/request-id');
+    const { Hono } = await import('hono');
+    const probe = new Hono().use('*', requestId()).get('/thing', (c) => c.json({ ok: true }));
+
+    const res = await probe.request('/thing', {
+      headers: { 'X-Request-Id': 'caller-supplied-id' },
+    });
+    expect(res.headers.get('x-request-id')).toBe('caller-supplied-id');
+  });
+});
+
+describe('request size', () => {
+  it('refuses an oversized body as a problem document, not plain text', async () => {
+    const { app } = await setup();
+    const { MAX_REQUEST_BYTES } = await import('../../src/lib/http-limits');
+
+    const res = await app.request('/v1/time/categories', {
+      method: 'POST',
+      headers: { ...JSON_HEADERS, 'Content-Length': String(MAX_REQUEST_BYTES + 1) },
+      body: JSON.stringify({ name: 'x'.repeat(64), color: 'blue' }),
+    });
+
+    expect(res.status).toBe(413);
+    // Hono's own 413 is plain text; routing it through `onError` keeps the one error shape.
+    expect(res.headers.get('content-type')).toContain('application/problem+json');
+    expect((await res.json()) as { code: string }).toMatchObject({ code: 'payload_too_large' });
+  });
+});

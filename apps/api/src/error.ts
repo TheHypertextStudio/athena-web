@@ -145,6 +145,19 @@ export class UnsupportedMediaTypeError extends ApiError {
 }
 
 /**
+ * 413 — the request body exceeds what this API will read.
+ *
+ * @remarks
+ * Raised by Hono's `bodyLimit` middleware through its `onError` hook, so that an over-long body
+ * fails as a problem document like everything else rather than as the middleware's plain text.
+ */
+export class PayloadTooLargeError extends ApiError {
+  constructor(maxBytes: number) {
+    super(413, 'payload_too_large', `Request body exceeds ${String(maxBytes)} bytes`);
+  }
+}
+
+/**
  * 406 — the caller's `Accept` excludes everything this endpoint can produce.
  *
  * @remarks
@@ -371,6 +384,9 @@ export function onError(err: Error, c: Context) {
         level: 'error',
         source: 'api',
         event: 'unhandled_error',
+        // Set by Hono's `requestId` middleware and echoed to the client as `X-Request-Id`, so a
+        // report of "it failed at 14:03" resolves to exactly one line here.
+        requestId: c.get('requestId'),
         method: c.req.method,
         path: c.req.path,
         message: err.message,

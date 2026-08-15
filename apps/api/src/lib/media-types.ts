@@ -18,13 +18,20 @@
  * the caller received a `422` complaining that fields were missing which it had in fact sent.
  * `415` says the true thing — the body could not be read at all — and names what to declare.
  */
+import { accepts } from 'hono/accepts';
 import type { MiddlewareHandler } from 'hono';
 
 import type { AppEnv } from '../context';
 import { NotAcceptableError, UnsupportedMediaTypeError } from '../error';
 
+/** The representation every endpoint answers with. */
+const JSON_MEDIA_TYPE = 'application/json';
+
 /** Everything this API can produce. Errors are the problem+json flavour of the same thing. */
-const PRODUCED = ['application/json', 'application/problem+json'];
+const PRODUCED = [JSON_MEDIA_TYPE, 'application/problem+json'];
+
+/** Sentinel for "nothing on offer satisfies this request", which `accepts` has no notion of. */
+const UNACCEPTABLE = 'none';
 
 /**
  * Everything this API can consume.
@@ -42,16 +49,6 @@ const BODIED = new Set(['POST', 'PUT', 'PATCH']);
 /** The bare media type, without parameters like `; charset=utf-8` or a multipart boundary. */
 function bare(value: string): string {
   return (value.split(';')[0] ?? '').trim().toLowerCase();
-}
-
-/** Whether a media range from `Accept` covers one of the types this API produces. */
-function rangeCovers(range: string): boolean {
-  const type = bare(range);
-  if (type === '*/*' || type === '') return true;
-  if (type === 'application/*') return true;
-  // `application/problem+json` satisfies a client that asked for `application/json` too: it is
-  // the error flavour of the same representation, and no caller accepts one without the other.
-  return PRODUCED.includes(type) || type.endsWith('+json');
 }
 
 /**
@@ -74,14 +71,29 @@ export const mediaTypes: MiddlewareHandler<AppEnv> = async (c, next) => {
     }
   }
 
-  const accept = c.req.header('Accept');
-  if (accept !== undefined && accept.trim() !== '') {
-    const acceptable = accept
-      .split(',')
-      .filter((range) => !/;\s*q=0(\.0+)?\s*(;|$)/.test(range))
-      .some(rangeCovers);
-    if (!acceptable) throw new NotAcceptableError();
-  }
+  // Parsed by Hono's own `accepts` helper rather than by splitting the header here: it already
+  // handles q-values, quoted parameters, and malformed entries, and re-deriving that was the
+  // largest piece of duplicated code in this module. All that remains local is the wildcard
+  // policy, which the helper's default matcher has no opinion about.
+  const chosen = accepts(c, {
+    header: 'Accept',
+    supports: PRODUCED,
+    // Reached only when the header is absent, which means "anything will do".
+    default: JSON_MEDIA_TYPE,
+    match: (ranges) =>
+      ranges
+        .filter((range) => range.q > 0)
+        .some(
+          ({ type }) =>
+            type === '*/*' ||
+            type === 'application/*' ||
+            PRODUCED.includes(type) ||
+            type.endsWith('+json'),
+        )
+        ? JSON_MEDIA_TYPE
+        : UNACCEPTABLE,
+  });
+  if (chosen === UNACCEPTABLE) throw new NotAcceptableError();
 
   await next();
 };

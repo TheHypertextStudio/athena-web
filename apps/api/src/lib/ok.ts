@@ -6,8 +6,9 @@
  * validator headers, and the documented `*Out` schema stay in one place instead of being
  * re-decided per route:
  *
- * - {@link ok} — `200 OK` for reads and in-place writes. On `GET` it also emits a strong
- *   `ETag` and answers a matching `If-None-Match` with `304 Not Modified`.
+ * - {@link ok} — `200 OK` for reads and in-place writes. Entity tags and `304` handling are
+ *   not here: Hono's own `etag` middleware does that for every response at once (see
+ *   `app.ts`), and correctly strips the headers a `304` must not carry.
  * - {@link created} — `201 Created` plus the `Location` of the new resource.
  * - {@link accepted} — `202 Accepted` plus the `Location` of the job resource that tracks
  *   the work, for handlers that queue rather than complete.
@@ -20,7 +21,6 @@ import type { z } from 'zod';
 
 import { ApiError } from '../error';
 import { env } from '../env';
-import { strongTag, tagListMatches } from './http-tags';
 
 /**
  * Validate and serialize a response body against its `*Out` schema.
@@ -97,13 +97,6 @@ function withStatus(c: Context, status: ContentfulStatusCode): void {
  * Validate and return a `200 OK` JSON body.
  *
  * @remarks
- * On `GET` and `HEAD` the response also carries a strong `ETag` derived from the serialized
- * body, and a request whose `If-None-Match` already names that tag gets `304 Not Modified` with
- * no body.
- * The 304 branch is cast back to the 200 response type on purpose: a 304 carries no
- * representation by definition, so widening the RPC contract with it would force every typed
- * call site to handle a body that can never arrive.
- *
  * Takes the schema's **input** type (pre-brand) so plain DB strings satisfy branded
  * `*Out` id fields; parsing produces the branded output the RPC client sees.
  *
@@ -114,17 +107,7 @@ function withStatus(c: Context, status: ContentfulStatusCode): void {
  * @throws {ApiError} 500 `internal` when the data does not satisfy its declared schema.
  */
 export function ok<T extends z.ZodType>(c: Context, schema: T, data: z.input<T>) {
-  const body = serialize(c, schema, data);
-  // `HEAD` is `GET` without the content (RFC 9110 §9.3.2), which means the same headers — a
-  // client using it to check an `ETag` before deciding whether to fetch gets nothing otherwise.
-  if (c.req.method !== 'GET' && c.req.method !== 'HEAD') return c.json(body);
-
-  const tag = strongTag(JSON.stringify(body));
-  c.header('ETag', tag);
-  if (tagListMatches(c.req.header('If-None-Match'), tag)) {
-    return c.body(null, 304) as unknown as ReturnType<typeof c.json<z.output<T>>>;
-  }
-  return c.json(body);
+  return c.json(serialize(c, schema, data));
 }
 
 /**

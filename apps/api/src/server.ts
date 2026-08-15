@@ -13,6 +13,8 @@
 import { serve } from '@hono/node-server';
 import { auth } from '@docket/auth';
 import { Hono } from 'hono';
+import { requestId } from 'hono/request-id';
+import { secureHeaders } from 'hono/secure-headers';
 
 import { adminApp, app } from './app';
 import { sessionMiddleware } from './auth/session-middleware';
@@ -54,6 +56,30 @@ const trustedOrigins =
 
 /** The root HTTP server: global middleware, the auth mount, the `/v1` app, and docs. */
 export const server = new Hono<AppEnv>();
+
+// A correlation id on every request and every response, from Hono's own middleware. The
+// unhandled-error log records method and path but had no way to tie a client's report of a
+// failure to the server-side line that recorded it; `X-Request-Id` is that thread.
+server.use('*', requestId());
+
+// The browser-facing hardening this API had none of: `nosniff`, HSTS, a referrer policy, and
+// the rest of Hono's defaults. An API that returns user-supplied file bytes (attachments,
+// document images) especially wants `X-Content-Type-Options: nosniff`, so a stored file cannot
+// be re-interpreted as something executable by a browser that guesses at its type.
+//
+// Two defaults are deliberately overridden, because `secureHeaders` applies its headers AFTER
+// the handler and therefore silently overrules any route that decided otherwise:
+//
+// - `crossOriginResourcePolicy` defaults to `same-origin`, which would stop the product app
+//   from rendering an `<img>` served by this API. The two are separate origins by design, so
+//   `same-origin` would be a false statement about the deployment, and a browser-only breakage
+//   no test here would catch.
+// - `xFrameOptions` is off because exactly one document on this server is *meant* to be framed
+//   cross-origin — the MCP Apps sandbox, whose whole purpose is to isolate third-party widget
+//   HTML on an origin other than the host page's. It constrains framing precisely, with
+//   `frame-ancestors` naming the web app; a blanket `SAMEORIGIN` would overwrite that and break
+//   it. Framing a JSON response is not an attack this header meaningfully prevents.
+server.use('*', secureHeaders({ crossOriginResourcePolicy: 'cross-origin', xFrameOptions: false }));
 
 server.use('*', buildCorsMiddleware(trustedOrigins));
 server.use('*', sessionMiddleware);

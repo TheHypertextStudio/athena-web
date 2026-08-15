@@ -119,7 +119,8 @@ it. Two checks run before any handler, in `src/lib/media-types.ts`:
   plainly sent them. A request with no body is never asked for a type.
 - An `Accept` header that excludes everything this API produces is `406`. A missing header, a
   wildcard, or a `+json` suffix all mean "anything will do". A range marked `q=0` is an explicit
-  refusal and does not count as coverage.
+  refusal and does not count as coverage. Parsing is Hono's `accepts` helper — q-values, quoted
+  parameters, and malformed entries are its problem, not ours; only the wildcard policy is local.
 
 ## Caching
 
@@ -138,6 +139,28 @@ exactly what an `ETag` is for: the browser keeps the body, sends `If-None-Match`
 `304`. `private` keeps shared caches out entirely, and `Vary` is the defence in depth that stops
 a misconfigured one keying an entry by URL alone. A handler that has said something more
 specific — the immutable document-image URL, the SSE streams — keeps its own answer.
+
+## Size limits and hardening
+
+A request body larger than `MAX_REQUEST_BYTES` is `413`, through Hono's `bodyLimit` with an
+`onError` that raises the same Problem model as everything else — the middleware's own answer is
+plain text, which would be the one failure a client parsing the documented shape could not read.
+Nothing capped a body before this.
+
+`secureHeaders()` runs on the root server, with two defaults deliberately overridden. It applies
+its headers **after** the handler, so it silently overrules any route that decided otherwise:
+
+- `crossOriginResourcePolicy` is `cross-origin`, not the default `same-origin`. This API and the
+  product app are separate origins by design, and `same-origin` would stop the app rendering an
+  `<img>` this API serves — a browser-only breakage no test here would catch.
+- `xFrameOptions` is off. Exactly one document is _meant_ to be framed cross-origin: the MCP Apps
+  sandbox, whose purpose is isolating third-party widget HTML on a foreign origin. It constrains
+  framing precisely with `frame-ancestors`, and a blanket `SAMEORIGIN` applied after the fact
+  would overwrite that.
+
+Every request carries an `X-Request-Id` (Hono's `requestId`, echoing a caller-supplied value when
+there is one), and the unhandled-error log records it — so a report of "it failed" resolves to one
+line.
 
 ## What a browser can actually see
 

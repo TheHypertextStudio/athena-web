@@ -2,6 +2,7 @@
  * `@docket/api` — the Hono environment bindings (`Variables`) shared by every route.
  */
 import type { auth } from '@docket/auth';
+import type { RequestIdVariables } from 'hono/request-id';
 
 /** The Better Auth session result (`{ session, user }` or null). */
 export type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
@@ -33,7 +34,7 @@ export interface ActorCtx {
 
 /** The Hono generic for Docket routes: the session + (within org routes) the actor context. */
 export interface AppEnv {
-  Variables: {
+  Variables: RequestIdVariables & {
     /** The authenticated session, or null. */
     session: AuthSession;
     /** The org-scoped actor context (set on `/orgs/:orgId/*`). */

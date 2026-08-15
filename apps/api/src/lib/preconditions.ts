@@ -14,17 +14,31 @@
  * be the stricter reading of RFC 9110 §13.1.1, and it is deliberately not what this API does:
  * the guarantee offered is "you can protect a write", not "every write is protected".
  *
- * @see {@link ./http-tags} for the tag function reads and writes share.
+ * Tags themselves are not minted here. Hono's `etag` middleware puts one on every response, so
+ * this only has to compare — `If-None-Match` is the middleware's job, `If-Match` is this one's.
  */
 import type { MiddlewareHandler } from 'hono';
-import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { PreconditionFailedError } from '../error';
-import { representationTag, tagListMatches } from './http-tags';
 
 /** The methods a precondition can guard. `POST` is excluded: it addresses a collection. */
 const GUARDED = new Set(['PUT', 'PATCH', 'DELETE']);
+
+/**
+ * Whether an `If-Match` header selects `tag`.
+ *
+ * @remarks
+ * `*` matches any existing representation. Otherwise the header is a comma-separated tag list;
+ * the `W/` prefix is stripped before comparing, matching how Hono's `etag` middleware compares
+ * `If-None-Match`, so the two halves of the contract agree on what "the same tag" means.
+ */
+function tagListMatches(header: string, tag: string): boolean {
+  const normalize = (value: string) => value.trim().replace(/^W\//, '');
+  if (normalize(header) === '*') return true;
+  const wanted = normalize(tag);
+  return header.split(',').some((entry) => normalize(entry) === wanted);
+}
 
 /**
  * Refuse an unsafe request whose `If-Match` names a version the resource no longer has.
@@ -62,31 +76,4 @@ export function preconditions(
 
     return next();
   };
-}
-
-/**
- * Refuse the write when the caller's `If-Match` names a version the resource no longer has,
- * comparing against a pre-image the handler already holds.
- *
- * @remarks
- * The direct form of {@link preconditions}, for a handler that has the pre-image in hand and
- * would rather not pay for the sub-request. Pass the resource **as it is now**, through the
- * same `*Out` schema its `GET` uses — that is what makes the tag the one the caller's last read
- * handed them.
- *
- * @param c - The Hono context for the write request.
- * @param schema - The `*Out` schema the resource is served through.
- * @param current - The resource's pre-write state, in that schema's input shape.
- * @throws {PreconditionFailedError} When `If-Match` is present and matches nothing.
- */
-export function assertIfMatch<T extends z.ZodType>(
-  c: { req: { header: (name: string) => string | undefined } },
-  schema: T,
-  current: z.input<T>,
-): void {
-  const header = c.req.header('If-Match');
-  if (header === undefined) return;
-  if (!tagListMatches(header, representationTag(schema, current))) {
-    throw new PreconditionFailedError();
-  }
 }

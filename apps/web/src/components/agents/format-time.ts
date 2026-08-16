@@ -2,52 +2,13 @@
  * Time formatting for the Agents (sessions) flagship.
  *
  * @remarks
- * Session rows lead with *when* a run started ("2h ago") and how long it has been *going*
- * (its elapsed duration). Both use the platform `Intl` APIs so phrasing is locale-aware.
- * `relativeTime` mirrors the project-detail stamp; `elapsed` renders a compact wall-clock
- * span ("1h 12m", "44s") between two timestamps for an in-flight or just-settled run.
+ * Session rows lead with *when* a run started ("2h ago") and how long it has been *going* (its
+ * elapsed duration). The first is `relativeTime` from `@docket/ui`, re-exported here so the
+ * surface's own imports stay in one place; `elapsed` is this surface's alone and renders a
+ * compact wall-clock span ("1h 12m", "44s") between two timestamps.
  */
 
-/** The largest relative-unit thresholds, in seconds, paired with their unit + divisor. */
-const THRESHOLDS: readonly [limit: number, unit: Intl.RelativeTimeFormatUnit, secs: number][] = [
-  [60, 'second', 1],
-  [3600, 'minute', 60],
-  [86_400, 'hour', 3600],
-  [604_800, 'day', 86_400],
-];
-
-/**
- * Format an ISO timestamp as a relative "… ago" stamp, or an absolute date when old.
- *
- * @param iso - The ISO timestamp to format.
- * @param now - The reference time (defaults to now); injectable for deterministic tests.
- * @returns a short relative or absolute time string.
- *
- * @example
- * ```ts
- * relativeTime('2026-06-07T10:00:00Z'); // 'just now' / '2 hr. ago' / 'Jun 1, 2026'
- * ```
- */
-export function relativeTime(iso: string, now: Date = new Date()): string {
-  const then = new Date(iso).getTime();
-  const diffSecs = Math.round((then - now.getTime()) / 1000);
-  const abs = Math.abs(diffSecs);
-
-  if (abs < 45) return 'just now';
-
-  for (const [limit, unit, secs] of THRESHOLDS) {
-    if (abs < limit) {
-      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
-      return rtf.format(Math.round(diffSecs / secs), unit);
-    }
-  }
-
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
+export { relativeTime } from '@docket/ui';
 
 /**
  * Format the elapsed span between a start and end (or now) as a compact duration.

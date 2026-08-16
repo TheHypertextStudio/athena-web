@@ -1,7 +1,7 @@
 'use client';
 
 import type { AthenaApprovalMode, HubPreferences } from '@docket/types';
-import { Select, Textarea } from '@docket/ui/primitives';
+import { Field, Select, Textarea } from '@docket/ui/primitives';
 import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { McpConnectorsSection } from '@/components/settings/mcp-connectors-section';
@@ -99,8 +99,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
           title="Working preferences"
           description="Give Athena durable guidance for how to represent you across Docket and your connected services."
         >
-          <label className="text-on-surface text-label-large flex flex-col gap-1.5">
-            Instructions for Athena
+          <Field label="Instructions for Athena">
             <Textarea
               value={instructions}
               onChange={(event) => {
@@ -115,9 +114,8 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
               placeholder="For example: keep updates concise and flag anything that needs my approval."
               className="w-full resize-y"
             />
-          </label>
-          <label className="text-on-surface text-label-large flex flex-col gap-1.5">
-            Approval behavior
+          </Field>
+          <Field label="Approval behavior">
             <Select
               value={approvalMode}
               onChange={(event) => {
@@ -132,7 +130,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
               <option value="routine_autonomy">Act on routine work</option>
               <option value="suggest_only">Suggest only</option>
             </Select>
-          </label>
+          </Field>
           <SettingRowStatus
             pending={save.isPending}
             saved={save.isSuccess}

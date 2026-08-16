@@ -91,7 +91,7 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
           {...(canManage ? { cta: { label: 'Connect account', onClick: picker.toggle } } : {})}
         />
       ) : (
-        <ul className="flex flex-col">
+        <ul>
           {rows.map((row) => (
             <GtasksAccountRow
               key={row.account.id}

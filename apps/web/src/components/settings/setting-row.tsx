@@ -60,11 +60,21 @@ export interface SettingRowProps {
   readonly className?: string;
 }
 
-/** The shared box: dense, aligned to the group header's inset, and flush to the group's edges. */
-const ROW_BASE = 'flex min-h-12 w-full min-w-0 items-center gap-3 px-4 py-3 text-left';
+/**
+ * The shared box: dense, aligned to the group header's inset, and flush to the group's edges.
+ *
+ * @remarks
+ * Exported for the rows this component cannot render for them — one whose internals are a chip
+ * and three trailing values rather than a label and a description. Six of those had re-typed this
+ * string, and between them they had drifted to three hover tones and three heights for a row that
+ * is meant to be one object. Composing from here is what keeps a bespoke row's *box* shared even
+ * when its contents are not.
+ */
+export const ROW_BASE = 'flex min-h-12 w-full min-w-0 items-center gap-3 px-4 py-3 text-left';
 
 /** The one hover answer — a single step above the `card` tone the group paints. */
-const ROW_INTERACTIVE = cn(
+/** The hover and disabled treatment for a row that responds to a pointer. See {@link ROW_BASE}. */
+export const ROW_INTERACTIVE = cn(
   'hover:bg-surface-container transition-colors',
   focusRingInset,
   'disabled:pointer-events-none disabled:opacity-38',

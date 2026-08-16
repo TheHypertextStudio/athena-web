@@ -346,7 +346,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
                 </Button>
               ) : null}
             </div>
-            <ul className="flex flex-col">
+            <ul>
               {calendars.map((calendar) => (
                 <li
                   key={calendar.id}

@@ -20,6 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Tabs,
+  menuDestructiveItem,
   type TabsItem,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
@@ -424,7 +425,7 @@ export default function ProjectDetailPage(): JSX.Element {
                 {canEdit && canDelete ? <DropdownMenuSeparator /> : null}
                 {canDelete ? (
                   <DropdownMenuItem
-                    className="text-error focus:text-error"
+                    className={menuDestructiveItem()}
                     onSelect={() => {
                       deleteProject.reset();
                       setConfirmDeleteOpen(true);

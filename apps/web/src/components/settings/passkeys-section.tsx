@@ -19,6 +19,8 @@
  * Errors render inline as `role="alert"` banners — there is no toast system.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { cn } from '@docket/ui';
+import { ROW_BASE, ROW_INTERACTIVE } from '@/components/settings/setting-row';
 import { LoadFailure } from './load-failure';
 import { WriteError } from './write-error';
 import { Plus, Shield, Trash2 } from '@docket/ui/icons';
@@ -138,7 +140,7 @@ export function PasskeysSection(): JSX.Element {
             }}
           />
         ) : (
-          <ul className="flex flex-col">
+          <ul>
             {passkeys.map((record) => (
               <PasskeyRow
                 key={record.id}
@@ -312,7 +314,7 @@ function PasskeyRow({ record, onRenamed, onRemove }: PasskeyRowProps): JSX.Eleme
   }, [rename.isSuccess, rename.submittedAt]);
 
   return (
-    <li className="hover:bg-surface-container flex min-h-12 items-center gap-3 px-4 py-3 transition-colors">
+    <li className={cn(ROW_BASE, ROW_INTERACTIVE)}>
       <DecorativeIcon icon={Shield} className="shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">

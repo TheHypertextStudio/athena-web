@@ -22,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Skeleton,
+  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { Copy, Edit, Ellipsis, LayoutTemplate, Plus, Trash2 } from '@docket/ui/icons';
 import { type JSX, useState } from 'react';
@@ -244,7 +245,7 @@ function KindGroup({
           }
         />
       ) : (
-        <ul className="flex flex-col">
+        <ul>
           {templates.map((template) => (
             <li
               key={template.id}
@@ -290,7 +291,7 @@ function KindGroup({
                     Duplicate
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    className="text-error focus:text-error"
+                    className={menuDestructiveItem()}
                     onSelect={() => {
                       onDelete(template);
                     }}

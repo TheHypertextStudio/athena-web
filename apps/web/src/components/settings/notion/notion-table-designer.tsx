@@ -27,7 +27,7 @@ import type {
 import { cn } from '@docket/ui';
 import { WriteError } from '../write-error';
 import { Plus, Settings } from '@docket/ui/icons';
-import { Button, Input, Select, Skeleton } from '@docket/ui/primitives';
+import { Button, Input, Select, Skeleton, menuDestructiveItem } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { SettingsGroup } from '../settings-group';
@@ -357,7 +357,7 @@ export function NotionTableDesigner({
           {!openField.required && canManage ? (
             <Button
               variant="ghost"
-              className="text-error focus:text-error w-fit"
+              className={cn(menuDestructiveItem(), 'w-fit')}
               onClick={() => {
                 removeColumn(open.field);
               }}

@@ -41,10 +41,11 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
-  focusRing,
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
+  focusRing,
+  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
@@ -306,7 +307,7 @@ export function TriageRow({
 
         <ContextMenuSeparator />
         <ContextMenuItem
-          className="text-error focus:text-error"
+          className={menuDestructiveItem()}
           onSelect={() => {
             onDismiss();
           }}

@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Tabs,
+  menuDestructiveItem,
   type TabsItem,
 } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
@@ -277,7 +278,7 @@ export default function ProgramDetailPage(): JSX.Element {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" width="sm">
                 <DropdownMenuItem
-                  className="text-error focus:text-error"
+                  className={menuDestructiveItem()}
                   onSelect={() => {
                     setConfirmDeleteOpen(true);
                   }}

@@ -137,7 +137,7 @@ export function DangerZoneTab(): JSX.Element {
           }
           body="rows"
         >
-          <ul className="flex flex-col">
+          <ul>
             {blockers.map((b) => (
               <li
                 key={b.organizationId}

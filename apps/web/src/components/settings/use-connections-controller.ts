@@ -142,7 +142,18 @@ export function useConnectionsController({
       },
       addAccountsHref: `/orgs/${orgId}/settings/connected-accounts`,
     };
-  }, [canManage, directory, availableLinearIdentities, selectedLinearAccountId, data, orgId]);
+    // Deliberately the two members rather than `data`: the hook returns a fresh object literal
+    // every render, so naming it here made this memo — and `categories` downstream of it —
+    // recompute unconditionally. `isBusy` and `connectAccount` are both stable.
+  }, [
+    canManage,
+    directory,
+    availableLinearIdentities,
+    selectedLinearAccountId,
+    data.isBusy,
+    data.connectAccount,
+    orgId,
+  ]);
 
   const categories = useMemo<readonly CategorySectionModel[]>(
     () =>

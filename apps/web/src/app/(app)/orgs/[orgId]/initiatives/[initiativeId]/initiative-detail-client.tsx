@@ -20,6 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Tabs,
+  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -461,7 +462,7 @@ export default function InitiativeDetailPage(): JSX.Element {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  className="text-error focus:text-error"
+                  className={menuDestructiveItem()}
                   onSelect={() => {
                     deleteInitiative.reset();
                     setConfirmDeleteOpen(true);

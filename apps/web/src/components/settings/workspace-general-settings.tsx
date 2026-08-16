@@ -3,7 +3,7 @@
 import type { OrgOut, OrgUpdate } from '@docket/types';
 import { WriteError } from './write-error';
 import type { VocabularyPreset } from '@docket/work/vocabulary';
-import { Input, Select, Skeleton, Textarea } from '@docket/ui/primitives';
+import { Field, Input, Select, Skeleton, Textarea } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
 import { LoadFailure } from './load-failure';
@@ -150,8 +150,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
             : {})}
         >
           <div className="grid gap-5 sm:grid-cols-2">
-            <label className="text-on-surface text-label-large flex flex-col gap-1.5 sm:col-span-2">
-              Workspace name
+            <Field label="Workspace name" className="sm:col-span-2">
               <Input
                 value={draft.name}
                 disabled={readOnly}
@@ -163,10 +162,9 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
               {nameInvalid ? (
                 <span className="text-error text-body-small">Workspace name is required.</span>
               ) : null}
-            </label>
+            </Field>
 
-            <label className="text-on-surface text-label-large flex flex-col gap-1.5 sm:col-span-2">
-              Purpose
+            <Field label="Purpose" className="sm:col-span-2">
               <Textarea
                 value={draft.purpose}
                 disabled={readOnly}
@@ -178,10 +176,9 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 }}
                 className="w-full resize-y"
               />
-            </label>
+            </Field>
 
-            <label className="text-on-surface text-label-large flex flex-col gap-1.5">
-              Terminology
+            <Field label="Terminology">
               <Select
                 value={draft.vocabulary}
                 disabled={readOnly}
@@ -193,7 +190,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 <option value="nonprofit">Nonprofit and programs</option>
                 <option value="agency">Agency and client work</option>
               </Select>
-            </label>
+            </Field>
 
             <div className="sm:col-span-2">
               <SettingsImagePicker

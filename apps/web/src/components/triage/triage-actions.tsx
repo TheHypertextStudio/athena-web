@@ -35,6 +35,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
@@ -181,7 +182,7 @@ export function TriageActions({
 
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          className="text-error focus:text-error"
+          className={menuDestructiveItem()}
           onSelect={() => {
             onDismiss();
           }}

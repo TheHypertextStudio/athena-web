@@ -221,7 +221,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
             frame="none"
           />
         ) : (
-          <ul className="flex flex-col">
+          <ul>
             {members.map((member) => {
               const isGuest = guestRoleId !== null && member.roleId === guestRoleId;
               return (

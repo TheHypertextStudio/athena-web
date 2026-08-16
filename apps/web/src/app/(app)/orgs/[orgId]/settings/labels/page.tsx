@@ -320,7 +320,7 @@ function LabelSection({
   if (labels.length === 0) return null;
   return (
     <SettingsGroup title={title} {...(description ? { description } : {})} body="rows">
-      <ul className="flex flex-col">{labels.map(renderRow)}</ul>
+      <ul>{labels.map(renderRow)}</ul>
     </SettingsGroup>
   );
 }
@@ -386,7 +386,7 @@ function GroupSection({
             : {})}
         />
       ) : (
-        <ul className="flex flex-col">{labels.map(renderRow)}</ul>
+        <ul>{labels.map(renderRow)}</ul>
       )}
     </SettingsGroup>
   );

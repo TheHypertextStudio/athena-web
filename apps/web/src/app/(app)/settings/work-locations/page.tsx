@@ -11,6 +11,7 @@ import type {
   WorkPlaceUpdate,
 } from '@docket/types';
 import { Calendar, Google, Home, MapPin, MoreHorizontal, Plus, Target } from '@docket/ui/icons';
+import { cn } from '@docket/ui';
 import { WriteError } from '@/components/settings/write-error';
 import {
   Badge,
@@ -26,6 +27,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { EmptyState } from '@docket/ui/components';
 import Link from 'next/link';
@@ -62,7 +64,7 @@ import {
   useApiQuery,
 } from '@/lib/query';
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
-import { SettingRow } from '@/components/settings/setting-row';
+import { ROW_BASE, ROW_INTERACTIVE, SettingRow } from '@/components/settings/setting-row';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 import { isActionable, syncStateCopy } from '@/components/settings/work-location-copy';
@@ -442,10 +444,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                     ? 'Clear current location'
                     : `Set ${place.name} as current location`;
                 return (
-                  <div
-                    key={place.id}
-                    className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-4 py-3 transition-colors"
-                  >
+                  <div key={place.id} className={cn(ROW_BASE, ROW_INTERACTIVE, 'min-h-16')}>
                     <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
                       {isHome ? <Home aria-hidden="true" /> : <MapPin aria-hidden="true" />}
                     </span>
@@ -519,7 +518,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            className="text-error focus:text-error"
+                            className={menuDestructiveItem()}
                             onSelect={() => {
                               setConfirmRetire(place);
                             }}
@@ -568,10 +567,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                   assertion.schedule.type === 'weekly_all_day' ||
                   assertion.schedule.type === 'weekly_timed';
                 return (
-                  <div
-                    key={assertion.id}
-                    className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-4 py-3 transition-colors"
-                  >
+                  <div key={assertion.id} className={cn(ROW_BASE, ROW_INTERACTIVE, 'min-h-16')}>
                     <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
                       <Calendar aria-hidden="true" />
                     </span>
@@ -618,7 +614,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                         ) : null}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          className="text-error focus:text-error"
+                          className={menuDestructiveItem()}
                           onSelect={() => {
                             setConfirmDeleteSchedule(assertion);
                           }}
@@ -708,10 +704,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
             body="rows"
           >
             {(syncQ.data?.accounts ?? []).map((account) => (
-              <div
-                key={account.connectionId}
-                className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-4 py-3 transition-colors"
-              >
+              <div key={account.connectionId} className={cn(ROW_BASE, ROW_INTERACTIVE, 'min-h-16')}>
                 <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
                   {account.provider === 'google' ? (
                     <Google aria-hidden="true" />

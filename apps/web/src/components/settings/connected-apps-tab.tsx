@@ -155,7 +155,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             frame="none"
           />
         ) : (
-          <ul className="flex flex-col">
+          <ul>
             {apps.map((app) => (
               <li key={app.clientId} className="flex items-center gap-4 px-4 py-3">
                 <Avatar className="size-9 shrink-0 rounded-md">

@@ -390,6 +390,36 @@ export function menuCheckedItemClass(variant: MenuVariant): string {
 }
 
 /**
+ * Class string for a row whose action destroys something.
+ *
+ * @remarks
+ * `text-error focus:text-error` was hand-written at fifteen menu rows, and about half of them
+ * omitted the `focus:` half — which is not cosmetic. A menu row sets its own label colour per
+ * state, so a bare `text-error` is overridden the moment the row takes roving focus, and the
+ * destructive tone vanishes for exactly the reader navigating by keyboard.
+ *
+ * The state layer moves to `error` too. Leaving it on `on-surface` gave a delete row the same
+ * neutral wash as Rename, so the one row worth hesitating over highlighted like the rest.
+ *
+ * Only `standard` is offered. A vibrant menu is the high-emphasis tertiary mapping the spec says
+ * to use sparingly, and there is no destructive action in the product on one.
+ *
+ * @returns the error role held across every state a menu row has.
+ *
+ * @example
+ * ```tsx
+ * <DropdownMenuItem className={menuDestructiveItem()} onSelect={onDelete}>
+ * ```
+ */
+export function menuDestructiveItem(): string {
+  return cn(
+    'text-error focus:text-error hover:text-error',
+    '[&_svg]:text-error',
+    'hover:bg-error/8 focus:not-hover:bg-error/10 active:bg-error/10',
+  );
+}
+
+/**
  * The leading gutter a checkable row reserves for its indicator, and the matching offset for a
  * plain row or label that has to share the same text axis.
  *

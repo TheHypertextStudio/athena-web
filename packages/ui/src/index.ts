@@ -10,4 +10,5 @@
  */
 export { cn } from './lib/utils';
 export { getOrgAccent, ORG_ACCENT_PALETTE } from './lib/org-accent';
+export { relativeTime } from './lib/relative-time';
 export { focusRing, focusRingInset } from './primitives/focus';

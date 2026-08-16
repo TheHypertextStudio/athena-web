@@ -9,7 +9,7 @@ import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { unwrap, useApiMutation } from '@/lib/query';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
-import { Input } from '@docket/ui/primitives';
+import { Field, Input } from '@docket/ui/primitives';
 import { SettingRowStatus } from '@/components/settings/setting-row-status';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
@@ -72,8 +72,7 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
           description="This is the identity Athena uses when working across your connected services."
           action={<SettingRowStatus pending={save.isPending} saved={save.isSuccess} />}
         >
-          <label className="text-on-surface text-label-large flex flex-col gap-1.5">
-            Name
+          <Field label="Name" {...(nameError === null ? {} : { error: nameError })}>
             <Input
               value={name}
               maxLength={120}
@@ -83,12 +82,7 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
                 setNameError(null);
               }}
             />
-            {nameError ? (
-              <span className="text-error text-body-small" role="alert">
-                {nameError}
-              </span>
-            ) : null}
-          </label>
+          </Field>
           <SettingsImagePicker
             label="Profile photo"
             value={image}

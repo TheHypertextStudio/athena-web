@@ -12,7 +12,7 @@ import type { ActionSpec } from '@docket/automation/contracts';
 import type { AutomationRuleCreate, AutomationRuleOut } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { Workflow } from '@docket/ui/icons';
-import { Badge, Button, Input, Select, Skeleton } from '@docket/ui/primitives';
+import { Badge, Button, Field, Input, Select, Skeleton } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
@@ -286,8 +286,7 @@ export default function AutomationsTab({
               Pick a workflow to start from. You can change it later.
             </p>
           </div>
-          <label className="text-on-surface text-label-large flex flex-col gap-1.5">
-            Workflow
+          <Field label="Workflow">
             <Select
               value={template}
               onChange={(event) => {
@@ -300,9 +299,8 @@ export default function AutomationsTab({
               <option value="dismiss_promotions">Dismiss promotional suggestions</option>
               <option value="assign_new_tasks_to_cycle">Assign new tasks to current cycle</option>
             </Select>
-          </label>
-          <label className="text-on-surface text-label-large flex flex-col gap-1.5">
-            Name
+          </Field>
+          <Field label="Name">
             <Input
               value={name}
               maxLength={160}
@@ -310,7 +308,7 @@ export default function AutomationsTab({
                 setName(event.target.value);
               }}
             />
-          </label>
+          </Field>
           <Button
             className="w-fit"
             disabled={saving || !name.trim()}

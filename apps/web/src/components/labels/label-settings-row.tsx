@@ -12,6 +12,8 @@
  * `0` is the signal to delete, and a large number is the warning that deleting will be felt.
  */
 import type { LabelOut, TeamOut } from '@docket/types';
+import { cn } from '@docket/ui';
+import { ROW_BASE, ROW_INTERACTIVE } from '@/components/settings/setting-row';
 import { LabelChip } from '@docket/ui/components';
 import {
   Button,
@@ -23,6 +25,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { Ellipsis } from '@docket/ui/icons';
 import type { JSX } from 'react';
@@ -73,7 +76,7 @@ export function LabelSettingsRow({
     // Flush inside its list's container rather than an island of its own. Each row used to paint
     // its own fill and radius, so a set of five labels read as five cards with gaps between them
     // instead of one list you can scan down.
-    <li className="hover:bg-surface-container flex min-h-12 items-center gap-3 px-4 py-3 transition-colors">
+    <li className={cn(ROW_BASE, ROW_INTERACTIVE)}>
       <LabelChip name={label.name} color={label.color} className="max-w-56" />
 
       <span className="text-on-surface-variant text-body-small ml-auto shrink-0 tabular-nums">
@@ -133,7 +136,7 @@ export function LabelSettingsRow({
               </DropdownMenuSub>
             ) : null}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-error focus:text-error" onSelect={onDelete}>
+            <DropdownMenuItem className={menuDestructiveItem()} onSelect={onDelete}>
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>

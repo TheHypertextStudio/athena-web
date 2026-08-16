@@ -15,6 +15,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 
@@ -162,7 +163,7 @@ export function TaskHeaderOverflowMenu({
         {canManage ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-error focus:text-error" onSelect={onDelete}>
+            <DropdownMenuItem className={menuDestructiveItem()} onSelect={onDelete}>
               <Trash2 className="h-4 w-4" />
               Delete task
             </DropdownMenuItem>

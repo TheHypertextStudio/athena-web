@@ -134,6 +134,7 @@ export {
   type MenuVariant,
   menuBadge,
   menuCheckedItemClass,
+  menuDestructiveItem,
   menuContentClass,
   menuFocusRing,
   menuGroup,

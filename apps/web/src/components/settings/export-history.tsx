@@ -64,7 +64,7 @@ export function ExportHistory({
   return (
     <SettingsGroup title="Recent exports" body="rows" aria-live="polite">
       {exports.length > 0 ? (
-        <ol className="flex flex-col">
+        <ol>
           {exports.map((exportJob) => (
             <ExportHistoryRow key={exportJob.id} exportJob={exportJob} />
           ))}

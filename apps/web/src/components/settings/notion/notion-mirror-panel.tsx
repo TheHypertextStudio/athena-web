@@ -197,7 +197,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
   ) : null;
 
   const tableList = (
-    <ul className="flex flex-col">
+    <ul>
       {model.databases.map((database) => (
         <DatabaseRow
           key={database.id}

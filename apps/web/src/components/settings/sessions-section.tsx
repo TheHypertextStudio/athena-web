@@ -172,7 +172,7 @@ export function SessionsSection(): JSX.Element {
             {userErrorMessage(revokeOne.error, 'Could not update your sessions.')}
           </p>
         ) : null}
-        <ul className="flex flex-col">
+        <ul>
           {sessions.map((s) => {
             const lastActive = formatCalendarDate(s.updatedAt);
             return (

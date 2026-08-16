@@ -27,6 +27,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
@@ -135,7 +136,7 @@ export function StatusSettingsRow({
             )}
             <DropdownMenuSeparator />
             {deleteBlockedReason === undefined ? (
-              <DropdownMenuItem className="text-error focus:text-error" onSelect={onDelete}>
+              <DropdownMenuItem className={menuDestructiveItem()} onSelect={onDelete}>
                 Delete
               </DropdownMenuItem>
             ) : (

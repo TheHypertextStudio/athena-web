@@ -151,7 +151,8 @@ describe('ServiceWorkerProvider', () => {
     // Keep the provider mounted and prove the activation changes the actual rendered card.
     expect(card.innerHTML).not.toBe(readyMarkup);
     expect(card).toHaveAttribute('aria-busy', 'true');
-    expect(screen.getByRole('button', { name: 'Applying update…' })).toBeDisabled();
+    expect(card).toHaveTextContent('Applying update…');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('reloads exactly once when the new worker takes over', async () => {
@@ -250,7 +251,8 @@ describe('ServiceWorkerProvider', () => {
     expect(screen.getByRole('status')).not.toHaveTextContent('Reload to use the latest version');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(waiting.postMessage).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole('button', { name: 'Applying update…' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Applying update…');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('removes every listener it added on unmount', async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight } from '@docket/ui/icons';
+import { ArrowRight, CircleAlert, Sparkles } from '@docket/ui/icons';
 import { focusRing } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import {
@@ -14,6 +14,8 @@ import {
   useRef,
   useState,
 } from 'react';
+
+import { NAVIGATION_PROGRESS_SWEEP_CLASSNAME } from '@/components/navigation-progress';
 
 /**
  * Registers the service worker and publishes the "a new version is ready" handshake.
@@ -262,6 +264,17 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
  * The "new version ready" prompt: a card docked at the bottom of the sidebar, above the account
  * row. Its visual state is intentionally separate from the worker handshake: the card makes a
  * completed click legible while the worker still owns activation and page takeover.
+ *
+ * Each phase renders exactly one message. Idle/ready and failure are distinguished by a leading
+ * icon (a sparkle, or an alert glyph in `text-error`); the in-flight phases show an indeterminate
+ * progress bar instead — the handshake reports no real progress, so a bar that filled to a
+ * percentage would be inventing one (same reasoning as {@link NavigationProgress}, whose
+ * `navigation-progress` keyframe this reuses). The reloading phase is the one moment with a real
+ * signal — the forced reload fallback is seconds away — so its bar fills to completion instead of
+ * continuing to sweep.
+ *
+ * The applying and reloading phases render no button — there is nothing to click while the worker
+ * is mid-handshake, so showing a disabled control there previously read as a duplicated message.
  */
 export function UpdateCard({ onApply }: { readonly onApply: () => void }): JSX.Element {
   const { updatePhase } = useServiceWorkerUpdate();
@@ -269,49 +282,83 @@ export function UpdateCard({ onApply }: { readonly onApply: () => void }): JSX.E
   const isApplying = phase === 'applying';
   const isReloading = phase === 'reloading';
   const isFailed = phase === 'failed';
-  const actionLabel = isApplying
-    ? 'Applying update…'
-    : isReloading
-      ? 'Reloading…'
-      : isFailed
-        ? 'Retry'
-        : 'Reload now';
-  const title = isApplying
-    ? 'Applying update…'
-    : isReloading
-      ? 'Reloading…'
-      : isFailed
-        ? 'Couldn’t apply update'
-        : 'Update available';
+  const isBusy = isApplying || isReloading;
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // The busy phases render no button (see below), so a click/keyboard-activation that starts the
+  // handshake takes its own focused element out of the DOM. Move focus to the card itself so a
+  // keyboard or screen-reader user isn't dropped to `<body>`.
+  useEffect(() => {
+    if (isBusy) containerRef.current?.focus();
+  }, [isBusy]);
+
+  const Icon = isFailed ? CircleAlert : Sparkles;
+  const iconColor = isFailed ? 'text-error' : 'text-primary';
+  const actionLabel = isFailed ? 'Retry' : 'Reload now';
+  const busyMessage = isApplying ? 'Applying update…' : 'Reloading…';
+  const readyOrFailedMessage = isFailed ? 'Couldn’t apply update' : 'Update available';
 
   return (
     <div
+      ref={containerRef}
+      tabIndex={-1}
       role="status"
       aria-live="polite"
-      aria-busy={isApplying || isReloading ? 'true' : undefined}
-      className="bg-secondary-container text-on-secondary-container shadow-level1 rounded-lg px-3 py-2.5"
-    >
-      <p className="text-label-large">{title}</p>
-      {!isApplying && !isReloading && !isFailed && (
-        <p className="text-body-small mt-0.5">Reload to use the latest version</p>
+      aria-busy={isBusy ? 'true' : undefined}
+      className={cn(
+        'bg-secondary-container text-on-secondary-container shadow-level1 rounded-lg px-3 py-2.5',
+        focusRing,
       )}
-      <button
-        type="button"
-        onClick={onApply}
-        disabled={isApplying || isReloading}
-        className={cn(
-          'group text-label-large hover:bg-on-secondary-container/8 mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 transition-colors disabled:cursor-wait disabled:opacity-80',
-          focusRing,
-        )}
-      >
-        <span className="min-w-0 flex-1 truncate text-left">{actionLabel}</span>
-        {!isApplying && !isReloading && (
-          <ArrowRight
-            aria-hidden="true"
-            className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
-          />
-        )}
-      </button>
+    >
+      {isBusy ? (
+        <div>
+          <p className="text-label-large truncate">{busyMessage}</p>
+          <div
+            role={isReloading ? 'progressbar' : undefined}
+            aria-hidden={isReloading ? undefined : true}
+            aria-valuenow={isReloading ? 100 : undefined}
+            aria-valuemin={isReloading ? 0 : undefined}
+            aria-valuemax={isReloading ? 100 : undefined}
+            aria-label={isReloading ? 'Reloading' : undefined}
+            className="bg-on-secondary-container/12 mt-2 h-1 w-full overflow-hidden rounded-full"
+          >
+            <div
+              className={cn(
+                'bg-primary h-full rounded-full',
+                isReloading
+                  ? 'w-full transition-[width] duration-200 ease-out'
+                  : NAVIGATION_PROGRESS_SWEEP_CLASSNAME,
+              )}
+            />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start gap-2">
+            <Icon aria-hidden="true" className={cn('mt-0.5 size-4 shrink-0', iconColor)} />
+            <div className="min-w-0 flex-1">
+              <p className="text-label-large">{readyOrFailedMessage}</p>
+              {!isFailed && (
+                <p className="text-body-small mt-0.5">Reload to use the latest version</p>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onApply}
+            className={cn(
+              'group text-label-large hover:bg-on-secondary-container/8 mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 transition-colors',
+              focusRing,
+            )}
+          >
+            <span className="min-w-0 flex-1 truncate text-left">{actionLabel}</span>
+            <ArrowRight
+              aria-hidden="true"
+              className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
+            />
+          </button>
+        </>
+      )}
     </div>
   );
 }

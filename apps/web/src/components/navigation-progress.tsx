@@ -34,6 +34,13 @@ import { useOptionalResponsiveRouter } from '@/lib/interactions/navigation';
 const APPEAR_AFTER_MS = 150;
 
 /**
+ * The indeterminate sweep, shared with {@link file://../components/service-worker-provider.tsx
+ * UpdateCard}'s in-flight states so the two bars can't drift apart independently.
+ */
+export const NAVIGATION_PROGRESS_SWEEP_CLASSNAME =
+  'w-1/3 animate-[navigation-progress_1s_ease-in-out_infinite]';
+
+/**
  * A slim progress bar shown while a navigation is in flight.
  *
  * @returns The bar, or nothing when no navigation is pending.
@@ -85,11 +92,7 @@ export function NavigationProgress(): JSX.Element | null {
        * a percentage would be inventing one. The global reduced-motion rule freezes the sweep,
        * which still leaves a visible mark that something is happening.
        */}
-      <div
-        className={cn(
-          'bg-primary h-full w-1/3 animate-[navigation-progress_1s_ease-in-out_infinite]',
-        )}
-      />
+      <div className={cn('bg-primary h-full', NAVIGATION_PROGRESS_SWEEP_CLASSNAME)} />
     </div>
   );
 }

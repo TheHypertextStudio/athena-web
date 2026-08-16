@@ -197,12 +197,12 @@ test.describe('notion mirror visuals', () => {
   }
 
   test('connections page, after the copy and layout fixes', async ({ page }) => {
-    // The Linear Agent card broke one word per line here at 390px, and the intro claimed the
-    // external tool was the source of truth. Both are captured at the width that showed them.
+    // The Linear Agent card broke one word per line here at 390px. Captured at the width that
+    // showed it.
     await page.setViewportSize({ width: 390, height: 844 });
     const { orgId } = await signUpAndOnboard(page, 'NotionConnShot');
     await page.goto(orgHref(orgId, 'settings/connections'), { waitUntil: 'domcontentloaded' });
-    await expect(page.getByText(/Keep Docket and the tools you already work in step/)).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Connections', level: 2 })).toBeVisible({
       timeout: TIMEOUTS.pageReady,
     });
     await shot(page, 'connections-390-light.png');

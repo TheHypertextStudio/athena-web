@@ -243,16 +243,12 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
         />
       ) : null}
 
-      {mirrorBroken ? (
+      {sync.error !== null ? (
+        <CardNote tone="error">{sync.error}</CardNote>
+      ) : mirrorBroken ? (
         <CardNote tone="error">
           {MIRROR_FAILED_TITLE} {MIRROR_FAILED_DETAIL}
         </CardNote>
-      ) : null}
-
-      {sync.error !== null ? (
-        <p role="alert" className="text-error text-body-small">
-          {sync.error}
-        </p>
       ) : null}
 
       {/* The attention block renders only when there is something to act on, so a healthy

@@ -142,7 +142,7 @@ cannot deploy through this gate.
 ## Related
 
 - CI wiring: `.github/workflows/ci.yml`, job `coverage`
-- Soft-fail / deploy-gating guard: `scripts/ci-gate-policy.ts`, `tests/ci/ci-gate-policy.test.ts`
+- Soft-fail / deploy-gating guard: `scripts/ci-gate-policy.ts`, `repo-tests/ci/ci-gate-policy.test.ts`
 - Slice record: `docs/engineering/launch/slices/ci-gating.md`
 - Turbo remote cache (SCR-25) is **not** configured; see
   `docs/engineering/launch/evidence/production/2026-08-02-turbo-remote-cache.txt` for the probe and

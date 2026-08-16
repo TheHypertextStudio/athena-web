@@ -289,7 +289,8 @@ export function CalendarSchedulingSurface({
               item.title
             );
           }}
-          // CORE-40's start-timer affordance for the live calendar timeline. `CalendarItemCard`
+          // The start-timer affordance that lets a timer be started for any task, directly from
+          // that task, on the live calendar timeline. `CalendarItemCard`
           // (which already grows a `TaskTimerButton` for a task-shaped item) is never mounted by
           // this surface — the real timeline renders through `SchedulingCanvas` — so the control
           // has to reach the item card through this opt-in extension point instead. Scoped to the

@@ -5,8 +5,8 @@
  * Two surfaces talk about the same authorization: `/oauth/authorize` asks for it, and
  * `/settings/connected-apps` is where a person goes afterwards to check what they agreed to and
  * take it back. They must therefore call each permission by the same name — and neither may ever
- * print a raw scope identifier, which is the SCR-12/SCR-14 rule the consent screen already
- * enforces.
+ * print a raw scope identifier — the same plain-language, no-raw-identifier rule the consent
+ * screen already enforces.
  *
  * The roster used to keep its own parallel label map. It had drifted ("Read work" against the
  * consent screen's "Read your work"), and its `?? scope` fallback printed `connectors:link` at a

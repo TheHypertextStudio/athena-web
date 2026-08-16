@@ -187,18 +187,19 @@ describe('planTaskReconcile', () => {
 });
 
 /**
- * `reconcileTasks` end-to-end for `provider: 'notion'` specifically (WIL-12).
+ * `reconcileTasks` end-to-end for `provider: 'notion'` specifically — proving that when the same
+ * field is edited on both sides, Docket's value wins the conflict.
  *
  * @remarks
  * The pure `planTaskReconcile` cases above are provider-agnostic by design — the decision logic
- * never reads `provenance.provider`. What WIL-12 actually asks for ("Docket wins, and the outbound
- * write carries Docket's value") is only observable at the `reconcileTasks` orchestration level,
- * against a real integration row and a scripted `pushTask`. `integration-reconcile-orchestration
+ * never reads `provenance.provider`. The conflict-resolution guarantee ("Docket wins, and the
+ * outbound write carries Docket's value") is only observable at the `reconcileTasks` orchestration
+ * level, against a real integration row and a scripted `pushTask`. `integration-reconcile-orchestration
  * .test.ts` already covers this shape generically with `provider: 'gtasks'`; this block closes the
  * one thing that leaves — that the exact same guarantee holds with `provider: 'notion'`, and that
  * the conflict log records Notion specifically, not a generic provider string.
  */
-describe('reconcileTasks — the Notion connector (WIL-12: Docket wins, the loss is logged)', () => {
+describe('reconcileTasks — the Notion connector (Docket wins conflicts, the loss is logged)', () => {
   it('pushes Docket’s value to Notion and records Notion’s losing value under provider: notion', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const integration = one(

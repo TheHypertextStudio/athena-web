@@ -18,7 +18,7 @@ import '@testing-library/jest-dom/vitest';
  * The query layer is mocked at the module boundary (the pattern
  * `tests/agenda/agenda-context-navigation.test.tsx` uses) so the surface renders synchronously
  * from fixtures with no network. A `QueryClientProvider` is still required, though: the shared
- * `TaskTable` the overview renders through grows a CORE-40 `TaskTimerButton` per row, and that
+ * `TaskTable` the overview renders through grows a `TaskTimerButton` per row, and that
  * control reads the caller's one tracker via the real (unstubbed) `useLiveApiQuery` — so
  * `renderWithProviders` below supplies a client and mocks the transport it calls through.
  */
@@ -198,7 +198,7 @@ vi.mock('../../src/lib/use-org-capability', () => ({
   useOrgCapability: () => false,
 }));
 
-// The overview's task rows each grow a CORE-40 `TaskTimerButton`, which reads the caller's one
+// The overview's task rows each grow a `TaskTimerButton`, which reads the caller's one
 // tracker via `useLiveApiQuery` — a real hook the `../../src/lib/query` mock above does not stub.
 // Mock the transport it calls through instead, so that read resolves to "nothing tracked" rather
 // than reaching the network from a test.
@@ -234,7 +234,7 @@ import {
 
 /**
  * Render `ui` inside the query client + tooltip provider the overview's per-row
- * {@link TaskTimerButton} (CORE-40) needs — mirrors the app root's real `TooltipProvider`
+ * {@link TaskTimerButton} needs — mirrors the app root's real `TooltipProvider`
  * placement (see `tests/components/views/task-table.test.tsx`'s identical helper).
  */
 function renderWithProviders(ui: ReactElement): ReturnType<typeof render> {

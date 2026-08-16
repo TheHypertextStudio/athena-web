@@ -33,8 +33,9 @@ function scheduleLaneDateHeading(date: string): ScheduleLaneDateHeading | null {
  *
  * @remarks
  * Today's day number is carried by a tonal `primary-container` chip, not a solid `primary` fill.
- * CAL-17 measured the solid fill at 5.7:1 (light) / 8.1:1 (dark) against the canvas — well above the
- * ~1.7:1 event blocks use ({@link file://./scheduling-item-surface.ts}) — which made the day badge,
+ * Events and time blocks must be the highest-contrast elements on the canvas, and the solid fill
+ * measured 5.7:1 (light) / 8.1:1 (dark) against the canvas — well above the ~1.7:1 event blocks use
+ * ({@link file://./scheduling-item-surface.ts}) — which made the day badge,
  * not an event, the highest-contrast fill on the page. `primary-container` measures 1.26:1 (light) /
  * 1.29:1 (dark), a step *below* an event's own fill, while `on-primary-container` still keeps the
  * digit legible at 10.2:1 / 8.8:1. Today stays identifiable by hue and position; it no longer

@@ -487,7 +487,7 @@ project to apply these.) Cloud Scheduler must be available in the chosen `GCP_RE
 
 The table above is not decoration: `scripts/scheduler-setup.ts` warns on every provisioning run
 when a route in `apps/api/src/routes/cron.ts` has no job (it never runs in prod) or a job targets
-a route that does not exist (it POSTs a 404 forever), and `tests/tooling/scheduler-setup.test.ts`
+a route that does not exist (it POSTs a 404 forever), and `repo-tests/tooling/scheduler-setup.test.ts`
 asserts the full path set so adding one without the other fails CI. When you add a cron route,
 add its `JOBS` entry and its row here in the same commit.
 

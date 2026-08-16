@@ -10,7 +10,7 @@
  *
  * The receiving **domain is never stored** — only the address's local part is. Composing the
  * address from `apiHosts.athenaMail` at read time is what makes the final
- * domain a configuration change rather than a code change *and* a data migration (ACH-23).
+ * domain a configuration change rather than a code change *and* a data migration.
  */
 import { randomBytes } from 'node:crypto';
 

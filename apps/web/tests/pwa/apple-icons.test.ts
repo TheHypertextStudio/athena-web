@@ -32,7 +32,7 @@ import manifest from '@/app/manifest';
  * coverage assertions independent of which mask shape Icon Composer applies, and they keep working
  * if Apple changes it.
  *
- * The non-interference guarantee (CAL-37) is asserted structurally, not by eyeballing a diff: the
+ * The non-interference guarantee is asserted structurally, not by eyeballing a diff: the
  * two generators in `@docket/brand` are read as text and each is required to write nothing into
  * the other's directory, and the manifest is required to name no Apple asset at all. A diff can
  * only tell you about the change that already happened; this fails the next one too.

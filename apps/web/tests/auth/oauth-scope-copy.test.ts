@@ -1,6 +1,6 @@
 /**
- * SCR-12/SCR-14: every permission Docket's authorization server can grant has plain-English
- * consent copy, and nothing in that copy is machine vocabulary.
+ * Every permission Docket's authorization server can grant has plain-English consent copy, and
+ * nothing in that copy is machine vocabulary.
  *
  * @remarks
  * The consent screen is where a person decides whether to trust an outside app with their work.
@@ -29,7 +29,9 @@ import {
  * Words a non-technical reader has no reason to know, matched whole-word and case-insensitively.
  *
  * @remarks
- * Verbatim from SCR-14's acceptance criteria. `API` is matched case-sensitively as an acronym
+ * This list is verbatim from the launch requirement that consent copy read at a non-technical,
+ * layperson level: none of these terms — OAuth, token, client_id, redirect_uri, scope, API, or
+ * endpoint — may appear in user-facing text. `API` is matched case-sensitively as an acronym
  * inside the same alternation so ordinary words containing that letter run ("capital", "rapid")
  * are not false positives — `\b` alone would not save us, but the acronym only appears uppercase.
  */
@@ -48,7 +50,8 @@ const BANNED_TERMS = [
  *
  * @remarks
  * Every issuable permission is either `a:b` or `a_b`. Copy containing either is almost certainly
- * an identifier that leaked into prose, which is the exact failure SCR-12 names.
+ * an identifier that leaked into prose — exactly the raw-scope-identifier leak the consent-screen
+ * requirement forbids.
  */
 const IDENTIFIER_FRAGMENT = /[:_]/;
 
@@ -98,8 +101,9 @@ describe('OAuth consent copy', () => {
   });
 
   it('says whether each permission looks at things or changes them', () => {
-    // The "whether access is read or write" half of SCR-12. Every entry resolves to a phrase; the
-    // bare category word is never what the screen prints.
+    // The "whether access is read or write" half of the consent-screen requirement: every
+    // granted permission must say what it does, not just name it. Every entry resolves to a
+    // phrase; the bare category word is never what the screen prints.
     for (const scope of OAUTH_ISSUABLE_SCOPES) {
       const { access } = OAUTH_SCOPE_COPY[scope];
       expect(access, `${scope} has no access category`).not.toBe('none');

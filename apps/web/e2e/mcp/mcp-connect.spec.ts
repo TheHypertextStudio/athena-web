@@ -1,5 +1,5 @@
 /**
- * MCP e2e Flow A — connect, read, step-up, write (build-manifest §MCP-17, `mcp-connect`).
+ * MCP e2e Flow A — connect, read, step-up, write (`mcp-connect`).
  *
  * The full OAuth 2.1 chain a real coding agent walks, with nothing mocked:
  * discovery (RFC 9728 → 8414) → dynamic client registration → browser consent →

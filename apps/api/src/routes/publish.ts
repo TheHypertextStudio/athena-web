@@ -4,14 +4,14 @@
  * @remarks
  * Publishing writes one row saying *that* a record is public and *where*. It never copies what
  * the record says — see `./publish-brief`, which projects every published byte from the live
- * work tables on each request (CORE-27).
+ * work tables on each request.
  *
  * **Capability.** Publishing requires `contribute`, the same level that authors the record
  * itself, not `manage`. A brief is a view of work its author already owns, the action is
  * reversible in one click, and every publication in the workspace is listed on the publishing
  * settings surface where an admin can withdraw it. Requiring `manage` would put an
  * administrator in the loop for every status page a team wants to share, which is how a feature
- * ends up unused. Domains are the opposite case and *are* `manage`-only (CORE-29) — a domain
+ * ends up unused. Domains are the opposite case and *are* `manage`-only — a domain
  * decides which host the whole workspace answers on.
  *
  * **Withdrawal keeps the row.** `DELETE` clears `publishedAt` and leaves the path reserved, so

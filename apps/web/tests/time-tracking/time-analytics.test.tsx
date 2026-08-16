@@ -2,7 +2,7 @@
  * Behaviour tests for {@link import('../../src/components/time-tracking/time-analytics').TimeAnalytics}.
  *
  * @remarks
- * Pins CORE-48's acceptance directly: a period selector, a period total, a ranked breakdown, and
+ * Pins the acceptance criteria directly: a period selector, a period total, a ranked breakdown, and
  * an explicit empty state when a period has no tracked time. The period selector and the six
  * breakdown-dimension chips are read straight from the component's own copy so a rename of either
  * fails this test rather than silently drifting from the acceptance criterion's wording.
@@ -99,7 +99,7 @@ describe('TimeAnalytics', () => {
     expect(await screen.findByText('1h 30m')).toBeInTheDocument();
     expect(screen.getByText(/tracked this week/)).toBeInTheDocument();
 
-    // The six breakdown dimensions named in the CORE-48 source quote, verbatim.
+    // The six breakdown dimensions named in the acceptance criteria's source quote, verbatim.
     for (const label of ['Project', 'Program', 'Initiative', 'Workspace', 'Task', 'Category']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
     }

@@ -6,9 +6,10 @@
  * data-integrity failure rather than a cosmetic one:
  *
  * - **Normalization drift.** If two callers spell the same host differently, the uniqueness
- *   constraint that stops workspace B stealing workspace A's domain (CORE-30) never fires.
+ *   constraint that stops workspace B stealing workspace A's domain never fires.
  * - **Verification that passes too easily.** A substring match, a stale token, or a swallowed
- *   resolver error would each let an unverified domain serve (CORE-31, MISS-04).
+ *   resolver error would each let an unverified domain serve — and a verified domain that never
+ *   actually serves the workspace's briefs over HTTPS is just as much a failure.
  */
 import { describe, expect, it, vi } from 'vitest';
 
@@ -28,7 +29,8 @@ const TOKEN = 'a'.repeat(CUSTOM_DOMAIN_TOKEN_LENGTH);
 
 describe('normalizeCustomDomain', () => {
   it('collapses every spelling of one claim to a single key', () => {
-    // If any of these disagreed, the CORE-30 unique constraint would be unenforceable.
+    // If any of these disagreed, the unique constraint that stops two workspaces claiming the
+    // same domain would be unenforceable.
     const spellings = [
       'example.com',
       'Example.COM',

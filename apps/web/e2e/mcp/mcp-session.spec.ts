@@ -1,5 +1,5 @@
 /**
- * MCP e2e Flow B — agent-session lifecycle over MCP (build-manifest §MCP-17, `mcp-session`).
+ * MCP e2e Flow B — agent-session lifecycle over MCP (`mcp-session`).
  *
  * An `agents:run`-scoped MCP client triggers an agent session, watches it park at the
  * approval gate, and approves the proposed action — the human-in-the-loop path a real

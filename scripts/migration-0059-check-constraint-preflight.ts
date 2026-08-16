@@ -1,5 +1,8 @@
 /**
- * Read-only preflight for migration `0059_work_data_constraints` — GEN-11's other half.
+ * Read-only preflight for migration `0059_work_data_constraints` — the other half of proving a
+ * migration is non-destructive to the author's existing production data: it isn't enough for the
+ * migration's DDL to be non-destructive in the abstract, the real rows it will run against must
+ * actually satisfy the new constraints.
  *
  * @remarks
  * `packages/db/tests/migrations/production-snapshot-restore.test.ts` proves the migration chain

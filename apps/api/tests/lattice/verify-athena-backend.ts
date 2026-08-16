@@ -3,8 +3,10 @@
  * Docket's own API keys — and write the transcript and request traces as committed evidence.
  *
  * @remarks
- * This is the run WIL-50 asks for, and the run `apps/api/src/routes/lattice-gate.ts` reads to
- * decide whether the Lattice surface may be reached in production.
+ * This is the run the launch requirements call for — proof that Athena works end to end on
+ * Cloudflare's model router using the project's own API keys, before the Lattice backend is
+ * allowed to ship — and it is the run `apps/api/src/routes/lattice-gate.ts` reads to decide
+ * whether the Lattice surface may be reached in production.
  *
  * ## It refuses to lie
  *

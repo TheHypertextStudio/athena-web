@@ -2,9 +2,10 @@
  * Walk the whole "run Athena on your own computer" flow in a real browser and record it.
  *
  * @remarks
- * This is the recording WIL-46 asks for: it counts the user actions between "not connected" and
- * "Athena runs on my computer", asserts that no text field for a URL, key or token exists anywhere
- * in the section, and captures the section at both widths in both themes.
+ * This is the recording that proves connecting Lattice is turnkey: it counts the user actions
+ * between "not connected" and "Athena runs on my computer" (the bar is three or fewer), asserts
+ * that no text field for a URL, key or token exists anywhere in the section, and captures the
+ * section at both widths in both themes.
  *
  * It drives the real app against the real API. The only stand-ins are Lovelace's own two services
  * (see `apps/api/tests/lattice/local-lovelace-stub.ts`), which have no public deployment yet.

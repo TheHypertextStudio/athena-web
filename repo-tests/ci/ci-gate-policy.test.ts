@@ -147,7 +147,7 @@ describe('gating-command detection', () => {
   });
 });
 
-describe('SCR-19 — every check job must gate the deploy', () => {
+describe('ungated-check-job — every check job must gate the deploy', () => {
   it('rejects a standalone check workflow unless it is explicitly advisory', () => {
     const workflow = parseWorkflow(
       'browser-tests.yml',
@@ -164,7 +164,7 @@ describe('SCR-19 — every check job must gate the deploy', () => {
     const findings = checkGatePolicy([workflow]);
 
     expect(findings).toHaveLength(1);
-    expect(findings[0]).toMatchObject({ rule: 'SCR-19', job: 'e2e', step: null });
+    expect(findings[0]).toMatchObject({ rule: 'ungated-check-job', job: 'e2e', step: null });
     expect(findings[0]?.message).toContain('explicitly advisory');
   });
 
@@ -199,7 +199,7 @@ describe('SCR-19 — every check job must gate the deploy', () => {
     );
 
     expect(findings).toHaveLength(1);
-    expect(findings[0]).toMatchObject({ rule: 'SCR-19', job: 'contract-tests' });
+    expect(findings[0]).toMatchObject({ rule: 'ungated-check-job', job: 'contract-tests' });
     expect(findings[0]?.message).toContain('deploy-production.needs');
   });
 
@@ -234,7 +234,7 @@ describe('SCR-19 — every check job must gate the deploy', () => {
   });
 });
 
-describe('SCR-20 — no gating step may be soft-failed', () => {
+describe('soft-failed-gate — no gating step may be soft-failed', () => {
   it('reports continue-on-error inside a check job', () => {
     const findings = check(
       [
@@ -248,7 +248,7 @@ describe('SCR-20 — no gating step may be soft-failed', () => {
     );
 
     expect(findings).toHaveLength(1);
-    expect(findings[0]).toMatchObject({ rule: 'SCR-20', job: 'test' });
+    expect(findings[0]).toMatchObject({ rule: 'soft-failed-gate', job: 'test' });
     expect(findings[0]?.message).toContain('continue-on-error');
   });
 
@@ -371,8 +371,8 @@ describe('the real workflows', () => {
       '.github/workflows/ci.yml',
       '.github/workflows/deploy.yml',
       // e2e is a check job that deliberately does not gate the deploy; see e2e.yml for why.
-      // SCR-19 is unaffected — it governs the workflow owning `deploy-production`, so a check job
-      // in another file is not a gate that file can skip.
+      // The ungated-check-job rule is unaffected — it only governs the workflow that owns
+      // `deploy-production`, so a check job in another file is not a gate that file can skip.
       '.github/workflows/e2e.yml',
       '.github/workflows/neon-branch.yml',
     ]);
@@ -410,11 +410,14 @@ describe('the real workflows', () => {
     const checkJobs = (ci?.jobs ?? []).filter((job) => isCheckJob(job)).map((job) => job.id);
 
     // Recorded expectation: adding a check job to ci.yml must update this list *and*
-    // deploy-production.needs, which is exactly the coupling SCR-19 asks for.
+    // deploy-production.needs, which is exactly the coupling the ungated-check-job rule enforces.
     expect(checkJobs).toEqual(['lint', 'typecheck', 'secret-scan', 'test', 'build']);
-    // `build-images` is in `needs` without being a check job, and the asymmetry is deliberate:
-    // it runs no tests, so SCR-19 does not require it, but the deploy consumes the images it
-    // pushes so the ordering is a real data dependency. Every check job still appears here.
+    // `build-images` and `still-latest` are in `needs` without being check jobs, and the
+    // asymmetry is deliberate: neither runs tests, so the ungated-check-job rule does not require
+    // them, but the
+    // deploy consumes the images `build-images` pushes and stands down when `still-latest` finds
+    // `main` has moved past this commit — both are real data/ordering dependencies. Every check
+    // job still appears here.
     expect(deploy?.needs).toEqual([
       'lint',
       'typecheck',
@@ -422,11 +425,12 @@ describe('the real workflows', () => {
       'test',
       'build',
       'build-images',
+      'still-latest',
     ]);
     expect(checkJobs.every((job) => deploy?.needs.includes(job))).toBe(true);
   });
 
-  it('runs the coverage gate — a bare `vitest run` enforces no thresholds (SCR-15)', () => {
+  it('runs the coverage gate — a bare `vitest run` enforces no thresholds', () => {
     const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
     // The job is sharded across a package matrix, so the gating command now carries a
     // `--filter`. What must hold is what held before sharding: the command that runs is
@@ -442,7 +446,7 @@ describe('the real workflows', () => {
     expect(test?.steps.every((step) => !step.continueOnError)).toBe(true);
   });
 
-  it('leaves no package untested when the test job is sharded (SCR-15)', () => {
+  it('leaves no package untested when the test job is sharded', () => {
     // Sharding introduces a failure mode the coverage gate cannot see: a package that matches
     // no shard's filter is never run, and a suite that never runs cannot fail. The protection is
     // structural — the catch-all group is defined by EXCLUSION (`--filter=!…`) rather than by an
@@ -482,7 +486,7 @@ describe('the real workflows', () => {
     }
   });
 
-  it('runs the secret scan against the committed .gitleaks.toml (GEN-06 clause 1)', () => {
+  it('runs the secret scan against the committed .gitleaks.toml', () => {
     const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
     const scan = ci?.jobs.find((job) => job.id === 'secret-scan');
     const commands = (scan?.steps ?? []).flatMap((step) => (step.run ? [step.run] : []));

@@ -2,8 +2,9 @@
  * Behaviour tests for {@link import('../../src/components/my-work/agent-task-row').AgentTaskRow}.
  *
  * @remarks
- * The My Work agent-aware row is one of the required CORE-40 hosts — a distinct row
- * representing a task. Two things are worth pinning:
+ * The My Work agent-aware row is one of the surfaces required to expose a start-timer
+ * affordance for every task it shows — a distinct row representing a task. Two things are
+ * worth pinning:
  *
  * - the row grows the {@link TaskTimerButton} affordance alongside the existing
  *   {@link LiveSessionPill}/{@link ActorAvatar} cells;
@@ -98,7 +99,7 @@ afterEach(() => {
 });
 
 describe('AgentTaskRow', () => {
-  it('offers the CORE-40 track-timer affordance for the row’s task', async () => {
+  it('offers the required track-timer affordance for the row’s task', async () => {
     renderRow(vi.fn());
     expect(await screen.findByTestId('task-timer-task_1')).toBeInTheDocument();
   });

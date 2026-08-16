@@ -141,7 +141,7 @@ export const INFRA_VARS: readonly VarSpec[] = [
     zod: opsServer.MAIL_FROM,
     where:
       'From-address for transactional email, e.g. "Athena <no-reply@$ATHENA_INBOUND_MAIL_HOST>". ' +
-      'Must be a Docket/Athena-owned mail domain with SPF, DKIM, and DMARC published (GEN-28).',
+      'Must be a Docket/Athena-owned mail domain with SPF, DKIM, and DMARC published.',
   },
   {
     name: 'SMS_ENDPOINT',

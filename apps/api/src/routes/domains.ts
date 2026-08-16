@@ -5,10 +5,10 @@
  * A workspace's briefs answer on its own identity slug (`organization.slug`,
  * `PATCH /v1/orgs/:orgId`) by default — every workspace has one from the moment it exists, so
  * there is nothing to claim. This router covers the one *optional* addressing upgrade: a custom
- * domain a workspace owns (CORE-29 … CORE-31, MISS-04). A workspace claims a host, Docket mints a
- * per-row token, and the host serves nothing until a DNS `TXT` record proves ownership.
- * Uniqueness is global and enforced by a unique index, so one host belongs to exactly one
- * workspace forever (CORE-30).
+ * domain a workspace owns. Only workspace admins may configure it, a workspace claims a host,
+ * Docket mints a per-row token, and the host serves nothing until a DNS `TXT` record proves
+ * ownership. Uniqueness is global and enforced by a unique index, so one host belongs to exactly
+ * one workspace forever.
  *
  * **Everything here is `manage`-only** — domain configuration decides which host the whole
  * workspace presents to the internet, which is not a per-member decision. A non-admin member
@@ -172,7 +172,7 @@ export function createPublishingAddressRoutes(lookupTxt: TxtLookup = resolveTxt)
 
 The row is created **unverified** and serves nothing. The response carries the \`TXT\` record to publish (type, name, value, TTL) and, once a custom-domain target is configured, the \`CNAME\` that routes traffic. Call \`POST /domains/{id}/verify\` after publishing the \`TXT\`.
 
-- A host already claimed by **any** workspace returns **409 \`domain_already_claimed\`** and writes nothing — a globally unique index backs this, so two simultaneous claims cannot both win (CORE-30).
+- A host already claimed by **any** workspace returns **409 \`domain_already_claimed\`** and writes nothing — a globally unique index backs this, so two simultaneous claims cannot both win.
 - A malformed host, an IP literal, a wildcard, or one of Docket's own hosts returns **422** with a \`host\` field issue.
 
 Requires \`manage\`.`,
@@ -274,7 +274,7 @@ The response reports \`failure\` as a stable code and \`observedCount\` as **how
         summary: 'Remove a custom domain',
         capability: 'manage',
         response: WorkspaceDomainOut,
-        description: `Release a domain. The row is deleted outright — unlike a withdrawn brief, there is nothing to preserve, and leaving the row would keep the host locked against every other workspace forever. The host stops serving Docket content on the next request (MISS-04), and becomes claimable again by any workspace that can prove ownership. Requires \`manage\`.`,
+        description: `Release a domain. The row is deleted outright — unlike a withdrawn brief, there is nothing to preserve, and leaving the row would keep the host locked against every other workspace forever. The host stops serving Docket content on the next request, and becomes claimable again by any workspace that can prove ownership. Requires \`manage\`.`,
       }),
       zParam(domainIdParam),
       async (c) => {

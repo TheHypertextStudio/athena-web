@@ -14,7 +14,7 @@
  * - the assignee cell resolves the actor id to a named avatar, with a neutral placeholder when a
  *   task is unassigned;
  * - rows are real links to the task detail, and grouped tasks render full-width group headers;
- * - every row offers {@link TaskTimerButton} (CORE-40) and a click on it starts that row's task
+ * - every row offers {@link TaskTimerButton} and a click on it starts that row's task
  *   without also activating the row's own link (which would otherwise both start a timer AND
  *   navigate to the task detail on the same click).
  *
@@ -399,7 +399,7 @@ describe('TaskTable', () => {
     expect(screen.getByText('Grouped task')).toBeInTheDocument();
   });
 
-  it('offers CORE-40’s track-timer affordance on every row, without activating the row link', async () => {
+  it('offers the track-timer affordance on every row, without activating the row link', async () => {
     recordsPost.mockResolvedValue(jsonResponse({ id: 'rec_new' }));
     render(
       withQueryClient(

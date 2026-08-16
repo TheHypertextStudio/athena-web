@@ -3,10 +3,10 @@
  *
  * @remarks
  * The privacy policy and terms of service are the only user-facing surfaces that publish a
- * contact address, and both used to hard-code it. GEN-25 requires that no user-facing Docket URL
- * or identity stay pinned to the legacy studio apex in source, so the address is resolved from
- * configuration through the shared host contract: when the final domain lands, the cutover is an
- * environment change, not an edit to two React components and a rebuild.
+ * contact address, and both used to hard-code it. No user-facing Docket URL or identity may stay
+ * pinned to the legacy studio apex in source, so the address is resolved from configuration
+ * through the shared host contract: when the final domain lands, the cutover is an environment
+ * change, not an edit to two React components and a rebuild.
  *
  * There is no hard-coded fallback, and that is the point. The address follows whatever apex the
  * app is actually served from (`NEXT_PUBLIC_APP_URL` → `support@<apex>`), so it is already

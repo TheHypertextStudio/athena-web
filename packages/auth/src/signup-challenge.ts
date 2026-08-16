@@ -5,8 +5,8 @@
  * Docket is passkey-first with no password, so historically sign-up minted an HMAC token over an
  * arbitrary, *unproven* `{name,email}` and the passkey plugin (running with `requireSession:false`)
  * bound the new credential to whatever user that email resolved to. That let anyone who knew a
- * victim's email graft their own passkey onto the victim's account (audit CRITICAL-1) and created
- * `emailVerified:true` accounts with no verification (HIGH-2).
+ * victim's email graft their own passkey onto the victim's account and created
+ * `emailVerified:true` accounts with no verification.
  *
  * This plugin closes both at the root by proving inbox ownership **before** any passkey is bound:
  *

@@ -2,10 +2,11 @@
  * `@docket/api` — the anticipated start date, and what the API refuses to store as a date.
  *
  * @remarks
- * Two requirements meet here. ENT-20 asks that an anticipated start date be settable and that it
- * survive a round trip, distinct from the due date. MISS-02 asks that an invalid date be
- * impossible to persist. The second is what makes the first worth having: a start date you can set
- * to `2026-02-30` is not a field, it is a text box.
+ * Two requirements meet here. One asks that an anticipated start date be settable and that it
+ * survive a round trip, distinct from the due date. The broader data-integrity mandate that every
+ * kind of stored data carry strong constraints asks that an invalid date be impossible to persist.
+ * The second is what makes the first worth having: a start date you can set to `2026-02-30` is not
+ * a field, it is a text box.
  *
  * The date defence has three layers and each is exercised here at the layer it belongs to:
  * the DTO (malformed, impossible, out of range, and a backwards window sent in one request), the
@@ -78,7 +79,7 @@ describe('anticipated start date', () => {
     expect(created.startDate?.slice(0, 10)).toBe('2026-09-10');
     expect(created.dueDate?.slice(0, 10)).toBe('2026-09-30');
 
-    // An independent read — the round trip ENT-20 asks for, not the create's own echo.
+    // An independent read — a genuine round trip, not the create's own echo.
     const reread = (await (
       await app.request(`/${created.id}`, { method: 'GET' })
     ).json()) as TaskBody;

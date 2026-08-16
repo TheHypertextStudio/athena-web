@@ -1,5 +1,5 @@
 /**
- * Optimistic-write behaviour for {@link useTaskMutations} (SCR-06).
+ * Optimistic-write behaviour for {@link useTaskMutations}.
  *
  * @remarks
  * Every task write in Docket is optimistic: the person changing a status, a priority, an assignee,

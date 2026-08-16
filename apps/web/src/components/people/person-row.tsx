@@ -10,9 +10,9 @@
  * the same role chip and the same destination. The component literally cannot render them
  * differently: `MemberOut.userId` is never read here, so there is no branch to drift.
  *
- * That is not an accident of implementation, it is the requirement (ENT-46 / ENT-47). A badge
- * reading "no account", a muted name, or a disabled row would tell a volunteer they are a lesser
- * participant in an organization where they may be doing the most work.
+ * That is not an accident of implementation, it is the requirement. A badge reading "no account",
+ * a muted name, or a disabled row would tell a volunteer they are a lesser participant in an
+ * organization where they may be doing the most work.
  *
  * The name is a real `<a href>` rather than a click handler on the row, per the interaction
  * contract: it is keyboard- and middle-click-operable for free, and it reports `cursor-pointer`

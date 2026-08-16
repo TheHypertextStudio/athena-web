@@ -3,14 +3,13 @@
  * pipeline or an executed production deploy.
  *
  * @remarks
- * This module exists because two launch requirements are otherwise unenforceable
- * by review alone:
+ * This module exists because two properties are otherwise unenforceable by review alone:
  *
- * - **SCR-19** — `deploy-production.needs` must name *every* job that executes
+ * - **No ungated check job** — `deploy-production.needs` must name *every* job that executes
  *   tests or checks. The list is correct today, but nothing stops a future job
  *   from being added to `ci.yml` without being wired into `needs`; such a job
  *   would run, fail, and the deploy would ship anyway.
- * - **SCR-20** — no *gating* step may be soft-failed. A `continue-on-error: true`,
+ * - **No soft-failed gate** — no *gating* step may be soft-failed. A `continue-on-error: true`,
  *   a trailing `|| true`, or an `if: always()` on a check step silently converts a
  *   red test into a green run.
  *
@@ -691,7 +690,7 @@ export function parseWorkflow(path: string, source: string): Workflow {
  * deploy must depend on. Extend this list when a new gating turbo task is
  * introduced; forgetting to is safe in one direction only (the job stops being
  * required), so the list is asserted against the real workflow by
- * `tests/ci/ci-gate-policy.test.ts`.
+ * `repo-tests/ci/ci-gate-policy.test.ts`.
  */
 export const GATING_TURBO_TASKS: readonly string[] = [
   'test',
@@ -714,10 +713,10 @@ export const GATING_COMMAND_TOKENS: readonly string[] = [
   'test:e2e',
   'vitest',
   'format:check',
-  // The repository-level suites under `tests/`, which `turbo run test` cannot see because they
+  // The repository-level suites under `repo-tests/`, which `turbo run test` cannot see because they
   // belong to no workspace package. This guard is one of them.
   'test:tooling',
-  // The GEN-06 clause 1 gate. It runs as a `run:` step rather than as gitleaks/gitleaks-action
+  // The no-committed-credentials gate. It runs as a `run:` step rather than as gitleaks/gitleaks-action
   // (see the `secret-scan` job's comment in ci.yml), so the action pattern below would miss it.
   'secret-scan',
   // This checker itself. Today it runs inside `quality`, which is already a check job; listing
@@ -732,7 +731,7 @@ export const GATING_COMMAND_TOKENS: readonly string[] = [
  * @remarks
  * A job whose only work is `uses: gitleaks/gitleaks-action` runs no `run` step,
  * so the shell heuristics would not see it. Listing such actions here keeps the
- * SCR-19 guard honest for check jobs implemented purely as actions.
+ * ungated-check-job guard honest for check jobs implemented purely as actions.
  */
 export const GATING_ACTION_PATTERNS: readonly RegExp[] = [/^gitleaks\/gitleaks-action(@|$)/i];
 
@@ -740,7 +739,7 @@ export const GATING_ACTION_PATTERNS: readonly RegExp[] = [/^gitleaks\/gitleaks-a
  * Action references whose failure reports a result but does not gate the build.
  *
  * @remarks
- * This is the deliberate SCR-20 carve-out. Coverage uploads and artifact uploads
+ * This is the deliberate soft-failed-gate carve-out. Coverage uploads and artifact uploads
  * legitimately carry `if: always()` — they exist precisely to run after a failed
  * check so the failure is diagnosable. Banning `if: always()` outright would push
  * teams to delete the diagnostics instead of the soft-fail, which is strictly
@@ -806,8 +805,8 @@ export function isCheckJob(job: WorkflowJob): boolean {
 
 /** A single policy violation. */
 export interface PolicyFinding {
-  /** The launch requirement the violation breaches. */
-  readonly rule: 'SCR-19' | 'SCR-20';
+  /** Which of the two rules this module enforces was broken. */
+  readonly rule: 'ungated-check-job' | 'soft-failed-gate';
   /** Repository-relative workflow path. */
   readonly workflow: string;
   /** The offending job's identifier. */
@@ -826,12 +825,12 @@ export interface GatePolicyOptions {
    * @remarks
    * Check jobs in a workflow that owns this job must be listed in its `needs`.
    * A separate check-running workflow must instead identify itself as advisory;
-   * otherwise SCR-19 reports that it has no production-gating path.
+   * otherwise `ungated-check-job` reports that it has no production-gating path.
    */
   readonly deployJobId?: string;
 }
 
-/** The job id that ships production, and the anchor for the SCR-19 guard. */
+/** The job id that ships production, and the anchor for the ungated-check-job guard. */
 export const DEFAULT_DEPLOY_JOB_ID = 'deploy-production';
 
 /**
@@ -845,16 +844,16 @@ export function isAdvisoryWorkflow(workflow: Workflow): boolean {
 }
 
 /**
- * Evaluates every workflow against the SCR-19 and SCR-20 gate rules.
+ * Evaluates every workflow against the two gate rules this module enforces.
  *
  * @remarks
- * SCR-19: within the workflow that declares the deploy job, every job that runs a
+ * `ungated-check-job`: within the workflow that declares the deploy job, every job that runs a
  * gating check must appear in that job's `needs`. A separate workflow that runs a
  * check must visibly call itself advisory, because GitHub Actions cannot make its
  * result a dependency of a deployment in another workflow. This makes both kinds
  * of signal explicit instead of reporting an advisory check as a deploy gate.
  *
- * SCR-20: a gating step may not be soft-failed. Three distinct soft-fails are
+ * `soft-failed-gate`: a gating step may not be soft-failed. Three distinct soft-fails are
  * detected — `continue-on-error: true` anywhere inside a check job (including at
  * job level, which is the most dangerous form because dependents still run), a
  * `|| true` / `|| exit 0` appended to a gating command, and `if: always()` on a
@@ -881,7 +880,7 @@ export function checkGatePolicy(
         if (job.id === deployJobId) continue;
         if (needs.has(job.id)) continue;
         findings.push({
-          rule: 'SCR-19',
+          rule: 'ungated-check-job',
           workflow: workflow.path,
           job: job.id,
           step: null,
@@ -894,7 +893,7 @@ export function checkGatePolicy(
     } else if (!isAdvisoryWorkflow(workflow)) {
       for (const job of checkJobs) {
         findings.push({
-          rule: 'SCR-19',
+          rule: 'ungated-check-job',
           workflow: workflow.path,
           job: job.id,
           step: null,
@@ -910,7 +909,7 @@ export function checkGatePolicy(
       if (!isCheckJob(job)) continue;
       if (job.continueOnError) {
         findings.push({
-          rule: 'SCR-20',
+          rule: 'soft-failed-gate',
           workflow: workflow.path,
           job: job.id,
           step: null,
@@ -922,7 +921,7 @@ export function checkGatePolicy(
       for (const step of job.steps) {
         if (step.continueOnError) {
           findings.push({
-            rule: 'SCR-20',
+            rule: 'soft-failed-gate',
             workflow: workflow.path,
             job: job.id,
             step: step.label,
@@ -937,7 +936,7 @@ export function checkGatePolicy(
           /\|\|\s*(true|exit\s+0|:)\s*$/m.test(step.run)
         ) {
           findings.push({
-            rule: 'SCR-20',
+            rule: 'soft-failed-gate',
             workflow: workflow.path,
             job: job.id,
             step: step.label,
@@ -953,7 +952,7 @@ export function checkGatePolicy(
           !isReportingStep(step)
         ) {
           findings.push({
-            rule: 'SCR-20',
+            rule: 'soft-failed-gate',
             workflow: workflow.path,
             job: job.id,
             step: step.label,
@@ -1006,7 +1005,7 @@ export function formatReport(
   findings: readonly PolicyFinding[],
 ): string {
   const lines: string[] = [
-    'CI gate policy (SCR-19 deploy gating, SCR-20 no soft-failed checks)',
+    'CI gate policy (ungated-check-job deploy gating, soft-failed-gate no soft-failed checks)',
     '',
   ];
   for (const workflow of workflows) {

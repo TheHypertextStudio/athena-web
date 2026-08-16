@@ -2,7 +2,7 @@
  * Behavior tests for the task detail Activity section.
  *
  * @remarks
- * The bar here is ENT-28's: every task, including one created seconds ago, shows an Activity
+ * The bar here: every task, including one created seconds ago, shows an Activity
  * section carrying at least its creation event, with an actor, action text, and a relative
  * timestamp. The read is mocked at the query layer so each state (loading, empty, populated,
  * failed) can be rendered deterministically.

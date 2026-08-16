@@ -73,7 +73,7 @@ export interface AgentTaskRowProps {
  * The avatar encodes the actor's kind by shape, so an agent delegate is visually distinct
  * from a human assignee without a legend.
  *
- * The trailing {@link TaskTimerButton} (CORE-40) is a `ListCell` like every other slot, so its
+ * The trailing {@link TaskTimerButton} is a `ListCell` like every other slot, so its
  * click is stopped from reaching the row's own `onActivate` the same way {@link LiveSessionPill}
  * already reaches through to its own `href` — a click on either never opens the task underneath.
  */

@@ -309,9 +309,10 @@ interface MachineEdge {
  *
  * @remarks
  * These are push endpoints — a provider or the platform scheduler calls them, and none of them
- * returns user data to its caller. They are therefore outside the letter of GEN-06's "every route
- * that returns user data", but they are exactly the surface where a missing gate would be easiest
- * to overlook, so each is probed twice: with NO authentication material, and with WRONG material.
+ * returns user data to its caller. They are therefore outside the letter of the auth-coverage
+ * requirement that every production route returning user data reject an unauthenticated request
+ * with 401/403, but they are exactly the surface where a missing gate would be easiest to
+ * overlook, so each is probed twice: with NO authentication material, and with WRONG material.
  *
  * The expected statuses are not uniformly 401/403, and each difference is deliberate rather than a
  * gap — the `why` field on every entry records which. Two entries also depend on this deployment's

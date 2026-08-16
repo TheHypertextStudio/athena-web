@@ -2,10 +2,10 @@
  * `@docket/api` — the task activity log: what gets written, and what reads back.
  *
  * @remarks
- * Mirrors `routes-harness` (pglite + injected actor context). The bar these tests hold is
- * ENT-29's: after changing status, assignee, priority, project, due date, anticipated start,
- * estimate and title, the log lists one entry per change with its label, previous value, new
- * value, actor and exact timestamp — in order, with nothing omitted or coalesced.
+ * Mirrors `routes-harness` (pglite + injected actor context). The bar these tests hold: after
+ * changing status, assignee, priority, project, due date, anticipated start, estimate and title,
+ * the log lists one entry per change with its label, previous value, new value, actor and exact
+ * timestamp — in order, with nothing omitted or coalesced.
  */
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -181,7 +181,7 @@ describe('task activity log — what is written', () => {
     ]);
   });
 
-  it('records every one of the eight fields ENT-29 names, in the order applied', async () => {
+  it('records every one of the eight tracked fields, in the order applied', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute', 'assign'], humanActorId);
     await db

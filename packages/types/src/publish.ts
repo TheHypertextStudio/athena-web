@@ -2,7 +2,8 @@
  * `@docket/types` — publishing DTOs: briefs and workspace custom domains.
  *
  * @remarks
- * Covers CORE-26 … CORE-34 and MISS-04. Two audiences share this module deliberately:
+ * Covers publishable artifacts — brief pages, custom domains, and slug-based fallback hosting.
+ * Two audiences share this module deliberately:
  *
  * - the **authenticated** surface (`Publication*`, `WorkspaceDomain*`), which the app uses to
  *   publish, unpublish, and manage domains; and
@@ -13,7 +14,8 @@
  * (`organization.slug`, `@docket/types/organization`) — every workspace has one from the moment
  * it exists, so there is no separate "claim a public name" concept here anymore.
  *
- * {@link PublicBriefOut} is the narrow waist that makes CORE-27 checkable. It carries no
+ * {@link PublicBriefOut} is the narrow waist that makes it checkable that a published brief
+ * reads from the same underlying data sources as the rest of the app. It carries no
  * publication-time snapshot: every field on it is projected from the live `initiative` /
  * `program` / `project` / `task` rows on each request. If a brief could ever show a stale
  * title, it would have to be because this shape gained a column the app does not read from the
@@ -272,7 +274,8 @@ export type BriefSection = z.infer<typeof BriefSection>;
  *
  * @remarks
  * Every field is projected from the live work tables on each request. There is no
- * publication-time copy of any of it, which is the whole of CORE-27.
+ * publication-time copy of any of it, which is the whole of what makes a published brief read
+ * from the same underlying data sources as the rest of the app rather than a forked snapshot.
  */
 export const PublicBriefOut = z
   .object({

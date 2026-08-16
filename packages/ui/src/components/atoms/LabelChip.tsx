@@ -28,7 +28,7 @@
  * The treatment is a tinted container plus a saturated dot, never a saturated fill. Ten filled
  * hues cannot all hold readable text in both themes, and a wall of filled chips shouts louder
  * than the work they annotate. The dot doubles as the required leading mark, so a label chip is
- * never a bare text pill (`CRAFT-13`).
+ * never a bare text pill.
  */
 import * as React from 'react';
 

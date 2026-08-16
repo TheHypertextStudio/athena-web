@@ -1,6 +1,8 @@
 /**
- * `pnpm sunsama:import` — migrate all active Sunsama work into Docket, through Sunsama's MCP
- * server and nothing else (WIL-01 / WIL-02 / WIL-03 / WIL-04 / MISS-08).
+ * `pnpm sunsama:import` — migrate all active Sunsama work into Docket with none left behind,
+ * preserving all existing data and as much metadata as the target schema allows, routing each
+ * item into its correct workspace rather than a catch-all, through Sunsama's MCP server and
+ * nothing else.
  *
  * @remarks
  * **How the data is read.** Every Sunsama record this tool sees arrives as the result of an MCP
@@ -52,9 +54,9 @@
  * **The report.** Every run writes a JSON report containing the source counts, the per-workspace
  * routing counts checked against the pre-declared routing, the MCP invocation log, and every
  * source field that had no Docket destination. An applied run additionally reports the real
- * per-workspace created/already-present counts and the real WIL-01 reconciliation (every Sunsama
- * id ↔ Docket id, both unmatched lists). Committing that file is what makes the state of the
- * migration auditable rather than a claim.
+ * per-workspace created/already-present counts and the real none-left-behind reconciliation
+ * (every Sunsama id mapped to its Docket id, both unmatched lists). Committing that file is what
+ * makes the state of the migration auditable rather than a claim.
  *
  * Usage (from the repo root):
  *
@@ -488,7 +490,8 @@ interface ApplyResult {
  * pays that cost, and only after {@link assertSafeApplyDatabase} has already vetted the database.
  *
  * @param itemsByWorkspace - Every mapped task, grouped by destination workspace.
- * @param sunsamaIds - Every active Sunsama task id this run read (the WIL-01 reconciliation set).
+ * @param sunsamaIds - Every active Sunsama task id this run read (the set used to prove none of
+ *   them were left behind).
  */
 async function applyToDocket(
   itemsByWorkspace: ReadonlyMap<DocketWorkspaceName, readonly ImportedItem[]>,
@@ -602,8 +605,8 @@ async function main(): Promise<void> {
 
   const mappedItems = sunsamaAccountToImportedItems(account.tasks, SUNSAMA_ROUTING, importedAt);
   const itemsByWorkspace = groupSunsamaImportedItemsByWorkspace(mappedItems);
-  // The WIL-01 reconciliation set: every source id the write path is expected to land, which
-  // since the §5.3 closure includes each subtask's child-row id alongside its parent's.
+  // The none-left-behind reconciliation set: every source id the write path is expected to land,
+  // which since the §5.3 closure includes each subtask's child-row id alongside its parent's.
   const allSourceIds = mappedItems.flatMap((entry) => [
     entry.item.provenance.externalId,
     ...entry.childItems.map((child) => child.provenance.externalId),

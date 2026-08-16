@@ -60,7 +60,7 @@ describe('SchedulingCanvas lane headings', () => {
     const marked = document.querySelectorAll('[data-schedule-lane-today]');
     expect(marked).toHaveLength(1);
     expect(marked[0]).toHaveTextContent('3');
-    // CAL-17: `bg-primary` measured 5.7:1 (light) / 8.1:1 (dark) against the canvas — higher contrast
+    // `bg-primary` measured 5.7:1 (light) / 8.1:1 (dark) against the canvas — higher contrast
     // than an event's own fill (~1.7:1), which made today's badge outrank events for the eye. The
     // tonal container is a step *below* an event's fill; see scheduling-item-surface.test.ts's "today
     // badge" case for the measured ratios.

@@ -19,7 +19,7 @@ import { z } from 'zod';
  * (`sign-in`, `settings`, `_next`, `privacy`) are real Docket paths, and a workspace answering on
  * one of them would shadow a page the product owns. Screening every public path segment — a
  * workspace's own identity slug included, since it doubles as its default brief address — against
- * one list is what CORE-32's "reserved/system slugs are refused" asks for, and keeping it here
+ * one list is what the reserved/system-slugs requirement asks for, and keeping it here
  * means the API rejects and the UI warns from the same source, for every caller.
  */
 export const RESERVED_PUBLIC_SLUGS: readonly string[] = [

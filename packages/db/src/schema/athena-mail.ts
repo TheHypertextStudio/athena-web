@@ -50,7 +50,7 @@ export interface AthenaMailAttachmentMeta {
  *
  * @remarks
  * The address is `{key}@{ATHENA_INBOUND_MAIL_HOST}` — the **host is never stored**, only the
- * local part. That is the whole of ACH-23 in one column: moving Athena to her final receiving
+ * local part. That is the whole of the config-driven-domain requirement in one column: moving Athena to her final receiving
  * domain changes one environment variable and zero rows, where a stored full address would mean
  * a data migration (and a window in which half the addresses printed in the UI bounce).
  *

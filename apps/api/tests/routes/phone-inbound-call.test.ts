@@ -1,5 +1,5 @@
 /**
- * Who reaches Athena on the telephone, and who does not (ACH-15, ACH-16, ACH-10, ACH-11).
+ * Who reaches Athena on the telephone, and who does not.
  *
  * @remarks
  * These drive the real inbound-call decision against the real database. The two properties worth

@@ -2,8 +2,9 @@
  * Behaviour tests for {@link import('../../../src/components/triage/triage-row').TriageRow}.
  *
  * @remarks
- * Triage is a task list like any other, so it is one of the required CORE-40 hosts. What is
- * worth pinning: the row grows {@link TaskTimerButton} alongside its existing
+ * Triage is a task list like any other, so it is one of the surfaces required to expose a
+ * start-timer affordance for every task it shows. What is worth pinning: the row grows
+ * {@link TaskTimerButton} alongside its existing
  * {@link SourceTag}/{@link TriageActions} affordances, and clicking it starts the row's task
  * without also activating the row (opening the task detail) — the same contract every other
  * interactive cell in this row already holds itself to.
@@ -91,7 +92,7 @@ afterEach(() => {
 });
 
 describe('TriageRow', () => {
-  it('offers the CORE-40 track-timer affordance for the row’s task', async () => {
+  it('offers the required track-timer affordance for the row’s task', async () => {
     renderRow(vi.fn());
     expect(await screen.findByTestId('task-timer-task_1')).toBeInTheDocument();
   });

@@ -248,7 +248,7 @@ export function buildTaskColumns({
         return <span className="text-on-surface-variant tabular-nums">{estimate ?? '—'}</span>;
       },
     },
-    // Track — the universal start-timer affordance (CORE-40): every task list is a place a task
+    // Track — the universal start-timer affordance: every task list is a place a task
     // is "represented", so every row offers it, icon-only to stay dense. Kept a tier longer than
     // the metadata columns (priority 1 vs. 2/3) since it is an action, not a fact about the task.
     {

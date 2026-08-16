@@ -347,9 +347,11 @@ export const opsServer = {
  * `docs/engineering/domain-cutover.md` can move one host at a time, and so today's production —
  * where `WEB_URL` and `API_URL` are unrelated names on a shared apex — keeps working unchanged.
  *
- * `ATHENA_INBOUND_MAIL_HOST` is the one GEN-25 exception: the interim receiving domain may sit
- * off the product apex, and it is a configuration value precisely so the final domain replaces
- * it without a code change (ACH-23).
+ * `ATHENA_INBOUND_MAIL_HOST` is the one deliberate exception to the rule that no user-facing
+ * Docket or Athena host may remain on the legacy apex (see
+ * packages/env/tests/hosts/legacy-host-policy.test.ts): the interim receiving domain may sit off
+ * the product apex, and it is a configuration value precisely so the final domain replaces it
+ * without a code change.
  */
 export const hostsServer = {
   /** Registrable apex Docket owns, e.g. `docket.place`. Absent ⇒ derived from `WEB_URL`. */

@@ -8,15 +8,16 @@ anything, and it runs only after every other job in the file has succeeded.
 
 ## The jobs
 
-| Job                 | What it runs                                                            | Gating?               |
-| ------------------- | ----------------------------------------------------------------------- | --------------------- |
-| `quality`           | `turbo run lint typecheck`, `pnpm format:check`, `pnpm ci:gate-policy`  | Yes                   |
-| `secret-scan`       | `pnpm secret-scan` — the in-repo scanner over the tracked tree          | Yes                   |
-| `test`              | `turbo run test`, then `pnpm test:tooling` for the root `tests/` suites | Yes                   |
-| `coverage`          | `turbo run test:coverage` — the same suites with thresholds enforced    | Yes                   |
-| `build`             | `turbo run build` — every deployable artifact                           | Yes                   |
-| `e2e`               | `pnpm --filter @docket/web test:e2e` against a real dev stack           | Yes                   |
-| `deploy-production` | Calls `deploy.yml`, on pushes to `main` only                            | The thing being gated |
+| Job                 | What it runs                                                                 | Gating?                                         |
+| ------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------- |
+| `quality`           | `turbo run lint typecheck`, `pnpm format:check`, `pnpm ci:gate-policy`       | Yes                                             |
+| `secret-scan`       | `pnpm secret-scan` — the in-repo scanner over the tracked tree               | Yes                                             |
+| `test`              | `turbo run test`, then `pnpm test:tooling` for the root `repo-tests/` suites | Yes                                             |
+| `coverage`          | `turbo run test:coverage` — the same suites with thresholds enforced         | Yes                                             |
+| `build`             | `turbo run build` — every deployable artifact                                | Yes                                             |
+| `e2e`               | `pnpm --filter @docket/web test:e2e` against a real dev stack                | Yes                                             |
+| `still-latest`      | Checks `main` hasn't moved past this commit since the gates started          | Yes — stands `deploy-production` down if it has |
+| `deploy-production` | Calls `deploy.yml`, on pushes to `main` only                                 | The thing being gated                           |
 
 `deploy-production.needs` must name **every** job above it. Not just the ones with "test" in the name:
 a lint failure, a type error, a formatting drift, a leaked credential, and a coverage regression are all
@@ -38,12 +39,13 @@ test. This is worse than the first failure mode because the CI badge stays green
 
 - as `pnpm ci:gate-policy`, a step inside the `quality` job, so a bad workflow edit fails the very
   run that introduced it; and
-- as `tests/ci/ci-gate-policy.test.ts` under `pnpm test:tooling`, which the `test` job runs.
+- as `repo-tests/ci/ci-gate-policy.test.ts` under `pnpm test:tooling`, which the `test` job runs.
 
 This was briefly two guards. A second, line-based workflow reader lived in
 `packages/test-utils/tests/workspace-policies/testing-tree.ts` with its own copy of the same rules —
-two parsers and two command vocabularies for one requirement, which is exactly the drift SCR-19 is
-about. The duplicate was removed; `testing-tree.ts` now walks the test tree only and says so.
+two parsers and two command vocabularies for one requirement, which is exactly the drift the
+ungated-check-job rule exists to prevent. The duplicate was removed; `testing-tree.ts` now walks
+the test tree only and says so.
 
 The module ships its own narrow YAML reader (`parseYaml`) rather than taking a dependency: the
 repository resolves no YAML parser and a launch gate should not be the thing that churns the
@@ -64,12 +66,13 @@ re-adoption is classified correctly even though the scan runs as a `run:` step t
 
 The assertions:
 
-1. Every check job in `ci.yml` appears in `deploy-production.needs`. SCR-19's acceptance names
-   `quality` and `build` explicitly and neither runs a test command, so the rule is written over
-   checks, not over tests — a tests-only rule would let a new lint-only job ship red. (SCR-19.)
+1. Every check job in `ci.yml` appears in `deploy-production.needs` (`ungated-check-job`, the launch
+   requirement tracked as SCR-19). The acceptance names `quality` and `build` explicitly and neither
+   runs a test command, so the rule is written over checks, not over tests — a tests-only rule
+   would let a new lint-only job ship red.
 2. No gating step is soft-failed by `continue-on-error: true` (step-level **or** job-level),
-   a trailing `|| true`, or `if: always()` — in `ci.yml` or in any other workflow file. (SCR-20,
-   static half.)
+   a trailing `|| true`, or `if: always()` — in `ci.yml` or in any other workflow file
+   (`soft-failed-gate`, tracked as SCR-20, static half).
 3. Committed expectations over the real file: the check-job set and `needs` are asserted as an exact
    list, so adding a job forces both to be updated together. The coverage job's command, the
    secret-scan job's command, and the presence of `pnpm ci:gate-policy` are each pinned.
@@ -114,7 +117,9 @@ checkout keeps `fetch-depth: 0` so the licensed binary can be run over the same 
 
 ## Outstanding empirical proof
 
-SCR-20's acceptance asks for more than the static guard above. It asks for proof by experiment:
+SCR-20's acceptance — the launch-compliance requirement `soft-failed-gate` is tracked against, in
+`docs/engineering/launch-compliance.json` — asks for more than the static guard above. It asks for
+proof by experiment:
 
 > Proven empirically on a scratch branch: force one unit test to fail and, separately, one e2e spec to
 > fail — in both cases the workflow run reports failure (not merely a skipped deploy) and

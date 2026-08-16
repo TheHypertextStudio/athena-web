@@ -16,7 +16,7 @@
  * `'task_timebox'` is a separate, legacy/derived kind that only the shared-calendar read path
  * (`calendar-shared.ts`) still synthesizes. Both are "this block is about doing a task" in the
  * same sense, so both are eligible here; checking only `'task_timebox'` (as an earlier version of
- * this logic did) meant the CORE-40 start-timer affordance never matched a single block created
+ * this logic did) meant the start-timer affordance never matched a single block created
  * through the app's own drag-a-task-onto-the-grid flow, only the legacy kind no live write path
  * produces anymore.
  */

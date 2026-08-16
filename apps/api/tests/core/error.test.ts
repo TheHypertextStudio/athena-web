@@ -168,7 +168,7 @@ describe('onError mapping', () => {
 });
 
 /**
- * `problemTypeUrl` is the ONE place a Problem `type` URI is built (GEN-25).
+ * `problemTypeUrl` is the ONE place a Problem `type` URI is built.
  *
  * @remarks
  * The point of the helper is that repointing the product at a new apex is a configuration change,

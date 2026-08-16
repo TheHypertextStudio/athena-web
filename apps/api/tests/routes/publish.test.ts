@@ -2,12 +2,12 @@
  * Publishing: briefs and custom domains.
  *
  * @remarks
- * Covers CORE-26 (all three entity types publish and unpublish), CORE-27 (a brief reads live
- * records, never a snapshot), CORE-29 (admin-only domain administration), CORE-30 (one host, one
- * workspace — in the handler AND in the database), CORE-31 (DNS ownership before serving),
- * CORE-32 (a workspace's own identity slug is its default brief address, from creation, with no
- * separate claim step), and MISS-04 (a verified domain serves its own workspace and only its own
- * workspace).
+ * Covers all three entity types publishing and unpublishing, a brief reading live
+ * records rather than a snapshot, admin-only domain administration, one host mapping to one
+ * workspace — enforced in the handler AND in the database, DNS ownership verification before
+ * serving, a workspace's own identity slug serving as its default brief address from creation
+ * with no separate claim step, and a verified domain serving its own workspace and only its own
+ * workspace.
  */
 import type * as DbModule from '@docket/db';
 import { and, eq } from 'drizzle-orm';
@@ -89,7 +89,7 @@ beforeAll(async () => {
   db = schema.db;
 });
 
-describe('CORE-26 · publishing each of the three entity types', () => {
+describe('publishing each of the three entity types', () => {
   it('serves a brief for an initiative, a program, and a project, and 404s once withdrawn', async () => {
     const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
     const { orgId, teamId, humanActorId, statusId } = await seedPublishingOrg(workspace);
@@ -539,7 +539,7 @@ describe('PATCH /:id · moving and withdrawing a brief in place', () => {
   });
 });
 
-describe('CORE-27 · a brief reads the live record, not a snapshot', () => {
+describe('a brief reads the live record, not a snapshot', () => {
   it('reflects an edit to the title, status, dates, description, and child list', async () => {
     const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
     const { orgId, teamId, humanActorId, statusId } = await seedPublishingOrg(workspace);
@@ -613,7 +613,7 @@ describe('CORE-27 · a brief reads the live record, not a snapshot', () => {
   });
 
   it('stores no copy of the record: the publication table has no content columns', () => {
-    // The structural half of CORE-27. If a snapshot column is ever added, this fails and the
+    // The structural half of the live-record guarantee. If a snapshot column is ever added, this fails and the
     // "same underlying data source" guarantee has to be re-argued rather than quietly lost.
     const columns = Object.keys(schema.publication).filter((key) => !key.startsWith('_'));
     for (const forbidden of ['title', 'name', 'description', 'summary', 'status', 'body', 'html']) {
@@ -622,7 +622,7 @@ describe('CORE-27 · a brief reads the live record, not a snapshot', () => {
   });
 });
 
-describe('CORE-29 · only workspace admins configure domains', () => {
+describe('only workspace admins configure domains', () => {
   it('403s every domain route for a non-admin member and writes nothing', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const member = await addressApp(orgId, ['contribute'], {}, humanActorId);
@@ -709,7 +709,7 @@ describe('CORE-29 · only workspace admins configure domains', () => {
   });
 });
 
-describe('CORE-30 · a domain belongs to exactly one workspace', () => {
+describe('a domain belongs to exactly one workspace', () => {
   it('409s a second workspace claiming the same host in any spelling, and writes no row', async () => {
     const a = await seedBaseOrg(db, schema);
     const b = await seedBaseOrg(db, schema);
@@ -768,7 +768,7 @@ describe('CORE-30 · a domain belongs to exactly one workspace', () => {
   });
 });
 
-describe('CORE-31 · DNS ownership before serving', () => {
+describe('DNS ownership before serving', () => {
   it('persists unverified, shows the exact record, and refuses to serve until the token matches', async () => {
     const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
     const { orgId, humanActorId, statusId } = await seedPublishingOrg(workspace);
@@ -808,8 +808,8 @@ describe('CORE-31 · DNS ownership before serving', () => {
     expect(domain.verificationRecord.value).toMatch(/^docket-domain-verification=[0-9a-f]{32}$/);
 
     const anon = await publicApp();
-    // Unverified: the host serves nothing (MISS-04's "before verification the identical request
-    // returns 4xx with no brief content").
+    // Unverified: the host serves nothing — before verification the identical request returns
+    // 4xx with no brief content.
     const refused = await anon.request(`/briefs/${workspace}/dns-gate?host=briefs.tenant.example`);
     expect(refused.status).toBe(404);
     expect(await refused.text()).not.toContain('Gated by DNS');
@@ -865,7 +865,7 @@ describe('CORE-31 · DNS ownership before serving', () => {
   });
 });
 
-describe('CORE-32 · the workspace slug fallback', () => {
+describe('the workspace slug fallback', () => {
   it("serves briefs on the org's own identity slug immediately — no separate claim step", async () => {
     // seedBaseOrg alone, deliberately: no seedPublishingOrg, no address-router call of any kind.
     // The org's own slug (auto-derived at creation) is its brief address from the moment it
@@ -947,7 +947,7 @@ describe('CORE-32 · the workspace slug fallback', () => {
   });
 });
 
-describe('MISS-04 · a verified domain serves its own workspace only', () => {
+describe('a verified domain serves its own workspace only', () => {
   it('serves this workspace, refuses another workspace, and stops when the domain is removed', async () => {
     const tenantName = `tenant-${Math.random().toString(36).slice(2, 8)}`;
     const otherName = `other-${Math.random().toString(36).slice(2, 8)}`;

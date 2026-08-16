@@ -206,7 +206,7 @@ const ZOD_CASES: readonly ZodCase[] = [
   },
 ];
 
-describe('ATH-46 — any Zod schema is representable as an elicitation', () => {
+describe('any Zod schema is representable as an elicitation', () => {
   it('covers at least the ten schema kinds the requirement enumerates', () => {
     expect(ZOD_CASES.length).toBeGreaterThanOrEqual(10);
   });
@@ -603,7 +603,7 @@ describe('ElicitationRequestSchema', () => {
   });
 });
 
-describe('ATH-47 — MCP spec interop', () => {
+describe('converting an MCP-spec requestedSchema into Athena’s own elicitation form', () => {
   it('renders a spec-shaped requestedSchema as a form with the server’s own labels', () => {
     const spec = elicitationFromMcpRequestedSchema({
       type: 'object',

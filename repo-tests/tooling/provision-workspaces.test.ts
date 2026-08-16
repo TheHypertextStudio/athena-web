@@ -1,5 +1,5 @@
 /**
- * The workspace-provisioning contract (WIL-05).
+ * The workspace-provisioning contract.
  *
  * @remarks
  * Two things about `scripts/provision-workspaces.ts` are worth holding still, and neither is

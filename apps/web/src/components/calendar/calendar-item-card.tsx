@@ -19,7 +19,7 @@
  * geometry and the actual `useUpdateCalendarItem` call.
  *
  * A task-shaped item with a `'contained'` task link ({@link containedTaskLink}) grows a
- * {@link TaskTimerButton} (CORE-40) beside the sync/read-only badges — a scheduled block *of* a
+ * {@link TaskTimerButton} beside the sync/read-only badges — a scheduled block *of* a
  * task is exactly where a person starting that work reaches to start tracking it. The control is
  * a sibling of the `onOpen` button, not nested inside it, so it never needs to fight the card's
  * own click-to-open handler.
@@ -174,7 +174,7 @@ export default function CalendarItemCard({
   const metaLine = [KIND_LABEL[item.kind], layer?.title].filter(Boolean).join(' · ');
 
   // A task-shaped block with a `'contained'` link is a scheduled block *of* a task, so the block
-  // itself is the natural place to start tracking it (CORE-40). Every other item has nothing here
+  // itself is the natural place to start tracking it. Every other item has nothing here
   // for the timer to attach to, so the control appears only once a contained task has arrived.
   const timeboxedTask = containedTaskLink(item);
 

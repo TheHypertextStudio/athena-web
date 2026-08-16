@@ -200,9 +200,10 @@ describe('OAuthAuthorizePage', () => {
     });
 
     it('renders a readable label for every permission the server can issue', async () => {
-      // The consent screen's half of the SCR-12 enumeration: with all five requested at once,
-      // each one resolves to a label and a read/write qualifier, and none renders as a raw
-      // identifier. `oauth-scope-copy.test.ts` enumerates the copy map itself.
+      // The consent screen's half of the requirement that every issuable permission renders as a
+      // human-readable label with a read/write qualifier, never a raw identifier: with all five
+      // requested at once, each one resolves to a label and a qualifier, and none renders raw.
+      // `oauth-scope-copy.test.ts` enumerates the copy map itself.
       window.history.replaceState(
         null,
         '',
@@ -250,10 +251,11 @@ describe('OAuthAuthorizePage', () => {
     });
 
     it('paints the request before the session read answers', async () => {
-      // SCR-03's principle applied here: who is asking and what they are asking for come from the
-      // URL, so both are known on the first paint. This screen used to throw all of it away for a
-      // bare "Loading…" until `/get-session` returned. Only the account row and the two decision
-      // buttons may wait on the session.
+      // The same principle that governs first paint elsewhere in the app, applied here: render
+      // whatever is statically known rather than gating it behind a fetch. Who is asking and what
+      // they are asking for come from the URL, so both are known on the first paint. This screen
+      // used to throw all of it away for a bare "Loading…" until `/get-session` returned. Only the
+      // account row and the two decision buttons may wait on the session.
       window.history.replaceState(null, '', `/oauth/authorize${SIGNED_QUERY}`);
       useSession.mockReturnValue({ data: null, isPending: true, error: null });
 

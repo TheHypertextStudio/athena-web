@@ -1,5 +1,7 @@
 /**
- * The first-paint regression lock for the app shell (SCR-01 / SCR-02 / SCR-03 / SCR-04).
+ * The first-paint regression lock for the app shell: nothing statically known — the shell chrome,
+ * the page heading, the tab bar — may wait on a fetch or hide behind a placeholder or a
+ * full-viewport loader.
  *
  * @remarks
  * Renders {@link AppShellFrame} in the hardest honest case — a server-confirmed identity, every

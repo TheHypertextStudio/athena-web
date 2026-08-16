@@ -126,13 +126,13 @@ jobs:
       - run: pnpm format:check
         if: matrix.gates
 
-      # SCR-19/SCR-20 guard: fails when a job that runs tests or checks is added to this file
-      # without being added to deploy-production.needs, or when a gating step is soft-failed
-      # (continue-on-error, `|| true`, `if: always()`). See scripts/ci-gate-policy.ts.
+      # Fails when a job that runs tests or checks is added to this file without being added to
+      # deploy-production.needs, or when a gating step is soft-failed (continue-on-error,
+      # `|| true`, `if: always()`). See scripts/ci-gate-policy.ts.
       - run: pnpm ci:gate-policy
         if: matrix.gates
 
-  # GEN-06 clause 1: no credential may reach the default branch. Fails the run — and therefore
+  # No credential may reach the default branch. Fails the run — and therefore
   # the production deploy, via deploy-production.needs — on any finding.
   #
   # The gate is `scripts/secret-scan.ts`, the in-repo scanner, NOT gitleaks/gitleaks-action.
@@ -166,7 +166,7 @@ jobs:
 
       - run: pnpm secret-scan
 
-  # SCR-15: the repo's gating test command. Every package's `test` script is a bare `vitest run`
+  # The repo's gating test command. Every package's `test` script is a bare `vitest run`
   # that enforces no thresholds, on purpose, so the inner loop (`pnpm --filter <pkg> test`) stays
   # fast. The thresholds in tooling/vitest/preset.ts (90 default, 100 for the trust-spine
   # packages) only fire under `test:coverage`, so that is what runs here and what makes a coverage
@@ -188,8 +188,8 @@ jobs:
   # of these filters it would silently go untested, so the `rest` group is defined by EXCLUSION
   # rather than by an enumerated list: anything new lands there by default.
   #
-  # The job id stays `test`, so `deploy-production.needs` and scripts/ci-gate-policy.ts (SCR-19)
-  # keep working unchanged — a matrix multiplies the runs, not the id.
+  # The job id stays `test`, so `deploy-production.needs` and scripts/ci-gate-policy.ts's
+  # ungated-check-job check keep working unchanged — a matrix multiplies the runs, not the id.
   test:
     name: Test (${{ matrix.group }})
     runs-on: ubuntu-latest
@@ -228,11 +228,11 @@ jobs:
 
       - run: pnpm turbo run test:coverage ${{ matrix.filter }} --concurrency=1
 
-      # `turbo run test:coverage` only runs *package* suites. The repository-level suites under `tests/`
-      # — the CI gate policy (tests/ci) and the launch-record reconciler (tests/launch) — belong
-      # to no workspace package, so turbo never sees them. Without this step the guards that
-      # protect this very file would not run in CI at all. They ride with `rest` so they run
-      # exactly once rather than three times.
+      # `turbo run test:coverage` only runs *package* suites. The repository-level suites under
+      # `repo-tests/` — the CI gate policy (repo-tests/ci) and the launch-record reconciler
+      # (repo-tests/launch) — belong to no workspace package, so turbo never sees them. Without
+      # this step the guards that protect this very file would not run in CI at all. They ride
+      # with `rest` so they run exactly once rather than three times.
       - run: pnpm test:tooling
         if: matrix.tooling
 
@@ -286,7 +286,8 @@ jobs:
   # `deploy-production` below still needs every check job, so a red run rolls out nothing. The
   # cost is one discarded image build on a failing run, which is the point of the trade.
   # `scripts/ci-gate-policy.ts` sees a job with no gating command and correctly does not classify
-  # it as a check job, so SCR-19 is unaffected.
+  # it as a check job, so it isn't required to appear in deploy-production.needs on that basis —
+  # it's listed there anyway, for the image-consumption ordering, not to satisfy that rule.
   build-images:
     name: Build deploy images
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -296,16 +297,56 @@ jobs:
     uses: ./.github/workflows/build-images.yml
     secrets: inherit
 
+  # `cancel-in-progress: false` above protects an ACTIVE deploy from being killed mid-migration —
+  # that is the fix for the 2026-08-05 outage, and it stays. But it means a run that started from
+  # an older push keeps paying for its gates even after newer commits have landed on `main`: under
+  # a burst of rapid pushes (several agents committing directly to main within the same
+  # ~15-20 minute gate window), a run can reach `deploy-production` for a commit `main` has already
+  # moved past. Deploying it anyway just means a second, immediate rollout when the next run's
+  # deploy lands on top of it. This job `needs` the same gates `deploy-production` does, so it
+  # checks freshness right before `deploy-production` would start rather than at T+0 when the run
+  # began — a check made 15-20 minutes early would already be stale by the time it's used. If
+  # `main` has moved on, `deploy-production` stands down — nothing has been touched yet, so this
+  # is a plain skip, not a cancellation of anything in flight.
+  still-latest:
+    name: Still latest on main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [lint, typecheck, secret-scan, test, build, build-images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for attempt in 1 2 3; do
+            latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha') && break
+            sleep 5
+          done
+          if [ -z "$latest" ]; then
+            echo "::error::Could not read main's current tip after 3 attempts; failing closed."
+            exit 1
+          fi
+          if [ "$latest" = "$GITHUB_SHA" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::main has moved to $latest since this run started at $GITHUB_SHA — skipping deploy for a stale commit."
+          fi
+
   # Browser e2e against the real dev stack (Portless routing + Next dev + Hono API + PGlite),
   # exactly the topology `pnpm dev` gives a developer — including the MCP OAuth flows
   # (register → consent → token → Bearer /mcp), which .env.local enables locally.
-  # SCR-19: `needs` must name EVERY job above that runs tests or checks. Adding a check job
-  # without adding it here would let a red check ship to production; `pnpm ci:gate-policy`
-  # (run in the `quality` job, and by tests/ci/ci-gate-policy.test.ts) fails when that happens.
+  # `needs` must name EVERY job above that runs tests or checks. Adding a check job without
+  # adding it here would let a red check ship to production; `pnpm ci:gate-policy`
+  # (run in the `quality` job, and by repo-tests/ci/ci-gate-policy.test.ts) fails when that happens.
   deploy-production:
     name: Deploy production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [lint, typecheck, secret-scan, test, build, build-images]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.still-latest.outputs.proceed == 'true'
+    needs: [lint, typecheck, secret-scan, test, build, build-images, still-latest]
     permissions:
       contents: read
       id-token: write

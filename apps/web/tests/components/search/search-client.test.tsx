@@ -2,8 +2,9 @@
  * Behaviour tests for {@link import('../../../src/components/search/search-client').SearchResultRow}.
  *
  * @remarks
- * `/search` is one of the places CORE-40 requires a start-timer affordance: a task result should
- * offer {@link TaskTimerButton} beside its link. Two things are worth pinning:
+ * `/search` is one of the surfaces that must expose a start-timer affordance for every task it
+ * shows — a timer must be startable for any task, at any time, from wherever it appears: a task
+ * result should offer {@link TaskTimerButton} beside its link. Two things are worth pinning:
  *
  * - only `task` results grow the control — every other kind links exactly as before;
  * - the timer starts against the task's real id (`route.entityId`), not the top-level

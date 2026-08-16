@@ -534,7 +534,8 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     recoveryChallenge(),
     // Email-verification challenge that gates passwordless sign-up: proves inbox ownership and
     // mints the single-use intent `resolvePasskeyUser` consumes, so a passkey is never bound to an
-    // unverified email. Closes the pre-registration account-takeover (audit CRITICAL-1/HIGH-2).
+    // unverified email. Closes the pre-registration account-takeover found in the security audit:
+    // an unauthenticated caller could register a passkey against an email they did not control.
     signupChallenge({
       mailer: deps.mailer,
       ...(deps.devEchoSignupCode ? { devEchoCode: true } : {}),
@@ -544,8 +545,8 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
   // A REAL OAuth 2.0 client provider (Better Auth's `genericOAuth` plugin) that performs a
   // genuine authorize → code → token → userinfo ceremony against a fake identity provider Docket
   // itself runs (`apps/api/src/lib/oauth-stub-provider.ts`) — never against Google, GitHub, or any
-  // real service. Exists solely so SCR-07 ("an OAuth-provider sign-in succeeds") can be proven
-  // with a real Better Auth session mint at the end of a real ceremony: no environment this code
+  // real service. Exists solely so production authentication's OAuth-provider sign-in clause can
+  // be proven with a real Better Auth session mint at the end of a real ceremony: no environment this code
   // runs in — including CI — has a real third-party OAuth account to complete one against, and the
   // six `socialProviders` blocks above are out of scope for that fixture (they mount real
   // providers' endpoints, not a stand-in). Gated exactly like every other local/test-only

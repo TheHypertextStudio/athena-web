@@ -115,7 +115,7 @@ describe('anticipated start date', () => {
   });
 
   it('is described to API consumers in the product’s own words, as a date-only field', () => {
-    // ENT-20 is about a concept, not a column: whatever the schema calls it, the published API
+    // The anticipated start date is about a concept, not a column: whatever the schema calls it, the published API
     // must offer "an anticipated start date" so a reader looking for one finds it. Asserting on
     // the emitted JSON Schema also proves the cross-field refinement did not cost the field its
     // `format: date` in the OpenAPI document.

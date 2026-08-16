@@ -1,5 +1,6 @@
 /**
- * `test-oauth` generic-oauth provider gating (SCR-07 real-ceremony fixture).
+ * `test-oauth` generic-oauth provider gating — the real-ceremony fixture that lets production
+ * authentication's OAuth-provider sign-in clause be proven end-to-end.
  *
  * @remarks
  * `packages/auth/src/auth-builder.ts` mounts Better Auth's `genericOAuth` plugin, configured

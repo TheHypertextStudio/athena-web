@@ -2,16 +2,17 @@
  * `@docket/env/custom-domain` — normalizing, verifying, and routing per-workspace domains.
  *
  * @remarks
- * A workspace can serve its published briefs from a domain it owns (CORE-29 … CORE-31,
- * MISS-04). Three things have to be true before that is safe, and all three are here so no
+ * A workspace can serve its published briefs from a domain it owns, restricted to workspace
+ * admins, unique across every workspace, and only after it has proved ownership via DNS. Three
+ * things have to be true before that is safe, and all three are here so no
  * feature has to re-derive them:
  *
  * 1. **One host, one spelling.** `Example.COM.`, `www.example.com`, and `https://example.com/x`
- *    are the same claim. Uniqueness (CORE-30) is only enforceable if every caller normalizes
+ *    are the same claim. Uniqueness is only enforceable if every caller normalizes
  *    identically before it writes a row or compares one, so normalization is a shared function
  *    rather than a convention.
  * 2. **Ownership is proved, not asserted.** A domain is persisted unverified and refuses to
- *    serve until a DNS `TXT` record carries a workspace-specific token (CORE-31).
+ *    serve until a DNS `TXT` record carries a workspace-specific token.
  * 3. **The refusal is legible.** Every rejection is a stable code, never provider or resolver
  *    text — the repo's UI-copy rule is that application copy is application-owned, and DNS
  *    error strings are neither owned nor trustworthy (a resolver echoes attacker-controlled
@@ -95,7 +96,8 @@ export type CustomDomainNormalization =
   | { readonly ok: true; readonly host: string }
   | { readonly ok: false; readonly reason: CustomDomainRejection };
 
-/** A `www.` prefix is stripped so both spellings collapse to one claim (CORE-30). */
+/** A `www.` prefix is stripped so both spellings collapse to one claim, which two workspaces
+ * cannot both hold. */
 const WWW_PREFIX = 'www.';
 
 /** Characters a DNS label may contain once the name is punycoded. */
@@ -201,9 +203,9 @@ export interface DomainDnsRecord {
  * The exact `TXT` record that proves ownership of `host`.
  *
  * @remarks
- * CORE-31 requires the UI to display the record's type, name, and value exactly; returning a
- * struct rather than a formatted string is what lets the UI lay it out as a copyable table
- * without parsing anything back out.
+ * The domain settings UI must display the record's type, name, and value exactly so the
+ * operator can copy them into their DNS provider; returning a struct rather than a formatted
+ * string is what lets the UI lay it out as a copyable table without parsing anything back out.
  *
  * @param host - A host already through {@link normalizeCustomDomain}.
  * @param token - The token from {@link generateCustomDomainToken}.
@@ -229,8 +231,8 @@ export function domainVerificationRecord(host: string, token: string): DomainDns
  * The `CNAME` that makes a verified domain actually serve briefs.
  *
  * @remarks
- * Verification proves ownership; it does not route traffic. MISS-04 requires the domain to
- * serve over HTTPS once verified, which needs the host pointed at Docket's brief edge — the
+ * Verification proves ownership; it does not route traffic. A verified domain must actually
+ * serve the workspace's published briefs over HTTPS, which needs the host pointed at Docket's brief edge — the
  * target comes from `CUSTOM_DOMAIN_CNAME_TARGET`, falling back to the brief host, so it is
  * configuration rather than a constant baked into the settings screen.
  *

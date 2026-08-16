@@ -197,8 +197,8 @@ describe('scheduling item surface', () => {
     }
   });
 
-  // CAL-17 (docs/engineering/launch-compliance.md): "event/time-block surfaces are the only elements
-  // using the highest-contrast fill". Today's lane-header day chip (scheduling-canvas-header.tsx) used
+  // Events and time blocks must be the only elements using the highest-contrast fill on the canvas —
+  // no supporting chrome may outrank them. Today's lane-header day chip (scheduling-canvas-header.tsx) used
   // to be a solid `bg-primary` fill — measured well above an event's own fill — which made a date
   // badge, not an event, the loudest object on the grid. It now uses `primary-container`, and this
   // pins that the tonal chip never re-outranks an event block again.

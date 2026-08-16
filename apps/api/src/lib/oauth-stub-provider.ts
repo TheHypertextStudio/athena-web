@@ -2,8 +2,9 @@
  * `@docket/api` — the local/test-only fake OAuth 2.0 authorization server behind `test-oauth`.
  *
  * @remarks
- * SCR-07 ("an OAuth-provider sign-in succeeds") requires a REAL Better Auth session to be minted
- * at the end of a REAL OAuth2 ceremony. No environment this code runs in — including CI — holds a
+ * The production auth requirement that "an OAuth-provider sign-in succeeds" requires a REAL
+ * Better Auth session to be minted at the end of a REAL OAuth2 ceremony, verified end-to-end in
+ * production. No environment this code runs in — including CI — holds a
  * real Google/GitHub/etc. account to complete one against, and the real `socialProviders` blocks
  * in `packages/auth/src/auth-builder.ts` are (deliberately) out of scope for a test fixture: they
  * mount real providers' own endpoints, not a stand-in.

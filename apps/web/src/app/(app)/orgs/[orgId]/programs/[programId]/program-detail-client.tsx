@@ -257,7 +257,7 @@ export default function ProgramDetailPage(): JSX.Element {
       }
       actions={
         // One ControlGroup at the row level, and no control inside it declares a height. That is
-        // what makes the publish icon and the overflow icon provably the same size (CORE-28)
+        // what makes the publish icon and the overflow icon provably the same size
         // rather than the same size until someone edits one of them.
         <ControlGroup controlSize="xl">
           <PublishAction

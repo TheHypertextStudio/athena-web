@@ -1,5 +1,5 @@
 /**
- * `AthenaMcpPanel`'s widget→conversation wiring (ATH-07, ATH-09).
+ * `AthenaMcpPanel`'s widget→conversation wiring.
  *
  * @remarks
  * `McpAppView` already proves the protocol reaches this panel's `onMessage`/`onModelContext`

@@ -1,5 +1,5 @@
 /**
- * `@docket/api` — composing a published brief out of the live work tables (CORE-27).
+ * `@docket/api` — composing a published brief out of the live work tables.
  *
  * @remarks
  * This module is the answer to "does a brief read the same data as the app?". It holds the
@@ -123,9 +123,10 @@ export function isProductHost(host: string): boolean {
  * @remarks
  * Returns `undefined` for one of Docket's own hosts (no restriction) and a workspace id for a
  * verified custom domain. Throws for anything else: an unknown host, or a host whose domain row
- * exists but has not proved ownership. Both are CORE-31/MISS-04 refusals, and both are 404
- * rather than 403 — telling an anonymous visitor "this domain is registered here but
- * unverified" would confirm the existence of a claim they have no business knowing about.
+ * exists but has not proved ownership. Both are refusals under the rule that a domain must pass
+ * DNS verification before it may serve published content, and both are 404 rather than 403 —
+ * telling an anonymous visitor "this domain is registered here but unverified" would confirm the
+ * existence of a claim they have no business knowing about.
  *
  * @param host - The `Host` the visitor asked on, or `undefined` when unknown.
  * @returns The workspace the host restricts to, or `undefined` for no restriction.
@@ -164,9 +165,9 @@ interface ResolvedPublication {
  * @remarks
  * Two distinct shapes, matching {@link BriefLocator.workspaceSlug}'s two states:
  * - **Shared host** (`workspaceSlug` present): the workspace is found by its own identity slug.
- *   A verified-custom-domain `hostScope` still gates it (MISS-04's "a brief belonging to a
- *   different workspace is not reachable on this host") — reachable only via a stale link or a
- *   direct API call today, since the proxy rewrite never produces this shape for a custom domain.
+ *   A verified-custom-domain `hostScope` still gates it — a brief belonging to a different
+ *   workspace must not be reachable on this host — reachable only via a stale link or a direct
+ *   API call today, since the proxy rewrite never produces this shape for a custom domain.
  * - **Custom domain** (`workspaceSlug` absent): the host itself is the only identifier. No
  *   `hostScope` means no verified domain matched at all, which is a refusal, not an "any
  *   workspace" fallback — the shared host never reaches this branch.

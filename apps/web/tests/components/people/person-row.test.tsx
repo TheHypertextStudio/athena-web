@@ -1,5 +1,5 @@
 /**
- * The equal-treatment contract for a People row (ENT-46 / ENT-47).
+ * The equal-treatment contract for a People row.
  *
  * @remarks
  * The requirement is that a person without a Docket account renders **identically** to one with

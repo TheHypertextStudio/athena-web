@@ -2064,7 +2064,7 @@ describe('SchedulingCanvas', () => {
   it('renders a consumer action control in the reserved bottom-right corner, isolated from open/move/region gestures', () => {
     // The corner-control layout is otherwise fully claimed: resize grips sit on the top/bottom
     // edges, move is `top-0.5 right-0.5`, and the relationship-source control is
-    // `bottom-0.5 left-0.5`. `renderItemAction` (CORE-40's start-timer affordance on the calendar
+    // `bottom-0.5 left-0.5`. `renderItemAction` (the start-timer affordance on the calendar
     // surface) is the one consumer of the remaining `bottom-0.5 right-0.5` slot.
     const onOpenItem = vi.fn();
     const onMoveItem = vi.fn();

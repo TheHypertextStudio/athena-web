@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `publishing` — the workspace's publishing settings surface (CORE-29 … CORE-32).
+ * `publishing` — the workspace's publishing settings surface.
  *
  * @remarks
  * Two lists, in the order a person actually needs them:

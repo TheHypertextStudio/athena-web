@@ -4,7 +4,7 @@
  * @remarks
  * `resolveBearerContext` in `apps/api/src/mcp/auth.ts` does not trust a valid signature alone: it
  * reads the token's `azp` claim and re-checks that the caller's grant for that client is still
- * standing, so that revoking a connected app stops it at the very next request (MISS-05). That
+ * standing, so that revoking a connected app stops it at the very next request. That
  * makes "a registered client the user has consented to" a precondition of every Bearer test, not
  * an incidental detail — and a precondition that is easy to get subtly wrong, since the
  * `oauth_consent.user_id` foreign key means a grant can only be seeded for a real `user` row.

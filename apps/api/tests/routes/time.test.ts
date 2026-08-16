@@ -146,7 +146,7 @@ describe('Time Ledger routes', () => {
     expect(body.record?.intervals.every((interval) => interval.endedAt !== null)).toBe(true);
   });
 
-  // CORE-43: the thing a timer names is an ordinary task, not a tracking-only entity.
+  // the thing a timer names is an ordinary task, not a tracking-only entity.
   it('creates a first-class Docket task when tracking is started from a freeform name', async () => {
     const record = await startTracking({
       context: { label: 'Draft the launch note', organizationId },
@@ -239,7 +239,7 @@ describe('Time Ledger routes', () => {
     ).toHaveLength(1);
   });
 
-  // CORE-37: the acceptance sequence, exactly as written.
+  // the acceptance sequence, exactly as written.
   it('persists start/pause/resume/pause/resume/stop as exactly three bounded segments', async () => {
     const record = await startTracking({ context: { label: 'Segmented work' } });
     for (const status of ['paused', 'running', 'paused', 'running', 'stopped']) {
@@ -277,7 +277,7 @@ describe('Time Ledger routes', () => {
     expect(hydrated?.measures.humanEffortMs).toBe(summed);
   });
 
-  // CORE-38: the segment itself carries the subject, and a task change moves the subject.
+  // the segment itself carries the subject, and a task change moves the subject.
   it('associates every segment with the task it tracked and switches subjects cleanly', async () => {
     const alpha = await seedTask('Alpha');
     const beta = await seedTask('Beta');
@@ -300,7 +300,7 @@ describe('Time Ledger routes', () => {
     expect(betaSegments[0]?.timeRecordId).toBe(second.id);
   });
 
-  // CORE-39: a restart inside the window continues the stretch; outside it starts a new one.
+  // a restart inside the window continues the stretch; outside it starts a new one.
   it('joins a restart under a minute and records a break at or beyond one minute', async () => {
     const taskId = await seedTask('Continuous work');
     const record = await startTracking({ context: { label: 'Continuous work', taskId } });
@@ -344,7 +344,7 @@ describe('Time Ledger routes', () => {
     expect(await segmentCount(second.id)).toBe(1);
   });
 
-  // CORE-42: the refusal is the SERVER's, reachable with no UI in the loop.
+  // the refusal is the SERVER's, reachable with no UI in the loop.
   it('refuses to stop a session whose task has no name, and leaves it running', async () => {
     const record = await startTracking({ context: { label: 'Nameable work' } });
     const schema = await getDb();
@@ -526,7 +526,7 @@ describe('Time Ledger routes', () => {
     ).rejects.toThrow();
   });
 
-  // CORE-44: every transition is announced, once, in order, with the task on it.
+  // every transition is announced, once, in order, with the task on it.
   it('emits exactly one typed event per timer transition, in order', async () => {
     const taskId = await seedTask('Observable work');
     const record = await startTracking({ context: { label: 'Observable work', taskId } });
@@ -820,7 +820,7 @@ describe('Time Ledger routes', () => {
     );
   });
 
-  // CORE-49: all four named dimensions, each reconciling, with explicit unassigned buckets.
+  // all four named dimensions, each reconciling, with explicit unassigned buckets.
   it('breaks tracked time down by project, program, initiative and workspace', async () => {
     const schema = await getDb();
     const programId = one(

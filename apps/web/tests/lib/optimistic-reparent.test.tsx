@@ -1,5 +1,5 @@
 /**
- * Optimistic drag-and-drop reparenting, end to end (SCR-06).
+ * Optimistic drag-and-drop reparenting, end to end.
  *
  * @remarks
  * Reparenting is the one mutation a person judges entirely by feel: they drag a row onto another

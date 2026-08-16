@@ -1,11 +1,11 @@
 /**
- * Optimistic-write behaviour for {@link useProjectMutations} (SCR-06), plus the initiative-toggle
+ * Optimistic-write behaviour for {@link useProjectMutations}, plus the initiative-toggle
  * regression that first brought this file into existence.
  *
  * @remarks
  * Two separate concerns live here, and they are worth keeping apart when reading:
  *
- * **The optimistic contract (SCR-06).** A project field edit and an initiative link/unlink are both
+ * **The optimistic contract.** A project field edit and an initiative link/unlink are both
  * writes a person makes from the properties panel, so both are held to the same two claims every
  * task mutation is held to in `use-task-mutations.test.tsx`:
  *

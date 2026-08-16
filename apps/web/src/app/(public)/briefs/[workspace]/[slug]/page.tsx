@@ -8,7 +8,11 @@ import { BriefDocument } from '@/components/publishing/brief-document';
 import { briefMetadata, readBriefAt } from '../../shared';
 
 /**
- * The published brief page on the shared brief host (CORE-26, CORE-27, CORE-33, MISS-04).
+ * The published brief page on the shared brief host: the surface that lets a published
+ * initiative, program, or project be reached as a public brief. It reads live from the same
+ * underlying records as the rest of the app rather than a forked snapshot, is designed as a
+ * standalone document rather than an app screen, and — together with the custom-domain variant —
+ * is what a workspace's verified custom domain actually serves over HTTPS.
  *
  * @remarks
  * Internally, one canonical path shape: `/briefs/<workspace>/<slug>`. A bare `/<workspace>/<slug>`

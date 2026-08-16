@@ -15,10 +15,11 @@ import type { unsealCredential as Unseal } from '../../src/lib/credentials';
 import { assertDefined } from '@docket/test-utils';
 
 /**
- * The stored-credential half of GEN-07.
+ * The stored-credential half of the requirement that API keys and other stored credentials never
+ * render in plaintext in the UI, logs, or API responses.
  *
  * @remarks
- * GEN-07 wants proof that a credential which is actually **stored** never leaves the server: not in
+ * This wants proof that a credential which is actually **stored** never leaves the server: not in
  * a response body, not in the DTO contract, not in plaintext at rest. That cannot be shown against
  * the local dev stack, because `scripts/dev-stack.sh` does not set `CREDENTIALS_ENCRYPTION_KEY` and
  * `sealCredential` refuses (409) to store anything without it — so the browser evidence in

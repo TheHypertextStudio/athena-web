@@ -403,8 +403,9 @@ describe('proxy (middleware) session gate', () => {
 
   it('redirects a cookieless protected request to sign-in, before Next renders anything', () => {
     // Absence of the cookie is certainty, not a guess — no session can exist without it — so this
-    // costs no network call. This is the half of SCR-07 that used to be missing entirely: a
-    // signed-out browser stayed on /today behind a dismissible dialog.
+    // costs no network call. This is the protected-route half of end-to-end auth enforcement that
+    // used to be missing entirely: a signed-out browser stayed on /today behind a dismissible
+    // dialog instead of being redirected to sign-in.
     const response = proxy(request({ pathname: '/today' }));
 
     expect(response.status).toBe(307);

@@ -43,9 +43,11 @@ export interface OAuthScopeCopy {
  * The plain-English qualifier shown beside each permission.
  *
  * @remarks
- * This is what satisfies the "whether access is read or write" half of SCR-12. It is a phrase
- * rather than the bare category word because "write" is not something a non-technical reader
- * should have to interpret while deciding whether to trust an app.
+ * The OAuth consent screen must explicitly tell the user which of their resources a third-party
+ * app is requesting and what it will do with them; this label is what satisfies the "what it will
+ * do with them" half of that requirement. It is a phrase rather than the bare category word
+ * because "write" is not something a non-technical reader should have to interpret while deciding
+ * whether to trust an app.
  */
 export const OAUTH_SCOPE_ACCESS_LABEL: Readonly<Record<OAuthScopeAccess, string>> = {
   read: 'View only',

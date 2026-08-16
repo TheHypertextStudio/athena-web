@@ -19,7 +19,7 @@ import {
 } from '../../../../scripts/secret-scan';
 
 /**
- * The gate for GEN-06's first clause: no credential is committed to this repository.
+ * The gate for the security requirement that no credential is committed to this repository.
  *
  * @remarks
  * Half of this file is the obvious half — run the production rule set over the real tracked tree

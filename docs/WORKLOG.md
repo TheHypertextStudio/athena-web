@@ -8592,3 +8592,139 @@ fields** from disconnected to running.
   keys. `apps/api/src/routes/lattice-gate.ts` records this honestly as `mode: 'harness'`, which
   keeps the Lattice surface unreachable in production until a real-key run is recorded.
 - Registering the Lovelace OAuth app (WIL-47's real consent screen) needs a human with a browser.
+
+## [CI-STALE-DEPLOY-001] Stand deploy-production down when main has moved past it — 2026-08-15
+
+#### Description
+
+Rapid direct-to-main pushes (multiple agents committing within the same ~15-20 minute gate window)
+were leaving `deploy-production` skipped run after run: `cancel-in-progress: false` on `main`
+correctly keeps a superseded run from being killed mid-migration, but it says nothing about a run
+that finishes its gates green for a commit `main` has already moved past — that run deployed anyway,
+immediately followed by the next run's deploy landing on top of it. Separately, the repo-root
+`tests/` directory was renamed to `repo-tests/`: it held CI-gate-policy checks, launch-record
+reconciliation, and tooling-script validation, none of which are tests of source code or
+user-facing behavior, and its name collided with every package's own (correctly named) `tests/`.
+
+#### Approach
+
+Added a `still-latest` job to `.github/workflows/ci.yml` that `needs` the same gates
+`deploy-production` does, so it checks — right before deploy would start, not at run start — whether
+`main` is still at this commit via `gh api .../git/ref/heads/main`. If not, `deploy-production`
+stands down (`if: ... && needs.still-latest.outputs.proceed == 'true'`); nothing has been touched
+yet, so this is a plain skip, not a cancellation of anything in flight. The check retries three
+times and fails closed (hard job failure, blocking that run's deploy) rather than guessing on a
+persistent `gh api` error.
+
+An `/code-review xhigh` pass on the diff caught the first cut of this job checking freshness with no
+`needs:` at all (so it evaluated at T+0, in parallel with the gates, and was stale by the time
+`deploy-production` read it — the exact bug the job existed to prevent), a `mergeConfig` call in the
+new root `vitest.config.ts` that concatenates `test.include` arrays instead of replacing them
+(currently dormant since `tests/` no longer exists, but contradicted its own doc comment), a missing
+`permissions:` block, `github.sha`/`github.repository` spliced directly into the `run:` body instead
+of read from the ambient `$GITHUB_SHA`/`$GITHUB_REPOSITORY` env vars, and a jobs-table doc edit that
+failed `prettier --check`. All were fixed; see Validation.
+
+#### Files changed
+
+`.github/workflows/ci.yml` (`still-latest` job, `deploy-production.if`/`.needs`); `package.json`,
+`vitest.config.ts`, `tooling/vitest/preset.ts` (`DocketVitestOptions.include`, replacing the
+`mergeConfig` workaround), `scripts/ci-gate-policy.ts` (comments) for the rename; the eleven files
+under `tests/` moved to `repo-tests/`, with `repo-tests/ci/ci-gate-policy.test.ts` gaining the
+`still-latest`-in-`needs` assertion; `docs/engineering/{ci-gating,coverage-ledger,deployment}.md`
+and `docs/engineering/launch/README.md` for the path references, plus a `still-latest` row in
+`ci-gating.md`'s jobs table.
+
+A raw-source `toContain` test asserting `deploy-production.if` reads
+`needs.still-latest.outputs.proceed` was added and then removed: the parsed `WorkflowJob` shape
+doesn't project a job-level `if:` (only step-level `condition`), and testing that gap via a
+whole-file string search — not even scoped to `deploy-production`'s own block once simplified —
+was the wrong tool for it. Closing this gap for real means teaching the parser to capture job-level
+`if:` and asserting on the parsed value, matching how every other check in this file works;
+skipped for now rather than done partway.
+
+## [ID-DECOUPLE-001] Stop citing internal launch-requirement IDs from source comments — 2026-08-16
+
+#### Description
+
+`scripts/ci-gate-policy.ts` baked its two enforcement rules directly into the external
+launch-compliance tracking scheme: `PolicyFinding.rule` was typed `'SCR-19' | 'SCR-20'`, and every
+comment explaining what the tool checks pointed at those bare IDs instead of stating the check.
+That's real coupling, not decoration — change the requirement taxonomy and you're now editing
+enforcement code, not just docs. The same pattern was everywhere: comments across the app and
+package source citing `SCR-`/`GEN-`/`WIL-`/`MISS-`/`CORE-`/`ACH-`/`ENT-`/`ATH-`/`CAL-`/`CRAFT-`/
+`CRITICAL-`/`HIGH-`-style IDs as the explanation for a piece of code, meaningless to a reader who
+hasn't also opened `docs/engineering/launch-compliance.json`.
+
+#### Approach
+
+`scripts/ci-gate-policy.ts`'s rule identifiers became self-descriptive: `rule: 'ungated-check-job' |
+'soft-failed-gate'`, with every doc comment, the report header string, and the dependent test file
+(`repo-tests/ci/ci-gate-policy.test.ts`) updated to match. `docs/engineering/ci-gating.md` — which
+legitimately correlates the tool's checks to the launch-compliance IDs for traceability — now states
+that correlation explicitly ("the `ungated-check-job` rule, tracked as SCR-19") instead of using the
+ID as the check's own name.
+
+For the rest of the repo: found every source file citing an internal ID (an iterative grep — the
+first pass caught `SCR/GEN/WIL/MISS`, cross-checking `docs/engineering/launch-compliance.json`'s
+actual ID vocabulary against the result surfaced `CORE/ACH/ENT`, and a final pass against that same
+vocabulary caught `ATH/CAL/CRAFT`), then rewrote each citation in place: where the surrounding
+sentence already explained the requirement, the bare ID was decoration and got deleted; where the
+comment leaned on the ID to carry meaning with nothing else, the requirement's actual text (looked up
+in `docs/engineering/launch-compliance.json`) was inlined instead. Comment-only changes throughout —
+no runtime behavior touched. Deliberately left alone: `docs/*.md`, `docs/*.json`, `WORKLOG.md` (IDs
+belong in the docs that track them), and the launch-compliance system's own machinery
+(`scripts/launch-record.ts`, `scripts/launch-scorecard.ts`,
+`packages/test-utils/tests/launch-policies/*`, `repo-tests/launch/launch-record.test.ts`) — those
+files' `GEN-01`-style strings are literal fixture/test data the reconciler parses, not citations.
+
+12 parallel batches covered 107 files. One real regression surfaced by the full test run rather than
+by review: a rewritten comment in `packages/env/src/api.ts` and one in `packages/env/src/slices.ts`
+spelled out the literal legacy hostname while explaining why an exception exists, tripping
+`packages/env/tests/hosts/legacy-host-policy.test.ts` — a policy scanner that greps all production
+source for that exact string precisely so it can never appear outside configuration. Fixed by
+describing the exception without the literal string, pointing at the policy test by path instead.
+
+#### Files changed
+
+`scripts/ci-gate-policy.ts`, `repo-tests/ci/ci-gate-policy.test.ts`, `.github/workflows/ci.yml`,
+`docs/engineering/ci-gating.md` for the core rename; 107 files total across `apps/api`, `apps/web`,
+`packages/*`, `scripts/*`, and `repo-tests/*` for the comment rewrites — see `git diff --stat` for
+the full list, too long to enumerate here.
+
+#### Validation
+
+`pnpm exec tsx scripts/ci-gate-policy.ts` — PASS. `pnpm test:tooling` — 147 tests pass.
+`pnpm lint`, `pnpm typecheck`, `pnpm test` — all 26 packages pass (4470+ tests in `@docket/api`
+alone). `pnpm exec prettier --check` clean on every touched file. One pre-existing, unrelated lint
+failure in `apps/web/tests/components/tabs/tab-shortcuts.test.tsx` was confirmed via `git status`
+to predate this change and was left alone.
+
+#### Learnings
+
+- A policy scanner that greps raw source for a banned literal (the legacy-hostname check) doesn't
+  care whether the match is in a string literal or a comment — rewriting a comment to be
+  self-contained can accidentally reintroduce the exact thing a different guard exists to keep out.
+  Running the full test suite, not just lint/prettier on touched files, is what caught it.
+- A narrow ID-prefix grep undercounts: the first sweep (`SCR|GEN|WIL|MISS`) missed `CORE`/`ACH`/`ENT`
+  entirely. Deriving the prefix list from the tracking system's own data
+  (`docs/engineering/launch-compliance.json`) rather than guessing from what's been seen in
+  conversation is what actually closes the set.
+
+#### Validation
+
+`pnpm exec tsx scripts/ci-gate-policy.ts` — PASS. `pnpm test:tooling` — 12 files, 147 tests pass.
+`pnpm exec prettier --check docs/engineering/ci-gating.md` — clean.
+
+#### Learnings
+
+- A job-level `if:` with no `success()`/`failure()`/`always()`/`cancelled()` call still implicitly
+  ANDs in `success()` over everything in `needs` — so adding `still-latest` to `deploy-production`'s
+  `needs` was already enough to make a `still-latest` failure block the deploy; the extra `&&
+needs.still-latest.outputs.proceed == 'true'` clause in `if:` only needed to express the
+  _stale-but-still-green_ case, not job failure.
+- A job with no `needs:` runs at T+0, not "right before" a sibling that does have `needs:` on the
+  same gates — placement has to be expressed structurally (via `needs`), not just in a comment.
+- Vite/Vitest's `mergeConfig` concatenates array-valued fields rather than replacing them; overriding
+  an array-valued option cleanly requires the option to be threaded through the config factory
+  itself, not merged in after the fact.

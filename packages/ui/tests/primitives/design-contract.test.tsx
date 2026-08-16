@@ -466,7 +466,8 @@ describe('type scale', () => {
  * This block used to be two assertions — row height and icon size, both pointed at `CONTROL.lg`
  * rather than at the spec — which is how the primitive came to sit 8px short on row height, 2px
  * short on icons, one type role off on the label, and on the wrong colour role entirely for
- * selection, without a single test going red. `CORE-08` in launch-compliance.md is that gap.
+ * selection, without a single test going red. This block closes that gap by pinning the metrics
+ * to the MD3 Expressive spec directly, instead of to the legacy control scale.
  */
 describe('MD3 menu spec — layout and shape', () => {
   it('sizes the row from the spec rather than from the control scale', () => {

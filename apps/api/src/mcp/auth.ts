@@ -185,8 +185,10 @@ export function oauthIssuer(): string | null {
  * Whether the caller's grant for `clientId` is still standing.
  *
  * @remarks
- * The check that makes revocation **immediate** rather than eventual (MISS-05). Docket's access
- * tokens are self-contained JWTs, so `verifyAccessToken` alone proves only that this AS minted the
+ * The check that makes revocation **immediate** rather than eventual: a third-party developer's
+ * consent screen must accurately describe live access, so revoking a grant from the user's
+ * settings has to make the very next call fail, not merely stop future token issuance. Docket's
+ * access tokens are self-contained JWTs, so `verifyAccessToken` alone proves only that this AS minted the
  * token for this resource and that it has not expired — it says nothing about whether the person
  * has since removed the app from their Connected apps screen. Without this lookup a revoked client
  * kept working for the remainder of the token's 15-minute lifetime, which is precisely the window

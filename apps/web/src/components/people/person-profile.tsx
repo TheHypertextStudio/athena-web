@@ -5,8 +5,8 @@
  *
  * @remarks
  * Every human Actor in a workspace has one of these, and every one of them resolves. That is the
- * requirement (ENT-43): a roster row must never lead to a 404 or a shrug, whether the person
- * behind it signs in or not.
+ * requirement: a roster row must never lead to a 404 or a shrug, whether the person behind it
+ * signs in or not.
  *
  * The profile answers three questions, in the order someone actually asks them: who is this, what
  * do they do here (their role), and what are they on the hook for (assigned tasks, projects they

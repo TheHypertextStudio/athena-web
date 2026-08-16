@@ -1,6 +1,6 @@
 /**
  * `pnpm check:context-strategy` — guard the embrace-extend-extinguish context strategy against
- * being relitigated in any launch artifact (GEN-22).
+ * being relitigated in any launch artifact.
  *
  * @remarks
  * The strategy is settled: Docket ingests context from the incumbent tools, adds capability on top

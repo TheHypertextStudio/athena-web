@@ -1,5 +1,5 @@
 /**
- * `publishing` — the published brief, rendered as a document rather than a screen (CORE-33).
+ * `publishing` — the published brief, rendered as a document rather than a screen.
  *
  * @remarks
  * A Server Component with no client bundle at all. That is not an optimisation, it is the

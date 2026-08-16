@@ -20,9 +20,11 @@ import type * as ReconcileModule from '../../src/routes/integration-reconcile';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 
 /**
- * WIL-01 / WIL-02 / WIL-04 / MISS-08 — the end-to-end proof that the Sunsama → Docket pipeline
- * (read via MCP → normalize → route → map → `sunsama-connector.ts` → `reconcileTasks`) produces
- * real, traceable, idempotent Docket task rows on the committed fixture account.
+ * The end-to-end proof that the Sunsama → Docket pipeline (read via MCP → normalize → route →
+ * map → `sunsama-connector.ts` → `reconcileTasks`) leaves no active Sunsama work item behind,
+ * preserves all existing data, reads exclusively through the Sunsama MCP server rather than an
+ * ad-hoc export, and routes each item into the correct one of the eight named workspaces —
+ * producing real, traceable, idempotent Docket task rows on the committed fixture account.
  *
  * @remarks
  * Deliberately calls `reconcileTasks` directly against the pglite harness — exactly the pattern
@@ -86,12 +88,13 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
     expect(routingProblems).toEqual([]);
 
     const account = await readFixtureAccount();
-    // WIL-01: nothing is left behind — every active fixture task was read.
+    // Nothing is left behind — every active fixture task was read.
     expect(account.tasks).toHaveLength(7);
 
     const routingReport = verifySunsamaRouting(account.tasks, SUNSAMA_ROUTING);
-    // MISS-08: the fallback count matches what was declared BEFORE this run, and nothing is
-    // unrouted.
+    // Every item routes to the correct one of the eight named workspaces rather than a
+    // catch-all default: the fallback count matches what was declared BEFORE this run, and
+    // nothing is unrouted.
     expect(routingReport.matchesDeclaration).toBe(true);
     expect(routingReport.unroutedCount).toBe(0);
 
@@ -130,7 +133,7 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
       );
     expect(rows).toHaveLength(10);
 
-    // WIL-01's reconciliation acceptance, computed for real: every Sunsama task and subtask id
+    // The "nothing left behind" acceptance, computed for real: every Sunsama task and subtask id
     // maps to exactly one Docket task id, and the unmatched list on both sides is empty.
     const sunsamaIds = new Set(items.map((item) => item.provenance.externalId));
     const docketExternalIds = new Set(

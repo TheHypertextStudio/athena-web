@@ -201,8 +201,9 @@ function assertCrossFieldRules(e: typeof env): void {
   if (e.APP_MODE === 'production') {
     // A domain cutover moves several variables, and the dangerous state is the half-applied one:
     // `WEB_URL` on the new apex while `ADMIN_URL` or `API_URL` still answer on the old. That
-    // deploy looks healthy and quietly keeps a user-facing host on the domain GEN-25 requires
-    // Docket to leave. Refusing to boot turns it into a deploy failure instead.
+    // deploy looks healthy and quietly keeps a user-facing host on the legacy apex production is
+    // required to leave entirely (see packages/env/tests/hosts/legacy-host-policy.test.ts).
+    // Refusing to boot turns it into a deploy failure instead.
 
     for (const [name, value] of Object.entries(e)) {
       if (typeof value === 'string' && !isRealValue(value)) {

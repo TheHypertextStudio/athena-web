@@ -135,7 +135,7 @@ async function awaitRaised(fixture: Fixture): Promise<{ id: string; spec: unknow
   throw new Error('no elicitation was raised');
 }
 
-describe('ATH-47 — a third-party MCP server can ask Athena', () => {
+describe('a third-party MCP server can ask Athena', () => {
   it('advertises the elicitation client capability during initialization', async () => {
     const fixture = await seed();
     const { server } = await connect(fixture);

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `publishing` — the publish control that sits beside a detail header's overflow menu (CORE-28).
+ * `publishing` — the publish control that sits beside a detail header's overflow menu.
  *
  * @remarks
  * The author asked for "an icon that is a sibling to the overflow menu", and the word *sibling*
@@ -13,7 +13,8 @@
  * Because it is a sibling, its geometry must match its siblings exactly. It takes no size of its
  * own: the enclosing `ControlGroup` (supplied by the detail header) sets the step, and `iconOnly`
  * makes the button square at that step. That is how the identical height, icon size, and hit
- * area CORE-28 asks for are guaranteed rather than eyeballed — there is no number here to drift.
+ * area a sibling control requires are guaranteed rather than eyeballed — there is no number here to
+ * drift.
  *
  * The state it can be in is genuinely three-valued, and the icon says which: never published,
  * published, withdrawn. The dialog behind it is where the address, the live URLs, and the

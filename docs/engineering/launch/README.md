@@ -96,7 +96,7 @@ filesChanged:
 verifier: production-verification-agent
 verifierArtifacts:
   - docs/engineering/launch/evidence/production/2026-08-02-secret-sweep.txt
-verification: 'pnpm exec vitest run tests/ci — 14 passed'
+verification: 'pnpm exec vitest run repo-tests/ci — 14 passed'
 ---
 
 ## GEN-02 — <requirement title>
@@ -182,10 +182,10 @@ sign-off is the specific dishonesty GEN-01 exists to prevent.
 ### Tests
 
 ```sh
-pnpm exec vitest run tests/launch
+pnpm exec vitest run repo-tests/launch
 ```
 
-`tests/launch/launch-record.test.ts` covers the parser's rejection cases, the reconciler's unclaimed
+`repo-tests/launch/launch-record.test.ts` covers the parser's rejection cases, the reconciler's unclaimed
 and doubly-claimed detection, the GEN-06 allowlist, and asserts against the **real** current data
 that the committed checklist holds every baseline id exactly once and that sign-off is not clean.
 

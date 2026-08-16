@@ -96,8 +96,9 @@ describe('Auth visual contract', () => {
   });
 
   it('sizes every text node from the MD3 type scale, never a stock Tailwind size', () => {
-    // SCR-11 asks that "every text node maps to an MD3 type token (no ad hoc font-size/weight)".
-    // The scale lives in `packages/ui/src/styles/globals.css` as `--text-{display,headline,title,
+    // The OAuth authorization page's design-system rebuild requires that every text node map to
+    // an MD3 type token, with no ad hoc font-size/weight. The scale lives in
+    // `packages/ui/src/styles/globals.css` as `--text-{display,headline,title,
     // body,label}-{large,medium,small}` and deliberately does NOT define Tailwind's stock
     // `text-xs … text-9xl`. Four call sites passed `text-2xl` to the wordmark (overriding its own
     // `text-3xl` default) and the sign-up screen's "Use a different email" link was `text-xs`:

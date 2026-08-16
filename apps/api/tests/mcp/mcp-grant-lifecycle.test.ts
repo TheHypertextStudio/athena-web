@@ -1,5 +1,5 @@
 /**
- * MISS-05 — the life of an OAuth grant, from "the consent screen said so" to "it is revoked".
+ * The life of an OAuth grant, from "the consent screen said so" to "it is revoked".
  *
  * @remarks
  * The consent screen at `/oauth/authorize` promises a person that an outside app will be able to
@@ -277,7 +277,7 @@ function toolCall(name: string, args: Record<string, unknown>): Record<string, u
 describe('every issuable permission has an enforcement point', () => {
   it('gates a tool on each of the four capability permissions', () => {
     // The consent screen lists these; if one of them gated nothing, the screen would be telling a
-    // person about access that does not exist — which is the whole of MISS-05.
+    // person about access that does not exist — the exact failure this suite exists to catch.
     const enforced = new Set(Object.values(scopeMod.TOOL_SCOPE));
     for (const scope of scopeMod.MCP_SCOPES) {
       expect(enforced, `${scope} gates no tool`).toContain(scope);

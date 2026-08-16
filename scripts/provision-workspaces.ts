@@ -1,6 +1,7 @@
 /**
  * `pnpm workspaces:provision` — bring the author's eight real workspaces into existence,
- * idempotently (WIL-05 / WIL-07).
+ * idempotently, each spelled exactly as named (including the full, untruncated
+ * "Willie Enterprises (dba Vibe Code Cleanup Company)" name) with no placeholder left over.
  *
  * @remarks
  * The author named eight enterprises that each need their own workspace. This tool reconciles

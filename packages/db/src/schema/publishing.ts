@@ -1,21 +1,22 @@
 /**
- * `@docket/db` — publishing schema island (CORE-26 … CORE-34, MISS-04).
+ * `@docket/db` — publishing schema island: the tables backing public brief pages and the
+ * custom domains they can serve from.
  *
  * @remarks
  * Two tables, and the shape of each is driven by one rule: **a brief is a permission
  * decision, not a copy of the work.** Nothing here stores a title, a description, a status,
  * or a task list. A {@link publication} row says only "this initiative/program/project is
  * readable by the public, at this path" — every byte a visitor sees is read live from
- * `initiative` / `program` / `project` / `task` at request time, which is what makes
- * CORE-27 ("the same underlying data sources as the rest of the app") true by construction
- * rather than by a sync job that can silently drift.
+ * `initiative` / `program` / `project` / `task` at request time, which is what makes a
+ * published brief read from the same underlying data sources as the rest of the app true by
+ * construction rather than by a sync job that can silently drift.
  *
  * Reachability is the other half. A published brief is served on:
  * - the product's own brief host, under the workspace's own identity slug
  *   (`organization.slug`, `@docket/db/schema/identity`) — every workspace has one from the
- *   moment it exists (CORE-32), or
- * - a {@link workspaceDomain} the workspace has proved it owns via DNS (CORE-29 … CORE-31,
- *   MISS-04).
+ *   moment it exists, so publishing never depends on first setting up a custom domain, or
+ * - a {@link workspaceDomain} the workspace has proved it owns via DNS, restricted to workspace
+ *   admins, globally unique across workspaces, and gated until verification succeeds.
  *
  * `workspace_domain.host` is globally unique, enforced in the database rather than in a
  * handler: a host is a public identity, and two tenants answering to one name is a tenancy
@@ -87,12 +88,13 @@ export const publication = pgTable(
  * A hostname a workspace has claimed, and (once proved) serves its briefs from.
  *
  * @remarks
- * `host` is globally unique — that single index is CORE-30's real enforcement. A handler check
- * alone loses the race between two concurrent claims; a unique index cannot. The value stored
- * is always the output of `normalizeCustomDomain`, so `Example.COM.`, `www.example.com`, and
- * `https://example.com/x` collapse to one row and collide with each other.
+ * `host` is globally unique — that single index is what actually stops one domain being claimed
+ * by two workspaces. A handler check alone loses the race between two concurrent claims; a
+ * unique index cannot. The value stored is always the output of `normalizeCustomDomain`, so
+ * `Example.COM.`, `www.example.com`, and `https://example.com/x` collapse to one row and
+ * collide with each other.
  *
- * `verifiedAt` is the serving gate (CORE-31): a row exists from the moment it is claimed, and
+ * `verifiedAt` is the serving gate: a row exists from the moment it is claimed, and
  * refuses to serve until DNS proves ownership. `lastFailure` stores a **stable failure code**
  * from `@docket/env/custom-domain` — never resolver output, which is attacker-influenced text
  * from a domain Docket does not own.

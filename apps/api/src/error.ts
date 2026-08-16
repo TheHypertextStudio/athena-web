@@ -333,7 +333,7 @@ const UNCONFIGURED_PROBLEM_BASE = 'https://docket.invalid';
  *
  * @remarks
  * Derived from the configured `WEB_URL` rather than a literal hostname, so the domain cutover
- * (GEN-25) is a configuration change and not a code change. This is the ONLY place a problem-type
+ * is a configuration change and not a code change. This is the ONLY place a problem-type
  * URI is built — `mcp/server.ts` calls it too — so repointing the product at its new apex means
  * editing one environment variable in one place.
  *

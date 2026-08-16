@@ -1,8 +1,8 @@
 /**
- * Secret scanner — proves no credential is committed to the tracked tree (GEN-06, clause 1).
+ * Secret scanner — proves no credential is committed to the tracked tree.
  *
  * @remarks
- * The launch acceptance for GEN-06 names "a secret scan (gitleaks or trufflehog)". Neither
+ * The launch acceptance criterion this satisfies names "a secret scan (gitleaks or trufflehog)". Neither
  * binary is installed here, and a security gate that has to download and execute a release
  * asset before it can run is a gate that fails open the day the asset moves, the vendor adds a
  * license check, or the runner has no egress. So the rules live in a real `.gitleaks.toml` —

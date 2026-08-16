@@ -12,7 +12,7 @@
  *   caller supplies the corresponding gesture callback;
  * - clicking the card's body calls `onOpen` with the item id;
  * - a non-`clean` sync state (and a conflict) surfaces a labeled badge;
- * - a `task_timebox` with a linked task grows the CORE-40 {@link TaskTimerButton}, and clicking it
+ * - a `task_timebox` with a linked task grows the {@link TaskTimerButton}, and clicking it
  *   starts that task's timer without also calling `onOpen` (the "open" button and the timer
  *   button are siblings, not nested, so there is nothing to stop-propagate against — but a
  *   regression that nested them would make one click do both).
@@ -236,7 +236,7 @@ describe('CalendarItemCard', () => {
     expect(screen.queryByLabelText('Syncing…')).not.toBeInTheDocument();
   });
 
-  describe('the CORE-40 track-timer affordance', () => {
+  describe('the track-timer affordance every task surface must offer', () => {
     const LINKED_TASK = {
       taskId: TaskId.parse('01BX5ZZKBKACTAV9WEVGEMMVT1'),
       organizationId: OrganizationId.parse('01BX5ZZKBKACTAV9WEVGEMMVR1'),

@@ -188,7 +188,7 @@ async function raise(
   });
 }
 
-describe('ATH-39 — typed, schema-validated answers', () => {
+describe('typed, schema-validated answers', () => {
   it('rejects an invalid payload with field-level errors and leaves the question open', async () => {
     const fixture = await seed({ withTask: true });
     const raised = await raise(fixture, {
@@ -323,7 +323,7 @@ describe('ATH-39 — typed, schema-validated answers', () => {
   });
 });
 
-describe('ATH-49 / ATH-53 — every question has a deadline and a task', () => {
+describe('every question has a deadline and a task', () => {
   it('persists an explicit deadline on every question', async () => {
     const fixture = await seed({ withTask: true });
     const now = new Date('2026-08-02T12:00:00.000Z');
@@ -386,7 +386,7 @@ describe('ATH-49 / ATH-53 — every question has a deadline and a task', () => {
   });
 });
 
-describe('ATH-50 / ATH-51 — what a deadline may and may not do', () => {
+describe('what a deadline may and may not do', () => {
   it('answers a derivable question as Athena, with her reasoning in the transcript', async () => {
     const fixture = await seed({ withTask: true });
     const raised = await raise(
@@ -537,7 +537,7 @@ describe('ATH-50 / ATH-51 — what a deadline may and may not do', () => {
   });
 });
 
-describe('ATH-48 — liveness follows recorded presence', () => {
+describe('liveness follows recorded presence', () => {
   it('marks a question live when the person is watching and absent when they are not', async () => {
     const fixture = await seed({ withTask: true });
     const now = new Date('2026-08-02T12:00:00.000Z');
@@ -566,7 +566,7 @@ describe('ATH-48 — liveness follows recorded presence', () => {
   });
 });
 
-describe('ATH-52 — every question names the action it authorizes', () => {
+describe('every question names the action it authorizes', () => {
   it('carries the action summary onto the row, the transcript, and the wire', async () => {
     const fixture = await seed({ withTask: true });
     const raised = await raise(fixture);
@@ -726,7 +726,7 @@ describe('withdrawal', () => {
   });
 });
 
-describe('ATH-55 — notification delivery is reported, never assumed', () => {
+describe('notification delivery is reported, never assumed', () => {
   it('says the deployment has no push identity rather than reporting a delivery', async () => {
     const fixture = await seed({ withTask: true });
     const raised = await raise(fixture, { timeSensitive: true });

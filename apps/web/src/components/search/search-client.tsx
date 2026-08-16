@@ -528,7 +528,7 @@ export interface SearchResultRowProps {
  * linking to the result's canonical destination.
  *
  * @remarks
- * A `task` result additionally grows the CORE-40 {@link TaskTimerButton} beside the link — the
+ * A `task` result additionally grows the {@link TaskTimerButton} beside the link — the
  * one place search shows a task, so it is also a place that offers to start tracking it. Exported
  * (rather than kept module-private) so that affordance can be pinned in isolation without
  * standing up the whole filtered-search page.
@@ -588,7 +588,7 @@ export function SearchResultRow({ result, orgName }: SearchResultRowProps): JSX.
     </Link>
   );
 
-  // A task result additionally offers the CORE-40 start-timer affordance beside the link, so
+  // A task result additionally offers the start-timer affordance beside the link, so
   // tracking it does not require opening the task detail first. The task's real id is
   // `route.entityId`, not `result.id` — the top-level id is a composite search-document id
   // (`searchDocumentId(kind, orgId, row.id)`), which the timer API would reject.

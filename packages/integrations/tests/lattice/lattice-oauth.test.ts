@@ -3,8 +3,8 @@
  * check.
  *
  * @remarks
- * The scope assertions are the ones that matter most. WIL-48 asks that Athena request only the
- * permissions its use of Lattice actually needs, and a scope list is exactly the kind of thing that
+ * The scope assertions are the ones that matter most. The OAuth grant must request only the
+ * permissions appropriate to Athena's use of Lattice, and a scope list is exactly the kind of thing that
  * quietly grows. These tests pin both what is asked for and what is deliberately not.
  */
 import { createHash } from 'node:crypto';

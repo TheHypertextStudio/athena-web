@@ -163,7 +163,8 @@ server.route('/internal/integrations/lattice', latticeOAuth);
 server.route('/internal/telephony/twilio', twilioVoice);
 server.route('/internal/cron', cron);
 // The local/test-only fake OAuth 2.0 identity provider behind the `test-oauth` generic-oauth
-// provider (SCR-07's real-ceremony fixture — see `packages/auth/src/auth-builder.ts` and
+// provider (the fixture that lets an OAuth-provider sign-in be exercised as a real ceremony,
+// since production auth must be verified end-to-end — see `packages/auth/src/auth-builder.ts` and
 // `lib/oauth-stub-provider.ts`'s module remarks). Gated exactly like `startDevScheduler` below:
 // the route is not registered AT ALL outside `local`/`test` (not merely 404ing), so it is
 // structurally impossible to reach in production — `oauth-stub-provider.ts`'s own per-request

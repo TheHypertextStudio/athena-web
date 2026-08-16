@@ -278,10 +278,11 @@ describe('track', () => {
     const stopped = payload(await track(client, { action: 'stop' }));
     expect(stopped.tracking.state).toBe('idle');
 
-    // Switching away from the first task (CORE-38) paused its record rather than ending it, and
+    // Switching away from the first task paused its record rather than ending it, keeping the
+    // segment tied to the specific task it was tracking instead of reassigning it, and
     // it was never explicitly stopped or resumed afterward — it is still a genuine, resumable
     // paused session. `status` with no explicit `timeRecordId` resolves to whatever `getActiveTime`
-    // reports (CORE-36: `status IN ('open', 'paused')`, `'open'` first), so once the second task's
+    // reports (`status IN ('open', 'paused')`, `'open'` first), so once the second task's
     // record is `'closed'` the first task's still-paused one is exactly what should resurface, not
     // a blank idle state that would make the paused session unreachable from `status`.
     const stillPaused = payload(await track(client, { action: 'status' }));
@@ -530,7 +531,7 @@ describe('track', () => {
     expect(await timerArtifacts(s)).toEqual(before);
   });
 
-  // CORE-42: the naming guard is the SERVER's, not a client affordance — it must hold over MCP
+  // The naming guard is the SERVER's, not a client affordance — it must hold over MCP
   // exactly as it does over REST (see `tests/routes/time.test.ts`'s matching REST case).
   it('refuses to stop over MCP when the tracked task has no name, and leaves it running', async () => {
     const s = await seedOrg();

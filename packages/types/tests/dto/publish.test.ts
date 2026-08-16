@@ -2,8 +2,8 @@
  * Unit tests for the public-slug validation and suggestion helpers.
  *
  * @remarks
- * `PublicSlug` and `suggestPublicSlug` are the two places CORE-32's "reserved/system slugs are
- * refused" is actually enforced — one on the way in (validation), one on the way out (the
+ * `PublicSlug` and `suggestPublicSlug` are the two places the reserved/system-slugs requirement is
+ * actually enforced — one on the way in (validation), one on the way out (the
  * best-effort suggestion offered before validation ever runs).
  */
 import { describe, expect, it } from 'vitest';

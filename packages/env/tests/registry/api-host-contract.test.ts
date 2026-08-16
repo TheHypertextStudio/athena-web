@@ -77,7 +77,7 @@ describe('apiHosts', () => {
   });
 
   it('leaves an unconfigured host undefined rather than inventing one', async () => {
-    // ACH-23: the Athena receiving domain has no MX records unless someone published them, so a
+    // The Athena receiving domain has no MX records unless someone published them, so a
     // derived value would be a hostname that silently accepts no mail.
     stubAll(validApiEnv());
     const { apiHosts } = await import('../../src/api');

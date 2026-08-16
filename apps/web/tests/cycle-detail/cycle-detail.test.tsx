@@ -1,5 +1,5 @@
 /**
- * Behavior tests for the redesigned cycle detail page (ENT-40 / ENT-41).
+ * Behavior tests for the redesigned cycle detail page.
  *
  * @remarks
  * These pin the four defects the redesign was commissioned to remove, at the level a screenshot
@@ -46,7 +46,7 @@ vi.mock('@/lib/query', async (importOriginal) => ({
 
 vi.mock('@/lib/use-org-capability', () => ({ useOrgCapability }));
 
-// The task table's rows each grow a CORE-40 `TaskTimerButton`, which reads the caller's one
+// The task table's rows each grow a `TaskTimerButton`, which reads the caller's one
 // tracker via `useLiveApiQuery` — a real hook this file does not stub (see the `@/lib/query`
 // mock above). Mock the transport it calls through instead of the query layer, so that read
 // resolves to "nothing tracked" rather than reaching the network from a test.

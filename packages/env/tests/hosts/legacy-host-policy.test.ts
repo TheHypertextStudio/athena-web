@@ -2,9 +2,9 @@
  * Repo policy: no legacy `hypertext.studio` hostname may appear in production source.
  *
  * @remarks
- * GEN-25 requires that no user-facing Docket or Athena URL remain under `hypertext.studio`,
+ * Production must leave no user-facing Docket or Athena URL under `hypertext.studio`,
  * with exactly one exception — the interim Athena inbound-mail host, which must be a
- * *configuration value* so the final domain replaces it without a code change (ACH-23).
+ * *configuration value* so the final domain replaces it without a code change.
  *
  * A hostname in source is what makes that impossible to honour. It survives every environment
  * change, it is invisible in a `gh variable list`, and the only thing that finds it is someone
@@ -35,7 +35,8 @@ const REPO_ROOT = fileURLToPath(new URL('../../../..', import.meta.url));
  * @remarks
  * Assembled from parts so that this file does not itself contain the literal string it forbids
  * — otherwise a naive repo-wide grep for the hostname (the check a human runs at cutover, and
- * the one GEN-25's acceptance names) would always return this test and never read as clean.
+ * the one the cutover acceptance criteria name) would always return this test and never read
+ * as clean.
  */
 const LEGACY_APEX = ['hypertext', 'studio'].join('.');
 
@@ -143,15 +144,16 @@ describe('legacy-host policy', () => {
     const hits = files.flatMap(legacyHits);
     expect(
       hits,
-      `A legacy hostname is hard-coded in production source. GEN-25 requires every ` +
-        `user-facing Docket/Athena host to come from configuration — resolve it through ` +
+      `A legacy hostname is hard-coded in production source. Every ` +
+        `user-facing Docket/Athena host must come from configuration — resolve it through ` +
         `the configured host variables instead. Offending lines:\n  ${hits.join('\n  ')}`,
     ).toEqual([]);
   });
 
   it('leaves the Athena inbound-mail host expressible as configuration only', () => {
-    // ACH-23's substantive half: the one permitted legacy reference is an environment value,
-    // so there must be a registry variable to hold it and no source literal to replace.
+    // The inbound-mail domain must stay configuration-driven: the one permitted legacy
+    // reference is an environment value, so there must be a registry variable to hold it and
+    // no source literal to replace.
     const registry = readFileSync(
       join(REPO_ROOT, 'packages/env/src/registry-vars-infra.ts'),
       'utf8',

@@ -3,9 +3,8 @@
  *
  * @remarks
  * These are the tests that make the launch claims checkable rather than assertable:
- * actions run *during* speech (ACH-05/ACH-06), barge-in halts audio before anything is written and
- * records what was actually heard (ACH-07), and no reply is ever assembled before being spoken
- * (ACH-03).
+ * actions run *during* speech, barge-in halts audio before anything is written and
+ * records what was actually heard, and no reply is ever assembled before being spoken.
  */
 import type { VoiceActionOut, VoiceEndReason, VoiceTurnOut } from '@docket/athena/voice';
 import { describe, expect, it } from 'vitest';

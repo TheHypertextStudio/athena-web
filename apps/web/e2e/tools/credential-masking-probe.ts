@@ -1,9 +1,10 @@
 /**
  * `pnpm --filter @docket/web exec tsx e2e/tools/credential-masking-probe.ts` — evidence capture for
- * credential masking on the connector surface (GEN-07).
+ * credential masking on the connector surface.
  *
  * @remarks
- * GEN-07 asks for three things about every settings surface that stores a credential: screenshots
+ * Credentials must never be rendered in plaintext in the UI, logs, or API responses. Proving that
+ * asks for three things about every settings surface that stores a credential: screenshots
  * at 1440x900 and 390x844 in light and dark showing the value masked, a network capture with no
  * full key in any response body, and server logs with no key material. This tool produces the
  * first two; the log search is a `grep` over the dev-stack log for the same probe token, run

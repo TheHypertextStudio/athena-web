@@ -33,7 +33,7 @@ const axisRetry = {
   dates: vi.fn(),
   people: vi.fn(),
 };
-// Backs the CORE-40 `renderItemAction` timer button: `TaskTimerButton` reads/writes the tracker
+// Backs the `renderItemAction` timer button: `TaskTimerButton` reads/writes the tracker
 // through `@/lib/api` directly, independent of the calendar-mutations mock above.
 const { activeGet, recordsPost } = vi.hoisted(() => ({
   activeGet: vi.fn(),
@@ -459,7 +459,7 @@ describe('CalendarSchedulingSurface persistence', () => {
     expect(compactContent.queryByText('Sync issue')).not.toBeInTheDocument();
   });
 
-  describe('the CORE-40 renderItemAction extension point', () => {
+  describe('the renderItemAction extension point for the start-timer affordance', () => {
     // `CalendarItemCard` (which already grows a `TaskTimerButton` for a task-shaped item) is
     // never mounted by the live /calendar timeline — it renders through `SchedulingCanvas`
     // instead — so this surface has to reach the timer control through the generic canvas's

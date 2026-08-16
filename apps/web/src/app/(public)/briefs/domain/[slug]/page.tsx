@@ -8,11 +8,14 @@ import { BriefDocument } from '@/components/publishing/brief-document';
 import { briefMetadata, readBriefAt } from '../../shared';
 
 /**
- * The published brief page on a workspace's own verified custom domain (CORE-26, CORE-27,
- * CORE-33, MISS-04). See the sibling `[workspace]/[slug]/page.tsx` for the shared-brief-host
- * shape and the full rationale — this route exists only because a custom domain needs no
- * workspace segment: the host itself already belongs to exactly one workspace (a domain can be
- * claimed by only one, per the unique host index), so `/<slug>` alone is unambiguous.
+ * The published brief page on a workspace's own verified custom domain: the surface that lets a
+ * workspace's verified custom domain actually serve its published briefs over HTTPS, reading live
+ * from the same underlying records as the rest of the app (never a forked snapshot) and designed
+ * as a standalone document rather than an app screen. See the sibling `[workspace]/[slug]/page.tsx`
+ * for the shared-brief-host shape and the full rationale — this route exists only because a custom
+ * domain needs no workspace segment: the host itself already belongs to exactly one workspace (a
+ * domain can be claimed by only one, per the unique host index), so `/<slug>` alone is
+ * unambiguous.
  *
  * `apps/web/src/proxy.ts` rewrites a request on any host that is neither the product's own nor
  * the configured shared brief host to this route's internal path. The API's `resolvePublication`

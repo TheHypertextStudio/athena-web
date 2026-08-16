@@ -51,7 +51,7 @@ function slice(
     requirementIds: Object.keys(outcomes),
     outcomes,
     filesChanged: [`docs/engineering/launch/slices/${id}.md`],
-    verification: 'pnpm exec vitest run tests/launch',
+    verification: 'pnpm exec vitest run repo-tests/launch',
     verifier: `${id}-independent-checker`,
     verifierArtifacts: [`docs/engineering/launch/evidence/verification/${id}.txt`],
     sourcePath: `docs/engineering/launch/slices/${id}.md`,
@@ -74,7 +74,7 @@ outcomes:
   GEN-02: partial
 filesChanged:
   - scripts/launch-record.ts
-verification: 'pnpm exec vitest run tests/launch — 12 passed'
+verification: 'pnpm exec vitest run repo-tests/launch — 12 passed'
 verifier: launch-record-reconciler
 verifierArtifacts:
   - docs/engineering/launch/evidence/verification/2026-08-02-launch-record-reconciliation.txt
@@ -92,7 +92,7 @@ describe('slice frontmatter parsing', () => {
     expect(parsed.requirementIds).toEqual(['GEN-01', 'GEN-02']);
     expect(parsed.outcomes).toEqual({ 'GEN-01': 'pass', 'GEN-02': 'partial' });
     expect(parsed.filesChanged).toEqual(['scripts/launch-record.ts']);
-    expect(parsed.verification).toBe('pnpm exec vitest run tests/launch — 12 passed');
+    expect(parsed.verification).toBe('pnpm exec vitest run repo-tests/launch — 12 passed');
   });
 
   it('rejects a slice file with no requirementIds key', () => {

@@ -63,7 +63,7 @@ function planBuild(filter: string): { packages: string[]; executed: string[] } {
 }
 
 /**
- * SCR-23 — a change in one package must not force unrelated packages to rebuild.
+ * A change in one package must not force unrelated packages to rebuild.
  *
  * @remarks
  * `--filter=...<pkg>` selects `<pkg>` plus everything that depends on it, which is
@@ -74,7 +74,7 @@ function planBuild(filter: string): { packages: string[]; executed: string[] } {
  * The executed-task list is a superset of the affected packages because `build`
  * declares `dependsOn: ["^build"]`, so a dependency's build node is scheduled ahead of
  * its dependent's. Those prerequisites are replayed from cache when their inputs are
- * unchanged (SCR-24), so they cost nothing — but they are asserted too, because a new
+ * unchanged, so they cost nothing — but they are asserted too, because a new
  * *executing* prerequisite is exactly the regression this check exists to catch.
  */
 describe('turbo build affected sets', () => {

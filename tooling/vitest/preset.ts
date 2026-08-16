@@ -56,6 +56,15 @@ export interface DocketVitestOptions {
    * gives each PGlite instance its own registry and nothing to race over.
    */
   pool?: 'threads' | 'forks';
+  /**
+   * Globs (relative to package root) that Vitest collects test files from.
+   *
+   * Defaults to `['tests/**\/*.{test,spec}.{ts,tsx}']`, this repo's per-package test-file
+   * convention. The repo-root config overrides this to `repo-tests/**\/*...` instead, since the
+   * root-level suites (CI config, launch-record reconciliation, tooling scripts) live outside any
+   * package's own `tests/` directory.
+   */
+  include?: string[];
 }
 
 /**
@@ -81,6 +90,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
     hookTimeout = 180_000,
     fileParallelism = true,
     pool = 'threads',
+    include = ['tests/**/*.{test,spec}.{ts,tsx}'],
   } = options;
   return defineConfig({
     plugins: useReact ? [react()] : [],
@@ -95,7 +105,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       // PGlite overrides this to `forks`; see DocketVitestOptions.pool.
       pool,
       fileParallelism,
-      include: ['tests/**/*.{test,spec}.{ts,tsx}'],
+      include,
       // Turbo runs every package's vitest concurrently, so the machine is heavily
       // oversubscribed during `pnpm test`. PGlite/route bootstrap hooks can spend
       // real time waiting behind CPU-bound file workers, while per-test timeouts

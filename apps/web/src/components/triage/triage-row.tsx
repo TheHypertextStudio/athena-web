@@ -8,8 +8,9 @@
  * canned {@link TaskRow} preset) because a Triage row carries three extra affordances a plain
  * task row does not: a leading-metadata {@link SourceTag | provenance pill} (native vs
  * linked-from-a-provider — the first thing a triager reads), a trailing
- * {@link TaskTimerButton | track-timer control} (CORE-40 — Triage is a task list like any
- * other), and a trailing {@link TriageActions | sort-it menu}. The row still reads like every
+ * {@link TaskTimerButton | track-timer control} (every place a task is represented gets a
+ * start-timer affordance, and Triage is a task list like any other), and a trailing
+ * {@link TriageActions | sort-it menu}. The row still reads like every
  * other Docket list row: a leading {@link StatusIcon} colored by the task's workflow-state
  * *type*, the title, then the assignee. Activating the row (click / Enter) opens the task
  * detail; the source link, the timer control, and the action trigger all stop propagation so

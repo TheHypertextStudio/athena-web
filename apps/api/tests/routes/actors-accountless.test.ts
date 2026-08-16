@@ -1,5 +1,5 @@
 /**
- * The account-less actor contract (ENT-44 / ENT-45 / ENT-46).
+ * The account-less actor contract.
  *
  * @remarks
  * The author's requirement is that a workspace can track people who hold no Docket account —
@@ -136,7 +136,7 @@ async function seedAccountHolder(
 }
 
 describe('people — an actor with no Docket account', () => {
-  it('persists with a null account link and reads back with every attribute intact (ENT-44)', async () => {
+  it('persists with a null account link and reads back with every attribute intact', async () => {
     const seeded = await seedOrg();
     const w = appWithActor(members, seeded.orgId, ['manage'], seeded.ownerActorId);
 
@@ -244,7 +244,7 @@ describe('people — an actor with no Docket account', () => {
     ).toBe(409);
   });
 
-  it('lists interleaved with account-holders by name, never grouped by account (ENT-46)', async () => {
+  it('lists interleaved with account-holders by name, never grouped by account', async () => {
     const seeded = await seedOrg();
     const w = appWithActor(members, seeded.orgId, ['manage'], seeded.ownerActorId);
 
@@ -408,7 +408,7 @@ describe('people — an actor with no Docket account', () => {
   });
 });
 
-describe('people — assigning work to someone with no account (ENT-45)', () => {
+describe('people — assigning work to someone with no account', () => {
   it('accepts an account-less actor as task assignee, project lead, and initiative owner', async () => {
     const seeded = await seedOrg();
     const session = fakeSession('u_people_assign');

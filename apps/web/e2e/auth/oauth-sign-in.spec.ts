@@ -2,7 +2,7 @@
  * E2E: signing in with an identity provider.
  *
  * @remarks
- * **What this covers (SCR-07, "an OAuth-provider sign-in succeeds").** Two things are asserted
+ * **What this covers: "an OAuth-provider sign-in succeeds".** Two things are asserted
  * here, and the first two matter more than they look:
  *
  * 1. **Availability is server truth, in both directions.** A provider button is a promise that the
@@ -11,10 +11,11 @@
  *    and dead-ends at the redirect is the connector-reliability failure in a different costume, so
  *    the absent case is tested as deliberately as the present one.
  * 2. **The ceremony really completes, end to end, and mints a real session.** This used to be the
- *    open half of SCR-07: an earlier version of this spec stubbed the provider at the redirect
- *    boundary and never drove the callback for real, so its own doc comment admitted "the token
- *    exchange and the session mint on the far side of the callback are not covered here" — and its
- *    assertion literally checked that NO session existed, the opposite of what SCR-07 requires.
+ *    open half of an OAuth-provider sign-in succeeding: an earlier version of this spec stubbed
+ *    the provider at the redirect boundary and never drove the callback for real, so its own doc
+ *    comment admitted "the token exchange and the session mint on the far side of the callback are
+ *    not covered here" — and its assertion literally checked that NO session existed, the opposite
+ *    of what a real sign-in requires.
  *    Closing that for real (not by faking it further) needed a genuine OAuth 2.0 identity provider
  *    to complete a ceremony against, since no environment this suite runs in — including CI — has
  *    a real Google/GitHub/etc. account. `packages/auth/src/auth-builder.ts` mounts a `test-oauth`
@@ -48,7 +49,7 @@
  * end). Google itself stays out of this test's boundary, matching the same rule
  * `e2e/calendar/google-calendar.spec.ts` already states.
  *
- * SCR-07's other clauses (returning-user passkey sign-in, session persists across reload,
+ * Authentication's other clauses (returning-user passkey sign-in, session persists across reload,
  * protected routes 307, sign-out) are covered elsewhere in the suite — not duplicated here.
  */
 import type { Page } from '@playwright/test';
@@ -116,7 +117,7 @@ test.describe('signing in with an identity provider', () => {
     // session cookie is set and a follow-up request confirms it) — confirmed by hand against the
     // dev stack and out of scope to fix here (`apps/web/src`/`service-worker` are not in this
     // spec's remit). Blocking service-worker registration for just this describe sidesteps the
-    // interference without touching what it's testing: SCR-07 cares whether Better Auth mints a
+    // interference without touching what it's testing: this spec cares whether Better Auth mints a
     // real session, not whether the offline-navigation fallback tolerates this specific shape of
     // redirect-terminated navigation.
     test.use({ serviceWorkers: 'block' });

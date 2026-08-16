@@ -1,5 +1,5 @@
 /**
- * One conversation, every door (ACH-02, ACH-08, ACH-10, ACH-11).
+ * One conversation, every door.
  *
  * @remarks
  * The claim under test is the one that is easiest to assert and hardest to keep: that web text,

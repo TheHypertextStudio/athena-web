@@ -14,7 +14,7 @@ import {
 } from '../../scripts/context-strategy-check';
 
 /**
- * GEN-22: the embrace-extend-extinguish context strategy must not be relitigated in any launch
+ * The embrace-extend-extinguish context strategy must not be relitigated in any launch
  * artifact, and the guard that enforces it must be reproducible AND proven to fire.
  *
  * A policy test that only asserts "currently zero findings" is worthless — a regex that matches

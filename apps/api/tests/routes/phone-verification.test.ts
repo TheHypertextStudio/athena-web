@@ -1,5 +1,5 @@
 /**
- * Phone-number ownership is proven by a code that is actually delivered (ACH-14).
+ * Phone-number ownership is proven by a code that is actually delivered.
  *
  * @remarks
  * The failure these tests exist to prevent is the one this codebase already shipped once: a

@@ -23,7 +23,7 @@
 import { type ConnectorConfig, type IntegrationOut, type TeamOut } from '@docket/types';
 import { cn } from '@docket/ui';
 import { Check } from '@docket/ui/icons';
-import { Checkbox, Select, Skeleton, focusRing } from '@docket/ui/primitives';
+import { Button, Checkbox, Select, Skeleton, focusRing } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
 import { useState } from 'react';
@@ -40,7 +40,6 @@ import {
 } from '@/lib/query';
 
 import { connectorCopy } from './integrations-config';
-import { IntegrationActionButton } from './integration-action-button';
 import TeamMappingPicker, { NOT_SYNCED } from './team-mapping-picker';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -443,9 +442,9 @@ export function IntegrationConfigPanel({
             Reconnect Linear and approve write access to turn on two-way sync.
           </p>
           {onReauthorize ? (
-            <IntegrationActionButton tone="primary" onClick={reauthorize} className="px-0">
+            <Button controlSize="md" variant="link" onClick={reauthorize}>
               Re-authorize Linear
-            </IntegrationActionButton>
+            </Button>
           ) : null}
         </div>
       ) : null}

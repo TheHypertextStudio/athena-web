@@ -47,6 +47,7 @@ export const BUTTON_VARIANTS = [
   'ghost',
   'link',
   'destructive',
+  'ghost-destructive',
 ] as const;
 
 /** One of the button colour treatments. See {@link BUTTON_VARIANTS}. */
@@ -61,6 +62,13 @@ const BUTTON_COLOR: Readonly<Record<ButtonVariant, string>> = {
   ghost: 'hover:bg-surface-container-high hover:text-on-surface',
   link: 'text-primary underline-offset-4 hover:underline',
   destructive: 'bg-error text-on-error hover:bg-error/90',
+  // The *trigger* for a destructive action, as distinct from the confirm step `destructive` paints.
+  // A filled error button on a row that merely opens a confirmation overstates what the click does
+  // and turns a list of five rows into five red blocks. Repeating `focus:` is not redundant: a
+  // menu item resets its colour on focus, so a `text-error` alone silently loses its tone the
+  // moment you arrive by keyboard — which is how eighteen hand-rolled copies of this ended up
+  // split between ones that remembered and ones that did not.
+  'ghost-destructive': 'text-error hover:text-error focus:text-error hover:bg-error/10',
 };
 
 /**

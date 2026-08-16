@@ -11,12 +11,11 @@
  */
 import type { IdentityOut, IdentityProvider } from '@docket/types';
 import { Plus } from '@docket/ui/icons';
-import { Badge, DecorativeIcon } from '@docket/ui/primitives';
+import { Badge, Button, DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { IdentityAccountRow } from './identity-account-row';
 import type { IdentityProviderEntry } from './identity-providers';
-import { IntegrationActionButton } from './integration-action-button';
 
 /** Props for {@link ProviderGroup}. */
 export interface ProviderGroupProps {
@@ -66,8 +65,9 @@ export function ProviderGroup({
         <div className="flex w-full shrink-0 items-center justify-between gap-2 pl-12 sm:w-auto sm:justify-start sm:pl-0">
           <Badge variant={badge.variant}>{badge.label}</Badge>
           {canAdd ? (
-            <IntegrationActionButton
-              tone="primary"
+            <Button
+              controlSize="md"
+              variant="ghost"
               disabled={adding}
               onClick={() => {
                 onAdd(entry.id);
@@ -75,7 +75,7 @@ export function ProviderGroup({
             >
               <Plus aria-hidden className="size-4" />
               {adding ? 'Opening…' : accounts.length > 0 ? 'Add another' : 'Add account'}
-            </IntegrationActionButton>
+            </Button>
           ) : null}
         </div>
       </div>

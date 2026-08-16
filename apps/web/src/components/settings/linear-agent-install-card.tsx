@@ -26,7 +26,7 @@
  */
 import type { IntegrationOut } from '@docket/types';
 import { Sparkles } from '@docket/ui/icons';
-import { Badge } from '@docket/ui/primitives';
+import { Badge, Button, DecorativeIcon } from '@docket/ui/primitives';
 import { useAppSearchParams } from '@/lib/app-location';
 import type { JSX } from 'react';
 
@@ -35,7 +35,8 @@ import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import { CardNote } from './card-note';
-import { IntegrationActionButton } from './integration-action-button';
+import { SettingRow } from './setting-row';
+import { SettingsGroup } from './settings-group';
 
 /** Props for {@link LinearAgentInstallCard}. */
 export interface LinearAgentInstallCardProps {
@@ -92,80 +93,66 @@ export function LinearAgentInstallCard({
   const isErrored = !install.isPending && status === 'error';
   const workspaceName = existing?.connection.externalWorkspaceName;
 
+  // Pinned beneath the row rather than stacked inside it: a CardNote paints its own full-bleed
+  // tonal band, which only reads as one when it spans the group.
+  const footer = (
+    <>
+      {installReturn === 'connected' ? (
+        <CardNote tone="muted">Athena was installed as a Linear agent.</CardNote>
+      ) : null}
+      {isErrored || installReturn === 'error' ? (
+        <CardNote tone="error">
+          Athena could not be installed as a Linear agent. Try again, or check that the Linear Agent
+          app is configured for this workspace.
+        </CardNote>
+      ) : null}
+      {integrationsQ.isError ? (
+        <CardNote tone="error">
+          {userErrorMessage(integrationsQ.error, 'Could not load the Linear Agent install status.')}
+        </CardNote>
+      ) : null}
+      {install.isError ? (
+        <CardNote tone="error">
+          {userErrorMessage(install.error, 'Could not start the Linear Agent install.')}
+        </CardNote>
+      ) : null}
+    </>
+  );
+
   return (
-    <section aria-label="Agents" className="flex flex-col gap-3">
-      <h2 className="text-on-surface-variant text-label-medium">Agents</h2>
-      <div className="bg-surface-container-low overflow-hidden rounded-xl">
-        {/* Stacks below `sm` rather than wrapping. With one flex row, the action's long label
-            ("Install Athena as a Linear Agent") has a wide min-content width and no room to wrap
-            to its own line, so it squeezed the `min-w-0` text column below its own min-content
-            and the title broke one word per line at 390px. */}
-        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-md">
-              <Sparkles aria-hidden="true" className="size-4" />
-            </span>
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-on-surface text-label-large">Athena as a Linear Agent</span>
-              <span className="text-on-surface-variant text-body-small">
-                Let teammates @-mention and delegate to Athena directly inside Linear.
+    <SettingsGroup title="Agents" body="rows" footer={footer}>
+      <SettingRow
+        leading={<DecorativeIcon icon={Sparkles} />}
+        label="Athena as a Linear Agent"
+        description={
+          <>
+            Let teammates @-mention and delegate to Athena directly inside Linear.
+            {isConnected ? (
+              <span className="block">
+                {workspaceName ? `Installed to ${workspaceName}` : 'Installed'}
               </span>
-              {isConnected ? (
-                <span className="text-on-surface-variant text-body-small">
-                  {workspaceName ? `Installed to ${workspaceName}` : 'Installed'}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          {integrationsQ.isPending ? (
+            ) : null}
+          </>
+        }
+        trailing={
+          integrationsQ.isPending ? (
             <span className="text-on-surface-variant text-body-small">Checking…</span>
           ) : isConnected ? (
-            <Badge variant="secondary" className="shrink-0">
-              Installed
-            </Badge>
+            <Badge variant="secondary">Installed</Badge>
           ) : (
-            <IntegrationActionButton
-              tone="primary"
+            <Button
+              controlSize="md"
+              variant="outline"
               disabled={isPending}
               onClick={() => {
                 install.mutate(undefined);
               }}
             >
-              {isPending
-                ? 'Connecting…'
-                : isErrored
-                  ? 'Try again'
-                  : 'Install Athena as a Linear Agent'}
-            </IntegrationActionButton>
-          )}
-        </div>
-
-        {installReturn === 'connected' ? (
-          <CardNote tone="muted">Athena was installed as a Linear agent.</CardNote>
-        ) : null}
-
-        {isErrored || installReturn === 'error' ? (
-          <CardNote tone="error">
-            Athena could not be installed as a Linear agent. Try again, or check that the Linear
-            Agent app is configured for this workspace.
-          </CardNote>
-        ) : null}
-
-        {integrationsQ.isError ? (
-          <CardNote tone="error">
-            {userErrorMessage(
-              integrationsQ.error,
-              'Could not load the Linear Agent install status.',
-            )}
-          </CardNote>
-        ) : null}
-
-        {install.isError ? (
-          <CardNote tone="error">
-            {userErrorMessage(install.error, 'Could not start the Linear Agent install.')}
-          </CardNote>
-        ) : null}
-      </div>
-    </section>
+              {isPending ? 'Connecting…' : isErrored ? 'Try again' : 'Install'}
+            </Button>
+          )
+        }
+      />
+    </SettingsGroup>
   );
 }

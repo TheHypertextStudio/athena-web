@@ -1,9 +1,8 @@
-import { Skeleton } from '@docket/ui/primitives';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import { TaskAlt } from '@docket/ui/icons';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
 
-import { IntegrationActionButton } from './integration-action-button';
 import type { GtasksPickerModel } from './use-gtasks-controller';
 
 /** Props for {@link GtasksIdentityPicker}. */
@@ -59,15 +58,16 @@ export function GtasksIdentityPicker({ picker, orgId }: GtasksIdentityPickerProp
             <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
               {label}
             </span>
-            <IntegrationActionButton
-              tone="primary"
+            <Button
+              controlSize="md"
+              variant="ghost"
               disabled={busy}
               onClick={() => {
                 picker.pick(identity.accountId);
               }}
             >
               {busy ? 'Connecting…' : 'Connect'}
-            </IntegrationActionButton>
+            </Button>
           </li>
         );
       })}

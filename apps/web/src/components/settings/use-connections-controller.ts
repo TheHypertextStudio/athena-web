@@ -60,7 +60,7 @@ export interface ConnectionsController {
   teams: readonly TeamOut[];
   loading: boolean;
   loadError: string | null;
-  intro: { text: string; crossHref: string; crossText: string };
+  intro: { crossHref: string; crossText: string };
   /** Drives the "This workspace" scope header; `linkedAccountsHref` links to identity linking. */
   scope: { linkedAccountsHref: string | undefined };
   gtasks: GtasksSectionModel | null;
@@ -221,11 +221,6 @@ export function useConnectionsController({
     loading: data.loading,
     loadError: data.loadError,
     intro: {
-      // Deliberately does NOT claim the external tool is the source of truth. That was true when
-      // every connector was a read-only mirror, and it is now false for the ones that matter
-      // most: Notion resolves a contested edit in Docket's favour, and a Docket-designed Notion
-      // database is Docket's data projected outward. Each connection states its own direction.
-      text: 'Keep Docket and the tools you already work in step with each other. Each connection sets what syncs, and which way.',
       crossHref: `/orgs/${orgId}/settings/import`,
       crossText: 'Moving off a tool entirely? Import it →',
     },

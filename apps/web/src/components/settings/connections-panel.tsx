@@ -19,7 +19,6 @@ import { GtasksAccountsSection } from './gtasks-accounts-section';
 import { IntegrationsStatus } from './integrations-status';
 import { LinearAgentInstallCard } from './linear-agent-install-card';
 import { ProviderCategorySection } from './provider-category-section';
-import { SettingsSubsection } from './settings-subsection';
 import { useConnectionsController } from './use-connections-controller';
 import { WorkspaceScopeHeader } from './workspace-scope-header';
 
@@ -53,11 +52,7 @@ export function ConnectionsPanel({
   return (
     <IntegrationsStatus loading={c.loading} loadError={c.loadError}>
       <div className="flex flex-col gap-6">
-        <IntegrationsIntro
-          text={c.intro.text}
-          crossHref={c.intro.crossHref}
-          crossText={c.intro.crossText}
-        />
+        <IntegrationsIntro crossHref={c.intro.crossHref} crossText={c.intro.crossText} />
 
         {isPersonal ? null : (
           <WorkspaceScopeHeader linkedAccountsHref={c.scope.linkedAccountsHref} />
@@ -79,13 +74,11 @@ export function ConnectionsPanel({
         ) : null}
 
         {c.calendar ? (
-          <SettingsSubsection title="Calendar">
-            <CalendarConnectionRow
-              name={c.calendar.name}
-              effect={c.calendar.effect}
-              href={c.calendar.href}
-            />
-          </SettingsSubsection>
+          <CalendarConnectionRow
+            name={c.calendar.name}
+            effect={c.calendar.effect}
+            href={c.calendar.href}
+          />
         ) : null}
 
         {c.categories.map((section) => (

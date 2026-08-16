@@ -1,9 +1,7 @@
-import { Select } from '@docket/ui/primitives';
+import { Button, Select } from '@docket/ui/primitives';
 import type { IdentityOut } from '@docket/types';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
-
-import { IntegrationActionButton } from './integration-action-button';
 
 /** The "connect another Linear account" affordance, shown once under the Linear category. */
 export interface LinearAddModel {
@@ -57,13 +55,14 @@ export function LinearAddAccountRow({ model }: LinearAddAccountRowProps): JSX.El
               </option>
             ))}
           </Select>
-          <IntegrationActionButton
-            tone="primary"
+          <Button
+            controlSize="md"
+            variant="ghost"
             disabled={model.selectedId.length === 0 || model.busy}
             onClick={model.connect}
           >
             {model.busy ? 'Connecting…' : 'Connect'}
-          </IntegrationActionButton>
+          </Button>
         </>
       ) : (
         <NextLink

@@ -40,7 +40,7 @@ export interface ImportController {
   teams: readonly TeamOut[];
   loading: boolean;
   loadError: string | null;
-  intro: { text: string; crossHref: string; crossText: string };
+  intro: { crossHref: string; crossText: string };
   categories: readonly ImportCategoryModel[];
   confirm: ConfirmDisconnectModel;
 }
@@ -96,7 +96,6 @@ export function useImportController({
     loading: data.loading,
     loadError: data.loadError,
     intro: {
-      text: 'Import everything from another tool into Docket, once. Docket becomes the source of truth and the tool can be retired.',
       crossHref: `/orgs/${orgId}/settings/connections`,
       crossText: 'Want to keep a tool in sync instead? Connect it →',
     },

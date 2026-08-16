@@ -1,5 +1,17 @@
-import NextLink from 'next/link';
+/**
+ * `settings` — Google Calendar's place in the Connections directory.
+ *
+ * @remarks
+ * Calendar is not a generic provider card: its accounts and per-calendar visibility have a nested
+ * surface of their own, so it renders as one row that leads there rather than connecting inline.
+ *
+ * It was a hand-rolled tonal box under a bare caption, which made it the one entry on Connections
+ * that was neither a provider card nor a settings row. It is a settings row.
+ */
 import type { JSX } from 'react';
+
+import { SettingRow } from './setting-row';
+import { SettingsGroup } from './settings-group';
 
 /** Props for {@link CalendarConnectionRow}. */
 export interface CalendarConnectionRowProps {
@@ -12,11 +24,10 @@ export interface CalendarConnectionRowProps {
 }
 
 /**
- * The Google Calendar connection row: a link-out to its dedicated multi-account configuration page.
+ * The Google Calendar connection, as one row that opens its own page.
  *
- * @remarks
- * Calendar isn't a generic provider card — its accounts and per-calendar visibility have their own
- * nested surface — so it renders as a single row that links there rather than connecting inline.
+ * @param props - The {@link CalendarConnectionRowProps}.
+ * @returns the rendered group.
  */
 export function CalendarConnectionRow({
   name,
@@ -24,18 +35,8 @@ export function CalendarConnectionRow({
   href,
 }: CalendarConnectionRowProps): JSX.Element {
   return (
-    <NextLink
-      href={href}
-      className="bg-surface-container-low hover:bg-surface-container flex items-center justify-between gap-3 rounded-xl px-4 py-3 transition-colors"
-    >
-      <span className="min-w-0">
-        <span className="text-on-surface text-label-large block truncate">{name}</span>
-        <span className="text-on-surface-variant text-body-small block truncate">{effect}</span>
-        <span className="text-on-surface-variant text-body-small block truncate">
-          Accounts and visible calendars
-        </span>
-      </span>
-      <span className="text-primary text-label-large shrink-0">Configure</span>
-    </NextLink>
+    <SettingsGroup title="Calendar" body="rows">
+      <SettingRow label={name} description={effect} href={href} />
+    </SettingsGroup>
   );
 }

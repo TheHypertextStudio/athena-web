@@ -9,12 +9,11 @@
  * this account. Used by {@link ProviderGroup}; a provider can list several of these.
  */
 import type { IdentityOut } from '@docket/types';
-import { Avatar, AvatarFallback, AvatarImage, Badge } from '@docket/ui/primitives';
+import { Avatar, AvatarFallback, AvatarImage, Badge, Button } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { accessLabels } from './identity-providers';
-import { IntegrationActionButton } from './integration-action-button';
 
 /** Props for {@link IdentityAccountRow}. */
 export interface IdentityAccountRowProps {
@@ -81,15 +80,16 @@ export function IdentityAccountRow({
           <span className="text-error text-body-small">Reconnect required</span>
         ) : null}
       </div>
-      <IntegrationActionButton
-        tone="danger"
+      <Button
+        controlSize="md"
+        variant="ghost-destructive"
         disabled={removing || identity.connectionCount > 0}
         onClick={() => {
           onRemove(identity.accountId);
         }}
       >
         {removing ? 'Removing…' : 'Remove'}
-      </IntegrationActionButton>
+      </Button>
     </li>
   );
 }

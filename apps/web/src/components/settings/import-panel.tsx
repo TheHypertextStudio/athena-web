@@ -30,11 +30,7 @@ export function ImportPanel({ orgId, canManage }: ImportPanelProps): JSX.Element
   return (
     <IntegrationsStatus loading={c.loading} loadError={c.loadError}>
       <div className="flex flex-col gap-6">
-        <IntegrationsIntro
-          text={c.intro.text}
-          crossHref={c.intro.crossHref}
-          crossText={c.intro.crossText}
-        />
+        <IntegrationsIntro crossHref={c.intro.crossHref} crossText={c.intro.crossText} />
 
         {c.categories.map((section) => (
           <ProviderCategorySection

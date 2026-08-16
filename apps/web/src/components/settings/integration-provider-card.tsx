@@ -1,12 +1,11 @@
 'use client';
 
 import type { IntegrationDirectoryProvider, IntegrationOut } from '@docket/types';
-import { DecorativeIcon } from '@docket/ui/primitives';
+import { Button, DecorativeIcon } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
 
 import { CardAlert, CardNote } from './card-note';
-import { IntegrationActionButton } from './integration-action-button';
 import { CONNECTION_ERROR_MESSAGE, integrationStatusLabel } from './integration-status';
 import { IntegrationRowActions } from './integration-row-actions';
 import { providerIcon } from './integrations-config';
@@ -87,9 +86,9 @@ function ConnectAffordance(props: {
     );
   }
   return (
-    <IntegrationActionButton tone="primary" disabled={props.busy} onClick={props.onConnect}>
+    <Button controlSize="md" variant="ghost" disabled={props.busy} onClick={props.onConnect}>
       {props.busy ? 'Connecting…' : props.actionLabel}
-    </IntegrationActionButton>
+    </Button>
   );
 }
 

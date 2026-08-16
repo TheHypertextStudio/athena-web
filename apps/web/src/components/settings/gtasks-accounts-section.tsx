@@ -16,14 +16,12 @@ import type { IntegrationDirectoryProvider, IntegrationOut, TeamOut } from '@doc
 import { EmptyState } from '@docket/ui/components';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { Plus, TaskAlt } from '@docket/ui/icons';
-import NextLink from 'next/link';
 import type { JSX } from 'react';
 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { GtasksAccountRow } from './gtasks-account-row';
 import { GtasksIdentityPicker } from './gtasks-identity-picker';
-import { IntegrationActionButton } from './integration-action-button';
-import { SettingsSubsection } from './settings-subsection';
+import { SettingsGroup } from './settings-group';
 import { useGtasksController } from './use-gtasks-controller';
 
 /** Props for {@link GtasksAccountsSection}. */
@@ -48,25 +46,29 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
   const { orgId, canManage, teams, picker, addError, loading, rows, confirm } = controller;
 
   return (
-    <SettingsSubsection
+    <SettingsGroup
       title="Google Tasks"
+      body="rows"
       action={
-        canManage ? (
-          <IntegrationActionButton
-            tone="primary"
+        // While the list is empty the empty state carries the action, so the header does not offer
+        // the same thing twice — the rule the rest of Settings already follows.
+        canManage && (rows.length > 0 || picker.open) ? (
+          <Button
+            controlSize="md"
+            variant="ghost"
             aria-expanded={picker.open}
             onClick={picker.toggle}
           >
             <Plus aria-hidden="true" className="size-4" />
             {picker.open ? 'Close' : 'Connect account'}
-          </IntegrationActionButton>
+          </Button>
         ) : undefined
       }
     >
       {picker.open ? <GtasksIdentityPicker picker={picker} orgId={orgId} /> : null}
 
       {addError ? (
-        <p role="alert" className="text-error text-body-medium">
+        <p role="alert" className="text-error text-body-medium px-4 pb-3">
           {addError}
         </p>
       ) : null}
@@ -75,8 +77,8 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
           connected and which task lists they sync. The section heading, the connect action and the
           empty-state copy are all static and render around this branch. */}
       {loading ? (
-        <Skeleton className="h-20 w-full rounded-xl" />
-      ) : rows.length === 0 ? (
+        <Skeleton className="m-4 h-20 rounded-xl" />
+      ) : rows.length === 0 && !picker.open ? (
         <EmptyState
           icon={TaskAlt}
           title="No Google Tasks connections yet"
@@ -86,16 +88,10 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
               : 'An admin can connect a Google account to sync its task lists.'
           }
           className="border-none bg-transparent"
-          action={
-            canManage ? (
-              <Button asChild variant="ghost" size="sm">
-                <NextLink href="/settings/connected-accounts">Link a Google account</NextLink>
-              </Button>
-            ) : null
-          }
+          {...(canManage ? { cta: { label: 'Connect account', onClick: picker.toggle } } : {})}
         />
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col">
           {rows.map((row) => (
             <GtasksAccountRow
               key={row.account.id}
@@ -113,6 +109,6 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
         onConfirm={confirm.confirm}
         onCancel={confirm.cancel}
       />
-    </SettingsSubsection>
+    </SettingsGroup>
   );
 }

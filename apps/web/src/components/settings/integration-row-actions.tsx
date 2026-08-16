@@ -1,8 +1,7 @@
 import type { IntegrationOut } from '@docket/types';
-import { Badge } from '@docket/ui/primitives';
+import { Badge, Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
-import { IntegrationActionButton } from './integration-action-button';
 import { STATUS_LABEL } from './integrations-config';
 
 /** The repair/install button label for a not-yet-healthy integration. */
@@ -78,41 +77,49 @@ export function IntegrationRowActions({
     <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
       <Badge variant={STATUS_LABEL[status].variant}>{STATUS_LABEL[status].label}</Badge>
       {canManage && needsConnect ? (
-        <IntegrationActionButton
-          tone="primary"
+        <Button
+          controlSize="md"
+          variant="ghost"
           disabled={disabled || busyReconnect}
           onClick={onReconnect}
         >
           {reconnectLabel(provider, status, busyReconnect)}
-        </IntegrationActionButton>
+        </Button>
       ) : null}
       {canChangeGithubInstallation ? (
-        <IntegrationActionButton
-          tone="primary"
+        <Button
+          controlSize="md"
+          variant="ghost"
           disabled={disabled || busyReconnect}
           onClick={onReconnect}
         >
           {busyReconnect ? 'Opening GitHub…' : 'Change GitHub installation'}
-        </IntegrationActionButton>
+        </Button>
       ) : null}
       {canManage && isConnected && !isMigration && syncable ? (
-        <IntegrationActionButton tone="muted" disabled={disabled || busySync} onClick={onSync}>
+        <Button controlSize="md" variant="ghost" disabled={disabled || busySync} onClick={onSync}>
           {busySync ? 'Syncing…' : 'Sync'}
-        </IntegrationActionButton>
+        </Button>
       ) : null}
       {canManage && configurable ? (
-        <IntegrationActionButton tone="primary" aria-expanded={configOpen} onClick={onToggleConfig}>
+        <Button
+          controlSize="md"
+          variant="ghost"
+          aria-expanded={configOpen}
+          onClick={onToggleConfig}
+        >
           {configOpen ? 'Close' : 'Configure'}
-        </IntegrationActionButton>
+        </Button>
       ) : null}
       {canManage ? (
-        <IntegrationActionButton
-          tone="danger"
+        <Button
+          controlSize="md"
+          variant="ghost-destructive"
           disabled={disabled || busyDisconnect}
           onClick={onDisconnect}
         >
           {busyDisconnect ? 'Disconnecting…' : 'Disconnect'}
-        </IntegrationActionButton>
+        </Button>
       ) : null}
     </div>
   );

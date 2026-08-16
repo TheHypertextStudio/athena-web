@@ -1,12 +1,10 @@
 'use client';
 
+import { useSharedOnlyGuard } from '@/components/settings/use-shared-only-guard';
 import { useAppParams } from '@/lib/app-location';
-import { useRouter } from 'next/navigation';
-import { useEffect, type JSX } from 'react';
-
-import { useActiveOrg } from '@/components/active-org';
+import type { JSX } from 'react';
 import { PublishingSettings } from '@/components/publishing/publishing-settings';
-import { defaultSettingsSection, sectionHref } from '@/components/settings/settings-registry';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /**
  * Settings → Publishing: where this workspace's published pages answer on the web.
@@ -27,23 +25,14 @@ import { defaultSettingsSection, sectionHref } from '@/components/settings/setti
  */
 export default function PublishingSettingsPage(): JSX.Element {
   const { orgId } = useAppParams<{ orgId: string }>();
-  const router = useRouter();
-  const { activeOrg } = useActiveOrg();
-  const isPersonal = activeOrg?.isPersonal ?? false;
 
-  useEffect(() => {
-    if (isPersonal) {
-      router.replace(sectionHref(orgId, defaultSettingsSection(true)));
-    }
-  }, [isPersonal, orgId, router]);
+  // See `use-shared-only-guard.ts`: the condition comes from the registry, so a fourth
+  // shared-only section cannot acquire a guard that disagrees with the nav.
+  if (useSharedOnlyGuard('publishing')) return <></>;
 
-  if (isPersonal) {
-    return (
-      <p className="text-on-surface-variant text-body-medium" role="status">
-        Opening settings&hellip;
-      </p>
-    );
-  }
-
-  return <PublishingSettings orgId={orgId} />;
+  return (
+    <SettingsSectionPage sectionKey="publishing">
+      <PublishingSettings orgId={orgId} />
+    </SettingsSectionPage>
+  );
 }

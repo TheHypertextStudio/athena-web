@@ -204,6 +204,8 @@ export function EditableTitle({
       }}
       className={cn(
         'm-0 [field-sizing:content] w-full resize-none overflow-hidden border-0 bg-transparent p-0 outline-none',
+        // Tapped to focus, so it answers to the same coarse floor every other control does.
+        'coarse:min-h-10',
         className,
       )}
     />

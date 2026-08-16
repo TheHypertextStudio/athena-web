@@ -39,13 +39,13 @@ export function SettingsSubsection({
     <section aria-label={title} className="flex flex-col gap-3">
       {action ? (
         <div className="flex items-center justify-between gap-2">
-          <Text as="h2" token="label-medium" tone="muted">
+          <Text as="h3" token="label-medium" tone="muted">
             {title}
           </Text>
           {action}
         </div>
       ) : (
-        <Text as="h2" token="label-medium" tone="muted">
+        <Text as="h3" token="label-medium" tone="muted">
           {title}
         </Text>
       )}

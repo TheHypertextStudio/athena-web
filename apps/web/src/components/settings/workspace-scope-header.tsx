@@ -24,7 +24,7 @@ export function WorkspaceScopeHeader({
 }: WorkspaceScopeHeaderProps): JSX.Element {
   return (
     <div className="flex flex-col gap-1">
-      <h2 className="text-on-surface text-title-small">This workspace</h2>
+      <h3 className="text-on-surface text-title-small">This workspace</h3>
       <p className="text-on-surface-variant text-body-medium max-w-prose">
         These connections belong to this workspace — anyone with access can use them, and workspace
         admins manage them.{' '}

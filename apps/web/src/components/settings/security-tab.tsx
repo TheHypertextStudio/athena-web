@@ -28,14 +28,25 @@ import { RecoveryCodesDialog } from './recovery-codes-dialog';
 import { SessionsSection } from './sessions-section';
 import { userErrorMessage } from '@/lib/problem';
 
-/** The Security settings tab — manage passkeys, email, active sessions, then recovery codes. */
+/**
+ * The Security settings tab.
+ *
+ * @remarks
+ * Ordered by what the cards are *about*, which they were not. Passkeys and recovery codes are one
+ * subject — a recovery code exists because a passkey can be lost — and they sat at opposite ends
+ * of the section with an email form and a device list between them. Meanwhile a toast nags about
+ * setting up recovery codes, and following it meant scrolling past two unrelated cards to find
+ * the thing it named.
+ *
+ * Sign-in first, then the account, then devices.
+ */
 export function SecurityTab(): JSX.Element {
   return (
     <div className="flex flex-col gap-6">
       <PasskeysSection />
+      <RecoveryCodesSection />
       <ChangeEmailSection />
       <SessionsSection />
-      <RecoveryCodesSection />
     </div>
   );
 }

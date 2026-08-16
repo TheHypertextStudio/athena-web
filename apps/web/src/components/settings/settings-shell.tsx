@@ -115,7 +115,13 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
         </DialogDescription>
         {/* `pr-14` reserves the close button's absolute 48px so the switcher never runs under it. */}
         <div className="flex shrink-0 items-center gap-3 py-3 pr-14 pl-5">
-          <DialogTitle className="text-title-medium shrink-0">Settings</DialogTitle>
+          {/* The modal names itself, so it is the top of this outline — everything below is
+              inside Settings. Radix defaults `Title` to an `h2`, which put it level with the open
+              section's own title, the nav's group labels, and every subsection caption: four
+              different things claiming the same rank, under no `h1` at all. */}
+          <DialogTitle asChild>
+            <h1 className="text-title-medium shrink-0">Settings</h1>
+          </DialogTitle>
           {/*
            * The switcher's trigger is `w-full`, so it needs a box that bounds it: unbounded it
            * stretched the whole header and pushed its own chevron under the close button at every

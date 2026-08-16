@@ -176,7 +176,7 @@ export function NotificationPreferencesSection({
         // gates. As a peer of Start and End it was both a second thing called "Quiet hours" —
         // ambiguous to anything resolving that name — and the reason the grid read out of order.
         action={
-          <label className="text-on-surface text-label-large flex items-center gap-2">
+          <label className="text-on-surface text-label-large coarse:min-h-10 flex items-center gap-2">
             <Checkbox
               checked={quietHours.enabled}
               disabled={saving}

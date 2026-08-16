@@ -53,6 +53,17 @@ export interface SettingsSection {
    * person cannot use and makes the product feel like it is withholding something.
    */
   readonly requiresManage?: boolean;
+  /**
+   * Whether the section exists only for a shared workspace.
+   *
+   * @remarks
+   * A personal workspace has no roster to manage, nothing to publish, and data sources already
+   * covered by the Personal group's own Connections. Those three sections were expressed by
+   * maintaining a *second* array of groups by hand, which meant adding a section meant remembering
+   * both — and that is precisely how Publishing came to render on a workspace with nothing to
+   * publish. The difference is a property of the section, so the section states it.
+   */
+  readonly sharedOnly?: boolean;
 }
 
 /** A labelled cluster of sections in the section list. */
@@ -125,7 +136,7 @@ export const PERSONAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     key: 'security',
     label: 'Security',
-    description: 'Protect your account and sign-in methods.',
+    description: 'How you sign in, how you get back in, and where you are signed in.',
     icon: Shield,
     href: 'security',
   },
@@ -177,6 +188,7 @@ const MEMBERS_SECTION: SettingsSection = {
   description: 'Manage who belongs to this workspace and what they can do.',
   icon: Users,
   href: 'members',
+  sharedOnly: true,
 };
 
 /** How this workspace's own work is configured — shown for both workspace kinds. */
@@ -238,6 +250,7 @@ const WORKSPACE_CONNECTIONS_SECTION: SettingsSection = {
   description: "Connect tools to keep this workspace's data in sync with Docket.",
   icon: Cable,
   href: 'connections',
+  sharedOnly: true,
 };
 
 /** Choose the web address published pages answer on — shared orgs only, gated on management. */
@@ -248,10 +261,11 @@ const PUBLISHING_SECTION: SettingsSection = {
   icon: Globe,
   href: 'publishing',
   requiresManage: true,
+  sharedOnly: true,
 };
 
-/** The Settings sections for a **shared workspace**, grouped for the section list. */
-export const WORKSPACE_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
+/** The Settings sections for a workspace, grouped for the section list. */
+const WORKSPACE_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
   {
     label: 'Workspace',
     sections: [GENERAL_SECTION, MEMBERS_SECTION, BILLING_SECTION],
@@ -267,30 +281,24 @@ export const WORKSPACE_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] 
 ];
 
 /**
- * The Settings sections for a **personal workspace**, grouped for the section list.
+ * The Settings section groups for the given workspace kind.
  *
  * @remarks
- * Omits Members & Access (there is no roster to manage), Connections (already covered by the
- * Personal group's own Connections), and the whole Advanced group (there is nothing to publish).
+ * One declaration filtered, rather than two maintained side by side. A group whose every section
+ * is `sharedOnly` disappears with them — which is what makes Advanced vanish from a personal
+ * workspace without anyone having to remember that it should.
+ *
+ * @param isPersonal - Whether the selected workspace is the caller's own space.
+ * @returns the groups to render, in display order.
  */
-export const PERSONAL_WORKSPACE_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
-  {
-    label: 'Workspace',
-    sections: [GENERAL_SECTION, BILLING_SECTION],
-  },
-  {
-    label: 'Work configuration',
-    sections: WORK_CONFIGURATION_SECTIONS,
-  },
-];
-
-/** Returns the workspace section groups for the given workspace kind. */
 export function workspaceSettingsSectionGroups(
   isPersonal: boolean,
 ): readonly SettingsSectionGroup[] {
-  return isPersonal
-    ? PERSONAL_WORKSPACE_SETTINGS_SECTION_GROUPS
-    : WORKSPACE_SETTINGS_SECTION_GROUPS;
+  if (!isPersonal) return WORKSPACE_SECTION_GROUPS;
+  return WORKSPACE_SECTION_GROUPS.flatMap((group) => {
+    const sections = group.sections.filter((section) => section.sharedOnly !== true);
+    return sections.length === 0 ? [] : [{ ...group, sections }];
+  });
 }
 
 /** Every workspace section for the given workspace kind, flattened, in display order. */
@@ -299,8 +307,9 @@ export function workspaceSettingsSections(isPersonal: boolean): readonly Setting
 }
 
 /** Every section across all groups of the shared-org registry, flattened, in display order. */
-export const SETTINGS_SECTIONS: readonly SettingsSection[] =
-  WORKSPACE_SETTINGS_SECTION_GROUPS.flatMap((group) => group.sections);
+export const SETTINGS_SECTIONS: readonly SettingsSection[] = WORKSPACE_SECTION_GROUPS.flatMap(
+  (group) => group.sections,
+);
 
 /**
  * Find a section by key across every group — personal and workspace, both workspace kinds.

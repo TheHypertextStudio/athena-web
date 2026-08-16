@@ -1,40 +1,10 @@
 'use client';
 
+import { useSharedOnlyGuard } from '@/components/settings/use-shared-only-guard';
 import { useAppParams } from '@/lib/app-location';
-
-/**
- * The Members & Access settings section (mvp-plan §8.7).
- *
- * @remarks
- * The primary, always-available Settings section for a **shared org**, reached at
- * `/orgs/[orgId]/settings/members`. It is a thin route wrapper around the existing
- * {@link MembersTab}, which owns its own data (members, roles, pending invitations), its own
- * `canManage` derivation, and every mutation (invite, role change, removal, revoke). Splitting
- * the former in-page tab into a routed page changes only where the content mounts — the
- * behavior is unchanged.
- *
- * Members & Access is an org-only concept: a **personal** workspace is the caller's own
- * organization-of-one, with no other members to manage. So this page guards against a personal
- * workspace — if the active org is personal it redirects to the personal default section
- * ({@link defaultSettingsSection}) and renders a calm placeholder rather than the org members
- * UI, which keeps the route unreachable from the (personal) nav and via a typed/bookmarked URL.
- *
- * Data is fetched at runtime, so the production build needs no running server.
- */
-import { useEffect, type JSX } from 'react';
-import { useRouter } from 'next/navigation';
-
-import { useActiveOrg } from '@/components/active-org';
+import type { JSX } from 'react';
 import { MembersTab } from '@/components/settings/members-tab';
-import {
-  defaultSettingsSection,
-  sectionHref,
-  SETTINGS_SECTIONS,
-} from '@/components/settings/settings-registry';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
-
-/** The registry entry for this section (its title + description copy). */
-const SECTION = SETTINGS_SECTIONS.find((s) => s.key === 'members');
 
 /**
  * The Members & Access section page.
@@ -44,32 +14,14 @@ const SECTION = SETTINGS_SECTIONS.find((s) => s.key === 'members');
  */
 export default function MembersSettingsPage(): JSX.Element {
   const { orgId } = useAppParams<{ orgId: string }>();
-  const router = useRouter();
-  const { activeOrg } = useActiveOrg();
-  const isPersonal = activeOrg?.isPersonal ?? false;
 
-  // Members & Access does not apply to a personal workspace; send it to the personal default.
-  useEffect(() => {
-    if (isPersonal) {
-      router.replace(sectionHref(orgId, defaultSettingsSection(true)));
-    }
-  }, [isPersonal, orgId, router]);
-
-  if (isPersonal) {
-    return (
-      <p className="text-on-surface-variant text-body-medium" role="status">
-        Opening settings&hellip;
-      </p>
-    );
-  }
+  // One redirect, driven by the section's own `sharedOnly` declaration rather than a condition
+  // retyped per route — which is how Publishing came to render on a workspace with nothing to
+  // publish. It stays at the route because routing does.
+  if (useSharedOnlyGuard('members')) return <></>;
 
   return (
-    <SettingsSectionPage
-      title={SECTION?.label ?? 'Members & Access'}
-      description={
-        SECTION?.description ?? 'Manage who belongs to this workspace and what they can do.'
-      }
-    >
+    <SettingsSectionPage sectionKey="members">
       <MembersTab orgId={orgId} />
     </SettingsSectionPage>
   );

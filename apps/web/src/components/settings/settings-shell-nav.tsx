@@ -16,7 +16,7 @@
 import { useContextState } from '@docket/ui/components';
 import { cn } from '@docket/ui';
 import Link from 'next/link';
-import { type JSX, useMemo } from 'react';
+import { type JSX, useId, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { useAppPathname } from '@/lib/app-location';
@@ -210,11 +210,14 @@ function NavGroup({
   content,
   onNavigate,
 }: NavGroupProps): JSX.Element | null {
+  const labelId = useId();
   if (sections.length === 0) return null;
   return (
     <div className="flex flex-col gap-1">
-      <h2 className="text-on-surface-variant text-label-medium px-2.5">{label}</h2>
-      <ul className="flex flex-col gap-0.5">
+      <span id={labelId} className="text-on-surface-variant text-label-medium px-2.5">
+        {label}
+      </span>
+      <ul aria-labelledby={labelId} className="flex flex-col gap-0.5">
         {sections.map((section) => (
           <NavRow
             key={section.key}

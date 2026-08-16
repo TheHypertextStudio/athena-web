@@ -380,7 +380,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
             </ul>
             {(layersByConnection.get(connection.id) ?? []).length > 0 ? (
               <div className="flex flex-col gap-1.5 px-4 pt-1 pb-3">
-                <h3 className="text-on-surface-variant text-label-medium">Layers</h3>
+                <h4 className="text-on-surface-variant text-label-medium">Layers</h4>
                 <CalendarLayerPanel layers={layersByConnection.get(connection.id) ?? []} />
               </div>
             ) : null}

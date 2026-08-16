@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * `settings` — the shell every routed Settings section renders inside.
  *

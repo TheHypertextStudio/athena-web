@@ -24,12 +24,10 @@ import {
   defaultSettingsSection,
   PERSONAL_SETTINGS_GROUP,
   PERSONAL_SETTINGS_SECTIONS,
-  PERSONAL_WORKSPACE_SETTINGS_SECTION_GROUPS,
   personalSectionHref,
   sectionHref,
   SETTINGS_SECTIONS,
   type SettingsSection,
-  WORKSPACE_SETTINGS_SECTION_GROUPS,
   workspaceSettingsSectionGroups,
   workspaceSettingsSections,
 } from '../../../src/components/settings/settings-registry';
@@ -100,12 +98,23 @@ describe('personalSectionHref', () => {
 });
 
 describe('workspaceSettingsSectionGroups', () => {
-  it('returns the full shared-org registry for a shared workspace', () => {
-    expect(workspaceSettingsSectionGroups(false)).toBe(WORKSPACE_SETTINGS_SECTION_GROUPS);
+  it('keeps every section for a shared workspace', () => {
+    const shared = workspaceSettingsSectionGroups(false).flatMap((group) => group.sections);
+    expect(shared).toEqual(SETTINGS_SECTIONS);
   });
 
-  it('returns the reduced registry for a personal workspace', () => {
-    expect(workspaceSettingsSectionGroups(true)).toBe(PERSONAL_WORKSPACE_SETTINGS_SECTION_GROUPS);
+  it('drops the shared-only sections for a personal workspace', () => {
+    const personal = workspaceSettingsSectionGroups(true).flatMap((group) => group.sections);
+    expect(personal.some((section) => section.sharedOnly === true)).toBe(false);
+    // A personal workspace has no roster, no data sources of its own, and nothing to publish.
+    expect(SETTINGS_SECTIONS.filter((section) => section.sharedOnly === true).map((s) => s.key)) //
+      .toEqual(['members', 'connections', 'publishing']);
+  });
+
+  it('drops a group whose every section was shared-only', () => {
+    // Advanced holds only Publishing, so it has to disappear rather than render as a bare label.
+    const labels = workspaceSettingsSectionGroups(true).map((group) => group.label);
+    expect(labels).not.toContain('Advanced');
   });
 });
 
@@ -129,7 +138,7 @@ describe('shared workspace sections', () => {
   });
 
   it('matches the flattened group sections exactly', () => {
-    const flattened = WORKSPACE_SETTINGS_SECTION_GROUPS.flatMap(
+    const flattened = workspaceSettingsSectionGroups(false).flatMap(
       (g): readonly SettingsSection[] => g.sections,
     );
     expect(orgSections).toEqual(flattened);

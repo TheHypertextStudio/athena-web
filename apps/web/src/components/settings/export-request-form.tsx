@@ -2,6 +2,7 @@
 
 import type { AccountExportOptionsOut } from '@docket/types';
 import { Checkbox, Button } from '@docket/ui/primitives';
+import { SettingsGroup } from './settings-group';
 import { type JSX, useState } from 'react';
 
 import {
@@ -67,93 +68,92 @@ export function ExportRequestForm({
   }
 
   return (
-    <div className="bg-surface-container-low flex flex-col gap-6 rounded-xl p-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-on-surface text-title-small">Choose data to include</h2>
-        <p className="text-on-surface-variant text-body-medium">
-          Start with everything selected, then remove anything you do not need.
-        </p>
-      </div>
-
-      <fieldset className="flex flex-col gap-3">
-        <legend className="sr-only">Data categories</legend>
-        {(Object.keys(EXPORT_CATEGORY_COPY) as ExportCategory[]).map((category) => {
-          const copy = EXPORT_CATEGORY_COPY[category];
-          const inputId = `export-category-${category}`;
-          return (
-            <label
-              key={category}
-              htmlFor={inputId}
-              className="hover:bg-surface-container-low bg-surface-container-low flex cursor-pointer gap-3 rounded-xl p-3"
-            >
-              <Checkbox
-                id={inputId}
-                checked={categories.includes(category)}
-                className="mt-0.5 shrink-0 rounded"
-                onChange={(event) => {
-                  toggleCategory(category, event.target.checked);
-                }}
-              />
-              <span className="flex min-w-0 flex-col gap-1">
-                <span className="text-on-surface text-label-large">{copy.title}</span>
-                <span className="text-on-surface-variant text-body-medium">{copy.description}</span>
-              </span>
-            </label>
-          );
-        })}
-      </fieldset>
-
-      {includesWorkspaces ? (
+    <>
+      <SettingsGroup
+        title="Choose data to include"
+        description="Start with everything selected, then remove anything you do not need."
+      >
         <fieldset className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <legend className="text-on-surface text-label-large">Workspaces</legend>
-            <button
-              type="button"
-              className="text-primary focus-visible:ring-ring text-label-large rounded hover:underline focus-visible:ring-2"
-              onClick={() => {
-                setWorkspaceIds(options.workspaces.map((workspace) => workspace.id));
-              }}
-            >
-              Select all
-            </button>
-          </div>
-          <p className="text-on-surface-variant text-body-medium">
-            Select the workspaces whose Docket work you want in this export.
-          </p>
-          <div className="bg-surface-container-low flex max-h-72 flex-col overflow-y-auto rounded-xl">
-            {options.workspaces.map((workspace) => {
-              const inputId = `export-workspace-${workspace.id}`;
-              return (
-                <label
-                  key={workspace.id}
-                  htmlFor={inputId}
-                  className="hover:bg-surface-container-low flex cursor-pointer items-center gap-3 px-3 py-2"
-                >
-                  <Checkbox
-                    id={inputId}
-                    checked={workspaceIds.includes(workspace.id)}
-                    className="shrink-0 rounded"
-                    onChange={(event) => {
-                      toggleWorkspace(workspace.id, event.target.checked);
-                    }}
-                  />
-                  <span className="text-on-surface text-body-medium break-words">
-                    {workspace.name}
+          <legend className="sr-only">Data categories</legend>
+          {(Object.keys(EXPORT_CATEGORY_COPY) as ExportCategory[]).map((category) => {
+            const copy = EXPORT_CATEGORY_COPY[category];
+            const inputId = `export-category-${category}`;
+            return (
+              <label
+                key={category}
+                htmlFor={inputId}
+                className="hover:bg-surface-container-low bg-surface-container-low flex cursor-pointer gap-3 rounded-xl p-3"
+              >
+                <Checkbox
+                  id={inputId}
+                  checked={categories.includes(category)}
+                  className="mt-0.5 shrink-0 rounded"
+                  onChange={(event) => {
+                    toggleCategory(category, event.target.checked);
+                  }}
+                />
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="text-on-surface text-label-large">{copy.title}</span>
+                  <span className="text-on-surface-variant text-body-medium">
+                    {copy.description}
                   </span>
-                </label>
-              );
-            })}
-          </div>
-          {workspaceIds.length === 0 ? (
-            <p role="alert" className="text-error text-body-medium">
-              Select at least one workspace or remove Workspace data from this export.
-            </p>
-          ) : null}
+                </span>
+              </label>
+            );
+          })}
         </fieldset>
-      ) : null}
 
-      <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl p-4">
-        <h2 className="text-on-surface text-title-small">Review &amp; create</h2>
+        {includesWorkspaces ? (
+          <fieldset className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <legend className="text-on-surface text-label-large">Workspaces</legend>
+              <button
+                type="button"
+                className="text-primary focus-visible:ring-ring text-label-large rounded hover:underline focus-visible:ring-2"
+                onClick={() => {
+                  setWorkspaceIds(options.workspaces.map((workspace) => workspace.id));
+                }}
+              >
+                Select all
+              </button>
+            </div>
+            <p className="text-on-surface-variant text-body-medium">
+              Select the workspaces whose Docket work you want in this export.
+            </p>
+            <div className="bg-surface-container-low flex max-h-72 flex-col overflow-y-auto rounded-xl">
+              {options.workspaces.map((workspace) => {
+                const inputId = `export-workspace-${workspace.id}`;
+                return (
+                  <label
+                    key={workspace.id}
+                    htmlFor={inputId}
+                    className="hover:bg-surface-container-low flex cursor-pointer items-center gap-3 px-3 py-2"
+                  >
+                    <Checkbox
+                      id={inputId}
+                      checked={workspaceIds.includes(workspace.id)}
+                      className="shrink-0 rounded"
+                      onChange={(event) => {
+                        toggleWorkspace(workspace.id, event.target.checked);
+                      }}
+                    />
+                    <span className="text-on-surface text-body-medium break-words">
+                      {workspace.name}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {workspaceIds.length === 0 ? (
+              <p role="alert" className="text-error text-body-medium">
+                Select at least one workspace or remove Workspace data from this export.
+              </p>
+            ) : null}
+          </fieldset>
+        ) : null}
+      </SettingsGroup>
+
+      <SettingsGroup title="Review &amp; create">
         <p className="text-on-surface-variant text-body-medium">
           Your export will be a ZIP file. Docket will email you at{' '}
           <span className="text-on-surface text-label-large">{options.deliveryEmail}</span> when
@@ -193,7 +193,7 @@ export function ExportRequestForm({
             {creating ? 'Creating export…' : 'Create export'}
           </Button>
         </div>
-      </div>
-    </div>
+      </SettingsGroup>
+    </>
   );
 }

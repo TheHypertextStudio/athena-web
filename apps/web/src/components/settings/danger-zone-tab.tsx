@@ -30,6 +30,7 @@ import {
 } from '@/lib/query';
 
 import { DeleteAccountDialog } from './delete-account-dialog';
+import { SettingsGroup } from './settings-group';
 import { sectionHref } from './settings-registry';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -121,17 +122,19 @@ export function DangerZoneTab(): JSX.Element {
 
       {/* Ownership-blocker guide */}
       {!pending && blockers.length > 0 ? (
-        <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-title-small">Resolve these workspaces first</h3>
-            <p className="text-on-surface-variant text-body-medium max-w-prose">
+        <SettingsGroup
+          title="Resolve these workspaces first"
+          description={
+            <>
               You&apos;re the only owner of{' '}
               {blockers.length === 1 ? 'a shared workspace' : 'some shared workspaces'} with other
               members. Transfer ownership (or delete the workspace) so it isn&apos;t left without an
               owner, then you can delete your account.
-            </p>
-          </div>
-          <ul className="bg-surface-container flex flex-col overflow-hidden rounded-md">
+            </>
+          }
+          body="rows"
+        >
+          <ul className="flex flex-col">
             {blockers.map((b) => (
               <li
                 key={b.organizationId}
@@ -149,7 +152,7 @@ export function DangerZoneTab(): JSX.Element {
               </li>
             ))}
           </ul>
-        </div>
+        </SettingsGroup>
       ) : null}
 
       {/* Delete account card */}

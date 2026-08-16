@@ -100,7 +100,13 @@ describe('the Connected apps roster', () => {
     // and `apps/api/tests/mcp/mcp-grant-lifecycle.test.ts` proves the claim against a token that
     // is still cryptographically valid at the moment it is refused. If that check is ever removed,
     // this test fails and the promise cannot quietly outlive the mechanism behind it.
-    const roster = screen.getByLabelText('Authorized MCP clients');
+    // Scoped through the heading rather than a landmark name: settings groups are deliberately
+    // unnamed sections, because one region landmark per card on a surface built entirely of cards
+    // is landmark spam. The heading is the group's identity and survives the container.
+    const roster = screen
+      .getByRole('heading', { name: 'Apps with access to your Docket' })
+      .closest('section');
+    expect(roster).not.toBeNull();
     expect(roster).toHaveTextContent('takes effect immediately');
     expect(roster).not.toHaveTextContent('15 minutes');
     expect(roster).not.toHaveTextContent('for up to');

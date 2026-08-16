@@ -20,6 +20,7 @@ import { formatCalendarDate } from '@/lib/format-date';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 import { ChangeEmailSection } from './change-email-section';
+import { SettingsGroup } from './settings-group';
 import { PasskeysSection } from './passkeys-section';
 import type { RecoveryCodesMode } from './recovery-codes-dialog';
 import { RecoveryCodesDialog } from './recovery-codes-dialog';
@@ -71,16 +72,11 @@ function RecoveryCodesSection(): JSX.Element {
   const generatedOn = formatCalendarDate(status.generatedAt);
 
   return (
-    <section className="flex flex-col gap-6" aria-label="Recovery codes">
-      <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-on-surface text-title-small">Recovery codes</h3>
-          <p className="text-on-surface-variant text-body-medium max-w-prose">
-            If you lose your passkey, a recovery code gets you back in. Each code works once. Keep
-            them in a password manager.
-          </p>
-        </div>
-
+    <>
+      <SettingsGroup
+        title="Recovery codes"
+        description="If you lose your passkey, a recovery code gets you back in. Each code works once. Keep them in a password manager."
+      >
         {status.enabled ? (
           <div className="flex flex-col gap-1">
             <p
@@ -118,7 +114,7 @@ function RecoveryCodesSection(): JSX.Element {
             {status.enabled ? 'Regenerate codes…' : 'Generate recovery codes…'}
           </Button>
         </div>
-      </div>
+      </SettingsGroup>
 
       <RecoveryCodesDialog
         open={dialogOpen}
@@ -128,6 +124,6 @@ function RecoveryCodesSection(): JSX.Element {
           void statusQ.refetch();
         }}
       />
-    </section>
+    </>
   );
 }

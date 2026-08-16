@@ -37,6 +37,7 @@ import {
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { LoadFailure } from './load-failure';
+import { SettingsGroup } from './settings-group';
 import { ClientSetup } from './mcp-setup-panels';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -105,35 +106,28 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
   return (
     <div className="flex flex-col gap-8">
       {/* ── Setup guide ── */}
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-title-small">Connect an MCP client</h2>
-          <p className="text-on-surface-variant text-body-medium">
-            Give Claude Desktop, Cursor, or any MCP-compatible tool access to your Docket account.
-          </p>
-        </div>
-
+      <SettingsGroup
+        title="Connect an MCP client"
+        description="Give Claude Desktop, Cursor, or any MCP-compatible tool access to your Docket account."
+      >
         <ClientSetup mcpUrl={mcpServerUrl} />
-      </section>
+      </SettingsGroup>
 
       {/* No separator element here. It painted nothing once the grouping border came off, so it
           announced a boundary to assistive tech that nobody could see. Two sibling sections, each
           with its own heading and 32px between them, are already separated. */}
 
       {/* ── Authorized clients roster ── */}
-      <section className="flex flex-col gap-4" aria-label="Authorized MCP clients">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-title-small">Apps with access to your Docket</h2>
-          {/* What revoking actually does, in the same words the consent screen used to grant it.
-              This copy carried a "for up to 15 minutes" caveat while the resource server checked
-              only the token's signature, and an app holding a live key kept working until it
-              expired. `apps/api/src/mcp/auth.ts` now re-checks the stored grant on every call, so
-              the caveat is gone and the immediate claim below is one the product actually keeps. */}
-          <p className="text-on-surface-variant text-body-medium">
-            These apps use the permissions you approved. Revoking takes effect immediately.
-          </p>
-        </div>
-
+      <SettingsGroup
+        title="Apps with access to your Docket"
+        body="rows"
+        // What revoking actually does, in the same words the consent screen used to grant it.
+        // This copy carried a "for up to 15 minutes" caveat while the resource server checked only
+        // the token's signature, and an app holding a live key kept working until it expired.
+        // `apps/api/src/mcp/auth.ts` now re-checks the stored grant on every call, so the caveat is
+        // gone and the immediate claim is one the product actually keeps.
+        description="These apps use the permissions you approved. Revoking takes effect immediately."
+      >
         {/* placeholder: the OAuth apps this person has authorized — how many, their names, icons,
             granted permissions and consent dates. Everything above (the heading and the paragraph
             explaining what revoking does) is static copy and paints first. */}
@@ -160,7 +154,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             className="border-none p-8"
           />
         ) : (
-          <ul className="bg-surface-container-low flex flex-col rounded-xl">
+          <ul className="flex flex-col">
             {apps.map((app) => (
               <li key={app.clientId} className="flex items-center gap-4 px-4 py-3">
                 <Avatar className="size-9 shrink-0 rounded-md">
@@ -219,7 +213,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             {userErrorMessage(revoke.error, 'Could not update connected apps.')}
           </p>
         ) : null}
-      </section>
+      </SettingsGroup>
     </div>
   );
 }

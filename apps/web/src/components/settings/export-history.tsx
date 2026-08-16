@@ -6,6 +6,7 @@ import { type JSX } from 'react';
 import { formatCalendarDate } from '@/lib/format-date';
 
 import { exportScopeSummary, exportStatusCopy } from './export-data-model';
+import { SettingsGroup } from './settings-group';
 import { SecureExportDownloadButton } from './export-download-button';
 
 /** One archive in the persistent export history. */
@@ -61,19 +62,18 @@ export function ExportHistory({
   readonly exports: readonly AccountExportOut[];
 }): JSX.Element {
   return (
-    <div className="flex flex-col gap-3" aria-live="polite">
-      <h2 className="text-on-surface text-title-small">Recent exports</h2>
+    <SettingsGroup title="Recent exports" body="rows" aria-live="polite">
       {exports.length > 0 ? (
-        <ol className="bg-surface-container-low rounded-xl px-4 sm:px-6">
+        <ol className="flex flex-col">
           {exports.map((exportJob) => (
             <ExportHistoryRow key={exportJob.id} exportJob={exportJob} />
           ))}
         </ol>
       ) : (
-        <p className="text-on-surface-variant text-body-medium">
-          You have not created an export yet.
+        <p className="text-on-surface-variant text-body-medium px-4 py-3">
+          You have not created an export yet. Choose what to include above, and it will appear here.
         </p>
       )}
-    </div>
+    </SettingsGroup>
   );
 }

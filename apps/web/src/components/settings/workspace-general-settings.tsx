@@ -6,6 +6,7 @@ import { Input, Select, Skeleton, Textarea } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
 import { LoadFailure } from './load-failure';
+import { SettingsGroup } from './settings-group';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
@@ -139,15 +140,14 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
       ) : workspaceQ.isPending || draft === null ? (
         /* placeholder: this workspace's saved name, purpose and work-vocabulary overrides — the values
            the form's fields are *for*. The section heading and description render above it. */
-        <Skeleton className="h-[34rem] max-w-2xl rounded-xl" />
+        <Skeleton className="h-[34rem] rounded-xl" />
       ) : (
-        <section className="bg-surface-container-low flex max-w-2xl flex-col gap-6 rounded-xl p-4">
-          {!permissionLoading && !canManage ? (
-            <p className="bg-surface-container text-on-surface-variant text-body-medium rounded-md px-3 py-2">
-              Only workspace owners and admins can change this.
-            </p>
-          ) : null}
-
+        <SettingsGroup
+          title="Workspace"
+          {...(!permissionLoading && !canManage
+            ? { description: 'Only workspace owners and admins can change this.' }
+            : {})}
+        >
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="text-on-surface text-label-large flex flex-col gap-1.5 sm:col-span-2">
               Workspace name
@@ -223,7 +223,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
               {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : ''}
             </p>
           )}
-        </section>
+        </SettingsGroup>
       )}
     </SettingsSectionPage>
   );

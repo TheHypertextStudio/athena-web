@@ -33,6 +33,7 @@ import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useLiveApiQuery } from '@/lib/query';
 
 import { LoadFailure } from './load-failure';
+import { SettingsGroup } from './settings-group';
 import { InviteForm } from './invite-form';
 import { InvitationsList } from './invitations-list';
 import { MemberRow } from './member-row';
@@ -207,69 +208,59 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
         </p>
       ) : null}
 
-      <section aria-label="Members" className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-on-surface text-title-small flex items-center gap-2">
-            <Users aria-hidden="true" className="size-4" />
-            Members
-            <span className="text-on-surface-variant text-body-large tabular-nums">
-              ({members.length})
-            </span>
-          </h2>
-        </div>
-        <div className="bg-surface-container-low overflow-hidden rounded-xl">
-          {members.length === 0 ? (
-            <EmptyState
-              icon={Users}
-              title="No members yet"
-              body="Invite someone by email and they will appear here once they accept."
-              className="border-none bg-transparent"
-            />
-          ) : (
-            <ul className="flex flex-col">
-              {members.map((member) => {
-                const isGuest = guestRoleId !== null && member.roleId === guestRoleId;
-                return (
-                  <MemberRow
-                    key={member.actorId}
-                    actorId={member.actorId}
-                    displayName={member.displayName}
-                    avatarUrl={member.avatar}
-                    roleId={member.roleId ?? null}
-                    isSelf={member.actorId === myActorId}
-                    isGuest={isGuest}
-                    roleOptions={roleOptions}
-                    canManage={canManage}
-                    savingRole={savingRoleFor === member.actorId}
-                    removing={removingFor === member.actorId}
-                    onChangeRole={(roleId) => {
-                      changeRole(member.actorId, roleId);
-                    }}
-                    onRemove={() => {
-                      remove(member.actorId);
-                    }}
-                  />
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      <section aria-label="Pending invitations" className="flex flex-col gap-3">
-        <h2 className="text-on-surface text-title-small">Pending invitations</h2>
-        <div className="bg-surface-container-low overflow-hidden rounded-xl">
-          <InvitationsList
-            invitations={pendingInvitations}
-            roleLabel={roleLabel}
-            canManage={canManage}
-            revokingId={revokingFor}
-            onRevoke={(id) => {
-              revoke(id);
-            }}
+      <SettingsGroup
+        title={`Members (${members.length})`}
+        icon={<Users aria-hidden="true" className="size-4" />}
+        body="rows"
+      >
+        {members.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No members yet"
+            body="Invite someone by email and they will appear here once they accept."
+            className="border-none bg-transparent"
           />
-        </div>
-      </section>
+        ) : (
+          <ul className="flex flex-col">
+            {members.map((member) => {
+              const isGuest = guestRoleId !== null && member.roleId === guestRoleId;
+              return (
+                <MemberRow
+                  key={member.actorId}
+                  actorId={member.actorId}
+                  displayName={member.displayName}
+                  avatarUrl={member.avatar}
+                  roleId={member.roleId ?? null}
+                  isSelf={member.actorId === myActorId}
+                  isGuest={isGuest}
+                  roleOptions={roleOptions}
+                  canManage={canManage}
+                  savingRole={savingRoleFor === member.actorId}
+                  removing={removingFor === member.actorId}
+                  onChangeRole={(roleId) => {
+                    changeRole(member.actorId, roleId);
+                  }}
+                  onRemove={() => {
+                    remove(member.actorId);
+                  }}
+                />
+              );
+            })}
+          </ul>
+        )}
+      </SettingsGroup>
+
+      <SettingsGroup title="Pending invitations" body="rows">
+        <InvitationsList
+          invitations={pendingInvitations}
+          roleLabel={roleLabel}
+          canManage={canManage}
+          revokingId={revokingFor}
+          onRevoke={(id) => {
+            revoke(id);
+          }}
+        />
+      </SettingsGroup>
     </div>
   );
 }

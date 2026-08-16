@@ -15,6 +15,7 @@
  * confirmation banner.
  */
 import { Button, Input } from '@docket/ui/primitives';
+import { SettingsGroup } from './settings-group';
 import { type JSX, useId, useState } from 'react';
 
 import { changeEmail, useSession } from '@/lib/auth-client';
@@ -51,60 +52,58 @@ export function ChangeEmailSection(): JSX.Element {
   }
 
   return (
-    <section className="flex flex-col gap-3" aria-label="Change email">
-      <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-on-surface text-title-small">Email address</h3>
-          <p className="text-on-surface-variant text-body-medium max-w-prose">
-            Your current email is{' '}
-            <span className="text-on-surface text-label-large">{currentEmail}</span>. Changing it
-            sends a confirmation link to this address — click it to finish the change.
-          </p>
-        </div>
+    <SettingsGroup
+      title="Email address"
+      description={
+        <>
+          Your current email is{' '}
+          <span className="text-on-surface text-label-large">{currentEmail}</span>. Changing it
+          sends a confirmation link to this address — click it to finish the change.
+        </>
+      }
+    >
+      {sent ? (
+        <p className="text-body-medium text-on-surface">
+          Check <span className="text-label-large">{currentEmail}</span> for a confirmation link to
+          finish the change.
+        </p>
+      ) : (
+        <form
+          className="flex flex-col gap-2 sm:flex-row sm:items-end"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (pending || newEmail.trim().length === 0) return;
+            void requestChange();
+          }}
+        >
+          <div className="flex flex-1 flex-col gap-2">
+            <label htmlFor={inputId} className="text-on-surface text-label-large">
+              New email
+            </label>
+            <Input
+              id={inputId}
+              type="email"
+              required
+              value={newEmail}
+              autoComplete="email"
+              placeholder="you@example.com"
+              onChange={(event) => {
+                setNewEmail(event.target.value);
+              }}
+            />
+          </div>
+          <Button type="submit" disabled={pending || newEmail.trim().length === 0}>
+            {pending ? 'Sending…' : 'Send confirmation'}
+          </Button>
+        </form>
+      )}
 
-        {sent ? (
-          <p className="text-body-medium text-on-surface">
-            Check <span className="text-label-large">{currentEmail}</span> for a confirmation link
-            to finish the change.
-          </p>
-        ) : (
-          <form
-            className="flex flex-col gap-2 sm:flex-row sm:items-end"
-            noValidate
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (pending || newEmail.trim().length === 0) return;
-              void requestChange();
-            }}
-          >
-            <div className="flex flex-1 flex-col gap-2">
-              <label htmlFor={inputId} className="text-on-surface text-label-large">
-                New email
-              </label>
-              <Input
-                id={inputId}
-                type="email"
-                required
-                value={newEmail}
-                autoComplete="email"
-                placeholder="you@example.com"
-                onChange={(event) => {
-                  setNewEmail(event.target.value);
-                }}
-              />
-            </div>
-            <Button type="submit" disabled={pending || newEmail.trim().length === 0}>
-              {pending ? 'Sending…' : 'Send confirmation'}
-            </Button>
-          </form>
-        )}
-
-        {error ? (
-          <p role="alert" className="text-error text-body-medium">
-            {error}
-          </p>
-        ) : null}
-      </div>
-    </section>
+      {error ? (
+        <p role="alert" className="text-error text-body-medium">
+          {error}
+        </p>
+      ) : null}
+    </SettingsGroup>
   );
 }

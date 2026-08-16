@@ -14,6 +14,7 @@ import { Calendar, Google, Home, MapPin, MoreHorizontal, Plus, Target } from '@d
 import {
   Badge,
   Button,
+  DecorativeIcon,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -60,6 +61,8 @@ import {
   useApiQuery,
 } from '@/lib/query';
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { SettingRow } from '@/components/settings/setting-row';
+import { SettingsGroup } from '@/components/settings/settings-group';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 import { isActionable, syncStateCopy } from '@/components/settings/work-location-copy';
 
@@ -401,10 +404,12 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
     <SettingsSectionPage
       sectionKey="work-locations"
       action={
-        <Button onClick={openNewPlace}>
-          <Plus aria-hidden="true" />
-          Add place
-        </Button>
+        places.length > 0 ? (
+          <Button onClick={openNewPlace}>
+            <Plus aria-hidden="true" />
+            Add place
+          </Button>
+        ) : undefined
       }
     >
       {loading ? (
@@ -418,172 +423,79 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
         </p>
       ) : (
         <>
-          <section aria-label="Saved places">
-            <div className="bg-surface-container-low overflow-hidden rounded-xl">
-              {places.length === 0 ? (
-                <EmptyState
-                  icon={MapPin}
-                  title="No saved places yet"
-                  body="Save the places you work from so schedules and calendar sync can use them."
-                  className="border-none bg-transparent"
-                  cta={{ label: 'Add place', onClick: openNewPlace }}
-                />
-              ) : (
-                places.map((place) => {
-                  const isHome = placesQ.data.profile.homePlaceId === place.id;
-                  const isCurrent = currentPlaceId === place.id;
-                  const currentAction =
-                    isCurrent && manualCurrent
-                      ? 'Clear current location'
-                      : `Set ${place.name} as current location`;
-                  return (
-                    <div
-                      key={place.id}
-                      className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-3 py-2 transition-colors"
-                    >
-                      <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
-                        {isHome ? <Home aria-hidden="true" /> : <MapPin aria-hidden="true" />}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                          <p className="text-on-surface text-title-small min-w-0 truncate">
-                            {place.name}
-                          </p>
-                          {isHome ? <Badge variant="outline">Home</Badge> : null}
-                          {isCurrent ? <Badge variant="outline">Current</Badge> : null}
-                          {place.providerMappings.map((mapping) => (
-                            <Badge
-                              key={`${mapping.connectionId}:${mapping.classification}`}
-                              variant="outline"
-                            >
-                              {mapping.provider === 'google' ? 'Google' : mapping.provider}
-                            </Badge>
-                          ))}
-                        </div>
-                        {place.address ? (
-                          <p className="text-on-surface-variant text-body-small truncate">
-                            {place.address}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="flex shrink-0 items-center">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-10"
-                              aria-label={currentAction}
-                              onClick={() => {
-                                if (isCurrent && manualCurrent) clearCurrent.mutate(undefined);
-                                else setCurrent.mutate(place.id);
-                              }}
-                            >
-                              <Target aria-hidden="true" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>{currentAction}</TooltipContent>
-                        </Tooltip>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-10"
-                              aria-label={`Actions for ${place.name}`}
-                              title="Place actions"
-                            >
-                              <MoreHorizontal aria-hidden="true" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" width="sm">
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                setEditingPlace(place);
-                                setPlaceEditorOpen(true);
-                              }}
-                            >
-                              Edit place
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                setProfile.mutate(isHome ? null : place.id);
-                              }}
-                            >
-                              {isHome ? 'Clear home' : 'Make home'}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-error focus:text-error"
-                              onSelect={() => {
-                                setConfirmRetire(place);
-                              }}
-                            >
-                              Retire place
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
-
-          <section className="flex flex-col gap-3" aria-labelledby="location-schedule-heading">
-            <div className="flex min-h-10 items-center justify-between gap-3">
-              <h3 id="location-schedule-heading" className="text-on-surface text-title-small">
-                Schedule
-              </h3>
-              <Button variant="outline" disabled={places.length === 0} onClick={openNewSchedule}>
-                <Plus aria-hidden="true" />
-                Add schedule
-              </Button>
-            </div>
-            <div className="bg-surface-container-low overflow-hidden rounded-xl">
-              {assertionsQ.data.items.length === 0 ? (
-                <EmptyState
-                  icon={Calendar}
-                  title="No schedule yet"
-                  body="Tell Docket where you usually work on which days."
-                  className="border-none bg-transparent"
-                  cta={{ label: 'Add schedule', onClick: openNewSchedule }}
-                />
-              ) : (
-                assertionsQ.data.items.map((assertion) => {
-                  const place = places.find((candidate) => candidate.id === assertion.placeId);
-                  const placeName = place?.name ?? 'Saved place';
-                  const weekly =
-                    assertion.schedule.type === 'weekly_all_day' ||
-                    assertion.schedule.type === 'weekly_timed';
-                  return (
-                    <div
-                      key={assertion.id}
-                      className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-3 py-2 transition-colors"
-                    >
-                      <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
-                        <Calendar aria-hidden="true" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                          <p className="text-on-surface text-title-small truncate">{placeName}</p>
-                          {assertion.origin === 'provider' ? (
-                            <Badge variant="outline">Imported</Badge>
-                          ) : null}
-                        </div>
-                        <p className="text-on-surface-variant text-body-small truncate">
-                          {scheduleSummary(assertion.schedule)}
+          <SettingsGroup title="Saved places" body="rows">
+            {places.length === 0 ? (
+              <EmptyState
+                icon={MapPin}
+                title="No saved places yet"
+                body="Save the places you work from so schedules and calendar sync can use them."
+                className="border-none bg-transparent"
+                cta={{ label: 'Add place', onClick: openNewPlace }}
+              />
+            ) : (
+              places.map((place) => {
+                const isHome = placesQ.data.profile.homePlaceId === place.id;
+                const isCurrent = currentPlaceId === place.id;
+                const currentAction =
+                  isCurrent && manualCurrent
+                    ? 'Clear current location'
+                    : `Set ${place.name} as current location`;
+                return (
+                  <div
+                    key={place.id}
+                    className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-4 py-3 transition-colors"
+                  >
+                    <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
+                      {isHome ? <Home aria-hidden="true" /> : <MapPin aria-hidden="true" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                        <p className="text-on-surface text-title-small min-w-0 truncate">
+                          {place.name}
                         </p>
+                        {isHome ? <Badge variant="outline">Home</Badge> : null}
+                        {isCurrent ? <Badge variant="outline">Current</Badge> : null}
+                        {place.providerMappings.map((mapping) => (
+                          <Badge
+                            key={`${mapping.connectionId}:${mapping.classification}`}
+                            variant="outline"
+                          >
+                            {mapping.provider === 'google' ? 'Google' : mapping.provider}
+                          </Badge>
+                        ))}
                       </div>
+                      {place.address ? (
+                        <p className="text-on-surface-variant text-body-small truncate">
+                          {place.address}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-center">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-10"
+                            aria-label={currentAction}
+                            onClick={() => {
+                              if (isCurrent && manualCurrent) clearCurrent.mutate(undefined);
+                              else setCurrent.mutate(place.id);
+                            }}
+                          >
+                            <Target aria-hidden="true" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{currentAction}</TooltipContent>
+                      </Tooltip>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
                             className="size-10"
-                            aria-label={`Actions for ${placeName} schedule`}
-                            title="Schedule actions"
+                            aria-label={`Actions for ${place.name}`}
+                            title="Place actions"
                           >
                             <MoreHorizontal aria-hidden="true" />
                           </Button>
@@ -591,173 +503,250 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                         <DropdownMenuContent align="end" width="sm">
                           <DropdownMenuItem
                             onSelect={() => {
-                              setEditingAssertion(assertion);
-                              setScheduleEditorOpen(true);
+                              setEditingPlace(place);
+                              setPlaceEditorOpen(true);
                             }}
                           >
-                            Edit schedule
+                            Edit place
                           </DropdownMenuItem>
-                          {weekly ? (
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                setOccurrenceAssertion(assertion);
-                              }}
-                            >
-                              Change one occurrence
-                            </DropdownMenuItem>
-                          ) : null}
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setProfile.mutate(isHome ? null : place.id);
+                            }}
+                          >
+                            {isHome ? 'Clear home' : 'Make home'}
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-error focus:text-error"
                             onSelect={() => {
-                              setConfirmDeleteSchedule(assertion);
+                              setConfirmRetire(place);
                             }}
                           >
-                            Delete schedule
+                            Retire place
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </section>
+                  </div>
+                );
+              })
+            )}
+          </SettingsGroup>
 
-          {schedulingQ.data?.commitments.length ? (
-            <section className="flex flex-col gap-3" aria-labelledby="planned-work-heading">
-              <h3 id="planned-work-heading" className="text-on-surface text-title-small">
-                Planned work
-              </h3>
-              <div className="bg-surface-container-low overflow-hidden rounded-xl">
-                {schedulingQ.data.commitments.map((commitment) => (
+          <SettingsGroup
+            title="Schedule"
+            body="rows"
+            action={
+              assertionsQ.data.items.length > 0 ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={places.length === 0}
+                  onClick={openNewSchedule}
+                >
+                  <Plus aria-hidden="true" />
+                  Add schedule
+                </Button>
+              ) : undefined
+            }
+          >
+            {assertionsQ.data.items.length === 0 ? (
+              <EmptyState
+                icon={Calendar}
+                title="No schedule yet"
+                body="Tell Docket where you usually work on which days."
+                className="border-none bg-transparent"
+                cta={{ label: 'Add schedule', onClick: openNewSchedule }}
+              />
+            ) : (
+              assertionsQ.data.items.map((assertion) => {
+                const place = places.find((candidate) => candidate.id === assertion.placeId);
+                const placeName = place?.name ?? 'Saved place';
+                const weekly =
+                  assertion.schedule.type === 'weekly_all_day' ||
+                  assertion.schedule.type === 'weekly_timed';
+                return (
                   <div
-                    key={commitment.id}
-                    className="hover:bg-surface-container flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-2 transition-colors"
+                    key={assertion.id}
+                    className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-4 py-3 transition-colors"
                   >
-                    <div className="min-w-0">
-                      <p className="text-on-surface text-title-small truncate">
-                        {commitment.title}
-                      </p>
-                      <p className="text-on-surface-variant text-body-small">
-                        {commitment.sessionsPerWeek} session
-                        {commitment.sessionsPerWeek === 1 ? '' : 's'} per week
+                    <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
+                      <Calendar aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                        <p className="text-on-surface text-label-large truncate">{placeName}</p>
+                        {assertion.origin === 'provider' ? (
+                          <Badge variant="outline">Imported</Badge>
+                        ) : null}
+                      </div>
+                      <p className="text-on-surface-variant text-body-small truncate">
+                        {scheduleSummary(assertion.schedule)}
                       </p>
                     </div>
-                    <Select
-                      aria-label={`Place for ${commitment.title}`}
-                      className="w-full @xl:w-56"
-                      value={commitment.workPlaceId ?? ''}
-                      onChange={(event) => {
-                        const nextPlaceId =
-                          places.find((place) => place.id === event.target.value)?.id ?? null;
-                        saveCommitmentPlace.mutate({ commitmentId: commitment.id, nextPlaceId });
-                      }}
-                    >
-                      <option value="">No saved place</option>
-                      {places.map((place) => (
-                        <option key={place.id} value={place.id}>
-                          {place.name}
-                        </option>
-                      ))}
-                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-10"
+                          aria-label={`Actions for ${placeName} schedule`}
+                          title="Schedule actions"
+                        >
+                          <MoreHorizontal aria-hidden="true" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" width="sm">
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setEditingAssertion(assertion);
+                            setScheduleEditorOpen(true);
+                          }}
+                        >
+                          Edit schedule
+                        </DropdownMenuItem>
+                        {weekly ? (
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setOccurrenceAssertion(assertion);
+                            }}
+                          >
+                            Change one occurrence
+                          </DropdownMenuItem>
+                        ) : null}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-error focus:text-error"
+                          onSelect={() => {
+                            setConfirmDeleteSchedule(assertion);
+                          }}
+                        >
+                          Delete schedule
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                ))}
-              </div>
-            </section>
+                );
+              })
+            )}
+          </SettingsGroup>
+
+          {schedulingQ.data?.commitments.length ? (
+            <SettingsGroup title="Planned work" body="rows">
+              {schedulingQ.data.commitments.map((commitment) => (
+                <div
+                  key={commitment.id}
+                  className="hover:bg-surface-container flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-3 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="text-on-surface text-label-large truncate">{commitment.title}</p>
+                    <p className="text-on-surface-variant text-body-small">
+                      {commitment.sessionsPerWeek} session
+                      {commitment.sessionsPerWeek === 1 ? '' : 's'} per week
+                    </p>
+                  </div>
+                  <Select
+                    aria-label={`Place for ${commitment.title}`}
+                    className="w-full @xl:w-56"
+                    value={commitment.workPlaceId ?? ''}
+                    onChange={(event) => {
+                      const nextPlaceId =
+                        places.find((place) => place.id === event.target.value)?.id ?? null;
+                      saveCommitmentPlace.mutate({ commitmentId: commitment.id, nextPlaceId });
+                    }}
+                  >
+                    <option value="">No saved place</option>
+                    {places.map((place) => (
+                      <option key={place.id} value={place.id}>
+                        {place.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              ))}
+            </SettingsGroup>
           ) : null}
 
-          <section className="flex flex-col gap-3" aria-labelledby="automatic-location-heading">
-            <h3 id="automatic-location-heading" className="text-on-surface text-title-small">
-              Automatic location
-            </h3>
-            <div className="bg-surface-container-low flex min-h-16 items-center gap-3 rounded-xl px-3 py-2">
-              <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
-                <Target aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-on-surface text-title-small">
-                  Use this device while Docket is open
-                </p>
-                <p className="text-on-surface-variant text-body-small" role="status">
+          <SettingsGroup title="Automatic location" body="rows">
+            <SettingRow
+              leading={<DecorativeIcon icon={Target} />}
+              label="Use this device while Docket is open"
+              description={
+                <span role="status">
                   {deviceStatus ??
                     (!hasMappedPlace
                       ? 'Choose a map location for a place first.'
                       : deviceRemembered
                         ? 'Ready when you start it.'
                         : 'Matches your position to saved places on this device.')}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                disabled={!hasMappedPlace}
-                onClick={() => {
-                  const next = !deviceActive;
-                  setDeviceActive(next);
-                  setDeviceRemembered(next);
-                  writeStoredValue(DEVICE_OPT_IN_KEY, next);
-                  if (!next) setDeviceStatus('Automatic location is off.');
-                }}
-              >
-                {deviceActive ? 'Stop' : 'Start'}
-              </Button>
-            </div>
-          </section>
-
-          <section className="flex flex-col gap-3" aria-labelledby="calendar-sync-heading">
-            <div className="flex flex-col gap-0.5">
-              <h3 id="calendar-sync-heading" className="text-on-surface text-title-small">
-                Calendar sync
-              </h3>
-              <p className="text-on-surface-variant text-body-small">
-                Google work locations appear as public calendar events.
-              </p>
-            </div>
-            <div className="bg-surface-container-low overflow-hidden rounded-xl">
-              {(syncQ.data?.accounts ?? []).map((account) => (
-                <div
-                  key={account.connectionId}
-                  className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-3 py-2 transition-colors"
+                </span>
+              }
+              trailing={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!hasMappedPlace}
+                  onClick={() => {
+                    const next = !deviceActive;
+                    setDeviceActive(next);
+                    setDeviceRemembered(next);
+                    writeStoredValue(DEVICE_OPT_IN_KEY, next);
+                    if (!next) setDeviceStatus('Automatic location is off.');
+                  }}
                 >
-                  <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
-                    {account.provider === 'google' ? (
-                      <Google aria-hidden="true" />
-                    ) : (
-                      <Calendar aria-hidden="true" />
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-on-surface text-title-small truncate">
-                      {account.accountLabel ?? account.provider}
-                    </p>
-                    <p className="text-on-surface-variant text-body-small">
-                      {syncStateCopy(account.state, account.reason)}
-                    </p>
-                  </div>
-                  {isActionable(account.state, account.reason) ? (
-                    <Button asChild variant="ghost">
-                      <Link href="/settings/connections/google-calendar">Review</Link>
-                    </Button>
-                  ) : null}
+                  {deviceActive ? 'Stop' : 'Start'}
+                </Button>
+              }
+            />
+          </SettingsGroup>
+
+          <SettingsGroup
+            title="Calendar sync"
+            description="Google work locations appear as public calendar events."
+            body="rows"
+          >
+            {(syncQ.data?.accounts ?? []).map((account) => (
+              <div
+                key={account.connectionId}
+                className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-4 py-3 transition-colors"
+              >
+                <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
+                  {account.provider === 'google' ? (
+                    <Google aria-hidden="true" />
+                  ) : (
+                    <Calendar aria-hidden="true" />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-on-surface text-label-large truncate">
+                    {account.accountLabel ?? account.provider}
+                  </p>
+                  <p className="text-on-surface-variant text-body-small">
+                    {syncStateCopy(account.state, account.reason)}
+                  </p>
                 </div>
-              ))}
-              {syncQ.data?.accounts.length === 0 ? (
-                <EmptyState
-                  icon={Google}
-                  title="No linked calendar accounts"
-                  body="Link a Google account to publish your work location to its calendar."
-                  className="border-none bg-transparent"
-                  action={
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href="/settings/connections/google-calendar">
-                        Link a Google account
-                      </Link>
-                    </Button>
-                  }
-                />
-              ) : null}
-            </div>
-          </section>
+                {isActionable(account.state, account.reason) ? (
+                  <Button asChild variant="ghost">
+                    <Link href="/settings/connections/google-calendar">Review</Link>
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+            {syncQ.data?.accounts.length === 0 ? (
+              <EmptyState
+                icon={Google}
+                title="No linked calendar accounts"
+                body="Link a Google account to publish your work location to its calendar."
+                className="border-none bg-transparent"
+                action={
+                  <Button asChild variant="ghost" size="sm">
+                    <Link href="/settings/connections/google-calendar">Link a Google account</Link>
+                  </Button>
+                }
+              />
+            ) : null}
+          </SettingsGroup>
         </>
       )}
 

@@ -1,7 +1,7 @@
 ---
 surfaces: ['settings']
 date: 2026-08-15
-verdict: ship
+verdict: needs-work
 scores:
   brand: 3
   typography: 4
@@ -12,7 +12,7 @@ scores:
   states: 4
   detail: 3
 gates:
-  a11y: true
+  a11y: false
   responsive: true
   theme-parity: true
   no-placeholder: true
@@ -43,19 +43,29 @@ light-only capture at one width.
 | 7. States completeness            | 4     | Every empty state is actionable and none names a precondition without a way to meet it. 21 silent mutations now report failure; reads and writes use different components so a query failure can no longer wear "Could not update…". Four dead-end statuses (bounced, unsubscribed, disabled, unmatched) state a cause and an exit.    |
 | 8. Detail craft (squint test)     | 3     | Duplicate CTAs removed wherever a header and an empty state offered the same action. Raw identifiers, zero-value IP addresses and truncated tokens no longer reach the reader. Held at 3: `cursor: default` on non-button controls was not re-measured this pass, and it was the 2026-08-02 finding behind this dimension's old score. |
 
-**Gates:** A11y ✅ · Responsive ✅ · Theme parity ✅ · No placeholder ✅ · Screenshots ✅
+**Gates:** A11y ❌ (bare checkboxes are 16px on touch) · Responsive ✅ · Theme parity ✅ · No placeholder ✅ · Screenshots ✅
 
 ## Gate evidence
 
-- **A11y — touch targets.** Measured, not assumed. Every interactive element in five sections was
-  measured at 390×844 with touch emulated; the settings form step was 36px and `sm` buttons 32px,
-  so _every_ field, primary action and the dialog's own close button failed the 40px standard. That
-  is the control scale being a mouse scale, so the floor went there: `coarse:h-10` in
-  `controlChrome` and `fieldSurface`, plus the four controls that size themselves outside it. The
-  checkbox keeps its 16px mark and grows a centred 40px hit area — confirmed by `elementFromPoint`
-  18px below the mark's centre returning the checkbox, once the element is scrolled into view.
-  The one remaining sub-40px node is a 1×1 visually-hidden file input whose target is the button
-  beside it.
+- **A11y — touch targets. FAILING, and the failure is instructive.** Every interactive element in
+  five sections was measured at 390×844 with touch emulated. The settings form step was 36px and
+  `sm` buttons 32px, so _every_ field, primary action and the dialog's own close button failed the
+  40px standard — the control scale is a mouse scale. The floor now lives there (`coarse:h-10` in
+  `controlChrome` and `fieldSurface`) plus the three controls that size themselves outside it, and
+  those all pass.
+
+  **Bare checkboxes do not.** The first attempt grew their hit area with an absolutely-positioned
+  `::after` on the wrapper span. It painted above the sibling input and took the tap itself, so
+  every checkbox not inside a `<label>` — the notification channel matrix, list-row selection,
+  calendar layer visibility — stopped toggling on touch. A pseudo-element cannot be the hit target
+  for a sibling. It is reverted, so those checkboxes are back to a 16px mark with no enlarged
+  target.
+
+  The fix has to come from what wraps the checkbox: a `<label>` spanning the row (already done for
+  the quiet-hours toggle) or a table cell taking `coarse:min-h-10`. That is finding 1 below and it
+  blocks the gate. A 16px target that works beats a 40px one that does not, which is why the
+  revert shipped ahead of the proper fix.
+
 - **Responsive.** Asserted rather than eyeballed, per section per capture: a screenshot is clipped
   to the viewport, so the one row that overflows is exactly what it cannot show.
   `expectNoHorizontalScroll` runs before every shutter — 92 assertions.
@@ -64,19 +74,30 @@ light-only capture at one width.
 
 ## Findings
 
-1. **Brand voice has no settled register.** Naming took three passes on one page, and the rule that
+1. **Bare checkboxes have no touch target — blocks the A11y gate.** The notification channel
+   matrix, `selection-checkbox`, and the calendar layer panel render `Checkbox` with no wrapping
+   label, so there is nothing to enlarge. Each needs its own row/cell to take the coarse floor.
+   Until then this surface does not meet the rubric.
+2. **Brand voice has no settled register.** Naming took three passes on one page, and the rule that
    emerged — headings are neutral labels, never conversational — has not been applied outside
    Settings. Worth a read-through of the other surfaces before it drifts further apart.
-2. **Motion is inherited, not authored.** Nothing in this pass touched transitions, and the
+3. **Motion is inherited, not authored.** Nothing in this pass touched transitions, and the
    dimension is a 3 by default rather than by decision.
-3. **`cursor: default` on non-button controls** was the 2026-08-02 detail finding and was not
+4. **`cursor: default` on non-button controls** was the 2026-08-02 detail finding and was not
    re-measured. It may or may not still hold.
-4. **The shell still lists "Tasks" and "Stream" twice**, once personal and once under Workspace.
+5. **The shell still lists "Tasks" and "Stream" twice**, once personal and once under Workspace.
    Recorded on all five surfaces in the 2026-08-02 pass; it is shell chrome rather than Settings,
    and it is visible in every capture here.
-5. **Shape is unused.** Everything is `rounded-xl`. MD3 Expressive differentiates a card, a
+6. **Shape is unused.** Everything is `rounded-xl`. MD3 Expressive differentiates a card, a
    selected row and a pressed state by shape, and none of that vocabulary is in play.
 
-**Verdict: SHIP.** Every dimension ≥ 3, every gate green, four dimensions at 4. The two dimensions
-that blocked the previous review — hierarchy and detail — are 4 and 3. Findings 1–5 are follow-ups,
-not blockers.
+**Verdict: BELOW BAR — one gate.** Every dimension is ≥ 3 and four are at 4, and the two
+dimensions that blocked the previous review are 4 and 3. But the rubric is explicit that any gate
+failure blocks ship regardless of dimension scores, and A11y fails on bare checkboxes.
+
+Finding 1 is the whole gap. Findings 2–6 are follow-ups.
+
+This verdict was SHIP until a review pass found the checkbox hit area was swallowing taps rather
+than enlarging them. Recording the correction rather than quietly re-scoring: the earlier claim
+rested on an `elementFromPoint` probe that confirmed the pseudo-element received the hit, which is
+exactly the problem — it received the hit _instead of_ the input.

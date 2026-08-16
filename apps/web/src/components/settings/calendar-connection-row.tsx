@@ -26,16 +26,16 @@ export function CalendarConnectionRow({
   return (
     <NextLink
       href={href}
-      className="border-outline-variant bg-surface-container-low hover:bg-surface-container flex items-center justify-between gap-3 rounded-lg border px-4 py-3 transition-colors"
+      className="bg-surface-container-low hover:bg-surface-container flex items-center justify-between gap-3 rounded-xl px-4 py-3 transition-colors"
     >
       <span className="min-w-0">
-        <span className="text-on-surface block truncate text-sm font-medium">{name}</span>
-        <span className="text-on-surface-variant block truncate text-xs">{effect}</span>
-        <span className="text-on-surface-variant block truncate text-xs">
+        <span className="text-on-surface text-label-large block truncate">{name}</span>
+        <span className="text-on-surface-variant text-body-small block truncate">{effect}</span>
+        <span className="text-on-surface-variant text-body-small block truncate">
           Accounts and visible calendars
         </span>
       </span>
-      <span className="text-primary shrink-0 text-sm font-medium">Configure</span>
+      <span className="text-primary text-label-large shrink-0">Configure</span>
     </NextLink>
   );
 }

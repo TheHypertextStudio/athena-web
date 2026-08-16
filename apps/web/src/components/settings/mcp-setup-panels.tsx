@@ -46,11 +46,17 @@ function CodeBlock({ code, label = 'Copy' }: { code: string; label?: string }): 
   }, [code]);
 
   return (
-    <div className="bg-surface-container flex items-start gap-2 rounded-lg p-3">
-      <pre className="text-on-surface text-body-medium min-w-0 flex-1 overflow-x-auto py-1 font-mono leading-relaxed">
+    <div className="bg-surface-container flex items-start gap-2 rounded-md p-3">
+      <pre className="text-on-surface text-body-medium min-w-0 flex-1 overflow-x-auto py-1 font-mono">
         <code>{code}</code>
       </pre>
-      <Button type="button" variant="ghost" size="sm" onClick={copy} className="shrink-0 text-xs">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={copy}
+        className="text-body-small shrink-0"
+      >
         <span className="grid">
           <span className={copied ? `invisible ${STACKED_LABEL}` : STACKED_LABEL}>{label}</span>
           <span className={copied ? STACKED_LABEL : `invisible ${STACKED_LABEL}`}>Copied!</span>
@@ -65,7 +71,9 @@ function CliSetup({ client, url }: { client: CliClient; url: string }): JSX.Elem
     <div className="flex flex-col gap-3">
       <p className="text-on-surface-variant text-body-medium">Run this command in your terminal:</p>
       <CodeBlock code={client.command(url)} label="Copy command" />
-      {client.note ? <p className="text-on-surface-variant text-xs">{client.note}</p> : null}
+      {client.note ? (
+        <p className="text-on-surface-variant text-body-small">{client.note}</p>
+      ) : null}
     </div>
   );
 }
@@ -88,7 +96,7 @@ function DeepLinkSetup({
         <Button asChild>
           <a href={client.deepLink(url)}>Open in {client.name}</a>
         </Button>
-        <p className="text-on-surface-variant text-xs">
+        <p className="text-on-surface-variant text-body-small">
           Opens {client.name} and pre-fills the MCP server config — no manual editing required.
         </p>
       </div>
@@ -108,7 +116,7 @@ function DeepLinkSetup({
           <p className="text-on-surface-variant text-body-medium">
             Paste this into{' '}
             {filePath ? (
-              <code className="bg-surface-container rounded px-1.5 py-0.5 font-mono text-xs">
+              <code className="bg-surface-container text-body-small rounded px-1.5 py-0.5 font-mono">
                 {filePath}
               </code>
             ) : (
@@ -117,7 +125,9 @@ function DeepLinkSetup({
             :
           </p>
           <CodeBlock code={client.snippet(url)} />
-          {client.note ? <p className="text-on-surface-variant text-xs">{client.note}</p> : null}
+          {client.note ? (
+            <p className="text-on-surface-variant text-body-small">{client.note}</p>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -140,7 +150,7 @@ function ConfigSetup({
       <p className="text-on-surface-variant text-body-medium">
         Paste this into{' '}
         {filePath ? (
-          <code className="bg-surface-container rounded px-1.5 py-0.5 font-mono text-xs">
+          <code className="bg-surface-container text-body-small rounded px-1.5 py-0.5 font-mono">
             {filePath}
           </code>
         ) : (
@@ -149,7 +159,9 @@ function ConfigSetup({
         :
       </p>
       <CodeBlock code={client.snippet(url)} />
-      {client.note ? <p className="text-on-surface-variant text-xs">{client.note}</p> : null}
+      {client.note ? (
+        <p className="text-on-surface-variant text-body-small">{client.note}</p>
+      ) : null}
     </div>
   );
 }
@@ -160,7 +172,7 @@ function StepsSetup({ client, url }: { client: StepsClient; url: string }): JSX.
       <ol className="text-on-surface-variant text-body-medium flex flex-col gap-2">
         {client.steps.map((step, i) => (
           <li key={step} className="flex gap-2.5">
-            <span className="bg-surface-container text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-medium">
+            <span className="bg-surface-container text-on-surface-variant text-label-medium flex size-5 shrink-0 items-center justify-center rounded-full">
               {i + 1}
             </span>
             <span className="pt-px">{step}</span>
@@ -168,7 +180,9 @@ function StepsSetup({ client, url }: { client: StepsClient; url: string }): JSX.
         ))}
       </ol>
       <CodeBlock code={url} label="Copy URL" />
-      {client.note ? <p className="text-on-surface-variant text-xs">{client.note}</p> : null}
+      {client.note ? (
+        <p className="text-on-surface-variant text-body-small">{client.note}</p>
+      ) : null}
     </div>
   );
 }
@@ -178,7 +192,9 @@ function UrlSetup({ client, url }: { client: UrlClient; url: string }): JSX.Elem
     <div className="flex flex-col gap-3">
       <p className="text-on-surface-variant text-body-medium">MCP server URL:</p>
       <CodeBlock code={url} label="Copy URL" />
-      {client.note ? <p className="text-on-surface-variant text-xs">{client.note}</p> : null}
+      {client.note ? (
+        <p className="text-on-surface-variant text-body-small">{client.note}</p>
+      ) : null}
     </div>
   );
 }
@@ -194,7 +210,7 @@ export function ClientSetup({ mcpUrl }: { mcpUrl: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="mcp-client-select" className="text-on-surface text-body-medium font-medium">
+        <label htmlFor="mcp-client-select" className="text-on-surface text-label-large">
           Which app are you setting up?
         </label>
         <Select

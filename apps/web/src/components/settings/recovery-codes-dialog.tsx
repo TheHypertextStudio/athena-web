@@ -161,7 +161,7 @@ export function RecoveryCodesDialog({
                 </li>
               ))}
             </ol>
-            <p className="text-on-surface-variant text-xs">
+            <p className="text-on-surface-variant text-body-small">
               Copy or download your codes — you won&apos;t see them again.
             </p>
           </div>

@@ -1,4 +1,6 @@
 import { Skeleton } from '@docket/ui/primitives';
+
+import { LoadFailure } from './load-failure';
 import type { JSX, ReactNode } from 'react';
 
 /** Props for {@link IntegrationsStatus}. */
@@ -31,17 +33,7 @@ export function IntegrationsStatus({
     );
   }
   if (loadError) {
-    return (
-      <div
-        role="alert"
-        className="border-outline-variant bg-surface-container-low text-on-surface-variant flex flex-col gap-1 rounded-lg border p-4"
-      >
-        <p className="text-on-surface text-body-medium font-medium">
-          We couldn&apos;t load connections.
-        </p>
-        <p className="text-body-medium">We&apos;ll keep trying automatically.</p>
-      </div>
-    );
+    return <LoadFailure message={loadError} retrying />;
   }
   return <>{children}</>;
 }

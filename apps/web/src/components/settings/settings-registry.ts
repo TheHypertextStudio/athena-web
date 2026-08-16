@@ -184,7 +184,7 @@ const WORK_CONFIGURATION_SECTIONS: readonly SettingsSection[] = [
   {
     key: 'statuses',
     label: 'Statuses',
-    description: 'What your work moves through, in your workspace\u2019s own words.',
+    description: 'The states work moves through.',
     icon: CircleDot,
     href: 'statuses',
   },
@@ -198,14 +198,14 @@ const WORK_CONFIGURATION_SECTIONS: readonly SettingsSection[] = [
   {
     key: 'labels',
     label: 'Labels',
-    description: 'The words this workspace uses that Docket does not ship.',
+    description: 'Your workspace’s own tags for organizing work.',
     icon: Tag,
     href: 'labels',
   },
   {
     key: 'templates',
     label: 'Templates',
-    description: 'Reusable starting points for the work this workspace creates most.',
+    description: 'Reusable starting points for new work.',
     icon: LayoutTemplate,
     href: 'templates',
   },
@@ -301,6 +301,29 @@ export function workspaceSettingsSections(isPersonal: boolean): readonly Setting
 /** Every section across all groups of the shared-org registry, flattened, in display order. */
 export const SETTINGS_SECTIONS: readonly SettingsSection[] =
   WORKSPACE_SETTINGS_SECTION_GROUPS.flatMap((group) => group.sections);
+
+/**
+ * Find a section by key across every group — personal and workspace, both workspace kinds.
+ *
+ * @remarks
+ * The registry is already the one place that knows a section's label and description, but only the
+ * nav read it: each route page re-typed its own header copy, and the two Connections routes
+ * disagreed about the wording of the same section. {@link SettingsSectionPage} resolves through
+ * here so a section is named once and every route that reaches it says the same thing.
+ *
+ * Searches personal sections first: the keys are disjoint apart from the ones a personal workspace
+ * deliberately shares with the personal group, and there the personal framing is the correct one.
+ *
+ * @param key - The section's registry key (e.g. `'connections'`).
+ * @returns the section, or `undefined` when no group declares that key.
+ */
+export function findSettingsSection(key: string): SettingsSection | undefined {
+  return (
+    PERSONAL_SETTINGS_SECTIONS.find((section) => section.key === key) ??
+    workspaceSettingsSections(false).find((section) => section.key === key) ??
+    workspaceSettingsSections(true).find((section) => section.key === key)
+  );
+}
 
 /** The section every workspace settings root redirects to, for either workspace kind. */
 export const DEFAULT_WORKSPACE_SETTINGS_SECTION = 'general';

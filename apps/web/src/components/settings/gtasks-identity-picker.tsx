@@ -38,7 +38,7 @@ export function GtasksIdentityPicker({ picker, orgId }: GtasksIdentityPickerProp
             Link a Google account under{' '}
             <NextLink
               href={`/orgs/${orgId}/settings/connected-accounts`}
-              className="text-primary font-medium hover:underline"
+              className="text-primary text-label-large hover:underline"
             >
               Connected accounts
             </NextLink>{' '}
@@ -54,7 +54,7 @@ export function GtasksIdentityPicker({ picker, orgId }: GtasksIdentityPickerProp
         const label = identity.email ?? identity.name ?? 'Google account';
         const busy = picker.busySub === identity.accountId;
         return (
-          <li key={identity.accountId} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
+          <li key={identity.accountId} className="flex items-center gap-3 rounded-md px-2 py-1.5">
             <TaskAlt aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
             <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
               {label}

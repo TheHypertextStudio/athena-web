@@ -65,6 +65,16 @@ import {
 export interface NotionMirrorPanelProps {
   /** The active workspace. */
   orgId: string;
+  /**
+   * Whether the caller may change this workspace's Notion setup.
+   *
+   * @remarks
+   * Every write behind this surface is guarded server-side at `manage`
+   * (`apps/api/src/routes/notion-mirror.ts`). Rendering the controls regardless meant a
+   * contributor could press "Create databases" and receive a bare 403 with nothing explaining
+   * it. Read stays available to everyone; only the write affordances are withheld.
+   */
+  canManage: boolean;
 }
 
 /**
@@ -86,7 +96,7 @@ function DatabaseRow({
   designHref: string;
 }): JSX.Element {
   return (
-    <li className="border-outline-variant flex flex-col gap-2 border-b px-4 py-3 last:border-b-0 @lg:flex-row @lg:items-center @lg:gap-4">
+    <li className="flex flex-col gap-2 px-4 py-3 @lg:flex-row @lg:items-center @lg:gap-4">
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-on-surface text-label-large">{database.title}</span>
         <span className="text-on-surface-variant text-body-small">
@@ -105,19 +115,16 @@ function DatabaseRow({
             <OpenInNew aria-hidden="true" className="size-3.5" />
           </a>
         ) : null}
-        <NextLink
-          href={designHref}
-          className="border-outline-variant text-on-surface text-label-large hover:bg-surface-container rounded-lg border px-3 py-1.5"
-        >
-          {tableAction(database.provisionedAt !== null)}
-        </NextLink>
+        <Button asChild variant="secondary" size="sm">
+          <NextLink href={designHref}>{tableAction(database.provisionedAt !== null)}</NextLink>
+        </Button>
       </span>
     </li>
   );
 }
 
 /** The Docket-in-Notion hub. */
-export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Element {
+export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps): JSX.Element {
   const model = useNotionMirror(orgId);
   const people = useNotionPeople(orgId, model.integration?.id ?? '');
   const sync = useNotionMirrorSync(orgId, model.integration?.id ?? '');
@@ -143,7 +150,7 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
 
   if (model.integration === null) {
     return (
-      <div className="border-outline-variant flex flex-col items-start gap-3 rounded-xl border border-dashed p-6">
+      <div className="bg-surface-container-lowest flex flex-col items-start gap-3 rounded-xl p-4">
         <p className="text-on-surface text-label-large">Notion isn’t connected yet</p>
         <p className="text-on-surface-variant text-body-small max-w-prose">
           Once you connect a Notion workspace, Docket can build databases inside it for your tasks,
@@ -176,8 +183,8 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
   // then failed before creating anything has zero databases, and gating on those would leave the
   // one connection most in need of a re-run with no way to ask for one.
   // Gated on health too: a run against a rejected credential fails, which demotes the connection
-  // again and notifies its owner.
-  const canSync = containerPage !== null && !connectionBroken;
+  // again and notifies its owner. And on permission, because the route guards on `manage`.
+  const canSync = containerPage !== null && !connectionBroken && canManage;
   const syncButton = canSync ? (
     <Button
       variant="outline"
@@ -191,7 +198,7 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
   ) : null;
 
   const tableList = (
-    <ul className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
+    <ul className="bg-surface-container-low overflow-hidden rounded-xl">
       {model.databases.map((database) => (
         <DatabaseRow
           key={database.id}
@@ -252,7 +259,7 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
       {/* The attention block renders only when there is something to act on, so a healthy
           connection is a quiet page rather than a wall of green reassurance. */}
       {needsPeople ? (
-        <div className="border-outline-variant bg-surface-container rounded-xl border p-4">
+        <div className="bg-surface-container rounded-xl p-4">
           <p className="text-on-surface text-body-medium flex items-center gap-2">
             <CircleAlert aria-hidden="true" className="text-error size-4" />
             {people.unmatched.length === 1
@@ -278,7 +285,7 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
           {connectionBroken ? (
             <p className="text-on-surface-variant text-body-small max-w-prose">{SETUP_BLOCKED}</p>
           ) : (
-            <NotionSetupCard orgId={orgId} integrationId={integrationId} />
+            <NotionSetupCard orgId={orgId} integrationId={integrationId} canManage={canManage} />
           )}
           {/* A page was already chosen but nothing exists in Notion — a provision that recorded
               its config and then failed. Retrying the run is the repair, and without this the
@@ -301,7 +308,7 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
           <h2 className="text-on-surface text-title-small">{PROVISIONED_TITLE}</h2>
           <p className="text-on-surface-variant text-body-small max-w-prose">{PROVISIONED_HINT}</p>
           {containerPage !== null ? (
-            <div className="border-outline-variant bg-surface-container-low mt-1 flex flex-col gap-1 rounded-xl border px-4 py-3">
+            <div className="bg-surface-container-low mt-1 flex flex-col gap-1 rounded-xl px-4 py-3">
               <span className="text-on-surface-variant text-body-small">{CONTAINER_LABEL}</span>
               {containerPage.url !== null ? (
                 <a

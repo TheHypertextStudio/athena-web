@@ -2,17 +2,18 @@
 
 import type { OrgOut, OrgUpdate } from '@docket/types';
 import type { VocabularyPreset } from '@docket/work/vocabulary';
-import { Input, Select, Skeleton } from '@docket/ui/primitives';
+import { Input, Select, Skeleton, Textarea } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
+import { LoadFailure } from './load-failure';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 
-import { SectionHeader } from './section-header';
 import { SettingsImagePicker } from './settings-image-picker';
 import { useCanManageOrg } from './use-can-manage-org';
+import { SettingsSectionPage } from './settings-section-page';
 
 /** Props for the workspace General settings editor. */
 export interface WorkspaceGeneralSettingsProps {
@@ -126,30 +127,29 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
   const nameInvalid = draft !== null && draft.name.trim() === '';
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title="General"
-        description="Edit how this workspace appears and how its work is named."
-      />
-
+    <SettingsSectionPage
+      title="General"
+      description="Edit how this workspace appears and how its work is named."
+    >
       {workspaceQ.isError ? (
-        <p role="status" className="text-on-surface-variant text-sm">
-          Workspace settings are temporarily unavailable. We&apos;ll keep checking automatically.
-        </p>
+        <LoadFailure
+          message={userErrorMessage(workspaceQ.error, 'Could not load workspace settings.')}
+          retrying
+        />
       ) : workspaceQ.isPending || draft === null ? (
         /* placeholder: this workspace's saved name, purpose and work-vocabulary overrides — the values
            the form's fields are *for*. The section heading and description render above it. */
-        <Skeleton className="h-[34rem] max-w-2xl rounded-lg" />
+        <Skeleton className="h-[34rem] max-w-2xl rounded-xl" />
       ) : (
-        <section className="border-outline-variant flex max-w-2xl flex-col gap-6 rounded-lg border p-5">
+        <section className="bg-surface-container-low flex max-w-2xl flex-col gap-6 rounded-xl p-4">
           {!permissionLoading && !canManage ? (
-            <p className="bg-surface-container text-on-surface-variant rounded-md px-3 py-2 text-sm">
-              Only workspace owners and admins can change these details.
+            <p className="bg-surface-container text-on-surface-variant text-body-medium rounded-md px-3 py-2">
+              Only workspace owners and admins can change this.
             </p>
           ) : null}
 
           <div className="grid gap-5 sm:grid-cols-2">
-            <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium sm:col-span-2">
+            <label className="text-on-surface text-label-large flex flex-col gap-1.5 sm:col-span-2">
               Workspace name
               <Input
                 value={draft.name}
@@ -160,13 +160,13 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 }}
               />
               {nameInvalid ? (
-                <span className="text-error text-xs font-normal">Workspace name is required.</span>
+                <span className="text-error text-body-small">Workspace name is required.</span>
               ) : null}
             </label>
 
-            <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium sm:col-span-2">
+            <label className="text-on-surface text-label-large flex flex-col gap-1.5 sm:col-span-2">
               Purpose
-              <textarea
+              <Textarea
                 value={draft.purpose}
                 disabled={readOnly}
                 maxLength={500}
@@ -175,11 +175,11 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 onChange={(event) => {
                   update('purpose', event.target.value);
                 }}
-                className="border-outline-variant bg-surface text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full resize-y"
               />
             </label>
 
-            <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">
+            <label className="text-on-surface text-label-large flex flex-col gap-1.5">
               Terminology
               <Select
                 value={draft.vocabulary}
@@ -211,16 +211,20 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
           </div>
 
           {save.error ? (
-            <p role="alert" className="text-error text-sm">
+            <p role="alert" className="text-error text-body-medium">
               {userErrorMessage(save.error, 'Could not save workspace settings.')}
             </p>
           ) : (
-            <p role="status" aria-live="polite" className="text-on-surface-variant h-4 text-xs">
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-on-surface-variant text-body-small h-4"
+            >
               {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : ''}
             </p>
           )}
         </section>
       )}
-    </div>
+    </SettingsSectionPage>
   );
 }

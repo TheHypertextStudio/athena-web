@@ -15,6 +15,7 @@
  * underneath it rather than on another screen.
  */
 import { PublicSlug, type WorkspaceDomainOut } from '@docket/types';
+import { RelativeTime } from '@docket/ui/components';
 import { Check, Edit, Globe, Trash2, X } from '@docket/ui/icons';
 import { Badge, Button, Input, Text } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
@@ -400,7 +401,10 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
             </Button>
             {domain.lastCheckedAt ? (
               <Text as="span" token="body-small" tone="muted" aria-live="polite">
-                {`Checked ${relativeTime(domain.lastCheckedAt)}`}
+                Checked{' '}
+                <RelativeTime iso={domain.lastCheckedAt}>
+                  {relativeTime(domain.lastCheckedAt)}
+                </RelativeTime>
               </Text>
             ) : null}
           </div>

@@ -76,9 +76,7 @@ export function IntegrationRowActions({
   const canChangeGithubInstallation = canManage && isConnected && provider === 'github';
   return (
     <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
-      <Badge variant={STATUS_LABEL[status].variant} className="font-normal">
-        {STATUS_LABEL[status].label}
-      </Badge>
+      <Badge variant={STATUS_LABEL[status].variant}>{STATUS_LABEL[status].label}</Badge>
       {canManage && needsConnect ? (
         <IntegrationActionButton
           tone="primary"

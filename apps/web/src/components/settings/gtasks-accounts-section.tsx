@@ -13,8 +13,10 @@
  * user-level identities; a connection is an org-level choice of identity + resources (task lists).
  */
 import type { IntegrationDirectoryProvider, IntegrationOut, TeamOut } from '@docket/types';
-import { Skeleton } from '@docket/ui/primitives';
+import { EmptyState } from '@docket/ui/components';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import { Plus, TaskAlt } from '@docket/ui/icons';
+import NextLink from 'next/link';
 import type { JSX } from 'react';
 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
@@ -75,14 +77,23 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
       {loading ? (
         <Skeleton className="h-20 w-full rounded-xl" />
       ) : rows.length === 0 ? (
-        <div className="bg-surface-container-low text-on-surface-variant text-body-medium flex items-center gap-3 rounded-xl p-4">
-          <TaskAlt aria-hidden="true" className="size-4 shrink-0" />
-          <span>
-            {canManage
-              ? 'No Google Tasks connections yet. Connect a linked account to start syncing.'
-              : 'No Google Tasks connections yet.'}
-          </span>
-        </div>
+        <EmptyState
+          icon={TaskAlt}
+          title="No Google Tasks connections yet"
+          body={
+            canManage
+              ? 'Connect a linked Google account to sync its task lists.'
+              : 'An admin can connect a Google account to sync its task lists.'
+          }
+          className="border-none bg-transparent"
+          action={
+            canManage ? (
+              <Button asChild variant="ghost" size="sm">
+                <NextLink href="/settings/connected-accounts">Link a Google account</NextLink>
+              </Button>
+            ) : null
+          }
+        />
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((row) => (

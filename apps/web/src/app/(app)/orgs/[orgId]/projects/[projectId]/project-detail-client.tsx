@@ -28,7 +28,7 @@ import { useAppParams, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
-import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { ApplyDescriptionTemplateControl } from '@/components/editor/apply-description-template';
 import { FreeformText } from '@/components/editor/freeform-text';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
@@ -623,7 +623,7 @@ export default function ProjectDetailPage(): JSX.Element {
         </p>
       ) : null}
 
-      <ConfirmDeleteDialog
+      <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
         onOpenChange={(next) => {
           // Clear a prior failure's message so it never lingers on the next open (or after close).

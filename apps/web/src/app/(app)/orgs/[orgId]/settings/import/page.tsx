@@ -17,9 +17,9 @@ import type { JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { ImportPanel } from '@/components/settings/import-panel';
-import { SectionHeader } from '@/components/settings/section-header';
 import { workspaceSettingsSections } from '@/components/settings/settings-registry';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The Import section page. */
 export default function ImportSettingsPage(): JSX.Element {
@@ -31,14 +31,11 @@ export default function ImportSettingsPage(): JSX.Element {
   const section = workspaceSettingsSections(isPersonal).find((s) => s.key === 'import');
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title={section?.label ?? 'Import'}
-        description={
-          section?.description ?? 'Import everything from another tool into Docket, once.'
-        }
-      />
+    <SettingsSectionPage
+      title={section?.label ?? 'Import'}
+      description={section?.description ?? 'Import everything from another tool into Docket, once.'}
+    >
       <ImportPanel orgId={orgId} canManage={canManage} />
-    </div>
+    </SettingsSectionPage>
   );
 }

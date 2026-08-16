@@ -173,6 +173,7 @@ vi.mock('../../src/lib/query', () => ({
 }));
 
 import WorkLocationsSettingsPage from '../../src/app/(app)/settings/work-locations/page';
+import { isActionable, SYNC_REASON } from '../../src/components/settings/work-location-copy';
 
 function renderPage(): void {
   render(
@@ -252,20 +253,28 @@ describe('WorkLocationsSettingsPage', () => {
     expect(screen.getByRole('menuitem', { name: 'Delete schedule' })).toBeInTheDocument();
   });
 
-  it('uses application-owned guidance for account action states', () => {
+  it('names the specific cause an account cannot publish, and offers the way out', () => {
     renderPage();
 
     expect(screen.getByText('ada@example.com')).toBeInTheDocument();
-    expect(
-      screen.getByText('Change the Google recurrence to daily or weekly to continue'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Google work locations appear as public calendar events.'),
-    ).toBeInTheDocument();
+    // The fixture account is blocked by `unsupported_recurrence`. Asserting the mapped entry
+    // rather than a literal keeps the wording editable while still proving the surface reaches
+    // for the cause instead of a catch-all — the whole point of the map.
+    expect(screen.getByText(SYNC_REASON.unsupported_recurrence)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute(
       'href',
       '/settings/connections/google-calendar',
     );
+  });
+
+  it('withholds the recovery link where no action would help', () => {
+    // `provider_unavailable` clears on its own and `unsupported_account` never clears; sending
+    // either reader to the Google Calendar page offers a fix that does not exist there.
+    expect(isActionable('action_required', 'provider_unavailable')).toBe(false);
+    expect(isActionable('action_required', 'unsupported_account')).toBe(false);
+    expect(isActionable('action_required', 'reauth_required')).toBe(true);
+    expect(isActionable('action_required', null)).toBe(true);
+    expect(isActionable('healthy', null)).toBe(false);
   });
 
   it('requires an explicit occurrence when a one-off clock time repeats', () => {

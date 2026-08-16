@@ -16,10 +16,14 @@ import type { SessionListOut, SessionOut } from '@docket/types';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
+import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+
 import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
+import { SettingRow } from './setting-row';
+import { SettingsGroup } from './settings-group';
 
 /** A coarse, dependency-free device label parsed from a session's raw User-Agent string. */
 function deviceLabel(userAgent: string | null): string {
@@ -66,6 +70,10 @@ async function revokeOtherSessions(): Promise<SessionListOut> {
 /** The Security-tab card that lists and revokes the user's active sessions. */
 export function SessionsSection(): JSX.Element {
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  // Signing out every other device reaches machines the person is not holding, so it asks
+  // first. Revoking a single session stays a one-click row action — its blast radius is the
+  // one row you are pointing at.
+  const [confirmSignOutAll, setConfirmSignOutAll] = useState(false);
 
   const listQ = useApiQuery(
     apiQueryOptions(
@@ -106,81 +114,96 @@ export function SessionsSection(): JSX.Element {
 
   return (
     <section className="flex flex-col gap-3" aria-label="Active sessions">
-      <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-body-medium font-medium">Active sessions</h3>
-            <p className="text-on-surface-variant text-body-medium max-w-prose">
-              Every device currently signed in to your account. If you don&apos;t recognize one,
-              revoke it.
-            </p>
-          </div>
-          {hasOtherSessions ? (
+      <SettingsGroup
+        title="Active sessions"
+        description="Every device currently signed in to your account. Revoke any you don't recognize."
+        body="rows"
+        action={
+          hasOtherSessions ? (
             <Button
               type="button"
               variant="outline"
-              className="shrink-0"
               disabled={revokeOthers.isPending}
               onClick={() => {
-                revokeOthers.mutate(undefined);
+                setConfirmSignOutAll(true);
               }}
             >
               {revokeOthers.isPending ? 'Signing out…' : 'Sign out other devices'}
             </Button>
-          ) : null}
-        </div>
-
+          ) : undefined
+        }
+      >
         {revokeOne.isError ? (
-          <p role="alert" className="text-error text-body-medium">
+          <p role="alert" className="text-error text-body-medium px-4 pb-2">
             {userErrorMessage(revokeOne.error, 'Could not update your sessions.')}
           </p>
         ) : null}
         {revokeOthers.isError ? (
-          <p role="alert" className="text-error text-body-medium">
+          <p role="alert" className="text-error text-body-medium px-4 pb-2">
             {userErrorMessage(revokeOthers.error, 'Could not update your sessions.')}
           </p>
         ) : null}
 
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col">
           {sessions.map((s) => {
             const lastActive = formatCalendarDate(s.updatedAt);
             return (
-              <li
-                key={s.id}
-                className="border-outline-variant bg-surface flex items-center gap-3 rounded-lg border p-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-on-surface text-body-medium truncate font-medium">
-                    {deviceLabel(s.userAgent)}
-                    {s.current ? (
-                      <span className="text-primary ml-2 text-xs font-normal">This device</span>
-                    ) : null}
-                  </p>
-                  <p className="text-on-surface-variant truncate text-xs">
-                    {[s.ipAddress, lastActive ? `Active ${lastActive}` : null]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </p>
-                </div>
-                {s.current ? null : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={revokeOne.isPending && revokingId === s.id}
-                    onClick={() => {
-                      setRevokingId(s.id);
-                      revokeOne.mutate(s.id);
-                    }}
-                  >
-                    {revokeOne.isPending && revokingId === s.id ? 'Revoking…' : 'Revoke'}
-                  </Button>
-                )}
+              <li key={s.id}>
+                <SettingRow
+                  label={
+                    <span className="text-on-surface text-label-large truncate">
+                      {deviceLabel(s.userAgent)}
+                      {s.current ? (
+                        <span className="text-primary text-body-small ml-2">This device</span>
+                      ) : null}
+                    </span>
+                  }
+                  description={[s.ipAddress, lastActive ? `Active ${lastActive}` : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  {...(s.current
+                    ? {}
+                    : {
+                        trailing: (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={revokeOne.isPending && revokingId === s.id}
+                            onClick={() => {
+                              setRevokingId(s.id);
+                              revokeOne.mutate(s.id);
+                            }}
+                          >
+                            {revokeOne.isPending && revokingId === s.id ? 'Revoking…' : 'Revoke'}
+                          </Button>
+                        ),
+                      })}
+                />
               </li>
             );
           })}
         </ul>
-      </div>
+      </SettingsGroup>
+
+      <ConfirmDestructiveDialog
+        open={confirmSignOutAll}
+        onOpenChange={setConfirmSignOutAll}
+        title="Sign out other devices?"
+        description="Every other signed-in device is signed out. This device stays signed in."
+        confirmLabel="Sign out other devices"
+        pending={revokeOthers.isPending}
+        {...(revokeOthers.isError
+          ? { error: userErrorMessage(revokeOthers.error, 'Could not update your sessions.') }
+          : {})}
+        onConfirm={() => {
+          revokeOthers.mutate(undefined, {
+            onSuccess: () => {
+              setConfirmSignOutAll(false);
+            },
+          });
+        }}
+      />
     </section>
   );
 }

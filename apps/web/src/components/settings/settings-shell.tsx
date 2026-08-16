@@ -114,7 +114,7 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
           Choose a section to update your personal or workspace settings.
         </DialogDescription>
         {/* `pr-14` reserves the close button's absolute 48px so the switcher never runs under it. */}
-        <div className="border-outline-variant flex shrink-0 items-center gap-3 border-b py-3 pr-14 pl-5">
+        <div className="flex shrink-0 items-center gap-3 py-3 pr-14 pl-5">
           <DialogTitle className="text-title-medium shrink-0">Settings</DialogTitle>
           {/*
            * The switcher's trigger is `w-full`, so it needs a box that bounds it: unbounded it

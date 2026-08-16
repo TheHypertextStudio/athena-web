@@ -26,8 +26,9 @@ import {
 import { Copy, Edit, Ellipsis, LayoutTemplate, Plus, Trash2 } from '@docket/ui/icons';
 import { type JSX, useState } from 'react';
 
-import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import { SectionHeader } from '@/components/settings/section-header';
+import { LoadFailure } from '@/components/settings/load-failure';
+import { firstWriteError, WriteError } from '@/components/settings/write-error';
+import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { TemplateEditorDialog } from '@/components/templates/template-editor';
 import {
   sortTemplates,
@@ -38,6 +39,7 @@ import {
 import { useAppParams } from '@/lib/app-location';
 import { userErrorMessage } from '@/lib/problem';
 import { useApiListQuery } from '@/lib/query';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The kinds a template may create, in the order the page lists them. */
 const KIND_ORDER: readonly TemplateTargetType[] = ['task', 'project', 'initiative', 'program'];
@@ -70,6 +72,11 @@ export default function TemplatesSettingsPage(): JSX.Element {
   const duplicate = useCreateTemplate(orgId);
   const remove = useDeleteTemplate(orgId);
 
+  const writeError = firstWriteError([
+    [duplicate, 'Could not duplicate that template.'],
+    [remove, 'Could not delete that template.'],
+  ]);
+
   const [editing, setEditing] = useState<EditorTarget | null>(null);
   const [deleting, setDeleting] = useState<TemplateOut | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -77,39 +84,39 @@ export default function TemplatesSettingsPage(): JSX.Element {
   const templates = query.data?.items ?? [];
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title="Templates"
-        description="Reusable starting points. Pick one from the Template menu in any create dialog."
-        action={
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button">
-                <Plus />
-                New template
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {KIND_ORDER.map((kind) => (
-                <NewTemplateItem
-                  key={kind}
-                  kind={kind}
-                  onSelect={() => {
-                    setEditing({ targetType: kind, template: null });
-                  }}
-                />
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        }
-      />
-
+    <SettingsSectionPage
+      title="Templates"
+      description="Reusable starting points. Pick one from the Template menu in any create dialog."
+      action={
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button">
+              <Plus />
+              New template
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {KIND_ORDER.map((kind) => (
+              <NewTemplateItem
+                key={kind}
+                kind={kind}
+                onSelect={() => {
+                  setEditing({ targetType: kind, template: null });
+                }}
+              />
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
+    >
+      {writeError ? <WriteError message={writeError} /> : null}
       {query.isPending ? (
-        <Skeleton className="h-96 max-w-3xl rounded-lg" />
+        <Skeleton className="h-96 max-w-3xl rounded-xl" />
       ) : query.isError ? (
-        <p role="status" className="text-on-surface-variant text-body-medium">
-          Templates are temporarily unavailable. We&apos;ll keep checking automatically.
-        </p>
+        <LoadFailure
+          message={userErrorMessage(query.error, 'Could not load templates.')}
+          retrying
+        />
       ) : templates.length === 0 ? (
         <EmptyState
           onCreate={() => {
@@ -162,7 +169,7 @@ export default function TemplatesSettingsPage(): JSX.Element {
         />
       ) : null}
 
-      <ConfirmDeleteDialog
+      <ConfirmDestructiveDialog
         open={deleting !== null}
         onOpenChange={(next) => {
           if (!next) setDeleting(null);
@@ -188,7 +195,7 @@ export default function TemplatesSettingsPage(): JSX.Element {
           });
         }}
       />
-    </div>
+    </SettingsSectionPage>
   );
 }
 
@@ -224,11 +231,11 @@ function KindGroup({
 
   return (
     <section aria-labelledby={`templates-${kind}`} className="flex flex-col gap-2">
-      <h3 id={`templates-${kind}`} className="text-on-surface text-label-large">
+      <h3 id={`templates-${kind}`} className="text-on-surface text-title-small">
         {noun}
       </h3>
       {templates.length === 0 ? (
-        <div className="bg-surface-container-low text-on-surface-variant text-body-medium flex items-center justify-between gap-3 rounded-lg px-4 py-3">
+        <div className="bg-surface-container-low text-on-surface-variant text-body-medium flex items-center justify-between gap-3 rounded-xl px-4 py-3">
           <span>No templates yet.</span>
           <Button type="button" variant="ghost" size="sm" onClick={onCreate}>
             Add one
@@ -239,7 +246,7 @@ function KindGroup({
           {templates.map((template) => (
             <li
               key={template.id}
-              className="bg-surface-container-low hover:bg-surface-container flex items-center gap-3 rounded-lg px-4 py-3"
+              className="bg-surface-container-low hover:bg-surface-container flex items-center gap-3 rounded-xl px-4 py-3"
             >
               <div className="flex min-w-0 flex-col">
                 <span className="text-on-surface text-body-large truncate">{template.name}</span>
@@ -309,7 +316,7 @@ function KindGroup({
  */
 function EmptyState({ onCreate }: { onCreate: () => void }): JSX.Element {
   return (
-    <div className="bg-surface-container-low flex max-w-3xl flex-col items-start gap-3 rounded-lg px-6 py-8">
+    <div className="bg-surface-container-low flex max-w-3xl flex-col items-start gap-3 rounded-xl px-6 py-8">
       <LayoutTemplate className="text-on-surface-variant size-6" />
       <div className="flex flex-col gap-1">
         <p className="text-on-surface text-body-large">No templates in this workspace.</p>

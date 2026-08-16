@@ -26,7 +26,7 @@ import type {
 } from '@docket/connections/notion/mirror-contract';
 import { cn } from '@docket/ui';
 import { Plus, Settings } from '@docket/ui/icons';
-import { Input, Select, Skeleton } from '@docket/ui/primitives';
+import { Button, Input, Select, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
 
@@ -43,6 +43,16 @@ export interface NotionTableDesignerProps {
   orgId: string;
   integrationId: string;
   entity: NotionMirrorEntity;
+  /**
+   * Whether the caller may change this workspace's Notion setup.
+   *
+   * @remarks
+   * Every write behind this surface is guarded server-side at `manage`
+   * (`apps/api/src/routes/notion-mirror.ts`). Rendering the controls regardless meant a
+   * contributor could press "Create databases" and receive a bare 403 with nothing explaining
+   * it. Read stays available to everyone; only the write affordances are withheld.
+   */
+  canManage: boolean;
 }
 
 /** Read the designer's editable column list out of a loaded design. */
@@ -67,6 +77,7 @@ export function NotionTableDesigner({
   orgId,
   integrationId,
   entity,
+  canManage,
 }: NotionTableDesignerProps): JSX.Element {
   const model = useNotionTableDesign(orgId, integrationId, entity);
   const design = model.design;
@@ -107,7 +118,7 @@ export function NotionTableDesigner({
       <div className="flex flex-col gap-3" aria-busy="true">
         {/* placeholder: the designed columns and a page of the workspace's own rows, both of
             which only the server can supply. */}
-        <Skeleton className="h-8 w-48 rounded-lg" />
+        <Skeleton className="h-8 w-48 rounded-xl" />
         <Skeleton className="h-64 w-full rounded-xl" />
       </div>
     );
@@ -161,6 +172,7 @@ export function NotionTableDesigner({
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-on-surface-variant text-body-small">Database name in Notion</span>
           <Input
+            disabled={!canManage}
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
@@ -185,7 +197,7 @@ export function NotionTableDesigner({
 
       {/* A wide table must scroll inside its own container; the page itself never scrolls
           sideways. */}
-      <div className="border-outline-variant bg-surface-container-low overflow-x-auto rounded-xl border">
+      <div className="bg-surface-container-low overflow-x-auto rounded-xl">
         <table className="w-full min-w-[36rem] border-collapse text-left">
           <thead>
             <tr className="bg-surface-container">
@@ -195,10 +207,7 @@ export function NotionTableDesigner({
                   <th
                     key={column.field}
                     scope="col"
-                    className={cn(
-                      'border-outline-variant text-body-medium border-b px-3 py-2 align-top',
-                      isOpen && 'bg-primary/5',
-                    )}
+                    className={cn('text-body-medium px-3 py-2 align-top', isOpen && 'bg-primary/5')}
                   >
                     <button
                       type="button"
@@ -233,7 +242,7 @@ export function NotionTableDesigner({
           </thead>
           <tbody>
             {design.rows.map((row, index) => (
-              <tr key={index} className="border-outline-variant border-b last:border-b-0">
+              <tr key={index} className="even:bg-surface-container">
                 {columns.map((column) => (
                   <td
                     key={column.field}
@@ -246,8 +255,8 @@ export function NotionTableDesigner({
             ))}
           </tbody>
         </table>
-        <div className="border-outline-variant flex flex-wrap items-center gap-3 border-t px-3 py-2">
-          {unusedFields.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-3 px-3 py-2">
+          {canManage && unusedFields.length > 0 ? (
             <label className="flex items-center gap-2">
               <span className="text-on-surface-variant text-body-small flex items-center gap-1">
                 <Plus aria-hidden="true" className="size-3.5" />
@@ -299,6 +308,7 @@ export function NotionTableDesigner({
           <label className="flex flex-col gap-1">
             <span className="text-on-surface-variant text-body-small">Column title in Notion</span>
             <Input
+              disabled={!canManage}
               value={open.title}
               onChange={(e) => {
                 renameColumn(open.field, e.target.value);
@@ -321,10 +331,10 @@ export function NotionTableDesigner({
                 <label
                   key={choice.value}
                   className={cn(
-                    'flex cursor-pointer items-start gap-2 rounded-lg border p-2.5',
+                    'flex cursor-pointer items-start gap-2 rounded-md p-2.5 transition-colors',
                     open.representation === choice.value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-outline-variant',
+                      ? 'bg-secondary-container text-on-secondary-container'
+                      : 'bg-surface-container hover:bg-surface-container-high',
                   )}
                 >
                   <input
@@ -345,17 +355,17 @@ export function NotionTableDesigner({
             </fieldset>
           ) : null}
 
-          {!openField.required ? (
-            <button
-              type="button"
+          {!openField.required && canManage ? (
+            <Button
+              variant="ghost"
+              className="text-error focus:text-error w-fit"
               onClick={() => {
                 removeColumn(open.field);
               }}
-              className="text-error text-body-medium w-fit hover:underline"
             >
               Remove this column
-            </button>
-          ) : (
+            </Button>
+          ) : !openField.required ? null : (
             <p className="text-on-surface-variant text-body-small">
               Notion needs one title column, so this one can’t be removed.
             </p>

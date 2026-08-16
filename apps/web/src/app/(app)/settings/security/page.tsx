@@ -15,8 +15,8 @@
 import { type JSX, Suspense } from 'react';
 import { useAppSearchParams } from '@/lib/app-location';
 
-import { SectionHeader } from '@/components/settings/section-header';
 import { SecurityTab } from '@/components/settings/security-tab';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** A one-time success banner shown after confirming an email change (`?email-changed=1`). */
 function EmailChangedBanner(): JSX.Element | null {
@@ -25,7 +25,7 @@ function EmailChangedBanner(): JSX.Element | null {
   return (
     <p
       role="status"
-      className="bg-primary/10 text-on-surface text-body-medium rounded-lg px-4 py-3"
+      className="bg-primary-container text-on-primary-container text-body-medium rounded-xl px-4 py-3"
     >
       Your email address has been updated.
     </p>
@@ -35,15 +35,14 @@ function EmailChangedBanner(): JSX.Element | null {
 /** The global caller-owned Security destination. */
 export default function GlobalSecuritySettingsPage(): JSX.Element {
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title="Security"
-        description="Manage your passkeys, email, active sessions, and recovery codes."
-      />
+    <SettingsSectionPage
+      title="Security"
+      description="Manage your passkeys, email, active sessions, and recovery codes."
+    >
       <Suspense>
         <EmailChangedBanner />
       </Suspense>
       <SecurityTab />
-    </div>
+    </SettingsSectionPage>
   );
 }

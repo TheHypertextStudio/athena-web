@@ -16,6 +16,7 @@ export {
   type EmptyStateProps,
   type EmptyStateTone,
 } from './atoms/EmptyState';
+export { RelativeTime, type RelativeTimeProps } from './atoms/RelativeTime';
 export {
   STATE_TYPE_TOKEN_CLASS,
   StatusGlyph,

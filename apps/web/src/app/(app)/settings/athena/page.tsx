@@ -1,11 +1,10 @@
 'use client';
 
 import type { AthenaApprovalMode, HubPreferences } from '@docket/types';
-import { Select, Skeleton } from '@docket/ui/primitives';
+import { Select, Skeleton, Textarea } from '@docket/ui/primitives';
 import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { McpConnectorsSection } from '@/components/settings/mcp-connectors-section';
-import { SectionHeader } from '@/components/settings/section-header';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { usePersonalWorkspaceId } from '@/components/settings/use-personal-workspace-id';
 import { api } from '@/lib/api';
@@ -15,6 +14,7 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } f
 import { VoicePhoneNumbers } from '@/components/athena/voice-phone-numbers';
 
 import { LatticeSection } from './lattice-section';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The user-owned Athena preferences destination. */
 export default function GlobalAthenaSettingsPage(): JSX.Element {
@@ -79,29 +79,28 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader title="Athena" description="Set how your chief of staff works with you." />
+    <SettingsSectionPage title="Athena" description="Set how your chief of staff works with you.">
       {/* placeholder: the caller's saved Athena preferences — their standing instructions and the
           approval mode. Both are free-form values only the stored record knows; the section
           heading and description above render immediately. */}
       {preferencesQ.isPending ? (
-        <Skeleton className="h-[30rem] max-w-2xl rounded-lg" />
+        <Skeleton className="h-[30rem] max-w-2xl rounded-xl" />
       ) : preferencesQ.isError ? (
-        <p role="status" className="text-on-surface-variant text-sm">
+        <p role="status" className="text-on-surface-variant text-body-medium">
           Athena preferences are temporarily unavailable. We&apos;ll keep checking automatically.
         </p>
       ) : (
-        <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-lg p-5">
+        <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-4">
           <div>
-            <h2 className="text-on-surface text-sm font-semibold">Working preferences</h2>
-            <p className="text-on-surface-variant mt-1 text-sm">
+            <h2 className="text-on-surface text-title-small">Working preferences</h2>
+            <p className="text-on-surface-variant text-body-medium mt-1">
               Give Athena durable guidance for how to represent you across Docket and your connected
               services.
             </p>
           </div>
-          <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">
+          <label className="text-on-surface text-label-large flex flex-col gap-1.5">
             Instructions for Athena
-            <textarea
+            <Textarea
               value={instructions}
               onChange={(event) => {
                 setInstructions(event.target.value);
@@ -113,10 +112,10 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
               }}
               rows={5}
               placeholder="For example: keep updates concise and flag anything that needs my approval."
-              className="border-outline-variant bg-surface text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2"
+              className="w-full resize-y"
             />
           </label>
-          <label className="text-on-surface flex max-w-md flex-col gap-1.5 text-sm font-medium">
+          <label className="text-on-surface text-label-large flex max-w-md flex-col gap-1.5">
             Approval behavior
             <Select
               value={approvalMode}
@@ -134,11 +133,15 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
             </Select>
           </label>
           {save.isError ? (
-            <p role="alert" className="text-error text-sm">
+            <p role="alert" className="text-error text-body-medium">
               {userErrorMessage(save.error, 'Could not save Athena preferences.')}
             </p>
           ) : (
-            <p role="status" aria-live="polite" className="text-on-surface-variant h-4 text-xs">
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-on-surface-variant text-body-small h-4"
+            >
               {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : ''}
             </p>
           )}
@@ -147,6 +150,6 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
       <VoicePhoneNumbers />
       <LatticeSection />
       {orgId ? <McpConnectorsSection orgId={orgId} canManage={canManage} /> : null}
-    </div>
+    </SettingsSectionPage>
   );
 }

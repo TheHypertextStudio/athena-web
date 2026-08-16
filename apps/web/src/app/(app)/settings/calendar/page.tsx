@@ -10,7 +10,7 @@
  * `/orgs/[orgId]/settings/calendar` (which this page used to delegate to, purely to reach a
  * workspace id it never used) has been removed.
  */
-import { Select } from '@docket/ui/primitives';
+import { Checkbox, Select } from '@docket/ui/primitives';
 import type {
   CalendarItemCreateIntent,
   CalendarLayerShareAccess,
@@ -22,7 +22,6 @@ import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { calendarLayersDef } from '@/components/calendar/calendar-data';
-import { SectionHeader } from '@/components/settings/section-header';
 import { api } from '@/lib/api';
 import {
   apiQueryOptions,
@@ -34,6 +33,7 @@ import {
   useApiQuery,
 } from '@/lib/query';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 const DEFAULTS: Required<Omit<CalendarPreferences, 'defaultLayerId'>> & {
   defaultLayerId: null;
@@ -153,12 +153,10 @@ export default function CalendarSettingsPage(): JSX.Element {
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title="Calendar"
-        description="Choose fluid scheduling defaults and the layers coworkers may compare."
-      />
-
+    <SettingsSectionPage
+      title="Calendar"
+      description="Choose fluid scheduling defaults and the layers coworkers may compare."
+    >
       {loading ? (
         <p className="text-on-surface-variant text-body-medium">Loading calendar settings…</p>
       ) : loadFailed ? (
@@ -292,14 +290,16 @@ export default function CalendarSettingsPage(): JSX.Element {
               </Select>
             </label>
 
-            <div className="border-outline-variant divide-outline-variant divide-y rounded-lg border">
+            <div className="bg-surface-container-low rounded-xl">
               {layers.map((layer) => {
                 const access = shareDraft[layer.id];
                 return (
-                  <div key={layer.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
+                  <div
+                    key={layer.id}
+                    className="hover:bg-surface-container flex flex-wrap items-center gap-3 px-3 py-2 transition-colors"
+                  >
                     <label className="text-body-medium flex min-w-0 flex-1 items-center gap-2">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={access !== undefined}
                         onChange={(event) => {
                           setShareDraft((current) => {
@@ -346,6 +346,6 @@ export default function CalendarSettingsPage(): JSX.Element {
           </>
         )}
       </section>
-    </div>
+    </SettingsSectionPage>
   );
 }

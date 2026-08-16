@@ -29,6 +29,16 @@ export interface ConnectionsPanelProps {
   canManage: boolean;
   /** Route to the personal "Connected accounts" surface; omit when it renders inline above. */
   linkedAccountsHref?: string;
+  /**
+   * Whether the workspace is the caller's personal space.
+   *
+   * @remarks
+   * Suppresses the workspace-scope explainer. That copy tells the reader these connections are
+   * shared — "anyone with access can use them, and workspace admins manage them" — which is a
+   * sentence about other people, addressed to someone who is the only person here. Org-backing is
+   * an implementation detail of a personal workspace and must not surface as org framing.
+   */
+  isPersonal?: boolean;
 }
 
 /** The Connections settings panel (live sync). */
@@ -36,6 +46,7 @@ export function ConnectionsPanel({
   orgId,
   canManage,
   linkedAccountsHref,
+  isPersonal = false,
 }: ConnectionsPanelProps): JSX.Element {
   const c = useConnectionsController({ orgId, canManage, linkedAccountsHref });
 
@@ -48,7 +59,9 @@ export function ConnectionsPanel({
           crossText={c.intro.crossText}
         />
 
-        <WorkspaceScopeHeader linkedAccountsHref={c.scope.linkedAccountsHref} />
+        {isPersonal ? null : (
+          <WorkspaceScopeHeader linkedAccountsHref={c.scope.linkedAccountsHref} />
+        )}
 
         {/* Distinct from the generic multi-provider directory below: an org-wide, admin-only app
             grant, not a "connect your account" affordance — see LinearAgentInstallCard's remarks. */}

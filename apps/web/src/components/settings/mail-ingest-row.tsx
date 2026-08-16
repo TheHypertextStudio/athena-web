@@ -25,11 +25,11 @@ export function MailIngestRow({ orgId, integration, canManage }: MailIngestRowPr
   const row = useMailIngestRow(orgId, integration);
 
   return (
-    <div className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-lg border px-4 py-3">
+    <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <span className="min-w-0">
-          <span className="text-on-surface block truncate text-sm font-medium">{row.account}</span>
-          <span className="text-on-surface-variant block text-xs">
+          <span className="text-on-surface text-label-large block truncate">{row.account}</span>
+          <span className="text-on-surface-variant text-body-small block">
             {row.enabled
               ? `Creating task suggestions from email (threshold ${String(row.activeThreshold)})`
               : 'Athena reads new mail and proposes tasks in triage — strictly opt-in.'}
@@ -48,7 +48,7 @@ export function MailIngestRow({ orgId, integration, canManage }: MailIngestRowPr
       </div>
 
       {canManage ? (
-        <label className="text-on-surface-variant flex items-center gap-2 text-xs">
+        <label className="text-on-surface-variant text-body-small flex items-center gap-2">
           Sensitivity
           <Select
             aria-label="Suggestion sensitivity"
@@ -68,11 +68,11 @@ export function MailIngestRow({ orgId, integration, canManage }: MailIngestRowPr
       ) : null}
 
       {row.enabled ? (
-        <p className="text-on-surface-variant text-xs">
+        <p className="text-on-surface-variant text-body-small">
           Default rules seeded — see the rules below.
         </p>
       ) : null}
-      {row.error !== null ? <p className="text-error text-xs">{row.error}</p> : null}
+      {row.error !== null ? <p className="text-error text-body-small">{row.error}</p> : null}
     </div>
   );
 }

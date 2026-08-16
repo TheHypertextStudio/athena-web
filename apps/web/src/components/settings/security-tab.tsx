@@ -55,7 +55,7 @@ function RecoveryCodesSection(): JSX.Element {
     // placeholder: whether recovery codes have been generated and how many remain unused. The
     // panel is either "generate codes" or "you have N left" — opposite copy, so neither can be
     // shown early without risking telling someone the wrong thing about their account recovery.
-    return <Skeleton className="h-40 w-full rounded-lg" />;
+    return <Skeleton className="h-40 w-full rounded-xl" />;
   }
   if (statusQ.isError) {
     return (
@@ -74,11 +74,10 @@ function RecoveryCodesSection(): JSX.Element {
     <section className="flex flex-col gap-6" aria-label="Recovery codes">
       <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
         <div className="flex flex-col gap-1">
-          <h3 className="text-on-surface text-body-medium font-medium">Recovery codes</h3>
+          <h3 className="text-on-surface text-title-small">Recovery codes</h3>
           <p className="text-on-surface-variant text-body-medium max-w-prose">
-            Docket signs you in with a passkey — no password. Recovery codes are your backup: if you
-            lose the device with your passkey, a code gets you back in so you can set up a new one.
-            Keep them somewhere safe, like a password manager.
+            If you lose your passkey, a recovery code gets you back in. Each code works once. Keep
+            them in a password manager.
           </p>
         </div>
 
@@ -96,7 +95,9 @@ function RecoveryCodesSection(): JSX.Element {
                 : `${status.remaining} recovery ${status.remaining === 1 ? 'code' : 'codes'} remaining.`}
             </p>
             {generatedOn ? (
-              <p className="text-on-surface-variant text-xs">Last generated on {generatedOn}.</p>
+              <p className="text-on-surface-variant text-body-small">
+                Last generated on {generatedOn}.
+              </p>
             ) : null}
           </div>
         ) : (

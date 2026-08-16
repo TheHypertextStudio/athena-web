@@ -126,7 +126,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
         actually syncs, and into which workspace, in{' '}
         <NextLink
           href={`/orgs/${orgId}/settings/connections`}
-          className="text-on-surface font-medium underline-offset-2 hover:underline"
+          className="text-on-surface text-label-large underline-offset-2 hover:underline"
         >
           Connections
         </NextLink>
@@ -139,16 +139,16 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
         </p>
       ) : null}
 
-      <h2 className="text-on-surface-variant text-xs font-medium">Linked accounts</h2>
+      <h2 className="text-on-surface-variant text-label-medium">Connected accounts</h2>
 
       {/* placeholder: which identity providers the caller has actually linked, and under which
           account. The "Linked accounts" heading and the provider catalog's own names are static. */}
       {loading ? (
         <ul className="flex flex-col gap-2">
           {[0, 1, 2].map((i) => (
-            <li key={i} className="border-outline-variant rounded-xl border p-4">
+            <li key={i} className="bg-surface-container-low rounded-xl p-4">
               <div className="flex items-center gap-3">
-                <Skeleton className="size-9 rounded-lg" />
+                <Skeleton className="size-9 rounded-xl" />
                 <div className="flex flex-1 flex-col gap-1.5">
                   <Skeleton className="h-4 w-28" />
                 </div>

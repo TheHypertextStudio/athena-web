@@ -10,8 +10,10 @@
  */
 import type { ContactPointCreate, ContactPointOut } from '@docket/notifications';
 import { cn } from '@docket/ui';
+import { EmptyState } from '@docket/ui/components';
+import { SettingsGroup } from './settings-group';
 import { CheckCircle2, Mail, MessageSquare, Trash2, X } from '@docket/ui/icons';
-import { Badge, Button, DecorativeIcon, Input, Select } from '@docket/ui/primitives';
+import { Badge, Button, DecorativeIcon, Input } from '@docket/ui/primitives';
 import { type JSX, type SyntheticEvent, useState } from 'react';
 
 /** Props for {@link ContactPointsSection}. */
@@ -38,11 +40,6 @@ export interface ContactPointsSectionProps {
 
 type AddableContactPointType = 'email' | 'phone';
 
-const CONTACT_METHODS: readonly { type: AddableContactPointType; label: string }[] = [
-  { type: 'phone', label: 'Phone' },
-  { type: 'email', label: 'Email' },
-];
-
 /** Notification destination list and destination-add form. */
 export function ContactPointsSection({
   contactPoints,
@@ -55,95 +52,215 @@ export function ContactPointsSection({
   onMakePrimary,
   onDisable,
 }: ContactPointsSectionProps): JSX.Element {
-  const [contactType, setContactType] = useState<AddableContactPointType>('phone');
-  const [destination, setDestination] = useState('');
   const [confirmDisableId, setConfirmDisableId] = useState<string | null>(null);
   const [codes, setCodes] = useState<Record<string, string>>({});
 
-  const submitDestination = (event: SyntheticEvent<HTMLFormElement>): void => {
+  // Split by type, and drop `push_token` entirely. The server scopes `primary` *within its
+  // destination type* — there is one primary email and one primary phone — so a single flat list
+  // showed two "Primary" badges with nothing saying what each was primary for. Push tokens are
+  // registered by a device, never typed in here, and used to render as rows nothing could act on.
+  const emails = contactPoints.filter((point) => point.type === 'email');
+  const phones = contactPoints.filter((point) => point.type === 'phone');
+
+  return (
+    <>
+      <ContactPointGroup
+        kind="email"
+        points={emails}
+        creating={creating}
+        savingId={savingId}
+        verifyingId={verifyingId}
+        codes={codes}
+        setCodes={setCodes}
+        confirmDisableId={confirmDisableId}
+        setConfirmDisableId={setConfirmDisableId}
+        onAdd={onAdd}
+        onVerify={onVerify}
+        onMakePrimary={onMakePrimary}
+        onDisable={onDisable}
+      />
+      <ContactPointGroup
+        kind="phone"
+        points={phones}
+        creating={creating}
+        savingId={savingId}
+        verifyingId={verifyingId}
+        codes={codes}
+        setCodes={setCodes}
+        confirmDisableId={confirmDisableId}
+        setConfirmDisableId={setConfirmDisableId}
+        onAdd={onAdd}
+        onVerify={onVerify}
+        onMakePrimary={onMakePrimary}
+        onDisable={onDisable}
+      />
+
+      {error ? (
+        <p role="alert" className="text-error text-body-medium">
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/** Copy and input semantics for each destination kind. */
+const KIND = {
+  email: {
+    title: 'Email addresses',
+    description: 'Where Docket sends email notifications.',
+    field: 'Email address',
+    inputType: 'email',
+    autoComplete: 'email',
+    purpose: 'email_notifications',
+    empty: 'Add an email address so Docket can send email notifications.',
+  },
+  phone: {
+    title: 'Phone numbers',
+    description: 'Where Docket sends text messages.',
+    field: 'Phone number',
+    inputType: 'tel',
+    autoComplete: 'tel',
+    purpose: 'sms_notifications',
+    empty: 'Add a phone number so Docket can send text messages.',
+  },
+} as const;
+
+/** Props for {@link ContactPointGroup}. */
+interface ContactPointGroupProps {
+  readonly kind: AddableContactPointType;
+  readonly points: readonly ContactPointOut[];
+  readonly creating: boolean;
+  readonly savingId: string | null;
+  readonly verifyingId: string | null;
+  readonly codes: Record<string, string>;
+  readonly setCodes: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  readonly confirmDisableId: string | null;
+  readonly setConfirmDisableId: React.Dispatch<React.SetStateAction<string | null>>;
+  readonly onAdd: (input: ContactPointCreate) => Promise<void> | void;
+  readonly onVerify: (id: string, code: string) => Promise<void> | void;
+  readonly onMakePrimary: (id: string) => Promise<void> | void;
+  readonly onDisable: (id: string) => Promise<void> | void;
+}
+
+/**
+ * One destination kind: its own list, its own primary, and its own add field.
+ *
+ * @remarks
+ * Email and phone were one list behind a "Contact method" select, which made you choose a mode
+ * before you could type and flattened a per-type concept into a single column. Splitting them
+ * removes the select entirely — the group you are in *is* the type — and lets each side carry the
+ * one primary the server actually scopes to it.
+ */
+function ContactPointGroup({
+  kind,
+  points,
+  creating,
+  savingId,
+  verifyingId,
+  codes,
+  setCodes,
+  confirmDisableId,
+  setConfirmDisableId,
+  onAdd,
+  onVerify,
+  onMakePrimary,
+  onDisable,
+}: ContactPointGroupProps): JSX.Element {
+  const [adding, setAdding] = useState(false);
+  const [value, setValue] = useState('');
+  const copy = KIND[kind];
+
+  const submit = (event: SyntheticEvent<HTMLFormElement>): void => {
     event.preventDefault();
-    const value = destination.trim();
-    if (!value) return;
-    const purpose = contactType === 'email' ? 'email_notifications' : 'sms_notifications';
-    void Promise.resolve(onAdd({ type: contactType, value, purpose })).then(() => {
-      setDestination('');
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    void Promise.resolve(onAdd({ type: kind, value: trimmed, purpose: copy.purpose })).then(() => {
+      setValue('');
+      setAdding(false);
     });
   };
 
-  const destinationLabel = contactType === 'phone' ? 'Phone number' : 'Destination';
-  const destinationType = contactType === 'phone' ? 'tel' : 'email';
-  const autocomplete = contactType === 'phone' ? 'tel' : 'email';
-
   return (
-    <section aria-label="Notification contact points" className="flex flex-col gap-4">
-      <form
-        onSubmit={submitDestination}
-        className="grid gap-2 @2xl:grid-cols-[10rem_minmax(0,1fr)_auto] @2xl:items-end"
-      >
-        <label className="text-on-surface-variant flex min-w-0 flex-col gap-1 text-xs">
-          Contact method
-          <Select
-            value={contactType}
-            disabled={creating}
-            onChange={(event) => {
-              setContactType(event.target.value as AddableContactPointType);
-              setDestination('');
+    <SettingsGroup
+      title={copy.title}
+      description={copy.description}
+      body="rows"
+      action={
+        points.length > 0 || adding ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-expanded={adding}
+            onClick={() => {
+              setAdding((open) => !open);
             }}
           >
-            {CONTACT_METHODS.map((method) => (
-              <option key={method.type} value={method.type}>
-                {method.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="text-on-surface-variant flex min-w-0 flex-1 flex-col gap-1 text-xs">
-          {destinationLabel}
-          <Input
-            type={destinationType}
-            value={destination}
-            disabled={creating}
-            autoComplete={autocomplete}
-            controlSize="lg"
-            onChange={(event) => {
-              setDestination(event.target.value);
+            {adding ? 'Cancel' : 'Add'}
+          </Button>
+        ) : undefined
+      }
+    >
+      {adding ? (
+        <form
+          onSubmit={submit}
+          className="grid gap-2 px-4 pb-3 @2xl:grid-cols-[1fr_auto] @2xl:items-end"
+        >
+          <label className="text-on-surface-variant text-body-small flex min-w-0 flex-col gap-1">
+            {copy.field}
+            <Input
+              type={copy.inputType}
+              value={value}
+              disabled={creating}
+              autoComplete={copy.autoComplete}
+              onChange={(event) => {
+                setValue(event.target.value);
+              }}
+            />
+          </label>
+          <Button type="submit" variant="outline" disabled={creating || value.trim().length === 0}>
+            {creating ? 'Adding…' : 'Add'}
+          </Button>
+        </form>
+      ) : null}
+
+      <div className="flex flex-col">
+        {points.length === 0 && !adding ? (
+          <EmptyState
+            icon={kind === 'email' ? Mail : MessageSquare}
+            title={`No ${kind === 'email' ? 'email addresses' : 'phone numbers'} yet`}
+            body={copy.empty}
+            className="border-none bg-transparent"
+            cta={{
+              label: `Add ${copy.field.toLowerCase()}`,
+              onClick: () => {
+                setAdding(true);
+              },
             }}
           />
-        </label>
-        <Button
-          type="submit"
-          variant="outline"
-          disabled={creating || destination.trim().length === 0}
-        >
-          {contactType === 'email' ? (
-            <Mail className="size-4" />
-          ) : (
-            <MessageSquare className="size-4" />
-          )}
-          {creating ? 'Adding…' : contactType === 'email' ? 'Add destination' : 'Add phone'}
-        </Button>
-      </form>
-
-      <div className="border-outline-variant divide-outline-variant rounded-lg border">
-        {contactPoints.map((point) => (
-          <div key={point.id} className="border-outline-variant flex flex-col gap-3 border-b p-4">
+        ) : null}
+        {points.map((point) => (
+          <div key={point.id} className="even:bg-surface-container flex flex-col gap-3 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
                 <DecorativeIcon className="bg-surface-container mt-0.5 shrink-0">
                   {point.type === 'email' ? <Mail /> : <MessageSquare />}
                 </DecorativeIcon>
                 <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-on-surface text-body-medium truncate font-medium">
-                    {point.valueMasked}
-                  </span>
+                  <span className="text-on-surface text-label-large truncate">{point.value}</span>
                   <div className="flex flex-wrap items-center gap-2">
                     <ContactPointStatusBadge point={point} />
-                    {point.primary ? (
-                      <Badge variant="outline" className="font-normal">
-                        Primary
-                      </Badge>
-                    ) : null}
+                    {point.primary ? <Badge variant="outline">Primary</Badge> : null}
                   </div>
+                  {STATUS_NOTE[point.status] === undefined ? null : (
+                    <p className="text-on-surface-variant text-body-small">
+                      {STATUS_NOTE[point.status]}{' '}
+                      {point.status === 'disabled'
+                        ? `Add it again above to resume ${kind === 'email' ? 'email' : 'text message'} notifications.`
+                        : `Remove it and add it again to resume ${kind === 'email' ? 'email' : 'text message'} notifications.`}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -169,7 +286,7 @@ export function ContactPointsSection({
                         type="button"
                         size="sm"
                         variant="outline"
-                        aria-label={`Confirm disable ${point.valueMasked}`}
+                        aria-label={`Confirm disable ${point.value}`}
                         disabled={savingId === point.id}
                         onClick={() => {
                           void Promise.resolve(onDisable(point.id)).then(() => {
@@ -184,7 +301,7 @@ export function ContactPointsSection({
                         type="button"
                         size="icon"
                         variant="ghost"
-                        aria-label={`Cancel disable ${point.valueMasked}`}
+                        aria-label={`Cancel disable ${point.value}`}
                         disabled={savingId === point.id}
                         onClick={() => {
                           setConfirmDisableId(null);
@@ -198,8 +315,8 @@ export function ContactPointsSection({
                       type="button"
                       size="icon"
                       variant="ghost"
-                      aria-label={`Disable ${point.valueMasked}`}
-                      title={`Disable ${point.valueMasked}`}
+                      aria-label={`Disable ${point.value}`}
+                      title={`Disable ${point.value}`}
                       disabled={savingId === point.id}
                       onClick={() => {
                         setConfirmDisableId(point.id);
@@ -214,12 +331,12 @@ export function ContactPointsSection({
 
             {point.status === 'pending' ? (
               <div className="flex flex-col gap-2 @2xl:flex-row @2xl:items-end">
-                <label className="text-on-surface-variant flex min-w-0 flex-1 flex-col gap-1 text-xs">
+                <label className="text-on-surface-variant text-body-small flex min-w-0 flex-1 flex-col gap-1">
                   Verification code
                   <Input
                     value={codes[point.id] ?? ''}
                     inputMode="numeric"
-                    aria-label={`Verification code for ${point.valueMasked}`}
+                    aria-label={`Verification code for ${point.value}`}
                     disabled={verifyingId === point.id}
                     onChange={(event) => {
                       setCodes((current) => ({ ...current, [point.id]: event.target.value }));
@@ -234,22 +351,30 @@ export function ContactPointsSection({
                     void onVerify(point.id, (codes[point.id] ?? '').trim());
                   }}
                 >
-                  Verify {point.valueMasked}
+                  Verify {point.value}
                 </Button>
               </div>
             ) : null}
           </div>
         ))}
       </div>
-
-      {error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {error}
-        </p>
-      ) : null}
-    </section>
+    </SettingsGroup>
   );
 }
+
+/**
+ * What each non-working state means and what ends it.
+ *
+ * @remarks
+ * "Bounced" and "Unsubscribed" were rendered as badges and nothing else — a dead end that names a
+ * condition, offers no cause, and leaves the reader believing notifications work when they do not.
+ * Both are recoverable, and both recover the same way, so the row says so.
+ */
+const STATUS_NOTE: Partial<Record<ContactPointOut['status'], string>> = {
+  bounced: 'Delivery to this address keeps failing, so Docket stopped sending to it.',
+  unsubscribed: 'You unsubscribed, so Docket stopped sending to it.',
+  disabled: 'Docket does not send here.',
+};
 
 /** Props for {@link ContactPointStatusBadge}. */
 interface ContactPointStatusBadgeProps {
@@ -271,7 +396,7 @@ function ContactPointStatusBadge({ point }: ContactPointStatusBadgeProps): JSX.E
   return (
     <Badge
       variant={point.status === 'active' ? 'secondary' : 'outline'}
-      className={cn('font-normal', point.status !== 'active' && 'text-on-surface-variant')}
+      className={cn(point.status !== 'active' && 'text-on-surface-variant')}
     >
       {label}
     </Badge>

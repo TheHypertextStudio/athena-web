@@ -19,10 +19,25 @@ import {
 } from '@docket/notifications';
 import { cn } from '@docket/ui';
 import { Schedule } from '@docket/ui/icons';
-import { Badge, Input } from '@docket/ui/primitives';
+import { Checkbox, Badge, Input } from '@docket/ui/primitives';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
+import { SettingsGroup } from './settings-group';
+
+/**
+ * A selectable checkbox tile.
+ *
+ * @remarks
+ * One tonal step above the group it sits in, rather than the outlined box it used to be: inside a
+ * `card` group an outline would be the third line on the surface, and the tile is a thing you
+ * press, so it takes a fill and a hover the way every other pressable does.
+ */
+const OPTION_TILE =
+  'bg-surface-container hover:bg-surface-container-high flex items-center gap-3 rounded-md px-3 py-2 transition-colors ' +
+  // MD3's disabled opacity, applied to the whole tile so a switched-off group reads as one
+  // inert block rather than live labels holding dead checkboxes.
+  'has-disabled:pointer-events-none has-disabled:opacity-38';
 
 const CHANNELS: readonly { key: NotificationChannel; label: string }[] = [
   { key: 'web', label: 'Web' },
@@ -136,10 +151,7 @@ export function NotificationPreferencesSection({
     void onPatch({ categories: { [category]: { [channel]: next } } });
   };
 
-  const announcementPreference = {
-    ...defaultNotificationChannelPreference('service_announcement'),
-    ...preferences.categories['service_announcement'],
-  };
+  const quietOff = !quietHours.enabled;
 
   const toggleQuietDay = (day: NotificationQuietHours['days'][number], checked: boolean): void => {
     setQuietHours((current) => {
@@ -155,69 +167,37 @@ export function NotificationPreferencesSection({
 
   return (
     <section aria-label="Notification preferences" className="flex flex-col gap-6">
-      <section className="border-outline-variant rounded-lg border p-4">
-        <h3 className="text-on-surface text-title-small">
-          How should Docket reach me for announcements?
-        </h3>
-        <div className="mt-3 grid gap-2 @2xl:grid-cols-2">
-          <label className="border-outline-variant flex items-center gap-3 rounded-md border px-3 py-2">
-            <input
-              type="checkbox"
-              className="accent-primary size-4 opacity-70"
-              checked
-              disabled
-              aria-label="Announcement web inbox"
-            />
-            <span className="text-body-medium text-on-surface">Web inbox</span>
-          </label>
-          {CHANNELS.filter((channel) => channel.key !== 'web').map((channel) => (
-            <label
-              key={channel.key}
-              className="border-outline-variant flex items-center gap-3 rounded-md border px-3 py-2"
-            >
-              <input
-                type="checkbox"
-                className="accent-primary size-4"
-                checked={announcementPreference[channel.key] === true}
-                disabled={saving}
-                aria-label={`Announcement ${channel.key === 'sms' ? 'text message' : channel.label.toLowerCase()}`}
-                onChange={(event) => {
-                  patchChannel('service_announcement', channel.key, event.target.checked);
-                }}
-              />
-              <span className="text-body-medium text-on-surface">
-                {channel.key === 'sms' ? 'Text message' : channel.label}
-              </span>
-            </label>
-          ))}
-        </div>
-      </section>
-
-      <section className="border-outline-variant bg-surface-container-low rounded-lg border">
-        <div className="border-outline-variant flex items-center gap-2 border-b px-4 py-3">
-          <Schedule aria-hidden="true" className="text-on-surface-variant size-4" />
-          <h3 className="text-on-surface text-title-small">Quiet hours</h3>
-        </div>
-        <div className="grid gap-3 p-4 @2xl:grid-cols-2 @2xl:items-end @4xl:grid-cols-[minmax(0,1fr)_10rem_10rem_auto]">
+      <SettingsGroup
+        title="Quiet hours"
+        description="Hold non-urgent notifications during these hours."
+        icon={<Schedule aria-hidden="true" className="size-4" />}
+        // The switch that gates the whole group belongs to the group, not beside the fields it
+        // gates. As a peer of Start and End it was both a second thing called "Quiet hours" —
+        // ambiguous to anything resolving that name — and the reason the grid read out of order.
+        action={
           <label className="text-on-surface text-label-large flex items-center gap-2">
-            <input
-              type="checkbox"
-              className="accent-primary size-4"
+            <Checkbox
               checked={quietHours.enabled}
               disabled={saving}
+              aria-label="Turn quiet hours on"
               onChange={(event) => {
                 setQuietHours((current) => ({ ...current, enabled: event.target.checked }));
               }}
             />
-            Quiet hours
+            On
           </label>
+        }
+      >
+        {/* Start and End are a pair and stay one. The previous 2-column step split them across
+            rows — "Quiet hours" beside "Start", then "End" beside the save status. */}
+        <div className="grid gap-3 @lg:grid-cols-[10rem_10rem_1fr] @lg:items-end">
           <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
             Start
             <Input
               type="time"
               aria-label="Quiet hours start"
               value={quietHours.start}
-              disabled={saving}
+              disabled={saving || quietOff}
               onChange={(event) => {
                 setQuietHours((current) => ({ ...current, start: event.target.value }));
               }}
@@ -229,7 +209,7 @@ export function NotificationPreferencesSection({
               type="time"
               aria-label="Quiet hours end"
               value={quietHours.end}
-              disabled={saving}
+              disabled={saving || quietOff}
               onChange={(event) => {
                 setQuietHours((current) => ({ ...current, end: event.target.value }));
               }}
@@ -239,18 +219,13 @@ export function NotificationPreferencesSection({
             {saving ? 'Saving…' : ''}
           </p>
         </div>
-        <div className="border-outline-variant grid gap-3 border-t p-4">
+        <div className="grid gap-3">
           <div className="flex flex-wrap gap-2">
             {QUIET_DAYS.map((day) => (
-              <label
-                key={day.key}
-                className="border-outline-variant text-body-medium flex items-center gap-2 rounded-md border px-3 py-2"
-              >
-                <input
-                  type="checkbox"
-                  className="accent-primary size-4"
+              <label key={day.key} className={cn(OPTION_TILE, 'text-body-medium gap-2')}>
+                <Checkbox
                   checked={quietHours.days.includes(day.key)}
-                  disabled={saving}
+                  disabled={saving || quietOff}
                   aria-label={`Quiet on ${day.label}`}
                   onChange={(event) => {
                     toggleQuietDay(day.key, event.target.checked);
@@ -260,12 +235,10 @@ export function NotificationPreferencesSection({
               </label>
             ))}
           </div>
-          <label className="text-on-surface text-body-medium flex items-center gap-2">
-            <input
-              type="checkbox"
-              className="accent-primary size-4"
+          <label className={cn(OPTION_TILE, 'text-body-medium w-fit gap-2')}>
+            <Checkbox
               checked={quietHours.allowUrgent}
-              disabled={saving}
+              disabled={saving || quietOff}
               aria-label="Allow urgent notifications"
               onChange={(event) => {
                 setQuietHours((current) => ({ ...current, allowUrgent: event.target.checked }));
@@ -274,14 +247,16 @@ export function NotificationPreferencesSection({
             Allow urgent notifications
           </label>
         </div>
-      </section>
+      </SettingsGroup>
 
-      <section aria-label="Channel preferences" className="flex flex-col gap-3">
-        <h3 className="text-on-surface text-title-small">Advanced channel rules</h3>
-        <div className="border-outline-variant overflow-x-auto rounded-lg border">
+      <SettingsGroup title="Advanced channel rules" body="rows">
+        <div className="overflow-x-auto">
           <table className="min-w-full border-separate border-spacing-0 text-left">
             <thead>
-              <tr className="bg-surface-container-low">
+              {/* The header earns a tonal step rather than a rule beneath it: one fill separates
+                  it from every row at once, where a hairline is a second mark competing with the
+                  checkbox grid it sits over. */}
+              <tr className="bg-surface-container">
                 <th className="text-on-surface-variant text-label-medium px-4 py-3">Category</th>
                 {CHANNELS.map((channel) => (
                   <th
@@ -301,8 +276,11 @@ export function NotificationPreferencesSection({
                 };
                 const locked = lockedPreference(category) || preference.locked === true;
                 return (
-                  <tr key={category} className="border-outline-variant border-t">
-                    <th className="border-outline-variant border-t px-4 py-3">
+                  <tr
+                    key={category}
+                    className="even:bg-surface-container hover:bg-surface-container-high transition-colors"
+                  >
+                    <th className="px-4 py-3">
                       <span className="flex min-w-48 items-center gap-2">
                         <span className="text-on-surface text-label-large">
                           {CATEGORY_LABELS[category]}
@@ -313,13 +291,9 @@ export function NotificationPreferencesSection({
                     {CHANNELS.map((channel) => {
                       const checked = preference[channel.key] === true;
                       return (
-                        <td
-                          key={channel.key}
-                          className="border-outline-variant border-t px-3 py-3 text-center"
-                        >
-                          <input
-                            type="checkbox"
-                            className={cn('accent-primary size-4', locked && 'opacity-70')}
+                        <td key={channel.key} className="px-3 py-3 text-center">
+                          <Checkbox
+                            className={cn(locked && 'opacity-70')}
                             aria-label={`${channel.label} for ${CATEGORY_LABELS[category]}`}
                             checked={checked}
                             disabled={locked || saving}
@@ -336,7 +310,7 @@ export function NotificationPreferencesSection({
             </tbody>
           </table>
         </div>
-      </section>
+      </SettingsGroup>
 
       {error ? (
         <p role="alert" className="text-error text-body-medium">

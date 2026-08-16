@@ -128,6 +128,7 @@ export {
   DEFAULT_MENU_SECTIONS,
   MENU_INDICATOR_GUTTER,
   MENU_METRICS,
+  MENU_VIEWPORT_FIT,
   type MenuItemClassOptions,
   type MenuSections,
   type MenuVariant,

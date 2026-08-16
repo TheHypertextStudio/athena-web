@@ -57,6 +57,7 @@ import {
   type MenuWidth,
   menuBadge,
   menuCheckedItemClass,
+  MENU_VIEWPORT_FIT,
   menuContentClass,
   menuFocusRing,
   menuGroup,
@@ -169,7 +170,7 @@ export function DropdownMenuSubContent({
   return (
     <DropdownMenuPrimitive.SubContent
       collisionPadding={collisionPadding}
-      className={cn(menuContentClass(variant), className)}
+      className={cn(menuContentClass(variant), MENU_VIEWPORT_FIT.dropdown, className)}
       {...props}
     />
   );
@@ -215,7 +216,7 @@ export function DropdownMenuContent({
             className={cn(
               menuContentClass(variant, width, sections),
               // Scrollable within the available viewport height Radix measures for us.
-              'max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-x-hidden overflow-y-auto',
+              MENU_VIEWPORT_FIT.dropdown,
               className,
             )}
             {...props}

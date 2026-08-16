@@ -23,6 +23,8 @@ import { useAppSearchParams } from '@/lib/app-location';
 import { type JSX, type ReactNode } from 'react';
 
 import { api } from '@/lib/api';
+import { LoadFailure } from '@/components/settings/load-failure';
+import { userErrorMessage } from '@/lib/problem';
 import {
   apiQueryOptions,
   queryKeys,
@@ -140,25 +142,39 @@ export function LatticeSection(): JSX.Element {
     invalidateKeys: [queryKeys.latticeConnection(), queryKeys.latticeDevices()],
   });
 
+  // One slot for whichever write just failed: they are mutually exclusive in practice (each is
+  // driven by a single control) and four separate lines would reserve space for three that are
+  // always empty.
+  const actionError = authorize.isError
+    ? userErrorMessage(authorize.error, 'Could not start the Lovelace connection.')
+    : chooseDevice.isError
+      ? userErrorMessage(chooseDevice.error, 'Could not switch Athena to that computer.')
+      : setEnabled.isError
+        ? userErrorMessage(setEnabled.error, 'Could not change where Athena runs.')
+        : disconnect.isError
+          ? userErrorMessage(disconnect.error, 'Could not disconnect Lovelace.')
+          : null;
+
   if (statusQ.isPending) {
     return (
-      <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-5">
+      <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-4">
         {/* placeholder: whether this person has authorized Lovelace and which of their computers
             is chosen — both are per-account facts only the stored record knows. */}
-        <Skeleton className="h-40 rounded-lg" />
+        <Skeleton className="h-40 rounded-xl" />
       </section>
     );
   }
 
   if (statusQ.isError || !status) {
     return (
-      <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-5">
+      <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-4">
         <Text token="title-medium" as="h2">
           Run Athena on your own computer
         </Text>
-        <Text token="body-medium" tone="muted" role="status">
-          This setting is temporarily unavailable. We&apos;ll keep checking automatically.
-        </Text>
+        <LoadFailure
+          message={userErrorMessage(statusQ.error, 'Could not load this setting.')}
+          retrying
+        />
       </section>
     );
   }
@@ -168,7 +184,7 @@ export function LatticeSection(): JSX.Element {
   if (!status.available) {
     const reason: LatticeDeploymentReason = status.deploymentReason ?? 'not_configured';
     return (
-      <section className="bg-surface-container-low flex max-w-2xl flex-col gap-3 rounded-xl p-5">
+      <section className="bg-surface-container-low flex max-w-2xl flex-col gap-3 rounded-xl p-4">
         <Text token="title-medium" as="h2">
           Run Athena on your own computer
         </Text>
@@ -208,7 +224,7 @@ export function LatticeSection(): JSX.Element {
       : undefined;
 
   return (
-    <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-5">
+    <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-4">
       <Toolbar
         leading={
           <Stack gap={1} className="min-w-0">
@@ -216,7 +232,7 @@ export function LatticeSection(): JSX.Element {
               Run Athena on your own computer
             </Text>
             <Text token="body-small" tone="muted">
-              Athena&apos;s thinking happens on a machine you own, not in the cloud.
+              Athena runs on a computer you own.
             </Text>
           </Stack>
         }
@@ -289,7 +305,7 @@ export function LatticeSection(): JSX.Element {
           {devicesQ.isPending ? (
             /* placeholder: the list of computers paired to this person's Lovelace account, which
                only the gateway can report. */
-            <Skeleton className="h-24 rounded-lg" />
+            <Skeleton className="h-24 rounded-xl" />
           ) : devices.length === 0 ? (
             <Stack gap={1}>
               <Text token="body-medium" role="status">
@@ -302,10 +318,7 @@ export function LatticeSection(): JSX.Element {
           ) : (
             <ul className="flex flex-col">
               {devices.map((device) => (
-                <li
-                  key={device.id}
-                  className="border-outline-variant/40 flex min-h-12 items-center gap-3 border-b px-1 last:border-b-0"
-                >
+                <li key={device.id} className="flex min-h-12 items-center gap-3 px-1">
                   <span aria-hidden className="text-on-surface-variant [&_svg]:size-4.5!">
                     {deviceIcon(device.status)}
                   </span>
@@ -374,6 +387,8 @@ export function LatticeSection(): JSX.Element {
       )}
 
       {reason ? <ReasonNote reason={reason} /> : null}
+
+      {actionError ? <LoadFailure message={actionError} /> : null}
 
       <Text token="body-small" tone="muted" role="status" aria-live="polite">
         {authorize.isPending

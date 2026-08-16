@@ -171,6 +171,28 @@ const MENU_SURFACE: Readonly<Record<MenuVariant, string>> = {
 };
 
 /**
+ * Cap a floating menu at the height Radix measured for it, and scroll inside that.
+ *
+ * @remarks
+ * Without this a menu taller than the space below its trigger cannot scroll, so Radix's collision
+ * handling does the only other thing available: it shifts the whole panel until it fits. A long
+ * submenu then opens *level with the viewport* rather than level with the row that opened it —
+ * a ten-item "Limit to a team" list rendering two hundred pixels above its own trigger, visually
+ * detached from the menu it belongs to.
+ *
+ * `Content` already did this and `SubContent` did not, in both the dropdown and the context menu,
+ * which is why only long submenus drifted. The values are keyed by menu because Radix namespaces
+ * the custom property per primitive, and each is written as a literal string so Tailwind's scanner
+ * still finds it.
+ */
+export const MENU_VIEWPORT_FIT = {
+  dropdown:
+    'max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-x-hidden overflow-y-auto',
+  context:
+    'max-h-[var(--radix-context-menu-content-available-height)] overflow-x-hidden overflow-y-auto',
+} as const;
+
+/**
  * Full class string for the menu container surface.
  *
  * @param variant - Which colour mapping to render in.

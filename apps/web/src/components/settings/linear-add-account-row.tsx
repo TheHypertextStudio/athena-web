@@ -32,8 +32,10 @@ export interface LinearAddAccountRowProps {
  */
 export function LinearAddAccountRow({ model }: LinearAddAccountRowProps): JSX.Element {
   return (
-    <li className="border-outline-variant bg-surface-container-low flex flex-wrap items-center gap-3 rounded-xl border border-dashed p-4">
-      <label className="text-on-surface text-sm font-medium" htmlFor="linear-identity">
+    // An "add another" slot is a well, not a card: `sunken` reads as an empty place waiting to be
+    // filled, which is what the dashed outline here was reaching for.
+    <li className="bg-surface-container-lowest flex flex-wrap items-center gap-3 rounded-xl p-4">
+      <label className="text-on-surface text-label-large" htmlFor="linear-identity">
         Connect another Linear account
       </label>
       {model.available.length > 0 ? (
@@ -66,7 +68,7 @@ export function LinearAddAccountRow({ model }: LinearAddAccountRowProps): JSX.El
       ) : (
         <NextLink
           href={model.addAccountsHref}
-          className="text-primary text-sm font-medium hover:underline"
+          className="text-primary text-label-large hover:underline"
         >
           Link another Linear account first
         </NextLink>

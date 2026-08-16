@@ -16,8 +16,8 @@
 import type { JSX } from 'react';
 
 import { ConnectedAccountsTab } from '@/components/settings/connected-accounts-tab';
-import { SectionHeader } from '@/components/settings/section-header';
 import { usePersonalWorkspaceId } from '@/components/settings/use-personal-workspace-id';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The global Connected accounts destination. */
 export default function GlobalConnectedAccountsSettingsPage(): JSX.Element {
@@ -28,12 +28,11 @@ export default function GlobalConnectedAccountsSettingsPage(): JSX.Element {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title="Connected accounts"
-        description="External accounts linked to your Docket identity. Connections sync resources from these."
-      />
+    <SettingsSectionPage
+      title="Connected accounts"
+      description="External accounts linked to your Docket identity. Connections sync resources from these."
+    >
       <ConnectedAccountsTab orgId={orgId} />
-    </div>
+    </SettingsSectionPage>
   );
 }

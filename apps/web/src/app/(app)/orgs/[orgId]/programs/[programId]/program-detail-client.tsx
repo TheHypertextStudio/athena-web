@@ -18,7 +18,7 @@ import { useRouter } from 'next/navigation';
 import { useAppParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
-import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { ApplyDescriptionTemplateControl } from '@/components/editor/apply-description-template';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
@@ -367,7 +367,7 @@ export default function ProgramDetailPage(): JSX.Element {
         </div>
       ) : null}
 
-      <ConfirmDeleteDialog
+      <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
         onOpenChange={(next) => {
           // Clear any prior failure so a stale message never shows on reopen.

@@ -60,7 +60,7 @@ describe('NotificationPreferencesSection', () => {
 
     expect(screen.queryByRole('button', { name: 'Save quiet hours' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText('Quiet hours'));
+    fireEvent.click(screen.getByLabelText('Turn quiet hours on'));
     fireEvent.change(screen.getByLabelText('Quiet hours start'), { target: { value: '19:30' } });
     fireEvent.change(screen.getByLabelText('Quiet hours end'), { target: { value: '07:00' } });
 
@@ -80,7 +80,10 @@ describe('NotificationPreferencesSection', () => {
     );
   });
 
-  it('surfaces announcement choices before the advanced channel matrix', async () => {
+  it('edits service announcements from the one matrix that owns every category', async () => {
+    // Announcements used to have a promoted group of its own *and* a row in the matrix below —
+    // one setting with two controls on one screen. The matrix is the single place now, so this
+    // asserts the category is still reachable and still patches the same shape.
     const onPatch = vi.fn(() => Promise.resolve());
     render(
       <NotificationPreferencesSection
@@ -95,14 +98,7 @@ describe('NotificationPreferencesSection', () => {
       />,
     );
 
-    const question = screen.getByRole('heading', {
-      name: 'How should Docket reach me for announcements?',
-    });
-    const advanced = screen.getByRole('heading', { name: 'Advanced channel rules' });
-
-    expect(question.compareDocumentPosition(advanced) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(4);
-
-    fireEvent.click(screen.getByLabelText('Announcement email'));
+    fireEvent.click(screen.getByLabelText('Email for Service announcements'));
 
     await waitFor(() => {
       expect(onPatch).toHaveBeenCalledWith({

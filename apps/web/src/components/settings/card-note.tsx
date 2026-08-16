@@ -20,7 +20,7 @@ export function CardNote({ tone, children }: CardNoteProps): JSX.Element {
   return (
     <p
       {...(tone === 'error' ? { role: 'alert' } : {})}
-      className={`${color} bg-surface-container px-4 py-2 text-xs`}
+      className={`${color} bg-surface-container text-body-small px-4 py-2`}
     >
       {children}
     </p>
@@ -46,7 +46,7 @@ export interface CardAlertProps {
  */
 export function CardAlert({ message, detail, action }: CardAlertProps): JSX.Element {
   return (
-    <div role="alert" className="bg-surface-container px-4 py-2 text-xs">
+    <div role="alert" className="bg-surface-container text-body-small px-4 py-2">
       <p className="text-error">{message}</p>
       <p className="text-on-surface-variant mt-1">{detail}</p>
       {action ? <div className="mt-2 flex flex-wrap items-center gap-2">{action}</div> : null}

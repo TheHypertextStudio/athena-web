@@ -32,14 +32,14 @@ describe('ContactPointsSection', () => {
           contactPoint({
             id: EMAIL_PRIMARY_ID,
             type: 'email',
-            valueMasked: 'a***@x.test',
+            value: 'ada@x.test',
             status: 'active',
             primary: true,
           }),
           contactPoint({
             id: PHONE_PENDING_ID,
             type: 'phone',
-            valueMasked: '***0123',
+            value: '+15550123',
             status: 'pending',
             primary: false,
             verifiedAt: null,
@@ -47,14 +47,14 @@ describe('ContactPointsSection', () => {
           contactPoint({
             id: EMAIL_BOUNCED_ID,
             type: 'email',
-            valueMasked: 'b***@x.test',
+            value: 'bee@x.test',
             status: 'bounced',
             primary: false,
           }),
           contactPoint({
             id: PHONE_UNSUBSCRIBED_ID,
             type: 'phone',
-            valueMasked: '***0456',
+            value: '+15550456',
             status: 'unsubscribed',
             primary: false,
           }),
@@ -74,7 +74,7 @@ describe('ContactPointsSection', () => {
     expect(screen.getByText('Verification pending')).toBeInTheDocument();
     expect(screen.getByText('Bounced')).toBeInTheDocument();
     expect(screen.getByText('Unsubscribed')).toBeInTheDocument();
-    expect(screen.getByText('***0123')).toBeInTheDocument();
+    expect(screen.getByText('+15550123')).toBeInTheDocument();
   });
 
   it('verifies a pending phone number with the entered code', async () => {
@@ -85,7 +85,7 @@ describe('ContactPointsSection', () => {
           contactPoint({
             id: PHONE_PENDING_ID,
             type: 'phone',
-            valueMasked: '***0123',
+            value: '+15550123',
             status: 'pending',
             primary: false,
             verifiedAt: null,
@@ -102,10 +102,10 @@ describe('ContactPointsSection', () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Verification code for ***0123'), {
+    fireEvent.change(screen.getByLabelText('Verification code for +15550123'), {
       target: { value: '000000' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Verify ***0123' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Verify +15550123' }));
 
     await waitFor(() => {
       expect(onVerify).toHaveBeenCalledWith(PHONE_PENDING_ID, '000000');
@@ -128,11 +128,11 @@ describe('ContactPointsSection', () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Contact method'), { target: { value: 'email' } });
-    fireEvent.change(screen.getByLabelText('Destination'), {
+    fireEvent.click(screen.getByRole('button', { name: 'Add email address' }));
+    fireEvent.change(screen.getByLabelText('Email address'), {
       target: { value: 'alerts@example.com' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add destination' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     await waitFor(() => {
       expect(onAdd).toHaveBeenCalledWith({
@@ -151,7 +151,7 @@ describe('ContactPointsSection', () => {
           contactPoint({
             id: EMAIL_PRIMARY_ID,
             type: 'email',
-            valueMasked: 'a***@x.test',
+            value: 'ada@x.test',
             status: 'active',
             primary: true,
           }),
@@ -167,10 +167,10 @@ describe('ContactPointsSection', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disable a***@x.test' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disable ada@x.test' }));
     expect(onDisable).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm disable a***@x.test' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm disable ada@x.test' }));
     expect(onDisable).toHaveBeenCalledWith(EMAIL_PRIMARY_ID);
   });
 });

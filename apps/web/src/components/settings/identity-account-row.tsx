@@ -10,6 +10,7 @@
  */
 import type { IdentityOut } from '@docket/types';
 import { Avatar, AvatarFallback, AvatarImage, Badge } from '@docket/ui/primitives';
+import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { accessLabels } from './identity-providers';
@@ -50,40 +51,39 @@ export function IdentityAccountRow({
   const access = accessLabels(identity.scopes);
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
+    <li className="hover:bg-surface-container-high flex items-center gap-3 px-4 py-3 transition-colors">
       <Avatar className="size-9">
         {identity.picture ? <AvatarImage src={identity.picture} alt="" /> : null}
-        <AvatarFallback className="text-body-medium font-medium">{initials(label)}</AvatarFallback>
+        <AvatarFallback className="text-label-large">{initials(label)}</AvatarFallback>
       </Avatar>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="text-on-surface text-body-medium truncate font-medium">{label}</span>
+        <span className="text-on-surface text-label-large truncate">{label}</span>
         {identity.connectionCount > 0 ? (
-          <span className="text-on-surface-variant text-xs">
-            Used by {identity.connectionCount} Docket connection
-            {identity.connectionCount === 1 ? '' : 's'}
+          <span className="text-on-surface-variant text-body-small">
+            {identity.connectionCount} Docket connection
+            {identity.connectionCount === 1 ? ' uses' : 's use'} this account, so it cannot be
+            removed yet.{' '}
+            <Link href="/settings/connections" className="text-primary underline">
+              Review connections
+            </Link>
           </span>
         ) : null}
         {access.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1">
             {access.map((a) => (
-              <Badge key={a} variant="secondary" className="text-xs font-normal">
+              <Badge key={a} variant="secondary" className="text-body-small">
                 {a}
               </Badge>
             ))}
           </div>
         ) : null}
         {identity.reauthorizationRequired ? (
-          <span className="text-error text-xs">Reconnect required</span>
+          <span className="text-error text-body-small">Reconnect required</span>
         ) : null}
       </div>
       <IntegrationActionButton
         tone="danger"
         disabled={removing || identity.connectionCount > 0}
-        title={
-          identity.connectionCount > 0
-            ? 'Disconnect or rebind this account’s Docket connections first.'
-            : undefined
-        }
         onClick={() => {
           onRemove(identity.accountId);
         }}

@@ -13,29 +13,31 @@
 import NextLink from 'next/link';
 import type { JSX } from 'react';
 
-import { SectionHeader } from '@/components/settings/section-header';
 import { NotionMirrorPanel } from '@/components/settings/notion/notion-mirror-panel';
 import { useAppParams } from '@/lib/app-location';
+import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The Notion mirror hub page. */
 export default function NotionMirrorPage(): JSX.Element {
   const { orgId } = useAppParams<{ orgId: string }>();
+  const { canManage } = useCanManageOrg(orgId);
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title="Notion"
-        description="Build databases in your Notion workspace from your Docket work, and keep them current."
-        action={
-          <NextLink
-            href={`/orgs/${orgId}/settings/connections`}
-            className="text-on-surface-variant text-body-medium hover:underline"
-          >
-            Back to Connections
-          </NextLink>
-        }
-      />
-      <NotionMirrorPanel orgId={orgId} />
-    </div>
+    <SettingsSectionPage
+      title="Notion"
+      description="Build databases in your Notion workspace from your Docket work, and keep them current."
+      action={
+        <NextLink
+          href={`/orgs/${orgId}/settings/connections`}
+          className="text-on-surface-variant text-body-medium hover:underline"
+        >
+          {' '}
+          Back to Connections{' '}
+        </NextLink>
+      }
+    >
+      <NotionMirrorPanel orgId={orgId} canManage={canManage} />
+    </SettingsSectionPage>
   );
 }

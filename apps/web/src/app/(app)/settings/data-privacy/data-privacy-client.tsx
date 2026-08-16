@@ -4,7 +4,7 @@ import type { JSX } from 'react';
 
 import { DangerZoneTab } from '@/components/settings/danger-zone-tab';
 import { ExportDataTab } from '@/components/settings/export-data-tab';
-import { SectionHeader } from '@/components/settings/section-header';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /**
  * The user-owned data export and deletion surface.
@@ -17,16 +17,15 @@ import { SectionHeader } from '@/components/settings/section-header';
  */
 export default function DataPrivacyClient(): JSX.Element {
   return (
-    <div className="flex flex-col gap-8">
-      <SectionHeader title="Data & privacy" description="Export or delete your Docket data." />
+    <SettingsSectionPage title="Data & privacy" description="Export or delete your Docket data.">
       <section className="flex flex-col gap-4">
         <h2 className="text-on-surface text-title-small">Export data</h2>
         <ExportDataTab />
       </section>
-      <section className="border-outline-variant flex flex-col gap-4 border-t pt-6">
+      <section className="flex flex-col gap-4 pt-6">
         <h2 className="text-on-surface text-title-small">Delete account</h2>
         <DangerZoneTab />
       </section>
-    </div>
+    </SettingsSectionPage>
   );
 }

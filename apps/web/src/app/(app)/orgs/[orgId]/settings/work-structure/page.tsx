@@ -7,15 +7,16 @@ import {
   type WorkspaceSettingsOut,
 } from '@docket/types';
 import { Skeleton } from '@docket/ui/primitives';
+import { LoadFailure } from '@/components/settings/load-failure';
 import { useAppParams } from '@/lib/app-location';
 import { useEffect, useState, type JSX } from 'react';
 
-import { SectionHeader } from '@/components/settings/section-header';
 import { SettingRowStatus } from '@/components/settings/setting-row-status';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The estimation scales offered, in picker order. */
 const ESTIMATION_SCALE_ORDER: readonly EstimationScale[] = [
@@ -84,26 +85,25 @@ export default function WorkStructureSettingsPage(): JSX.Element {
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title="Work structure"
-        description="Keep initiatives strategic by limiting how deeply they can be nested, and choose how the team sizes work."
-      />
-
+    <SettingsSectionPage
+      title="Work structure"
+      description="Set how deeply initiatives can nest, and which scale the team estimates with."
+    >
       {/* placeholder: the workspace's configured initiative-nesting depth and estimation scale,
           and whether the caller is permitted to change them. The headings and explanations above
           are static copy. */}
       {settingsQ.isPending ? (
-        <Skeleton className="h-96 max-w-2xl rounded-lg" />
+        <Skeleton className="h-96 max-w-2xl rounded-xl" />
       ) : settingsQ.isError ? (
-        <p role="status" className="text-on-surface-variant text-body-medium">
-          Work structure is temporarily unavailable. We&apos;ll keep checking automatically.
-        </p>
+        <LoadFailure
+          message={userErrorMessage(settingsQ.error, 'Could not load work structure settings.')}
+          retrying
+        />
       ) : (
         <section aria-labelledby="initiative-depth" className="flex max-w-2xl flex-col gap-5">
           {!permissionLoading && !canManage ? (
             <p className="bg-surface-container text-on-surface-variant text-body-medium rounded-md px-3 py-2">
-              Only workspace owners and admins can change this limit.
+              Only workspace owners and admins can change this.
             </p>
           ) : null}
           <div>
@@ -131,10 +131,10 @@ export default function WorkStructureSettingsPage(): JSX.Element {
                     saveDepth.mutate(value);
                   }
                 }}
-                className={`focus-visible:ring-ring text-label-large size-10 rounded-md border focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`focus-visible:ring-ring text-label-large size-10 rounded-md focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
                   depth === value
-                    ? 'border-primary bg-primary text-on-primary'
-                    : 'border-outline-variant text-on-surface hover:bg-surface-container'
+                    ? 'bg-secondary-container text-on-secondary-container'
+                    : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
                 }`}
               >
                 {value}
@@ -181,10 +181,10 @@ export default function WorkStructureSettingsPage(): JSX.Element {
                       saveScale.mutate(value);
                     }
                   }}
-                  className={`focus-visible:ring-ring flex flex-col items-start rounded-md border px-3 py-2 text-left focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
+                  className={`focus-visible:ring-ring flex flex-col items-start rounded-md px-3 py-2 text-left focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
                     scale === value
-                      ? 'border-primary bg-primary text-on-primary'
-                      : 'border-outline-variant text-on-surface hover:bg-surface-container'
+                      ? 'bg-secondary-container text-on-secondary-container'
+                      : 'bg-surface-container text-on-surface hover:bg-surface-container-high'
                   }`}
                 >
                   <span className="text-label-large">{ESTIMATION_SCALE_LABEL[value]}</span>
@@ -212,6 +212,6 @@ export default function WorkStructureSettingsPage(): JSX.Element {
           />
         </section>
       )}
-    </div>
+    </SettingsSectionPage>
   );
 }

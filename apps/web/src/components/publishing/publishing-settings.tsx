@@ -26,7 +26,7 @@ import { Button, Input, Skeleton, Text } from '@docket/ui/primitives';
 import { useState, type JSX, type SyntheticEvent } from 'react';
 
 import { api } from '@/lib/api';
-import { SectionHeader } from '@/components/settings/section-header';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 import { SettingsSubsection } from '@/components/settings/settings-subsection';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { userErrorMessage } from '@/lib/problem';
@@ -69,20 +69,16 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
   const [host, setHost] = useState('');
 
   if (permissionLoading) {
-    return <Skeleton className="h-72 max-w-2xl rounded-lg" />;
+    return <Skeleton className="h-72 rounded-xl" />;
   }
 
   if (!canManage) {
     return (
-      <div className="flex flex-col gap-6">
-        <SectionHeader
-          title="Publishing"
-          description="Choose the web address your published pages answer on."
-        />
+      <SettingsSectionPage sectionKey="publishing">
         <Text as="p" token="body-medium" tone="muted">
-          Only workspace owners and admins can change where published pages answer.
+          Only workspace owners and admins can change this.
         </Text>
-      </div>
+      </SettingsSectionPage>
     );
   }
 
@@ -113,12 +109,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
   };
 
   return (
-    <div className="flex max-w-2xl flex-col gap-10">
-      <SectionHeader
-        title="Publishing"
-        description="Choose the web address your published pages answer on."
-      />
-
+    <SettingsSectionPage sectionKey="publishing">
       <SettingsSubsection
         title="Addresses"
         action={
@@ -240,6 +231,6 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
           </ul>
         )}
       </SettingsSubsection>
-    </div>
+    </SettingsSectionPage>
   );
 }

@@ -217,7 +217,7 @@ export function makeContactPointOutFixture(
     id: notificationFixtureIds.contactPointId,
     userId: notificationFixtureIds.userId,
     type: 'email',
-    valueMasked: 'a***@example.com',
+    value: 'alerts@example.com',
     status: 'active',
     primary: true,
     verifiedAt: '2026-07-06T19:00:00.000Z',

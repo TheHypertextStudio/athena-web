@@ -69,8 +69,8 @@ export function DangerZoneTab(): JSX.Element {
     // "cancel the deletion you scheduled", so there is no correct static copy to show meanwhile.
     return (
       <div className="flex flex-col gap-3">
-        <Skeleton className="h-24 w-full rounded-lg" />
-        <Skeleton className="h-32 w-full rounded-lg" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-32 w-full rounded-xl" />
       </div>
     );
   }
@@ -90,17 +90,13 @@ export function DangerZoneTab(): JSX.Element {
     <section className="flex flex-col gap-6" aria-label="Danger zone">
       {/* Pending-deletion banner */}
       {pending && status.deleteAfterAt ? (
-        <div className="border-error/40 bg-error/5 flex flex-col gap-3 rounded-lg border p-4">
+        <div className="bg-error-container text-on-error-container flex flex-col gap-3 rounded-xl p-4">
           <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-body-medium font-medium">
-              Your account is scheduled for deletion
-            </h3>
-            <p className="text-on-surface-variant text-body-medium">
+            <h3 className="text-title-small">Your account is scheduled for deletion</h3>
+            <p className="text-body-medium">
               It will be permanently deleted on{' '}
-              <span className="text-on-surface font-medium">
-                {formatCalendarDate(status.deleteAfterAt)}
-              </span>{' '}
-              ({daysUntil(status.deleteAfterAt)} days left). Cancel any time before then to restore
+              <span className="text-label-large">{formatCalendarDate(status.deleteAfterAt)}</span> (
+              {daysUntil(status.deleteAfterAt)} days left). Cancel any time before then to restore
               everything.
             </p>
           </div>
@@ -125,11 +121,9 @@ export function DangerZoneTab(): JSX.Element {
 
       {/* Ownership-blocker guide */}
       {!pending && blockers.length > 0 ? (
-        <div className="border-outline-variant flex flex-col gap-3 rounded-lg border p-4">
+        <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
           <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-body-medium font-medium">
-              Resolve these workspaces first
-            </h3>
+            <h3 className="text-on-surface text-title-small">Resolve these workspaces first</h3>
             <p className="text-on-surface-variant text-body-medium max-w-prose">
               You&apos;re the only owner of{' '}
               {blockers.length === 1 ? 'a shared workspace' : 'some shared workspaces'} with other
@@ -137,17 +131,15 @@ export function DangerZoneTab(): JSX.Element {
               owner, then you can delete your account.
             </p>
           </div>
-          <ul className="border-outline-variant divide-outline-variant flex flex-col divide-y rounded-md border">
+          <ul className="bg-surface-container flex flex-col overflow-hidden rounded-md">
             {blockers.map((b) => (
               <li
                 key={b.organizationId}
-                className="flex items-center justify-between gap-3 px-4 py-3"
+                className="hover:bg-surface-container-high flex items-center justify-between gap-3 px-4 py-3 transition-colors"
               >
                 <div className="flex min-w-0 flex-col">
-                  <span className="text-on-surface text-body-medium truncate font-medium">
-                    {b.name}
-                  </span>
-                  <span className="text-on-surface-variant text-xs">
+                  <span className="text-on-surface text-label-large truncate">{b.name}</span>
+                  <span className="text-on-surface-variant text-body-small">
                     {b.memberCount} members · you&apos;re the only owner
                   </span>
                 </div>
@@ -162,14 +154,13 @@ export function DangerZoneTab(): JSX.Element {
 
       {/* Delete account card */}
       {!pending ? (
-        <div className="border-error/40 flex flex-col gap-3 rounded-lg border p-4">
+        <div className="bg-error-container text-on-error-container flex flex-col gap-3 rounded-xl p-4">
           <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-body-medium font-medium">Delete account</h3>
-            <p className="text-on-surface-variant text-body-medium max-w-prose">
+            <h3 className="text-title-small">Delete account</h3>
+            <p className="text-body-medium max-w-prose">
               Permanently delete your Docket account, your personal workspace, and any workspace
               only you belong to. You&apos;ll have 14 days to change your mind. Want a copy first?
-              Use <span className="text-on-surface font-medium">Export data</span> before you
-              delete.
+              Use <span className="text-label-large">Export data</span> before you delete.
             </p>
           </div>
           <div>

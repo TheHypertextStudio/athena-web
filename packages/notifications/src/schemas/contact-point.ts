@@ -30,7 +30,12 @@ export const ContactPointOut = z
     id: Id,
     userId: z.string().min(1),
     type: ContactPointType,
-    valueMasked: z.string().min(1),
+    value: z
+      .string()
+      .min(1)
+      .describe(
+        'The destination itself, unmasked. This resource is caller-owned — every handler scopes to `requireUserId`, so the only person who can read it is the person it belongs to, and masking their own address back at them just stops them confirming which one it is. The masked form still exists for operational views of a *delivery* (`NotificationDestination.valueMasked`), where the reader may not own the destination.',
+      ),
     status: ContactPointStatus,
     primary: z.boolean(),
     verifiedAt: NotificationInstant.nullable(),

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `ConfirmDeleteDialog` — the one destructive-confirmation dialog every entity detail page shares.
+ * `ConfirmDestructiveDialog` — the one destructive-confirmation dialog in the product.
  *
  * @remarks
  * A thin, entity-agnostic wrapper over the {@link Dialog} primitive from `@docket/ui`, which
@@ -23,7 +23,7 @@
  * const [open, setOpen] = useState(false);
  * const [error, setError] = useState<string | null>(null);
  * const del = useApiMutation({ ... });
- * <ConfirmDeleteDialog
+ * <ConfirmDestructiveDialog
  *   open={open}
  *   onOpenChange={setOpen}
  *   title="Delete project?"
@@ -51,8 +51,8 @@ import {
 } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 
-/** Props for {@link ConfirmDeleteDialog}. */
-export interface ConfirmDeleteDialogProps {
+/** Props for {@link ConfirmDestructiveDialog}. */
+export interface ConfirmDestructiveDialogProps {
   /** Whether the dialog is open. */
   open: boolean;
   /** Open/close handler (also fired on overlay/escape dismiss); ignored while `pending`. */
@@ -62,7 +62,7 @@ export interface ConfirmDeleteDialogProps {
   /** Explains what deleting does and that it is irreversible. */
   description: ReactNode;
   /** Label for the destructive confirm button (default `"Delete"`). */
-  confirmLabel?: string;
+  confirmLabel: string;
   /** Whether the delete is in flight; disables both buttons and blocks dismissal. */
   pending?: boolean;
   /**
@@ -76,16 +76,16 @@ export interface ConfirmDeleteDialogProps {
 }
 
 /** The shared destructive-confirmation dialog for entity "Delete <entity>" actions. */
-export function ConfirmDeleteDialog({
+export function ConfirmDestructiveDialog({
   open,
   onOpenChange,
   title,
   description,
-  confirmLabel = 'Delete',
+  confirmLabel,
   pending = false,
   error,
   onConfirm,
-}: ConfirmDeleteDialogProps): JSX.Element {
+}: ConfirmDestructiveDialogProps): JSX.Element {
   return (
     <Dialog
       open={open}

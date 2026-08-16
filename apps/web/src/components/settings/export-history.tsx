@@ -15,20 +15,20 @@ function ExportHistoryRow({ exportJob }: { exportJob: AccountExportOut }): JSX.E
   const expires = exportJob.expiresAt ? formatCalendarDate(exportJob.expiresAt) : null;
 
   return (
-    <li className="border-outline-variant flex flex-col gap-3 border-t py-4 first:border-t-0 first:pt-0">
+    <li className="flex flex-col gap-3 py-4">
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="text-on-surface text-body-medium font-medium">
-            {exportStatusCopy(exportJob)}
-          </p>
+          <p className="text-on-surface text-label-large">{exportStatusCopy(exportJob)}</p>
           {exportJob.origin === 'account_deletion' ? (
-            <span className="text-on-surface-variant text-xs">Created for account deletion</span>
+            <span className="text-on-surface-variant text-body-small">
+              Created for account deletion
+            </span>
           ) : null}
         </div>
         <p className="text-on-surface-variant text-body-medium">
           {exportScopeSummary(exportJob.scope)}
         </p>
-        <p className="text-on-surface-variant text-xs">
+        <p className="text-on-surface-variant text-body-small">
           Requested {requested}
           {downloadUrl && expires ? ` · Available until ${expires}` : ''}
         </p>
@@ -62,9 +62,9 @@ export function ExportHistory({
 }): JSX.Element {
   return (
     <div className="flex flex-col gap-3" aria-live="polite">
-      <h2 className="text-on-surface text-title-large">Recent exports</h2>
+      <h2 className="text-on-surface text-title-small">Recent exports</h2>
       {exports.length > 0 ? (
-        <ol className="border-outline-variant rounded-lg border px-4 sm:px-6">
+        <ol className="bg-surface-container-low rounded-xl px-4 sm:px-6">
           {exports.map((exportJob) => (
             <ExportHistoryRow key={exportJob.id} exportJob={exportJob} />
           ))}

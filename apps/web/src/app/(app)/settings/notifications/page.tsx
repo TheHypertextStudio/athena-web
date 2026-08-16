@@ -15,7 +15,6 @@ import { useState, type JSX } from 'react';
 
 import { ContactPointsSection } from '@/components/settings/contact-points-section';
 import { NotificationPreferencesSection } from '@/components/settings/notification-preferences-section';
-import { SectionHeader } from '@/components/settings/section-header';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import {
@@ -27,6 +26,7 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The Notifications settings route. */
 export default function NotificationsSettingsPage(): JSX.Element {
@@ -114,16 +114,17 @@ export default function NotificationsSettingsPage(): JSX.Element {
             : null;
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader title="Notifications" description="Decide what Docket tells you, and where." />
-
+    <SettingsSectionPage
+      title="Notifications"
+      description="Decide what Docket tells you, and where."
+    >
       {/* placeholder: the caller's saved notification preferences and their verified contact
           points — which channels exist, which are on, and which addresses they point at. The
           section heading and description above render from static copy. */}
       {loading ? (
         <div className="flex flex-col gap-3" aria-label="Loading notification settings">
-          <Skeleton className="h-36 w-full rounded-lg" />
-          <Skeleton className="h-64 w-full rounded-lg" />
+          <Skeleton className="h-36 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
         </div>
       ) : loadError || !preferencesQ.data || !contactPointsQ.data ? (
         <p role="alert" className="text-error text-body-medium">
@@ -131,14 +132,9 @@ export default function NotificationsSettingsPage(): JSX.Element {
         </p>
       ) : (
         <>
-          <NotificationPreferencesSection
-            preferences={preferencesQ.data}
-            saving={patchPreferences.isPending}
-            error={mutationError}
-            onPatch={async (patch) => {
-              await patchPreferences.mutateAsync(patch);
-            }}
-          />
+          {/* Contact points first: a channel is only choosable once there is somewhere to
+              send it. Asking someone to enable SMS and Push above a form they have not
+              reached yet is the page telling them to pick a destination they cannot name. */}
           <ContactPointsSection
             contactPoints={contactPointsQ.data.items}
             creating={addContactPoint.isPending}
@@ -173,8 +169,16 @@ export default function NotificationsSettingsPage(): JSX.Element {
               }
             }}
           />
+          <NotificationPreferencesSection
+            preferences={preferencesQ.data}
+            saving={patchPreferences.isPending}
+            error={mutationError}
+            onPatch={async (patch) => {
+              await patchPreferences.mutateAsync(patch);
+            }}
+          />
         </>
       )}
-    </div>
+    </SettingsSectionPage>
   );
 }

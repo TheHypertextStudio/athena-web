@@ -4,17 +4,16 @@
 import type { JSX } from 'react';
 
 import GoogleCalendarSettings from '@/components/settings/google-calendar-settings';
-import { SectionHeader } from '@/components/settings/section-header';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** Configure first-party Google Calendar accounts and visible calendars. */
 export default function GoogleCalendarSettingsPage(): JSX.Element {
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title="Google Calendar"
-        description="Choose which linked Google calendars appear in agenda views."
-      />
+    <SettingsSectionPage
+      title="Google Calendar"
+      description="Choose which linked Google calendars appear in agenda views."
+    >
       <GoogleCalendarSettings />
-    </div>
+    </SettingsSectionPage>
   );
 }

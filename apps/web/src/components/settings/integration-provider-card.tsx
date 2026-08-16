@@ -82,7 +82,9 @@ function ConnectAffordance(props: {
   onConnect: () => void;
 }): JSX.Element {
   if (!props.canManage) {
-    return <span className="text-on-surface-variant text-xs">Ask an admin to configure</span>;
+    return (
+      <span className="text-on-surface-variant text-body-small">Ask an admin to configure</span>
+    );
   }
   return (
     <IntegrationActionButton tone="primary" disabled={props.busy} onClick={props.onConnect}>
@@ -127,12 +129,16 @@ export function IntegrationProviderCard({
       <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
         <DecorativeIcon icon={ProviderIcon} className="bg-surface-container shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-on-surface text-body-medium font-medium">{provider.name}</span>
-          {effect ? <span className="text-on-surface-variant text-xs">{effect}</span> : null}
-          {identityLabel ? (
-            <span className="text-on-surface-variant truncate text-xs">{identityLabel}</span>
+          <span className="text-on-surface text-label-large">{provider.name}</span>
+          {effect ? (
+            <span className="text-on-surface-variant text-body-small">{effect}</span>
           ) : null}
-          <span className="text-on-surface-variant text-xs">
+          {identityLabel ? (
+            <span className="text-on-surface-variant text-body-small truncate">
+              {identityLabel}
+            </span>
+          ) : null}
+          <span className="text-on-surface-variant text-body-small">
             {visibleIntegration
               ? integrationStatusLabel(visibleIntegration)
               : (mechanics ?? connectHint)}
@@ -179,7 +185,8 @@ export function IntegrationProviderCard({
           message={CONNECTION_ERROR_MESSAGE}
           detail={
             <>
-              Use <span className="font-medium">Reconnect</span> to re-authorize and resume syncing.
+              Use <span className="text-label-large">Reconnect</span> to re-authorize and resume
+              syncing.
             </>
           }
         />

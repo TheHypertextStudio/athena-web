@@ -41,10 +41,8 @@ export function GtasksAccountRow({
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <DecorativeIcon icon={TaskAlt} className="bg-surface-container shrink-0" />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-on-surface text-body-medium truncate font-medium">
-              {row.label}
-            </span>
-            <span className="text-on-surface-variant truncate text-xs">{row.summary}</span>
+            <span className="text-on-surface text-label-large truncate">{row.label}</span>
+            <span className="text-on-surface-variant text-body-small truncate">{row.summary}</span>
           </div>
         </div>
         <IntegrationRowActions
@@ -73,7 +71,7 @@ export function GtasksAccountRow({
           message="This account could not be synced."
           detail={
             <>
-              Use <span className="font-medium">Reconnect</span>, or re-link this account under
+              Use <span className="text-label-large">Reconnect</span>, or re-link this account under
               Connected accounts.
             </>
           }

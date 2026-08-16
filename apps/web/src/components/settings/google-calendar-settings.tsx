@@ -16,9 +16,10 @@ import {
   GOOGLE_CONNECTOR_SCOPES,
   type CalendarConnectionOut,
   type CalendarConnectionStatus,
+  type CalendarListOut,
 } from '@docket/types';
 import { Calendar, RefreshCw } from '@docket/ui/icons';
-import { Badge, Button } from '@docket/ui/primitives';
+import { Checkbox, Badge, Button } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { JSX } from 'react';
@@ -38,7 +39,10 @@ import {
   useApiQuery,
 } from '@/lib/query';
 
+import { EmptyState, RelativeTime } from '@docket/ui/components';
 import { relativeTime } from './format-time';
+import { SettingRow } from './setting-row';
+import { SettingsGroup } from './settings-group';
 
 const STATUS_LABEL: Record<
   CalendarConnectionStatus,
@@ -67,14 +71,29 @@ function writeScopeStatus(connection: CalendarConnectionOut): WriteScopeStatus {
 }
 
 /** Format a Calendar sync result into compact feedback. */
-function syncSummary(data: {
-  eventsCreated: number;
-  eventsUpdated: number;
-  eventsDeleted: number;
-  errors: readonly string[];
-}): string {
+function syncSummary(
+  data: {
+    eventsCreated: number;
+    eventsUpdated: number;
+    eventsDeleted: number;
+    errors: readonly string[];
+  },
+  calendars: readonly CalendarListOut[],
+): string {
   if (data.errors.length > 0) {
-    return `${data.errors.length} sync issue${data.errors.length === 1 ? '' : 's'} found.`;
+    // Each entry is `<provider calendar id>: <provider message>`. The message half is the
+    // provider's own text and never reaches the screen, but the id half identifies a calendar
+    // already listed below by name — so "2 sync issues found" can say *which two* instead of
+    // leaving someone to guess which of eight calendars is stale.
+    const named = data.errors
+      .map((entry) => entry.slice(0, entry.indexOf(':')))
+      .map((id) => calendars.find((calendar) => calendar.externalCalendarId === id)?.title)
+      .filter((title): title is string => title !== undefined);
+    const unique = [...new Set(named)];
+    if (unique.length > 0) {
+      return `Could not sync ${unique.join(', ')}. Everything else is up to date.`;
+    }
+    return `${data.errors.length} calendar${data.errors.length === 1 ? '' : 's'} could not be synced.`;
   }
   const changed = data.eventsCreated + data.eventsUpdated + data.eventsDeleted;
   if (changed === 0) return 'Up to date.';
@@ -170,22 +189,29 @@ export default function GoogleCalendarSettings(): JSX.Element {
   );
   const nativeLayers = layers.filter((layer) => layer.connectionId === null);
   const mutationDisabled = updateCalendar.isPending || sync.isPending;
-  const syncFeedback = sync.data ? syncSummary(sync.data) : null;
+  const syncFeedback = sync.data ? syncSummary(sync.data, data?.calendars ?? []) : null;
+  // Both writes were fire-and-forget: a refused visibility toggle snapped the checkbox back with
+  // no explanation, and a failed manual sync left the summary line showing the previous run.
+  const writeError = updateCalendar.isError
+    ? userErrorMessage(updateCalendar.error, 'Could not update calendar visibility.')
+    : sync.isError
+      ? userErrorMessage(sync.error, 'Could not sync Google Calendar.')
+      : null;
   const googleAvailable = identitiesQuery.data?.googleOAuth?.available === true;
 
   if (query.isPending) {
     // placeholder: the connected Google accounts and their calendars — which exist, which are
     // synced, and what each is named. Nothing about a connection roster is knowable in advance.
-    return <div className="bg-surface-container-low h-48 animate-pulse rounded-lg" />;
+    return <div className="bg-surface-container-low h-48 animate-pulse rounded-xl" />;
   }
 
   if (query.isError) {
     return (
-      <div role="alert" className="border-outline-variant rounded-lg border p-4">
-        <p className="text-error text-sm">
+      <SettingsGroup role="alert">
+        <p className="text-error text-body-medium">
           {userErrorMessage(query.error, 'Could not load Google Calendar settings.')}
         </p>
-      </div>
+      </SettingsGroup>
     );
   }
 
@@ -195,12 +221,16 @@ export default function GoogleCalendarSettings(): JSX.Element {
         <div className="flex items-center gap-2">
           <Calendar className="text-primary size-5" />
           <div>
-            <p className="text-on-surface text-sm font-medium">
+            <p className="text-on-surface text-label-large">
               {data?.connections.length ?? 0} account{data?.connections.length === 1 ? '' : 's'}
             </p>
-            {syncFeedback ? (
+            {writeError ? (
+              <p role="alert" className="text-error text-body-small">
+                {writeError}
+              </p>
+            ) : syncFeedback ? (
               <p
-                className={`text-xs ${
+                className={`text-body-small ${
                   sync.data && sync.data.errors.length > 0
                     ? 'text-error'
                     : 'text-on-surface-variant'
@@ -227,72 +257,80 @@ export default function GoogleCalendarSettings(): JSX.Element {
                   : 'Connect Google account'}
             </Button>
           ) : null}
-          <NextLink
-            href="/settings/connections"
-            className="border-outline-variant text-on-surface hover:bg-surface-container-high inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium"
-          >
-            Connected accounts
-          </NextLink>
-          <button
-            type="button"
+          <Button asChild variant="outline" size="sm">
+            <NextLink href="/settings/connected-accounts">Connected accounts</NextLink>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => {
               sync.mutate(undefined);
             }}
             disabled={mutationDisabled || (data?.connections.length ?? 0) === 0}
-            className="border-outline-variant text-on-surface hover:bg-surface-container-high col-span-2 inline-flex items-center justify-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50 sm:col-span-1"
+            className="col-span-2 sm:col-span-1"
           >
             <RefreshCw className={`size-4 ${sync.isPending ? 'animate-spin' : ''}`} />
             {sync.isPending ? 'Syncing' : 'Sync'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {oauthError ? (
-        <p role="alert" className="text-error text-sm">
+        <p role="alert" className="text-error text-body-medium">
           {oauthError}
         </p>
       ) : null}
 
       {(data?.connections ?? []).length === 0 ? (
-        <div className="border-outline-variant rounded-lg border p-4">
-          <p className="text-on-surface-variant text-sm">
-            Link a Google account from Connected accounts, then choose its visible calendars here.
-          </p>
-        </div>
+        <SettingsGroup>
+          <EmptyState
+            icon={Calendar}
+            title="No Google account linked"
+            body="Link a Google account, then choose which of its calendars appear in Docket."
+            className="border-none bg-transparent"
+            action={
+              <Button asChild variant="ghost" size="sm">
+                <NextLink href="/settings/connected-accounts">Link a Google account</NextLink>
+              </Button>
+            }
+          />
+        </SettingsGroup>
       ) : null}
 
       {(data?.connections ?? []).map((connection) => {
         const calendars = calendarsByConnection.get(connection.id) ?? [];
         return (
-          <section key={connection.id} className="border-outline-variant rounded-lg border">
-            <div className="border-outline-variant flex items-center justify-between border-b px-4 py-3">
-              <div className="min-w-0">
-                <h2 className="text-on-surface truncate text-sm font-medium">
-                  {connection.accountEmail ?? connection.accountName ?? 'Google account'}
-                </h2>
-                <div className="text-on-surface-variant flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+          <SettingsGroup key={connection.id} body="rows">
+            <SettingRow
+              label={connection.accountEmail ?? connection.accountName ?? 'Google account'}
+              description={
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <span>
                     {connection.calendarsEnabled} of {connection.calendarsTotal} calendars visible
                   </span>
                   {connection.lastSyncedAt ? (
-                    <span>Last synced {relativeTime(connection.lastSyncedAt)}</span>
+                    <span>
+                      Last synced{' '}
+                      <RelativeTime iso={connection.lastSyncedAt}>
+                        {relativeTime(connection.lastSyncedAt)}
+                      </RelativeTime>
+                    </span>
                   ) : null}
-                </div>
-              </div>
-              <Badge variant={STATUS_LABEL[connection.status].variant} className="font-normal">
-                {STATUS_LABEL[connection.status].label}
-              </Badge>
-            </div>
+                </span>
+              }
+              trailing={
+                <Badge variant={STATUS_LABEL[connection.status].variant}>
+                  {STATUS_LABEL[connection.status].label}
+                </Badge>
+              }
+            />
             {connection.status === 'error' ? (
-              <p
-                role="alert"
-                className="text-error border-outline-variant border-b px-4 py-2 text-xs"
-              >
+              <p role="alert" className="text-error bg-surface-container text-body-small px-4 py-2">
                 Google Calendar could not be synced. Reconnect it to restore syncing.
               </p>
             ) : null}
-            <div className="border-outline-variant flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
-              <Badge variant={writeScopeStatus(connection).variant} className="font-normal">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+              <Badge variant={writeScopeStatus(connection).variant}>
                 {writeScopeStatus(connection).label}
               </Badge>
               {!connection.scopeState?.calendarWrite && googleAvailable ? (
@@ -309,12 +347,14 @@ export default function GoogleCalendarSettings(): JSX.Element {
                 </Button>
               ) : null}
             </div>
-            <ul className="divide-outline-variant divide-y">
+            <ul className="flex flex-col">
               {calendars.map((calendar) => (
-                <li key={calendar.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <li
+                  key={calendar.id}
+                  className="hover:bg-surface-container flex items-center justify-between gap-3 px-4 py-3 transition-colors"
+                >
                   <label className="flex min-w-0 items-center gap-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={calendar.selected}
                       disabled={mutationDisabled}
                       onChange={(event) => {
@@ -323,36 +363,36 @@ export default function GoogleCalendarSettings(): JSX.Element {
                           selected: event.currentTarget.checked,
                         });
                       }}
-                      className="accent-primary size-4"
                     />
                     <span
                       aria-hidden="true"
                       className="size-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: calendar.color ?? 'var(--color-primary)' }}
                     />
-                    <span className="text-on-surface truncate text-sm">{calendar.title}</span>
+                    <span className="text-on-surface text-body-medium truncate">
+                      {calendar.title}
+                    </span>
                   </label>
-                  <span className="text-on-surface-variant shrink-0 text-xs">
+                  <span className="text-on-surface-variant text-body-small shrink-0">
                     {calendar.primary ? 'Primary' : (calendar.accessRole ?? 'Calendar')}
                   </span>
                 </li>
               ))}
             </ul>
             {(layersByConnection.get(connection.id) ?? []).length > 0 ? (
-              <div className="border-outline-variant border-t px-4 py-3">
-                <h3 className="text-on-surface-variant mb-1.5 text-sm font-medium">Layers</h3>
+              <div className="flex flex-col gap-1.5 px-4 pt-1 pb-3">
+                <h3 className="text-on-surface-variant text-label-medium">Layers</h3>
                 <CalendarLayerPanel layers={layersByConnection.get(connection.id) ?? []} />
               </div>
             ) : null}
-          </section>
+          </SettingsGroup>
         );
       })}
 
       {nativeLayers.length > 0 ? (
-        <section className="border-outline-variant rounded-lg border p-4">
-          <h2 className="text-on-surface mb-2 text-sm font-medium">Docket-native</h2>
+        <SettingsGroup title="Docket calendars">
           <CalendarLayerPanel layers={nativeLayers} />
-        </section>
+        </SettingsGroup>
       ) : null}
     </div>
   );

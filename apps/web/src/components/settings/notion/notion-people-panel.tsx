@@ -32,6 +32,16 @@ import { useNotionPeople, type PersonDecision } from './use-notion-mirror-contro
 export interface NotionPeoplePanelProps {
   orgId: string;
   integrationId: string;
+  /**
+   * Whether the caller may change this workspace's Notion setup.
+   *
+   * @remarks
+   * Every write behind this surface is guarded server-side at `manage`
+   * (`apps/api/src/routes/notion-mirror.ts`). Rendering the controls regardless meant a
+   * contributor could press "Create databases" and receive a bare 403 with nothing explaining
+   * it. Read stays available to everyone; only the write affordances are withheld.
+   */
+  canManage: boolean;
 }
 
 /** Initials for an avatar chip, from a display name. */
@@ -45,7 +55,11 @@ function initials(name: string): string {
 }
 
 /** The Notion ↔ Docket identity surface. */
-export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelProps): JSX.Element {
+export function NotionPeoplePanel({
+  orgId,
+  integrationId,
+  canManage,
+}: NotionPeoplePanelProps): JSX.Element {
   const people = useNotionPeople(orgId, integrationId);
 
   if (people.loading) {
@@ -76,7 +90,7 @@ export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelPro
 
   if (nothingSeen) {
     return (
-      <div className="border-outline-variant rounded-xl border border-dashed p-6">
+      <div className="bg-surface-container-lowest rounded-xl p-4">
         <p className="text-on-surface text-label-large">No Notion people yet</p>
         <p className="text-on-surface-variant text-body-small mt-1 max-w-prose">
           Docket learns who is in your Notion workspace on the first sync. Once the databases exist
@@ -90,7 +104,7 @@ export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelPro
     <div className="@container flex flex-col gap-4">
       {people.unmatched.length > 0 ? (
         <section
-          className="border-outline-variant overflow-hidden rounded-xl border"
+          className="bg-surface-container-low overflow-hidden rounded-xl"
           aria-label="People who need a decision"
         >
           <div className="bg-surface-container flex items-center gap-2 px-4 py-2.5">
@@ -101,7 +115,7 @@ export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelPro
                 : `${String(people.unmatched.length)} people to sort out`}
             </span>
           </div>
-          <p className="text-on-surface-variant text-body-small border-outline-variant border-t px-4 py-2">
+          <p className="text-on-surface-variant text-body-small px-4 py-2">
             These people work in your Notion workspace but Docket doesn’t know who they are. Until
             you say, anything assigned to them in Notion can’t reach Docket.
           </p>
@@ -113,6 +127,7 @@ export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelPro
                 email={person.email}
                 busy={people.resolving === person.externalId}
                 roster={people.roster}
+                canManage={canManage}
                 onDecide={(decision) => {
                   people.resolve(person.externalId, decision);
                 }}
@@ -147,6 +162,7 @@ export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelPro
                 key={person.externalId}
                 person={person}
                 busy={people.resolving === person.externalId}
+                canManage={canManage}
                 onRestore={() => {
                   people.resolve(person.externalId, { action: 'unignore' });
                 }}
@@ -181,11 +197,12 @@ function UnmatchedRow(props: {
   busy: boolean;
   roster: readonly { id: string; displayName: string }[];
   onDecide: (decision: PersonDecision) => void;
+  canManage: boolean;
 }): JSX.Element {
   const [choice, setChoice] = useState('create_actor');
 
   return (
-    <li className="border-outline-variant bg-surface-container-low flex flex-col gap-3 border-t px-4 py-3 @xl:flex-row @xl:items-center">
+    <li className="bg-surface-container-low flex flex-col gap-3 px-4 py-3 @xl:flex-row @xl:items-center">
       <span className="bg-surface-container text-on-surface-variant text-body-small flex size-8 shrink-0 items-center justify-center rounded-full">
         {initials(props.name)}
       </span>
@@ -195,36 +212,41 @@ function UnmatchedRow(props: {
           {props.email ?? 'No email in Notion'}
         </span>
       </span>
-      <div className="flex shrink-0 items-center gap-2">
-        <Select
-          aria-label={`What should Docket do about ${props.name}?`}
-          value={choice}
-          disabled={props.busy}
-          onChange={(e) => {
-            setChoice(e.target.value);
-          }}
-          className="w-56"
-        >
-          <option value="create_actor">Add to Docket as a new person</option>
-          <option value="skip">Don’t sync them</option>
-          {props.roster.map((member) => (
-            <option key={member.id} value={`match:${member.id}`}>
-              This is {member.displayName}
-            </option>
-          ))}
-        </Select>
-        <Button
-          disabled={props.busy}
-          onClick={() => {
-            if (choice === 'create_actor') props.onDecide({ action: 'create_actor' });
-            else if (choice === 'skip') props.onDecide({ action: 'skip' });
-            else
-              props.onDecide({ action: 'match_existing', actorId: choice.slice('match:'.length) });
-          }}
-        >
-          {props.busy ? 'Saving…' : 'Apply'}
-        </Button>
-      </div>
+      {props.canManage ? (
+        <div className="flex shrink-0 items-center gap-2">
+          <Select
+            aria-label={`What should Docket do about ${props.name}?`}
+            value={choice}
+            disabled={props.busy}
+            onChange={(e) => {
+              setChoice(e.target.value);
+            }}
+            className="w-56"
+          >
+            <option value="create_actor">Add to Docket as a new person</option>
+            <option value="skip">Don’t sync them</option>
+            {props.roster.map((member) => (
+              <option key={member.id} value={`match:${member.id}`}>
+                This is {member.displayName}
+              </option>
+            ))}
+          </Select>
+          <Button
+            disabled={props.busy}
+            onClick={() => {
+              if (choice === 'create_actor') props.onDecide({ action: 'create_actor' });
+              else if (choice === 'skip') props.onDecide({ action: 'skip' });
+              else
+                props.onDecide({
+                  action: 'match_existing',
+                  actorId: choice.slice('match:'.length),
+                });
+            }}
+          >
+            {props.busy ? 'Saving…' : 'Apply'}
+          </Button>
+        </div>
+      ) : null}
     </li>
   );
 }
@@ -261,14 +283,12 @@ function Summary(props: {
 
   if (props.children === undefined) {
     return (
-      <section className={cn('border-outline-variant rounded-xl border px-4 py-3')}>
-        {heading}
-      </section>
+      <section className={cn('bg-surface-container-low rounded-xl px-4 py-3')}>{heading}</section>
     );
   }
 
   return (
-    <details className="border-outline-variant overflow-hidden rounded-xl border">
+    <details className="bg-surface-container-low overflow-hidden rounded-xl">
       <summary className="cursor-pointer list-none px-4 py-3 marker:content-none">
         {heading}
       </summary>
@@ -290,9 +310,10 @@ function IgnoredRow(props: {
   person: NotionWorkspacePerson;
   busy: boolean;
   onRestore: () => void;
+  canManage: boolean;
 }): JSX.Element {
   return (
-    <li className="border-outline-variant bg-surface-container-low flex items-center gap-3 border-t px-4 py-3">
+    <li className="bg-surface-container-low flex items-center gap-3 px-4 py-3">
       <span className="bg-surface-container text-on-surface-variant text-body-small flex size-8 shrink-0 items-center justify-center rounded-full">
         {initials(props.person.name)}
       </span>
@@ -302,9 +323,11 @@ function IgnoredRow(props: {
           {props.person.email ?? 'No email in Notion'}
         </span>
       </span>
-      <Button variant="outline" disabled={props.busy} onClick={props.onRestore}>
-        {UNIGNORE_ACTION}
-      </Button>
+      {props.canManage ? (
+        <Button variant="outline" disabled={props.busy} onClick={props.onRestore}>
+          {UNIGNORE_ACTION}
+        </Button>
+      ) : null}
     </li>
   );
 }

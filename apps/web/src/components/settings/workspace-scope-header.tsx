@@ -24,7 +24,7 @@ export function WorkspaceScopeHeader({
 }: WorkspaceScopeHeaderProps): JSX.Element {
   return (
     <div className="flex flex-col gap-1">
-      <h2 className="text-on-surface text-title-small font-medium">This workspace</h2>
+      <h2 className="text-on-surface text-title-small">This workspace</h2>
       <p className="text-on-surface-variant text-body-medium max-w-prose">
         These connections belong to this workspace — anyone with access can use them, and workspace
         admins manage them.{' '}
@@ -33,14 +33,14 @@ export function WorkspaceScopeHeader({
             Linking a personal account happens in{' '}
             <NextLink
               href={linkedAccountsHref}
-              className="text-on-surface font-medium underline-offset-2 hover:underline"
+              className="text-on-surface text-label-large underline-offset-2 hover:underline"
             >
               Connected accounts
             </NextLink>
             .
           </>
         ) : (
-          'Personal account links are shown above under Linked accounts.'
+          'Your own linked accounts are shown above.'
         )}
       </p>
     </div>

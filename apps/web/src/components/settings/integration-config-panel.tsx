@@ -23,7 +23,7 @@
 import { type ConnectorConfig, type IntegrationOut, type TeamOut } from '@docket/types';
 import { cn } from '@docket/ui';
 import { Check } from '@docket/ui/icons';
-import { Select, Skeleton } from '@docket/ui/primitives';
+import { Checkbox, Select, Skeleton, focusRing } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
 import { useState } from 'react';
@@ -277,12 +277,12 @@ export function IntegrationConfigPanel({
   const emptySubset = !copy.usesTeamMapping && !allMode && listIds.length === 0;
 
   return (
-    <div className="border-outline-variant bg-surface-container flex flex-col gap-5 border-t p-4">
-      <p className="text-on-surface-variant text-xs leading-snug">{copy.connectBlurb}</p>
+    <div className="bg-surface-container flex flex-col gap-5 p-4">
+      <p className="text-on-surface-variant text-body-small">{copy.connectBlurb}</p>
 
       {/* Direction */}
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-on-surface-variant mb-1 text-xs font-medium">Sync direction</legend>
+        <legend className="text-on-surface-variant text-label-medium mb-1">Sync direction</legend>
         <div className="grid gap-2 @2xl:grid-cols-2" role="radiogroup" aria-label="Sync direction">
           {(
             [
@@ -302,17 +302,20 @@ export function IntegrationConfigPanel({
                   commit(buildPayload({ twoWay: d.twoWay, teamId, allMode, listIds, teamMap }));
                 }}
                 className={cn(
-                  'focus-visible:ring-ring bg-surface-container-low relative flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors outline-none focus-visible:ring-2',
+                  'relative flex flex-col gap-1 rounded-md p-3 text-left transition-colors',
+                  focusRing,
+                  // Selection changes colour and nothing else — `secondary-container` is MD3's
+                  // selection role, the same one a selected Chip takes.
                   isSelected
-                    ? 'border-primary bg-primary/5'
-                    : 'border-outline-variant hover:border-primary/40',
+                    ? 'bg-secondary-container text-on-secondary-container'
+                    : 'bg-surface-container hover:bg-surface-container-high',
                 )}
               >
                 <span className="flex items-center justify-between gap-2">
-                  <span className="text-on-surface text-body-medium font-semibold">{d.title}</span>
+                  <span className="text-on-surface text-title-small">{d.title}</span>
                   {isSelected ? <Check aria-hidden="true" className="text-primary size-4" /> : null}
                 </span>
-                <span className="text-on-surface-variant text-xs leading-snug">{d.detail}</span>
+                <span className="text-on-surface-variant text-body-small">{d.detail}</span>
               </button>
             );
           })}
@@ -321,7 +324,7 @@ export function IntegrationConfigPanel({
 
       {/* Containers */}
       <fieldset className="flex flex-col gap-2">
-        <legend className="text-on-surface-variant mb-1 text-xs font-medium">
+        <legend className="text-on-surface-variant text-label-medium mb-1">
           {capitalize(copy.containerNounPlural)} to sync
         </legend>
         {copy.usesTeamMapping ? (
@@ -341,22 +344,20 @@ export function IntegrationConfigPanel({
         ) : listsQ.isPending ? (
           /* placeholder: the containers (lists / projects / boards) this integration exposes, which
              only the provider can enumerate. The field's own label and help text are static. */
-          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-xl" />
         ) : listsQ.isError ? (
-          <p className="text-error text-xs">
+          <p className="text-error text-body-small">
             {userErrorMessage(listsQ.error, 'Could not update integration settings.')}
           </p>
         ) : lists.length === 0 ? (
-          <p className="text-on-surface-variant text-xs">
+          <p className="text-on-surface-variant text-body-small">
             No {copy.containerNounPlural} found for this account.
           </p>
         ) : (
           <div className="flex flex-col gap-1">
             {/* The default: sync every container. Turning it off reveals an explicit per-item choice. */}
             <label className="hover:bg-surface-container-high flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5">
-              <input
-                type="checkbox"
-                className="accent-primary size-4"
+              <Checkbox
                 checked={allMode}
                 onChange={(e) => {
                   const nextAllMode = e.target.checked;
@@ -364,18 +365,16 @@ export function IntegrationConfigPanel({
                   commit(buildPayload({ twoWay, teamId, allMode: nextAllMode, listIds, teamMap }));
                 }}
               />
-              <span className="text-on-surface text-body-medium font-medium">
+              <span className="text-on-surface text-label-large">
                 Sync all {copy.checklistNounPlural}
               </span>
             </label>
             {!allMode ? (
-              <ul className="border-outline-variant ml-3 flex flex-col gap-1 border-l pl-3">
+              <ul className="ml-3 flex flex-col gap-1 pl-3">
                 {lists.map((l) => (
                   <li key={l.id}>
                     <label className="hover:bg-surface-container-high flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5">
-                      <input
-                        type="checkbox"
-                        className="accent-primary size-4"
+                      <Checkbox
                         checked={listIds.includes(l.id)}
                         onChange={() => {
                           toggleList(l.id);
@@ -388,7 +387,7 @@ export function IntegrationConfigPanel({
               </ul>
             ) : null}
             {emptySubset ? (
-              <p className="text-on-surface-variant px-2 text-xs">
+              <p className="text-on-surface-variant text-body-small px-2">
                 Select at least one {copy.checklistNoun}, or turn “Sync all{' '}
                 {copy.checklistNounPlural}” back on.
               </p>
@@ -403,7 +402,7 @@ export function IntegrationConfigPanel({
         <div className="flex flex-col gap-2">
           <label
             htmlFor={`team-${integration.id}`}
-            className="text-on-surface-variant text-xs font-medium"
+            className="text-on-surface-variant text-label-medium"
           >
             Land mirrored work in
           </label>
@@ -435,12 +434,12 @@ export function IntegrationConfigPanel({
       {reauthNeeded ? (
         <div
           role="alert"
-          className="border-outline-variant bg-surface-container-low flex flex-col items-start gap-2 rounded-lg border p-3"
+          className="bg-surface-container-low flex flex-col items-start gap-2 rounded-xl p-3"
         >
           <p className="text-error text-body-medium">
             {error ?? 'Linear needs to grant Docket write access.'}
           </p>
-          <p className="text-on-surface-variant text-xs">
+          <p className="text-on-surface-variant text-body-small">
             Reconnect Linear and approve write access to turn on two-way sync.
           </p>
           {onReauthorize ? (
@@ -453,7 +452,10 @@ export function IntegrationConfigPanel({
 
       {/* Autosave status — every field persists on change, so there is no Save button. Kept quiet
           (text-on-surface-variant, xs); the generic-error and re-auth notices above own failures. */}
-      <div className="text-on-surface-variant flex h-4 items-center text-xs" aria-live="polite">
+      <div
+        className="text-on-surface-variant text-body-small flex h-4 items-center"
+        aria-live="polite"
+      >
         {save.isPending ? 'Saving…' : saved ? 'Saved' : null}
       </div>
     </div>

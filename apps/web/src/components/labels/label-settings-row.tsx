@@ -70,7 +70,10 @@ export function LabelSettingsRow({
   const team = label.teamId ? teams.find((t) => t.id === label.teamId) : undefined;
 
   return (
-    <li className="bg-surface-container-low hover:bg-surface-container flex items-center gap-3 rounded-lg px-4 py-3">
+    // Flush inside its list's container rather than an island of its own. Each row used to paint
+    // its own fill and radius, so a set of five labels read as five cards with gaps between them
+    // instead of one list you can scan down.
+    <li className="hover:bg-surface-container flex min-h-12 items-center gap-3 px-4 py-3 transition-colors">
       <LabelChip name={label.name} color={label.color} className="max-w-56" />
 
       <span className="text-on-surface-variant text-body-small ml-auto shrink-0 tabular-nums">
@@ -100,7 +103,7 @@ export function LabelSettingsRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={onEdit}>Rename or recolour</DropdownMenuItem>
+            <DropdownMenuItem onSelect={onEdit}>Rename or recolor</DropdownMenuItem>
             {!hideScope && teams.length > 0 ? (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>Limit to a team</DropdownMenuSubTrigger>

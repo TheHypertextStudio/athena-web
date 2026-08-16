@@ -31,6 +31,7 @@ import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useLiveApiQuery } from '@/lib/query';
 
+import { LoadFailure } from './load-failure';
 import { InviteForm } from './invite-form';
 import { InvitationsList } from './invitations-list';
 import { MemberRow } from './member-row';
@@ -171,14 +172,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   }
 
   if (loadError) {
-    return (
-      <p
-        role="status"
-        className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body-medium rounded-lg border p-4"
-      >
-        Workspace members are temporarily unavailable. We&apos;ll keep checking automatically.
-      </p>
-    );
+    return <LoadFailure message={loadError} retrying />;
   }
 
   const pendingInvitations = invitations.map((invitation) => ({
@@ -206,7 +200,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
       {actionError ? (
         <p
           role="alert"
-          className="border-error/40 text-error bg-error/5 text-body-medium rounded-lg border p-3"
+          className="bg-error-container text-on-error-container text-body-medium rounded-xl p-3"
         >
           {actionError}
         </p>
@@ -214,21 +208,21 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
 
       <section aria-label="Members" className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-on-surface flex items-center gap-2 text-base font-semibold">
+          <h2 className="text-on-surface text-title-small flex items-center gap-2">
             <Users aria-hidden="true" className="size-4" />
             Members
-            <span className="text-on-surface-variant font-normal tabular-nums">
+            <span className="text-on-surface-variant text-body-large tabular-nums">
               ({members.length})
             </span>
           </h2>
         </div>
-        <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
+        <div className="bg-surface-container-low overflow-hidden rounded-xl">
           {members.length === 0 ? (
             <p className="text-on-surface-variant text-body-medium p-6 text-center">
               No members yet — invite someone above to get started.
             </p>
           ) : (
-            <ul className="divide-outline-variant divide-y">
+            <ul className="flex flex-col">
               {members.map((member) => {
                 const isGuest = guestRoleId !== null && member.roleId === guestRoleId;
                 return (
@@ -259,8 +253,8 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
       </section>
 
       <section aria-label="Pending invitations" className="flex flex-col gap-3">
-        <h2 className="text-on-surface text-base font-semibold">Pending invitations</h2>
-        <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
+        <h2 className="text-on-surface text-title-small">Pending invitations</h2>
+        <div className="bg-surface-container-low overflow-hidden rounded-xl">
           <InvitationsList
             invitations={pendingInvitations}
             roleLabel={roleLabel}

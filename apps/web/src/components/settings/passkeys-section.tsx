@@ -38,6 +38,8 @@ import { EditableTitle } from '@/components/editor/editable-title';
 import { passkey } from '@/lib/auth-client';
 import { formatCalendarDate } from '@/lib/format-date';
 import { toUserFacingError, userErrorMessage } from '@/lib/problem';
+import { SettingRow } from './setting-row';
+import { SettingsGroup } from './settings-group';
 
 /** The Better Auth passkey record as returned by `listUserPasskeys` (subset this UI renders). */
 interface PasskeyRecord {
@@ -100,19 +102,14 @@ export function PasskeysSection(): JSX.Element {
 
   return (
     <section className="flex flex-col gap-3" aria-label="Passkeys">
-      <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-body-medium font-medium">Passkeys</h3>
-            <p className="text-on-surface-variant text-body-medium max-w-prose">
-              Passkeys are how you sign in — Face ID, Touch ID, or a security key, with no password.
-              Add one for each device you use so you&apos;re never locked out if you lose another.
-            </p>
-          </div>
+      <SettingsGroup
+        title="Passkeys"
+        description="How you sign in — Face ID, Touch ID, or a security key. Add one for each device you use."
+        body="rows"
+        action={
           <Button
             type="button"
             variant="outline"
-            className="shrink-0"
             onClick={() => {
               setAddOpen(true);
             }}
@@ -120,14 +117,12 @@ export function PasskeysSection(): JSX.Element {
             <Plus aria-hidden="true" className="size-4" />
             Add passkey
           </Button>
-        </div>
-
+        }
+      >
         {passkeys.length === 0 ? (
-          <p className="text-on-surface-variant text-body-medium">
-            No passkeys yet. Add one to sign in from this device.
-          </p>
+          <SettingRow label="No passkeys yet. Add one to sign in from this device." />
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="flex flex-col">
             {passkeys.map((record) => (
               <PasskeyRow
                 key={record.id}
@@ -142,7 +137,7 @@ export function PasskeysSection(): JSX.Element {
             ))}
           </ul>
         )}
-      </div>
+      </SettingsGroup>
 
       <AddPasskeyDialog
         open={addOpen}
@@ -212,7 +207,7 @@ function AddPasskeyDialog({ open, onOpenChange, onAdded }: AddPasskeyDialogProps
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2">
-          <label htmlFor={nameId} className="text-on-surface text-body-medium font-medium">
+          <label htmlFor={nameId} className="text-on-surface text-label-large">
             Name
           </label>
           <Input
@@ -303,7 +298,7 @@ function PasskeyRow({ record, onRenamed, onRemove }: PasskeyRowProps): JSX.Eleme
   }, [rename.isSuccess, rename.submittedAt]);
 
   return (
-    <li className="border-outline-variant bg-surface flex items-center gap-3 rounded-lg border p-3">
+    <li className="hover:bg-surface-container flex min-h-12 items-center gap-3 px-4 py-3 transition-colors">
       <DecorativeIcon icon={Shield} className="shrink-0" />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
@@ -315,17 +310,17 @@ function PasskeyRow({ record, onRenamed, onRemove }: PasskeyRowProps): JSX.Eleme
             canEdit
             ariaLabel="Passkey name"
             placeholder="Unnamed passkey"
-            className="text-on-surface text-body-medium min-w-0 truncate font-medium"
+            className="text-on-surface text-label-large min-w-0 truncate"
           />
           {rename.isError ? (
-            <span role="alert" className="text-error shrink-0 text-xs">
+            <span role="alert" className="text-error text-body-small shrink-0">
               {userErrorMessage(rename.error, 'Could not update your passkeys.')}
             </span>
           ) : showSaved ? (
-            <span className="text-on-surface-variant shrink-0 text-xs">Saved</span>
+            <span className="text-on-surface-variant text-body-small shrink-0">Saved</span>
           ) : null}
         </div>
-        <p className="text-on-surface-variant truncate text-xs">
+        <p className="text-on-surface-variant text-body-small truncate">
           {[addedOn(record), record.deviceType === 'multiDevice' ? 'Synced' : null]
             .filter(Boolean)
             .join(' · ')}

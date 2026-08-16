@@ -21,8 +21,10 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
+import { LoadFailure } from '@/components/settings/load-failure';
+import { firstWriteError, WriteError } from '@/components/settings/write-error';
+import { userErrorMessage } from '@/lib/problem';
 import { useActiveOrg } from '@/components/active-org';
-import { SectionHeader } from '@/components/settings/section-header';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { DeleteStatusDialog } from '@/components/statuses/delete-status-dialog';
 import {
@@ -40,6 +42,7 @@ import type { StatusLike } from '@/components/statuses/status-registry';
 import { api } from '@/lib/api';
 import { useAppParams } from '@/lib/app-location';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** Which status the editor is open on, and which set and category it would be created into. */
 interface EditorTarget {
@@ -98,6 +101,15 @@ export default function StatusesSettingsPage(): JSX.Element {
   const deleteStatus = useDeleteStatus(orgId);
   const forkTeam = useForkTeamStatuses(orgId);
   const resetTeam = useResetTeamStatuses(orgId);
+
+  const writeError = firstWriteError([
+    [createStatus, 'Could not create that status.'],
+    [updateStatus, 'Could not save that status.'],
+    [reorderStatuses, 'Could not reorder statuses.'],
+    [deleteStatus, 'Could not delete that status.'],
+    [forkTeam, 'Could not give this team its own statuses.'],
+    [resetTeam, 'Could not return this team to the workspace statuses.'],
+  ]);
 
   const [editing, setEditing] = useState<EditorTarget | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
@@ -180,18 +192,15 @@ export default function StatusesSettingsPage(): JSX.Element {
   ];
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title="Statuses"
-        description="What your work moves through. Name them however your workspace talks; the five categories underneath are what keep glyphs, progress, and reporting honest."
-      />
-
+    <SettingsSectionPage
+      title="Statuses"
+      description="The states work moves through. Rename them to match how your workspace talks."
+    >
+      {writeError ? <WriteError message={writeError} /> : null}
       {setsQ.isPending ? (
-        <Skeleton className="h-[36rem] max-w-3xl rounded-lg" />
+        <Skeleton className="h-[36rem] max-w-3xl rounded-xl" />
       ) : setsQ.isError ? (
-        <p role="status" className="text-on-surface-variant text-body-medium">
-          Statuses are temporarily unavailable. We&apos;ll keep checking automatically.
-        </p>
+        <LoadFailure message={userErrorMessage(setsQ.error, 'Could not load statuses.')} retrying />
       ) : (
         <div className="flex max-w-3xl min-w-0 flex-col gap-10">
           {sections.map((section) => (
@@ -314,7 +323,7 @@ export default function StatusesSettingsPage(): JSX.Element {
           }}
         />
       )}
-    </div>
+    </SettingsSectionPage>
   );
 }
 

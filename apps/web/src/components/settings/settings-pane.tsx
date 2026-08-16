@@ -27,6 +27,7 @@
  */
 import { cn } from '@docket/ui';
 import { ChevronLeft } from '@docket/ui/icons';
+import { Surface, focusRing } from '@docket/ui/primitives';
 import { type JSX, type ReactNode, useEffect, useRef, useState } from 'react';
 
 /** Props for {@link SettingsPane}. */
@@ -86,13 +87,25 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
             onClick={() => {
               setBrowsing(true);
             }}
-            className="text-on-surface-variant text-label-large hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring -ml-2 inline-flex min-h-11 shrink-0 items-center gap-1 self-start rounded-md pr-3 pl-1 transition-colors outline-none focus-visible:ring-2 sm:hidden"
+            className={cn(
+              // The button sits on the modal panel itself (`surface-container-high`), so its hover
+              // steps to `highest`. Hovering to `high` — what this used to do — was a no-op.
+              'text-on-surface-variant text-label-large hover:bg-surface-container-highest hover:text-on-surface -ml-2 inline-flex min-h-11 shrink-0 items-center gap-1 self-start rounded-md pr-3 pl-1 transition-colors sm:hidden',
+              focusRing,
+            )}
           >
             <ChevronLeft aria-hidden="true" className="size-5 shrink-0" />
             All settings
           </button>
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        {/* The content pane is the one region lowered off the panel. The modal panel is
+            `surface-container-high`; a group drawn on it at `surface-container-low` sat *below* its
+            own background, which is why 88 hairlines had been added to make those cards visible.
+            Dropping the pane to `surface` puts every group one step above it, so the ramp runs the
+            way `docs/design/design-system.md` §8 describes and the lines are simply gone. */}
+        <Surface tone="page" shape="medium" pad="roomy" className="min-h-0 flex-1 overflow-y-auto">
+          {children}
+        </Surface>
       </div>
     </div>
   );

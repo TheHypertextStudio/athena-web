@@ -25,6 +25,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@docket/ui/primitives';
+import { EmptyState } from '@docket/ui/components';
 import Link from 'next/link';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
@@ -58,6 +59,9 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
+import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
+import { isActionable, syncStateCopy } from '@/components/settings/work-location-copy';
 
 const DEVICE_OPT_IN_KEY = 'docket.work-location.device-opt-in';
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
@@ -109,18 +113,6 @@ function deviceErrorCopy(error: ForegroundLocationError): string {
   return 'This browser could not determine its position.';
 }
 
-/** Plain-language account delivery state. */
-function syncStateCopy(state: string, reason: string | null): string {
-  if (state === 'healthy') return 'Up to date';
-  if (state === 'pending') return 'Preparing location sync';
-  if (state === 'retrying') return 'Retrying safely';
-  if (reason === 'unsupported_recurrence') {
-    return 'Change the Google recurrence to daily or weekly to continue';
-  }
-  if (state === 'unsupported') return 'Work-location sync is not supported for this account';
-  return 'Account action is required';
-}
-
 /** The user-owned Work locations settings destination. */
 export default function WorkLocationsSettingsPage(): JSX.Element {
   const [pointAt, setPointAt] = useState(() => new Date().toISOString());
@@ -153,6 +145,11 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
   const [occurrenceAssertion, setOccurrenceAssertion] = useState<WorkLocationAssertionOut | null>(
     null,
   );
+  // Both destroy server data — a saved place takes its geofence with it, and a schedule takes
+  // its recurrence. Held here rather than per row so one dialog serves every row.
+  const [confirmRetire, setConfirmRetire] = useState<WorkPlaceOut | null>(null);
+  const [confirmDeleteSchedule, setConfirmDeleteSchedule] =
+    useState<WorkLocationAssertionOut | null>(null);
   const [deviceRemembered, setDeviceRemembered] = useState(false);
   const [deviceActive, setDeviceActive] = useState(false);
   const [deviceStatus, setDeviceStatus] = useState<string | null>(null);
@@ -401,19 +398,19 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="border-outline-variant flex flex-row items-center justify-between gap-4 border-b pb-4">
-        <h2 className="text-on-surface text-title-medium">Work locations</h2>
+    <SettingsSectionPage
+      sectionKey="work-locations"
+      action={
         <Button onClick={openNewPlace}>
           <Plus aria-hidden="true" />
           Add place
         </Button>
-      </header>
-
+      }
+    >
       {loading ? (
         <div className="flex flex-col gap-3" aria-label="Loading work locations">
-          <Skeleton className="h-32 w-full rounded-lg" />
-          <Skeleton className="h-40 w-full rounded-lg" />
+          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-40 w-full rounded-xl" />
         </div>
       ) : loadError || !placesQ.data || !assertionsQ.data ? (
         <p role="alert" className="text-error text-body-medium">
@@ -422,13 +419,15 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
       ) : (
         <>
           <section aria-label="Saved places">
-            <div className="border-outline-variant divide-outline-variant divide-y overflow-hidden rounded-xl border">
+            <div className="bg-surface-container-low overflow-hidden rounded-xl">
               {places.length === 0 ? (
-                <div className="flex min-h-24 items-center px-4 py-5">
-                  <p className="text-on-surface-variant text-body-medium">
-                    Add the places you work from most often.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={MapPin}
+                  title="No saved places yet"
+                  body="Save the places you work from so schedules and calendar sync can use them."
+                  className="border-none bg-transparent"
+                  cta={{ label: 'Add place', onClick: openNewPlace }}
+                />
               ) : (
                 places.map((place) => {
                   const isHome = placesQ.data.profile.homePlaceId === place.id;
@@ -440,9 +439,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                   return (
                     <div
                       key={place.id}
-                      className="bg-surface-container-low flex min-h-16 items-center gap-3 px-3 py-2"
+                      className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-3 py-2 transition-colors"
                     >
-                      <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-lg">
+                      <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
                         {isHome ? <Home aria-hidden="true" /> : <MapPin aria-hidden="true" />}
                       </span>
                       <div className="min-w-0 flex-1">
@@ -515,9 +514,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              className="text-error"
+                              className="text-error focus:text-error"
                               onSelect={() => {
-                                retirePlace.mutate(place.id);
+                                setConfirmRetire(place);
                               }}
                             >
                               Retire place
@@ -542,11 +541,15 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                 Add schedule
               </Button>
             </div>
-            <div className="border-outline-variant divide-outline-variant divide-y overflow-hidden rounded-xl border">
+            <div className="bg-surface-container-low overflow-hidden rounded-xl">
               {assertionsQ.data.items.length === 0 ? (
-                <p className="text-on-surface-variant text-body-medium px-4 py-5">
-                  No expected locations scheduled.
-                </p>
+                <EmptyState
+                  icon={Calendar}
+                  title="No schedule yet"
+                  body="Tell Docket where you usually work on which days."
+                  className="border-none bg-transparent"
+                  cta={{ label: 'Add schedule', onClick: openNewSchedule }}
+                />
               ) : (
                 assertionsQ.data.items.map((assertion) => {
                   const place = places.find((candidate) => candidate.id === assertion.placeId);
@@ -557,9 +560,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                   return (
                     <div
                       key={assertion.id}
-                      className="bg-surface-container-low flex min-h-16 items-center gap-3 px-3 py-2"
+                      className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-3 py-2 transition-colors"
                     >
-                      <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-lg">
+                      <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
                         <Calendar aria-hidden="true" />
                       </span>
                       <div className="min-w-0 flex-1">
@@ -605,9 +608,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                           ) : null}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            className="text-error"
+                            className="text-error focus:text-error"
                             onSelect={() => {
-                              deleteAssertion.mutate(assertion.id);
+                              setConfirmDeleteSchedule(assertion);
                             }}
                           >
                             Delete schedule
@@ -626,11 +629,11 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
               <h3 id="planned-work-heading" className="text-on-surface text-title-small">
                 Planned work
               </h3>
-              <div className="border-outline-variant divide-outline-variant divide-y overflow-hidden rounded-xl border">
+              <div className="bg-surface-container-low overflow-hidden rounded-xl">
                 {schedulingQ.data.commitments.map((commitment) => (
                   <div
                     key={commitment.id}
-                    className="bg-surface-container-low flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-2"
+                    className="hover:bg-surface-container flex min-h-16 flex-wrap items-center justify-between gap-3 px-4 py-2 transition-colors"
                   >
                     <div className="min-w-0">
                       <p className="text-on-surface text-title-small truncate">
@@ -668,8 +671,8 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
             <h3 id="automatic-location-heading" className="text-on-surface text-title-small">
               Automatic location
             </h3>
-            <div className="border-outline-variant bg-surface-container-low flex min-h-16 items-center gap-3 rounded-xl border px-3 py-2">
-              <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-lg">
+            <div className="bg-surface-container-low flex min-h-16 items-center gap-3 rounded-xl px-3 py-2">
+              <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
                 <Target aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
@@ -710,13 +713,13 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                 Google work locations appear as public calendar events.
               </p>
             </div>
-            <div className="border-outline-variant divide-outline-variant divide-y overflow-hidden rounded-xl border">
+            <div className="bg-surface-container-low overflow-hidden rounded-xl">
               {(syncQ.data?.accounts ?? []).map((account) => (
                 <div
                   key={account.connectionId}
-                  className="bg-surface-container-low flex min-h-16 items-center gap-3 px-3 py-2"
+                  className="hover:bg-surface-container flex min-h-16 items-center gap-3 px-3 py-2 transition-colors"
                 >
-                  <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-lg">
+                  <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">
                     {account.provider === 'google' ? (
                       <Google aria-hidden="true" />
                     ) : (
@@ -731,7 +734,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                       {syncStateCopy(account.state, account.reason)}
                     </p>
                   </div>
-                  {account.state === 'action_required' ? (
+                  {isActionable(account.state, account.reason) ? (
                     <Button asChild variant="ghost">
                       <Link href="/settings/connections/google-calendar">Review</Link>
                     </Button>
@@ -739,9 +742,19 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                 </div>
               ))}
               {syncQ.data?.accounts.length === 0 ? (
-                <p className="text-on-surface-variant text-body-medium px-4 py-5">
-                  No linked calendar accounts.
-                </p>
+                <EmptyState
+                  icon={Google}
+                  title="No linked calendar accounts"
+                  body="Link a Google account to publish your work location to its calendar."
+                  className="border-none bg-transparent"
+                  action={
+                    <Button asChild variant="ghost" size="sm">
+                      <Link href="/settings/connections/google-calendar">
+                        Link a Google account
+                      </Link>
+                    </Button>
+                  }
+                />
               ) : null}
             </div>
           </section>
@@ -793,11 +806,41 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
         }}
       />
 
+      <ConfirmDestructiveDialog
+        open={confirmRetire !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRetire(null);
+        }}
+        title={`Retire ${confirmRetire?.name ?? 'this place'}?`}
+        description="Schedules that point at it stop matching. Location history already recorded is unchanged."
+        confirmLabel="Retire place"
+        pending={retirePlace.isPending}
+        onConfirm={() => {
+          if (confirmRetire) retirePlace.mutate(confirmRetire.id);
+          setConfirmRetire(null);
+        }}
+      />
+
+      <ConfirmDestructiveDialog
+        open={confirmDeleteSchedule !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDeleteSchedule(null);
+        }}
+        title="Delete this schedule?"
+        description="The expected location stops applying from now on. Days already recorded are unchanged."
+        confirmLabel="Delete schedule"
+        pending={deleteAssertion.isPending}
+        onConfirm={() => {
+          if (confirmDeleteSchedule) deleteAssertion.mutate(confirmDeleteSchedule.id);
+          setConfirmDeleteSchedule(null);
+        }}
+      />
+
       {mutationError ? (
         <p role="alert" className="text-error text-body-small">
           {userErrorMessage(mutationError, 'Could not save that work-location change.')}
         </p>
       ) : null}
-    </div>
+    </SettingsSectionPage>
   );
 }

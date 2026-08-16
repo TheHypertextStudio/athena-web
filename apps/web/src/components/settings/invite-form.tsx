@@ -11,7 +11,7 @@
  * invitation and clears the email on success; errors surface inline as `role="alert"`. All
  * controls are styled design-system components (no bare inputs/selects).
  */
-import { Button, Input } from '@docket/ui/primitives';
+import { Checkbox, Button, Input } from '@docket/ui/primitives';
 import { Plus } from '@docket/ui/icons';
 import type { JSX } from 'react';
 import { useState } from 'react';
@@ -64,7 +64,7 @@ export function InviteForm({
 
   return (
     <form
-      className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
+      className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4"
       onSubmit={(event) => {
         event.preventDefault();
         // `canSubmit` implies a non-null role id; bail otherwise (narrows `effectiveRoleId`).
@@ -74,8 +74,8 @@ export function InviteForm({
       }}
     >
       <div className="flex flex-col gap-1">
-        <h3 className="text-on-surface text-base font-semibold">Invite someone</h3>
-        <p className="text-on-surface-variant text-xs">
+        <h3 className="text-on-surface text-title-small">Invite someone</h3>
+        <p className="text-on-surface-variant text-body-small">
           They&rsquo;ll get an email invitation to join this workspace.
         </p>
       </div>
@@ -106,17 +106,16 @@ export function InviteForm({
       </div>
 
       <label className="text-on-surface-variant text-body-medium flex w-fit cursor-pointer items-center gap-2">
-        <input
-          type="checkbox"
-          className="accent-primary size-4 rounded"
+        <Checkbox
+          className="rounded"
           checked={asGuest}
           onChange={(event) => {
             setAsGuest(event.target.checked);
           }}
         />
         <span>
-          Invite as a <span className="text-on-surface font-medium">guest</span> — a limited outside
-          collaborator
+          Invite as a <span className="text-on-surface text-label-large">guest</span> — a limited
+          outside collaborator
         </span>
       </label>
 

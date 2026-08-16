@@ -33,10 +33,41 @@ import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 /** The role keys that confer org-management ability. */
 const MANAGER_ROLE_KEYS = new Set(['owner', 'admin']);
 
+/**
+ * The capability ladder, ascending. A role holds a capability when its own bundle names one at
+ * least this high — the server collapses a bundle to its maximum rank, so the client does too.
+ */
+const CAPABILITY_RANK: Readonly<Record<string, number>> = {
+  view: 0,
+  comment: 1,
+  contribute: 2,
+  assign: 3,
+  manage: 4,
+};
+
+/** The rank a role must reach to create work. */
+const CONTRIBUTE_RANK = 2;
+
+/** Whether a role's capability bundle (plus its org-wide baseline) reaches `contribute`. */
+function reachesContribute(role: RoleOut): boolean {
+  const held = [...role.capabilities, ...(role.baseCapability ? [role.baseCapability] : [])];
+  return held.some((capability) => (CAPABILITY_RANK[capability] ?? -1) >= CONTRIBUTE_RANK);
+}
+
 /** The resolution state of a {@link useCanManageOrg} read. */
 export interface CanManageOrg {
   /** Whether the caller holds an `owner` / `admin` role in the org. */
   readonly canManage: boolean;
+  /**
+   * Whether the caller may create and edit work in the org.
+   *
+   * @remarks
+   * Distinct from {@link canManage}, and the distinction is load-bearing: several writes are
+   * guarded server-side at `contribute`, not `manage`. Creating a label is one — `POST
+   * /v1/orgs/:orgId/labels` takes `capabilityGuard('contribute')` — so gating its button on
+   * `canManage` hid an affordance from every member who was entitled to it.
+   */
+  readonly canContribute: boolean;
   /** Whether the management ability is still being resolved. */
   readonly loading: boolean;
 }
@@ -83,12 +114,12 @@ export function useCanManageOrg(orgId: string): CanManageOrg {
   );
 
   if (!enabled) {
-    return { canManage: false, loading: false };
+    return { canManage: false, canContribute: false, loading: false };
   }
 
   const loading = membersQ.isPending || rolesQ.isPending;
   if (loading || membersQ.isError || rolesQ.isError) {
-    return { canManage: false, loading };
+    return { canManage: false, canContribute: false, loading };
   }
 
   // After the pending/error guard above, both reads are in their success state, so `.data` is
@@ -97,5 +128,10 @@ export function useCanManageOrg(orgId: string): CanManageOrg {
   const roles: readonly RoleOut[] = rolesQ.data.items;
   const me = members.find((m) => m.userId === userId);
   const myRole = me?.roleId ? roles.find((r) => r.id === me.roleId) : null;
-  return { canManage: myRole ? MANAGER_ROLE_KEYS.has(myRole.key) : false, loading: false };
+  const canManage = myRole ? MANAGER_ROLE_KEYS.has(myRole.key) : false;
+  return {
+    canManage,
+    canContribute: canManage || (myRole ? reachesContribute(myRole) : false),
+    loading: false,
+  };
 }

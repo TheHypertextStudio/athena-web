@@ -42,10 +42,24 @@ import { useNotionParentPages, useNotionSetup } from './use-notion-mirror-contro
 export interface NotionSetupCardProps {
   orgId: string;
   integrationId: string;
+  /**
+   * Whether the caller may change this workspace's Notion setup.
+   *
+   * @remarks
+   * Every write behind this surface is guarded server-side at `manage`
+   * (`apps/api/src/routes/notion-mirror.ts`). Rendering the controls regardless meant a
+   * contributor could press "Create databases" and receive a bare 403 with nothing explaining
+   * it. Read stays available to everyone; only the write affordances are withheld.
+   */
+  canManage: boolean;
 }
 
 /** Choose a Notion page, then create the designed databases inside it. */
-export function NotionSetupCard({ orgId, integrationId }: NotionSetupCardProps): JSX.Element {
+export function NotionSetupCard({
+  orgId,
+  integrationId,
+  canManage,
+}: NotionSetupCardProps): JSX.Element {
   const setup = useNotionSetup(orgId, integrationId);
   const [page, setPage] = useState<NotionParentPageOut | null>(null);
   const [query, setQuery] = useState('');
@@ -71,7 +85,7 @@ export function NotionSetupCard({ orgId, integrationId }: NotionSetupCardProps):
           <p className="text-on-surface-variant text-body-small max-w-prose" role="note">
             {NO_PAGES_HINT}
           </p>
-          <NotionConnectAction label={NO_PAGES_ACTION} />
+          <NotionConnectAction label={NO_PAGES_ACTION} disabled={!canManage} />
         </div>
       ) : (
         <div className="flex flex-wrap items-end gap-3">
@@ -96,7 +110,7 @@ export function NotionSetupCard({ orgId, integrationId }: NotionSetupCardProps):
             />
           </div>
           <Button
-            disabled={setup.creating || page === null}
+            disabled={setup.creating || page === null || !canManage}
             onClick={() => {
               if (page !== null) setup.create(page.id);
             }}

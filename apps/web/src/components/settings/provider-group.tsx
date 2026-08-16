@@ -61,7 +61,7 @@ export function ProviderGroup({
       <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
         <DecorativeIcon icon={Icon} className="bg-surface-container shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-on-surface text-body-medium font-medium">{entry.name}</span>
+          <span className="text-on-surface text-label-large">{entry.name}</span>
         </div>
         <div className="flex w-full shrink-0 items-center justify-between gap-2 pl-12 sm:w-auto sm:justify-start sm:pl-0">
           <Badge variant={badge.variant}>{badge.label}</Badge>
@@ -81,7 +81,7 @@ export function ProviderGroup({
       </div>
 
       {accounts.length > 0 ? (
-        <ul className="border-outline-variant divide-outline-variant divide-y border-t">
+        <ul className="bg-surface-container flex flex-col">
           {accounts.map((identity) => (
             <IdentityAccountRow
               key={identity.accountId}

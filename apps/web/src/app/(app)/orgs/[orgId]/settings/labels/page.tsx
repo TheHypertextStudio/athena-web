@@ -24,8 +24,10 @@ import { Button, Checkbox, Skeleton } from '@docket/ui/primitives';
 import { Plus } from '@docket/ui/icons';
 import { type JSX, useState } from 'react';
 
+import { LoadFailure } from '@/components/settings/load-failure';
+import { firstWriteError, WriteError } from '@/components/settings/write-error';
 import { useActiveOrg } from '@/components/active-org';
-import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { LabelEditorDialog } from '@/components/labels/label-editor-dialog';
 import { LabelSettingsRow } from '@/components/labels/label-settings-row';
 import {
@@ -37,12 +39,14 @@ import {
   useUpdateLabel,
   useUpdateLabelGroup,
 } from '@/components/labels/queries';
-import { SectionHeader } from '@/components/settings/section-header';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { useAppParams } from '@/lib/app-location';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
+import { SettingRow } from '@/components/settings/setting-row';
+import { SettingsGroup } from '@/components/settings/settings-group';
 
 /** Which label the editor is open on, and which group it would be created into. */
 interface EditorTarget {
@@ -60,7 +64,10 @@ interface EditorTarget {
 export default function LabelsSettingsPage(): JSX.Element {
   const { orgId } = useAppParams<{ orgId: string }>();
   const { activeOrg } = useActiveOrg();
-  const { canManage } = useCanManageOrg(orgId);
+  // Creating a label is a `contribute` write server-side; restructuring the label set (groups,
+  // scope, delete) is `manage`. Gating both on `canManage` hid the New label button from every
+  // member the API would have accepted.
+  const { canManage, canContribute } = useCanManageOrg(orgId);
 
   // A personal workspace is an org of one with a single default team, so "limit this to a team"
   // is a question with no meaningful answer there. Org-backing is an implementation detail.
@@ -82,6 +89,16 @@ export default function LabelsSettingsPage(): JSX.Element {
   const createGroup = useCreateLabelGroup(orgId);
   const updateGroup = useUpdateLabelGroup(orgId);
   const removeGroup = useDeleteLabelGroup(orgId);
+
+  // Six writes with no failure surface: a refused rename or reorder simply reverted on the next
+  // render, which reads as the product discarding your edit for no reason.
+  const writeError = firstWriteError([
+    [updateLabel, 'Could not save that label.'],
+    [removeLabel, 'Could not delete that label.'],
+    [createGroup, 'Could not create that group.'],
+    [updateGroup, 'Could not save that group.'],
+    [removeGroup, 'Could not dissolve that group.'],
+  ]);
 
   const [editing, setEditing] = useState<EditorTarget | null>(null);
   const [deleting, setDeleting] = useState<LabelOut | null>(null);
@@ -125,40 +142,37 @@ export default function LabelsSettingsPage(): JSX.Element {
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title="Labels"
-        description="Your workspace's own vocabulary, for the dimensions Docket does not model. Priorities and health are Docket's opinions; statuses and labels are yours."
-        action={
-          canManage ? (
-            <Button
-              type="button"
-              onClick={() => {
-                setEditing({ label: null, groupId: null });
-              }}
-            >
-              <Plus />
-              New label
-            </Button>
-          ) : undefined
-        }
-      />
-
+    <SettingsSectionPage
+      title="Labels"
+      description="Your workspace's own tags, for anything you want to track that Docket has no field for."
+      action={
+        canContribute ? (
+          <Button
+            type="button"
+            onClick={() => {
+              setEditing({ label: null, groupId: null });
+            }}
+          >
+            <Plus />
+            New label
+          </Button>
+        ) : undefined
+      }
+    >
+      {writeError ? <WriteError message={writeError} /> : null}
       {labelsQ.isPending ? (
-        <Skeleton className="h-96 max-w-3xl rounded-lg" />
+        <Skeleton className="h-96 max-w-3xl rounded-xl" />
       ) : labelsQ.isError ? (
-        <p role="status" className="text-on-surface-variant text-body-medium">
-          Labels are temporarily unavailable. We&apos;ll keep checking automatically.
-        </p>
+        <LoadFailure message={userErrorMessage(labelsQ.error, 'Could not load labels.')} retrying />
       ) : labels.length === 0 ? (
         <EmptyLabels
-          canManage={canManage}
+          canManage={canContribute}
           onCreate={() => {
             setEditing({ label: null, groupId: null });
           }}
         />
       ) : (
-        <div className="flex max-w-3xl flex-col gap-8">
+        <div className="flex max-w-3xl flex-col gap-4">
           {groups.map((group) => (
             <GroupSection
               key={group.id}
@@ -179,7 +193,6 @@ export default function LabelsSettingsPage(): JSX.Element {
           ))}
 
           <LabelSection
-            id="loose"
             title={groups.length > 0 ? 'Other labels' : 'Labels'}
             labels={loose}
             renderRow={(label) => <LabelSettingsRow key={label.id} {...rowProps(label)} />}
@@ -187,9 +200,8 @@ export default function LabelsSettingsPage(): JSX.Element {
 
           {!hideScope && teamScoped.length > 0 ? (
             <LabelSection
-              id="team"
               title="Limited to a team"
-              description="Offered only inside their own team. Useful for shorthand one team says out loud — anything you would want in a workspace-wide report should not live here."
+              description="Offered only inside their own team."
               labels={teamScoped}
               renderRow={(label) => <LabelSettingsRow key={label.id} {...rowProps(label)} />}
             />
@@ -197,9 +209,8 @@ export default function LabelsSettingsPage(): JSX.Element {
 
           {unused.length > 0 ? (
             <LabelSection
-              id="unused"
               title="Not used"
-              description="Nothing carries these. Deleting them costs nothing."
+              description="Nothing uses these yet."
               labels={unused}
               renderRow={(label) => <LabelSettingsRow key={label.id} {...rowProps(label)} />}
             />
@@ -237,7 +248,7 @@ export default function LabelsSettingsPage(): JSX.Element {
         />
       ) : null}
 
-      <ConfirmDeleteDialog
+      <ConfirmDestructiveDialog
         open={deleting !== null}
         onOpenChange={(next) => {
           if (!next) setDeleting(null);
@@ -266,7 +277,7 @@ export default function LabelsSettingsPage(): JSX.Element {
         }}
       />
 
-      <ConfirmDeleteDialog
+      <ConfirmDestructiveDialog
         open={dissolving !== null}
         onOpenChange={(next) => {
           if (!next) setDissolving(null);
@@ -289,19 +300,17 @@ export default function LabelsSettingsPage(): JSX.Element {
           });
         }}
       />
-    </div>
+    </SettingsSectionPage>
   );
 }
 
 /** A plain titled section of label rows. */
 function LabelSection({
-  id,
   title,
   description,
   labels,
   renderRow,
 }: {
-  id: string;
   title: string;
   description?: string;
   labels: readonly LabelOut[];
@@ -309,15 +318,9 @@ function LabelSection({
 }): JSX.Element | null {
   if (labels.length === 0) return null;
   return (
-    <section aria-labelledby={`labels-${id}`} className="flex flex-col gap-2">
-      <h3 id={`labels-${id}`} className="text-on-surface text-label-large">
-        {title}
-      </h3>
-      {description ? (
-        <p className="text-on-surface-variant text-body-small">{description}</p>
-      ) : null}
-      <ul className="flex flex-col gap-1">{labels.map(renderRow)}</ul>
-    </section>
+    <SettingsGroup title={title} {...(description ? { description } : {})} body="rows">
+      <ul className="flex flex-col">{labels.map(renderRow)}</ul>
+    </SettingsGroup>
   );
 }
 
@@ -340,14 +343,18 @@ function GroupSection({
   renderRow: (label: LabelOut) => JSX.Element;
 }): JSX.Element {
   return (
-    <section aria-labelledby={`group-${group.id}`} className="flex flex-col gap-2">
-      <div className="flex items-center gap-3">
-        <h3 id={`group-${group.id}`} className="text-on-surface text-label-large">
-          {group.name}
-        </h3>
-        {canManage ? (
+    <SettingsGroup
+      title={group.name}
+      description={
+        group.exclusive
+          ? 'Picking one of these releases the others, like a status.'
+          : 'These sit together, and several can apply at once.'
+      }
+      body="rows"
+      action={
+        canManage ? (
           <>
-            <label className="text-on-surface-variant text-label-medium ml-auto flex items-center gap-2">
+            <label className="text-on-surface-variant text-label-medium flex items-center gap-2">
               Single choice
               <Checkbox
                 checked={group.exclusive}
@@ -361,26 +368,26 @@ function GroupSection({
               Dissolve
             </Button>
           </>
-        ) : null}
-      </div>
-      <p className="text-on-surface-variant text-body-small">
-        {group.exclusive
-          ? 'Picking one of these releases the others — a single choice, like a status.'
-          : 'These sit together, but several can apply at once.'}
-      </p>
+        ) : undefined
+      }
+    >
       {labels.length === 0 ? (
-        <div className="bg-surface-container-low text-on-surface-variant text-body-medium flex items-center justify-between gap-3 rounded-lg px-4 py-3">
-          <span>No labels in this group yet.</span>
-          {canManage ? (
-            <Button type="button" variant="ghost" size="sm" onClick={onAddLabel}>
-              Add one
-            </Button>
-          ) : null}
-        </div>
+        <SettingRow
+          label="No labels in this group yet."
+          {...(canManage
+            ? {
+                trailing: (
+                  <Button type="button" variant="ghost" size="sm" onClick={onAddLabel}>
+                    Add one
+                  </Button>
+                ),
+              }
+            : {})}
+        />
       ) : (
-        <ul className="flex flex-col gap-1">{labels.map(renderRow)}</ul>
+        <ul className="flex flex-col">{labels.map(renderRow)}</ul>
       )}
-    </section>
+    </SettingsGroup>
   );
 }
 
@@ -393,11 +400,11 @@ function EmptyLabels({
   onCreate: () => void;
 }): JSX.Element {
   return (
-    <div className="bg-surface-container-low flex max-w-3xl flex-col items-start gap-3 rounded-lg px-4 py-6">
+    <div className="bg-surface-container-lowest flex max-w-3xl flex-col items-start gap-3 rounded-xl p-4">
       <p className="text-on-surface text-body-medium">No labels yet.</p>
       <p className="text-on-surface-variant text-body-small">
-        You do not have to start here. Type a new name into the label picker on any task or project
-        and it will be created as you go — this page is for tidying up afterwards.
+        Type a new name into the label picker on any task or project and it will be created as you
+        go. This page is for tidying up afterwards.
       </p>
       {canManage ? (
         <Button type="button" variant="ghost" size="sm" onClick={onCreate}>

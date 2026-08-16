@@ -49,14 +49,16 @@ export default function TeamMappingPicker({
   if (loading) {
     // placeholder: the external provider's own teams/containers, which only that provider can
     // enumerate — the left-hand side of every mapping row.
-    return <Skeleton className="h-16 w-full rounded-lg" />;
+    return <Skeleton className="h-16 w-full rounded-xl" />;
   }
   if (error) {
-    return <p className="text-error text-xs">{error}</p>;
+    return <p className="text-error text-body-small">{error}</p>;
   }
   if (externalTeams.length === 0) {
     return (
-      <p className="text-on-surface-variant text-xs">No {containerNoun}s found for this account.</p>
+      <p className="text-on-surface-variant text-body-small">
+        No {containerNoun}s found for this account.
+      </p>
     );
   }
   return (

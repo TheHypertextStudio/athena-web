@@ -19,6 +19,15 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from 
 export interface AutomationRulesData {
   rules: readonly AutomationRuleOut[];
   isPending: boolean;
+  /**
+   * Why the rule list could not be read, when it could not be.
+   *
+   * @remarks
+   * Without this the hook reported a failed read as `rules: []`, and the surface rendered its
+   * "No automation rules yet" empty state — asserting a fact about the caller's configuration
+   * that it had no way to know. An unreadable list and an empty list are different answers.
+   */
+  loadError: string | null;
   createRule: (input: AutomationRuleCreate) => Promise<void>;
   rename: (id: string, name: string) => Promise<void>;
   setEnabled: (id: string, enabled: boolean) => Promise<void>;
@@ -89,6 +98,9 @@ export function useAutomationRules(orgId: string): AutomationRulesData {
   return {
     rules: listQ.data?.items ?? [],
     isPending: listQ.isPending,
+    loadError: listQ.isError
+      ? userErrorMessage(listQ.error, 'Could not load automation rules.')
+      : null,
     createRule: async (input) => void (await createM.mutateAsync(input)),
     rename: async (id, name) => void (await renameM.mutateAsync({ id, name })),
     setEnabled: async (id, enabled) => void (await toggleM.mutateAsync({ id, enabled })),

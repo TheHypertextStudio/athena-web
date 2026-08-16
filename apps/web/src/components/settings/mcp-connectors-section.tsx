@@ -35,6 +35,8 @@ import {
   connectorReadinessLabel,
   deriveMcpConnectorDraft,
 } from '@/components/settings/mcp-connector-draft';
+import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { EmptyState } from '@docket/ui/components';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import {
@@ -76,9 +78,7 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           <p className="text-on-surface-variant text-body-medium">
             Connect services you use. Athena works through them under rules you set.
           </p>
-          <p className="text-on-surface-variant text-xs">
-            Built on MCP (Model Context Protocol), the open standard for AI tool access.
-          </p>
+          <p className="text-on-surface-variant text-body-small"></p>
         </div>
         {canManage ? (
           <Button
@@ -103,14 +103,14 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
         </p>
       ) : null}
 
-      <h4 className="text-on-surface mt-3 text-sm font-semibold">Connected tools</h4>
+      <h4 className="text-on-surface text-title-small mt-3">Connected tools</h4>
 
       {/* placeholder: the MCP tools connected to this workspace — how many and what each one is.
           The "Connected tools" heading directly above renders from a static string. */}
       {listQ.isLoading ? (
         <div className="flex flex-col gap-2" aria-hidden="true">
-          <Skeleton className="h-16 w-full rounded-lg" />
-          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-xl" />
+          <Skeleton className="h-16 w-full rounded-xl" />
         </div>
       ) : listQ.data && listQ.data.length > 0 ? (
         <ul className="flex flex-col gap-2">
@@ -119,14 +119,26 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           ))}
         </ul>
       ) : (
-        <div className="bg-surface-container-low text-on-surface-variant text-body-medium flex items-center gap-3 rounded-xl p-4">
-          <Cable aria-hidden="true" className="size-4 shrink-0" />
-          <span>
-            {canManage
-              ? 'No tools connected yet. Add a connector so Athena can act through the services you use.'
-              : 'No tools connected yet. Ask an admin to add a connector.'}
-          </span>
-        </div>
+        <EmptyState
+          icon={Cable}
+          title="No tools connected yet"
+          body={
+            canManage
+              ? 'Connect a tool so Athena can act through the services you already use.'
+              : 'An admin can connect a tool so Athena can act through it.'
+          }
+          className="border-none bg-transparent"
+          {...(canManage
+            ? {
+                cta: {
+                  label: 'Add connector',
+                  onClick: () => {
+                    setAddOpen(true);
+                  },
+                },
+              }
+            : {})}
+        />
       )}
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -161,6 +173,8 @@ interface McpConnectorRowProps {
 function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.Element {
   // Tool prefix (alias) autosaves on blur. Keep a local draft so we can sanitize keystrokes and
   // hold onto an invalid value the user is mid-fixing without clobbering the persisted alias.
+  // Disconnecting removes Athena's access to this tool for the whole workspace, so it asks.
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [aliasDraft, setAliasDraft] = useState(mcp.alias);
   const [aliasFocused, setAliasFocused] = useState(false);
   const [aliasError, setAliasError] = useState<string | null>(null);
@@ -243,16 +257,16 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
   const busy = authorize.isPending || verify.isPending || disconnect.isPending || edit.isPending;
 
   return (
-    <li className="bg-surface-container-low flex flex-col gap-4 rounded-lg p-4">
+    <li className="bg-surface-container-low flex flex-col gap-4 rounded-xl p-4">
       <div className="flex flex-col gap-2">
-        <div className="text-on-surface flex items-center gap-2 text-sm font-medium">
+        <div className="text-on-surface text-label-large flex items-center gap-2">
           <span className="max-w-xs min-w-0 flex-1">
             <EditableTitle
               value={mcp.label}
               onSave={saveLabel}
               canEdit={canManage}
               ariaLabel="Connector name"
-              className="text-on-surface text-sm font-medium"
+              className="text-on-surface text-label-large"
               placeholder="Connector name"
             />
           </span>
@@ -260,29 +274,29 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
             {connectorReadinessLabel(mcp.status)}
           </Badge>
           {edit.isSuccess ? (
-            <span className="text-on-surface-variant text-xs font-normal">Saved</span>
+            <span className="text-on-surface-variant text-body-small">Saved</span>
           ) : null}
         </div>
         {mcp.status === 'connected' && mcp.toolCount !== null ? (
-          <span className="text-on-surface-variant text-xs">
+          <span className="text-on-surface-variant text-body-small">
             {String(mcp.toolCount)} tool{mcp.toolCount === 1 ? '' : 's'} available
           </span>
         ) : null}
         {mcp.status === 'error' ? (
-          <span role="alert" className="text-error text-xs">
+          <span role="alert" className="text-error text-body-small">
             This server could not be reached.
           </span>
         ) : null}
       </div>
-      <details className="text-on-surface-variant text-xs">
-        <summary className="cursor-pointer font-medium">Connection details</summary>
+      <details className="text-on-surface-variant text-body-small">
+        <summary className="text-label-large cursor-pointer">Connection details</summary>
         <dl className="mt-3 grid gap-2">
           <div>
-            <dt className="font-medium">Server</dt>
+            <dt className="text-label-large">Server</dt>
             <dd className="mt-0.5 font-mono break-all">{mcp.url}</dd>
           </div>
           <div>
-            <dt className="font-medium">Tool prefix</dt>
+            <dt className="text-label-large">Tool prefix</dt>
             <dd className="mt-0.5">
               {canManage ? (
                 <>
@@ -303,7 +317,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
                     <span className="font-mono">__*</span>
                   </span>
                   {aliasError ? (
-                    <span role="alert" className="text-error mt-1 block text-xs">
+                    <span role="alert" className="text-error text-body-small mt-1 block">
                       {aliasError}
                     </span>
                   ) : null}
@@ -315,7 +329,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
           </div>
           {mcp.authMode === 'oauth' && mcp.oauthScope ? (
             <div>
-              <dt className="font-medium">Granted scope</dt>
+              <dt className="text-label-large">Granted scope</dt>
               <dd className="mt-0.5 font-mono break-all">{mcp.oauthScope}</dd>
             </div>
           ) : null}
@@ -353,21 +367,47 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
           <Button
             variant="ghost"
             size="sm"
-            className="text-error"
+            className="text-error focus:text-error"
             disabled={busy}
             onClick={() => {
-              disconnect.mutate(undefined);
+              setConfirmDisconnect(true);
             }}
           >
             {disconnect.isPending ? 'Disconnecting…' : 'Disconnect'}
           </Button>
         </div>
       ) : null}
+      {authorize.isError || verify.isError ? (
+        <p role="alert" className="text-error text-body-small">
+          {authorize.isError
+            ? userErrorMessage(authorize.error, 'Could not start authorization for this server.')
+            : userErrorMessage(verify.error, 'Could not verify this server.')}
+        </p>
+      ) : null}
       {edit.error ? (
-        <p role="alert" className="text-error text-xs">
+        <p role="alert" className="text-error text-body-small">
           {userErrorMessage(edit.error, 'Could not save this connector.')}
         </p>
       ) : null}
+
+      <ConfirmDestructiveDialog
+        open={confirmDisconnect}
+        onOpenChange={setConfirmDisconnect}
+        title={`Disconnect ${mcp.label}?`}
+        description="Athena loses access to this tool for everyone in the workspace. You can connect it again later."
+        confirmLabel="Disconnect"
+        pending={disconnect.isPending}
+        {...(disconnect.isError
+          ? { error: userErrorMessage(disconnect.error, 'Could not disconnect this connector.') }
+          : {})}
+        onConfirm={() => {
+          disconnect.mutate(undefined, {
+            onSuccess: () => {
+              setConfirmDisconnect(false);
+            },
+          });
+        }}
+      />
     </li>
   );
 }
@@ -491,7 +531,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
     >
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={urlId} className="text-on-surface text-sm font-medium">
+          <label htmlFor={urlId} className="text-on-surface text-label-large">
             Server URL
           </label>
           <Input
@@ -516,7 +556,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={labelId} className="text-on-surface text-sm font-medium">
+          <label htmlFor={labelId} className="text-on-surface text-label-large">
             Name
           </label>
           <Input
@@ -530,13 +570,13 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
             }}
           />
         </div>
-        <details className="bg-surface-container-low rounded-lg px-3 py-2">
-          <summary className="text-on-surface cursor-pointer text-sm font-medium">
+        <details className="bg-surface-container-low rounded-xl px-3 py-2">
+          <summary className="text-on-surface text-label-large cursor-pointer">
             Advanced options
           </summary>
           <div className="mt-4 flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor={aliasId} className="text-on-surface text-sm font-medium">
+              <label htmlFor={aliasId} className="text-on-surface text-label-large">
                 Tool prefix
               </label>
               <Input
@@ -553,13 +593,13 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
             </div>
           </div>
         </details>
-        <details className="bg-surface-container-low rounded-lg px-3 py-2">
-          <summary className="text-on-surface cursor-pointer text-sm font-medium">
+        <details className="bg-surface-container-low rounded-xl px-3 py-2">
+          <summary className="text-on-surface text-label-large cursor-pointer">
             Other connection methods
           </summary>
           <div className="mt-4 flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor={authId} className="text-on-surface text-sm font-medium">
+              <label htmlFor={authId} className="text-on-surface text-label-large">
                 Connection method
               </label>
               <Select
@@ -576,7 +616,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
             </div>
             {authMode === 'bearer' ? (
               <div className="flex flex-col gap-1.5">
-                <label htmlFor={tokenId} className="text-on-surface text-sm font-medium">
+                <label htmlFor={tokenId} className="text-on-surface text-label-large">
                   Bearer token
                 </label>
                 <Input
@@ -596,7 +636,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
       </div>
 
       {error ? (
-        <p role="alert" className="text-error text-sm">
+        <p role="alert" className="text-error text-body-medium">
           {error}
         </p>
       ) : null}

@@ -34,16 +34,16 @@ export default function IntegrationsSettingsError({
   return (
     <div
       role="alert"
-      className="border-outline-variant flex flex-col items-start gap-1 rounded-lg border p-4"
+      className="bg-surface-container-low flex flex-col items-start gap-1 rounded-xl p-4"
     >
       <div className="flex flex-col gap-1">
-        <p className="text-on-surface text-body-medium font-medium">
-          Couldn’t load your integrations
-        </p>
-        <p className="text-on-surface-variant text-xs">
+        <p className="text-on-surface text-label-large">Couldn’t load your connections</p>
+        <p className="text-on-surface-variant text-body-small">
           {userErrorMessage(error, 'Something went wrong while loading this section.')}
         </p>
-        <p className="text-on-surface-variant text-xs">We&apos;re reloading it automatically.</p>
+        <p className="text-on-surface-variant text-body-small">
+          We&apos;re reloading it automatically.
+        </p>
       </div>
     </div>
   );

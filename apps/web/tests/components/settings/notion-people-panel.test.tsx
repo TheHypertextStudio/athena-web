@@ -69,7 +69,9 @@ function person(over: Record<string, unknown> = {}) {
 
 function renderPanel(): void {
   const { wrapper } = makeQueryWrapper();
-  render(<NotionPeoplePanel orgId={ORG_ID} integrationId={INTEGRATION_ID} />, { wrapper });
+  render(<NotionPeoplePanel orgId={ORG_ID} integrationId={INTEGRATION_ID} canManage />, {
+    wrapper,
+  });
 }
 
 /** The decision select and its Apply button, for the one unmatched row on screen. */

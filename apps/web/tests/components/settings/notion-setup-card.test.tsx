@@ -65,9 +65,11 @@ const PAGE = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-function renderCard(): QueryClient {
+function renderCard(canManage = true): QueryClient {
   const { client, wrapper } = makeQueryWrapper();
-  render(<NotionSetupCard orgId={ORG_ID} integrationId={INTEGRATION_ID} />, { wrapper });
+  render(<NotionSetupCard orgId={ORG_ID} integrationId={INTEGRATION_ID} canManage={canManage} />, {
+    wrapper,
+  });
   return client;
 }
 
@@ -184,5 +186,13 @@ describe('NotionSetupCard', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Create in Notion' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/could not finish creating/i);
+  });
+  it('withholds provisioning from a caller who cannot manage the workspace', async () => {
+    // Every write behind this card is guarded at `manage` server-side. Rendering an enabled
+    // "Create in Notion" for a contributor promised something the API answers with a bare 403.
+    parentPagesGet.mockResolvedValue(okResponse({ items: [PAGE()] }));
+    renderCard(false);
+
+    expect(await screen.findByRole('button', { name: 'Create in Notion' })).toBeDisabled();
   });
 });

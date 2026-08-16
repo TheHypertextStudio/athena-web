@@ -1,7 +1,7 @@
 'use client';
 
 import type { AccountExportOptionsOut } from '@docket/types';
-import { Button } from '@docket/ui/primitives';
+import { Checkbox, Button } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import {
@@ -67,9 +67,9 @@ export function ExportRequestForm({
   }
 
   return (
-    <div className="border-outline-variant flex flex-col gap-6 rounded-lg border p-4 sm:p-6">
+    <div className="bg-surface-container-low flex flex-col gap-6 rounded-xl p-4">
       <div className="flex flex-col gap-1">
-        <h2 className="text-on-surface text-title-small font-semibold">Choose data to include</h2>
+        <h2 className="text-on-surface text-title-small">Choose data to include</h2>
         <p className="text-on-surface-variant text-body-medium">
           Start with everything selected, then remove anything you do not need.
         </p>
@@ -84,19 +84,18 @@ export function ExportRequestForm({
             <label
               key={category}
               htmlFor={inputId}
-              className="border-outline-variant hover:bg-surface-container-low flex cursor-pointer gap-3 rounded-lg border p-3"
+              className="hover:bg-surface-container-low bg-surface-container-low flex cursor-pointer gap-3 rounded-xl p-3"
             >
-              <input
+              <Checkbox
                 id={inputId}
-                type="checkbox"
                 checked={categories.includes(category)}
-                className="accent-primary focus-visible:ring-ring mt-0.5 size-4 shrink-0 rounded focus-visible:ring-2"
+                className="mt-0.5 shrink-0 rounded"
                 onChange={(event) => {
                   toggleCategory(category, event.target.checked);
                 }}
               />
               <span className="flex min-w-0 flex-col gap-1">
-                <span className="text-on-surface text-body-medium font-medium">{copy.title}</span>
+                <span className="text-on-surface text-label-large">{copy.title}</span>
                 <span className="text-on-surface-variant text-body-medium">{copy.description}</span>
               </span>
             </label>
@@ -107,10 +106,10 @@ export function ExportRequestForm({
       {includesWorkspaces ? (
         <fieldset className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <legend className="text-on-surface text-body-medium font-medium">Workspaces</legend>
+            <legend className="text-on-surface text-label-large">Workspaces</legend>
             <button
               type="button"
-              className="text-primary focus-visible:ring-ring rounded text-sm font-medium hover:underline focus-visible:ring-2"
+              className="text-primary focus-visible:ring-ring text-label-large rounded hover:underline focus-visible:ring-2"
               onClick={() => {
                 setWorkspaceIds(options.workspaces.map((workspace) => workspace.id));
               }}
@@ -121,20 +120,19 @@ export function ExportRequestForm({
           <p className="text-on-surface-variant text-body-medium">
             Select the workspaces whose Docket work you want in this export.
           </p>
-          <div className="border-outline-variant flex max-h-72 flex-col overflow-y-auto rounded-lg border">
+          <div className="bg-surface-container-low flex max-h-72 flex-col overflow-y-auto rounded-xl">
             {options.workspaces.map((workspace) => {
               const inputId = `export-workspace-${workspace.id}`;
               return (
                 <label
                   key={workspace.id}
                   htmlFor={inputId}
-                  className="border-outline-variant hover:bg-surface-container-low flex cursor-pointer items-center gap-3 border-b px-3 py-2 last:border-b-0"
+                  className="hover:bg-surface-container-low flex cursor-pointer items-center gap-3 px-3 py-2"
                 >
-                  <input
+                  <Checkbox
                     id={inputId}
-                    type="checkbox"
                     checked={workspaceIds.includes(workspace.id)}
-                    className="accent-primary focus-visible:ring-ring size-4 shrink-0 rounded focus-visible:ring-2"
+                    className="shrink-0 rounded"
                     onChange={(event) => {
                       toggleWorkspace(workspace.id, event.target.checked);
                     }}
@@ -154,12 +152,12 @@ export function ExportRequestForm({
         </fieldset>
       ) : null}
 
-      <div className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-lg border p-4">
-        <h2 className="text-on-surface text-body-medium font-semibold">Review &amp; create</h2>
+      <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl p-4">
+        <h2 className="text-on-surface text-title-small">Review &amp; create</h2>
         <p className="text-on-surface-variant text-body-medium">
           Your export will be a ZIP file. Docket will email you at{' '}
-          <span className="text-on-surface font-medium">{options.deliveryEmail}</span> when your
-          data is ready. Your download stays available for 14 days.
+          <span className="text-on-surface text-label-large">{options.deliveryEmail}</span> when
+          your data is ready. Your download stays available for 14 days.
         </p>
         <p className="text-on-surface-variant text-body-medium">
           Includes:{' '}

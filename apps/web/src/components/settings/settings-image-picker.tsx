@@ -76,7 +76,7 @@ export function SettingsImagePicker({
 
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-on-surface text-sm font-medium">{label}</span>
+      <span className="text-on-surface text-label-large">{label}</span>
       <div className="flex flex-wrap items-center gap-3">
         <Avatar className="size-14">
           <AvatarImage src={value || undefined} alt="" />
@@ -116,9 +116,9 @@ export function SettingsImagePicker({
           </Button>
         ) : null}
       </div>
-      <p className="text-on-surface-variant text-xs">JPG, PNG, WebP, or GIF. Up to 1 MB.</p>
+      <p className="text-on-surface-variant text-body-small">JPG, PNG, WebP, or GIF. Up to 1 MB.</p>
       {error ? (
-        <p className="text-error text-xs" role="alert">
+        <p className="text-error text-body-small" role="alert">
           {error}
         </p>
       ) : null}

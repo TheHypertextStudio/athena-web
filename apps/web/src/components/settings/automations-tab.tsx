@@ -10,10 +10,15 @@
 
 import type { ActionSpec } from '@docket/automation/contracts';
 import type { AutomationRuleCreate, AutomationRuleOut } from '@docket/types';
+import { EmptyState } from '@docket/ui/components';
+import { Workflow } from '@docket/ui/icons';
 import { Button, Card, CardContent, Input, Select } from '@docket/ui/primitives';
+import NextLink from 'next/link';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
+import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { LoadFailure } from './load-failure';
 import { useAutomationRules } from '@/lib/use-automation-rules';
 
 /** Transient persistence status for an in-place autosave field. */
@@ -66,11 +71,60 @@ export function automationTemplateInput(
   };
 }
 
+/**
+ * Plain-language phrases for the action commands a rule can run.
+ *
+ * @remarks
+ * `ActionSpec.type` is an open string on the wire — the executor grows new commands without a
+ * schema change — so this maps the ones that exist and {@link humanizeToken} carries anything
+ * newer. Before this, the row printed the identifier itself: a rule read `on created →
+ * mail.archive, suggestion.dismiss`, which is the product's own internals quoted at the person
+ * using it.
+ */
+const ACTION_PHRASE: Readonly<Record<string, string>> = {
+  'mail.applyLabel': 'label the email',
+  'mail.archive': 'archive the email',
+  'mail.markRead': 'mark the email read',
+  'mail.markUnread': 'mark the email unread',
+  'mail.removeLabel': 'remove the email label',
+  'mail.trash': 'move the email to trash',
+  'suggestion.autoAccept': 'accept the suggestion',
+  'suggestion.dismiss': 'dismiss the suggestion',
+  'task.applyLabel': 'label the task',
+  'task.assign': 'assign the task',
+  'task.assignToCycle': 'add the task to the current cycle',
+  'task.route': 'move the task',
+  'task.setPriority': 'set the priority',
+  'task.setStatus': 'set the status',
+};
+
+/** Plain-language phrases for what starts a rule. */
+const TRIGGER_PHRASE: Readonly<Record<string, string>> = {
+  email_suggestion: 'a suggestion arrives from email',
+  task: 'a task changes',
+  created: 'something new arrives',
+  updated: 'something changes',
+  completed: 'something is completed',
+};
+
+/** Turn an unmapped `dotted.camelCase` identifier into readable words. */
+function humanizeToken(token: string): string {
+  const tail = token.includes('.') ? (token.split('.').pop() ?? token) : token;
+  return tail
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase();
+}
+
 /** A short human summary of what a rule does, from its `on`/`then`. */
 function ruleSummary(rule: AutomationRuleOut): string {
-  const on = rule.on.kind ?? rule.on.subjectType ?? 'any event';
-  const actions = rule.then.map((a: ActionSpec) => a.type).join(', ') || 'no actions';
-  return `on ${on} → ${actions}`;
+  const triggerKey = rule.on.subjectType ?? rule.on.kind;
+  const trigger =
+    (triggerKey === undefined ? undefined : TRIGGER_PHRASE[triggerKey]) ??
+    (triggerKey === undefined ? 'anything happens' : humanizeToken(triggerKey));
+  const actions = rule.then.map((a: ActionSpec) => ACTION_PHRASE[a.type] ?? humanizeToken(a.type));
+  if (actions.length === 0) return `When ${trigger}, do nothing yet.`;
+  return `When ${trigger}, ${actions.join(' and ')}.`;
 }
 
 /** One rule row: name (autosaves in place) + summary + enable/disable + delete. */
@@ -126,32 +180,40 @@ function RuleRow({
               onSave={(next) => void saveName(next)}
               canEdit={canManage}
               ariaLabel={`Automation name for ${rule.name}`}
-              className="truncate text-sm font-medium"
+              className="text-label-large truncate"
             />
             {rule.isSeed ? (
-              <span className="text-on-surface-variant bg-surface-container-high rounded px-1 text-[10px]">
+              <span className="text-on-surface-variant bg-surface-container-high text-label-small rounded px-1">
                 default
               </span>
             ) : null}
             {!rule.enabled ? (
-              <span className="text-on-surface-variant text-[10px]">off</span>
+              <span className="text-on-surface-variant text-label-small">off</span>
             ) : null}
             {status === 'saved' ? (
-              <span className="text-on-surface-variant text-xs">Saved</span>
+              <span className="text-on-surface-variant text-body-small">Saved</span>
             ) : status === 'error' ? (
-              <span className="text-error text-xs" role="alert">
+              <span className="text-error text-body-small" role="alert">
                 Couldn’t save
               </span>
             ) : null}
           </div>
-          <span className="text-on-surface-variant truncate text-xs">{ruleSummary(rule)}</span>
+          <span className="text-on-surface-variant text-body-small truncate">
+            {ruleSummary(rule)}
+          </span>
         </div>
         {canManage ? (
           <div className="flex shrink-0 gap-1.5">
             <Button variant="outline" size="sm" onClick={onToggle}>
               {rule.enabled ? 'Disable' : 'Enable'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onDelete} aria-label="Delete rule">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-error focus:text-error"
+              onClick={onDelete}
+              aria-label={`Delete ${rule.name}`}
+            >
               Delete
             </Button>
           </div>
@@ -174,7 +236,10 @@ export default function AutomationsTab({
   orgId: string;
   canManage: boolean;
 }): JSX.Element {
-  const { rules, isPending, createRule, rename, setEnabled, remove, actionError } =
+  const [confirmDelete, setConfirmDelete] = useState<AutomationRuleOut | null>(null);
+  // The empty state names Connections; a name is not a way of getting there.
+  const connectionsHref = `/orgs/${orgId}/settings/connections`;
+  const { rules, isPending, loadError, createRule, rename, setEnabled, remove, actionError } =
     useAutomationRules(orgId);
   const [creating, setCreating] = useState(false);
   const [template, setTemplate] = useState<AutomationTemplate>('archive_completed_email');
@@ -197,10 +262,8 @@ export default function AutomationsTab({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-4">
-        <p className="text-on-surface-variant text-sm">
-          Rules run when something happens anywhere in Docket — a task completes, an issue arrives
-          from a connected tool, an email suggestion appears — and take actions like setting a
-          status, assigning, notifying, archiving the source email, or dismissing a suggestion.
+        <p className="text-on-surface-variant text-body-medium">
+          Rules watch for something happening in Docket and take an action in response.
         </p>
         {canManage ? (
           <Button
@@ -218,12 +281,12 @@ export default function AutomationsTab({
         <Card>
           <CardContent className="grid gap-4 p-4">
             <div>
-              <h3 className="text-on-surface text-sm font-semibold">New automation</h3>
-              <p className="text-on-surface-variant text-xs">
-                Start with a proven workflow; you can rename, pause, or remove it at any time.
+              <h3 className="text-on-surface text-title-small">New automation</h3>
+              <p className="text-on-surface-variant text-body-small">
+                Pick a workflow to start from. You can change it later.
               </p>
             </div>
-            <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">
+            <label className="text-on-surface text-label-large flex flex-col gap-1.5">
               Workflow
               <Select
                 value={template}
@@ -238,7 +301,7 @@ export default function AutomationsTab({
                 <option value="assign_new_tasks_to_cycle">Assign new tasks to current cycle</option>
               </Select>
             </label>
-            <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">
+            <label className="text-on-surface text-label-large flex flex-col gap-1.5">
               Name
               <Input
                 value={name}
@@ -260,15 +323,21 @@ export default function AutomationsTab({
       ) : null}
 
       {isPending ? (
-        <p className="text-on-surface-variant text-sm">Loading rules…</p>
+        <p className="text-on-surface-variant text-body-medium">Loading rules…</p>
+      ) : loadError ? (
+        <LoadFailure message={loadError} retrying />
       ) : rules.length === 0 ? (
-        <div className="border-outline-variant bg-surface-container-low flex flex-col gap-1 rounded-lg border p-4">
-          <p className="text-on-surface text-sm font-medium">No automation rules yet.</p>
-          <p className="text-on-surface-variant text-sm">
-            Create a rule for a recurring workflow, or connect a mailbox from Connections to bring
-            email suggestions into Docket.
-          </p>
-        </div>
+        <EmptyState
+          icon={Workflow}
+          title="No automation rules yet"
+          body="Rules act on your tasks and email suggestions without you having to."
+          className="border-none bg-transparent"
+          action={
+            <Button asChild variant="ghost" size="sm">
+              <NextLink href={connectionsHref}>Connect a mailbox</NextLink>
+            </Button>
+          }
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {rules.map((rule) => (
@@ -278,14 +347,30 @@ export default function AutomationsTab({
               canManage={canManage}
               onRename={(name) => rename(rule.id, name)}
               onToggle={() => void setEnabled(rule.id, !rule.enabled)}
-              onDelete={() => void remove(rule.id)}
+              onDelete={() => {
+                setConfirmDelete(rule);
+              }}
             />
           ))}
         </div>
       )}
 
+      <ConfirmDestructiveDialog
+        open={confirmDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDelete(null);
+        }}
+        title="Delete this rule?"
+        description={`“${confirmDelete?.name ?? ''}” stops running and cannot be recovered. Work it already acted on is unchanged.`}
+        confirmLabel="Delete rule"
+        onConfirm={() => {
+          if (confirmDelete) void remove(confirmDelete.id);
+          setConfirmDelete(null);
+        }}
+      />
+
       {actionError ? (
-        <p className="text-error text-xs" role="alert">
+        <p className="text-error text-body-small" role="alert">
           {actionError}
         </p>
       ) : null}

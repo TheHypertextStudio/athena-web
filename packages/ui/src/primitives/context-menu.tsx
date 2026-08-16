@@ -61,6 +61,7 @@ import {
   type MenuWidth,
   menuBadge,
   menuCheckedItemClass,
+  MENU_VIEWPORT_FIT,
   menuContentClass,
   menuFocusRing,
   menuGroup,
@@ -176,6 +177,7 @@ export function ContextMenuSubContent({
         menuContentClass(variant),
         // Grow from the Radix-provided transform origin rather than from the panel's centre.
         'origin-[var(--radix-context-menu-content-transform-origin)]',
+        MENU_VIEWPORT_FIT.context,
         className,
       )}
       {...props}
@@ -221,7 +223,8 @@ export function ContextMenuContent({
             className={cn(
               menuContentClass(variant, width, sections),
               // Scrollable within the viewport, growing from the Radix transform origin.
-              'max-h-[var(--radix-context-menu-content-available-height)] origin-[var(--radix-context-menu-content-transform-origin)] overflow-x-hidden overflow-y-auto',
+              'origin-[var(--radix-context-menu-content-transform-origin)]',
+              MENU_VIEWPORT_FIT.context,
               className,
             )}
             {...props}

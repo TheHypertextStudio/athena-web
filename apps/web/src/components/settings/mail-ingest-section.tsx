@@ -32,25 +32,25 @@ export function MailIngestSection({ orgId, canManage }: MailIngestSectionProps):
   return (
     <section aria-label="Email to task" className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h2 className="text-on-surface text-title-small font-medium">Turn email into tasks</h2>
+        <h2 className="text-on-surface text-title-small">Turn email into tasks</h2>
         <p className="text-on-surface-variant text-body-medium max-w-prose">
-          When on, Athena reads new mail from a connected inbox and proposes tasks in triage —
-          strictly opt-in. Enabling it seeds the default rules below.
+          Athena reads new mail and suggests tasks in your inbox. Turning it on adds the default
+          rules below.
         </p>
       </div>
 
       {/* placeholder: which inboxes are connected and whether mail ingest is switched on for
           them. The heading, the explanation and the "no inbox connected" copy are static. */}
       {loading ? (
-        <Skeleton className="h-20 w-full rounded-lg" />
+        <Skeleton className="h-20 w-full rounded-xl" />
       ) : connected.length === 0 ? (
-        <div className="bg-surface-container-low text-on-surface-variant flex flex-col gap-1 rounded-lg px-4 py-3">
-          <p className="text-on-surface text-sm font-medium">No inbox connected yet</p>
-          <p className="text-xs">
+        <div className="bg-surface-container-low text-on-surface-variant flex flex-col gap-1 rounded-xl px-4 py-3">
+          <p className="text-on-surface text-label-large">No inbox connected yet</p>
+          <p className="text-body-small">
             Connect Gmail in{' '}
             <NextLink
               href={connectionsHref}
-              className="text-on-surface font-medium underline-offset-2 hover:underline"
+              className="text-on-surface text-label-large underline-offset-2 hover:underline"
             >
               Connections
             </NextLink>{' '}

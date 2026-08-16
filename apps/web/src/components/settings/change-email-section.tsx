@@ -54,18 +54,18 @@ export function ChangeEmailSection(): JSX.Element {
     <section className="flex flex-col gap-3" aria-label="Change email">
       <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
         <div className="flex flex-col gap-1">
-          <h3 className="text-on-surface text-body-medium font-medium">Email address</h3>
+          <h3 className="text-on-surface text-title-small">Email address</h3>
           <p className="text-on-surface-variant text-body-medium max-w-prose">
             Your current email is{' '}
-            <span className="text-on-surface font-medium">{currentEmail}</span>. Changing it sends a
-            confirmation link to this address — click it to finish the change.
+            <span className="text-on-surface text-label-large">{currentEmail}</span>. Changing it
+            sends a confirmation link to this address — click it to finish the change.
           </p>
         </div>
 
         {sent ? (
           <p className="text-body-medium text-on-surface">
-            Check <span className="font-medium">{currentEmail}</span> for a confirmation link to
-            finish the change.
+            Check <span className="text-label-large">{currentEmail}</span> for a confirmation link
+            to finish the change.
           </p>
         ) : (
           <form
@@ -78,7 +78,7 @@ export function ChangeEmailSection(): JSX.Element {
             }}
           >
             <div className="flex flex-1 flex-col gap-2">
-              <label htmlFor={inputId} className="text-on-surface text-body-medium font-medium">
+              <label htmlFor={inputId} className="text-on-surface text-label-large">
                 New email
               </label>
               <Input

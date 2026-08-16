@@ -35,6 +35,8 @@ import {
   useLiveApiQuery,
 } from '@/lib/query';
 
+import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { LoadFailure } from './load-failure';
 import { ClientSetup } from './mcp-setup-panels';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -85,6 +87,9 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
     invalidateKeys: [queryKeys.connectedApps()],
   });
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  // Revoking breaks a third-party integration the moment it lands, and the app is named by a
+  // row the pointer is already over — worth one question before it stops working.
+  const [confirmRevoke, setConfirmRevoke] = useState<ConnectedApp | null>(null);
   const revokeApp = useCallback(
     (clientId: string) => {
       setRevokingId(clientId);
@@ -102,8 +107,8 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
       {/* ── Setup guide ── */}
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-body-medium font-medium">Connect an MCP client</h2>
-          <p className="text-on-surface-variant text-body-medium leading-relaxed">
+          <h2 className="text-on-surface text-title-small">Connect an MCP client</h2>
+          <p className="text-on-surface-variant text-body-medium">
             Give Claude Desktop, Cursor, or any MCP-compatible tool access to your Docket account.
           </p>
         </div>
@@ -111,23 +116,21 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
         <ClientSetup mcpUrl={mcpServerUrl} />
       </section>
 
-      <div className="border-outline-variant border-t" role="separator" />
+      {/* No separator element here. It painted nothing once the grouping border came off, so it
+          announced a boundary to assistive tech that nobody could see. Two sibling sections, each
+          with its own heading and 32px between them, are already separated. */}
 
       {/* ── Authorized clients roster ── */}
       <section className="flex flex-col gap-4" aria-label="Authorized MCP clients">
         <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-body-medium font-medium">
-            Apps with access to your Docket
-          </h2>
+          <h2 className="text-on-surface text-title-small">Apps with access to your Docket</h2>
           {/* What revoking actually does, in the same words the consent screen used to grant it.
               This copy carried a "for up to 15 minutes" caveat while the resource server checked
               only the token's signature, and an app holding a live key kept working until it
               expired. `apps/api/src/mcp/auth.ts` now re-checks the stored grant on every call, so
               the caveat is gone and the immediate claim below is one the product actually keeps. */}
           <p className="text-on-surface-variant text-body-medium">
-            Each app below can read or act on your work using the permissions you approved. Revoking
-            takes effect immediately: the app&rsquo;s very next request is refused, it cannot renew
-            its access, and it has to ask your approval again to reconnect.
+            These apps use the permissions you approved. Revoking takes effect immediately.
           </p>
         </div>
 
@@ -138,7 +141,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
           <div className="flex flex-col gap-2">
             {[0, 1].map((i) => (
               <div key={i} className="flex items-center gap-4 py-2">
-                <Skeleton className="h-9 w-9 rounded-lg" />
+                <Skeleton className="h-9 w-9 rounded-xl" />
                 <div className="flex flex-1 flex-col gap-1.5">
                   <Skeleton className="h-4 w-40" />
                   <Skeleton className="h-3 w-24" />
@@ -148,9 +151,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             ))}
           </div>
         ) : loadError ? (
-          <p role="status" className="text-on-surface-variant text-body-medium">
-            Connected apps are temporarily unavailable. We&apos;ll keep checking automatically.
-          </p>
+          <LoadFailure message={loadError} retrying />
         ) : apps.length === 0 ? (
           <EmptyState
             icon={Link}
@@ -159,16 +160,14 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             className="border-none p-8"
           />
         ) : (
-          <ul className="border-outline-variant divide-outline-variant flex flex-col divide-y rounded-lg border">
+          <ul className="bg-surface-container-low flex flex-col rounded-xl">
             {apps.map((app) => (
               <li key={app.clientId} className="flex items-center gap-4 px-4 py-3">
-                <span className="bg-surface-container text-on-surface-variant text-body-medium flex size-9 shrink-0 items-center justify-center rounded-lg font-medium">
+                <span className="bg-surface-container text-on-surface-variant text-label-large flex size-9 shrink-0 items-center justify-center rounded-md">
                   {app.name.charAt(0).toUpperCase()}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="text-on-surface text-body-medium truncate font-medium">
-                    {app.name}
-                  </span>
+                  <span className="text-on-surface text-label-large truncate">{app.name}</span>
                   {/* Same words the consent screen used when this grant was approved — the roster
                       is where a person checks what they agreed to, so it must not rename it. Going
                       through `describeScope` also removes the `?? scope` fallback that used to
@@ -176,7 +175,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
                       scope left the issuable set. */}
                   <div className="flex flex-wrap gap-1">
                     {app.scopes.map((scope) => (
-                      <Badge key={scope} variant="secondary" className="text-xs font-normal">
+                      <Badge key={scope} variant="secondary" className="text-body-small">
                         {describeScope(scope).label}
                       </Badge>
                     ))}
@@ -188,7 +187,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
                   size="sm"
                   disabled={revokingId === app.clientId}
                   onClick={() => {
-                    revokeApp(app.clientId);
+                    setConfirmRevoke(app);
                   }}
                 >
                   {revokingId === app.clientId ? 'Revoking…' : 'Revoke'}
@@ -197,6 +196,21 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             ))}
           </ul>
         )}
+
+        <ConfirmDestructiveDialog
+          open={confirmRevoke !== null}
+          onOpenChange={(open) => {
+            if (!open) setConfirmRevoke(null);
+          }}
+          title={`Revoke ${confirmRevoke?.name ?? ''}?`}
+          description="The app loses access immediately and has to ask for your approval again to reconnect."
+          confirmLabel="Revoke access"
+          pending={revokingId !== null}
+          onConfirm={() => {
+            if (confirmRevoke) revokeApp(confirmRevoke.clientId);
+            setConfirmRevoke(null);
+          }}
+        />
 
         {revoke.isError ? (
           <p role="alert" className="text-error text-body-medium">

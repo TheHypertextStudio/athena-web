@@ -26,12 +26,12 @@ import { useRouter } from 'next/navigation';
 
 import { useActiveOrg } from '@/components/active-org';
 import { MembersTab } from '@/components/settings/members-tab';
-import { SectionHeader } from '@/components/settings/section-header';
 import {
   defaultSettingsSection,
   sectionHref,
   SETTINGS_SECTIONS,
 } from '@/components/settings/settings-registry';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The registry entry for this section (its title + description copy). */
 const SECTION = SETTINGS_SECTIONS.find((s) => s.key === 'members');
@@ -64,14 +64,13 @@ export default function MembersSettingsPage(): JSX.Element {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <SectionHeader
-        title={SECTION?.label ?? 'Members & Access'}
-        description={
-          SECTION?.description ?? 'Manage who belongs to this workspace and what they can do.'
-        }
-      />
+    <SettingsSectionPage
+      title={SECTION?.label ?? 'Members & Access'}
+      description={
+        SECTION?.description ?? 'Manage who belongs to this workspace and what they can do.'
+      }
+    >
       <MembersTab orgId={orgId} />
-    </div>
+    </SettingsSectionPage>
   );
 }

@@ -216,7 +216,7 @@ export function LabelEditorDialog({
                 />
               </Field>
 
-              <Field label="Colour">
+              <Field label="Color">
                 <LabelColorPicker value={color} onChange={setColor} />
               </Field>
 

@@ -117,11 +117,11 @@ export function RoleControl({
                 value={option.id}
                 className="flex-col items-start gap-0.5 py-2"
               >
-                <span className="text-on-surface font-medium">{copy?.label ?? option.key}</span>
+                <span className="text-on-surface text-label-large">
+                  {copy?.label ?? option.key}
+                </span>
                 {copy ? (
-                  <span className="text-on-surface-variant text-xs leading-snug">
-                    {copy.summary}
-                  </span>
+                  <span className="text-on-surface-variant text-body-small">{copy.summary}</span>
                 ) : null}
               </DropdownMenuRadioItem>
             );

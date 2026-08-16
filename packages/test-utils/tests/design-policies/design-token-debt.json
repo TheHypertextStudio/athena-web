@@ -6,7 +6,7 @@
     "raw-type-utility": 4
   },
   "apps/admin/src/app/(admin)/notifications/notification-console.tsx": {
-    "raw-type-utility": 30
+    "raw-type-utility": 26
   },
   "apps/admin/src/app/(admin)/orgs/[id]/org-detail-ui.tsx": {
     "raw-type-utility": 3
@@ -46,7 +46,7 @@
     "raw-type-utility": 5
   },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx": {
-    "raw-type-utility": 15
+    "raw-type-utility": 11
   },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx": {
     "raw-type-utility": 31
@@ -69,9 +69,6 @@
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
     "raw-type-utility": 3
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/settings/connections/error.tsx": {
-    "raw-type-utility": 3
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx": {
     "raw-type-utility": 4
   },
@@ -87,17 +84,11 @@
   "apps/web/src/app/(app)/portfolio/portfolio-client.tsx": {
     "raw-type-utility": 1
   },
-  "apps/web/src/app/(app)/settings/athena/page.tsx": {
-    "raw-type-utility": 12
-  },
-  "apps/web/src/app/(app)/settings/profile/page.tsx": {
-    "raw-type-utility": 14
-  },
   "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
     "raw-type-utility": 8
   },
   "apps/web/src/app/(app)/today/page.tsx": {
-    "raw-type-utility": 8
+    "raw-type-utility": 4
   },
   "apps/web/src/app/(app)/workspaces/new/page.tsx": {
     "raw-type-utility": 6
@@ -118,7 +109,7 @@
     "raw-type-utility": 5
   },
   "apps/web/src/app/(marketing)/about/page.tsx": {
-    "raw-type-utility": 12
+    "raw-type-utility": 3
   },
   "apps/web/src/app/(marketing)/pricing/page.tsx": {
     "raw-type-utility": 5
@@ -183,7 +174,7 @@
     "raw-type-utility": 1
   },
   "apps/web/src/components/athena/athena-panel-provider.tsx": {
-    "raw-type-utility": 16
+    "raw-type-utility": 13
   },
   "apps/web/src/components/athena/athena-workbench.tsx": {
     "raw-type-utility": 26
@@ -192,7 +183,7 @@
     "raw-type-utility": 32
   },
   "apps/web/src/components/calendar/item-drawer/core-fields-form.tsx": {
-    "raw-type-utility": 11
+    "raw-type-utility": 9
   },
   "apps/web/src/components/canvas/bulk-actions-bar.tsx": {
     "shadow-outside-overlay": 1
@@ -264,10 +255,10 @@
     "shadow-outside-overlay": 1
   },
   "apps/web/src/components/marketing/hero.tsx": {
-    "raw-type-utility": 4
+    "raw-type-utility": 2
   },
   "apps/web/src/components/marketing/marketing-cta.tsx": {
-    "raw-type-utility": 5
+    "raw-type-utility": 1
   },
   "apps/web/src/components/marketing/site-footer.tsx": {
     "raw-type-utility": 7
@@ -348,139 +339,6 @@
   "apps/web/src/components/search/search-client.tsx": {
     "raw-type-utility": 13
   },
-  "apps/web/src/components/settings/automations-tab.tsx": {
-    "raw-type-utility": 21
-  },
-  "apps/web/src/components/settings/calendar-connection-row.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/settings/card-note.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/settings/change-email-section.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/web/src/components/settings/connected-accounts-tab.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/web/src/components/settings/connected-apps-tab.tsx": {
-    "raw-type-utility": 7
-  },
-  "apps/web/src/components/settings/contact-points-section.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/settings/danger-zone-tab.tsx": {
-    "raw-type-utility": 7
-  },
-  "apps/web/src/components/settings/delete-account-dialog.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/settings/disconnect-confirm-dialog.tsx": {
-    "raw-type-utility": 2,
-    "shadow-outside-overlay": 1
-  },
-  "apps/web/src/components/settings/export-history.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/web/src/components/settings/export-request-form.tsx": {
-    "raw-type-utility": 7
-  },
-  "apps/web/src/components/settings/google-calendar-settings.tsx": {
-    "raw-type-utility": 22
-  },
-  "apps/web/src/components/settings/gtasks-account-row.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/web/src/components/settings/gtasks-identity-picker.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/settings/identity-account-row.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/settings/integration-action-button.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/settings/integration-config-panel.tsx": {
-    "raw-type-utility": 17
-  },
-  "apps/web/src/components/settings/integration-provider-card.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/settings/integration-row-actions.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/settings/integrations-intro.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/settings/integrations-status.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/settings/invitations-list.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/web/src/components/settings/invite-form.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/web/src/components/settings/linear-add-account-row.tsx": {
-    "raw-type-utility": 5
-  },
-  "apps/web/src/components/settings/linear-agent-install-card.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/settings/mail-ingest-row.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/settings/mail-ingest-section.tsx": {
-    "raw-type-utility": 5
-  },
-  "apps/web/src/components/settings/mcp-connectors-section.tsx": {
-    "raw-type-utility": 34
-  },
-  "apps/web/src/components/settings/mcp-setup-panels.tsx": {
-    "raw-type-utility": 13
-  },
-  "apps/web/src/components/settings/member-row.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/web/src/components/settings/members-tab.tsx": {
-    "raw-type-utility": 5
-  },
-  "apps/web/src/components/settings/passkeys-section.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/settings/provider-group.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/settings/recovery-codes-dialog.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/settings/role-control.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/web/src/components/settings/section-header.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/settings/security-tab.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/settings/sessions-section.tsx": {
-    "raw-type-utility": 5
-  },
-  "apps/web/src/components/settings/settings-image-picker.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/web/src/components/settings/settings-subsection.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/web/src/components/settings/team-mapping-picker.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/settings/workspace-general-settings.tsx": {
-    "raw-type-utility": 20
-  },
-  "apps/web/src/components/settings/workspace-scope-header.tsx": {
-    "raw-type-utility": 2
-  },
   "apps/web/src/components/stream/actor-avatar.tsx": {
     "raw-type-utility": 2
   },
@@ -495,7 +353,7 @@
     "raw-type-utility": 1
   },
   "apps/web/src/components/task-detail/CommentActivityFeed.tsx": {
-    "raw-type-utility": 8
+    "raw-type-utility": 7
   },
   "apps/web/src/components/task-detail/Dependencies.tsx": {
     "raw-type-utility": 6
@@ -522,7 +380,7 @@
     "raw-type-utility": 4
   },
   "apps/web/src/components/today/today-prompt.tsx": {
-    "raw-type-utility": 12
+    "raw-type-utility": 7
   },
   "apps/web/src/components/triage/source-tag.tsx": {
     "raw-type-utility": 2

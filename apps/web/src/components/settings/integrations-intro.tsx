@@ -19,11 +19,8 @@ export function IntegrationsIntro({
 }: IntegrationsIntroProps): JSX.Element {
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-on-surface-variant text-body-medium leading-relaxed">{text}</p>
-      <NextLink
-        href={crossHref}
-        className="text-primary text-body-medium w-fit font-medium hover:underline"
-      >
+      <p className="text-on-surface-variant text-body-medium">{text}</p>
+      <NextLink href={crossHref} className="text-primary text-label-large w-fit hover:underline">
         {crossText}
       </NextLink>
     </div>

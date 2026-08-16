@@ -20,24 +20,26 @@ import { SectionHeader } from '@/components/settings/section-header';
 import { entityLabel } from '@/components/settings/notion/notion-copy';
 import { NotionTableDesigner } from '@/components/settings/notion/notion-table-designer';
 import { useAppParams } from '@/lib/app-location';
+import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { useNotionMirror } from '@/components/settings/notion/use-notion-mirror-controller';
+import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The per-entity table designer page. */
 export default function NotionTableDesignerPage(): JSX.Element {
   const { orgId, entity } = useAppParams<{ orgId: string; entity: string }>();
   const { integration, loading } = useNotionMirror(orgId);
+  const { canManage, loading: permissionLoading } = useCanManageOrg(orgId);
 
   const parsed = NotionMirrorEntity.safeParse(entity);
   const backHref = `/orgs/${orgId}/settings/connections/notion`;
 
   if (!parsed.success) {
     return (
-      <div className="flex flex-col gap-4">
-        <SectionHeader title="Not found" description="There is no Notion table by that name." />
+      <SettingsSectionPage title="Not found" description="There is no Notion table by that name.">
         <NextLink href={backHref} className="text-primary text-label-large">
           Back to Notion
         </NextLink>
-      </div>
+      </SettingsSectionPage>
     );
   }
 
@@ -55,14 +57,19 @@ export default function NotionTableDesignerPage(): JSX.Element {
           </NextLink>
         }
       />
-      {loading ? (
+      {loading || permissionLoading ? (
         <p className="text-on-surface-variant text-body-medium">Loading your Notion setup…</p>
       ) : integration === null ? (
         <p className="text-on-surface-variant text-body-medium">
           Connect Notion first, then come back to shape this table.
         </p>
       ) : (
-        <NotionTableDesigner orgId={orgId} integrationId={integration.id} entity={parsed.data} />
+        <NotionTableDesigner
+          orgId={orgId}
+          integrationId={integration.id}
+          entity={parsed.data}
+          canManage={canManage}
+        />
       )}
     </div>
   );

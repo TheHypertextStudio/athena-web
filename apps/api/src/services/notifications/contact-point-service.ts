@@ -157,7 +157,7 @@ function toContactPointOut(row: ContactPointRow): z.input<typeof ContactPointOut
     id: row.id,
     userId: row.userId,
     type: row.type,
-    valueMasked: row.valueMasked,
+    value: row.value,
     status: row.status,
     primary: row.primary,
     verifiedAt: row.verifiedAt?.toISOString() ?? null,

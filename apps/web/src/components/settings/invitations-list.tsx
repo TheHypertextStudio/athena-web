@@ -79,7 +79,7 @@ export function InvitationsList({
   }
 
   return (
-    <ul className="divide-outline-variant divide-y">
+    <ul className="flex flex-col">
       {invitations.map((invitation) => (
         <InvitationRow
           key={invitation.id}
@@ -116,16 +116,10 @@ function InvitationRow({
     <li className="hover:bg-surface-container-high flex min-h-14 items-center gap-3 px-3 py-2 transition-colors">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-2">
-          <span className="text-on-surface text-body-medium truncate font-medium">
-            {invitation.email}
-          </span>
-          {invitation.asGuest ? (
-            <Badge variant="secondary" className="font-normal">
-              Guest
-            </Badge>
-          ) : null}
+          <span className="text-on-surface text-label-large truncate">{invitation.email}</span>
+          {invitation.asGuest ? <Badge variant="secondary">Guest</Badge> : null}
         </div>
-        <span className="text-on-surface-variant text-xs">
+        <span className="text-on-surface-variant text-body-small">
           Invited as {roleLabel(invitation.roleId)} &middot; {formatExpiry(invitation.expiresAt)}
         </span>
       </div>

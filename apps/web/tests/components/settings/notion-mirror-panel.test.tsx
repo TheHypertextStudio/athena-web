@@ -110,7 +110,7 @@ function database(over: Record<string, unknown> = {}) {
 
 function renderPanel(): void {
   const { wrapper } = makeQueryWrapper();
-  render(<NotionMirrorPanel orgId={ORG_ID} />, { wrapper });
+  render(<NotionMirrorPanel orgId={ORG_ID} canManage />, { wrapper });
 }
 
 /** One sync run as `GET /:id/runs` returns it, newest-first. */

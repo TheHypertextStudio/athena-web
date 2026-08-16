@@ -29,12 +29,43 @@ import { relativeTime } from './format-time';
  * @returns one line of application-owned status copy.
  */
 export function integrationStatusLabel(existing: IntegrationOut): string {
-  if (existing.status === 'error') return 'Connection needs attention';
+  if (existing.status === 'error') {
+    // "Connection needs attention" withheld the two facts that decide whether it is urgent: how
+    // long it has been broken, and how stale the data you are looking at now is.
+    const since =
+      existing.lastErrorAt === null ? '' : ` since ${relativeTime(existing.lastErrorAt)}`;
+    const stale =
+      existing.lastSyncedAt === null
+        ? ' · Never synced'
+        : ` · Last synced ${relativeTime(existing.lastSyncedAt)}`;
+    return `Connection needs attention${since}${stale}`;
+  }
   if (existing.status === 'disconnected') return 'Disconnected';
   if (existing.status === 'pending') return 'Finishing setup';
+
+  // A connector with no cadence never syncs again on its own. Reading "Connected" and nothing
+  // else, you would reasonably assume it keeps itself current.
+  const cadence =
+    existing.syncCadenceMinutes === null ? null : cadencePhrase(existing.syncCadenceMinutes);
+  const rhythm = cadence === null ? ' · Syncs when you ask it to' : ` · Syncs ${cadence}`;
   if (existing.lastSyncedAt)
-    return `Connected · Last synced ${relativeTime(existing.lastSyncedAt)}`;
-  return 'Connected';
+    return `Connected · Last synced ${relativeTime(existing.lastSyncedAt)}${rhythm}`;
+  return `Connected${rhythm}`;
+}
+
+/**
+ * A sync cadence in the words someone would use for it.
+ *
+ * @param minutes - The background re-sync interval.
+ * @returns an adverbial phrase that completes "Syncs …".
+ */
+function cadencePhrase(minutes: number): string {
+  if (minutes < 60) return `every ${minutes} minutes`;
+  if (minutes === 60) return 'hourly';
+  if (minutes === 1440) return 'daily';
+  if (minutes % 1440 === 0) return `every ${minutes / 1440} days`;
+  if (minutes % 60 === 0) return `every ${minutes / 60} hours`;
+  return `every ${minutes} minutes`;
 }
 
 /** Whether a status should read as healthy — the one place that decision is made. */

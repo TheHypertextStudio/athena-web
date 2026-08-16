@@ -7,7 +7,7 @@ import {
   PRODUCT_CAPABILITIES,
   type ProductEntitlementSource,
   type ProductEntitlementStatus,
-} from '@docket/types';
+} from '../../src/contracts';
 
 import { resolveProductCapability } from '../../src/application/entitlement';
 import { getMigratedDb } from '../support/db';

@@ -2,12 +2,13 @@
 import { organization, organizationProductEntitlement } from '@docket/db';
 import type { Database } from '@docket/db';
 import {
+  isProductKey,
   productGrantsCapability,
   type ProductCapability,
   type ProductEntitlementSource,
   type ProductEntitlementStatus,
   type ProductKey,
-} from '@docket/types';
+} from '../contracts';
 import { eq } from 'drizzle-orm';
 
 /** Product states that grant their catalogued capabilities. */
@@ -58,6 +59,7 @@ export async function resolveProductCapability(
   for (const row of rows) {
     if (
       row.productKey &&
+      isProductKey(row.productKey) &&
       row.status &&
       row.source &&
       ACCESS_STATUSES.has(row.status) &&

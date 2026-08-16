@@ -657,9 +657,6 @@ importers:
       '@docket/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@docket/types':
-        specifier: workspace:*
-        version: link:../../packages/types
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9)

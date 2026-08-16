@@ -27,7 +27,7 @@ import {
   PRODUCT_ENTITLEMENT_SOURCES,
   PRODUCT_ENTITLEMENT_STATUSES,
   PRODUCT_KEYS,
-} from '@docket/types';
+} from '@docket/billing/contracts';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -245,7 +245,7 @@ const billing = new Hono<AppEnv>()
         organizationId: actorCtx.orgId,
         canManageBilling: actorCtx.capabilities.includes('manage'),
         products: products.map((product) => ({
-          productKey: product.productKey,
+          productKey: BillingProductOut.shape.productKey.parse(product.productKey),
           name: 'Docket Pro' as const,
           status: product.status,
           source: product.source,

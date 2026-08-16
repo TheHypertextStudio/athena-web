@@ -1,5 +1,4 @@
 /** `@docket/db` — organization product ownership. */
-import type { ProductKey } from '@docket/types';
 import { index, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { productEntitlementSource, productEntitlementStatus } from '../enums';
@@ -18,7 +17,7 @@ export const organizationProductEntitlement = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
-    productKey: text('product_key').$type<ProductKey>().notNull(),
+    productKey: text('product_key').notNull(),
     status: productEntitlementStatus('status').notNull(),
     source: productEntitlementSource('source').notNull(),
     stripeSubscriptionId: text('stripe_subscription_id'),

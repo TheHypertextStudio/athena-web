@@ -1,5 +1,5 @@
 import { Check } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
+import { Button, Text } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
@@ -43,39 +43,45 @@ export function PricingProducts(): JSX.Element {
   return (
     <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 py-20">
       <div className="flex max-w-2xl flex-col gap-4">
-        <h1 className="font-display text-display-large-small text-ink tracking-tight text-balance">
+        <Text as="h1" token="display-small">
           Docket is free. Docket Pro is $8 per organization each month.
-        </h1>
-        <p className="text-ink-muted text-lg text-balance">
+        </Text>
+        <Text as="p" token="body-large" tone="muted">
           Docket Pro is billed separately for each organization that uses it.
-        </p>
+        </Text>
       </div>
       <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:max-w-2xl">
         {PRODUCTS.map((product) => (
           <div
             key={product.name}
             className={`bg-paper flex flex-col gap-6 rounded-md border p-6 ${
-              product.featured ? 'border-ink shadow-plate' : 'border-outline-variant'
+              product.featured ? 'border-ink' : 'border-outline-variant'
             }`}
           >
             <div className="flex flex-col gap-2">
-              <h2 className="font-display text-ink text-2xl tracking-tight">{product.name}</h2>
+              <Text as="h2" token="title-large">
+                {product.name}
+              </Text>
               <div className="flex items-baseline gap-1.5">
-                <span className="font-display text-ink text-4xl tracking-tight">
+                <Text token="display-small" numeric>
                   {product.price}
-                </span>
+                </Text>
                 {product.cadence ? (
-                  <span className="text-ink-muted font-mono text-xs">{product.cadence}</span>
+                  <Text token="label-small" tone="muted">
+                    {product.cadence}
+                  </Text>
                 ) : null}
               </div>
-              <p className="text-ink-muted text-body-medium">{product.description}</p>
+              <Text as="p" token="body-medium" tone="muted">
+                {product.description}
+              </Text>
             </div>
             <ul className="border-outline-variant flex flex-col gap-2.5 border-t pt-5">
               {product.features.map((feature) => (
-                <li key={feature} className="text-body-medium text-ink flex items-start gap-2">
+                <Text as="li" key={feature} token="body-medium" className="flex items-start gap-2">
                   <Check className="text-sienna mt-0.5 size-4 shrink-0" aria-hidden />
                   <span>{feature}</span>
-                </li>
+                </Text>
               ))}
             </ul>
             <Button

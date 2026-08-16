@@ -1,7 +1,7 @@
 /** API delivery mapping for organization-product capability access. */
 import { resolveProductCapability } from '@docket/billing/application/entitlement';
+import type { ProductCapability } from '@docket/billing/contracts';
 import { db } from '@docket/db';
-import type { ProductCapability } from '@docket/types';
 import type { MiddlewareHandler } from 'hono';
 
 import type { AppEnv } from './context';

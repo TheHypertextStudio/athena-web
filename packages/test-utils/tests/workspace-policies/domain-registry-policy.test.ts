@@ -359,7 +359,7 @@ describe('domain registry policy', () => {
     expect(billing?.supportedDeployableRuntimes).toEqual(['api']);
   });
 
-  it("declares Billing's exact five public entrypoints", () => {
+  it("declares Billing's exact six public entrypoints", () => {
     const registry = readDomainRegistry();
     const billing = registry.domains.find((domain) => domain.packageName === '@docket/billing');
 
@@ -369,6 +369,7 @@ describe('domain registry policy', () => {
       './adapters/stripe',
       './application/lifecycle',
       './application/entitlement',
+      './provision',
     ]);
   });
 

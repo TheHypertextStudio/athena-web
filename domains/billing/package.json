@@ -41,7 +41,6 @@
   },
   "dependencies": {
     "@docket/db": "workspace:*",
-    "@docket/types": "workspace:*",
     "drizzle-orm": "catalog:",
     "stripe": "catalog:"
   },

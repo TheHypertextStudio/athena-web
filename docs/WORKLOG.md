@@ -83,7 +83,12 @@
   Stripe SDK provisioning adapter to the billing domain's 90% gate. Direct adapter and failure-path
   tests now exercise resource mapping, immutable-price replacement inputs, portal policy, webhook
   creation and rotation, safe origins, CLI forwarding, and mode-matched credentials; focused
-  billing coverage passes at 97.26% statements, 92.08% branches, 100% functions, and 97.51% lines.
+  billing coverage passes at 97.34% statements, 92.11% branches, 100% functions, and 97.58% lines.
+  The same hosted shard identified repository-policy debt hidden from the ordinary test command:
+  the new pricing component now uses named type roles and no card shadow, removed onboarding files
+  no longer occupy the design-debt ledger, and the product catalog now belongs to Billing's public
+  contract instead of the generic types package. Billing's registry declares the provisioner, and
+  the exact non-API/non-web coverage shard plus the 155 repository tooling tests pass locally.
 
 ### [WORK-LOCATION-002] Make work-location settings feel like a place list
 

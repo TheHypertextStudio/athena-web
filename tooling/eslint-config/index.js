@@ -80,6 +80,7 @@ export const baseConfig = tseslint.config(
       // dev server can leave behind (e.g. `.next.corrupt-bak`) as well.
       '**/.next.*/**',
       '**/.turbo/**',
+      '**/.wrangler/**',
       '**/coverage/**',
       // Generated build output, like `.next` above: the service worker is authored as typechecked
       // ES modules under `apps/web/service-worker` (linted there) and bundled to this file. The

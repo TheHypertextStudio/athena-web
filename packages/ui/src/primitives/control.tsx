@@ -348,19 +348,6 @@ export function useControlMetrics(explicit?: ControlSize): ControlMetrics {
 }
 
 /**
- * The shared chrome every control renders: box model, alignment, motion, and disabled treatment.
- *
- * @param size - The resolved control step.
- * @param options - Shape overrides for icon-only and free-height controls.
- * @returns A class string carrying height, padding, gap, radius, label type token, and icon sizing.
- *
- * @remarks
- * Note what is **absent** and stays absent: no `shadow-*` in any state, and no `hover:scale-*` /
- * `active:scale-*` / `hover:p-*`. A control never changes its own size to signal interactivity —
- * state is communicated by color (a state layer) and by the focus ring, both of which leave the
- * box untouched. The design-token policy test fails the build if either creeps back in.
- */
-/**
  * The minimum a control may render at on a coarse pointer.
  *
  * @remarks
@@ -376,6 +363,19 @@ export function useControlMetrics(explicit?: ControlSize): ControlMetrics {
  */
 export const COARSE_FLOOR = { fixed: 'coarse:h-10', growable: 'coarse:min-h-10' } as const;
 
+/**
+ * The shared chrome every control renders: box model, alignment, motion, and disabled treatment.
+ *
+ * @param size - The resolved control step.
+ * @param options - Shape overrides for icon-only and free-height controls.
+ * @returns A class string carrying height, padding, gap, radius, label type token, and icon sizing.
+ *
+ * @remarks
+ * Note what is **absent** and stays absent: no `shadow-*` in any state, and no `hover:scale-*` /
+ * `active:scale-*` / `hover:p-*`. A control never changes its own size to signal interactivity —
+ * state is communicated by color (a state layer) and by the focus ring, both of which leave the
+ * box untouched. The design-token policy test fails the build if either creeps back in.
+ */
 export function controlChrome(
   size: ControlSize,
   options?: {

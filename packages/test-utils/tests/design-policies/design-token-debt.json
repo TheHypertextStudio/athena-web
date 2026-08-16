@@ -84,6 +84,9 @@
   "apps/web/src/app/(app)/portfolio/portfolio-client.tsx": {
     "raw-type-utility": 1
   },
+  "apps/web/src/app/(app)/settings/calendar/page.tsx": {
+    "raw-type-utility": 1
+  },
   "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
     "raw-type-utility": 8
   },

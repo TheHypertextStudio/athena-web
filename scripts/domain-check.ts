@@ -7,12 +7,11 @@
  * way twice, which is what makes the answers usable as evidence:
  *
  * - `hosts` — what host does each role resolve to **right now**, from this environment, and does
- *   the isolation invariant hold? (GEN-25)
+ *   the isolation invariant hold?
  * - `availability` — is a candidate name actually unregistered, according to the registry's own
- *   RDAP service rather than a resolver's silence? (GEN-23)
+ *   RDAP service rather than a resolver's silence?
  * - `probe` — does every resolved host answer over HTTPS with a certificate whose SAN covers it?
- *   (GEN-24)
- * - `verify` — does a workspace's custom domain currently prove ownership? (CORE-31)
+ * - `verify` — does a workspace's custom domain currently prove ownership?
  * - `legacy` — where does the old apex still appear **outside** shipped source, i.e. the places
  *   `packages/env/tests/hosts/legacy-host-policy.test.ts` deliberately does not police?
  *
@@ -33,14 +32,117 @@ import { connect, type PeerCertificate } from 'node:tls';
 import { join, relative, resolve } from 'node:path';
 import process from 'node:process';
 
-import {
-  assertHostConfigIsolated,
-  type HostConfig,
-  HOST_ROLES,
-  resolveHostConfig,
-  verifyCustomDomain,
-  WEB_HOST_ROLES,
-} from '../packages/env/src/index';
+import { verifyCustomDomain } from '../packages/env/src/custom-domain';
+
+/**
+ * A user-facing host role this script resolves.
+ *
+ * @remarks
+ * `athena-mail` is the odd one out: it needs MX records, not a TLS certificate, and it is the
+ * one host allowed to sit off the product apex during the interim before the final domain lands.
+ */
+type HostRole = 'app' | 'api' | 'admin' | 'brief' | 'athena-mail';
+
+/** Every {@link HostRole}, in the order a human would want them listed. */
+const HOST_ROLES: readonly HostRole[] = ['app', 'api', 'admin', 'brief', 'athena-mail'];
+
+/** The web-serving roles, i.e. every role except the mail host — these must answer over HTTPS. */
+const WEB_HOST_ROLES: readonly HostRole[] = ['app', 'api', 'admin', 'brief'];
+
+/** One resolved host: the bare hostname (for DNS/TLS/RP-id comparisons) and its printable origin. */
+interface ResolvedHost {
+  readonly host: string;
+  readonly origin: string;
+}
+
+/** The fully resolved host contract for one deployment. */
+interface HostConfig {
+  readonly rootDomain: string | undefined;
+  readonly passkeyRpId: string | undefined;
+  readonly supportEmail: string | undefined;
+  readonly customDomainTarget: string | undefined;
+  readonly hosts: Partial<Record<HostRole, ResolvedHost>>;
+}
+
+/** Turn a raw origin or bare-host value into a {@link ResolvedHost}, or `undefined` if unset. */
+function resolveHost(value: string | undefined): ResolvedHost | undefined {
+  if (value === undefined || value.length === 0) return undefined;
+  if (value.includes('://')) {
+    const url = new URL(value);
+    return { host: url.hostname, origin: url.origin };
+  }
+  return { host: value, origin: `https://${value}` };
+}
+
+/**
+ * Resolves every host role from the values already read by {@link currentConfig}.
+ *
+ * @remarks
+ * Deliberately no apex-derived fallback. `packages/env`'s equivalent used to default an unset
+ * `ADMIN_URL`/`PUBLIC_BRIEF_HOST`/`SUPPORT_EMAIL` to a subdomain of `PUBLIC_ROOT_DOMAIN` — removed
+ * because a silent fallback is how a half-applied domain change ships a hostname nobody
+ * configured. A role here is either explicitly set or `undefined`, same as the app's own contract.
+ */
+function buildHostConfig(source: {
+  rootDomain: string | undefined;
+  appUrl: string | undefined;
+  apiUrl: string | undefined;
+  adminUrl: string | undefined;
+  briefHost: string | undefined;
+  athenaInboundMailHost: string | undefined;
+  customDomainTarget: string | undefined;
+  passkeyRpId: string | undefined;
+  supportEmail: string | undefined;
+}): HostConfig {
+  const hosts: Partial<Record<HostRole, ResolvedHost>> = {};
+  const app = resolveHost(source.appUrl);
+  const api = resolveHost(source.apiUrl);
+  const admin = resolveHost(source.adminUrl);
+  const brief = resolveHost(source.briefHost);
+  const athenaMail = resolveHost(source.athenaInboundMailHost);
+  if (app) hosts.app = app;
+  if (api) hosts.api = api;
+  if (admin) hosts.admin = admin;
+  if (brief) hosts.brief = brief;
+  if (athenaMail) hosts['athena-mail'] = athenaMail;
+  return {
+    rootDomain: source.rootDomain,
+    passkeyRpId: source.passkeyRpId,
+    supportEmail: source.supportEmail,
+    customDomainTarget: source.customDomainTarget,
+    hosts,
+  };
+}
+
+/**
+ * Every configured web-serving host must sit at or under the configured apex.
+ *
+ * @remarks
+ * Structural, not a denylist of yesterday's domain — the same reasoning
+ * `packages/env/tests/hosts/legacy-host-policy.test.ts` uses. `athena-mail` is exempt; see
+ * {@link HostRole}.
+ *
+ * @throws {Error} When the apex is unset while a web host is configured, or a web host does not
+ *   sit at or under the apex.
+ */
+function assertHostConfigIsolated(config: HostConfig): void {
+  for (const role of WEB_HOST_ROLES) {
+    const resolved = config.hosts[role];
+    if (!resolved) continue;
+    if (config.rootDomain === undefined) {
+      throw new Error(
+        `${role} is configured (${resolved.host}) but no apex (PUBLIC_ROOT_DOMAIN) is set.`,
+      );
+    }
+    const isApex = resolved.host === config.rootDomain;
+    const isSubdomain = resolved.host.endsWith(`.${config.rootDomain}`);
+    if (!isApex && !isSubdomain) {
+      throw new Error(
+        `${role} (${resolved.host}) does not sit at or under the apex ${config.rootDomain}.`,
+      );
+    }
+  }
+}
 
 /** Repo root, relative to this script. */
 const REPO_ROOT = resolve(import.meta.dirname, '..');
@@ -94,7 +196,7 @@ function loadEnvFile(file: string): void {
 
 /** The host contract as this environment resolves it. */
 function currentConfig(): HostConfig {
-  return resolveHostConfig({
+  return buildHostConfig({
     rootDomain: process.env['PUBLIC_ROOT_DOMAIN'] ?? process.env['NEXT_PUBLIC_ROOT_DOMAIN'],
     appUrl: process.env['WEB_URL'] ?? process.env['NEXT_PUBLIC_APP_URL'],
     apiUrl: process.env['API_URL'] ?? process.env['NEXT_PUBLIC_API_URL'],

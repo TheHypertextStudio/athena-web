@@ -20,7 +20,8 @@
     "declarationMap": true,
     "sourceMap": true,
     "composite": true,
-    "incremental": true
+    "incremental": true,
+    "types": ["node"]
   },
   "exclude": ["node_modules", "dist", ".next", "coverage"]
 }

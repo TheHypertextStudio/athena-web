@@ -361,7 +361,7 @@ function metadata(value: Stripe.Metadata | null): Record<string, string> {
 }
 
 /** Official Stripe SDK adapter for the narrow provisioning port. */
-class StripeSdkProvisioningClient implements StripeProvisioningClient {
+export class StripeSdkProvisioningClient implements StripeProvisioningClient {
   constructor(
     private readonly stripe: Stripe,
     private readonly livemode: boolean,

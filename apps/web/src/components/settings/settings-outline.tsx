@@ -32,10 +32,26 @@ export const SETTINGS_GROUP_ATTR = 'data-settings-group';
 
 /** One entry in a section's outline. */
 export interface SettingsOutlineEntry {
-  /** The heading's element id, used as the scroll target. */
-  readonly id: string;
+  /**
+   * A key unique within this outline.
+   *
+   * @remarks
+   * Not the heading's DOM id. A group title can be user-supplied — the Labels page renders one
+   * group per label group the reader created — so two groups can slug to the same id, or to an
+   * empty one if a name is all emoji. Position makes the key unique where the title cannot.
+   */
+  readonly key: string;
   /** The group's title, exactly as the section renders it. */
   readonly label: string;
+  /**
+   * The heading itself.
+   *
+   * @remarks
+   * Held rather than re-found by id on every scroll frame and every click. It also sidesteps
+   * duplicate ids entirely: `querySelector('#…')` returns the first match, so two groups sharing
+   * a slug would scroll to the same place and the spy would highlight the wrong row.
+   */
+  readonly element: HTMLElement;
 }
 
 /**
@@ -73,9 +89,10 @@ export function useSettingsOutline(container: HTMLElement | null): readonly Sett
 
     const read = (): void => {
       const found = [...container.querySelectorAll(`[${SETTINGS_GROUP_ATTR}]`)].flatMap(
-        (element) => {
+        (element, index) => {
           const label = element.textContent.trim();
-          return element.id && label ? [{ id: element.id, label }] : [];
+          if (!(element instanceof HTMLElement) || !label) return [];
+          return [{ key: `${String(index)}:${label}`, label, element }];
         },
       );
       // A one-group section has nothing to navigate between; an outline of one row is a control
@@ -85,7 +102,7 @@ export function useSettingsOutline(container: HTMLElement | null): readonly Sett
         current.length === next.length &&
         current.every((entry, i) => {
           const candidate = next[i];
-          return entry.id === candidate?.id && entry.label === candidate.label;
+          return entry.key === candidate?.key && entry.element === candidate.element;
         })
           ? current
           : next,
@@ -144,21 +161,18 @@ export function useActiveOutlineEntry(
     // Resolved once per outline change rather than per scroll event. The headings do not move, so
     // re-finding them by id on every frame of a scroll was pure repetition — and the outline had
     // already held these very elements when it read their text.
-    const headings = entries.flatMap((entry) => {
-      const element = container.querySelector(`#${CSS.escape(entry.id)}`);
-      return element instanceof HTMLElement ? [{ id: entry.id, element }] : [];
-    });
+    const headings = entries.map((entry) => ({ key: entry.key, element: entry.element }));
 
     let frame = 0;
     const read = (): void => {
       frame = 0;
       const top = container.getBoundingClientRect().top;
-      let current = first.id;
+      let current = first.key;
       for (const heading of headings) {
         // 8px of slack so a heading resting exactly on the edge counts as reached. The list is in
         // document order, so the first heading still below the edge ends the search.
         if (heading.element.getBoundingClientRect().top - top > 8) break;
-        current = heading.id;
+        current = heading.key;
       }
       setActiveId(current);
     };

@@ -33,7 +33,8 @@
  *
  * ## The 40px floor on a coarse pointer
  *
- * Every step under 40px also carries `coarse:h-10`. The craft rubric's a11y gate requires a 40px
+ * Every control renders at least 40px tall on a coarse pointer. The craft rubric's a11y gate
+ * requires a 40px touch target on mobile, and the settings form step is 36px — so a 40px
  * touch target on mobile, and the settings form step is 36px — so *every* field, every primary
  * action and the dialog's own close button failed it, along with every 32px `sm` button beside
  * them. That is not a settings defect; it is the scale being a mouse scale, and a phone reading it

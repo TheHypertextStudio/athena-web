@@ -15,30 +15,23 @@ import { useAppParams } from '@/lib/app-location';
  */
 import type { JSX } from 'react';
 
-import { useActiveOrg } from '@/components/active-org';
 import { ConnectionsPanel } from '@/components/settings/connections-panel';
-import { workspaceSettingsSections } from '@/components/settings/settings-registry';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
+import { useSharedOnlyGuard } from '@/components/settings/use-shared-only-guard';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The Connections section page. */
 export default function ConnectionsSettingsPage(): JSX.Element {
   const { orgId } = useAppParams<{ orgId: string }>();
-  const { activeOrg } = useActiveOrg();
   const { canManage } = useCanManageOrg(orgId);
 
-  const isPersonal = activeOrg?.isPersonal ?? false;
-  const section = workspaceSettingsSections(isPersonal).find((s) => s.key === 'connections');
+  if (useSharedOnlyGuard('connections')) return <></>;
 
   return (
-    <SettingsSectionPage
-      title={section?.label ?? 'Connections'}
-      description={section?.description ?? 'Connect tools to keep them in sync with Docket.'}
-    >
+    <SettingsSectionPage sectionKey="connections">
       <ConnectionsPanel
         orgId={orgId}
         canManage={canManage}
-        isPersonal={isPersonal}
         // Linked identities are user-scoped, not workspace-scoped, and now live in the Personal
         // group of the settings modal rather than under this org's own settings tree.
         linkedAccountsHref="/settings/connected-accounts"

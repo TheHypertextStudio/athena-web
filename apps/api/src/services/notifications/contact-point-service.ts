@@ -152,12 +152,29 @@ export class NotificationContactPointService {
   }
 }
 
+/**
+ * A push subscription endpoint, reduced to something safe to send back.
+ *
+ * @remarks
+ * Unmasking was the right call for an address the caller typed: showing somebody a masked version
+ * of their own email just stops them confirming which one it is. A `push_token` is not an address
+ * — it is a bearer credential a device registered, and whoever holds it can send that device
+ * notifications. It is never typed in, never displayed, and the web client filters push rows out
+ * of the list entirely, so putting it on the wire buys nothing and risks a real capability.
+ *
+ * @param value - The stored token.
+ * @returns a short, non-usable tail for debugging.
+ */
+function maskPushToken(value: string): string {
+  return `…${value.slice(-6)}`;
+}
+
 function toContactPointOut(row: ContactPointRow): z.input<typeof ContactPointOut> {
   return {
     id: row.id,
     userId: row.userId,
     type: row.type,
-    value: row.value,
+    value: row.type === 'push_token' ? maskPushToken(row.value) : row.value,
     status: row.status,
     primary: row.primary,
     verifiedAt: row.verifiedAt?.toISOString() ?? null,

@@ -557,7 +557,11 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                 title="No schedule yet"
                 body="Tell Docket where you usually work on which days."
                 frame="none"
-                cta={{ label: 'Add schedule', onClick: openNewSchedule }}
+                cta={{
+                  label: 'Add schedule',
+                  onClick: openNewSchedule,
+                  disabled: places.length === 0,
+                }}
               />
             ) : (
               assertionsQ.data.items.map((assertion) => {

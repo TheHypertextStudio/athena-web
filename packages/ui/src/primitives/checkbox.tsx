@@ -62,14 +62,13 @@ export function Checkbox({
 
   return (
     <span
-      className={cn(
-        'relative inline-flex size-4 shrink-0 items-center justify-center',
-        // The mark stays 16px; the hit area grows around it via a pseudo-element, so the tick
-        // does not become a slab on a phone. `-inset-3` centres it — 16 + 12 + 12 = 40 — where a
-        // bare `size-10` anchored the box to the mark's top-left corner and left the target
-        // sitting down and to the right of the thing it belongs to.
-        'coarse:after:absolute coarse:after:-inset-3 coarse:after:content-[""]',
-      )}
+      // An earlier attempt grew the coarse-pointer hit area with an absolutely-positioned
+      // `::after` here. It painted above the input and took the tap itself, so every checkbox not
+      // wrapped in a `<label>` — the notification channel matrix, list-row selection, calendar
+      // layer visibility — stopped toggling on touch. A pseudo-element cannot be the hit target
+      // for a sibling. The 40px target for a bare checkbox has to come from what wraps it: a
+      // label that already spans the row, or a cell taking `coarse:min-h-10`.
+      className={cn('relative inline-flex size-4 shrink-0 items-center justify-center')}
     >
       <input
         type="checkbox"

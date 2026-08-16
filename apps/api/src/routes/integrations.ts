@@ -13,6 +13,7 @@ import {
   SyncRunOut,
   TaskOut,
 } from '@docket/types';
+import { providerErrorKind } from '@docket/connections/provider-error';
 import { isConnectorError, uninstallInstallation, type ImportedItem } from '@docket/integrations';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -362,6 +363,7 @@ Requires \`manage\` — wiring an external data source into the org is an admini
           ...(externalAccountId !== undefined ? { createdBy: actorId } : {}),
           status: 'pending',
           lastError: null,
+          lastErrorKind: null,
           lastErrorAt: null,
         });
         return created(c, IntegrationOut, toOut(row));
@@ -568,6 +570,7 @@ Unlike \`GET /:id/runs\`, which is capped at the 20 most recent runs, this addre
               createdBy: actorId,
               status: 'pending' as const,
               lastError: null,
+              lastErrorKind: null,
               lastErrorAt: null,
             }
           : {}),
@@ -667,6 +670,7 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
         const updated = await setIntegration(id, {
           status: 'error',
           lastError: LINEAR_WRITE_SCOPE_MESSAGE,
+          lastErrorKind: 'auth',
           lastErrorAt: new Date(),
         });
         return ok(c, IntegrationOut, toOut(updated));
@@ -684,6 +688,7 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
         const updated = await setIntegration(id, {
           status: 'error',
           lastError: tokenResult.message,
+          lastErrorKind: 'auth',
           lastErrorAt: new Date(),
         });
         return ok(c, IntegrationOut, toOut(updated));
@@ -728,6 +733,7 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
         const verifiedPatch = {
           status: 'connected',
           lastError: null,
+          lastErrorKind: null,
           lastErrorAt: null,
           connection: {
             ...row.connection,
@@ -771,6 +777,7 @@ Requires \`manage\` — it exercises live credentials and mutates health. Side e
         const updated = await setIntegration(id, {
           status: 'error',
           lastError: message,
+          lastErrorKind: providerErrorKind(err),
           lastErrorAt: new Date(),
         });
         return ok(c, IntegrationOut, toOut(updated));
@@ -812,6 +819,7 @@ Requires \`contribute\` (it creates tasks, the same bar as authoring work direct
         await setIntegration(id, {
           status: 'error',
           lastError: tokenResult.message,
+          lastErrorKind: 'auth',
           lastErrorAt: new Date(),
         });
         throw new ConflictError(
@@ -832,7 +840,12 @@ Requires \`contribute\` (it creates tasks, the same bar as authoring work direct
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Connector failed to import work';
-        await setIntegration(id, { status: 'error', lastError: message, lastErrorAt: new Date() });
+        await setIntegration(id, {
+          status: 'error',
+          lastError: message,
+          lastErrorKind: providerErrorKind(err),
+          lastErrorAt: new Date(),
+        });
         throw new ConflictError(message);
       }
 
@@ -847,6 +860,7 @@ Requires \`contribute\` (it creates tasks, the same bar as authoring work direct
         lastSyncStatus: 'succeeded',
         lastSyncedAt: new Date(),
         lastError: null,
+        lastErrorKind: null,
         lastErrorAt: null,
       });
       return ok(c, pageOf(TaskOut), { items: created });

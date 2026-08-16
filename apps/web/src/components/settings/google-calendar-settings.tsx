@@ -87,7 +87,10 @@ function syncSummary(
     // already listed below by name — so "2 sync issues found" can say *which two* instead of
     // leaving someone to guess which of eight calendars is stale.
     const named = data.errors
-      .map((entry) => entry.slice(0, entry.indexOf(':')))
+      .map((entry) => {
+        const separator = entry.indexOf(':');
+        return separator === -1 ? entry : entry.slice(0, separator);
+      })
       .map((id) => calendars.find((calendar) => calendar.externalCalendarId === id)?.title)
       .filter((title): title is string => title !== undefined);
     const unique = [...new Set(named)];

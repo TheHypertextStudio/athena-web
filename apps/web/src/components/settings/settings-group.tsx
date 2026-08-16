@@ -54,17 +54,6 @@ export interface SettingsGroupProps extends Omit<
    */
   readonly body?: 'padded' | 'rows';
   /**
-   * The element a `rows` body renders as.
-   *
-   * @remarks
-   * A run of rows is usually a list, and fourteen groups were nesting their own
-   * `<ul className="flex flex-col">` inside the identical flex column this already renders —
-   * two boxes where one is meant, and the inner one silently dropping the `min-w-0` that keeps a
-   * long value from forcing the group wider than its column. Naming the element here means the
-   * list *is* the rows container.
-   */
-  readonly rowsAs?: 'div' | 'ul' | 'ol';
-  /**
    * A full-bleed band pinned beneath the body, for a persistent note or alert — pass a
    * {@link CardNote} or {@link CardAlert}, which paint the band's own tonal step.
    */
@@ -87,7 +76,6 @@ export function SettingsGroup({
   description,
   action,
   body = 'padded',
-  rowsAs: Rows = 'div',
   footer,
   children,
   className,
@@ -147,7 +135,7 @@ export function SettingsGroup({
 
       {children ? (
         body === 'rows' ? (
-          <Rows className="flex min-w-0 flex-col">{children}</Rows>
+          <div className="flex min-w-0 flex-col">{children}</div>
         ) : (
           // A padded group is a form, and `control.tsx` names `lg` (36px) as the settings-form
           // step. Every field in settings was rendering at the bare `md` default instead, because

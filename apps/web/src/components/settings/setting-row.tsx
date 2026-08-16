@@ -72,7 +72,6 @@ export interface SettingRowProps {
  */
 export const ROW_BASE = 'flex min-h-12 w-full min-w-0 items-center gap-3 px-4 py-3 text-left';
 
-/** The one hover answer — a single step above the `card` tone the group paints. */
 /** The hover and disabled treatment for a row that responds to a pointer. See {@link ROW_BASE}. */
 export const ROW_INTERACTIVE = cn(
   'hover:bg-surface-container transition-colors',

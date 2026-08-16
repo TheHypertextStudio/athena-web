@@ -4,7 +4,6 @@ import { useSharedOnlyGuard } from '@/components/settings/use-shared-only-guard'
 import { useAppParams } from '@/lib/app-location';
 import type { JSX } from 'react';
 import { PublishingSettings } from '@/components/publishing/publishing-settings';
-import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /**
  * Settings → Publishing: where this workspace's published pages answer on the web.
@@ -30,9 +29,5 @@ export default function PublishingSettingsPage(): JSX.Element {
   // shared-only section cannot acquire a guard that disagrees with the nav.
   if (useSharedOnlyGuard('publishing')) return <></>;
 
-  return (
-    <SettingsSectionPage sectionKey="publishing">
-      <PublishingSettings orgId={orgId} />
-    </SettingsSectionPage>
-  );
+  return <PublishingSettings orgId={orgId} />;
 }

@@ -160,17 +160,14 @@ function SectionOutline({ content }: SectionOutlineProps): JSX.Element | null {
   return (
     <ul className="mt-0.5 flex flex-col gap-0.5">
       {entries.map((entry) => {
-        const current = entry.id === activeId;
+        const current = entry.key === activeId;
         return (
-          <li key={entry.id}>
+          <li key={entry.key}>
             <button
               type="button"
               aria-current={current ? 'true' : undefined}
               onClick={() => {
-                content?.querySelector(`#${CSS.escape(entry.id)}`)?.scrollIntoView({
-                  block: 'start',
-                  behavior: 'smooth',
-                });
+                entry.element.scrollIntoView({ block: 'start', behavior: 'smooth' });
               }}
               className={cn(
                 'text-body-medium focus-visible:ring-ring flex min-h-8 w-full items-center rounded-md py-1 pr-2.5 pl-9 text-left outline-none focus-visible:ring-2',

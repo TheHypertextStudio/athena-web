@@ -107,7 +107,7 @@ export function toSyncRunOut(run: SyncRunRow): z.input<typeof SyncRunOut> {
     processed: run.processed,
     total: run.total,
     error: run.error,
-    errorKind: SyncFailureKind.nullable().parse(run.errorKind),
+    errorKind: SyncFailureKind.nullable().catch(null).parse(run.errorKind),
     startedAt: run.startedAt.toISOString(),
     finishedAt: run.finishedAt?.toISOString() ?? null,
   };
@@ -163,6 +163,7 @@ async function finishSuccess(
       lastSyncStatus: 'succeeded',
       lastSyncedAt: now,
       lastError: null,
+      lastErrorKind: null,
       lastErrorAt: null,
       syncStartedAt: null,
       ...(opts?.stampFullSync ? { lastFullSyncedAt: now } : {}),

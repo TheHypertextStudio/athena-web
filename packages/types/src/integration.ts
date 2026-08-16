@@ -423,13 +423,6 @@ export const SyncRunPurpose = z
 export type SyncRunPurpose = z.infer<typeof SyncRunPurpose>;
 
 /**
- * The durable record of one connector sync run.
- *
- * @remarks
- * Replaces the former ephemeral `SyncJobOut` (an in-memory job wiped on every restart). Each
- * run is persisted, so a failure leaves a real, auditable trace instead of vanishing.
- */
-/**
  * What sort of failure a sync run hit.
  *
  * @remarks
@@ -445,6 +438,13 @@ export const SyncFailureKind = z.enum(['auth', 'rate_limit', 'network', 'provide
 /** Sync-failure classification value. */
 export type SyncFailureKind = z.infer<typeof SyncFailureKind>;
 
+/**
+ * The durable record of one connector sync run.
+ *
+ * @remarks
+ * Replaces the former ephemeral `SyncJobOut` (an in-memory job wiped on every restart). Each
+ * run is persisted, so a failure leaves a real, auditable trace instead of vanishing.
+ */
 export const SyncRunOut = z
   .object({
     id: z.string().describe('The sync-run id.'),

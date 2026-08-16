@@ -176,43 +176,43 @@ export function SessionsSection(): JSX.Element {
           {sessions.map((s) => {
             const lastActive = formatCalendarDate(s.updatedAt);
             return (
-              <li key={s.id}>
-                <SettingRow
-                  leading={<DecorativeIcon icon={deviceIcon(s.userAgent)} />}
-                  label={
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="text-on-surface text-label-large truncate">
-                        {deviceLabel(s.userAgent)}
-                      </span>
-                      {s.current ? <Badge variant="secondary">This device</Badge> : null}
+              <SettingRow
+                key={s.id}
+                as="li"
+                leading={<DecorativeIcon icon={deviceIcon(s.userAgent)} />}
+                label={
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="text-on-surface text-label-large truncate">
+                      {deviceLabel(s.userAgent)}
                     </span>
-                  }
-                  description={[
-                    lastActive ? `Active ${lastActive}` : null,
-                    isMeaningfulAddress(s.ipAddress) ? s.ipAddress : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  {...(s.current
-                    ? {}
-                    : {
-                        trailing: (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled={revokeOne.isPending && revokingId === s.id}
-                            onClick={() => {
-                              setRevokingId(s.id);
-                              revokeOne.mutate(s.id);
-                            }}
-                          >
-                            {revokeOne.isPending && revokingId === s.id ? 'Revoking…' : 'Revoke'}
-                          </Button>
-                        ),
-                      })}
-                />
-              </li>
+                    {s.current ? <Badge variant="secondary">This device</Badge> : null}
+                  </span>
+                }
+                description={[
+                  lastActive ? `Active ${lastActive}` : null,
+                  isMeaningfulAddress(s.ipAddress) ? s.ipAddress : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                {...(s.current
+                  ? {}
+                  : {
+                      trailing: (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={revokeOne.isPending && revokingId === s.id}
+                          onClick={() => {
+                            setRevokingId(s.id);
+                            revokeOne.mutate(s.id);
+                          }}
+                        >
+                          {revokeOne.isPending && revokingId === s.id ? 'Revoking…' : 'Revoke'}
+                        </Button>
+                      ),
+                    })}
+              />
             );
           })}
         </ul>

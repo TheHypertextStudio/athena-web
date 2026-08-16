@@ -458,7 +458,7 @@ export function toOut(i: IntegrationRow): z.input<typeof IntegrationOut> {
     lastSyncStatus: i.lastSyncStatus,
     lastSyncedAt: i.lastSyncedAt?.toISOString() ?? null,
     lastError: i.lastError,
-    lastErrorKind: SyncFailureKind.nullable().parse(i.lastErrorKind),
+    lastErrorKind: SyncFailureKind.nullable().catch(null).parse(i.lastErrorKind),
     lastErrorAt: i.lastErrorAt?.toISOString() ?? null,
     syncCadenceMinutes: i.syncCadenceMinutes,
     createdAt: i.createdAt.toISOString(),

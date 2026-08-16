@@ -239,7 +239,9 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
         <CardAlert
           message={CONNECTION_ERROR_MESSAGE}
           detail={CONNECTION_ERROR_DETAIL}
-          action={<NotionConnectAction label={RECONNECT_ACTION} variant="default" />}
+          action={
+            <NotionConnectAction label={RECONNECT_ACTION} variant="default" disabled={!canManage} />
+          }
         />
       ) : null}
 

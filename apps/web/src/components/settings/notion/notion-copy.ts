@@ -63,6 +63,9 @@ export const SYNC_ACTION_BUSY = 'Syncing…';
  * and is provider-authored text; repeating it here would put Notion's words in Docket's mouth,
  * and it is rarely actionable anyway.
  */
+export const SYNC_FAILED =
+  'Docket could not finish updating your Notion databases. Check the connection and try again.';
+
 /**
  * What to do about each sort of sync failure, in Docket's words.
  *
@@ -79,7 +82,7 @@ export const SYNC_ACTION_BUSY = 'Syncing…';
  * Keyed on the enum so a sixth kind is a type error rather than a silent fall-through to the
  * generic line.
  */
-export const SYNC_FAILURE_BY_KIND: Record<SyncFailureKind, string> = {
+const SYNC_FAILURE_BY_KIND: Record<SyncFailureKind, string> = {
   auth:
     'Notion no longer accepts Docket’s access. Reconnect Notion from Connections — your designed ' +
     'databases are kept.',
@@ -90,7 +93,7 @@ export const SYNC_FAILURE_BY_KIND: Record<SyncFailureKind, string> = {
   provider:
     'Notion rejected part of the update. This is usually a page Docket can no longer see — check ' +
     'that the parent page is still shared with Docket, then run it again.',
-  unknown: 'Docket could not finish updating your Notion databases. Try running it again.',
+  unknown: SYNC_FAILED,
 };
 
 /**
@@ -102,9 +105,6 @@ export const SYNC_FAILURE_BY_KIND: Record<SyncFailureKind, string> = {
 export function syncFailureCopy(kind: SyncFailureKind | null | undefined): string {
   return kind == null ? SYNC_FAILED : SYNC_FAILURE_BY_KIND[kind];
 }
-
-export const SYNC_FAILED =
-  'Docket could not finish updating your Notion databases. Check the connection and try again.';
 
 /**
  * Shown when the LAST mirror run failed but the connection itself is fine.

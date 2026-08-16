@@ -334,15 +334,18 @@ export function findSettingsSection(key: string): SettingsSection | undefined {
  * Every section by key, resolved once.
  *
  * @remarks
- * Personal first, so a key a personal workspace shares with the personal group keeps the personal
- * framing. The shared workspace groups are a strict superset of the personal ones, so scanning
- * both workspace kinds — which this used to do — could never reach a third answer.
+ * `connections` is declared in both registries, and the personal framing is the correct one for
+ * it — so personal entries are inserted LAST, because `new Map` keeps the last value for a
+ * duplicate key. Listing them first reads as precedence and produces the opposite.
+ *
+ * The shared workspace groups are a strict superset of the personal ones, so scanning both
+ * workspace kinds — which this used to do — could never reach a third answer.
  *
  * Built at module scope because `SettingsSectionPage` resolves through here in its render body, so
  * a per-call `flatMap` re-flattened two arrays on every keystroke in every settings form.
  */
 const SECTIONS_BY_KEY: ReadonlyMap<string, SettingsSection> = new Map(
-  [...PERSONAL_SETTINGS_SECTIONS, ...workspaceSettingsSections(false)].map((section) => [
+  [...workspaceSettingsSections(false), ...PERSONAL_SETTINGS_SECTIONS].map((section) => [
     section.key,
     section,
   ]),

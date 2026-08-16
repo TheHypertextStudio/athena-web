@@ -39,7 +39,7 @@
 
 ### [DOCKET-PRO-001] Ship product-based billing and literal public copy
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-08-15
 - **Priority**: P0
 - **Description**: Sell Docket Pro as the single paid organization product, keep personal Docket
@@ -61,10 +61,11 @@
   - [x] Install the nine real seeded application screenshots and remove every placeholder frame.
   - [x] Run focused checks and the full typecheck, lint, test, and build gates.
   - [x] Provision Stripe sandbox, transfer the same contract to production, and verify both.
-  - [ ] Fast-forward directly to `main`, monitor Git-driven deployment, and verify production.
-- **Blockers**: The implementation and Stripe objects are ready, but production checkout, webhook
-  activation, return routing, and cancellation cannot be verified until these commits are deployed.
-  Revised pricing must remain unpublished until that live verification is complete.
+  - [x] Fast-forward directly to `main`, monitor Git-driven deployment, and verify production.
+- **Blockers**: None for the public release. A real paid checkout and cancellation were deliberately
+  not executed because verification had no authenticated customer organization or payment method;
+  the provisioned Stripe resources, public billing contract, and non-destructive purchase entry
+  path were verified without submitting a charge.
 - **Notes**: Product owner approved the Privacy and Terms mechanics on 2026-08-15. Docket is free by
   default; Docket Pro costs USD $8 per organization each month and grants the five named
   capabilities. Products are not ordered tiers. MCP access is vendor-neutral and rests on OAuth
@@ -89,6 +90,17 @@
   no longer occupy the design-debt ledger, and the product catalog now belongs to Billing's public
   contract instead of the generic types package. Billing's registry declares the provisioner, and
   the exact non-API/non-web coverage shard plus the 155 repository tooling tests pass locally.
+  Revision `9c300736` reached `main` with zero merge commits. GitHub Actions run `31917262905`
+  passed every required lint, type, test, build, image, secret-scan, migration, API deployment, web
+  deployment, and scheduler gate. Production serves the exact approved headline and subtitle; all
+  nine seeded application images return successfully and render at their native 1152 by 720 size.
+  The home and pricing pages were inspected at 1440 by 900 and 390 by 844 viewports. The production
+  API health and configuration endpoints are healthy, the public configuration exposes the live
+  Stripe client contract, and unauthenticated billing and MCP requests fail with the intended
+  application-owned responses. MCP resource metadata is vendor-neutral. No pull request was
+  created, no Vercel setting was changed manually, and no payment was submitted. The distinction
+  between live configuration proof and a real customer transaction remains explicit rather than
+  treating one as evidence of the other.
 
 ### [WORK-LOCATION-002] Make work-location settings feel like a place list
 

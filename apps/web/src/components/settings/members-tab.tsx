@@ -22,6 +22,7 @@
  * Data is fetched at runtime, so the production build needs no running server.
  */
 import type { MemberOut, RoleOut } from '@docket/types';
+import { EmptyState } from '@docket/ui/components';
 import { Skeleton } from '@docket/ui/primitives';
 import { Users } from '@docket/ui/icons';
 import type { JSX } from 'react';
@@ -218,9 +219,12 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
         </div>
         <div className="bg-surface-container-low overflow-hidden rounded-xl">
           {members.length === 0 ? (
-            <p className="text-on-surface-variant text-body-medium p-6 text-center">
-              No members yet — invite someone above to get started.
-            </p>
+            <EmptyState
+              icon={Users}
+              title="No members yet"
+              body="Invite someone by email and they will appear here once they accept."
+              className="border-none bg-transparent"
+            />
           ) : (
             <ul className="flex flex-col">
               {members.map((member) => {

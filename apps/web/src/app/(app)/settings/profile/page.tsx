@@ -10,6 +10,8 @@ import { userErrorMessage } from '@/lib/problem';
 import { unwrap, useApiMutation } from '@/lib/query';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 import { Input } from '@docket/ui/primitives';
+import { SettingRowStatus } from '@/components/settings/setting-row-status';
+import { SettingsGroup } from '@/components/settings/settings-group';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The signed-in user's profile destination. */
@@ -63,37 +65,14 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
   }
 
   return (
-    <SettingsSectionPage
-      title="Profile"
-      description="Manage your name, email, and personal identity."
-    >
-      {/* placeholder: the signed-in account's name, email and avatar — unknown until the session
-          resolves. Deliberately a line of copy rather than grey bars: the shape of a profile is
-          not interesting enough to be worth miming. */}
-      {isPending ? (
-        <p className="text-on-surface-variant text-body-medium" role="status">
-          Loading your profile…
-        </p>
-      ) : session ? (
-        <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-on-surface text-title-small">Your identity</h2>
-              <p className="text-on-surface-variant text-body-medium">
-                This is the identity Athena uses when working across your connected services.
-              </p>
-            </div>
-            {save.isPending ? (
-              <p className="text-on-surface-variant text-body-small shrink-0" role="status">
-                Saving…
-              </p>
-            ) : save.isSuccess ? (
-              <p className="text-on-surface-variant text-body-small shrink-0" role="status">
-                Saved
-              </p>
-            ) : null}
-          </div>
-          <label className="text-on-surface text-label-large flex max-w-md flex-col gap-1.5">
+    <SettingsSectionPage sectionKey="profile" loading={isPending}>
+      {session ? (
+        <SettingsGroup
+          title="Your identity"
+          description="This is the identity Athena uses when working across your connected services."
+          action={<SettingRowStatus pending={save.isPending} saved={save.isSuccess} />}
+        >
+          <label className="text-on-surface text-label-large flex flex-col gap-1.5">
             Name
             <Input
               value={name}
@@ -131,7 +110,7 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
               Change your sign-in email from Security, where the confirmation step is protected.
             </p>
           </div>
-        </section>
+        </SettingsGroup>
       ) : null}
     </SettingsSectionPage>
   );

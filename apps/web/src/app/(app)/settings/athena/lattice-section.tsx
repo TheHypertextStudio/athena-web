@@ -24,6 +24,7 @@ import { type JSX, type ReactNode } from 'react';
 
 import { api } from '@/lib/api';
 import { LoadFailure } from '@/components/settings/load-failure';
+import { SettingsGroup } from '@/components/settings/settings-group';
 import { userErrorMessage } from '@/lib/problem';
 import {
   apiQueryOptions,
@@ -157,25 +158,22 @@ export function LatticeSection(): JSX.Element {
 
   if (statusQ.isPending) {
     return (
-      <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-4">
-        {/* placeholder: whether this person has authorized Lovelace and which of their computers
-            is chosen — both are per-account facts only the stored record knows. */}
+      // placeholder: whether this person has authorized Lovelace and which of their computers is
+      // chosen — both are per-account facts only the stored record knows.
+      <SettingsGroup title="Run Athena on your own computer">
         <Skeleton className="h-40 rounded-xl" />
-      </section>
+      </SettingsGroup>
     );
   }
 
   if (statusQ.isError || !status) {
     return (
-      <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-4">
-        <Text token="title-medium" as="h2">
-          Run Athena on your own computer
-        </Text>
+      <SettingsGroup title="Run Athena on your own computer">
         <LoadFailure
           message={userErrorMessage(statusQ.error, 'Could not load this setting.')}
           retrying
         />
-      </section>
+      </SettingsGroup>
     );
   }
 
@@ -184,14 +182,11 @@ export function LatticeSection(): JSX.Element {
   if (!status.available) {
     const reason: LatticeDeploymentReason = status.deploymentReason ?? 'not_configured';
     return (
-      <section className="bg-surface-container-low flex max-w-2xl flex-col gap-3 rounded-xl p-4">
-        <Text token="title-medium" as="h2">
-          Run Athena on your own computer
-        </Text>
+      <SettingsGroup title="Run Athena on your own computer">
         <Text token="body-medium" tone="muted" role="status">
           {LATTICE_DEPLOYMENT_COPY[reason]}
         </Text>
-      </section>
+      </SettingsGroup>
     );
   }
 
@@ -224,42 +219,32 @@ export function LatticeSection(): JSX.Element {
       : undefined;
 
   return (
-    <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-4">
-      <Toolbar
-        leading={
-          <Stack gap={1} className="min-w-0">
-            <Text token="title-medium" as="h2">
-              Run Athena on your own computer
-            </Text>
-            <Text token="body-small" tone="muted">
-              Athena runs on a computer you own.
-            </Text>
-          </Stack>
-        }
-        trailing={
-          connected ? (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                disconnect.mutate(undefined);
-              }}
-              disabled={disconnect.isPending}
-            >
-              Disconnect
-            </Button>
-          ) : (
-            <Button
-              onClick={() => {
-                authorize.mutate(undefined);
-              }}
-              disabled={authorize.isPending}
-            >
-              Connect Lovelace
-            </Button>
-          )
-        }
-      />
-
+    <SettingsGroup
+      title="Run Athena on your own computer"
+      description="Athena runs on a computer you own."
+      action={
+        connected ? (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              disconnect.mutate(undefined);
+            }}
+            disabled={disconnect.isPending}
+          >
+            Disconnect
+          </Button>
+        ) : (
+          <Button
+            onClick={() => {
+              authorize.mutate(undefined);
+            }}
+            disabled={authorize.isPending}
+          >
+            Connect Lovelace
+          </Button>
+        )
+      }
+    >
       {returnNote ? (
         <Text token="body-medium" role="status">
           {returnNote}
@@ -399,6 +384,6 @@ export function LatticeSection(): JSX.Element {
               ? 'Saving…'
               : ''}
       </Text>
-    </section>
+    </SettingsGroup>
   );
 }

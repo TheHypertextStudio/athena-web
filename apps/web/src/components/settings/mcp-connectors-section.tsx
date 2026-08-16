@@ -37,6 +37,7 @@ import {
 } from '@/components/settings/mcp-connector-draft';
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { EmptyState } from '@docket/ui/components';
+import { SettingsGroup } from './settings-group';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import {
@@ -71,28 +72,26 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
   );
 
   return (
-    <section className="flex flex-col gap-3" aria-label="MCP connectors">
-      <div className="flex flex-wrap items-start gap-4 sm:flex-nowrap sm:justify-between">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h3 className="text-on-surface text-title-small">Tools for Athena</h3>
-          <p className="text-on-surface-variant text-body-medium">
-            Connect services you use. Athena works through them under rules you set.
-          </p>
-          <p className="text-on-surface-variant text-body-small"></p>
-        </div>
-        {canManage ? (
+    <SettingsGroup
+      title="Tools for Athena"
+      description="Connect services you use. Athena works through them under rules you set."
+      action={
+        // While nothing is connected the empty state carries the action, so the header does not
+        // offer the same thing twice.
+        canManage && (listQ.data?.length ?? 0) > 0 ? (
           <Button
             type="button"
-            className="shrink-0"
+            variant="outline"
+            size="sm"
             onClick={() => {
               setAddOpen(true);
             }}
           >
             Add connector
           </Button>
-        ) : null}
-      </div>
-
+        ) : undefined
+      }
+    >
       {mcpReturn === 'connected' ? (
         <p role="status" className="text-success text-body-medium">
           Tool connected.
@@ -103,10 +102,8 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
         </p>
       ) : null}
 
-      <h4 className="text-on-surface text-title-small mt-3">Connected tools</h4>
-
       {/* placeholder: the MCP tools connected to this workspace — how many and what each one is.
-          The "Connected tools" heading directly above renders from a static string. */}
+          The group heading above renders from a static string. */}
       {listQ.isLoading ? (
         <div className="flex flex-col gap-2" aria-hidden="true">
           <Skeleton className="h-16 w-full rounded-xl" />
@@ -158,7 +155,7 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           />
         </DialogContent>
       </Dialog>
-    </section>
+    </SettingsGroup>
   );
 }
 

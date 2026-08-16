@@ -25,12 +25,14 @@
  * Pure presentation — all reads and writes live in `use-notion-mirror-controller.ts`.
  */
 import type { NotionMirrorDatabaseOut } from '@docket/connections/notion/mirror-contract';
-import { ArrowRight, CheckCircle2, CircleAlert, OpenInNew } from '@docket/ui/icons';
+import { ArrowRight, CheckCircle2, CircleAlert, LayoutTemplate, OpenInNew } from '@docket/ui/icons';
+import { EmptyState } from '@docket/ui/components';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
 
 import { CardAlert, CardNote } from '../card-note';
+import { SettingsGroup } from '../settings-group';
 import { CONNECTION_ERROR_MESSAGE, integrationStatusLabel } from '../integration-status';
 
 import {
@@ -150,19 +152,19 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
 
   if (model.integration === null) {
     return (
-      <div className="bg-surface-container-lowest flex flex-col items-start gap-3 rounded-xl p-4">
-        <p className="text-on-surface text-label-large">Notion isn’t connected yet</p>
-        <p className="text-on-surface-variant text-body-small max-w-prose">
-          Once you connect a Notion workspace, Docket can build databases inside it for your tasks,
-          projects and the rest of your work — and keep them current.
-        </p>
-        <NextLink
-          href={model.connectionsHref}
-          className="text-primary text-label-large hover:underline"
-        >
-          Connect Notion <ArrowRight aria-hidden="true" className="inline size-3.5" />
-        </NextLink>
-      </div>
+      <SettingsGroup>
+        <EmptyState
+          icon={LayoutTemplate}
+          title="Notion isn’t connected yet"
+          body="Connect a Notion workspace and Docket can build databases inside it for your work, and keep them current."
+          className="border-none bg-transparent"
+          action={
+            <Button asChild>
+              <NextLink href={model.connectionsHref}>Connect Notion</NextLink>
+            </Button>
+          }
+        />
+      </SettingsGroup>
     );
   }
 

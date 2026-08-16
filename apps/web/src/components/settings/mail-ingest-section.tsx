@@ -44,7 +44,7 @@ export function MailIngestSection({ orgId, canManage }: MailIngestSectionProps):
       {loading ? (
         <Skeleton className="h-20 w-full rounded-xl" />
       ) : connected.length === 0 ? (
-        <div className="bg-surface-container-low text-on-surface-variant flex flex-col gap-1 rounded-xl px-4 py-3">
+        <div className="text-on-surface-variant flex flex-col gap-1 px-4 py-3">
           <p className="text-on-surface text-label-large">No inbox connected yet</p>
           <p className="text-body-small">
             Connect Gmail in{' '}

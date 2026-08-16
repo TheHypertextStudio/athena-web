@@ -1,7 +1,7 @@
 'use client';
 
 import type { AthenaApprovalMode, HubPreferences } from '@docket/types';
-import { Select, Skeleton, Textarea } from '@docket/ui/primitives';
+import { Select, Textarea } from '@docket/ui/primitives';
 import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { McpConnectorsSection } from '@/components/settings/mcp-connectors-section';
@@ -14,6 +14,8 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } f
 import { VoicePhoneNumbers } from '@/components/athena/voice-phone-numbers';
 
 import { LatticeSection } from './lattice-section';
+import { LoadFailure } from '@/components/settings/load-failure';
+import { SettingsGroup } from '@/components/settings/settings-group';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The user-owned Athena preferences destination. */
@@ -79,25 +81,23 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
   }
 
   return (
-    <SettingsSectionPage title="Athena" description="Set how your chief of staff works with you.">
-      {/* placeholder: the caller's saved Athena preferences — their standing instructions and the
-          approval mode. Both are free-form values only the stored record knows; the section
-          heading and description above render immediately. */}
-      {preferencesQ.isPending ? (
-        <Skeleton className="h-[30rem] max-w-2xl rounded-xl" />
-      ) : preferencesQ.isError ? (
-        <p role="status" className="text-on-surface-variant text-body-medium">
-          Athena preferences are temporarily unavailable. We&apos;ll keep checking automatically.
-        </p>
+    <SettingsSectionPage
+      sectionKey="athena"
+      // placeholder: the caller's saved Athena preferences — their standing instructions and the
+      // approval mode. Both are free-form values only the stored record knows; the section heading
+      // and description render immediately.
+      loading={preferencesQ.isPending}
+    >
+      {preferencesQ.isError ? (
+        <LoadFailure
+          message={userErrorMessage(preferencesQ.error, 'Could not load Athena preferences.')}
+          retrying
+        />
       ) : (
-        <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-xl p-4">
-          <div>
-            <h2 className="text-on-surface text-title-small">Working preferences</h2>
-            <p className="text-on-surface-variant text-body-medium mt-1">
-              Give Athena durable guidance for how to represent you across Docket and your connected
-              services.
-            </p>
-          </div>
+        <SettingsGroup
+          title="Working preferences"
+          description="Give Athena durable guidance for how to represent you across Docket and your connected services."
+        >
           <label className="text-on-surface text-label-large flex flex-col gap-1.5">
             Instructions for Athena
             <Textarea
@@ -115,7 +115,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
               className="w-full resize-y"
             />
           </label>
-          <label className="text-on-surface text-label-large flex max-w-md flex-col gap-1.5">
+          <label className="text-on-surface text-label-large flex flex-col gap-1.5">
             Approval behavior
             <Select
               value={approvalMode}
@@ -145,7 +145,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
               {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : ''}
             </p>
           )}
-        </section>
+        </SettingsGroup>
       )}
       <VoicePhoneNumbers />
       <LatticeSection />

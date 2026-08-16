@@ -37,6 +37,8 @@ import { Badge, Button, ControlGroup, Field, Input, Select, Text } from '@docket
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
+import { SettingsGroup } from '@/components/settings/settings-group';
+
 import { api } from '@/lib/api';
 import { formatClock } from '@/lib/format-time';
 import { userErrorMessage } from '@/lib/problem';
@@ -272,19 +274,7 @@ export function VoicePhoneNumbers(): JSX.Element {
   const alert = notice ?? (challenge?.deliveryFailed ? UNDELIVERED_MESSAGE : null);
 
   return (
-    <section
-      className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-lg p-5"
-      data-phone-numbers-section
-    >
-      <div className="flex flex-col gap-1">
-        <Text as="h2" token="title-medium">
-          Call Athena
-        </Text>
-        <Text token="body-medium" tone="muted">
-          {SECTION_DESCRIPTION}
-        </Text>
-      </div>
-
+    <SettingsGroup title="Call Athena" description={SECTION_DESCRIPTION} data-phone-numbers-section>
       {items.length > 0 ? (
         <ul className="flex flex-col gap-2" data-phone-number-list>
           {items.map((number) => (
@@ -467,7 +457,7 @@ export function VoicePhoneNumbers(): JSX.Element {
           </Text>
         </p>
       ) : null}
-    </section>
+    </SettingsGroup>
   );
 }
 

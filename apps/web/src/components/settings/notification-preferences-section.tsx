@@ -36,6 +36,9 @@ import { SettingsGroup } from './settings-group';
  */
 const OPTION_TILE =
   'bg-surface-container hover:bg-surface-container-high flex items-center gap-3 rounded-md px-3 py-2 transition-colors ' +
+  // The tile is the touch target for the checkbox inside it — a 16px mark is not one — so it
+  // takes the same coarse floor every control on the surface does.
+  'coarse:min-h-10 ' +
   // MD3's disabled opacity, applied to the whole tile so a switched-off group reads as one
   // inert block rather than live labels holding dead checkboxes.
   'has-disabled:pointer-events-none has-disabled:opacity-38';
@@ -292,16 +295,21 @@ export function NotificationPreferencesSection({
                     {CHANNELS.map((channel) => {
                       const checked = preference[channel.key] === true;
                       return (
-                        <td key={channel.key} className="px-3 py-3 text-center">
-                          <Checkbox
-                            className={cn(locked && 'opacity-70')}
-                            aria-label={`${channel.label} for ${CATEGORY_LABELS[category]}`}
-                            checked={checked}
-                            disabled={locked || saving}
-                            onChange={(event) => {
-                              patchChannel(category, channel.key, event.target.checked);
-                            }}
-                          />
+                        <td key={channel.key} className="p-0 text-center">
+                          {/* The label is the touch target: it forwards its clicks to the input,
+                              so the whole cell is tappable at the coarse floor while the mark
+                              stays 16px. */}
+                          <label className="coarse:min-h-10 coarse:min-w-10 inline-flex items-center justify-center px-3 py-3">
+                            <Checkbox
+                              className={cn(locked && 'opacity-70')}
+                              aria-label={`${channel.label} for ${CATEGORY_LABELS[category]}`}
+                              checked={checked}
+                              disabled={locked || saving}
+                              onChange={(event) => {
+                                patchChannel(category, channel.key, event.target.checked);
+                              }}
+                            />
+                          </label>
                         </td>
                       );
                     })}

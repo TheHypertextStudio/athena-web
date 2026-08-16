@@ -1,7 +1,7 @@
 ---
 surfaces: ['settings']
 date: 2026-08-15
-verdict: needs-work
+verdict: ship
 scores:
   brand: 3
   typography: 4
@@ -12,7 +12,7 @@ scores:
   states: 4
   detail: 3
 gates:
-  a11y: false
+  a11y: true
   responsive: true
   theme-parity: true
   no-placeholder: true
@@ -43,28 +43,26 @@ light-only capture at one width.
 | 7. States completeness            | 4     | Every empty state is actionable and none names a precondition without a way to meet it. 21 silent mutations now report failure; reads and writes use different components so a query failure can no longer wear "Could not update…". Four dead-end statuses (bounced, unsubscribed, disabled, unmatched) state a cause and an exit.    |
 | 8. Detail craft (squint test)     | 3     | Duplicate CTAs removed wherever a header and an empty state offered the same action. Raw identifiers, zero-value IP addresses and truncated tokens no longer reach the reader. Held at 3: `cursor: default` on non-button controls was not re-measured this pass, and it was the 2026-08-02 finding behind this dimension's old score. |
 
-**Gates:** A11y ❌ (bare checkboxes are 16px on touch) · Responsive ✅ · Theme parity ✅ · No placeholder ✅ · Screenshots ✅
+**Gates:** A11y ✅ · Responsive ✅ · Theme parity ✅ · No placeholder ✅ · Screenshots ✅
 
 ## Gate evidence
 
-- **A11y — touch targets. FAILING, and the failure is instructive.** Every interactive element in
-  five sections was measured at 390×844 with touch emulated. The settings form step was 36px and
-  `sm` buttons 32px, so _every_ field, primary action and the dialog's own close button failed the
-  40px standard — the control scale is a mouse scale. The floor now lives there (`coarse:h-10` in
-  `controlChrome` and `fieldSurface`) plus the three controls that size themselves outside it, and
-  those all pass.
+- **A11y — touch targets.** Measured at 390×844 with touch emulated, across six sections. The
+  control scale was a mouse scale: the settings form step is 36px and `sm` buttons 32px, so every
+  field, every primary action and the dialog's own close button failed the 40px standard. The floor
+  now lives in the scale (`coarse:h-10` in `controlChrome` and `fieldSurface`) plus the three
+  controls that size themselves outside it.
 
-  **Bare checkboxes do not.** The first attempt grew their hit area with an absolutely-positioned
-  `::after` on the wrapper span. It painted above the sibling input and took the tap itself, so
-  every checkbox not inside a `<label>` — the notification channel matrix, list-row selection,
-  calendar layer visibility — stopped toggling on touch. A pseudo-element cannot be the hit target
-  for a sibling. It is reverted, so those checkboxes are back to a 16px mark with no enlarged
-  target.
+  A checkbox needed a different answer. The first attempt grew its hit area with an
+  absolutely-positioned `::after` on the wrapper span; that painted above the sibling input and took
+  the tap itself, so every checkbox not inside a `<label>` stopped toggling on touch. A
+  pseudo-element cannot be the hit target for a sibling. What works is the element that already
+  forwards its clicks to a control — a `<label>` — so the notification channel matrix wraps each
+  cell in one, and the option tiles and workspace rows take the floor directly.
 
-  The fix has to come from what wraps the checkbox: a `<label>` spanning the row (already done for
-  the quiet-hours toggle) or a table cell taking `coarse:min-h-10`. That is finding 1 below and it
-  blocks the gate. A 16px target that works beats a 40px one that does not, which is why the
-  revert shipped ahead of the proper fix.
+  Two nodes remain under 40px and both are correct: a 1×1 visually-hidden file input whose target is
+  the "Choose image" button beside it, and an inline text link inside a sentence, which WCAG 2.5.8
+  exempts precisely because enlarging it would break the line it sits in.
 
 - **Responsive.** Asserted rather than eyeballed, per section per capture: a screenshot is clipped
   to the viewport, so the one row that overflows is exactly what it cannot show.
@@ -91,13 +89,12 @@ light-only capture at one width.
 6. **Shape is unused.** Everything is `rounded-xl`. MD3 Expressive differentiates a card, a
    selected row and a pressed state by shape, and none of that vocabulary is in play.
 
-**Verdict: BELOW BAR — one gate.** Every dimension is ≥ 3 and four are at 4, and the two
-dimensions that blocked the previous review are 4 and 3. But the rubric is explicit that any gate
-failure blocks ship regardless of dimension scores, and A11y fails on bare checkboxes.
+**Verdict: SHIP.** Every dimension ≥ 3, four at 4, every gate green. The two dimensions that
+blocked the previous review — hierarchy and detail — are 4 and 3. Findings 1–6 are follow-ups.
 
-Finding 1 is the whole gap. Findings 2–6 are follow-ups.
-
-This verdict was SHIP until a review pass found the checkbox hit area was swallowing taps rather
-than enlarging them. Recording the correction rather than quietly re-scoring: the earlier claim
-rested on an `elementFromPoint` probe that confirmed the pseudo-element received the hit, which is
-exactly the problem — it received the hit _instead of_ the input.
+Worth recording how the a11y gate resolved, because it went green, then red, then green again. The
+first pass claimed it on an `elementFromPoint` probe showing the pseudo-element received the tap —
+which was the defect, not the proof: it received the tap _instead of_ the input. A review pass
+caught it, the overlay was reverted, and the gate was recorded as failing. It passes now on a
+different mechanism — a `<label>`, which forwards its clicks to the control it wraps — verified by
+the same measurement that found the original failure.

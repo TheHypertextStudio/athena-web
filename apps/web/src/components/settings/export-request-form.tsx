@@ -110,7 +110,7 @@ export function ExportRequestForm({
               <legend className="text-on-surface text-label-large">Workspaces</legend>
               <button
                 type="button"
-                className="text-primary focus-visible:ring-ring text-label-large rounded hover:underline focus-visible:ring-2"
+                className="text-primary focus-visible:ring-ring text-label-large coarse:min-h-10 inline-flex items-center rounded hover:underline focus-visible:ring-2"
                 onClick={() => {
                   setWorkspaceIds(options.workspaces.map((workspace) => workspace.id));
                 }}
@@ -128,7 +128,7 @@ export function ExportRequestForm({
                   <label
                     key={workspace.id}
                     htmlFor={inputId}
-                    className="hover:bg-surface-container-low flex cursor-pointer items-center gap-3 px-3 py-2"
+                    className="hover:bg-surface-container-low coarse:min-h-10 flex cursor-pointer items-center gap-3 px-3 py-2"
                   >
                     <Checkbox
                       id={inputId}

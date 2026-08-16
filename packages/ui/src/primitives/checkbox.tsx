@@ -61,7 +61,16 @@ export function Checkbox({
   }, [indeterminate]);
 
   return (
-    <span className={cn('relative inline-flex size-4 shrink-0 items-center justify-center')}>
+    <span
+      className={cn(
+        'relative inline-flex size-4 shrink-0 items-center justify-center',
+        // The mark stays 16px; the hit area grows around it via a pseudo-element, so the tick
+        // does not become a slab on a phone. `-inset-3` centres it — 16 + 12 + 12 = 40 — where a
+        // bare `size-10` anchored the box to the mark's top-left corner and left the target
+        // sitting down and to the right of the thing it belongs to.
+        'coarse:after:absolute coarse:after:-inset-3 coarse:after:content-[""]',
+      )}
+    >
       <input
         type="checkbox"
         ref={(node) => {

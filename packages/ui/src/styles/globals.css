@@ -37,6 +37,16 @@
  * THIS file: packages/ui/src/styles/ → ../ is packages/ui/src) so the design system's
  * classes are always present in every app that imports this stylesheet.
  */
+/*
+ * A finger, not a narrow window.
+ *
+ * The craft rubric asks for a 40px touch target on mobile, and the control scale's steps are 24
+ * through 36 — a mouse scale. `coarse:` raises a control to 40px wherever the pointer cannot be
+ * precise, which is the condition that actually matters: a laptop at 390px wide still has a mouse,
+ * and a tablet at 1024px does not. See `packages/ui/src/primitives/control.tsx`.
+ */
+@custom-variant coarse (@media (pointer: coarse));
+
 @source '../primitives';
 @source '../components';
 @source '../hooks';

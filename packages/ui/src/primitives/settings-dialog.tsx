@@ -98,6 +98,9 @@ export function SettingsDialogContent({
             aria-label="Close settings"
             className={cn(
               'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute top-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-md opacity-70 transition-colors transition-opacity hover:opacity-100 disabled:pointer-events-none [&_svg]:size-5',
+              // Matches the control scale's coarse floor: this is the one control on every
+              // settings surface, and it sized itself outside that scale.
+              'coarse:h-10 coarse:w-10',
               focusRing,
             )}
           >

@@ -63,7 +63,7 @@ import * as React from 'react';
 
 import { ChevronDown } from '../icons';
 import { cn } from '../lib/utils';
-import { CONTROL, CONTROL_RADIUS, type ControlSize, useControlSize } from './control';
+import { CONTROL, CONTROL_RADIUS, COARSE_FLOOR, type ControlSize, useControlSize } from './control';
 import { focusRing } from './focus';
 import { Text, typeClass } from './text';
 
@@ -134,7 +134,9 @@ export function fieldSurface({
       : 'has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50',
     CONTROL_RADIUS,
     typeClass(metrics.fieldToken),
-    multiline ? cn(metrics.minHeight, 'py-2') : metrics.height,
+    multiline
+      ? cn(metrics.minHeight, COARSE_FLOOR.growable, 'py-2')
+      : cn(metrics.height, COARSE_FLOOR.fixed),
     variant === 'plain' ? 'px-0' : metrics.paddingX,
     variant === 'outlined' && 'border-outline-variant hover:border-outline bg-transparent',
     variant === 'filled' &&

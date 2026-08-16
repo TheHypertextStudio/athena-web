@@ -31,6 +31,17 @@
  * | `lg` | 36px   | 14px      | 8px | 18px | `label-large`  | `body-medium`    | dialog + settings form fields, menu rows |
  * | `xl` | 40px   | 16px      | 8px | 20px | `label-large`  | `body-large`     | primary dialog actions, the global search field |
  *
+ * ## The 40px floor on a coarse pointer
+ *
+ * Every step under 40px also carries `coarse:h-10`. The craft rubric's a11y gate requires a 40px
+ * touch target on mobile, and the settings form step is 36px — so *every* field, every primary
+ * action and the dialog's own close button failed it, along with every 32px `sm` button beside
+ * them. That is not a settings defect; it is the scale being a mouse scale, and a phone reading it
+ * as one.
+ *
+ * `coarse` is a `pointer: coarse` variant rather than a width breakpoint on purpose: the thing
+ * that needs a bigger target is a finger, and a narrow window on a laptop still has a mouse.
+ *
  * `md` is 32px because that is MD3's chip container height
  * (`md.comp.assist-chip.container-height = 32dp`, confirmed in the Material Web token source
  * `tokens/versions/v0_192/_md-comp-assist-chip.scss`), and a chip is the most common inline
@@ -349,6 +360,22 @@ export function useControlMetrics(explicit?: ControlSize): ControlMetrics {
  * state is communicated by color (a state layer) and by the focus ring, both of which leave the
  * box untouched. The design-token policy test fails the build if either creeps back in.
  */
+/**
+ * The minimum a control may render at on a coarse pointer.
+ *
+ * @remarks
+ * Applied by the chrome builders rather than written into the four steps it raises, so the metrics
+ * table stays one token per field — several callers and the design-contract test read
+ * `height`/`minHeight` as single class names.
+ *
+ * Exported because fields do not go through {@link controlChrome}: `fieldSurface` reads the same
+ * metrics directly, and a floor that only one of the two builders applied would leave every text
+ * input at 36px while the button beside it grew to 40.
+ *
+ * `xl` is already 40px, so the floor is a no-op there and is applied unconditionally.
+ */
+export const COARSE_FLOOR = { fixed: 'coarse:h-10', growable: 'coarse:min-h-10' } as const;
+
 export function controlChrome(
   size: ControlSize,
   options?: {
@@ -361,7 +388,9 @@ export function controlChrome(
   const metrics = CONTROL[size];
   return cn(
     'inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-colors select-none',
-    options?.growable === true ? metrics.minHeight : metrics.height,
+    options?.growable === true
+      ? cn(metrics.minHeight, COARSE_FLOOR.growable)
+      : cn(metrics.height, COARSE_FLOOR.fixed),
     options?.iconOnly === true ? cn(metrics.width, 'px-0') : metrics.paddingX,
     metrics.gap,
     CONTROL_RADIUS,

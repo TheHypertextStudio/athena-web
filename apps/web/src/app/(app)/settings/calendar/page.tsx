@@ -33,6 +33,8 @@ import {
   useApiQuery,
 } from '@/lib/query';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
+import { LoadFailure } from '@/components/settings/load-failure';
+import { SettingsGroup } from '@/components/settings/settings-group';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 const DEFAULTS: Required<Omit<CalendarPreferences, 'defaultLayerId'>> & {
@@ -153,27 +155,14 @@ export default function CalendarSettingsPage(): JSX.Element {
   });
 
   return (
-    <SettingsSectionPage
-      title="Calendar"
-      description="Choose fluid scheduling defaults and the layers coworkers may compare."
-    >
-      {loading ? (
-        <p className="text-on-surface-variant text-body-medium">Loading calendar settings…</p>
-      ) : loadFailed ? (
-        <p role="alert" className="text-error text-body-medium">
-          Calendar settings are temporarily unavailable.
-        </p>
+    <SettingsSectionPage sectionKey="calendar" loading={loading}>
+      {loadFailed ? (
+        <LoadFailure message="Could not load your calendar settings." retrying />
       ) : (
-        <section aria-labelledby="calendar-defaults" className="flex max-w-2xl flex-col gap-4">
-          <div>
-            <h3 id="calendar-defaults" className="text-on-surface text-title-small">
-              Scheduling defaults
-            </h3>
-            <p className="text-on-surface-variant text-body-small">
-              These follow you across devices; the canvas still adapts to every viewport.
-            </p>
-          </div>
-
+        <SettingsGroup
+          title="Scheduling defaults"
+          description="These follow you across devices; the canvas still adapts to every viewport."
+        >
           <label className="text-label-large flex flex-col gap-1">
             <span>New regions become</span>
             <Select
@@ -255,19 +244,13 @@ export default function CalendarSettingsPage(): JSX.Element {
               {savePreferences.isPending ? 'Saving…' : savePreferences.isSuccess ? 'Saved' : ''}
             </p>
           )}
-        </section>
+        </SettingsGroup>
       )}
 
-      <section aria-labelledby="calendar-sharing" className="flex max-w-2xl flex-col gap-4">
-        <div>
-          <h3 id="calendar-sharing" className="text-on-surface text-title-small">
-            Workspace comparison
-          </h3>
-          <p className="text-on-surface-variant text-body-small">
-            Nothing is shared until you enable a layer. Provider-private events remain busy-only.
-          </p>
-        </div>
-
+      <SettingsGroup
+        title="Workspace comparison"
+        description="Nothing is shared until you enable a layer. Provider-private events remain busy-only."
+      >
         {sharedWorkspaces.length === 0 ? (
           <p className="text-on-surface-variant text-body-medium">
             Join a shared workspace to compare schedules.
@@ -290,13 +273,13 @@ export default function CalendarSettingsPage(): JSX.Element {
               </Select>
             </label>
 
-            <div className="bg-surface-container-low rounded-xl">
+            <div className="bg-surface-container overflow-hidden rounded-xl">
               {layers.map((layer) => {
                 const access = shareDraft[layer.id];
                 return (
                   <div
                     key={layer.id}
-                    className="hover:bg-surface-container flex flex-wrap items-center gap-3 px-3 py-2 transition-colors"
+                    className="hover:bg-surface-container-high flex flex-wrap items-center gap-3 px-4 py-3 transition-colors"
                   >
                     <label className="text-body-medium flex min-w-0 flex-1 items-center gap-2">
                       <Checkbox
@@ -345,7 +328,7 @@ export default function CalendarSettingsPage(): JSX.Element {
             )}
           </>
         )}
-      </section>
+      </SettingsGroup>
     </SettingsSectionPage>
   );
 }

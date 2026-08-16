@@ -26,7 +26,10 @@ import {
 import { Copy, Edit, Ellipsis, LayoutTemplate, Plus, Trash2 } from '@docket/ui/icons';
 import { type JSX, useState } from 'react';
 
+import { EmptyState as SharedEmptyState } from '@docket/ui/components';
 import { LoadFailure } from '@/components/settings/load-failure';
+import { SettingRow } from '@/components/settings/setting-row';
+import { SettingsGroup } from '@/components/settings/settings-group';
 import { firstWriteError, WriteError } from '@/components/settings/write-error';
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { TemplateEditorDialog } from '@/components/templates/template-editor';
@@ -235,12 +238,14 @@ function KindGroup({
         {noun}
       </h3>
       {templates.length === 0 ? (
-        <div className="bg-surface-container-low text-on-surface-variant text-body-medium flex items-center justify-between gap-3 rounded-xl px-4 py-3">
-          <span>No templates yet.</span>
-          <Button type="button" variant="ghost" size="sm" onClick={onCreate}>
-            Add one
-          </Button>
-        </div>
+        <SettingRow
+          label={<span className="text-on-surface-variant">No templates yet.</span>}
+          trailing={
+            <Button type="button" variant="ghost" size="sm" onClick={onCreate}>
+              Add one
+            </Button>
+          }
+        />
       ) : (
         <ul className="flex flex-col gap-1">
           {templates.map((template) => (
@@ -316,20 +321,14 @@ function KindGroup({
  */
 function EmptyState({ onCreate }: { onCreate: () => void }): JSX.Element {
   return (
-    <div className="bg-surface-container-low flex max-w-3xl flex-col items-start gap-3 rounded-xl px-6 py-8">
-      <LayoutTemplate className="text-on-surface-variant size-6" />
-      <div className="flex flex-col gap-1">
-        <p className="text-on-surface text-body-large">No templates in this workspace.</p>
-        <p className="text-on-surface-variant text-body-medium max-w-prose">
-          A template pre-fills a create dialog — the outline of a bug report, the properties of a
-          launch. Make one and it appears in the Template menu wherever that kind of work is
-          created.
-        </p>
-      </div>
-      <Button type="button" onClick={onCreate}>
-        <Plus />
-        New template
-      </Button>
-    </div>
+    <SettingsGroup>
+      <SharedEmptyState
+        icon={LayoutTemplate}
+        title="No templates in this workspace"
+        body="A template pre-fills a create dialog — the outline of a bug report, the properties of a launch. Make one and it appears in the Template menu wherever that kind of work is created."
+        className="border-none bg-transparent"
+        cta={{ label: 'New template', onClick: onCreate }}
+      />
+    </SettingsGroup>
   );
 }

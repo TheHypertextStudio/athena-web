@@ -433,7 +433,7 @@ export function IntegrationConfigPanel({
       {reauthNeeded ? (
         <div
           role="alert"
-          className="bg-surface-container-low flex flex-col items-start gap-2 rounded-xl p-3"
+          className="bg-error-container text-on-error-container flex flex-col items-start gap-2 rounded-xl p-3"
         >
           <p className="text-error text-body-medium">
             {error ?? 'Linear needs to grant Docket write access.'}

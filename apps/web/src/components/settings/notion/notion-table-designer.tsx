@@ -28,6 +28,8 @@ import { cn } from '@docket/ui';
 import { Plus, Settings } from '@docket/ui/icons';
 import { Button, Input, Select, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
+
+import { SettingsGroup } from '../settings-group';
 import { useMemo, useState } from 'react';
 
 import {
@@ -297,14 +299,14 @@ export function NotionTableDesigner({
       )}
 
       {open && openField ? (
-        <div className="border-primary/40 bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-on-surface text-label-large">{open.title} column</span>
+        <SettingsGroup
+          title={`${open.title} column`}
+          action={
             <span className="text-on-surface-variant text-label-small font-mono">
               {entity}.{open.field}
             </span>
-          </div>
-
+          }
+        >
           <label className="flex flex-col gap-1">
             <span className="text-on-surface-variant text-body-small">Column title in Notion</span>
             <Input
@@ -370,7 +372,7 @@ export function NotionTableDesigner({
               Notion needs one title column, so this one can’t be removed.
             </p>
           )}
-        </div>
+        </SettingsGroup>
       ) : null}
 
       {model.error !== null ? (

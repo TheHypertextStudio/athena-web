@@ -22,6 +22,8 @@
 import type { NotionParentPageOut } from '@docket/connections/notion/mirror-contract';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
+
+import { SettingsGroup } from '../settings-group';
 import { useState } from 'react';
 
 import {
@@ -74,12 +76,7 @@ export function NotionSetupCard({
     query === '' && !search.pending && search.error === null && search.pages.length === 0;
 
   return (
-    <div className="border-primary/40 bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4">
-      <div>
-        <p className="text-on-surface text-label-large">{SETUP_TITLE}</p>
-        <p className="text-on-surface-variant text-body-small mt-1 max-w-prose">{SETUP_BODY}</p>
-      </div>
-
+    <SettingsGroup title={SETUP_TITLE} description={SETUP_BODY}>
       {noPages ? (
         <div className="flex flex-col items-start gap-2">
           <p className="text-on-surface-variant text-body-small max-w-prose" role="note">
@@ -131,6 +128,6 @@ export function NotionSetupCard({
           {setup.error ?? search.error}
         </p>
       ) : null}
-    </div>
+    </SettingsGroup>
   );
 }

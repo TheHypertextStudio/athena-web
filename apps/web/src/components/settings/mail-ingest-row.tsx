@@ -25,7 +25,7 @@ export function MailIngestRow({ orgId, integration, canManage }: MailIngestRowPr
   const row = useMailIngestRow(orgId, integration);
 
   return (
-    <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl px-4 py-3">
+    <div className="flex flex-col gap-2 px-4 py-3">
       <div className="flex items-center justify-between gap-3">
         <span className="min-w-0">
           <span className="text-on-surface text-label-large block truncate">{row.account}</span>

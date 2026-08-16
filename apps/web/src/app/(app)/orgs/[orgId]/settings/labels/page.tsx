@@ -21,7 +21,8 @@
  */
 import type { LabelGroupOut, LabelOut, LabelUpdate, TeamOut } from '@docket/types';
 import { Button, Checkbox, Skeleton } from '@docket/ui/primitives';
-import { Plus } from '@docket/ui/icons';
+import { EmptyState } from '@docket/ui/components';
+import { Plus, Tag } from '@docket/ui/icons';
 import { type JSX, useState } from 'react';
 
 import { LoadFailure } from '@/components/settings/load-failure';
@@ -400,17 +401,14 @@ function EmptyLabels({
   onCreate: () => void;
 }): JSX.Element {
   return (
-    <div className="bg-surface-container-lowest flex max-w-3xl flex-col items-start gap-3 rounded-xl p-4">
-      <p className="text-on-surface text-body-medium">No labels yet.</p>
-      <p className="text-on-surface-variant text-body-small">
-        Type a new name into the label picker on any task or project and it will be created as you
-        go. This page is for tidying up afterwards.
-      </p>
-      {canManage ? (
-        <Button type="button" variant="ghost" size="sm" onClick={onCreate}>
-          Create one now
-        </Button>
-      ) : null}
-    </div>
+    <SettingsGroup>
+      <EmptyState
+        icon={Tag}
+        title="No labels yet"
+        body="Type a new name into the label picker on any task or project and it will be created as you go. This page is for tidying up afterwards."
+        className="border-none bg-transparent"
+        {...(canManage ? { cta: { label: 'Create one now', onClick: onCreate } } : {})}
+      />
+    </SettingsGroup>
   );
 }

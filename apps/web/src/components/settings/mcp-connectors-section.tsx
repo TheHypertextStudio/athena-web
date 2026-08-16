@@ -254,7 +254,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
   const busy = authorize.isPending || verify.isPending || disconnect.isPending || edit.isPending;
 
   return (
-    <li className="bg-surface-container-low flex flex-col gap-4 rounded-xl p-4">
+    <li className="flex flex-col gap-4 px-4 py-3">
       <div className="flex flex-col gap-2">
         <div className="text-on-surface text-label-large flex items-center gap-2">
           <span className="max-w-xs min-w-0 flex-1">
@@ -567,7 +567,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
             }}
           />
         </div>
-        <details className="bg-surface-container-low rounded-xl px-3 py-2">
+        <details className="bg-surface-container rounded-xl px-4 py-3">
           <summary className="text-on-surface text-label-large cursor-pointer">
             Advanced options
           </summary>
@@ -590,7 +590,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
             </div>
           </div>
         </details>
-        <details className="bg-surface-container-low rounded-xl px-3 py-2">
+        <details className="bg-surface-container rounded-xl px-4 py-3">
           <summary className="text-on-surface text-label-large cursor-pointer">
             Other connection methods
           </summary>

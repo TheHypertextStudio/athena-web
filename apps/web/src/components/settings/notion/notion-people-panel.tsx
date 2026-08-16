@@ -19,12 +19,14 @@
  *   Left unexplained this reads as the sync having dropped somebody.
  */
 import type { NotionWorkspacePerson } from '@docket/connections/notion/mirror-contract';
-import { cn } from '@docket/ui';
-import { CheckCircle2, CircleAlert, User, UserOff } from '@docket/ui/icons';
+import { CheckCircle2, CircleAlert, User, UserOff, Users } from '@docket/ui/icons';
+import { EmptyState } from '@docket/ui/components';
 import { Avatar, AvatarFallback, Button, Select, Skeleton } from '@docket/ui/primitives';
+import NextLink from 'next/link';
 import type { JSX, ReactNode } from 'react';
 import { useState } from 'react';
 
+import { SettingsGroup } from '../settings-group';
 import { IGNORED_DETAIL, UNIGNORE_ACTION, ignoredTitle } from './notion-copy';
 import { useNotionPeople, type PersonDecision } from './use-notion-mirror-controller';
 
@@ -90,23 +92,28 @@ export function NotionPeoplePanel({
 
   if (nothingSeen) {
     return (
-      <div className="bg-surface-container-lowest rounded-xl p-4">
-        <p className="text-on-surface text-label-large">No Notion people yet</p>
-        <p className="text-on-surface-variant text-body-small mt-1 max-w-prose">
-          Docket learns who is in your Notion workspace on the first sync. Once the databases exist
-          and a sync has run, everyone shows up here to be matched.
-        </p>
-      </div>
+      <SettingsGroup>
+        <EmptyState
+          icon={Users}
+          title="No Notion people yet"
+          body="Docket learns who is in your Notion workspace on the first sync. Run one and everyone shows up here to be matched."
+          className="border-none bg-transparent"
+          action={
+            <Button asChild variant="outline">
+              <NextLink href={`/orgs/${orgId}/settings/connections/notion`}>
+                Go to Notion sync
+              </NextLink>
+            </Button>
+          }
+        />
+      </SettingsGroup>
     );
   }
 
   return (
     <div className="@container flex flex-col gap-4">
       {people.unmatched.length > 0 ? (
-        <section
-          className="bg-surface-container-low overflow-hidden rounded-xl"
-          aria-label="People who need a decision"
-        >
+        <SettingsGroup className="overflow-hidden" body="rows">
           <div className="bg-surface-container flex items-center gap-2 px-4 py-2.5">
             <CircleAlert aria-hidden="true" className="text-error size-4" />
             <span className="text-on-surface text-label-large">
@@ -134,7 +141,7 @@ export function NotionPeoplePanel({
               />
             ))}
           </ul>
-        </section>
+        </SettingsGroup>
       ) : null}
 
       <Summary
@@ -283,7 +290,9 @@ function Summary(props: {
 
   if (props.children === undefined) {
     return (
-      <section className={cn('bg-surface-container-low rounded-xl px-4 py-3')}>{heading}</section>
+      <SettingsGroup body="rows">
+        <div className="px-4 py-3">{heading}</div>
+      </SettingsGroup>
     );
   }
 

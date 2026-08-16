@@ -29,7 +29,7 @@ export function GtasksIdentityPicker({ picker, orgId }: GtasksIdentityPickerProp
   }
   if (picker.available.length === 0) {
     return (
-      <div className="bg-surface-container-low text-on-surface-variant text-body-medium rounded-xl p-4">
+      <div className="text-on-surface-variant text-body-medium px-4 py-3">
         {picker.hasAnyIdentity ? (
           'Every linked Google account is already connected here.'
         ) : (
@@ -48,12 +48,12 @@ export function GtasksIdentityPicker({ picker, orgId }: GtasksIdentityPickerProp
     );
   }
   return (
-    <ul className="bg-surface-container-low flex flex-col gap-1 rounded-xl p-2">
+    <ul className="flex flex-col">
       {picker.available.map((identity) => {
         const label = identity.email ?? identity.name ?? 'Google account';
         const busy = picker.busySub === identity.accountId;
         return (
-          <li key={identity.accountId} className="flex items-center gap-3 rounded-md px-2 py-1.5">
+          <li key={identity.accountId} className="flex items-center gap-3 px-4 py-3">
             <TaskAlt aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
             <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
               {label}

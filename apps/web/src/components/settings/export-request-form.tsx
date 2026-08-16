@@ -82,7 +82,7 @@ export function ExportRequestForm({
               <label
                 key={category}
                 htmlFor={inputId}
-                className="hover:bg-surface-container-low bg-surface-container-low flex cursor-pointer gap-3 rounded-xl p-3"
+                className="bg-surface-container hover:bg-surface-container-high flex cursor-pointer gap-3 rounded-xl p-3"
               >
                 <Checkbox
                   id={inputId}

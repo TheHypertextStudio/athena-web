@@ -200,7 +200,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
   ) : null;
 
   const tableList = (
-    <ul className="bg-surface-container-low overflow-hidden rounded-xl">
+    <ul className="flex flex-col">
       {model.databases.map((database) => (
         <DatabaseRow
           key={database.id}
@@ -261,7 +261,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
       {/* The attention block renders only when there is something to act on, so a healthy
           connection is a quiet page rather than a wall of green reassurance. */}
       {needsPeople ? (
-        <div className="bg-surface-container rounded-xl p-4">
+        <SettingsGroup>
           <p className="text-on-surface text-body-medium flex items-center gap-2">
             <CircleAlert aria-hidden="true" className="text-error size-4" />
             {people.unmatched.length === 1
@@ -277,7 +277,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
           >
             Match people <ArrowRight aria-hidden="true" className="inline size-3.5" />
           </NextLink>
-        </div>
+        </SettingsGroup>
       ) : null}
 
       {nothingProvisioned ? (
@@ -302,15 +302,30 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
             <p className="text-on-surface-variant text-body-small mt-2 mb-2 max-w-prose">
               {EMPTY_DATABASE_HINT}
             </p>
-            {tableList}
+            <SettingsGroup body="rows">{tableList}</SettingsGroup>
           </details>
         </>
       ) : (
-        <section className="flex flex-col gap-2" aria-label="Docket in Notion">
-          <h2 className="text-on-surface text-title-small">{PROVISIONED_TITLE}</h2>
-          <p className="text-on-surface-variant text-body-small max-w-prose">{PROVISIONED_HINT}</p>
+        <SettingsGroup
+          title={PROVISIONED_TITLE}
+          description={PROVISIONED_HINT}
+          body="rows"
+          footer={
+            <div className="bg-surface-container flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              {/* The freshness stamp is what was last actually PUSHED, so it stays true even when
+                  the newest run failed — but it is only reassuring on its own, which is why the
+                  failure note above has to be read first. */}
+              <p className="text-on-surface-variant text-body-small">
+                {model.lastSyncedLabel !== null
+                  ? `Last updated ${model.lastSyncedLabel}.`
+                  : 'Nothing has been pushed to Notion yet.'}
+              </p>
+              {syncButton}
+            </div>
+          }
+        >
           {containerPage !== null ? (
-            <div className="bg-surface-container-low mt-1 flex flex-col gap-1 rounded-xl px-4 py-3">
+            <div className="flex flex-col gap-1 px-4 py-3">
               <span className="text-on-surface-variant text-body-small">{CONTAINER_LABEL}</span>
               {containerPage.url !== null ? (
                 <a
@@ -328,19 +343,8 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
               <span className="text-on-surface-variant text-body-small">{CONTAINER_NOTE}</span>
             </div>
           ) : null}
-          <div className="mt-1">{tableList}</div>
-          <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-            {/* The freshness stamp is what was last actually PUSHED, so it stays true even when
-                the newest run failed — but it is only reassuring on its own, which is why the
-                failure note above has to be read first. */}
-            <p className="text-on-surface-variant text-body-small">
-              {model.lastSyncedLabel !== null
-                ? `Last updated ${model.lastSyncedLabel}.`
-                : 'Nothing has been pushed to Notion yet.'}
-            </p>
-            {syncButton}
-          </div>
-        </section>
+          {tableList}
+        </SettingsGroup>
       )}
     </div>
   );

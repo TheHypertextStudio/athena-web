@@ -21,7 +21,7 @@
 import type { NotionWorkspacePerson } from '@docket/connections/notion/mirror-contract';
 import { cn } from '@docket/ui';
 import { CheckCircle2, CircleAlert, User, UserOff } from '@docket/ui/icons';
-import { Button, Select, Skeleton } from '@docket/ui/primitives';
+import { Avatar, AvatarFallback, Button, Select, Skeleton } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 import { useState } from 'react';
 
@@ -203,9 +203,9 @@ function UnmatchedRow(props: {
 
   return (
     <li className="bg-surface-container-low flex flex-col gap-3 px-4 py-3 @xl:flex-row @xl:items-center">
-      <span className="bg-surface-container text-on-surface-variant text-body-small flex size-8 shrink-0 items-center justify-center rounded-full">
-        {initials(props.name)}
-      </span>
+      <Avatar className="size-8 shrink-0">
+        <AvatarFallback className="text-body-small">{initials(props.name)}</AvatarFallback>
+      </Avatar>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-on-surface text-body-medium truncate">{props.name}</span>
         <span className="text-on-surface-variant text-body-small truncate">
@@ -314,9 +314,9 @@ function IgnoredRow(props: {
 }): JSX.Element {
   return (
     <li className="bg-surface-container-low flex items-center gap-3 px-4 py-3">
-      <span className="bg-surface-container text-on-surface-variant text-body-small flex size-8 shrink-0 items-center justify-center rounded-full">
-        {initials(props.person.name)}
-      </span>
+      <Avatar className="size-8 shrink-0">
+        <AvatarFallback className="text-body-small">{initials(props.person.name)}</AvatarFallback>
+      </Avatar>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-on-surface text-body-medium truncate">{props.person.name}</span>
         <span className="text-on-surface-variant text-body-small truncate">

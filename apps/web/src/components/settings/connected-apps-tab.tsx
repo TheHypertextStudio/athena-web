@@ -20,7 +20,7 @@
  */
 import { EmptyState } from '@docket/ui/components';
 import { Link } from '@docket/ui/icons';
-import { Badge, Button, Skeleton } from '@docket/ui/primitives';
+import { Avatar, AvatarFallback, Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -163,9 +163,11 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
           <ul className="bg-surface-container-low flex flex-col rounded-xl">
             {apps.map((app) => (
               <li key={app.clientId} className="flex items-center gap-4 px-4 py-3">
-                <span className="bg-surface-container text-on-surface-variant text-label-large flex size-9 shrink-0 items-center justify-center rounded-md">
-                  {app.name.charAt(0).toUpperCase()}
-                </span>
+                <Avatar className="size-9 shrink-0 rounded-md">
+                  <AvatarFallback className="text-label-large rounded-md">
+                    {app.name.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="text-on-surface text-label-large truncate">{app.name}</span>
                   {/* Same words the consent screen used when this grant was approved — the roster

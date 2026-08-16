@@ -55,6 +55,15 @@ export interface EmptyStateCta {
   readonly label: string;
   /** Invoked when the action is activated. */
   readonly onClick: () => void;
+  /**
+   * Whether the action is currently unavailable.
+   *
+   * @remarks
+   * An empty state's CTA is often the one thing on screen, so it is also the thing somebody clicks
+   * twice when nothing appears to happen. Where it starts something slow and externally visible —
+   * an OAuth redirect, an import — a second click starts it again.
+   */
+  readonly disabled?: boolean;
 }
 
 /** Props for {@link EmptyState}. */
@@ -132,7 +141,7 @@ export function EmptyState({
       <p className="text-on-surface text-body-medium font-medium">{title}</p>
       <p className="text-on-surface-variant text-body-medium max-w-xs leading-relaxed">{body}</p>
       {cta ? (
-        <Button size="sm" onClick={cta.onClick}>
+        <Button size="sm" onClick={cta.onClick} disabled={cta.disabled ?? false}>
           {cta.label}
         </Button>
       ) : null}

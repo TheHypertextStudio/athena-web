@@ -242,19 +242,16 @@ export default function GoogleCalendarSettings(): JSX.Element {
           </div>
         </div>
         <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
-          {googleAvailable ? (
+          {googleAvailable && (data?.connections.length ?? 0) > 0 ? (
             <Button
               size="sm"
+              variant="outline"
               onClick={() => {
                 void startGoogleLink();
               }}
               disabled={oauthPending}
             >
-              {oauthPending
-                ? 'Opening Google…'
-                : (data?.connections.length ?? 0) > 0
-                  ? 'Add Google account'
-                  : 'Connect Google account'}
+              {oauthPending ? 'Opening Google…' : 'Add Google account'}
             </Button>
           ) : null}
           <Button asChild variant="outline" size="sm">
@@ -288,11 +285,17 @@ export default function GoogleCalendarSettings(): JSX.Element {
             title="No Google account linked"
             body="Link a Google account, then choose which of its calendars appear in Docket."
             className="border-none bg-transparent"
-            action={
-              <Button asChild variant="ghost" size="sm">
-                <NextLink href="/settings/connected-accounts">Link a Google account</NextLink>
-              </Button>
-            }
+            {...(googleAvailable
+              ? {
+                  cta: {
+                    label: oauthPending ? 'Opening Google…' : 'Connect Google account',
+                    disabled: oauthPending,
+                    onClick: () => {
+                      void startGoogleLink();
+                    },
+                  },
+                }
+              : {})}
           />
         </SettingsGroup>
       ) : null}

@@ -13,19 +13,17 @@ export default function GlobalConnectionsSettingsPage(): JSX.Element {
   const orgId = usePersonalWorkspaceId();
   const { canManage } = useCanManageOrg(orgId ?? '');
 
-  if (!orgId) {
-    return <p className="text-on-surface-variant text-body-medium">Loading your connections…</p>;
-  }
-
   return (
     <SettingsSectionPage
-      title="Connections"
-      description="Connect the apps Athena uses as data sources."
+      sectionKey="connections"
+      // Resolving the personal workspace id replaced the whole page with one sentence — no title,
+      // no description, and the settings nav pointing at a section that appeared to be blank.
+      loading={!orgId}
     >
-      <ConnectedAccountsTab orgId={orgId} />
+      <ConnectedAccountsTab orgId={orgId ?? ''} />
       {/* This route is the caller's own personal space by construction — it resolves the personal
           workspace id itself — so the shared-workspace scope explainer never applies here. */}
-      <ConnectionsPanel orgId={orgId} canManage={canManage} isPersonal />
+      <ConnectionsPanel orgId={orgId ?? ''} canManage={canManage} isPersonal />
     </SettingsSectionPage>
   );
 }

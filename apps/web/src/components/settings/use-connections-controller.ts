@@ -75,6 +75,16 @@ export interface UseConnectionsControllerArgs {
   canManage: boolean;
   /** Route to the personal "Connected accounts" surface; omit when it renders inline above. */
   linkedAccountsHref?: string | undefined;
+  /**
+   * Whether this is the caller's own Connections, in the Personal settings group.
+   *
+   * @remarks
+   * Decides which Google Calendar route the row opens. Both exist, and the personal page linked
+   * into the org-scoped one — so configuring your own calendar moved the settings nav's highlight
+   * from Personal to Workspace, and `/settings/connections/google-calendar` was unreachable from
+   * anywhere in the product despite being a real route.
+   */
+  isPersonal?: boolean;
 }
 
 /** The Connections feature controller: assembles the live-sync view model over the shared data. */
@@ -82,6 +92,7 @@ export function useConnectionsController({
   orgId,
   canManage,
   linkedAccountsHref,
+  isPersonal = false,
 }: UseConnectionsControllerArgs): ConnectionsController {
   const data = useIntegrationsData(orgId);
   const {
@@ -195,10 +206,12 @@ export function useConnectionsController({
         ? {
             name: calendarDirectory.name,
             effect: connectionCardCopy('calendar').effect,
-            href: `/orgs/${orgId}/settings/connections/google-calendar`,
+            href: isPersonal
+              ? '/settings/connections/google-calendar'
+              : `/orgs/${orgId}/settings/connections/google-calendar`,
           }
         : null,
-    [calendarDirectory, orgId],
+    [calendarDirectory, orgId, isPersonal],
   );
 
   return {

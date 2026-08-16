@@ -27,8 +27,10 @@
  */
 import { cn } from '@docket/ui';
 import { ChevronLeft } from '@docket/ui/icons';
-import { Surface, focusRing } from '@docket/ui/primitives';
+import { Surface } from '@docket/ui/primitives';
 import { type JSX, type ReactNode, useEffect, useRef, useState } from 'react';
+
+import { SETTINGS_BACK_CLASS } from './settings-back';
 
 /** Props for {@link SettingsPane}. */
 export interface SettingsPaneProps {
@@ -87,12 +89,10 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
             onClick={() => {
               setBrowsing(true);
             }}
-            className={cn(
-              // The button sits on the modal panel itself (`surface-container-high`), so its hover
-              // steps to `highest`. Hovering to `high` — what this used to do — was a no-op.
-              'text-on-surface-variant text-label-large hover:bg-surface-container-highest hover:text-on-surface -ml-2 inline-flex min-h-11 shrink-0 items-center gap-1 self-start rounded-md pr-3 pl-1 transition-colors sm:hidden',
-              focusRing,
-            )}
+            // Shares its appearance with a nested page's back link, which can sit directly
+            // above it on a narrow viewport. `sm:hidden` is this one's alone: the section list is
+            // already beside the pane at wider widths, so there is nothing to go back to.
+            className={cn(SETTINGS_BACK_CLASS, 'sm:hidden')}
           >
             <ChevronLeft aria-hidden="true" className="size-5 shrink-0" />
             All settings

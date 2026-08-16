@@ -10,10 +10,10 @@
  * databases, identity matching and sync history do not fit — and burying them three levels deep
  * inside a card is what made the existing connector configuration hard to find.
  */
-import NextLink from 'next/link';
 import type { JSX } from 'react';
 
 import { NotionMirrorPanel } from '@/components/settings/notion/notion-mirror-panel';
+import { useConnectionsParent } from '@/components/settings/use-connections-parent';
 import { useAppParams } from '@/lib/app-location';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
@@ -22,20 +22,13 @@ import { SettingsSectionPage } from '@/components/settings/settings-section-page
 export default function NotionMirrorPage(): JSX.Element {
   const { orgId } = useAppParams<{ orgId: string }>();
   const { canManage } = useCanManageOrg(orgId);
+  const parent = useConnectionsParent(orgId);
 
   return (
     <SettingsSectionPage
       title="Notion"
       description="Build databases in your Notion workspace from your Docket work, and keep them current."
-      action={
-        <NextLink
-          href={`/orgs/${orgId}/settings/connections`}
-          className="text-on-surface-variant text-body-medium hover:underline"
-        >
-          {' '}
-          Back to Connections{' '}
-        </NextLink>
-      }
+      parent={parent}
     >
       <NotionMirrorPanel orgId={orgId} canManage={canManage} />
     </SettingsSectionPage>

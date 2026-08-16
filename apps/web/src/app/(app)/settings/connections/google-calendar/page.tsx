@@ -11,6 +11,7 @@ export default function GlobalGoogleCalendarSettingsPage(): JSX.Element {
     <SettingsSectionPage
       title="Google Calendar"
       description="Choose the accounts and calendars Athena can use as data sources."
+      parent={{ label: 'Connections', href: '/settings/connections' }}
     >
       <GoogleCalendarSettings />
     </SettingsSectionPage>

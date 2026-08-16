@@ -48,7 +48,7 @@ export function ConnectionsPanel({
   linkedAccountsHref,
   isPersonal = false,
 }: ConnectionsPanelProps): JSX.Element {
-  const c = useConnectionsController({ orgId, canManage, linkedAccountsHref });
+  const c = useConnectionsController({ orgId, canManage, linkedAccountsHref, isPersonal });
 
   return (
     <IntegrationsStatus loading={c.loading} loadError={c.loadError}>

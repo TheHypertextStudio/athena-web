@@ -8,7 +8,6 @@
  * (`person` is), and without this the hub's "Match people" link landed on the table designer's
  * not-found state.
  */
-import NextLink from 'next/link';
 import type { JSX } from 'react';
 
 import { NotionPeoplePanel } from '@/components/settings/notion/notion-people-panel';
@@ -30,19 +29,10 @@ export default function NotionPeoplePage(): JSX.Element {
     <SettingsSectionPage
       title="People"
       description="How the people in your Notion workspace line up with the people in Docket."
-      action={
-        <NextLink
-          href={backHref}
-          className="text-on-surface-variant text-body-medium hover:underline"
-        >
-          {' '}
-          Back to Notion{' '}
-        </NextLink>
-      }
+      parent={{ label: 'Notion', href: backHref }}
+      loading={loading || permissionLoading}
     >
-      {loading || permissionLoading ? (
-        <p className="text-on-surface-variant text-body-medium">Loading your Notion setup…</p>
-      ) : integration === null ? (
+      {integration === null ? (
         <p className="text-on-surface-variant text-body-medium">
           Connect Notion first, then come back to match people.
         </p>

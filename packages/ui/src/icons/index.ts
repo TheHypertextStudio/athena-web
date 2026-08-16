@@ -110,6 +110,7 @@ export { default as Share } from '@mui/icons-material/IosShare';
 export { default as Shield } from '@mui/icons-material/ShieldOutlined';
 export { default as Mic } from '@mui/icons-material/MicNone';
 export { default as MicOff } from '@mui/icons-material/MicOff';
+export { default as Computer } from '@mui/icons-material/ComputerOutlined';
 export { default as Phone } from '@mui/icons-material/PhoneIphone';
 export { default as PhoneOff } from '@mui/icons-material/PhoneDisabled';
 export { default as SoundWave } from '@mui/icons-material/GraphicEq';

@@ -19,6 +19,7 @@ import { Inbox } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 
 import { MailIngestRow } from './mail-ingest-row';
+import { SettingsGroup } from './settings-group';
 import { useMailIngestList } from './use-mail-ingest-controller';
 
 /** Props for {@link MailIngestSection}. */
@@ -32,15 +33,11 @@ export function MailIngestSection({ orgId, canManage }: MailIngestSectionProps):
   const { loading, connected, connectionsHref } = useMailIngestList(orgId);
 
   return (
-    <section aria-label="Email to task" className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-on-surface text-title-small">Turn email into tasks</h2>
-        <p className="text-on-surface-variant text-body-medium max-w-prose">
-          Athena reads new mail and suggests tasks in your inbox. Turning it on adds the default
-          rules below.
-        </p>
-      </div>
-
+    <SettingsGroup
+      title="Email to tasks"
+      description="Athena reads new mail and suggests tasks in your inbox. Turning it on adds the default rules below."
+      body="rows"
+    >
       {/* placeholder: which inboxes are connected and whether mail ingest is switched on for
           them. The heading, the explanation and the "no inbox connected" copy are static. */}
       {loading ? (
@@ -67,6 +64,6 @@ export function MailIngestSection({ orgId, canManage }: MailIngestSectionProps):
           />
         ))
       )}
-    </section>
+    </SettingsGroup>
   );
 }

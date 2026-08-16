@@ -51,37 +51,39 @@ const DEFAULTS: Required<Omit<CalendarPreferences, 'defaultLayerId'>> & {
 };
 
 /**
- * How dense a day reads, in the terms a person actually has an opinion about.
+ * The hour heights the calendar offers.
  *
  * @remarks
- * The stored value is pixels per hour, which is the right thing for the grid to consume and the
- * wrong thing to show somebody. Nobody arrives at this page wanting 72 px/hour; they arrive
- * wanting their day to stop feeling cramped. The number stays visible as the secondary half so a
- * setting that syncs across devices is still checkable, but the word leads.
- *
- * @param pixelsPerHour - The stored vertical scale, or undefined before preferences resolve.
- * @returns the density in one word.
+ * The stored value is pixels per hour, which the grid consumes and nobody has an opinion about. A
+ * slider asked the reader to pick a number out of a continuous range to express a preference with
+ * four useful answers, and then gave them no way to know which one they had picked. These are the
+ * four answers.
  */
-function densityWord(pixelsPerHour: number | undefined): string {
-  if (pixelsPerHour === undefined) return 'Comfortable';
-  if (pixelsPerHour < 48) return 'Compact';
-  if (pixelsPerHour < 96) return 'Comfortable';
-  if (pixelsPerHour < 156) return 'Roomy';
-  return 'Spacious';
-}
+const HOUR_HEIGHTS = [
+  { value: 40, label: 'Compact' },
+  { value: 72, label: 'Comfortable' },
+  { value: 120, label: 'Roomy' },
+  { value: 180, label: 'Spacious' },
+] as const;
 
 /**
- * How wide a day column reads.
+ * The offered height closest to what is stored.
  *
- * @param minLaneWidth - The stored minimum column width, or undefined before preferences resolve.
- * @returns the width in one word.
+ * @remarks
+ * A stored value need not be one of the options — it may predate them, or have come from the
+ * slider these replaced. Snapping to the nearest keeps the control showing something true instead
+ * of falling back to a default the account never chose.
+ *
+ * @param stored - The persisted pixels per hour, when there is one.
+ * @returns the closest offered value.
  */
-function widthWord(minLaneWidth: number | undefined): string {
-  if (minLaneWidth === undefined) return 'Comfortable';
-  if (minLaneWidth < 200) return 'Narrow';
-  if (minLaneWidth < 320) return 'Comfortable';
-  if (minLaneWidth < 480) return 'Wide';
-  return 'Very wide';
+function nearestHourHeight(stored: number | undefined): number {
+  if (stored === undefined) return 72;
+  return HOUR_HEIGHTS.reduce<number>(
+    (best, option) =>
+      Math.abs(option.value - stored) < Math.abs(best - stored) ? option.value : best,
+    72,
+  );
 }
 
 /** Calendar settings route. */
@@ -205,11 +207,11 @@ export default function CalendarSettingsPage(): JSX.Element {
       ) : (
         <>
           <SettingsGroup
-            title="When you block out time"
-            description="What Docket creates when you drag across the calendar. Follows you on every device."
+            title="New calendar items"
+            description="What dragging across the calendar creates. Applies on every device."
           >
             <label className="text-label-large flex flex-col gap-1">
-              <span>Make it</span>
+              <span>Type</span>
               <Select
                 value={draft.defaultCreateIntent ?? DEFAULTS.defaultCreateIntent}
                 onChange={(event) => {
@@ -219,21 +221,21 @@ export default function CalendarSettingsPage(): JSX.Element {
                   }));
                 }}
               >
-                <option value="event">An event</option>
-                <option value="timebox">Time to work on something</option>
+                <option value="event">Event</option>
+                <option value="timebox">Timebox</option>
               </Select>
               {/* The one genuinely interesting choice on this page was two bare nouns. An event is a
                 commitment with other people in it; a timebox is time you are protecting for
                 yourself, and it can carry the task you are protecting it for. */}
               <span className="text-on-surface-variant text-body-small font-normal">
                 {(draft.defaultCreateIntent ?? DEFAULTS.defaultCreateIntent) === 'event'
-                  ? 'An appointment or meeting, like anything else on your calendar.'
-                  : 'Time you are holding for your own work, which you can attach a task to.'}
+                  ? 'An appointment or meeting.'
+                  : 'Reserved working time, which can be linked to a task.'}
               </span>
             </label>
 
             <label className="text-label-large flex flex-col gap-1">
-              <span>Put it on</span>
+              <span>Calendar</span>
               <Select
                 value={draft.defaultLayerId ?? ''}
                 onChange={(event) => {
@@ -253,52 +255,30 @@ export default function CalendarSettingsPage(): JSX.Element {
             </label>
           </SettingsGroup>
 
-          <SettingsGroup
-            title="How your calendar looks"
-            description="Docket still fits these to whatever screen you are on."
-          >
+          <SettingsGroup title="Display">
             <label className="text-label-large flex flex-col gap-1">
-              <span>
-                How tall an hour is ·{' '}
-                <span className="text-on-surface-variant font-normal">
-                  {densityWord(draft.pixelsPerHour ?? DEFAULTS.pixelsPerHour)}
-                </span>
-              </span>
-              <input
-                type="range"
-                min={24}
-                max={240}
-                step={4}
-                value={draft.pixelsPerHour ?? DEFAULTS.pixelsPerHour}
+              {/* Day-column width used to sit beside this as a second slider. It was a canvas
+                  layout constant wearing the clothes of a preference: the grid already fits itself
+                  to the viewport, so asking somebody for a minimum column width asked them to
+                  solve a layout problem the product had not told them it had. The stored value is
+                  untouched and the grid still honours it; it is simply no longer something a
+                  person is asked to have an opinion about. */}
+              <span>Hour height</span>
+              <Select
+                value={String(nearestHourHeight(draft.pixelsPerHour ?? DEFAULTS.pixelsPerHour))}
                 onChange={(event) => {
                   setDraft((current) => ({
                     ...current,
                     pixelsPerHour: Number(event.target.value),
                   }));
                 }}
-              />
-            </label>
-
-            <label className="text-label-large flex flex-col gap-1">
-              <span>
-                How wide a day is ·{' '}
-                <span className="text-on-surface-variant font-normal">
-                  {widthWord(draft.minLaneWidth ?? DEFAULTS.minLaneWidth)}
-                </span>
-              </span>
-              <input
-                type="range"
-                min={160}
-                max={640}
-                step={8}
-                value={draft.minLaneWidth ?? DEFAULTS.minLaneWidth}
-                onChange={(event) => {
-                  setDraft((current) => ({
-                    ...current,
-                    minLaneWidth: Number(event.target.value),
-                  }));
-                }}
-              />
+              >
+                {HOUR_HEIGHTS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
             </label>
 
             {savePreferences.isError ? (

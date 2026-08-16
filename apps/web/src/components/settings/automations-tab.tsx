@@ -12,13 +12,16 @@ import type { ActionSpec } from '@docket/automation/contracts';
 import type { AutomationRuleCreate, AutomationRuleOut } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { Workflow } from '@docket/ui/icons';
-import { Button, Card, CardContent, Input, Select } from '@docket/ui/primitives';
+import { Badge, Button, Input, Select, Skeleton } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { LoadFailure } from './load-failure';
+import { SettingRow } from './setting-row';
+import { SettingRowStatus } from './setting-row-status';
+import { SettingsGroup } from './settings-group';
 import { useAutomationRules } from '@/lib/use-automation-rules';
 
 /** Transient persistence status for an in-place autosave field. */
@@ -171,55 +174,50 @@ function RuleRow({
   }
 
   return (
-    <Card>
-      <CardContent className="flex items-center justify-between gap-3 p-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <EditableTitle
-              value={rule.name}
-              onSave={(next) => void saveName(next)}
-              canEdit={canManage}
-              ariaLabel={`Automation name for ${rule.name}`}
-              className="text-label-large truncate"
-            />
-            {rule.isSeed ? (
-              <span className="text-on-surface-variant bg-surface-container-high text-label-small rounded px-1">
-                default
-              </span>
-            ) : null}
-            {!rule.enabled ? (
-              <span className="text-on-surface-variant text-label-small">off</span>
-            ) : null}
-            {status === 'saved' ? (
-              <span className="text-on-surface-variant text-body-small">Saved</span>
-            ) : status === 'error' ? (
-              <span className="text-error text-body-small" role="alert">
-                Couldn’t save
-              </span>
-            ) : null}
-          </div>
-          <span className="text-on-surface-variant text-body-small truncate">
-            {ruleSummary(rule)}
-          </span>
-        </div>
-        {canManage ? (
-          <div className="flex shrink-0 gap-1.5">
-            <Button variant="outline" size="sm" onClick={onToggle}>
-              {rule.enabled ? 'Disable' : 'Enable'}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-error focus:text-error"
-              onClick={onDelete}
-              aria-label={`Delete ${rule.name}`}
-            >
-              Delete
-            </Button>
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+    <SettingRow
+      label={
+        <span className="flex min-w-0 items-center gap-2">
+          <EditableTitle
+            value={rule.name}
+            onSave={(next) => void saveName(next)}
+            canEdit={canManage}
+            ariaLabel={`Automation name for ${rule.name}`}
+            className="text-label-large truncate"
+          />
+          {/* Badges rather than hand-tinted spans: the tonal container roles are what make a
+              seeded rule and a switched-off one read as different states at a glance, and the
+              spans here were painting two of them the same muted grey. */}
+          {rule.isSeed ? <Badge variant="secondary">Default</Badge> : null}
+          {rule.enabled ? null : <Badge variant="outline">Off</Badge>}
+        </span>
+      }
+      description={ruleSummary(rule)}
+      trailing={
+        <span className="flex shrink-0 items-center gap-1.5">
+          <SettingRowStatus pending={false} saved={status === 'saved'} />
+          {status === 'error' ? (
+            <span className="text-error text-body-small" role="alert">
+              Couldn’t save
+            </span>
+          ) : null}
+          {canManage ? (
+            <>
+              <Button variant="outline" size="sm" onClick={onToggle}>
+                {rule.enabled ? 'Disable' : 'Enable'}
+              </Button>
+              <Button
+                variant="ghost-destructive"
+                size="sm"
+                onClick={onDelete}
+                aria-label={`Delete ${rule.name}`}
+              >
+                Delete
+              </Button>
+            </>
+          ) : null}
+        </span>
+      }
+    />
   );
 }
 
@@ -260,86 +258,97 @@ export default function AutomationsTab({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-4">
-        <p className="text-on-surface-variant text-body-medium">
-          Rules watch for something happening in Docket and take an action in response.
-        </p>
-        {canManage ? (
+    <SettingsGroup
+      title="Rules"
+      description="Each rule watches for something happening in Docket and takes an action in response."
+      body="rows"
+      action={
+        canManage && (rules.length > 0 || creating) ? (
           <Button
-            className="shrink-0"
+            variant="outline"
+            size="sm"
             onClick={() => {
               setCreating((current) => !current);
             }}
           >
             {creating ? 'Close' : 'New automation'}
           </Button>
-        ) : null}
-      </div>
-
+        ) : undefined
+      }
+    >
       {creating ? (
-        <Card>
-          <CardContent className="grid gap-4 p-4">
-            <div>
-              <h3 className="text-on-surface text-title-small">New automation</h3>
-              <p className="text-on-surface-variant text-body-small">
-                Pick a workflow to start from. You can change it later.
-              </p>
-            </div>
-            <label className="text-on-surface text-label-large flex flex-col gap-1.5">
-              Workflow
-              <Select
-                value={template}
-                onChange={(event) => {
-                  const next = event.target.value as AutomationTemplate;
-                  setTemplate(next);
-                  setName(TEMPLATE_NAMES[next]);
-                }}
-              >
-                <option value="archive_completed_email">Archive email after task completion</option>
-                <option value="dismiss_promotions">Dismiss promotional suggestions</option>
-                <option value="assign_new_tasks_to_cycle">Assign new tasks to current cycle</option>
-              </Select>
-            </label>
-            <label className="text-on-surface text-label-large flex flex-col gap-1.5">
-              Name
-              <Input
-                value={name}
-                maxLength={160}
-                onChange={(event) => {
-                  setName(event.target.value);
-                }}
-              />
-            </label>
-            <Button
-              className="w-fit"
-              disabled={saving || !name.trim()}
-              onClick={() => void submitRule()}
+        // The create form is a step inside this group, not a card of its own: nesting a card of
+        // the same tone inside one paints it its parent's colour and separates nothing.
+        <div className="border-outline-variant grid gap-4 border-b px-4 py-4">
+          <div>
+            <p className="text-on-surface text-label-large">New automation</p>
+            <p className="text-on-surface-variant text-body-small">
+              Pick a workflow to start from. You can change it later.
+            </p>
+          </div>
+          <label className="text-on-surface text-label-large flex flex-col gap-1.5">
+            Workflow
+            <Select
+              value={template}
+              onChange={(event) => {
+                const next = event.target.value as AutomationTemplate;
+                setTemplate(next);
+                setName(TEMPLATE_NAMES[next]);
+              }}
             >
-              {saving ? 'Creating…' : 'Create automation'}
-            </Button>
-          </CardContent>
-        </Card>
+              <option value="archive_completed_email">Archive email after task completion</option>
+              <option value="dismiss_promotions">Dismiss promotional suggestions</option>
+              <option value="assign_new_tasks_to_cycle">Assign new tasks to current cycle</option>
+            </Select>
+          </label>
+          <label className="text-on-surface text-label-large flex flex-col gap-1.5">
+            Name
+            <Input
+              value={name}
+              maxLength={160}
+              onChange={(event) => {
+                setName(event.target.value);
+              }}
+            />
+          </label>
+          <Button
+            className="w-fit"
+            disabled={saving || !name.trim()}
+            onClick={() => void submitRule()}
+          >
+            {saving ? 'Creating…' : 'Create automation'}
+          </Button>
+        </div>
       ) : null}
 
       {isPending ? (
-        <p className="text-on-surface-variant text-body-medium">Loading rules…</p>
+        <Skeleton className="m-4 h-20 rounded-xl" />
       ) : loadError ? (
         <LoadFailure message={loadError} retrying />
       ) : rules.length === 0 ? (
         <EmptyState
           icon={Workflow}
           title="No automation rules yet"
-          body="A rule watches for something — a suggestion arriving, a task falling due — and does the next step for you. Connect a mailbox first if you want rules that act on email."
+          body="A rule watches for something — a suggestion arriving, a task falling due — and does the next step for you."
           className="border-none bg-transparent"
+          {...(canManage
+            ? {
+                cta: {
+                  label: 'New automation',
+                  onClick: () => {
+                    setCreating(true);
+                  },
+                },
+              }
+            : {})}
           action={
-            <Button asChild variant="outline">
-              <NextLink href={connectionsHref}>Connect a mailbox</NextLink>
+            <Button asChild variant="ghost" size="sm">
+              <NextLink href={connectionsHref}>Connect a mailbox for email rules</NextLink>
             </Button>
           }
         />
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col">
           {rules.map((rule) => (
             <RuleRow
               key={rule.id}
@@ -370,10 +379,10 @@ export default function AutomationsTab({
       />
 
       {actionError ? (
-        <p className="text-error text-body-small" role="alert">
+        <p className="text-error text-body-small px-4 pb-3" role="alert">
           {actionError}
         </p>
       ) : null}
-    </div>
+    </SettingsGroup>
   );
 }

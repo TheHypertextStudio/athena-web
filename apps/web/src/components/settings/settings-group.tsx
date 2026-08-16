@@ -27,6 +27,7 @@
  * the old `p-3`/`p-4`/`p-5`/`p-6` split arose.
  */
 import { cn } from '@docket/ui';
+import { SETTINGS_GROUP_ATTR, settingsGroupId } from './settings-outline';
 import { ControlGroup, Surface, Text } from '@docket/ui/primitives';
 import type * as React from 'react';
 import type { JSX, ReactNode } from 'react';
@@ -107,7 +108,15 @@ export function SettingsGroup({
         >
           <div className="flex min-w-0 flex-col gap-1">
             {title ? (
-              <Text as="h3" token="title-small" className="flex items-center gap-2">
+              // The id and the marker are what let the rail list this section's groups without a
+              // second, hand-maintained copy of their names. See `settings-outline.tsx`.
+              <Text
+                as="h3"
+                token="title-small"
+                id={settingsGroupId(title)}
+                {...{ [SETTINGS_GROUP_ATTR]: '' }}
+                className="flex items-center gap-2"
+              >
                 {icon ? (
                   <span className="text-on-surface-variant flex shrink-0 items-center">{icon}</span>
                 ) : null}

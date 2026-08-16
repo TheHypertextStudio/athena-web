@@ -38,7 +38,7 @@ export interface SettingsPaneProps {
    * Render the section list. Receives the callback to call once a section has been chosen, so the
    * phone leaves the list for the section the choice just routed to.
    */
-  readonly renderNav: (onNavigate: () => void) => ReactNode;
+  readonly renderNav: (onNavigate: () => void, content: HTMLElement | null) => ReactNode;
   /** The routed section's content. */
   readonly children: ReactNode;
 }
@@ -49,6 +49,9 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
   // viewer did not ask for would make every deep link cost an extra tap.
   const [browsing, setBrowsing] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  // State rather than a ref: the rail derives its sub-navigation from what this element contains,
+  // so it has to re-render when the element arrives. A ref would hand it null forever.
+  const [content, setContent] = useState<HTMLElement | null>(null);
 
   // Open the list where the viewer already is. There are 19 sections and the current one is often
   // well below the fold — `Publishing` is last — so a list that always starts at the top makes you
@@ -72,7 +75,7 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
       >
         {renderNav(() => {
           setBrowsing(false);
-        })}
+        }, content)}
       </div>
 
       <div
@@ -103,9 +106,11 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
             own background, which is why 88 hairlines had been added to make those cards visible.
             Dropping the pane to `surface` puts every group one step above it, so the ramp runs the
             way `docs/design/design-system.md` §8 describes and the lines are simply gone. */}
-        <Surface tone="page" shape="medium" pad="roomy" className="min-h-0 flex-1 overflow-y-auto">
-          {children}
-        </Surface>
+        <div ref={setContent} className="min-h-0 flex-1 overflow-y-auto">
+          <Surface tone="page" shape="medium" pad="roomy" className="min-h-full">
+            {children}
+          </Surface>
+        </div>
       </div>
     </div>
   );

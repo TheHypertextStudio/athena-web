@@ -135,10 +135,11 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
           </div>
         </div>
         <SettingsPane
-          renderNav={(onNavigate) => (
+          renderNav={(onNavigate, content) => (
             <SettingsShellNav
               selectedOrgId={selectedOrgId}
               selectedOrgIsPersonal={selectedOrgIsPersonal}
+              content={content}
               onNavigate={onNavigate}
             />
           )}

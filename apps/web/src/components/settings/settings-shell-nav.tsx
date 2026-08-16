@@ -16,7 +16,7 @@
 import { useContextState } from '@docket/ui/components';
 import { cn } from '@docket/ui';
 import Link from 'next/link';
-import { type JSX, useMemo } from 'react';
+import { type JSX, type ReactNode, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { useAppPathname } from '@/lib/app-location';
@@ -28,6 +28,7 @@ import {
   type SettingsSection,
   workspaceSettingsSectionGroups,
 } from './settings-registry';
+import { useActiveOutlineEntry, useSettingsOutline } from './settings-outline';
 import { useCanManageOrg } from './use-can-manage-org';
 
 /** Shared row layout for every settings link, personal or workspace. */
@@ -68,7 +69,10 @@ export interface SettingsNavGroup {
 export function useSettingsNavGroups({
   selectedOrgId,
   selectedOrgIsPersonal,
-}: SettingsShellNavProps): readonly SettingsNavGroup[] {
+}: Pick<
+  SettingsShellNavProps,
+  'selectedOrgId' | 'selectedOrgIsPersonal'
+>): readonly SettingsNavGroup[] {
   const { canManage } = useCanManageOrg(selectedOrgId ?? '');
 
   return useMemo(() => {
@@ -97,12 +101,14 @@ interface NavRowProps {
   readonly href: string;
   /** The registry entry this row renders. */
   readonly section: SettingsSection;
+  /** The open section's group list, rendered beneath this row while it is the current one. */
+  readonly outline?: ReactNode;
   /** Called once this row has been chosen, so a phone can leave the list for the section. */
   readonly onNavigate?: (() => void) | undefined;
 }
 
 /** One nav row (a real link), highlighted when its own route is the current page. */
-function NavRow({ href, section, onNavigate }: NavRowProps): JSX.Element {
+function NavRow({ href, section, outline, onNavigate }: NavRowProps): JSX.Element {
   const pathname = useAppPathname();
   const active = isCurrentSection(pathname, href);
   const Icon = section.icon;
@@ -123,7 +129,62 @@ function NavRow({ href, section, onNavigate }: NavRowProps): JSX.Element {
         <Icon aria-hidden="true" className="size-4 shrink-0" />
         <span className="truncate">{section.label}</span>
       </Link>
+      {active ? outline : null}
     </li>
+  );
+}
+
+/** Props for {@link SectionOutline}. */
+interface SectionOutlineProps {
+  /** The open section's scroll container. */
+  readonly content: HTMLElement | null;
+}
+
+/**
+ * The open section's own groups, listed beneath it.
+ *
+ * @remarks
+ * Indented under the section row rather than replacing it, so the rail keeps showing where you are
+ * in the whole of Settings while it shows where you are inside one section. It renders nothing for
+ * a section with fewer than two groups — see `settings-outline.tsx`.
+ *
+ * @param props - The {@link SectionOutlineProps}.
+ * @returns the rendered outline, or null when there is nothing to list.
+ */
+function SectionOutline({ content }: SectionOutlineProps): JSX.Element | null {
+  const entries = useSettingsOutline(content);
+  const activeId = useActiveOutlineEntry(content, entries);
+
+  if (entries.length === 0) return null;
+
+  return (
+    <ul className="mt-0.5 flex flex-col gap-0.5">
+      {entries.map((entry) => {
+        const current = entry.id === activeId;
+        return (
+          <li key={entry.id}>
+            <button
+              type="button"
+              aria-current={current ? 'true' : undefined}
+              onClick={() => {
+                content?.querySelector(`#${CSS.escape(entry.id)}`)?.scrollIntoView({
+                  block: 'start',
+                  behavior: 'smooth',
+                });
+              }}
+              className={cn(
+                'text-body-medium focus-visible:ring-ring flex min-h-8 w-full items-center rounded-md py-1 pr-2.5 pl-9 text-left outline-none focus-visible:ring-2',
+                current
+                  ? 'text-on-surface bg-surface-container-high'
+                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
+              )}
+            >
+              <span className="truncate">{entry.label}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -135,12 +196,20 @@ interface NavGroupProps {
   readonly sections: readonly SettingsSection[];
   /** Build a section's absolute route. */
   readonly hrefFor: (section: SettingsSection) => string;
+  /** The open section's scroll container, for the current row's outline. */
+  readonly content: HTMLElement | null;
   /** Forwarded to each {@link NavRow}. */
   readonly onNavigate?: (() => void) | undefined;
 }
 
 /** A labelled group of {@link NavRow}s. */
-function NavGroup({ label, sections, hrefFor, onNavigate }: NavGroupProps): JSX.Element | null {
+function NavGroup({
+  label,
+  sections,
+  hrefFor,
+  content,
+  onNavigate,
+}: NavGroupProps): JSX.Element | null {
   if (sections.length === 0) return null;
   return (
     <div className="flex flex-col gap-1">
@@ -151,6 +220,7 @@ function NavGroup({ label, sections, hrefFor, onNavigate }: NavGroupProps): JSX.
             key={section.key}
             href={hrefFor(section)}
             section={section}
+            outline={<SectionOutline content={content} />}
             onNavigate={onNavigate}
           />
         ))}
@@ -165,6 +235,14 @@ export interface SettingsShellNavProps {
   readonly selectedOrgId: string | null;
   /** Whether that workspace is the caller's personal space. */
   readonly selectedOrgIsPersonal: boolean;
+  /**
+   * The open section's scroll container.
+   *
+   * @remarks
+   * The rail reads the section's own group headings out of this to build its sub-navigation, which
+   * is what keeps the two from ever disagreeing — see `settings-outline.tsx`.
+   */
+  readonly content: HTMLElement | null;
   /**
    * Called once a section row has been chosen.
    *
@@ -186,6 +264,7 @@ export interface SettingsShellNavProps {
 export function SettingsShellNav({
   selectedOrgId,
   selectedOrgIsPersonal,
+  content,
   onNavigate,
 }: SettingsShellNavProps): JSX.Element {
   const groups = useSettingsNavGroups({ selectedOrgId, selectedOrgIsPersonal });
@@ -198,6 +277,7 @@ export function SettingsShellNav({
           label={group.label}
           sections={group.sections}
           hrefFor={group.hrefFor}
+          content={content}
           onNavigate={onNavigate}
         />
       ))}

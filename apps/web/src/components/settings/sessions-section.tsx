@@ -13,7 +13,8 @@
  * banners — there is no toast system.
  */
 import type { SessionListOut, SessionOut } from '@docket/types';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { Computer, Phone } from '@docket/ui/icons';
+import { Badge, Button, DecorativeIcon, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
@@ -26,6 +27,37 @@ import { SettingRow } from './setting-row';
 import { SettingsGroup } from './settings-group';
 
 /** A coarse, dependency-free device label parsed from a session's raw User-Agent string. */
+/**
+ * Whether an address is worth showing beside a session.
+ *
+ * @remarks
+ * A local or unspecified address renders as `0000:0000:0000:0000:0000:0000:0000:0000` or `::1`,
+ * which is the widest thing on the row and tells the reader nothing. The row exists so somebody
+ * can recognize a device; an address that identifies nothing is noise sitting where the
+ * identifying detail should be.
+ *
+ * @param ip - The session's recorded address, if any.
+ * @returns whether to render it.
+ */
+function isMeaningfulAddress(ip: string | null): boolean {
+  if (!ip) return false;
+  const normalized = ip.trim().toLowerCase();
+  if (normalized === '::1' || normalized === '127.0.0.1' || normalized === '::') return false;
+  // An all-zero IPv6 address in any of its written forms.
+  return !/^(0{1,4}:){7}0{1,4}$/.test(normalized);
+}
+
+/**
+ * The glyph that anchors a session row.
+ *
+ * @param userAgent - The session's user agent.
+ * @returns a device-shaped icon so the list has one column the eye can run down.
+ */
+function deviceIcon(userAgent: string | null): typeof Computer {
+  if (userAgent === null) return Computer;
+  return userAgent.includes('iPhone') || userAgent.includes('Android') ? Phone : Computer;
+}
+
 function deviceLabel(userAgent: string | null): string {
   if (!userAgent) return 'Unknown device';
   const os =
@@ -150,15 +182,19 @@ export function SessionsSection(): JSX.Element {
             return (
               <li key={s.id}>
                 <SettingRow
+                  leading={<DecorativeIcon icon={deviceIcon(s.userAgent)} />}
                   label={
-                    <span className="text-on-surface text-label-large truncate">
-                      {deviceLabel(s.userAgent)}
-                      {s.current ? (
-                        <span className="text-primary text-body-small ml-2">This device</span>
-                      ) : null}
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="text-on-surface text-label-large truncate">
+                        {deviceLabel(s.userAgent)}
+                      </span>
+                      {s.current ? <Badge variant="secondary">This device</Badge> : null}
                     </span>
                   }
-                  description={[s.ipAddress, lastActive ? `Active ${lastActive}` : null]
+                  description={[
+                    lastActive ? `Active ${lastActive}` : null,
+                    isMeaningfulAddress(s.ipAddress) ? s.ipAddress : null,
+                  ]
                     .filter(Boolean)
                     .join(' · ')}
                   {...(s.current

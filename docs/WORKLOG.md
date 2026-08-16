@@ -100,7 +100,9 @@
   application-owned responses. MCP resource metadata is vendor-neutral. No pull request was
   created, no Vercel setting was changed manually, and no payment was submitted. The distinction
   between live configuration proof and a real customer transaction remains explicit rather than
-  treating one as evidence of the other.
+  treating one as evidence of the other. A later worklog-only CI run exposed that the exhaustive
+  migrated-contract scan can take 35 seconds on hosted runners despite Vitest's 30-second default;
+  the scan now has an explicit 60-second ceiling rather than depending on runner speed.
 
 ### [WORK-LOCATION-002] Make work-location settings feel like a place list
 

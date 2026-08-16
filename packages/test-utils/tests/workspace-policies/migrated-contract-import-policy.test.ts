@@ -1057,5 +1057,5 @@ describe('migrated contract import policy', () => {
         })
         .join('\n'),
     ).toEqual([]);
-  });
+  }, 60_000);
 });

@@ -63,7 +63,8 @@ describe('contact point routes', () => {
       primary: true,
       verifiedAt: expect.any(String),
     });
-    expect(first.items[0]?.valueMasked).toContain('@x.test');
+    // Caller-owned: the response carries the real address, not a masked one.
+    expect(first.items[0]?.value).toContain('@x.test');
 
     const rows = await db
       .select()
@@ -90,7 +91,7 @@ describe('contact point routes', () => {
     expect(created).toMatchObject({
       userId,
       type: 'phone',
-      valueMasked: expect.stringContaining('0123'),
+      value: expect.stringContaining('0123'),
       status: 'pending',
       primary: false,
       verifiedAt: null,
@@ -215,7 +216,7 @@ interface ContactPointWire {
   readonly id: string;
   readonly userId: string;
   readonly type: string;
-  readonly valueMasked: string;
+  readonly value: string;
   readonly status: string;
   readonly primary: boolean;
   readonly verifiedAt: string | null;

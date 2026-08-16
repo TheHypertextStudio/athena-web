@@ -87,7 +87,7 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
               ? 'Connect a linked Google account to sync its task lists.'
               : 'An admin can connect a Google account to sync its task lists.'
           }
-          className="border-none bg-transparent"
+          frame="none"
           {...(canManage ? { cta: { label: 'Connect account', onClick: picker.toggle } } : {})}
         />
       ) : (

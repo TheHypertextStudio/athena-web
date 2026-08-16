@@ -19,6 +19,7 @@ import {
   type CalendarListOut,
 } from '@docket/types';
 import { Calendar, RefreshCw } from '@docket/ui/icons';
+import { firstWriteError, WriteError } from './write-error';
 import { Checkbox, Badge, Button } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -192,11 +193,10 @@ export default function GoogleCalendarSettings(): JSX.Element {
   const syncFeedback = sync.data ? syncSummary(sync.data, data?.calendars ?? []) : null;
   // Both writes were fire-and-forget: a refused visibility toggle snapped the checkbox back with
   // no explanation, and a failed manual sync left the summary line showing the previous run.
-  const writeError = updateCalendar.isError
-    ? userErrorMessage(updateCalendar.error, 'Could not update calendar visibility.')
-    : sync.isError
-      ? userErrorMessage(sync.error, 'Could not sync Google Calendar.')
-      : null;
+  const writeError = firstWriteError([
+    [updateCalendar, 'Could not update calendar visibility.'],
+    [sync, 'Could not sync Google Calendar.'],
+  ]);
   const googleAvailable = identitiesQuery.data?.googleOAuth?.available === true;
 
   if (query.isPending) {
@@ -272,11 +272,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
         </div>
       </div>
 
-      {oauthError ? (
-        <p role="alert" className="text-error text-body-medium">
-          {oauthError}
-        </p>
-      ) : null}
+      {oauthError ? <WriteError message={oauthError} /> : null}
 
       {(data?.connections ?? []).length === 0 ? (
         <SettingsGroup>
@@ -284,7 +280,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
             icon={Calendar}
             title="No Google account linked"
             body="Link a Google account, then choose which of its calendars appear in Docket."
-            className="border-none bg-transparent"
+            frame="none"
             {...(googleAvailable
               ? {
                   cta: {

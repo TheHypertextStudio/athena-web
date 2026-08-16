@@ -1,6 +1,7 @@
 'use client';
 
 import type { AccountExportOptionsOut } from '@docket/types';
+import { WriteError } from './write-error';
 import { Checkbox, Button } from '@docket/ui/primitives';
 import { SettingsGroup } from './settings-group';
 import { type JSX, useState } from 'react';
@@ -168,11 +169,7 @@ export function ExportRequestForm({
               : ''}
           </span>
         </p>
-        {error ? (
-          <p role="alert" className="text-error text-body-medium">
-            {error}
-          </p>
-        ) : null}
+        {error ? <WriteError message={error} /> : null}
         {hasPendingExport ? (
           <p role="status" aria-live="polite" className="text-on-surface-variant text-body-medium">
             An export is already being prepared. You can leave this page and download it here when

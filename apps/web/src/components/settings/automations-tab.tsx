@@ -330,7 +330,7 @@ export default function AutomationsTab({
           icon={Workflow}
           title="No automation rules yet"
           body="A rule watches for something — a suggestion arriving, a task falling due — and does the next step for you."
-          className="border-none bg-transparent"
+          frame="none"
           {...(canManage
             ? {
                 cta: {

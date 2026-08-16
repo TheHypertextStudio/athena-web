@@ -406,7 +406,7 @@ function EmptyLabels({
         icon={Tag}
         title="No labels yet"
         body="Type a new name into the label picker on any task or project and it will be created as you go. This page is for tidying up afterwards."
-        className="border-none bg-transparent"
+        frame="none"
         {...(canManage ? { cta: { label: 'Create one now', onClick: onCreate } } : {})}
       />
     </SettingsGroup>

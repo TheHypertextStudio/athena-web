@@ -160,7 +160,7 @@ export default function AthenaConversation({
             icon={Sparkles}
             title="This is your line to Athena"
             body='Try "What should I focus on today?" or "Create a plan to make sure I get more sleep."'
-            className="border-none bg-transparent"
+            frame="none"
           />
         )}
         {sending ? (

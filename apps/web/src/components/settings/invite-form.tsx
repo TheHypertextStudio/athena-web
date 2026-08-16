@@ -12,6 +12,7 @@
  * controls are styled design-system components (no bare inputs/selects).
  */
 import { Checkbox, Button, Input } from '@docket/ui/primitives';
+import { WriteError } from './write-error';
 import { Plus } from '@docket/ui/icons';
 import type { JSX } from 'react';
 import { useState } from 'react';
@@ -117,11 +118,7 @@ export function InviteForm({
           </span>
         </label>
 
-        {error ? (
-          <p role="alert" className="text-error text-body-medium">
-            {error}
-          </p>
-        ) : null}
+        {error ? <WriteError message={error} /> : null}
       </form>
     </SettingsGroup>
   );

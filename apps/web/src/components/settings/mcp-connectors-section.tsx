@@ -14,6 +14,7 @@
  * (see {@link AddMcpConnectorForm}), so a connector never has to be added from Settings alone.
  */
 import type { McpIntegrationOut } from '@docket/types';
+import { WriteError } from './write-error';
 import { Cable } from '@docket/ui/icons';
 import {
   Badge,
@@ -124,7 +125,7 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
               ? 'Connect a tool so Athena can act through the services you already use.'
               : 'An admin can connect a tool so Athena can act through it.'
           }
-          className="border-none bg-transparent"
+          frame="none"
           {...(canManage
             ? {
                 cta: {
@@ -632,11 +633,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
         </details>
       </div>
 
-      {error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {error}
-        </p>
-      ) : null}
+      {error ? <WriteError message={error} /> : null}
 
       <Button type="submit" disabled={!canSubmit} className="self-start">
         {connect.isPending ? 'Preparing…' : authMode === 'oauth' ? 'Continue' : 'Connect'}

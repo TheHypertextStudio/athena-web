@@ -13,6 +13,7 @@
  * banners — there is no toast system.
  */
 import type { SessionListOut, SessionOut } from '@docket/types';
+import { LoadFailure } from './load-failure';
 import { Computer, Phone } from '@docket/ui/icons';
 import { Badge, Button, DecorativeIcon, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
@@ -135,9 +136,10 @@ export function SessionsSection(): JSX.Element {
   }
   if (listQ.isError) {
     return (
-      <p role="alert" className="text-error text-body-medium">
-        {userErrorMessage(listQ.error, 'Could not update your sessions.')}
-      </p>
+      <LoadFailure
+        message={userErrorMessage(listQ.error, 'Could not load your sessions.')}
+        retrying
+      />
     );
   }
 
@@ -170,12 +172,6 @@ export function SessionsSection(): JSX.Element {
             {userErrorMessage(revokeOne.error, 'Could not update your sessions.')}
           </p>
         ) : null}
-        {revokeOthers.isError ? (
-          <p role="alert" className="text-error text-body-medium px-4 pb-2">
-            {userErrorMessage(revokeOthers.error, 'Could not update your sessions.')}
-          </p>
-        ) : null}
-
         <ul className="flex flex-col">
           {sessions.map((s) => {
             const lastActive = formatCalendarDate(s.updatedAt);

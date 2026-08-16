@@ -44,14 +44,18 @@ export interface SettingRowProps {
   readonly description?: ReactNode;
   /** Controls aligned to the row's trailing edge (a switch, a button, an overflow menu). */
   readonly trailing?: ReactNode;
-  /** Content stacked beneath the row's own line — an expanded panel, an error, a nested form. */
-  readonly children?: ReactNode;
-  /** Activates the row. Renders the row as a `button`. Mutually exclusive with `href`. */
-  readonly onActivate?: () => void;
   /** Navigates. Renders the row as a link. Mutually exclusive with `onActivate`. */
   readonly href?: string;
-  /** Accessible name for an interactive row whose `label` is not descriptive on its own. */
-  readonly activateLabel?: string;
+  /**
+   * The element the row renders as.
+   *
+   * @remarks
+   * A row inside a semantic list has to be an `li`, and without this seven of them re-typed
+   * `ROW_BASE` as a literal to get one — reintroducing the three hover tones and three heights
+   * this component exists to collapse. The row's box is the same either way; only its element
+   * changes.
+   */
+  readonly as?: 'div' | 'li';
   /** Extra classes merged onto the row (layout only — never colour, radius, or padding). */
   readonly className?: string;
 }
@@ -77,10 +81,8 @@ export function SettingRow({
   label,
   description,
   trailing,
-  children,
-  onActivate,
   href,
-  activateLabel,
+  as: Element = 'div',
   className,
 }: SettingRowProps): JSX.Element {
   const line = (
@@ -114,40 +116,13 @@ export function SettingRow({
   );
 
   if (href) {
-    return (
-      <NextLink
-        href={href}
-        className={cn(ROW_BASE, ROW_INTERACTIVE, className)}
-        {...(activateLabel ? { 'aria-label': activateLabel } : {})}
-      >
+    const link = (
+      <NextLink href={href} className={cn(ROW_BASE, ROW_INTERACTIVE, className)}>
         {line}
       </NextLink>
     );
+    return Element === 'li' ? <li>{link}</li> : link;
   }
 
-  if (onActivate) {
-    return (
-      <button
-        type="button"
-        onClick={onActivate}
-        className={cn(ROW_BASE, ROW_INTERACTIVE, className)}
-        {...(activateLabel ? { 'aria-label': activateLabel } : {})}
-      >
-        {line}
-      </button>
-    );
-  }
-
-  // A row with nested content is a region, not a line: the label line keeps the row box and the
-  // children stack beneath it at the same inset.
-  if (children) {
-    return (
-      <div className={cn('flex min-w-0 flex-col', className)}>
-        <div className={ROW_BASE}>{line}</div>
-        <div className="flex min-w-0 flex-col gap-3 px-4 pb-3">{children}</div>
-      </div>
-    );
-  }
-
-  return <div className={cn(ROW_BASE, className)}>{line}</div>;
+  return <Element className={cn(ROW_BASE, className)}>{line}</Element>;
 }

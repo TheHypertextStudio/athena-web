@@ -21,6 +21,7 @@
  * this panel doesn't manage (`defaultListId`, `pushNativeTasks`, …) survive the write.
  */
 import { type ConnectorConfig, type IntegrationOut, type TeamOut } from '@docket/types';
+import { WriteError } from './write-error';
 import { cn } from '@docket/ui';
 import { Check } from '@docket/ui/icons';
 import { Button, Checkbox, Select, Skeleton, focusRing } from '@docket/ui/primitives';
@@ -424,11 +425,7 @@ export function IntegrationConfigPanel({
         </div>
       ) : null}
 
-      {error && !reauthNeeded ? (
-        <p role="alert" className="text-error text-body-medium">
-          {error}
-        </p>
-      ) : null}
+      {error && !reauthNeeded ? <WriteError message={error} /> : null}
 
       {reauthNeeded ? (
         <div

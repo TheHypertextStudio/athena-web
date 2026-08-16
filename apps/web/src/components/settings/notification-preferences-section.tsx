@@ -18,6 +18,7 @@ import {
   type NotificationQuietHours,
 } from '@docket/notifications';
 import { cn } from '@docket/ui';
+import { WriteError } from './write-error';
 import { Schedule } from '@docket/ui/icons';
 import { Checkbox, Badge, Input } from '@docket/ui/primitives';
 import { type JSX, useEffect, useRef, useState } from 'react';
@@ -312,11 +313,7 @@ export function NotificationPreferencesSection({
         </div>
       </SettingsGroup>
 
-      {error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {error}
-        </p>
-      ) : null}
+      {error ? <WriteError message={error} /> : null}
     </section>
   );
 }

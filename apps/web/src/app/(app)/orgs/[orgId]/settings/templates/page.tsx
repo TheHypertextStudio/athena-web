@@ -233,10 +233,7 @@ function KindGroup({
   const noun = useVocabulary(kind, { plural: true });
 
   return (
-    <section aria-labelledby={`templates-${kind}`} className="flex flex-col gap-2">
-      <h3 id={`templates-${kind}`} className="text-on-surface text-title-small">
-        {noun}
-      </h3>
+    <SettingsGroup title={noun} body="rows">
       {templates.length === 0 ? (
         <SettingRow
           label={<span className="text-on-surface-variant">No templates yet.</span>}
@@ -247,7 +244,7 @@ function KindGroup({
           }
         />
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col">
           {templates.map((template) => (
             <li
               key={template.id}
@@ -307,7 +304,7 @@ function KindGroup({
           ))}
         </ul>
       )}
-    </section>
+    </SettingsGroup>
   );
 }
 
@@ -326,7 +323,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }): JSX.Element {
         icon={LayoutTemplate}
         title="No templates in this workspace"
         body="A template pre-fills a create dialog — the outline of a bug report, the properties of a launch. Make one and it appears in the Template menu wherever that kind of work is created."
-        className="border-none bg-transparent"
+        frame="none"
         cta={{ label: 'New template', onClick: onCreate }}
       />
     </SettingsGroup>

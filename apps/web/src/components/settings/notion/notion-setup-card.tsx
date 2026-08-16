@@ -20,6 +20,7 @@
  *   controller surfaces that as an error instead of letting it read as success.
  */
 import type { NotionParentPageOut } from '@docket/connections/notion/mirror-contract';
+import { WriteError } from '../write-error';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
@@ -124,9 +125,7 @@ export function NotionSetupCard({
       ) : null}
 
       {(setup.error ?? search.error) ? (
-        <p role="alert" className="text-error text-body-medium">
-          {setup.error ?? search.error}
-        </p>
+        <WriteError message={setup.error ?? search.error ?? ''} />
       ) : null}
     </SettingsGroup>
   );

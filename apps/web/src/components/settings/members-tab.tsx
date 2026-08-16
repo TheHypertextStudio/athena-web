@@ -218,7 +218,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
             icon={Users}
             title="No members yet"
             body="Invite someone by email and they will appear here once they accept."
-            className="border-none bg-transparent"
+            frame="none"
           />
         ) : (
           <ul className="flex flex-col">

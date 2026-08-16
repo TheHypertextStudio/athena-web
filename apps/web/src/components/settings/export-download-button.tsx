@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@docket/ui/primitives';
+import { WriteError } from './write-error';
 import { type JSX, useState } from 'react';
 
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
@@ -94,11 +95,7 @@ export function SecureExportDownloadButton({
       >
         {busy ? 'Verifying…' : 'Download your data'}
       </Button>
-      {error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {error}
-        </p>
-      ) : null}
+      {error ? <WriteError message={error} /> : null}
     </div>
   );
 }

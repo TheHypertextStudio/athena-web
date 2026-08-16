@@ -16,6 +16,7 @@ import { VoicePhoneNumbers } from '@/components/athena/voice-phone-numbers';
 import { LatticeSection } from './lattice-section';
 import { LoadFailure } from '@/components/settings/load-failure';
 import { SettingsGroup } from '@/components/settings/settings-group';
+import { SettingRowStatus } from '@/components/settings/setting-row-status';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The user-owned Athena preferences destination. */
@@ -132,19 +133,13 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
               <option value="suggest_only">Suggest only</option>
             </Select>
           </label>
-          {save.isError ? (
-            <p role="alert" className="text-error text-body-medium">
-              {userErrorMessage(save.error, 'Could not save Athena preferences.')}
-            </p>
-          ) : (
-            <p
-              role="status"
-              aria-live="polite"
-              className="text-on-surface-variant text-body-small h-4"
-            >
-              {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : ''}
-            </p>
-          )}
+          <SettingRowStatus
+            pending={save.isPending}
+            saved={save.isSuccess}
+            {...(save.isError
+              ? { error: userErrorMessage(save.error, 'Could not save Athena preferences.') }
+              : {})}
+          />
         </SettingsGroup>
       )}
       <VoicePhoneNumbers />

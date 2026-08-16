@@ -1,6 +1,7 @@
 'use client';
 
 import type { OrgOut, OrgUpdate } from '@docket/types';
+import { WriteError } from './write-error';
 import type { VocabularyPreset } from '@docket/work/vocabulary';
 import { Input, Select, Skeleton, Textarea } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
@@ -211,9 +212,9 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
           </div>
 
           {save.error ? (
-            <p role="alert" className="text-error text-body-medium">
-              {userErrorMessage(save.error, 'Could not save workspace settings.')}
-            </p>
+            <WriteError
+              message={userErrorMessage(save.error, 'Could not save workspace settings.')}
+            />
           ) : (
             <p
               role="status"

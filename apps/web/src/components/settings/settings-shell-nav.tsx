@@ -16,7 +16,7 @@
 import { useContextState } from '@docket/ui/components';
 import { cn } from '@docket/ui';
 import Link from 'next/link';
-import { type JSX, type ReactNode, useMemo } from 'react';
+import { type JSX, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { useAppPathname } from '@/lib/app-location';
@@ -101,14 +101,14 @@ interface NavRowProps {
   readonly href: string;
   /** The registry entry this row renders. */
   readonly section: SettingsSection;
-  /** The open section's group list, rendered beneath this row while it is the current one. */
-  readonly outline?: ReactNode;
+  /** The open section's scroll container, for this row's outline while it is the current one. */
+  readonly content: HTMLElement | null;
   /** Called once this row has been chosen, so a phone can leave the list for the section. */
   readonly onNavigate?: (() => void) | undefined;
 }
 
 /** One nav row (a real link), highlighted when its own route is the current page. */
-function NavRow({ href, section, outline, onNavigate }: NavRowProps): JSX.Element {
+function NavRow({ href, section, content, onNavigate }: NavRowProps): JSX.Element {
   const pathname = useAppPathname();
   const active = isCurrentSection(pathname, href);
   const Icon = section.icon;
@@ -129,7 +129,7 @@ function NavRow({ href, section, outline, onNavigate }: NavRowProps): JSX.Elemen
         <Icon aria-hidden="true" className="size-4 shrink-0" />
         <span className="truncate">{section.label}</span>
       </Link>
-      {active ? outline : null}
+      {active ? <SectionOutline content={content} /> : null}
     </li>
   );
 }
@@ -220,7 +220,7 @@ function NavGroup({
             key={section.key}
             href={hrefFor(section)}
             section={section}
-            outline={<SectionOutline content={content} />}
+            content={content}
             onNavigate={onNavigate}
           />
         ))}

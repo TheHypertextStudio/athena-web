@@ -25,6 +25,7 @@
  * Pure presentation — all reads and writes live in `use-notion-mirror-controller.ts`.
  */
 import type { NotionMirrorDatabaseOut } from '@docket/connections/notion/mirror-contract';
+import { WriteError } from '../write-error';
 import { ArrowRight, CheckCircle2, CircleAlert, LayoutTemplate, OpenInNew } from '@docket/ui/icons';
 import { EmptyState } from '@docket/ui/components';
 import { Button, Skeleton } from '@docket/ui/primitives';
@@ -143,11 +144,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
   }
 
   if (model.error !== null) {
-    return (
-      <p role="alert" className="text-error text-body-medium">
-        {model.error}
-      </p>
-    );
+    return <WriteError message={model.error} />;
   }
 
   if (model.integration === null) {
@@ -157,7 +154,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
           icon={LayoutTemplate}
           title="Notion isn’t connected yet"
           body="Connect a Notion workspace and Docket can build databases inside it for your work, and keep them current."
-          className="border-none bg-transparent"
+          frame="none"
           action={
             <Button asChild>
               <NextLink href={model.connectionsHref}>Connect Notion</NextLink>

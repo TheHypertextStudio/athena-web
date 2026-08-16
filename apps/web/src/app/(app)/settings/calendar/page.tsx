@@ -41,10 +41,13 @@ import { LoadFailure } from '@/components/settings/load-failure';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
+/** The hour height an account gets before it has chosen one. */
+const DEFAULT_HOUR_HEIGHT = 72;
+
 const DEFAULTS: Required<Omit<CalendarPreferences, 'defaultLayerId'>> & {
   defaultLayerId: null;
 } = {
-  pixelsPerHour: 72,
+  pixelsPerHour: DEFAULT_HOUR_HEIGHT,
   minLaneWidth: 240,
   defaultCreateIntent: 'event',
   defaultLayerId: null,
@@ -74,15 +77,15 @@ const HOUR_HEIGHTS = [
  * slider these replaced. Snapping to the nearest keeps the control showing something true instead
  * of falling back to a default the account never chose.
  *
- * @param stored - The persisted pixels per hour, when there is one.
+ * @param stored - The persisted pixels per hour. The caller resolves the default first, so this
+ * never sees an absent value.
  * @returns the closest offered value.
  */
-function nearestHourHeight(stored: number | undefined): number {
-  if (stored === undefined) return 72;
+function nearestHourHeight(stored: number): number {
   return HOUR_HEIGHTS.reduce<number>(
     (best, option) =>
       Math.abs(option.value - stored) < Math.abs(best - stored) ? option.value : best,
-    72,
+    DEFAULT_HOUR_HEIGHT,
   );
 }
 
@@ -265,7 +268,7 @@ export default function CalendarSettingsPage(): JSX.Element {
                   person is asked to have an opinion about. */}
               <span>Hour height</span>
               <Select
-                value={String(nearestHourHeight(draft.pixelsPerHour ?? DEFAULTS.pixelsPerHour))}
+                value={String(nearestHourHeight(draft.pixelsPerHour ?? DEFAULT_HOUR_HEIGHT))}
                 onChange={(event) => {
                   setDraft((current) => ({
                     ...current,
@@ -303,7 +306,7 @@ export default function CalendarSettingsPage(): JSX.Element {
             icon={Users}
             title="No shared workspaces"
             body="Calendar sharing is between people in the same workspace. Yours is just you for now."
-            className="border-none bg-transparent"
+            frame="none"
             action={
               <Button asChild variant="outline">
                 <NextLink href="/workspaces/new">Create a shared workspace</NextLink>

@@ -318,12 +318,26 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] =
  * @returns the section, or `undefined` when no group declares that key.
  */
 export function findSettingsSection(key: string): SettingsSection | undefined {
-  return (
-    PERSONAL_SETTINGS_SECTIONS.find((section) => section.key === key) ??
-    workspaceSettingsSections(false).find((section) => section.key === key) ??
-    workspaceSettingsSections(true).find((section) => section.key === key)
-  );
+  return SECTIONS_BY_KEY.get(key);
 }
+
+/**
+ * Every section by key, resolved once.
+ *
+ * @remarks
+ * Personal first, so a key a personal workspace shares with the personal group keeps the personal
+ * framing. The shared workspace groups are a strict superset of the personal ones, so scanning
+ * both workspace kinds — which this used to do — could never reach a third answer.
+ *
+ * Built at module scope because `SettingsSectionPage` resolves through here in its render body, so
+ * a per-call `flatMap` re-flattened two arrays on every keystroke in every settings form.
+ */
+const SECTIONS_BY_KEY: ReadonlyMap<string, SettingsSection> = new Map(
+  [...PERSONAL_SETTINGS_SECTIONS, ...workspaceSettingsSections(false)].map((section) => [
+    section.key,
+    section,
+  ]),
+);
 
 /** The section every workspace settings root redirects to, for either workspace kind. */
 export const DEFAULT_WORKSPACE_SETTINGS_SECTION = 'general';

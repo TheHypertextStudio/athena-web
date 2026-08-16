@@ -12,6 +12,7 @@
  * the Danger zone shows the pending banner. Failures surface inline (no toast system exists).
  */
 import { AccountStatusOut } from '@docket/types';
+import { WriteError } from './write-error';
 import {
   Button,
   Dialog,
@@ -117,11 +118,7 @@ export function DeleteAccountDialog({
           />
         </div>
 
-        {error ? (
-          <p role="alert" className="text-error text-body-medium">
-            {error}
-          </p>
-        ) : null}
+        {error ? <WriteError message={error} /> : null}
 
         <DialogFooter>
           <DialogClose asChild>

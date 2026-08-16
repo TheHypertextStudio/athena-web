@@ -92,11 +92,24 @@ export function useSettingsOutline(container: HTMLElement | null): readonly Sett
       );
     };
 
+    let frame = 0;
+    const schedule = (): void => {
+      if (frame === 0)
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          read();
+        });
+    };
+
     read();
-    const observer = new MutationObserver(read);
-    observer.observe(container, { childList: true, subtree: true, characterData: true });
+    // `childList` alone: a group heading appears or disappears by mounting, never by having its
+    // text rewritten in place. Watching `characterData` meant the Data & privacy poll and every
+    // "Saving…"/"Saved" transition re-scanned the pane for headings that had not changed.
+    const observer = new MutationObserver(schedule);
+    observer.observe(container, { childList: true, subtree: true });
     return () => {
       observer.disconnect();
+      if (frame !== 0) cancelAnimationFrame(frame);
     };
   }, [container]);
 
@@ -122,27 +135,45 @@ export function useActiveOutlineEntry(
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (container === null || entries.length === 0) {
+    const first = entries[0];
+    if (container === null || first === undefined) {
       setActiveId(null);
       return;
     }
 
+    // Resolved once per outline change rather than per scroll event. The headings do not move, so
+    // re-finding them by id on every frame of a scroll was pure repetition — and the outline had
+    // already held these very elements when it read their text.
+    const headings = entries.flatMap((entry) => {
+      const element = container.querySelector(`#${CSS.escape(entry.id)}`);
+      return element instanceof HTMLElement ? [{ id: entry.id, element }] : [];
+    });
+
+    let frame = 0;
     const read = (): void => {
+      frame = 0;
       const top = container.getBoundingClientRect().top;
-      let current: string | null = entries[0] === undefined ? null : entries[0].id;
-      for (const entry of entries) {
-        const element = container.querySelector(`#${CSS.escape(entry.id)}`);
-        if (!(element instanceof HTMLElement)) continue;
-        // 8px of slack so a heading resting exactly on the edge counts as reached.
-        if (element.getBoundingClientRect().top - top <= 8) current = entry.id;
+      let current = first.id;
+      for (const heading of headings) {
+        // 8px of slack so a heading resting exactly on the edge counts as reached. The list is in
+        // document order, so the first heading still below the edge ends the search.
+        if (heading.element.getBoundingClientRect().top - top > 8) break;
+        current = heading.id;
       }
       setActiveId(current);
     };
 
+    // One read per frame, not one per scroll event — a trackpad fires several between paints and
+    // every extra one is a layout read whose answer cannot yet have changed on screen.
+    const schedule = (): void => {
+      if (frame === 0) frame = requestAnimationFrame(read);
+    };
+
     read();
-    container.addEventListener('scroll', read, { passive: true });
+    container.addEventListener('scroll', schedule, { passive: true });
     return () => {
-      container.removeEventListener('scroll', read);
+      container.removeEventListener('scroll', schedule);
+      if (frame !== 0) cancelAnimationFrame(frame);
     };
   }, [container, entries]);
 

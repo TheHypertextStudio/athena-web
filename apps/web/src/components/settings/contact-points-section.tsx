@@ -9,6 +9,7 @@
  * destinations primary, and disable destinations without deleting delivery history.
  */
 import type { ContactPointCreate, ContactPointOut } from '@docket/notifications';
+import { WriteError } from './write-error';
 import { cn } from '@docket/ui';
 import { EmptyState } from '@docket/ui/components';
 import { SettingsGroup } from './settings-group';
@@ -52,9 +53,6 @@ export function ContactPointsSection({
   onMakePrimary,
   onDisable,
 }: ContactPointsSectionProps): JSX.Element {
-  const [confirmDisableId, setConfirmDisableId] = useState<string | null>(null);
-  const [codes, setCodes] = useState<Record<string, string>>({});
-
   // Split by type, and drop `push_token` entirely. The server scopes `primary` *within its
   // destination type* — there is one primary email and one primary phone — so a single flat list
   // showed two "Primary" badges with nothing saying what each was primary for. Push tokens are
@@ -70,10 +68,6 @@ export function ContactPointsSection({
         creating={creating}
         savingId={savingId}
         verifyingId={verifyingId}
-        codes={codes}
-        setCodes={setCodes}
-        confirmDisableId={confirmDisableId}
-        setConfirmDisableId={setConfirmDisableId}
         onAdd={onAdd}
         onVerify={onVerify}
         onMakePrimary={onMakePrimary}
@@ -85,21 +79,13 @@ export function ContactPointsSection({
         creating={creating}
         savingId={savingId}
         verifyingId={verifyingId}
-        codes={codes}
-        setCodes={setCodes}
-        confirmDisableId={confirmDisableId}
-        setConfirmDisableId={setConfirmDisableId}
         onAdd={onAdd}
         onVerify={onVerify}
         onMakePrimary={onMakePrimary}
         onDisable={onDisable}
       />
 
-      {error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {error}
-        </p>
-      ) : null}
+      {error ? <WriteError message={error} /> : null}
     </>
   );
 }
@@ -114,6 +100,9 @@ const KIND = {
     autoComplete: 'email',
     purpose: 'email_notifications',
     empty: 'Add an email address so Docket can send email notifications.',
+    icon: Mail,
+    /** What the reader loses while none of these exist, in the words the group already uses. */
+    channel: 'email',
   },
   phone: {
     title: 'Phone numbers',
@@ -123,6 +112,8 @@ const KIND = {
     autoComplete: 'tel',
     purpose: 'sms_notifications',
     empty: 'Add a phone number so Docket can send text messages.',
+    icon: MessageSquare,
+    channel: 'text message',
   },
 } as const;
 
@@ -133,10 +124,6 @@ interface ContactPointGroupProps {
   readonly creating: boolean;
   readonly savingId: string | null;
   readonly verifyingId: string | null;
-  readonly codes: Record<string, string>;
-  readonly setCodes: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  readonly confirmDisableId: string | null;
-  readonly setConfirmDisableId: React.Dispatch<React.SetStateAction<string | null>>;
   readonly onAdd: (input: ContactPointCreate) => Promise<void> | void;
   readonly onVerify: (id: string, code: string) => Promise<void> | void;
   readonly onMakePrimary: (id: string) => Promise<void> | void;
@@ -158,10 +145,6 @@ function ContactPointGroup({
   creating,
   savingId,
   verifyingId,
-  codes,
-  setCodes,
-  confirmDisableId,
-  setConfirmDisableId,
   onAdd,
   onVerify,
   onMakePrimary,
@@ -169,6 +152,8 @@ function ContactPointGroup({
 }: ContactPointGroupProps): JSX.Element {
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState('');
+  const [confirmDisableId, setConfirmDisableId] = useState<string | null>(null);
+  const [codes, setCodes] = useState<Record<string, string>>({});
   const copy = KIND[kind];
 
   const submit = (event: SyntheticEvent<HTMLFormElement>): void => {
@@ -228,10 +213,10 @@ function ContactPointGroup({
       <div className="flex flex-col">
         {points.length === 0 && !adding ? (
           <EmptyState
-            icon={kind === 'email' ? Mail : MessageSquare}
-            title={`No ${kind === 'email' ? 'email addresses' : 'phone numbers'} yet`}
+            icon={copy.icon}
+            title={`No ${copy.title.toLowerCase()} yet`}
             body={copy.empty}
-            className="border-none bg-transparent"
+            frame="none"
             cta={{
               label: `Add ${copy.field.toLowerCase()}`,
               onClick: () => {
@@ -257,8 +242,8 @@ function ContactPointGroup({
                     <p className="text-on-surface-variant text-body-small">
                       {STATUS_NOTE[point.status]}{' '}
                       {point.status === 'disabled'
-                        ? `Add it again above to resume ${kind === 'email' ? 'email' : 'text message'} notifications.`
-                        : `Remove it and add it again to resume ${kind === 'email' ? 'email' : 'text message'} notifications.`}
+                        ? `Add it again above to resume ${copy.channel} notifications.`
+                        : `Remove it and add it again to resume ${copy.channel} notifications.`}
                     </p>
                   )}
                 </div>

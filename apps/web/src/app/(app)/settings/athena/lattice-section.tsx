@@ -24,6 +24,7 @@ import { type JSX, type ReactNode } from 'react';
 
 import { api } from '@/lib/api';
 import { LoadFailure } from '@/components/settings/load-failure';
+import { firstWriteError } from '@/components/settings/write-error';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { userErrorMessage } from '@/lib/problem';
 import {
@@ -146,15 +147,12 @@ export function LatticeSection(): JSX.Element {
   // One slot for whichever write just failed: they are mutually exclusive in practice (each is
   // driven by a single control) and four separate lines would reserve space for three that are
   // always empty.
-  const actionError = authorize.isError
-    ? userErrorMessage(authorize.error, 'Could not start the Lovelace connection.')
-    : chooseDevice.isError
-      ? userErrorMessage(chooseDevice.error, 'Could not switch Athena to that computer.')
-      : setEnabled.isError
-        ? userErrorMessage(setEnabled.error, 'Could not change where Athena runs.')
-        : disconnect.isError
-          ? userErrorMessage(disconnect.error, 'Could not disconnect Lovelace.')
-          : null;
+  const actionError = firstWriteError([
+    [authorize, 'Could not start the Lovelace connection.'],
+    [chooseDevice, 'Could not switch Athena to that computer.'],
+    [setEnabled, 'Could not change where Athena runs.'],
+    [disconnect, 'Could not disconnect Lovelace.'],
+  ]);
 
   if (statusQ.isPending) {
     return (

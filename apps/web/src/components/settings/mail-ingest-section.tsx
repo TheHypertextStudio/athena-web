@@ -47,7 +47,7 @@ export function MailIngestSection({ orgId, canManage }: MailIngestSectionProps):
           icon={Inbox}
           title="No inbox connected yet"
           body="Connect Gmail and Docket turns the mail that needs doing into task suggestions you can accept or ignore."
-          className="border-none bg-transparent"
+          frame="none"
           action={
             <Button asChild variant="outline">
               <NextLink href={connectionsHref}>Connect Gmail</NextLink>

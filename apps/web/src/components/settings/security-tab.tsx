@@ -12,6 +12,7 @@
  * render inline as `role="alert"` banners (there is no toast system).
  */
 import type { RecoveryCodesStatusOut } from '@docket/types';
+import { LoadFailure } from './load-failure';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
@@ -60,9 +61,10 @@ function RecoveryCodesSection(): JSX.Element {
   }
   if (statusQ.isError) {
     return (
-      <p role="alert" className="text-error text-body-medium">
-        {userErrorMessage(statusQ.error, 'Could not load security settings.')}
-      </p>
+      <LoadFailure
+        message={userErrorMessage(statusQ.error, 'Could not load security settings.')}
+        retrying
+      />
     );
   }
 

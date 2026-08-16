@@ -11,6 +11,7 @@ import type {
   WorkPlaceUpdate,
 } from '@docket/types';
 import { Calendar, Google, Home, MapPin, MoreHorizontal, Plus, Target } from '@docket/ui/icons';
+import { WriteError } from '@/components/settings/write-error';
 import {
   Badge,
   Button,
@@ -418,9 +419,9 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
           <Skeleton className="h-40 w-full rounded-xl" />
         </div>
       ) : loadError || !placesQ.data || !assertionsQ.data ? (
-        <p role="alert" className="text-error text-body-medium">
-          {userErrorMessage(loadError, 'Could not load work-location settings.')}
-        </p>
+        <WriteError
+          message={userErrorMessage(loadError, 'Could not load work-location settings.')}
+        />
       ) : (
         <>
           <SettingsGroup title="Saved places" body="rows">
@@ -429,7 +430,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                 icon={MapPin}
                 title="No saved places yet"
                 body="Save the places you work from so schedules and calendar sync can use them."
-                className="border-none bg-transparent"
+                frame="none"
                 cta={{ label: 'Add place', onClick: openNewPlace }}
               />
             ) : (
@@ -556,7 +557,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                 icon={Calendar}
                 title="No schedule yet"
                 body="Tell Docket where you usually work on which days."
-                className="border-none bg-transparent"
+                frame="none"
                 cta={{ label: 'Add schedule', onClick: openNewSchedule }}
               />
             ) : (
@@ -738,7 +739,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                 icon={Google}
                 title="No linked calendar accounts"
                 body="Link a Google account to publish your work location to its calendar."
-                className="border-none bg-transparent"
+                frame="none"
                 action={
                   <Button asChild variant="ghost" size="sm">
                     <Link href="/settings/connections/google-calendar">Link a Google account</Link>

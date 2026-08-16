@@ -27,31 +27,18 @@
 import type { MemberOut, RoleOut } from '@docket/types';
 
 import { useSession } from '@/lib/auth-client';
+import { satisfies } from '@docket/identity-access/capabilities';
+
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The role keys that confer org-management ability. */
 const MANAGER_ROLE_KEYS = new Set(['owner', 'admin']);
 
-/**
- * The capability ladder, ascending. A role holds a capability when its own bundle names one at
- * least this high — the server collapses a bundle to its maximum rank, so the client does too.
- */
-const CAPABILITY_RANK: Readonly<Record<string, number>> = {
-  view: 0,
-  comment: 1,
-  contribute: 2,
-  assign: 3,
-  manage: 4,
-};
-
-/** The rank a role must reach to create work. */
-const CONTRIBUTE_RANK = 2;
-
 /** Whether a role's capability bundle (plus its org-wide baseline) reaches `contribute`. */
 function reachesContribute(role: RoleOut): boolean {
   const held = [...role.capabilities, ...(role.baseCapability ? [role.baseCapability] : [])];
-  return held.some((capability) => (CAPABILITY_RANK[capability] ?? -1) >= CONTRIBUTE_RANK);
+  return held.some((capability) => satisfies(capability, 'contribute'));
 }
 
 /** The resolution state of a {@link useCanManageOrg} read. */

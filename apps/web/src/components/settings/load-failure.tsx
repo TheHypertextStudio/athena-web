@@ -30,7 +30,7 @@
  * }
  * ```
  */
-import type { JSX, ReactNode } from 'react';
+import type { JSX } from 'react';
 
 /** Props for {@link LoadFailure}. */
 export interface LoadFailureProps {
@@ -44,8 +44,6 @@ export interface LoadFailureProps {
    * wait for a recovery that is never coming.
    */
   readonly retrying?: boolean;
-  /** An action that could resolve it — a reconnect link, a retry button. */
-  readonly action?: ReactNode;
 }
 
 /**
@@ -54,14 +52,11 @@ export interface LoadFailureProps {
  * @param props - The {@link LoadFailureProps}.
  * @returns the rendered alert.
  */
-export function LoadFailure({ message, retrying = false, action }: LoadFailureProps): JSX.Element {
+export function LoadFailure({ message, retrying = false }: LoadFailureProps): JSX.Element {
   return (
-    <div role="alert" className="flex flex-col items-start gap-2">
-      <p className="text-error text-body-medium">
-        {message}
-        {retrying ? <span className="text-on-surface-variant"> Docket keeps trying.</span> : null}
-      </p>
-      {action}
-    </div>
+    <p role="alert" className="text-error text-body-medium">
+      {message}
+      {retrying ? <span className="text-on-surface-variant"> Docket keeps trying.</span> : null}
+    </p>
   );
 }

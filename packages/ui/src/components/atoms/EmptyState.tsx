@@ -92,7 +92,18 @@ export interface EmptyStateProps {
    * button; when both are given, `cta` renders first, then `action`.
    */
   readonly action?: React.ReactNode;
-  /** Extra class names merged onto the outer container (e.g. `border-none` when already framed). */
+  /**
+   * Whether to draw its own panel.
+   *
+   * @remarks
+   * `panel` (the default) is the standalone case: a hairline frame on the low container tone, a
+   * designed surface rather than a dashed wireframe placeholder. `none` is for an empty state that
+   * already sits inside a framed container — every settings group, which is where eighteen callers
+   * were each passing `className="border-none bg-transparent"` by hand to unpaint a frame the
+   * component had just painted. A magic string is not an API; this is.
+   */
+  readonly frame?: 'panel' | 'none';
+  /** Extra class names merged onto the outer container. */
   readonly className?: string | undefined;
 }
 
@@ -109,9 +120,9 @@ const TONE_DISC_CLASS: Record<EmptyStateTone, string> = {
  *
  * @remarks
  * Renders inside a hairline panel on the low container tone — a designed surface, not a
- * dashed wireframe placeholder; pass `className="border-none bg-transparent"` when it already
- * sits inside a framed container. The icon is decorative (`aria-hidden`), so the title + body
- * carry the accessible meaning.
+ * dashed wireframe placeholder. Pass `frame="none"` when it already sits inside a framed
+ * container. The icon is decorative (`aria-hidden`), so the title + body carry the accessible
+ * meaning.
  */
 export function EmptyState({
   icon: Icon = Inbox,
@@ -120,12 +131,14 @@ export function EmptyState({
   tone = 'neutral',
   cta,
   action,
+  frame = 'panel',
   className,
 }: EmptyStateProps): React.JSX.Element {
   return (
     <div
       className={cn(
-        'border-outline-variant bg-surface-container-low/60 flex flex-col items-center gap-3 rounded-xl border p-8 text-center',
+        'flex flex-col items-center gap-3 p-8 text-center',
+        frame === 'panel' && 'border-outline-variant bg-surface-container-low/60 rounded-xl border',
         className,
       )}
     >

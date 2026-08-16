@@ -15,6 +15,7 @@
  * Runtime/deployment status is never exposed as roadmap copy in production UI.
  */
 import type { IdentityOut, IdentityProvider } from '@docket/types';
+import { WriteError } from './write-error';
 import { Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import NextLink from 'next/link';
@@ -133,11 +134,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
         .
       </p>
 
-      {error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {error}
-        </p>
-      ) : null}
+      {error ? <WriteError message={error} /> : null}
 
       {/* placeholder: which identity providers the caller has actually linked, and under which
           account. The "Linked accounts" heading and the provider catalog's own names are static. */}
@@ -156,9 +153,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
           ))}
         </ul>
       ) : loadError ? (
-        <p role="alert" className="text-error text-body-medium">
-          {loadError}
-        </p>
+        <WriteError message={loadError} />
       ) : (
         <ul className="flex flex-col gap-2">
           {visibleProviders.map((entry) => (

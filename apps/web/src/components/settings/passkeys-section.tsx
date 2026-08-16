@@ -19,6 +19,8 @@
  * Errors render inline as `role="alert"` banners — there is no toast system.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { LoadFailure } from './load-failure';
+import { WriteError } from './write-error';
 import { Plus, Shield, Trash2 } from '@docket/ui/icons';
 import {
   Button,
@@ -92,9 +94,10 @@ export function PasskeysSection(): JSX.Element {
   }
   if (listQ.isError) {
     return (
-      <p role="alert" className="text-error text-body-medium">
-        {userErrorMessage(listQ.error, 'Could not update your passkeys.')}
-      </p>
+      <LoadFailure
+        message={userErrorMessage(listQ.error, 'Could not load your passkeys.')}
+        retrying
+      />
     );
   }
 
@@ -126,7 +129,7 @@ export function PasskeysSection(): JSX.Element {
             icon={Shield}
             title="No passkeys yet"
             body="A passkey is how you sign in — your fingerprint, face, or a security key. Add one for each device you use."
-            className="border-none bg-transparent"
+            frame="none"
             cta={{
               label: 'Add passkey',
               onClick: () => {
@@ -234,9 +237,7 @@ function AddPasskeyDialog({ open, onOpenChange, onAdded }: AddPasskeyDialogProps
           />
         </div>
         {add.isError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {userErrorMessage(add.error, 'Could not update your passkeys.')}
-          </p>
+          <WriteError message={userErrorMessage(add.error, 'Could not update your passkeys.')} />
         ) : null}
         <DialogFooter>
           <Button
@@ -398,9 +399,7 @@ function RemovePasskeyDialog({
           </DialogDescription>
         </DialogHeader>
         {remove.isError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {userErrorMessage(remove.error, 'Could not update your passkeys.')}
-          </p>
+          <WriteError message={userErrorMessage(remove.error, 'Could not update your passkeys.')} />
         ) : null}
         <DialogFooter>
           <Button

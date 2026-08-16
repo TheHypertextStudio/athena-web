@@ -13,6 +13,8 @@
  * inline as `role="alert"` banners (there is no toast system).
  */
 import type { AccountStatusOut } from '@docket/types';
+import { LoadFailure } from './load-failure';
+import { WriteError } from './write-error';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { type JSX, useState } from 'react';
@@ -77,9 +79,10 @@ export function DangerZoneTab(): JSX.Element {
   }
   if (statusQ.isError) {
     return (
-      <p role="alert" className="text-error text-body-medium">
-        {userErrorMessage(statusQ.error, 'Could not update account settings.')}
-      </p>
+      <LoadFailure
+        message={userErrorMessage(statusQ.error, 'Could not load account settings.')}
+        retrying
+      />
     );
   }
 
@@ -102,9 +105,9 @@ export function DangerZoneTab(): JSX.Element {
             </p>
           </div>
           {cancelDeletion.isError ? (
-            <p role="alert" className="text-error text-body-medium">
-              {userErrorMessage(cancelDeletion.error, 'Could not update account settings.')}
-            </p>
+            <WriteError
+              message={userErrorMessage(cancelDeletion.error, 'Could not update account settings.')}
+            />
           ) : null}
           <div>
             <Button

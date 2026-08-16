@@ -9,6 +9,7 @@
  * in focused adjacent components so this module remains the data-orchestration boundary.
  */
 import { Skeleton } from '@docket/ui/primitives';
+import { WriteError } from './write-error';
 import { type JSX } from 'react';
 
 import { api } from '@/lib/api';
@@ -89,11 +90,13 @@ export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Elem
   }
   if (optionsQ.isError || exportsQ.isError) {
     return (
-      <p role="alert" className="text-error text-body-medium">
-        {optionsQ.isError
-          ? userErrorMessage(optionsQ.error, 'Could not load export options.')
-          : userErrorMessage(exportsQ.error, 'Could not load your export history.')}
-      </p>
+      <WriteError
+        message={
+          optionsQ.isError
+            ? userErrorMessage(optionsQ.error, 'Could not load export options.')
+            : userErrorMessage(exportsQ.error, 'Could not load your export history.')
+        }
+      />
     );
   }
 

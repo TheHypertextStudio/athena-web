@@ -19,6 +19,7 @@
  * back to printing the raw scope identifier for anything it did not recognise.
  */
 import { EmptyState } from '@docket/ui/components';
+import { WriteError } from './write-error';
 import { Link } from '@docket/ui/icons';
 import { Avatar, AvatarFallback, Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
@@ -151,7 +152,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             icon={Link}
             title="No apps connected"
             body="Claude Desktop, Cursor, and other tools you connect will appear here, with the permissions you approved."
-            className="border-none bg-transparent"
+            frame="none"
           />
         ) : (
           <ul className="flex flex-col">
@@ -209,9 +210,9 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
         />
 
         {revoke.isError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {userErrorMessage(revoke.error, 'Could not update connected apps.')}
-          </p>
+          <WriteError
+            message={userErrorMessage(revoke.error, 'Could not update connected apps.')}
+          />
         ) : null}
       </SettingsGroup>
     </div>

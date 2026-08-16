@@ -10,6 +10,7 @@
  * workspace id it never actually used) has been removed.
  */
 import type { ContactPointCreate, NotificationPreferencePatch } from '@docket/notifications';
+import { WriteError } from '@/components/settings/write-error';
 import { Skeleton } from '@docket/ui/primitives';
 import { useState, type JSX } from 'react';
 
@@ -127,9 +128,7 @@ export default function NotificationsSettingsPage(): JSX.Element {
           <Skeleton className="h-64 w-full rounded-xl" />
         </div>
       ) : loadError || !preferencesQ.data || !contactPointsQ.data ? (
-        <p role="alert" className="text-error text-body-medium">
-          {loadError ?? 'Could not load notification settings.'}
-        </p>
+        <WriteError message={loadError ?? 'Could not load notification settings.'} />
       ) : (
         <>
           {/* Contact points first: a channel is only choosable once there is somewhere to

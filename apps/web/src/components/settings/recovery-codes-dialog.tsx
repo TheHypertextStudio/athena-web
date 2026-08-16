@@ -15,6 +15,7 @@
  * Security tab refetches the remaining count.
  */
 import { RecoveryCodesOut } from '@docket/types';
+import { WriteError } from './write-error';
 import {
   Button,
   Dialog,
@@ -167,11 +168,7 @@ export function RecoveryCodesDialog({
           </div>
         ) : null}
 
-        {error ? (
-          <p role="alert" className="text-error text-body-medium">
-            {error}
-          </p>
-        ) : null}
+        {error ? <WriteError message={error} /> : null}
 
         <DialogFooter>
           {revealed ? (

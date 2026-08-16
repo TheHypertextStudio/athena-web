@@ -19,6 +19,7 @@
  *   Left unexplained this reads as the sync having dropped somebody.
  */
 import type { NotionWorkspacePerson } from '@docket/connections/notion/mirror-contract';
+import { WriteError } from '../write-error';
 import { CheckCircle2, CircleAlert, User, UserOff, Users } from '@docket/ui/icons';
 import { EmptyState } from '@docket/ui/components';
 import { Avatar, AvatarFallback, Button, Select, Skeleton } from '@docket/ui/primitives';
@@ -75,11 +76,7 @@ export function NotionPeoplePanel({
   }
 
   if (people.error !== null) {
-    return (
-      <p role="alert" className="text-error text-body-medium">
-        {people.error}
-      </p>
-    );
+    return <WriteError message={people.error} />;
   }
 
   // `ignored` counts too: a workspace whose every Notion member was skipped has still been seen,
@@ -97,7 +94,7 @@ export function NotionPeoplePanel({
           icon={Users}
           title="No Notion people yet"
           body="Docket learns who is in your Notion workspace on the first sync. Run one and everyone shows up here to be matched."
-          className="border-none bg-transparent"
+          frame="none"
           action={
             <Button asChild variant="outline">
               <NextLink href={`/orgs/${orgId}/settings/connections/notion`}>

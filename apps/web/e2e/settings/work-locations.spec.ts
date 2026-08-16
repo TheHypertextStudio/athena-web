@@ -12,7 +12,9 @@ test('a person can plan across multiple regular places with home kept separate',
   await expect(page.getByRole('heading', { name: 'Work locations' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
-  const savedPlaces = page.getByRole('region', { name: 'Saved places' });
+  const savedPlaces = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: 'Saved places' }) });
   await page.getByRole('button', { name: 'Add place' }).click();
   let placeDialog = page.getByRole('dialog', { name: 'Add place' });
   await placeDialog.getByRole('textbox', { name: 'Name' }).fill('Main library');

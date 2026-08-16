@@ -42,7 +42,6 @@ import {
 
 import { EmptyState, RelativeTime } from '@docket/ui/components';
 import { relativeTime } from './format-time';
-import { SettingRow } from './setting-row';
 import { SettingsGroup } from './settings-group';
 
 const STATUS_LABEL: Record<
@@ -302,30 +301,31 @@ export default function GoogleCalendarSettings(): JSX.Element {
       {(data?.connections ?? []).map((connection) => {
         const calendars = calendarsByConnection.get(connection.id) ?? [];
         return (
-          <SettingsGroup key={connection.id} body="rows">
-            <SettingRow
-              label={connection.accountEmail ?? connection.accountName ?? 'Google account'}
-              description={
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <span>
-                    {connection.calendarsEnabled} of {connection.calendarsTotal} calendars visible
-                  </span>
-                  {connection.lastSyncedAt ? (
-                    <span>
-                      Last synced{' '}
-                      <RelativeTime iso={connection.lastSyncedAt}>
-                        {relativeTime(connection.lastSyncedAt)}
-                      </RelativeTime>
-                    </span>
-                  ) : null}
+          <SettingsGroup
+            key={connection.id}
+            title={connection.accountEmail ?? connection.accountName ?? 'Google account'}
+            description={
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span>
+                  {connection.calendarsEnabled} of {connection.calendarsTotal} calendars visible
                 </span>
-              }
-              trailing={
-                <Badge variant={STATUS_LABEL[connection.status].variant}>
-                  {STATUS_LABEL[connection.status].label}
-                </Badge>
-              }
-            />
+                {connection.lastSyncedAt ? (
+                  <span>
+                    Last synced{' '}
+                    <RelativeTime iso={connection.lastSyncedAt}>
+                      {relativeTime(connection.lastSyncedAt)}
+                    </RelativeTime>
+                  </span>
+                ) : null}
+              </span>
+            }
+            action={
+              <Badge variant={STATUS_LABEL[connection.status].variant}>
+                {STATUS_LABEL[connection.status].label}
+              </Badge>
+            }
+            body="rows"
+          >
             {connection.status === 'error' ? (
               <p role="alert" className="text-error bg-surface-container text-body-small px-4 py-2">
                 Google Calendar could not be synced. Reconnect it to restore syncing.

@@ -20,7 +20,12 @@ import type {
   NotionParentPageOut,
   NotionWorkspacePerson,
 } from '@docket/connections/notion/mirror-contract';
-import { ConnectorConfig, type IntegrationOut, type SyncRunOut } from '@docket/types';
+import {
+  ConnectorConfig,
+  type IntegrationOut,
+  type SyncFailureKind,
+  type SyncRunOut,
+} from '@docket/types';
 import { useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -37,7 +42,7 @@ import { useRemoteSearch } from '@/lib/use-remote-search';
 
 import { relativeTime } from '../format-time';
 
-import { SETUP_FAILED, SYNC_FAILED } from './notion-copy';
+import { SETUP_FAILED, SYNC_FAILED, syncFailureCopy } from './notion-copy';
 
 /**
  * How the mirror is actually doing, as opposed to how the connection is doing.
@@ -59,6 +64,8 @@ export interface NotionMirrorHealth {
   connection: IntegrationOut['status'];
   /** How the most recent *mirror* pass ended, or null when one has never run. */
   lastRun: 'succeeded' | 'failed' | 'running' | null;
+  /** What sort of failure the last run was, when it failed. Drives the copy the hub shows. */
+  lastRunErrorKind: SyncFailureKind | null;
   /** When that pass ended, in words, or null. */
   lastRunLabel: string | null;
 }
@@ -175,6 +182,7 @@ function mirrorHealth(
   return {
     connection: integration?.status ?? 'pending',
     lastRun: latest?.status ?? null,
+    lastRunErrorKind: latest?.errorKind ?? null,
     lastRunLabel: relativeTimeLabel(latest?.finishedAt ?? latest?.startedAt ?? null),
   };
 }
@@ -411,8 +419,8 @@ export function useNotionMirrorSync(orgId: string, integrationId: string): Notio
       queryKeys.integrationRuns(orgId, integrationId),
       queryKeys.integrations(orgId),
     ],
-    onSuccess: (finished: { status: string }) => {
-      setError(finished.status === 'succeeded' ? null : SYNC_FAILED);
+    onSuccess: (finished: { status: string; errorKind?: SyncFailureKind | null }) => {
+      setError(finished.status === 'succeeded' ? null : syncFailureCopy(finished.errorKind));
     },
     onError: (e: Error) => {
       setError(userErrorMessage(e, SYNC_FAILED));

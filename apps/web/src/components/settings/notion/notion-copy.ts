@@ -9,6 +9,7 @@
  * Nothing here is derived from a provider response. A Notion error message never reaches the
  * screen; the UI branches on the error's type or status and renders one of these.
  */
+import type { SyncFailureKind } from '@docket/types';
 import type {
   NotionMirrorEntity,
   NotionPersonRepresentation,
@@ -62,6 +63,46 @@ export const SYNC_ACTION_BUSY = 'Syncing…';
  * and is provider-authored text; repeating it here would put Notion's words in Docket's mouth,
  * and it is rarely actionable anyway.
  */
+/**
+ * What to do about each sort of sync failure, in Docket's words.
+ *
+ * @remarks
+ * The reason a run failed was recorded as the provider's own prose and then never shown, because
+ * provider diagnostics are not Docket's words to speak — `lastError` is on the web error-source
+ * policy's forbidden list, and rightly. The effect was that a broken connection could say only
+ * "something went wrong", about the reader's own workspace, forever.
+ *
+ * The connector always knew *what sort* of failure it was; the sync spine simply discarded that.
+ * Now it survives, and each sort gets copy that names a next step — which is the whole difference
+ * between a reader who can fix their sync and one who can only click the button again.
+ *
+ * Keyed on the enum so a sixth kind is a type error rather than a silent fall-through to the
+ * generic line.
+ */
+export const SYNC_FAILURE_BY_KIND: Record<SyncFailureKind, string> = {
+  auth:
+    'Notion no longer accepts Docket’s access. Reconnect Notion from Connections — your designed ' +
+    'databases are kept.',
+  rate_limit:
+    'Notion is rate-limiting Docket. Nothing is lost; the next scheduled run will pick up where ' +
+    'this one stopped.',
+  network: 'Docket could not reach Notion. Try again in a moment.',
+  provider:
+    'Notion rejected part of the update. This is usually a page Docket can no longer see — check ' +
+    'that the parent page is still shared with Docket, then run it again.',
+  unknown: 'Docket could not finish updating your Notion databases. Try running it again.',
+};
+
+/**
+ * The copy for a failed run.
+ *
+ * @param kind - The recorded classification, when the run carried one.
+ * @returns application-owned copy naming a next step.
+ */
+export function syncFailureCopy(kind: SyncFailureKind | null | undefined): string {
+  return kind == null ? SYNC_FAILED : SYNC_FAILURE_BY_KIND[kind];
+}
+
 export const SYNC_FAILED =
   'Docket could not finish updating your Notion databases. Check the connection and try again.';
 
@@ -74,9 +115,6 @@ export const SYNC_FAILED =
  * showed a green chip and a reassuring "Last updated" stamp from before the breakage.
  */
 export const MIRROR_FAILED_TITLE = 'The last update to Notion didn’t finish.';
-/** What to do about {@link MIRROR_FAILED_TITLE}. */
-export const MIRROR_FAILED_DETAIL =
-  'What’s in Notion is older than what’s in Docket. Try running it again.';
 
 /** The follow-up line on the hub's broken-connection alert, beside {@link RECONNECT_ACTION}. */
 export const CONNECTION_ERROR_DETAIL =

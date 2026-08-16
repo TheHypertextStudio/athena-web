@@ -1774,6 +1774,7 @@ describe('integration DTOs', () => {
       lastSyncStatus: null,
       lastSyncedAt: null,
       lastError: null,
+      lastErrorKind: null,
       lastErrorAt: null,
       syncCadenceMinutes: 60,
       createdAt: 'x',

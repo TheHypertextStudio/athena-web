@@ -486,6 +486,21 @@ export const integration = pgTable(
     lastFullSyncedAt: timestamp('last_full_synced_at'),
     /** Human-readable reason the connection/last-sync is unhealthy (null = healthy). */
     lastError: text('last_error'),
+    /**
+     * What kind of failure {@link integration.lastError} was — a {@link ProviderErrorKind}.
+     *
+     * @remarks
+     * The connector already classifies every failure structurally (auth, rate limit, network,
+     * provider status) and the sync spine threw that away, persisting only the provider's prose.
+     * Since provider diagnostics are never rendered — `lastError` is on the web error-source
+     * policy's forbidden list — the reader was left with a fixed sentence and no way to learn
+     * anything about their own broken connection.
+     *
+     * Deliberately `text` rather than a Postgres enum: drizzle batches pending migrations into one
+     * transaction, so adding an enum value and using it in the same migration trips 55P04. The
+     * closed set is enforced by Zod at the API boundary instead.
+     */
+    lastErrorKind: text('last_error_kind'),
     /** When {@link integration.lastError} was recorded. */
     lastErrorAt: timestamp('last_error_at'),
     /** In-progress lease: set when a sync run starts, cleared when it finishes. */
@@ -569,6 +584,8 @@ export const syncRun = pgTable(
     total: integer('total').notNull().default(0),
     /** Failure reason when `status = 'failed'` (null otherwise). */
     error: text('error'),
+    /** What kind of failure {@link syncRun.error} was. See {@link integration.lastErrorKind}. */
+    errorKind: text('error_kind'),
     startedAt: timestamp('started_at').notNull().defaultNow(),
     finishedAt: timestamp('finished_at'),
   },

@@ -429,6 +429,22 @@ export type SyncRunPurpose = z.infer<typeof SyncRunPurpose>;
  * Replaces the former ephemeral `SyncJobOut` (an in-memory job wiped on every restart). Each
  * run is persisted, so a failure leaves a real, auditable trace instead of vanishing.
  */
+/**
+ * What sort of failure a sync run hit.
+ *
+ * @remarks
+ * A connector classifies every failure structurally, and until now the sync spine discarded that
+ * and kept only the provider's prose — which is never rendered, since provider diagnostics are not
+ * Docket's words to speak. The result was a page that said "something went wrong" and could say
+ * nothing else, about the reader's own broken connection.
+ *
+ * This is the classification, carried through so a client can choose its own copy and its own
+ * recovery for each case. The set mirrors `ProviderErrorKind` in `@docket/connections`.
+ */
+export const SyncFailureKind = z.enum(['auth', 'rate_limit', 'network', 'provider', 'unknown']);
+/** Sync-failure classification value. */
+export type SyncFailureKind = z.infer<typeof SyncFailureKind>;
+
 export const SyncRunOut = z
   .object({
     id: z.string().describe('The sync-run id.'),
@@ -450,6 +466,9 @@ export const SyncRunOut = z
       .string()
       .nullable()
       .describe('The failure reason when `status` is `failed`; null otherwise.'),
+    errorKind: SyncFailureKind.nullable().describe(
+      'What sort of failure this was, for a client to turn into its own copy; null when the run did not fail.',
+    ),
     startedAt: z
       .string()
       .describe('ISO-8601 instant the run began — the list sort key (descending).'),
@@ -514,6 +533,9 @@ export const IntegrationOut = z
       .string()
       .nullable()
       .describe('ISO-8601 timestamp `lastError` was recorded; null when there is no error.'),
+    lastErrorKind: SyncFailureKind.nullable().describe(
+      'What sort of failure `lastError` was, for a client to turn into its own copy; null when healthy.',
+    ),
     syncCadenceMinutes: z
       .number()
       .int()

@@ -12,11 +12,16 @@
 import { actor, db, integration, notification, syncRun } from '@docket/db';
 import {
   ConnectorConfig,
+  SyncFailureKind,
   type SyncRunOut,
   type SyncRunPurpose,
   type SyncTrigger,
 } from '@docket/types';
-import { isProviderAuthError } from '@docket/connections/provider-error';
+import {
+  isProviderAuthError,
+  providerErrorKind,
+  type ProviderErrorKind,
+} from '@docket/connections/provider-error';
 import type { ConnectorProvider } from '@docket/integrations';
 import { MAIL_CAPABLE_PROVIDERS, type ImportedItem } from '@docket/integrations';
 import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or } from 'drizzle-orm';
@@ -102,6 +107,7 @@ export function toSyncRunOut(run: SyncRunRow): z.input<typeof SyncRunOut> {
     processed: run.processed,
     total: run.total,
     error: run.error,
+    errorKind: SyncFailureKind.nullable().parse(run.errorKind),
     startedAt: run.startedAt.toISOString(),
     finishedAt: run.finishedAt?.toISOString() ?? null,
   };
@@ -179,7 +185,7 @@ async function finishFailure(
   run: SyncRunRow,
   row: IntegrationRow,
   message: string,
-  opts: { needsReauth: boolean; now: Date },
+  opts: { needsReauth: boolean; kind: ProviderErrorKind; now: Date },
 ): Promise<SyncRunRow> {
   await db
     .update(integration)
@@ -187,13 +193,17 @@ async function finishFailure(
       status: 'error',
       lastSyncStatus: 'failed',
       lastError: message,
+      // The connector knows *what sort* of failure this was; without recording it the only thing
+      // that survives is the provider's prose, which is never shown to anybody. See
+      // `integration.lastErrorKind`.
+      lastErrorKind: opts.kind,
       lastErrorAt: opts.now,
       syncStartedAt: null,
     })
     .where(eq(integration.id, row.id));
   const [updated] = await db
     .update(syncRun)
-    .set({ status: 'failed', error: message, finishedAt: opts.now })
+    .set({ status: 'failed', error: message, errorKind: opts.kind, finishedAt: opts.now })
     .where(eq(syncRun.id, run.id))
     .returning();
   if (row.status !== 'error') {
@@ -307,13 +317,14 @@ export async function runLeasedSync(
   if (!provider) {
     return finishFailure(run, row, 'Integration provider does not support sync', {
       needsReauth: false,
+      kind: 'unknown',
       now,
     });
   }
 
   const tokenResult = await resolveConnectorToken(row.createdBy, provider, row.externalAccountId);
   if (!tokenResult.ok) {
-    return finishFailure(run, row, tokenResult.message, { needsReauth: true, now });
+    return finishFailure(run, row, tokenResult.message, { needsReauth: true, kind: 'auth', now });
   }
 
   try {
@@ -327,7 +338,7 @@ export async function runLeasedSync(
   } catch (err) {
     const needsReauth = isProviderAuthError(err);
     const message = err instanceof Error ? err.message : 'Connector error';
-    return finishFailure(run, row, message, { needsReauth, now });
+    return finishFailure(run, row, message, { needsReauth, kind: providerErrorKind(err), now });
   }
 }
 

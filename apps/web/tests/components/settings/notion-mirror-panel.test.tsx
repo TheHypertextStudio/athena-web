@@ -86,6 +86,7 @@ function integration(config: Record<string, unknown> = {}) {
     lastSyncStatus: null,
     lastSyncedAt: null,
     lastError: null,
+    lastErrorKind: null,
     lastErrorAt: null,
     syncCadenceMinutes: null,
     createdAt: '2026-01-01T00:00:00Z',

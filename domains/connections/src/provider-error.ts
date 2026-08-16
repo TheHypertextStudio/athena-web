@@ -96,6 +96,30 @@ export function providerErrorKindForStatus(status: number): ProviderErrorKind {
 }
 
 /**
+ * Read the provider-error kind off an unknown throwable.
+ *
+ * @remarks
+ * Structural, like the guards below, so an adapter keeps its own error classes and only has to
+ * carry the `kind` contract. Anything that is not a classified provider error — a bug in our own
+ * reconcile code, a `TypeError`, a timeout we never wrapped — is `unknown`, which is honest: the
+ * point of this taxonomy is to say what we actually know.
+ *
+ * @param value - A caught throwable or other unknown value.
+ * @returns the carried kind, or `unknown` when the throwable is not a classified provider error.
+ */
+export function providerErrorKind(value: unknown): ProviderErrorKind {
+  if (typeof value !== 'object' || value === null || !('kind' in value)) return 'unknown';
+  const { kind } = value;
+  return kind === 'auth' ||
+    kind === 'rate_limit' ||
+    kind === 'network' ||
+    kind === 'provider' ||
+    kind === 'unknown'
+    ? kind
+    : 'unknown';
+}
+
+/**
  * Determine whether an unknown throwable represents a reauthorization-required provider failure.
  *
  * @remarks

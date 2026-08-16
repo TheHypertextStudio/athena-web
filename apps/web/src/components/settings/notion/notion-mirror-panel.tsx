@@ -42,8 +42,8 @@ import {
   CONTAINER_NOTE,
   CONTAINER_UNKNOWN,
   EMPTY_DATABASE_HINT,
-  MIRROR_FAILED_DETAIL,
   MIRROR_FAILED_TITLE,
+  syncFailureCopy,
   OPEN_IN_NOTION,
   PROVISIONED_HINT,
   PROVISIONED_TITLE,
@@ -247,7 +247,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
         <CardNote tone="error">{sync.error}</CardNote>
       ) : mirrorBroken ? (
         <CardNote tone="error">
-          {MIRROR_FAILED_TITLE} {MIRROR_FAILED_DETAIL}
+          {MIRROR_FAILED_TITLE} {syncFailureCopy(health.lastRunErrorKind)}
         </CardNote>
       ) : null}
 

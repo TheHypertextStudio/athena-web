@@ -762,6 +762,7 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
       processed: 0,
       total: 0,
       error: null,
+      errorKind: null,
       startedAt: new Date('2026-07-01T00:00:00.000Z'),
       finishedAt: null,
     };

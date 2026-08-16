@@ -7,11 +7,12 @@ import {
   DIRECTORY_PROVIDER_IDS,
   IdentityProvider as IdentityProviderSchema,
   PROVIDER_CATALOG,
+  SyncFailureKind,
   WEBHOOK_PROVIDER_IDS,
-  type WebhookProviderId,
   connectorIdentityProvider,
   parseOAuthScopes,
   type IntegrationDirectoryProvider,
+  type WebhookProviderId,
 } from '@docket/types';
 import type { ConnectorProvider } from '@docket/integrations';
 import { WRITE_BACK_CAPABLE_PROVIDERS } from '@docket/integrations';
@@ -457,6 +458,7 @@ export function toOut(i: IntegrationRow): z.input<typeof IntegrationOut> {
     lastSyncStatus: i.lastSyncStatus,
     lastSyncedAt: i.lastSyncedAt?.toISOString() ?? null,
     lastError: i.lastError,
+    lastErrorKind: SyncFailureKind.nullable().parse(i.lastErrorKind),
     lastErrorAt: i.lastErrorAt?.toISOString() ?? null,
     syncCadenceMinutes: i.syncCadenceMinutes,
     createdAt: i.createdAt.toISOString(),

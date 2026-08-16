@@ -14,7 +14,9 @@
 import NextLink from 'next/link';
 import type { JSX } from 'react';
 
-import { Skeleton } from '@docket/ui/primitives';
+import { EmptyState } from '@docket/ui/components';
+import { Inbox } from '@docket/ui/icons';
+import { Button, Skeleton } from '@docket/ui/primitives';
 
 import { MailIngestRow } from './mail-ingest-row';
 import { useMailIngestList } from './use-mail-ingest-controller';
@@ -44,19 +46,17 @@ export function MailIngestSection({ orgId, canManage }: MailIngestSectionProps):
       {loading ? (
         <Skeleton className="h-20 w-full rounded-xl" />
       ) : connected.length === 0 ? (
-        <div className="text-on-surface-variant flex flex-col gap-1 px-4 py-3">
-          <p className="text-on-surface text-label-large">No inbox connected yet</p>
-          <p className="text-body-small">
-            Connect Gmail in{' '}
-            <NextLink
-              href={connectionsHref}
-              className="text-on-surface text-label-large underline-offset-2 hover:underline"
-            >
-              Connections
-            </NextLink>{' '}
-            to turn its mail into task suggestions.
-          </p>
-        </div>
+        <EmptyState
+          icon={Inbox}
+          title="No inbox connected yet"
+          body="Connect Gmail and Docket turns the mail that needs doing into task suggestions you can accept or ignore."
+          className="border-none bg-transparent"
+          action={
+            <Button asChild variant="outline">
+              <NextLink href={connectionsHref}>Connect Gmail</NextLink>
+            </Button>
+          }
+        />
       ) : (
         connected.map((integration) => (
           <MailIngestRow

@@ -111,7 +111,7 @@ export const PERSONAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     key: 'calendar',
     label: 'Calendar',
-    description: 'Set scheduling defaults and calendar sharing.',
+    description: 'Choose what blocking out time creates, and what coworkers can see.',
     icon: Calendar,
     href: 'calendar',
   },

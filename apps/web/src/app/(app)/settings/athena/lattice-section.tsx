@@ -292,12 +292,11 @@ export function LatticeSection(): JSX.Element {
                only the gateway can report. */
             <Skeleton className="h-24 rounded-xl" />
           ) : devices.length === 0 ? (
-            <Stack gap={1}>
-              <Text token="body-medium" role="status">
-                No computers are paired with your Lovelace account yet.
-              </Text>
+            <Stack gap={1} role="status">
+              <Text token="body-medium">No computers are paired yet</Text>
               <Text token="body-small" tone="muted">
-                Install Lattice on the computer you want Athena to use, then refresh this list.
+                Install Lattice on the computer you want Athena to use. It appears here once it
+                connects — use Refresh above if you have just installed it.
               </Text>
             </Stack>
           ) : (

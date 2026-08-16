@@ -150,8 +150,8 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
           <EmptyState
             icon={Link}
             title="No apps connected"
-            body="When you authorize an MCP client, it appears here."
-            className="border-none p-8"
+            body="Claude Desktop, Cursor, and other tools you connect will appear here, with the permissions you approved."
+            className="border-none bg-transparent"
           />
         ) : (
           <ul className="flex flex-col">

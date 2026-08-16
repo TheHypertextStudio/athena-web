@@ -34,11 +34,11 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useEffect, useId, useState } from 'react';
 
+import { EmptyState } from '@docket/ui/components';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { passkey } from '@/lib/auth-client';
 import { formatCalendarDate } from '@/lib/format-date';
 import { toUserFacingError, userErrorMessage } from '@/lib/problem';
-import { SettingRow } from './setting-row';
 import { SettingsGroup } from './settings-group';
 
 /** The Better Auth passkey record as returned by `listUserPasskeys` (subset this UI renders). */
@@ -107,20 +107,33 @@ export function PasskeysSection(): JSX.Element {
         description="How you sign in — Face ID, Touch ID, or a security key. Add one for each device you use."
         body="rows"
         action={
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setAddOpen(true);
-            }}
-          >
-            <Plus aria-hidden="true" className="size-4" />
-            Add passkey
-          </Button>
+          passkeys.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAddOpen(true);
+              }}
+            >
+              <Plus aria-hidden="true" className="size-4" />
+              Add passkey
+            </Button>
+          ) : undefined
         }
       >
         {passkeys.length === 0 ? (
-          <SettingRow label="No passkeys yet. Add one to sign in from this device." />
+          <EmptyState
+            icon={Shield}
+            title="No passkeys yet"
+            body="A passkey is how you sign in — your fingerprint, face, or a security key. Add one for each device you use."
+            className="border-none bg-transparent"
+            cta={{
+              label: 'Add passkey',
+              onClick: () => {
+                setAddOpen(true);
+              },
+            }}
+          />
         ) : (
           <ul className="flex flex-col">
             {passkeys.map((record) => (

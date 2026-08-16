@@ -330,10 +330,10 @@ export default function AutomationsTab({
         <EmptyState
           icon={Workflow}
           title="No automation rules yet"
-          body="Rules act on your tasks and email suggestions without you having to."
+          body="A rule watches for something — a suggestion arriving, a task falling due — and does the next step for you. Connect a mailbox first if you want rules that act on email."
           className="border-none bg-transparent"
           action={
-            <Button asChild variant="ghost" size="sm">
+            <Button asChild variant="outline">
               <NextLink href={connectionsHref}>Connect a mailbox</NextLink>
             </Button>
           }

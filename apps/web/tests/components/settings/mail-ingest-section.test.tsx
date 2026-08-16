@@ -117,9 +117,12 @@ describe('MailIngestSection', () => {
 
   it('guides the user to Connections when no inbox is connected', async () => {
     renderSection([]);
-    // Not a blank void: the feature stays discoverable from where its rules live.
-    expect(await screen.findByText('No inbox connected yet')).toBeTruthy();
-    const link = screen.getByRole('link', { name: 'Connections' });
-    expect(link.getAttribute('href')).toBe('/orgs/org_1/settings/connections');
+    // Not a blank void: the feature stays discoverable from where its rules live. Asserted by
+    // destination rather than by label, so the copy stays editable while the way out cannot
+    // silently disappear.
+    const link = await screen.findByRole('link', {
+      name: (_name, element) => element.getAttribute('href') === '/orgs/org_1/settings/connections',
+    });
+    expect(link).toBeInTheDocument();
   });
 });

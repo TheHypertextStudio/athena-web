@@ -10,7 +10,10 @@
  * `/orgs/[orgId]/settings/calendar` (which this page used to delegate to, purely to reach a
  * workspace id it never used) has been removed.
  */
-import { Checkbox, Select } from '@docket/ui/primitives';
+import { EmptyState } from '@docket/ui/components';
+import { Users } from '@docket/ui/icons';
+import { Button, Checkbox, Select } from '@docket/ui/primitives';
+import NextLink from 'next/link';
 import type {
   CalendarItemCreateIntent,
   CalendarLayerShareAccess,
@@ -32,6 +35,7 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
+import { userErrorMessage } from '@/lib/problem';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 import { LoadFailure } from '@/components/settings/load-failure';
 import { SettingsGroup } from '@/components/settings/settings-group';
@@ -45,6 +49,40 @@ const DEFAULTS: Required<Omit<CalendarPreferences, 'defaultLayerId'>> & {
   defaultCreateIntent: 'event',
   defaultLayerId: null,
 };
+
+/**
+ * How dense a day reads, in the terms a person actually has an opinion about.
+ *
+ * @remarks
+ * The stored value is pixels per hour, which is the right thing for the grid to consume and the
+ * wrong thing to show somebody. Nobody arrives at this page wanting 72 px/hour; they arrive
+ * wanting their day to stop feeling cramped. The number stays visible as the secondary half so a
+ * setting that syncs across devices is still checkable, but the word leads.
+ *
+ * @param pixelsPerHour - The stored vertical scale, or undefined before preferences resolve.
+ * @returns the density in one word.
+ */
+function densityWord(pixelsPerHour: number | undefined): string {
+  if (pixelsPerHour === undefined) return 'Comfortable';
+  if (pixelsPerHour < 48) return 'Compact';
+  if (pixelsPerHour < 96) return 'Comfortable';
+  if (pixelsPerHour < 156) return 'Roomy';
+  return 'Spacious';
+}
+
+/**
+ * How wide a day column reads.
+ *
+ * @param minLaneWidth - The stored minimum column width, or undefined before preferences resolve.
+ * @returns the width in one word.
+ */
+function widthWord(minLaneWidth: number | undefined): string {
+  if (minLaneWidth === undefined) return 'Comfortable';
+  if (minLaneWidth < 200) return 'Narrow';
+  if (minLaneWidth < 320) return 'Comfortable';
+  if (minLaneWidth < 480) return 'Wide';
+  return 'Very wide';
+}
 
 /** Calendar settings route. */
 export default function CalendarSettingsPage(): JSX.Element {
@@ -157,108 +195,145 @@ export default function CalendarSettingsPage(): JSX.Element {
   return (
     <SettingsSectionPage sectionKey="calendar" loading={loading}>
       {loadFailed ? (
-        <LoadFailure message="Could not load your calendar settings." retrying />
-      ) : (
-        <SettingsGroup
-          title="Scheduling defaults"
-          description="These follow you across devices; the canvas still adapts to every viewport."
-        >
-          <label className="text-label-large flex flex-col gap-1">
-            <span>New regions become</span>
-            <Select
-              value={draft.defaultCreateIntent ?? DEFAULTS.defaultCreateIntent}
-              onChange={(event) => {
-                setDraft((current) => ({
-                  ...current,
-                  defaultCreateIntent: event.target.value as CalendarItemCreateIntent,
-                }));
-              }}
-            >
-              <option value="event">Event</option>
-              <option value="timebox">Timebox</option>
-            </Select>
-          </label>
-
-          <label className="text-label-large flex flex-col gap-1">
-            <span>Default event calendar</span>
-            <Select
-              value={draft.defaultLayerId ?? ''}
-              onChange={(event) => {
-                const layer = destinations.find((candidate) => candidate.id === event.target.value);
-                setDraft((current) => ({ ...current, defaultLayerId: layer?.id ?? null }));
-              }}
-            >
-              <option value="">Docket calendar</option>
-              {destinations.map((layer) => (
-                <option key={layer.id} value={layer.id}>
-                  {layer.title}
-                </option>
-              ))}
-            </Select>
-          </label>
-
-          <label className="text-label-large flex flex-col gap-1">
-            <span>
-              Vertical scale · {String(draft.pixelsPerHour ?? DEFAULTS.pixelsPerHour)} px/hour
-            </span>
-            <input
-              type="range"
-              min={24}
-              max={240}
-              step={4}
-              value={draft.pixelsPerHour ?? DEFAULTS.pixelsPerHour}
-              onChange={(event) => {
-                setDraft((current) => ({
-                  ...current,
-                  pixelsPerHour: Number(event.target.value),
-                }));
-              }}
-            />
-          </label>
-
-          <label className="text-label-large flex flex-col gap-1">
-            <span>
-              Preferred lane width · {String(draft.minLaneWidth ?? DEFAULTS.minLaneWidth)} px
-            </span>
-            <input
-              type="range"
-              min={160}
-              max={640}
-              step={8}
-              value={draft.minLaneWidth ?? DEFAULTS.minLaneWidth}
-              onChange={(event) => {
-                setDraft((current) => ({
-                  ...current,
-                  minLaneWidth: Number(event.target.value),
-                }));
-              }}
-            />
-          </label>
-
-          {savePreferences.isError ? (
-            <p role="alert" className="text-error text-body-small">
-              Could not save these preferences.
-            </p>
-          ) : (
-            <p aria-live="polite" className="text-on-surface-variant text-body-small h-4">
-              {savePreferences.isPending ? 'Saving…' : savePreferences.isSuccess ? 'Saved' : ''}
-            </p>
+        <LoadFailure
+          message={userErrorMessage(
+            preferencesQ.error ?? layersQ.error,
+            'Could not load your calendar settings.',
           )}
-        </SettingsGroup>
+          retrying
+        />
+      ) : (
+        <>
+          <SettingsGroup
+            title="When you block out time"
+            description="What Docket creates when you drag across the calendar. Follows you on every device."
+          >
+            <label className="text-label-large flex flex-col gap-1">
+              <span>Make it</span>
+              <Select
+                value={draft.defaultCreateIntent ?? DEFAULTS.defaultCreateIntent}
+                onChange={(event) => {
+                  setDraft((current) => ({
+                    ...current,
+                    defaultCreateIntent: event.target.value as CalendarItemCreateIntent,
+                  }));
+                }}
+              >
+                <option value="event">An event</option>
+                <option value="timebox">Time to work on something</option>
+              </Select>
+              {/* The one genuinely interesting choice on this page was two bare nouns. An event is a
+                commitment with other people in it; a timebox is time you are protecting for
+                yourself, and it can carry the task you are protecting it for. */}
+              <span className="text-on-surface-variant text-body-small font-normal">
+                {(draft.defaultCreateIntent ?? DEFAULTS.defaultCreateIntent) === 'event'
+                  ? 'An appointment or meeting, like anything else on your calendar.'
+                  : 'Time you are holding for your own work, which you can attach a task to.'}
+              </span>
+            </label>
+
+            <label className="text-label-large flex flex-col gap-1">
+              <span>Put it on</span>
+              <Select
+                value={draft.defaultLayerId ?? ''}
+                onChange={(event) => {
+                  const layer = destinations.find(
+                    (candidate) => candidate.id === event.target.value,
+                  );
+                  setDraft((current) => ({ ...current, defaultLayerId: layer?.id ?? null }));
+                }}
+              >
+                <option value="">Docket calendar</option>
+                {destinations.map((layer) => (
+                  <option key={layer.id} value={layer.id}>
+                    {layer.title}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </SettingsGroup>
+
+          <SettingsGroup
+            title="How your calendar looks"
+            description="Docket still fits these to whatever screen you are on."
+          >
+            <label className="text-label-large flex flex-col gap-1">
+              <span>
+                How tall an hour is ·{' '}
+                <span className="text-on-surface-variant font-normal">
+                  {densityWord(draft.pixelsPerHour ?? DEFAULTS.pixelsPerHour)}
+                </span>
+              </span>
+              <input
+                type="range"
+                min={24}
+                max={240}
+                step={4}
+                value={draft.pixelsPerHour ?? DEFAULTS.pixelsPerHour}
+                onChange={(event) => {
+                  setDraft((current) => ({
+                    ...current,
+                    pixelsPerHour: Number(event.target.value),
+                  }));
+                }}
+              />
+            </label>
+
+            <label className="text-label-large flex flex-col gap-1">
+              <span>
+                How wide a day is ·{' '}
+                <span className="text-on-surface-variant font-normal">
+                  {widthWord(draft.minLaneWidth ?? DEFAULTS.minLaneWidth)}
+                </span>
+              </span>
+              <input
+                type="range"
+                min={160}
+                max={640}
+                step={8}
+                value={draft.minLaneWidth ?? DEFAULTS.minLaneWidth}
+                onChange={(event) => {
+                  setDraft((current) => ({
+                    ...current,
+                    minLaneWidth: Number(event.target.value),
+                  }));
+                }}
+              />
+            </label>
+
+            {savePreferences.isError ? (
+              <LoadFailure
+                message={userErrorMessage(savePreferences.error, 'Could not save this preference.')}
+              />
+            ) : (
+              <p aria-live="polite" className="text-on-surface-variant text-body-small h-4">
+                {savePreferences.isPending ? 'Saving…' : savePreferences.isSuccess ? 'Saved' : ''}
+              </p>
+            )}
+          </SettingsGroup>
+        </>
       )}
 
       <SettingsGroup
-        title="Workspace comparison"
-        description="Nothing is shared until you enable a layer. Provider-private events remain busy-only."
+        title="What coworkers can see"
+        description="Nothing is shared until you tick a calendar here. Events your provider marks private only ever show as busy."
       >
         {sharedWorkspaces.length === 0 ? (
-          <p className="text-on-surface-variant text-body-medium">
-            Join a shared workspace to compare schedules.
-          </p>
+          <EmptyState
+            icon={Users}
+            title="No shared workspaces"
+            body="Calendar sharing is between people in the same workspace. Yours is just you for now."
+            className="border-none bg-transparent"
+            action={
+              <Button asChild variant="outline">
+                <NextLink href="/workspaces/new">Create a shared workspace</NextLink>
+              </Button>
+            }
+          />
         ) : (
           <>
             <label className="text-label-large flex flex-col gap-1">
-              <span>Workspace</span>
+              <span>Share with</span>
               <Select
                 value={workspaceId}
                 onChange={(event) => {
@@ -297,30 +372,32 @@ export default function CalendarSettingsPage(): JSX.Element {
                       />
                       <span className="truncate">{layer.title}</span>
                     </label>
-                    {access ? (
-                      <Select
-                        aria-label={`Sharing level for ${layer.title}`}
-                        value={access}
-                        onChange={(event) => {
-                          setShareDraft((current) => ({
-                            ...current,
-                            [layer.id]: event.target.value as CalendarLayerShareAccess,
-                          }));
-                        }}
-                      >
-                        <option value="details">Details</option>
-                        <option value="busy">Busy only</option>
-                      </Select>
-                    ) : null}
+                    <Select
+                      aria-label={`What coworkers see of ${layer.title}`}
+                      disabled={access === undefined}
+                      value={access ?? 'details'}
+                      onChange={(event) => {
+                        setShareDraft((current) => ({
+                          ...current,
+                          [layer.id]: event.target.value as CalendarLayerShareAccess,
+                        }));
+                      }}
+                    >
+                      <option value="details">Full details</option>
+                      <option value="busy">Busy only</option>
+                    </Select>
                   </div>
                 );
               })}
             </div>
 
             {sharesQ.isError || replaceShares.isError ? (
-              <p role="alert" className="text-error text-body-small">
-                Calendar sharing is temporarily unavailable.
-              </p>
+              <LoadFailure
+                message={userErrorMessage(
+                  sharesQ.error ?? replaceShares.error,
+                  'Could not save what coworkers can see.',
+                )}
+              />
             ) : (
               <p aria-live="polite" className="text-on-surface-variant text-body-small h-4">
                 {replaceShares.isPending ? 'Saving…' : replaceShares.isSuccess ? 'Saved' : ''}

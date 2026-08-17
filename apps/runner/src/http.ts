@@ -9,8 +9,11 @@ const DEFAULT_OUTBOUND_TIMEOUT_MS = 10_000;
 export interface RunnerHttpEnv {
   readonly ATHENA_RUN_QUEUE: Pick<Queue, 'send'>;
   readonly ATHENA_WORKFLOW: Pick<Workflow, 'get'>;
+  /** Signs this Worker's outbound requests to Docket (verified against the same secret there). */
   readonly CLOUDFLARE_TO_DOCKET_HMAC_SECRET: string;
+  /** The Docket API origin this Worker calls — the runner side of `CLOUDFLARE_ATHENA_RUNNER_URL`. */
   readonly DOCKET_API_URL: string;
+  /** Verifies inbound requests Docket signs (the other direction of the HMAC pair). */
   readonly DOCKET_TO_CLOUDFLARE_HMAC_SECRET: string;
 }
 

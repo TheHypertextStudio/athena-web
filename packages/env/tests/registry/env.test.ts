@@ -5,11 +5,14 @@ import {
   agentServer,
   authServer,
   clientShared,
+  connectorServer,
   dbServer,
+  hostsServer,
   mcpServer,
   opsServer,
   sharedServer,
   stripeServer,
+  voiceServer,
 } from '../../src/slices';
 
 // ---------------------------------------------------------------------------
@@ -83,6 +86,36 @@ describe('registry', () => {
 
   it('returns undefined for an unknown var', () => {
     expect(findVar('DEFINITELY_NOT_A_REAL_VAR')).toBeUndefined();
+  });
+
+  it('registers every var declared in a schema slice — nothing explained only in a code comment', () => {
+    // Each slice below has real, human-written TSDoc on its vars, but that prose is invisible to
+    // `pnpm env:check` and the bootstrap prompt (registry.ts's own header: this registry is "the
+    // one declaration site" they read). A var can be fully correct and still never surface to a
+    // person setting up the project if it only exists in the Zod schema.
+    const sliceModules = {
+      sharedServer,
+      dbServer,
+      authServer,
+      stripeServer,
+      mcpServer,
+      agentServer,
+      opsServer,
+      connectorServer,
+      hostsServer,
+      voiceServer,
+      clientShared,
+    };
+    const declared = new Set<string>();
+    for (const slice of Object.values(sliceModules)) {
+      for (const key of Object.keys(slice)) declared.add(key);
+    }
+    const registered = new Set(VAR_REGISTRY.map((v) => v.name));
+    const missing = [...declared].filter((name) => !registered.has(name)).sort();
+    expect(
+      missing,
+      `VAR_REGISTRY has no entry for: ${missing.join(', ')} — pnpm env:check and the bootstrap prompt can't see or explain them`,
+    ).toEqual([]);
   });
 
   it('covers vars across every slice + scope + target shape', () => {

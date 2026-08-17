@@ -6,7 +6,9 @@ export const DEFAULT_DISPATCH_SWEEP_TIMEOUT_MS = 5 * 60_000;
 
 /** Configuration needed by Cloudflare's scheduled dispatch recovery. */
 export interface DispatchSweepEnv {
+  /** Signs this Worker's outbound requests to Docket (verified against the same secret there). */
   readonly CLOUDFLARE_TO_DOCKET_HMAC_SECRET: string;
+  /** The Docket API origin this Worker calls — the runner side of `CLOUDFLARE_ATHENA_RUNNER_URL`. */
   readonly DOCKET_API_URL: string;
 }
 

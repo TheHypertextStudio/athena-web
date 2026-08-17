@@ -72,6 +72,16 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     where: 'Deprecated one-release alias for the Docket Pro price id',
   },
   {
+    name: 'DOCKET_PRICE_LOOKUP_TEAM_ANNUAL',
+    slice: 'stripe',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- registered for one compatibility release
+    zod: stripeServer.DOCKET_PRICE_LOOKUP_TEAM_ANNUAL,
+    where: 'Deprecated — the annual Team product is no longer sold',
+  },
+  {
     name: 'STRIPE_BILLING_PORTAL_CONFIG_ID',
     slice: 'stripe',
     scope: 'server',
@@ -146,6 +156,26 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     required: false,
     zod: agentServer.ANTHROPIC_API_KEY,
     where: 'Anthropic API key for the built-in Athena runtime',
+    sensitive: true,
+  },
+  {
+    name: 'CLOUDFLARE_AI_GATEWAY_BASE_URL',
+    slice: 'agent',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: agentServer.CLOUDFLARE_AI_GATEWAY_BASE_URL,
+    where:
+      'Anthropic-compatible Cloudflare AI Gateway URL — requires CLOUDFLARE_AI_GATEWAY_TOKEN too',
+  },
+  {
+    name: 'CLOUDFLARE_AI_GATEWAY_TOKEN',
+    slice: 'agent',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: agentServer.CLOUDFLARE_AI_GATEWAY_TOKEN,
+    where: 'Cloudflare token authorizing requests through CLOUDFLARE_AI_GATEWAY_BASE_URL',
     sensitive: true,
   },
   {

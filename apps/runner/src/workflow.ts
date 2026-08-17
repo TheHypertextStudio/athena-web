@@ -5,7 +5,9 @@ import { signInternalRequest } from './hmac';
 
 /** Docket callback configuration shared by Workflow and scheduled requests. */
 export interface DocketWorkflowEnv {
+  /** The Docket API origin this Worker calls — the runner side of `CLOUDFLARE_ATHENA_RUNNER_URL`. */
   readonly DOCKET_API_URL: string;
+  /** Signs this Worker's outbound requests to Docket (verified against the same secret there). */
   readonly CLOUDFLARE_TO_DOCKET_HMAC_SECRET: string;
 }
 

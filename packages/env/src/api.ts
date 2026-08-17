@@ -216,6 +216,17 @@ function assertCrossFieldRules(e: typeof env): void {
         fail(`${name} is required for the production Linear integration.`);
       }
     }
+
+    // Both roles are documented as "derived when unset" (docs/engineering/domain-cutover.md's
+    // host-contract table), but no such derivation exists in code — an unset value means Publishing
+    // has no destination to route a workspace's default address or a verified custom domain to.
+    // Refusing to boot turns that silent gap into a deploy failure instead.
+    for (const name of ['PUBLIC_BRIEF_HOST', 'CUSTOM_DOMAIN_CNAME_TARGET']) {
+      const value = e[name as keyof typeof e];
+      if (typeof value !== 'string' || !isRealValue(value)) {
+        fail(`${name} is required for the production Publishing feature.`);
+      }
+    }
   }
 }
 

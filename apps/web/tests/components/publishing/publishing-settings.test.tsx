@@ -37,6 +37,7 @@ const {
   usePublicationsQueryMock,
   verifyMutateMock,
   renameMutateMock,
+  useVerifyDomainMutationMock,
 } = vi.hoisted(() => ({
   envMock: {
     NEXT_PUBLIC_API_URL: 'https://api.docket.test',
@@ -49,6 +50,7 @@ const {
   usePublicationsQueryMock: vi.fn(),
   verifyMutateMock: vi.fn(),
   renameMutateMock: vi.fn(),
+  useVerifyDomainMutationMock: vi.fn(),
 }));
 
 // A live object, not a snapshot: `env.NEXT_PUBLIC_BRIEF_HOST` is read at render time, so mutating
@@ -65,7 +67,7 @@ vi.mock('../../../src/components/publishing/use-publishing', () => ({
   useWorkspaceDomainsQuery: useWorkspaceDomainsQueryMock,
   usePublicationsQuery: usePublicationsQueryMock,
   useAddDomainMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
-  useVerifyDomainMutation: () => ({ mutate: verifyMutateMock, isPending: false, data: null }),
+  useVerifyDomainMutation: useVerifyDomainMutationMock,
   useRemoveDomainMutation: () => ({ mutate: vi.fn(), isPending: false }),
   useRenameAddressMutation: () => ({
     mutate: renameMutateMock,
@@ -89,6 +91,12 @@ beforeEach(() => {
   Object.defineProperty(navigator, 'clipboard', {
     value: { writeText: clipboardWriteText },
     configurable: true,
+  });
+  useVerifyDomainMutationMock.mockReturnValue({
+    mutate: verifyMutateMock,
+    isPending: false,
+    data: null,
+    error: null,
   });
 });
 
@@ -120,6 +128,7 @@ function domain(overrides: {
   host: string;
   verified: boolean;
   lastFailure?: string | null;
+  routingRecord?: { type: string; name: string; value: string; ttlSeconds: number } | null;
 }): unknown {
   return {
     id: overrides.id,
@@ -135,7 +144,7 @@ function domain(overrides: {
       value: 'docket-verify=abc123',
       ttlSeconds: 300,
     },
-    routingRecord: null,
+    routingRecord: overrides.routingRecord ?? null,
     createdAt: '2026-08-01T00:00:00.000Z',
   };
 }
@@ -158,6 +167,13 @@ function renderSettings(options: { domains?: unknown[]; publications?: unknown[]
 function addressRow(text: string): HTMLElement {
   const row = screen.getByText(text).closest('li');
   expect(row).not.toBeNull();
+  return assertDefined(row);
+}
+
+/** The default address row — always first in the Addresses list, regardless of what it says. */
+function defaultAddressRow(): HTMLElement {
+  const list = screen.getByRole('region', { name: 'Addresses' });
+  const [row] = within(list).getAllByRole('listitem');
   return assertDefined(row);
 }
 
@@ -206,8 +222,17 @@ describe('PublishingSettings — the address list', () => {
   it('never fabricates a domain when none is configured and none is verified', () => {
     renderSettings();
 
-    const row = addressRow('acme');
+    const row = defaultAddressRow();
     expect(within(row).queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('never presents the bare workspace identity as a web address', () => {
+    // The identity slug (e.g. an org named "Las Vegans for Better Transit" -> "lvbt") is an internal
+    // key, not a URL — no host, no scheme, nothing a visitor could type into a browser.
+    renderSettings();
+
+    const row = defaultAddressRow();
+    expect(within(row).queryByText('acme')).not.toBeInTheDocument();
   });
 
   it('marks the default address Primary while no custom domain has taken over', () => {
@@ -220,18 +245,46 @@ describe('PublishingSettings — the address list', () => {
     expect(within(addressRow('pending.acme.com')).queryByText('Primary')).not.toBeInTheDocument();
   });
 
-  it('moves Primary onto a verified custom domain, which answers at its own root', () => {
+  it('moves Primary onto a verified custom domain that actually routes here', () => {
+    envMock.NEXT_PUBLIC_BRIEF_HOST = 'briefs.docket.example';
+    renderSettings({
+      domains: [
+        domain({
+          id: 'dom_1',
+          host: 'updates.acme.com',
+          verified: true,
+          routingRecord: {
+            type: 'CNAME',
+            name: 'updates.acme.com',
+            value: 'briefs.docket.example',
+            ttlSeconds: 300,
+          },
+        }),
+      ],
+    });
+
+    // Not `addressRow`: a real CNAME's Name field is the host itself, so the row's own DNS
+    // record duplicates the host text — the link's accessible name stays unambiguous.
+    const link = screen.getByRole('link', { name: 'updates.acme.com' });
+    const row = assertDefined(link.closest('li'));
+    expect(within(row).getByText('Primary')).toBeVisible();
+    expect(link).toHaveAttribute('href', 'https://updates.acme.com/');
+    expect(
+      within(addressRow('briefs.docket.example/acme')).queryByText('Primary'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('withholds Primary and the live link from a verified domain with nowhere to route', () => {
     envMock.NEXT_PUBLIC_BRIEF_HOST = 'briefs.docket.example';
     renderSettings({
       domains: [domain({ id: 'dom_1', host: 'updates.acme.com', verified: true })],
     });
 
     const row = addressRow('updates.acme.com');
-    expect(within(row).getByText('Primary')).toBeVisible();
-    expect(within(row).getByRole('link')).toHaveAttribute('href', 'https://updates.acme.com/');
-    expect(
-      within(addressRow('briefs.docket.example/acme')).queryByText('Primary'),
-    ).not.toBeInTheDocument();
+    expect(within(row).queryByText('Primary')).not.toBeInTheDocument();
+    expect(within(row).queryByRole('link')).not.toBeInTheDocument();
+    // Nothing is actually served by the unroutable domain, so the default address keeps the mark.
+    expect(within(addressRow('briefs.docket.example/acme')).getByText('Primary')).toBeVisible();
   });
 
   it('withholds Primary when there is only one address for it to distinguish', () => {
@@ -246,7 +299,7 @@ describe('PublishingSettings — the address list', () => {
       domains: [domain({ id: 'dom_1', host: 'updates.acme.com', verified: true })],
     });
 
-    const row = addressRow('acme');
+    const row = defaultAddressRow();
     expect(within(row).getByText(/not reachable/i)).toBeVisible();
     expect(within(row).queryByText('Primary')).not.toBeInTheDocument();
   });
@@ -303,6 +356,26 @@ describe('PublishingSettings — custom domain verification state', () => {
 
     const row = addressRow('updates.acme.com');
     expect(within(row).getByRole('status')).toHaveTextContent(/isn.t serving/i);
+  });
+
+  it('offers a retry when the automatic re-check of an already-verified domain fails', () => {
+    useVerifyDomainMutationMock.mockReturnValue({
+      mutate: verifyMutateMock,
+      isPending: false,
+      data: null,
+      error: new Error('network error'),
+    });
+    renderSettings({
+      domains: [domain({ id: 'dom_1', host: 'updates.acme.com', verified: true })],
+    });
+
+    const row = addressRow('updates.acme.com');
+    expect(within(row).getByRole('alert')).toBeInTheDocument();
+    // Stale success-cache still says Verified — the failure must not be the only place that shows.
+    expect(within(row).getByText('Verified')).toBeVisible();
+    const retry = within(row).getByRole('button', { name: /check/i });
+    fireEvent.click(retry);
+    expect(verifyMutateMock).toHaveBeenCalledWith('dom_1');
   });
 
   it('offers a manual check for an unverified domain, and does not auto-verify it', () => {

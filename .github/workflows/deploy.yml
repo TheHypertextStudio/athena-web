@@ -74,6 +74,7 @@ jobs:
           API_URL: "${{ vars.API_URL }}"
           WEB_URL: "${{ vars.WEB_URL }}"
           PUBLIC_BRIEF_HOST: "${{ vars.PUBLIC_BRIEF_HOST }}"
+          CUSTOM_DOMAIN_CNAME_TARGET: "${{ vars.CUSTOM_DOMAIN_CNAME_TARGET }}"
           BETTER_AUTH_URL: "${{ vars.API_URL }}"
           BETTER_AUTH_TRUSTED_ORIGINS: "${{ vars.WEB_URL }},${{ vars.ADMIN_URL }}"
           BETTER_AUTH_ALLOWED_HOSTS: "${{ vars.BETTER_AUTH_ALLOWED_HOSTS }}"

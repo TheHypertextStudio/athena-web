@@ -265,6 +265,21 @@ describe('generated deployment manifests', () => {
     ).toEqual([]);
   });
 
+  it('gives Cloud Run the Publishing host config production refuses to boot without', () => {
+    // PUBLIC_BRIEF_HOST and CUSTOM_DOMAIN_CNAME_TARGET are schema-optional
+    // (packages/env/src/slices.ts) but required in production by a cross-field check
+    // (packages/env/src/api.ts) — the same failure class `requiredApi` above cannot see, since it
+    // only derives from the schema's required/optional shape, not the cross-field rules.
+    const present = new Set(cloudRunEnvNames());
+    const missing = ['PUBLIC_BRIEF_HOST', 'CUSTOM_DOMAIN_CNAME_TARGET'].filter(
+      (key) => !present.has(key),
+    );
+    expect(
+      missing,
+      `deploy.yml writes no value for: ${missing.join(', ')} — production refuses to boot without it`,
+    ).toEqual([]);
+  });
+
   it('gives the bootstrap skeleton every required var', () => {
     const present = bootstrapSkeletonKeys();
     expect(present.has('APP_MODE')).toBe(true);

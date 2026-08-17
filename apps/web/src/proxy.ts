@@ -194,10 +194,11 @@ export function proxy(request: NextRequest): NextResponse {
   const host = requestHost(request).split(':')[0];
   if (own !== undefined && host !== undefined && host !== own) {
     const briefUrl = request.nextUrl.clone();
-    briefUrl.pathname =
-      host === briefHostname()
-        ? `/briefs${briefUrl.pathname}`
-        : `/briefs/domain${briefUrl.pathname}`;
+    // Bare root (`/`) must not become a trailing-slash target (`/briefs/`): Next's own
+    // trailing-slash redirect never resolves for a path that arrived via `rewrite()` rather than a
+    // real navigation, so the request hangs indefinitely instead of reaching a 404.
+    const suffix = briefUrl.pathname === '/' ? '' : briefUrl.pathname;
+    briefUrl.pathname = host === briefHostname() ? `/briefs${suffix}` : `/briefs/domain${suffix}`;
     return NextResponse.rewrite(briefUrl);
   }
 

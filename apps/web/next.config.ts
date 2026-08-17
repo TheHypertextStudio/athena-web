@@ -3,6 +3,7 @@ import type { NextConfig } from 'next';
 
 import { docsSiteOrigin } from './src/lib/docs-site';
 import { validatedApiOrigin } from './src/lib/proxy-origin';
+import { assertPublishingHostConfigured } from './src/lib/require-publishing-host';
 
 /** The API origin the browser is rewritten to (same-origin so Better Auth cookies flow). */
 const apiUrl = process.env['API_URL'];
@@ -12,6 +13,8 @@ if (!apiUrl) {
   );
 }
 const API_ORIGIN = validatedApiOrigin(apiUrl, process.env['NEXT_PUBLIC_APP_URL']);
+
+assertPublishingHostConfigured(process.env['VERCEL_ENV'], process.env['NEXT_PUBLIC_BRIEF_HOST']);
 
 /**
  * Retired product-domain alias that must never become a second browser origin.

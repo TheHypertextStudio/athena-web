@@ -549,6 +549,29 @@ describe('proxy: public brief host rewrite', () => {
     );
   });
 
+  it('rewrites the bare root of the shared brief host without a trailing slash', () => {
+    // A trailing-slash target (`/briefs/`) collides with Next's own trailing-slash redirect for
+    // the rewritten route, which never resolves for a request that arrived via `rewrite()` rather
+    // than a real navigation — the request hangs instead of ever reaching a 404.
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example');
+    vi.stubEnv('NEXT_PUBLIC_BRIEF_HOST', 'briefs.example');
+
+    const response = proxy(request({ host: 'briefs.example', pathname: '/' }));
+
+    expect(response.headers.get('x-middleware-rewrite')).toBe('https://briefs.example/briefs');
+  });
+
+  it('rewrites the bare root of a custom domain without a trailing slash', () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example');
+    vi.stubEnv('NEXT_PUBLIC_BRIEF_HOST', 'briefs.example');
+
+    const response = proxy(request({ host: 'updates.acme.com', pathname: '/' }));
+
+    expect(response.headers.get('x-middleware-rewrite')).toBe(
+      'https://updates.acme.com/briefs/domain',
+    );
+  });
+
   it('leaves a request on the product’s own host untouched by the brief rewrite', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example');
 

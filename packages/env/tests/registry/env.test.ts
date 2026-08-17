@@ -336,6 +336,8 @@ describe('api composition', () => {
       LINEAR_CLIENT_ID: 'linear-client-id',
       LINEAR_CLIENT_SECRET: 'linear-client-secret',
       LINEAR_WEBHOOK_SECRET: 'linear-webhook-secret',
+      PUBLIC_BRIEF_HOST: 'briefs.example.com',
+      CUSTOM_DOMAIN_CNAME_TARGET: 'briefs.example.com',
     };
 
     it('requires all Linear production credentials', async () => {
@@ -361,6 +363,41 @@ describe('api composition', () => {
     });
   });
 
+  describe('production publishing host policy', () => {
+    const productionPublishingEnv = {
+      ...validApiEnv(),
+      APP_MODE: 'production',
+      LINEAR_CLIENT_ID: 'linear-client-id',
+      LINEAR_CLIENT_SECRET: 'linear-client-secret',
+      LINEAR_WEBHOOK_SECRET: 'linear-webhook-secret',
+      PUBLIC_BRIEF_HOST: 'briefs.example.com',
+      CUSTOM_DOMAIN_CNAME_TARGET: 'briefs.example.com',
+    };
+
+    it('requires PUBLIC_BRIEF_HOST in production', async () => {
+      for (const [key, value] of Object.entries(productionPublishingEnv)) vi.stubEnv(key, value);
+      vi.stubEnv('PUBLIC_BRIEF_HOST', undefined);
+      await expect(import('../../src/api')).rejects.toThrow(
+        'PUBLIC_BRIEF_HOST is required for the production Publishing feature',
+      );
+    });
+
+    it('requires CUSTOM_DOMAIN_CNAME_TARGET in production', async () => {
+      for (const [key, value] of Object.entries(productionPublishingEnv)) vi.stubEnv(key, value);
+      vi.stubEnv('CUSTOM_DOMAIN_CNAME_TARGET', undefined);
+      await expect(import('../../src/api')).rejects.toThrow(
+        'CUSTOM_DOMAIN_CNAME_TARGET is required for the production Publishing feature',
+      );
+    });
+
+    it('accepts real publishing hosts in production', async () => {
+      for (const [key, value] of Object.entries(productionPublishingEnv)) vi.stubEnv(key, value);
+      const mod = await import('../../src/api');
+      expect(mod.env.PUBLIC_BRIEF_HOST).toBe('briefs.example.com');
+      expect(mod.env.CUSTOM_DOMAIN_CNAME_TARGET).toBe('briefs.example.com');
+    });
+  });
+
   describe('Cloudflare execution pairing', () => {
     const productionEnv = {
       ...validApiEnv(),
@@ -372,6 +409,8 @@ describe('api composition', () => {
       CLOUDFLARE_ATHENA_RUNNER_URL: 'https://runner.example.com',
       CLOUDFLARE_TO_DOCKET_HMAC_SECRET: 'cloudflare-to-docket-secret-long-enough',
       DOCKET_TO_CLOUDFLARE_HMAC_SECRET: 'docket-to-cloudflare-secret-long-enough',
+      PUBLIC_BRIEF_HOST: 'briefs.example.com',
+      CUSTOM_DOMAIN_CNAME_TARGET: 'briefs.example.com',
     };
 
     it('accepts a production runner with distinct directional secrets', async () => {

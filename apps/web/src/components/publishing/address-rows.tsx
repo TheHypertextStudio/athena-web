@@ -161,11 +161,7 @@ export function DefaultAddressRow({
           </div>
         ) : (
           <span className="min-w-0 flex-1 truncate">
-            {url === undefined ? (
-              <Text as="span" token="body-medium" truncate>
-                {address ?? ''}
-              </Text>
-            ) : (
+            {url !== undefined ? (
               <Text as="span" token="body-medium" truncate>
                 <a
                   href={url}
@@ -175,6 +171,17 @@ export function DefaultAddressRow({
                 >
                   {address}
                 </a>
+              </Text>
+            ) : briefHost === undefined ? (
+              // No shared host at all — the identity slug alone (e.g. `lvbt`) is an internal key,
+              // not a URL, so it never stands in for one here even inertly. Application-owned
+              // copy only: no mention of "deployment", env vars, or any other internal detail.
+              <Text as="span" token="body-medium" tone="muted" truncate>
+                No default address available yet
+              </Text>
+            ) : (
+              <Text as="span" token="body-medium" truncate>
+                {address ?? ''}
               </Text>
             )}
           </span>
@@ -303,7 +310,7 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
         <Globe aria-hidden className="text-on-surface-variant size-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate">
           <Text as="span" token="body-medium" truncate>
-            {domain.verified ? (
+            {domain.verified && domain.routingRecord ? (
               <a
                 href={`https://${domain.host}/`}
                 target="_blank"
@@ -433,9 +440,29 @@ export function DomainRow({ orgId, domain, primary }: DomainRowProps): JSX.Eleme
       ) : null}
 
       {verify.error || remove.error ? (
-        <Text as="p" token="body-small" tone="error" role="alert" className={ROW_INDENT}>
-          {userErrorMessage(verify.error ?? remove.error, 'Could not update this domain.')}
-        </Text>
+        <div className={`flex items-center gap-3 ${ROW_INDENT}`}>
+          <Text as="p" token="body-small" tone="error" role="alert">
+            {userErrorMessage(verify.error ?? remove.error, 'Could not update this domain.')}
+          </Text>
+          {/* The auto-reverify effect only runs on mount, so a domain that was already `verified`
+              when this row loaded has no other trigger to retry a failed re-check — without this,
+              the stale `Verified`/`Primary` badges above sit next to this error indefinitely. */}
+          {domain.verified && verify.error ? (
+            // A pending retry clears `verify.error` immediately (TanStack's mutation states are
+            // mutually exclusive), so this branch never coexists with a pending request to show a
+            // "Checking…" label for.
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                verify.mutate(domain.id);
+              }}
+            >
+              Check again
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </li>
   );

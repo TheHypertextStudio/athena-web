@@ -87,8 +87,10 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
   const livePublications = publications.filter((publication) => publication.published);
   // A verified custom domain answers at its own root — no workspace segment, since the domain
   // already belongs to exactly this workspace — so it wins over the shared brief host, which still
-  // needs the identity slug to disambiguate the many workspaces that share it.
-  const primaryDomain = domains.find((domain) => domain.verified);
+  // needs the identity slug to disambiguate the many workspaces that share it. `verified` alone only
+  // proves ownership; `routingRecord` is what makes the domain actually serve anything, so a domain
+  // without one never takes the mark (or the live link — see `DomainRow`) from the default address.
+  const primaryDomain = domains.find((domain) => domain.verified && domain.routingRecord);
   // `Primary` answers "which of these?", so it appears only where there is more than one address to
   // choose between. A deployment with no shared brief host has no default address at all, so the
   // default row cannot hold the mark even when it is the only row.

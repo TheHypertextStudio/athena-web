@@ -7,7 +7,7 @@
  */
 import type { TurnMessage } from '../../turn-protocol';
 
-import type { AgentTurnRuntime, TurnEvent, TurnInput, TurnStopReason } from '../contracts';
+import type { AgentTurnRuntime, TurnEvent, TurnInput, TurnStopReason } from '../turn';
 import {
   latticeToolUseId,
   parseLatticeReply,

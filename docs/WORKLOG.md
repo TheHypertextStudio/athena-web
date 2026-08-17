@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-15
+> **Last Updated**: 2026-08-16
 
 ---
 
@@ -5219,6 +5219,62 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [EXPORTS-001] Tighten the workspace's package `exports` surface and naming
+
+- **Completed**: 2026-08-16
+- **Priority**: P3
+- **Summary**: Audited every `exports` subpath across `domains/*` and `packages/*` (~100
+  subpaths total) for dead surface, naming drift, and syntax inconsistency, then cut it down.
+  Collapsed conditional-object `{types, default}` exports (identical on both branches) to bare
+  strings everywhere except `apps/api`'s `./rpc-contract`, which has a genuine dist/source split.
+  Renamed `domains/athena/src/turn/contracts.ts` to `turn/turn.ts` so the `./turn` subpath's
+  target file matches its sibling naming pattern, and `domains/connections/src/notion/protocol.ts`
+  to `notion/api-contract.ts` (it exported a single fixed version constant, not a stateful
+  exchange, so `protocol` was a misnomer). Dropped `@docket/ui/vocabulary` from public exports and
+  deleted its backing file once investigation showed it had zero consumers, including internally —
+  `useVocabulary` already imports `@docket/work/vocabulary` directly. Deleted
+  `packages/env/src/marketing.ts`, orphaned debris from a since-removed `apps/marketing` app (per
+  an earlier entry in this log). Collapsed `packages/service-worker`'s `exports` field to nothing:
+  none of its 6 subpaths had a real consumer — `apps/web` invokes its build step by raw file path
+  (`tsx .../bin/build.ts`), not as a module import, because a service worker is a standalone
+  browser script and can't be imported into an app's bundle the way a library can. Fixed a stale
+  claim in `docs/engineering/architecture.md` that `@docket/db` and `@docket/auth` are compiled to
+  `dist` — neither has a build script; only `apps/api`'s `rpc-contract` types condition is
+  compiled. Documented a `protocol`/`contract`/`contracts` naming convention in
+  `docs/engineering/specs/domain-first-reorganization.md`.
+- **Files Changed**: `domains/athena/package.json` and 7 more `domains/*`/`packages/*`
+  `package.json` files (exports syntax collapse); `domains/athena/src/turn/{turn.ts,
+adapters/anthropic.ts, adapters/lattice.ts, internal/lattice-tool-protocol.ts,
+model-backend.ts, translate.ts}` and 4 athena test files (rename fallout);
+  `domains/connections/src/notion/{api-contract.ts, adapters/notion-sdk-client.ts}`,
+  `domains/connections/tests/provider-error.test.ts`, `domains/registry.json`,
+  `packages/integrations/src/{notion.ts, notion-mapping.ts}`, and
+  `packages/integrations/tests/notion/notion-protocol-compatibility.test.ts` (Notion rename
+  fallout); `packages/test-utils/tests/workspace-policies/source-text-policy.test.ts` and
+  `packages/db/tests/identity-access.test.ts` (policy-test assertions updated to match); deleted
+  `packages/ui/src/vocabulary/presets.ts`, `packages/ui/tests/vocabulary/barrels.test.ts`,
+  `packages/env/src/marketing.ts`, `packages/service-worker/tests/package-exports.test.ts`;
+  `packages/env/tests/registry/env.test.ts` (dropped the `marketing` case from a
+  `describe.each`); `docs/engineering/architecture.md` and
+  `docs/engineering/specs/domain-first-reorganization.md`.
+- **Validation**: Root `pnpm typecheck` (26/26 packages) and `pnpm lint` (25/25) pass. Every
+  touched package's own test suite passes, including `@docket/api` (369 files, 4384 tests) and
+  the `domains/registry.json`-vs-`package.json` policy tests in `@docket/test-utils` (176 tests
+  across 18 files) that would fail on any registry/manifest drift from the Notion rename.
+- **Decisions made**: Kept `domains/athena/src/turn/adapters/anthropic.ts` and
+  `turn/translate.ts` exports as-is — they looked like internal-only leakage (only consumed by
+  the package's own test) but that test deliberately imports each symbol twice, once via the
+  public specifier and once via a relative path, as a public/internal parity check. Left
+  `packages/env`'s `./admin`/`./registry` subpaths, `packages/brand`'s `./mark`, and
+  `packages/notifications`'s `./schemas` untouched — all show low or zero current usage but none
+  had the same clear "genuinely dead" signal the removed ones did.
+- **Learnings**: A single-consumer or test-only-consumer subpath is not automatically dead code —
+  check _why_ it's referenced before removing it; a deliberate contract-parity test looks
+  identical to leakage at a glance. The worktree this session used was deleted from disk
+  mid-session (recreated from its branch, `claude/app-modules-list-e081ae`, before any file edits
+  landed) — a reminder that a missing working directory should be surfaced and confirmed with the
+  user rather than silently worked around.
 
 ### [DEPLOY-ENV-001] A required variable cannot reach the schema without reaching the deploy
 

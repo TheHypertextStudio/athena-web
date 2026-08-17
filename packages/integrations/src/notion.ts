@@ -27,7 +27,7 @@ import type {
   ResourceRef,
   TaskPushOp,
 } from './connector';
-import { NOTION_API_VERSION } from '@docket/connections/notion/protocol';
+import { NOTION_API_VERSION } from '@docket/connections/notion/api-contract';
 import { ConnectorError } from './connector-error';
 import { asRecord, str } from './json';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';

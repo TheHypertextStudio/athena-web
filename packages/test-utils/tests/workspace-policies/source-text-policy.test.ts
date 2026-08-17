@@ -8,8 +8,8 @@ import { collectWorkspaceSourceFiles, relativeToWorkspaceRoot, WORKSPACE_ROOT } 
 
 const NOTION_API_VERSION_LITERAL = '2026-03-11';
 const NOTION_API_VERSION_SYMBOL = 'NOTION_API_VERSION';
-const NOTION_PROTOCOL_MODULE = '@docket/connections/notion/protocol';
-const NOTION_PROTOCOL_SOURCE = 'domains/connections/src/notion/protocol.ts';
+const NOTION_PROTOCOL_MODULE = '@docket/connections/notion/api-contract';
+const NOTION_PROTOCOL_SOURCE = 'domains/connections/src/notion/api-contract.ts';
 const REQUIRED_NOTION_PROTOCOL_REFERENCES = [
   {
     file: 'packages/integrations/src/notion-mapping.ts',
@@ -24,7 +24,7 @@ const REQUIRED_NOTION_PROTOCOL_REFERENCES = [
   {
     file: 'domains/connections/src/notion/adapters/notion-sdk-client.ts',
     kind: 'import',
-    specifier: '../protocol',
+    specifier: '../api-contract',
   },
 ] as const satisfies readonly {
   readonly file: string;
@@ -122,7 +122,7 @@ function canonicalNotionProtocolFixture(
       'domains/connections/src/notion/adapters/notion-sdk-client.ts',
       sourceFor(
         'domains/connections/src/notion/adapters/notion-sdk-client.ts',
-        `import { ${NOTION_API_VERSION_SYMBOL} } from '../protocol';`,
+        `import { ${NOTION_API_VERSION_SYMBOL} } from '../api-contract';`,
       ),
     ),
     fixtureSource(

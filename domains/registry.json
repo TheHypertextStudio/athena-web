@@ -62,7 +62,7 @@
       "description": "External-service connection contracts and rules, beginning with the Docket-designed Notion mirror.",
       "publicExports": [
         "./provider-error",
-        "./notion/protocol",
+        "./notion/api-contract",
         "./notion/mirror-contract",
         "./notion/mirror-schema",
         "./notion/mirror-values",

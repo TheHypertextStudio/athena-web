@@ -233,27 +233,24 @@ describe('realEnvValue', () => {
 });
 
 // ===========================================================================
-// web.ts / marketing.ts / admin.ts — Next.js client compositions
+// web.ts / admin.ts — Next.js client compositions
 // ===========================================================================
 
 describe.each([
   ['web', () => import('../../src/web')] as const,
-  ['marketing', () => import('../../src/marketing')] as const,
   ['admin', () => import('../../src/admin')] as const,
 ])('%s composition', (_name, load) => {
   it('validates with valid public URLs', async () => {
     vi.stubEnv('SKIP_ENV_VALIDATION', 'false');
     vi.stubEnv('NEXT_PUBLIC_API_URL', 'https://api.example.com');
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
-    if (_name !== 'marketing') vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', 'example.com');
+    vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', 'example.com');
     const mod = await load();
     expect(mod.env.NEXT_PUBLIC_API_URL).toBe('https://api.example.com');
     expect(mod.env.NEXT_PUBLIC_APP_URL).toBe('https://app.example.com');
-    if (_name !== 'marketing') {
-      expect('NEXT_PUBLIC_PASSKEY_RP_ID' in mod.env).toBe(true);
-      if ('NEXT_PUBLIC_PASSKEY_RP_ID' in mod.env) {
-        expect(mod.env.NEXT_PUBLIC_PASSKEY_RP_ID).toBe('example.com');
-      }
+    expect('NEXT_PUBLIC_PASSKEY_RP_ID' in mod.env).toBe(true);
+    if ('NEXT_PUBLIC_PASSKEY_RP_ID' in mod.env) {
+      expect(mod.env.NEXT_PUBLIC_PASSKEY_RP_ID).toBe('example.com');
     }
   });
 
@@ -265,7 +262,7 @@ describe.each([
   it('throws fail-fast on an invalid required public var', async () => {
     vi.stubEnv('NEXT_PUBLIC_API_URL', '');
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
-    if (_name !== 'marketing') vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', '');
+    vi.stubEnv('NEXT_PUBLIC_PASSKEY_RP_ID', '');
     // emptyStringAsUndefined makes empty -> undefined, which then defaults; to
     // force a failure we provide a value that fails `min(1)` only via a
     // non-string is impossible here, so instead skip-validation path proves the

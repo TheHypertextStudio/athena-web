@@ -3,7 +3,7 @@ import type { RawMessageStreamEvent } from '@anthropic-ai/sdk/resources/messages
 
 import type { TurnContentBlock } from '../turn-protocol';
 
-import type { TurnEvent, TurnStopReason } from './contracts';
+import type { TurnEvent, TurnStopReason } from './turn';
 
 /** Buffer for one provider content block until its stream stop event arrives. */
 interface TurnBlockBuffer {

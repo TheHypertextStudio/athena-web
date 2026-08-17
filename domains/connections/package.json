@@ -6,38 +6,14 @@
   "license": "UNLICENSED",
   "description": "Connection-owned contracts and application rules for Docket's external-service experiences.",
   "exports": {
-    "./provider-error": {
-      "types": "./src/provider-error.ts",
-      "default": "./src/provider-error.ts"
-    },
-    "./notion/protocol": {
-      "types": "./src/notion/protocol.ts",
-      "default": "./src/notion/protocol.ts"
-    },
-    "./notion/mirror-contract": {
-      "types": "./src/notion/mirror-contract.ts",
-      "default": "./src/notion/mirror-contract.ts"
-    },
-    "./notion/mirror-schema": {
-      "types": "./src/notion/mirror-schema.ts",
-      "default": "./src/notion/mirror-schema.ts"
-    },
-    "./notion/mirror-values": {
-      "types": "./src/notion/mirror-values.ts",
-      "default": "./src/notion/mirror-values.ts"
-    },
-    "./notion/mirror-port": {
-      "types": "./src/notion/mirror-port.ts",
-      "default": "./src/notion/mirror-port.ts"
-    },
-    "./notion/adapters/notion-sdk": {
-      "types": "./src/notion/adapters/notion-sdk.ts",
-      "default": "./src/notion/adapters/notion-sdk.ts"
-    },
-    "./notion/adapters/in-memory": {
-      "types": "./src/notion/adapters/in-memory.ts",
-      "default": "./src/notion/adapters/in-memory.ts"
-    }
+    "./provider-error": "./src/provider-error.ts",
+    "./notion/api-contract": "./src/notion/api-contract.ts",
+    "./notion/mirror-contract": "./src/notion/mirror-contract.ts",
+    "./notion/mirror-schema": "./src/notion/mirror-schema.ts",
+    "./notion/mirror-values": "./src/notion/mirror-values.ts",
+    "./notion/mirror-port": "./src/notion/mirror-port.ts",
+    "./notion/adapters/notion-sdk": "./src/notion/adapters/notion-sdk.ts",
+    "./notion/adapters/in-memory": "./src/notion/adapters/in-memory.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

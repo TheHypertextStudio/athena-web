@@ -6,26 +6,11 @@
   "license": "UNLICENSED",
   "description": "Actionable-work contracts and application rules shared by Docket delivery runtimes.",
   "exports": {
-    "./task-contract": {
-      "types": "./src/task-contract.ts",
-      "default": "./src/task-contract.ts"
-    },
-    "./task-drafting": {
-      "types": "./src/task-drafting.ts",
-      "default": "./src/task-drafting.ts"
-    },
-    "./task-titles": {
-      "types": "./src/task-titles.ts",
-      "default": "./src/task-titles.ts"
-    },
-    "./parent-resolution": {
-      "types": "./src/parent-resolution.ts",
-      "default": "./src/parent-resolution.ts"
-    },
-    "./vocabulary": {
-      "types": "./src/vocabulary.ts",
-      "default": "./src/vocabulary.ts"
-    }
+    "./task-contract": "./src/task-contract.ts",
+    "./task-drafting": "./src/task-drafting.ts",
+    "./task-titles": "./src/task-titles.ts",
+    "./parent-resolution": "./src/parent-resolution.ts",
+    "./vocabulary": "./src/vocabulary.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

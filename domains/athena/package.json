@@ -6,82 +6,25 @@
   "license": "UNLICENSED",
   "description": "Athena domain contracts and pure execution rules shared by its delivery runtimes.",
   "exports": {
-    "./execution-protocol": {
-      "types": "./src/execution-protocol.ts",
-      "default": "./src/execution-protocol.ts"
-    },
-    "./elicitation": {
-      "types": "./src/elicitation.ts",
-      "default": "./src/elicitation.ts"
-    },
-    "./elicitation-api": {
-      "types": "./src/elicitation-api.ts",
-      "default": "./src/elicitation-api.ts"
-    },
-    "./turn-protocol": {
-      "types": "./src/turn-protocol.ts",
-      "default": "./src/turn-protocol.ts"
-    },
-    "./agent-session": {
-      "types": "./src/agent-session.ts",
-      "default": "./src/agent-session.ts"
-    },
-    "./agent-bus": {
-      "types": "./src/agent-bus.ts",
-      "default": "./src/agent-bus.ts"
-    },
-    "./conversation": {
-      "types": "./src/conversation.ts",
-      "default": "./src/conversation.ts"
-    },
-    "./voice": {
-      "types": "./src/voice.ts",
-      "default": "./src/voice.ts"
-    },
-    "./phone": {
-      "types": "./src/phone.ts",
-      "default": "./src/phone.ts"
-    },
-    "./digest": {
-      "types": "./src/digest.ts",
-      "default": "./src/digest.ts"
-    },
-    "./digest-episodes": {
-      "types": "./src/digest-episodes.ts",
-      "default": "./src/digest-episodes.ts"
-    },
-    "./anthropic": {
-      "types": "./src/anthropic.ts",
-      "default": "./src/anthropic.ts"
-    },
-    "./turn": {
-      "types": "./src/turn/contracts.ts",
-      "default": "./src/turn/contracts.ts"
-    },
-    "./turn/translate": {
-      "types": "./src/turn/translate.ts",
-      "default": "./src/turn/translate.ts"
-    },
-    "./turn/adapters/anthropic": {
-      "types": "./src/turn/adapters/anthropic.ts",
-      "default": "./src/turn/adapters/anthropic.ts"
-    },
-    "./turn/adapters/lattice": {
-      "types": "./src/turn/adapters/lattice.ts",
-      "default": "./src/turn/adapters/lattice.ts"
-    },
-    "./turn/model-backend": {
-      "types": "./src/turn/model-backend.ts",
-      "default": "./src/turn/model-backend.ts"
-    },
-    "./task-drafting/adapters/anthropic": {
-      "types": "./src/task-drafting/adapters/anthropic.ts",
-      "default": "./src/task-drafting/adapters/anthropic.ts"
-    },
-    "./task-drafting/adapters/deterministic": {
-      "types": "./src/task-drafting/adapters/deterministic.ts",
-      "default": "./src/task-drafting/adapters/deterministic.ts"
-    }
+    "./execution-protocol": "./src/execution-protocol.ts",
+    "./elicitation": "./src/elicitation.ts",
+    "./elicitation-api": "./src/elicitation-api.ts",
+    "./turn-protocol": "./src/turn-protocol.ts",
+    "./agent-session": "./src/agent-session.ts",
+    "./agent-bus": "./src/agent-bus.ts",
+    "./conversation": "./src/conversation.ts",
+    "./voice": "./src/voice.ts",
+    "./phone": "./src/phone.ts",
+    "./digest": "./src/digest.ts",
+    "./digest-episodes": "./src/digest-episodes.ts",
+    "./anthropic": "./src/anthropic.ts",
+    "./turn": "./src/turn/turn.ts",
+    "./turn/translate": "./src/turn/translate.ts",
+    "./turn/adapters/anthropic": "./src/turn/adapters/anthropic.ts",
+    "./turn/adapters/lattice": "./src/turn/adapters/lattice.ts",
+    "./turn/model-backend": "./src/turn/model-backend.ts",
+    "./task-drafting/adapters/anthropic": "./src/task-drafting/adapters/anthropic.ts",
+    "./task-drafting/adapters/deterministic": "./src/task-drafting/adapters/deterministic.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

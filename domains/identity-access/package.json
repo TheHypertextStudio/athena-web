@@ -6,18 +6,9 @@
   "license": "UNLICENSED",
   "description": "Portable capability and explicit-grant policy for Docket identity and access decisions.",
   "exports": {
-    "./capabilities": {
-      "types": "./src/capabilities.ts",
-      "default": "./src/capabilities.ts"
-    },
-    "./grants": {
-      "types": "./src/grants.ts",
-      "default": "./src/grants.ts"
-    },
-    "./authorization": {
-      "types": "./src/authorization.ts",
-      "default": "./src/authorization.ts"
-    }
+    "./capabilities": "./src/capabilities.ts",
+    "./grants": "./src/grants.ts",
+    "./authorization": "./src/authorization.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

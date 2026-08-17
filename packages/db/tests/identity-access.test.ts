@@ -264,10 +264,7 @@ describe('loadExplicitAuthorizationFacts', () => {
       await readFile(resolve(import.meta.dirname, '../package.json'), 'utf8'),
     ) as { readonly exports: Readonly<Record<string, unknown>> };
 
-    expect(packageJson.exports['./identity-access']).toEqual({
-      types: './src/identity-access.ts',
-      default: './src/identity-access.ts',
-    });
+    expect(packageJson.exports['./identity-access']).toBe('./src/identity-access.ts');
   });
 
   it('loads pure authorization facts for an active non-human actor without evaluating them', async () => {

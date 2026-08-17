@@ -16,7 +16,7 @@ import {
   type TurnEvent,
   type TurnInput,
   type TurnMessage,
-} from '../src/turn/contracts';
+} from '../src/turn/turn';
 import {
   DEFAULT_TURN_MAX_TOKENS,
   DEFAULT_TURN_MODEL,

@@ -7,10 +7,7 @@
   "description": "Docket data layer — Drizzle schema, database client, migrations, and ULID id generation.",
   "exports": {
     ".": "./src/index.ts",
-    "./identity-access": {
-      "types": "./src/identity-access.ts",
-      "default": "./src/identity-access.ts"
-    }
+    "./identity-access": "./src/identity-access.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

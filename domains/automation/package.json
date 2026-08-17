@@ -6,14 +6,8 @@
   "license": "UNLICENSED",
   "description": "Portable Automation Rules contracts and pure evaluation for Docket delivery runtimes.",
   "exports": {
-    "./contracts": {
-      "types": "./src/contracts.ts",
-      "default": "./src/contracts.ts"
-    },
-    "./evaluation": {
-      "types": "./src/evaluation.ts",
-      "default": "./src/evaluation.ts"
-    }
+    "./contracts": "./src/contracts.ts",
+    "./evaluation": "./src/evaluation.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

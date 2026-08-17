@@ -7,7 +7,7 @@ import {
   providerErrorKindForStatus,
   type ProviderErrorKind,
 } from '../src/provider-error';
-import { NOTION_API_VERSION } from '../src/notion/protocol';
+import { NOTION_API_VERSION } from '../src/notion/api-contract';
 
 describe('Connections provider-error vocabulary', () => {
   it.each([

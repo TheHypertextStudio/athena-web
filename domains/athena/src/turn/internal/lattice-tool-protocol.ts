@@ -6,7 +6,7 @@
  * malformed replies as prose. The conservative parser is intentional: guessing could mutate a
  * person's workspace from a hypothetical example.
  */
-import type { TurnToolDef } from '../contracts';
+import type { TurnToolDef } from '../turn';
 
 /** Fence language used for tool-call envelopes. */
 const FENCE_TAG = 'json';

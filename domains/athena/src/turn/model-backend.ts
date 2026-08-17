@@ -5,8 +5,8 @@
  * and which credential belongs to that backend. Delivery runtimes consume the resolved descriptor
  * and runtime rather than duplicating tier selection in containers or request handlers.
  */
-import type { AgentTurnRuntime } from './contracts';
-import { MockAgentTurnRuntime } from './contracts';
+import type { AgentTurnRuntime } from './turn';
+import { MockAgentTurnRuntime } from './turn';
 import { RealAgentTurnRuntime } from './adapters/anthropic';
 
 /** Supported Athena model backend tiers. */

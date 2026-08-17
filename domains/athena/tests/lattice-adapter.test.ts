@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { TurnMessage } from '../src/turn-protocol';
-import type { TurnEvent, TurnInput, TurnToolDef } from '../src/turn/contracts';
+import type { TurnEvent, TurnInput, TurnToolDef } from '../src/turn/turn';
 import {
   DEFAULT_LATTICE_MAX_TOKENS,
   type LatticeChatPortRequest,

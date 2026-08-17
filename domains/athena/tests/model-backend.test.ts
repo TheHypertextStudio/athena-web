@@ -22,7 +22,7 @@ import {
   resolveModelBackend,
   selectModelBackendId,
 } from '../src/turn/model-backend';
-import type { AgentTurnRuntime } from '../src/turn/contracts';
+import type { AgentTurnRuntime } from '../src/turn/turn';
 
 const LATTICE: ModelBackendEnv = {
   APP_MODE: 'production',

@@ -12,7 +12,7 @@ import {
   type UpdateDataSourceParameters,
 } from '@notionhq/client';
 
-import { NOTION_API_VERSION } from '../protocol';
+import { NOTION_API_VERSION } from '../api-contract';
 import { ProviderError } from '../../provider-error';
 import type {
   MirrorChange,

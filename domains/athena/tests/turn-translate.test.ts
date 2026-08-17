@@ -14,7 +14,7 @@
 import type { RawMessageStreamEvent } from '@anthropic-ai/sdk/resources/messages';
 import { describe, expect, it } from 'vitest';
 
-import type { TurnEvent } from '../src/turn/contracts';
+import type { TurnEvent } from '../src/turn/turn';
 import { parseToolInput, toStopReason, translateTurnEvents } from '../src/turn/translate';
 
 /** Feed hand-built provider events through the translator and collect what comes out. */

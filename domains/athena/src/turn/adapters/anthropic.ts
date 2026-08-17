@@ -10,7 +10,7 @@ import type {
 import type { TurnContentBlock } from '../../turn-protocol';
 import { makeAnthropicClient, wrapAnthropicError } from '../../anthropic';
 
-import type { AgentTurnRuntime, TurnEvent, TurnInput } from '../contracts';
+import type { AgentTurnRuntime, TurnEvent, TurnInput } from '../turn';
 import { translateTurnEvents } from '../translate';
 
 export { parseToolInput, toStopReason, translateTurnEvents } from '../translate';

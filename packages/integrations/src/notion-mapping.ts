@@ -25,8 +25,8 @@
 import type { ImportedItem, TaskPushOp } from './connector';
 import { asRecord, str } from './json';
 
-/** @deprecated Import from `@docket/connections/notion/protocol` in new adapter code. */
-export { NOTION_API_VERSION } from '@docket/connections/notion/protocol';
+/** @deprecated Import from `@docket/connections/notion/api-contract` in new adapter code. */
+export { NOTION_API_VERSION } from '@docket/connections/notion/api-contract';
 
 /**
  * The Notion property types this mapping understands.

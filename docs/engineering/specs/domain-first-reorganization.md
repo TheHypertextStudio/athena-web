@@ -74,6 +74,24 @@ Each domain has deliberate exports only. The machine-readable source of truth is
 points, allowed runtime dependencies, and supported runtimes. The registry and each package
 manifest are checked together.
 
+The convention below governs the _suffix_ a subpath takes when it needs one; a bare noun that
+names an entire feature area (`athena/turn`) isn't required to carry any of the three words
+below. Once a subpath does take a suffix, it picks one of three words for a typed boundary, and
+the choice is meaningful, not interchangeable:
+
+- **`protocol`** — a stateful, multi-message wire exchange carried over time (a signed
+  request/response handshake, a turn/event stream). `athena/execution-protocol` and
+  `athena/turn-protocol` are the only two subpaths that qualify.
+- **`contract`** (singular) — the fixed data or interface shape for one specific named entity
+  (`work/task-contract`, `connections/notion/mirror-contract`, `api/rpc-contract`,
+  `connections/notion/api-contract`).
+- **`contracts`** (plural) — a module that aggregates several related contract types under one
+  subpath, rather than naming a single entity (`billing/contracts`, `automation/contracts`).
+
+A subpath that only holds a fixed constant or value — not an ongoing exchange — takes `contract`,
+even if the underlying concept has "protocol" in its plain-English description (an API version
+number is a fixed value, not a stateful exchange).
+
 Representative public entry points are:
 
 ```text

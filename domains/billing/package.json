@@ -6,30 +6,12 @@
   "license": "UNLICENSED",
   "description": "Server-side billing lifecycle and provider behavior.",
   "exports": {
-    "./contracts": {
-      "types": "./src/contracts.ts",
-      "default": "./src/contracts.ts"
-    },
-    "./adapters/in-memory": {
-      "types": "./src/adapters/in-memory.ts",
-      "default": "./src/adapters/in-memory.ts"
-    },
-    "./adapters/stripe": {
-      "types": "./src/adapters/stripe.ts",
-      "default": "./src/adapters/stripe.ts"
-    },
-    "./application/lifecycle": {
-      "types": "./src/application/lifecycle.ts",
-      "default": "./src/application/lifecycle.ts"
-    },
-    "./application/entitlement": {
-      "types": "./src/application/entitlement.ts",
-      "default": "./src/application/entitlement.ts"
-    },
-    "./provision": {
-      "types": "./src/provision.ts",
-      "default": "./src/provision.ts"
-    }
+    "./contracts": "./src/contracts.ts",
+    "./adapters/in-memory": "./src/adapters/in-memory.ts",
+    "./adapters/stripe": "./src/adapters/stripe.ts",
+    "./application/lifecycle": "./src/application/lifecycle.ts",
+    "./application/entitlement": "./src/application/entitlement.ts",
+    "./provision": "./src/provision.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -56,7 +56,7 @@ export function LoadFailure({ message, retrying = false }: LoadFailureProps): JS
   return (
     <p role="alert" className="text-error text-body-medium">
       {message}
-      {retrying ? <span className="text-on-surface-variant"> Docket keeps trying.</span> : null}
+      {retrying ? <span className="text-on-surface-variant"> Retrying automatically.</span> : null}
     </p>
   );
 }

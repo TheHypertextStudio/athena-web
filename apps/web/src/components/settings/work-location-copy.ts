@@ -21,7 +21,7 @@ export const SYNC_REASON: Record<WorkLocationSyncReason, string> = {
   unsupported_account: 'This account type cannot publish a work location.',
   missing_scope: 'Docket needs permission to edit this calendar.',
   unsupported_recurrence: 'Change the Google recurrence to daily or weekly to continue.',
-  provider_unavailable: 'Google is not responding. Docket keeps trying.',
+  provider_unavailable: 'Google is not responding. Retrying automatically.',
   reauth_required: 'Sign in to this account again to resume publishing.',
 };
 

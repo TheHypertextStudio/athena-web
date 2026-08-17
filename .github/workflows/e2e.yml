@@ -141,7 +141,7 @@ jobs:
 
       # Built once by the `build` job above. The tar archive preserves the pnpm links in the traced
       # module graph. Without them Next cannot resolve @swc/helpers and the server never starts.
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v8
         with:
           name: web-standalone
           path: .

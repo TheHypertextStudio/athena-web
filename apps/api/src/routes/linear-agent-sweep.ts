@@ -34,12 +34,14 @@ interface Candidate {
  * Rows considered per sweep tick.
  *
  * @remarks
- * 25 sits in the middle of a sane 20-50 range: this sweep is registered at a tight once-a-minute
- * cadence (see `scripts/scheduler-setup.ts`), and each candidate runs a full multi-turn agentic
- * loop (LLM calls + tool execution) rather than a cheap row update, so a smaller batch keeps one
- * invocation's wall-clock time predictable.
+ * `scripts/scheduler-setup.ts` registers this sweep at a five-minute cadence, so the limit is
+ * scaled to the same multiple of its original 25 — otherwise candidates queuing over the wider
+ * window would outpace what one tick clears. Each candidate still runs a full multi-turn agentic
+ * loop (LLM calls + tool execution) sequentially, so one invocation's wall-clock time grows with
+ * this number; raising it is safe because overlapping ticks are already harmless (see this
+ * file's top-level remarks on the fencing-token claim).
  */
-const BATCH_LIMIT = 25;
+const BATCH_LIMIT = 125;
 
 /** The outcome of one sweep tick. */
 export interface LinearAgentSweepResult {
@@ -108,7 +110,8 @@ async function settleUnclaimableRuns(sessionId: string, message: string): Promis
  * response is to drop the candidate and look again next tick. Anything else — most importantly
  * "not in a runnable state", raised when the session settled before its queued run was ever
  * driven — is terminal for this run and must be recorded, or the row stays queued forever and
- * the sweep retries it every minute for the life of the deployment.
+ * the sweep retries it every tick (five minutes, see `scripts/scheduler-setup.ts`) for the life
+ * of the deployment.
  */
 const RACE_MESSAGES =
   /generation is already running|generation changed during|concurrent run limit/i;

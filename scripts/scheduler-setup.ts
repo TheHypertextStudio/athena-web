@@ -67,7 +67,7 @@ export const JOBS: readonly CronJob[] = [
   {
     name: 'docket-process-events',
     path: '/internal/cron/process-events',
-    schedule: '*/2 * * * *',
+    schedule: '*/5 * * * *',
     description:
       'Docket: ambient-intelligence drain (normalize inbound webhook events into canonical events).',
   },
@@ -130,7 +130,7 @@ export const JOBS: readonly CronJob[] = [
   {
     name: 'docket-run-linear-agent-sessions',
     path: '/internal/cron/run-linear-agent-sessions',
-    schedule: '*/1 * * * *',
+    schedule: '*/5 * * * *',
     description:
       'Docket: Linear Agent session-run sweep (drives queued agent runs via driveSession and relays the resulting activity back to the Linear thread).',
   },
@@ -142,12 +142,12 @@ export const JOBS: readonly CronJob[] = [
       'Docket: expired-session sweep (deletes session rows past their expiresAt — Better Auth only prunes these lazily).',
   },
   // User schedules have a five-minute floor (AthenaTriggerCreate.scheduleMinutes min 5), so a
-  // one-minute sweep keeps a run within a minute of its due time; the row claim and cooldown
+  // five-minute sweep keeps a run within one tick of its due time; the row claim and cooldown
   // make an overlapping tick harmless.
   {
     name: 'docket-athena-triggers',
     path: '/internal/cron/athena-triggers',
-    schedule: '*/1 * * * *',
+    schedule: '*/5 * * * *',
     description:
       'Docket: Athena assignment-trigger sweep (runs every due user-owned scheduled trigger).',
   },
@@ -158,12 +158,12 @@ export const JOBS: readonly CronJob[] = [
     description:
       'Docket: elicitation-deadline sweep (auto-answers derivable overdue questions, parks the rest).',
   },
-  // The projection queue is durable, so cadence is purely search staleness; two minutes matches
+  // The projection queue is durable, so cadence is purely search staleness; five minutes matches
   // the process-events precedent for user-visible freshness.
   {
     name: 'docket-search-index',
     path: '/internal/cron/search-index',
-    schedule: '*/2 * * * *',
+    schedule: '*/5 * * * *',
     description:
       'Docket: search-index drain (processes durable projection jobs from entity writes and backfills).',
   },

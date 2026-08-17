@@ -1,4 +1,9 @@
 # One allowed Conventional Commit scope per line.
+#
+# A scope names the product/domain area a change lands in. If a change is cross-cutting and
+# doesn't belong to one area — e.g. it touches the exports/module boundary across many
+# domains/packages at once — omit the scope entirely rather than reaching for the closest-sounding
+# one. `dx` is not a catch-all for "internal/technical work"; see its own comment below.
 admin
 agents
 athena
@@ -8,6 +13,10 @@ billing
 data
 design
 docs
+# dx: the LOCAL DEVELOPER'S day-to-day tooling and workflow only — lint config, CI, build
+# scripts, the dev server, editor/IDE setup. It is not for the product's own code, including
+# internal package/module structure, exports, or naming (that work is either scoped to the
+# domain/package it changes, or left unscoped if it's cross-cutting).
 dx
 hub
 integrations

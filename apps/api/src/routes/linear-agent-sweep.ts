@@ -31,17 +31,26 @@ interface Candidate {
 }
 
 /**
+ * Minutes between `docket-run-linear-agent-sessions` ticks.
+ *
+ * @remarks
+ * Must match that job's schedule in `scripts/scheduler-setup.ts` — the two are not otherwise
+ * linked, so keep them in step by hand when either changes.
+ */
+const SWEEP_CADENCE_MINUTES = 5;
+
+/**
  * Rows considered per sweep tick.
  *
  * @remarks
- * `scripts/scheduler-setup.ts` registers this sweep at a five-minute cadence, so the limit is
- * scaled to the same multiple of its original 25 — otherwise candidates queuing over the wider
- * window would outpace what one tick clears. Each candidate still runs a full multi-turn agentic
- * loop (LLM calls + tool execution) sequentially, so one invocation's wall-clock time grows with
- * this number; raising it is safe because overlapping ticks are already harmless (see this
- * file's top-level remarks on the fencing-token claim).
+ * Scaled to {@link SWEEP_CADENCE_MINUTES} off a base of 25/minute so candidates queuing over the
+ * wider window don't outpace what one tick clears. Each candidate still runs a full multi-turn
+ * agentic loop (LLM calls + tool execution) sequentially, so one invocation's wall-clock time
+ * grows with this number; overlapping ticks are harmless regardless (see this file's top-level
+ * remarks on the fencing-token claim), and both the Cloud Run request timeout and this job's
+ * Cloud Scheduler `--attempt-deadline` were raised alongside this limit for the same reason.
  */
-const BATCH_LIMIT = 125;
+const BATCH_LIMIT = 25 * SWEEP_CADENCE_MINUTES;
 
 /** The outcome of one sweep tick. */
 export interface LinearAgentSweepResult {

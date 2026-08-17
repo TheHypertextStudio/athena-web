@@ -311,6 +311,13 @@ function jobCommand(job: CronJob, ctx: Ctx, secret: string, exists: boolean): st
     `--uri=${shq(ctx.apiUrl + job.path)}`,
     `--http-method=POST`,
     `--time-zone=${shq('Etc/UTC')}`,
+    // Cloud Scheduler's HTTP-target default (3 min) is tighter than docket-run-linear-agent-sessions
+    // can need now that its sweep processes up to 125 candidates sequentially (see BATCH_LIMIT in
+    // apps/api/src/routes/linear-agent-sweep.ts) — a busy tick past 3 minutes would otherwise read as
+    // a failed attempt and trigger a Scheduler-driven retry while the original request keeps running.
+    // Applied to every job rather than just that one: a longer deadline only matters to a job that's
+    // actually still running past 3 minutes, so it costs nothing for the fast ones.
+    `--attempt-deadline=600s`,
     `--description=${shq(job.description)}`,
     `${headerFlag}=${shq(`x-cron-secret=${secret}`)}`,
     `--quiet`,

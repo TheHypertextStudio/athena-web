@@ -107,6 +107,7 @@ jobs:
             --max-instances=10
             --memory=512Mi
             --cpu=1
+            --timeout=600
             --env-vars-file=${{ runner.temp }}/docket-api-env.yaml
           # Bootstrap owns this non-secret env→Secret Manager mapping. Optional providers are
           # mounted only after their secrets exist. Overwrite keeps retired mounts from surviving.

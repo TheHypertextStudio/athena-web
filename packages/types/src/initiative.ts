@@ -2,6 +2,7 @@
  * `@docket/types` — Initiative slice DTOs.
  */
 import { z } from 'zod';
+import { DateResolution } from '@docket/work/planning-timeframe';
 
 import { Health } from './capability';
 import { AttachmentOut } from './attachment';
@@ -86,6 +87,9 @@ export const InitiativeCreate = z
       .date()
       .optional()
       .describe('Optional planned completion date (ISO-8601 `YYYY-MM-DD`).'),
+    targetDateResolution: DateResolution.nullable()
+      .optional()
+      .describe('Linear-compatible broad resolution, or null/omitted for a precise target day.'),
     health: Health.optional().describe(
       'Optional initial health verdict (`on_track`/`at_risk`/`off_track`). Omit to leave unset.',
     ),
@@ -134,6 +138,11 @@ export const InitiativeUpdate = z
       .describe(
         'New planned completion date (ISO-8601). Omit to leave unchanged; `null` clears it.',
       ),
+    targetDateResolution: DateResolution.nullable()
+      .optional()
+      .describe(
+        'New broad target resolution. Omit with the date for a precise day; null clears it.',
+      ),
     health: Health.nullable()
       .optional()
       .describe('New health verdict. Omit to leave unchanged; `null` clears it.'),
@@ -169,6 +178,16 @@ export const InitiativeOut = z
       .nullable()
       .optional()
       .describe('Planned completion date (ISO-8601 string), or `null` when undated.'),
+    targetDateResolution: DateResolution.nullable().describe(
+      'Broad target resolution, or `null` when the saved target is a precise day or unset.',
+    ),
+    targetDateFiscalYearStartMonth: z
+      .number()
+      .int()
+      .min(0)
+      .max(11)
+      .nullable()
+      .describe('Read-only saved zero-based fiscal basis for a broad target value.'),
     health: Health.nullable()
       .optional()
       .describe(

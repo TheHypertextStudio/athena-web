@@ -240,6 +240,14 @@ export const WorkspaceSettingsOut = z
       "The workspace's task-estimation scale. Determines which point values the task " +
         'estimate picker offers; see {@link ESTIMATION_SCALES}.',
     ),
+    fiscalYearStartMonth: z
+      .number()
+      .int()
+      .min(0)
+      .max(11)
+      .describe(
+        'Zero-based month that starts the workspace fiscal year. January is 0 and December is 11.',
+      ),
   })
   .meta({ id: 'WorkspaceSettingsOut', description: 'Workspace work-structure settings.' });
 /** Workspace settings representation. */

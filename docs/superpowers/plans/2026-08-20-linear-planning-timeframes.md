@@ -171,10 +171,10 @@ the calendar-component invariant.
 - Modify: `packages/types/src/initiative.ts`
 - Modify: `packages/types/src/organization.ts`
 - Create: `packages/types/tests/dto/planning-timeframes.test.ts`
-- Modify: `packages/db/src/schema/enums.ts`
+- Modify: `packages/db/src/enums.ts`
 - Modify: `packages/db/src/schema/identity.ts`
 - Modify: `packages/db/src/schema/work.ts`
-- Create: `packages/db/drizzle/0094_linear_planning_timeframes.sql`
+- Create: `packages/db/drizzle/0094_mighty_martin_li.sql`
 - Modify: `packages/db/drizzle/meta/_journal.json`
 - Create: `packages/db/drizzle/meta/0094_snapshot.json`
 - Modify: `packages/db/tests/schema/initiative-experience-schema.test.ts`
@@ -187,7 +187,7 @@ the calendar-component invariant.
 - Project and Initiative outputs include resolution and read-only fiscal snapshot fields.
 - Workspace settings include `fiscalYearStartMonth` as an integer from `0` through `11`.
 
-- [ ] **Step 1: Write failing DTO tests for Linear wire compatibility**
+- [x] **Step 1: Write failing DTO tests for Linear wire compatibility**
 
 ```typescript
 expect(
@@ -210,13 +210,13 @@ expect(WorkspaceSettingsUpdate.parse({ fiscalYearStartMonth: 6 })).toEqual({
 expect(WorkspaceSettingsUpdate.safeParse({ fiscalYearStartMonth: 12 }).success).toBe(false);
 ```
 
-- [ ] **Step 2: Run the DTO test and verify the new fields are stripped or rejected**
+- [x] **Step 2: Run the DTO test and verify the new fields are stripped or rejected**
 
 Run: `pnpm --filter @docket/types test -- tests/dto/planning-timeframes.test.ts`
 
 Expected: FAIL on the missing resolution and workspace fields.
 
-- [ ] **Step 3: Add the documented DTO fields**
+- [x] **Step 3: Add the documented DTO fields**
 
 ```typescript
 import { DateResolution } from '@docket/work/planning-timeframe';
@@ -232,7 +232,7 @@ Create and update schemas include only resolution fields. Output schemas include
 fiscal snapshot fields. Add `fiscalYearStartMonth` to `WorkspaceSettingsOut`, which makes it
 optional on `WorkspaceSettingsUpdate` through the existing `.partial()` contract.
 
-- [ ] **Step 4: Write failing schema tests for null pairing and migration defaults**
+- [x] **Step 4: Write failing schema tests for null pairing and migration defaults**
 
 ```typescript
 expect(organization.fiscalYearStartMonth.notNull).toBe(true);
@@ -246,7 +246,7 @@ expect(initiative.targetDateFiscalYearStartMonth).toBeDefined();
 Add integration fixtures that reject a broad resolution without a fiscal snapshot and reject a
 precise date with one.
 
-- [ ] **Step 5: Add the enum, columns, and schema checks**
+- [x] **Step 5: Add the enum, columns, and schema checks**
 
 ```typescript
 export const planningDateResolution = pgEnum('planning_date_resolution', [
@@ -262,7 +262,7 @@ Add `fiscalYearStartMonth: integer('fiscal_year_start_month').notNull().default(
 each planning date. Add checks that pair nulls and enforce the correct first-day or last-day
 boundary. Use fiscal-shifted `date_trunc` expressions for quarter, half-year, and year boundaries.
 
-- [ ] **Step 6: Generate and inspect migration 0094**
+- [x] **Step 6: Generate and inspect migration 0094**
 
 Run: `pnpm db:generate`
 
@@ -271,13 +271,13 @@ dates unchanged, defaults each organization to January, and installs all pairing
 checks. Rename the generated SQL to `0094_linear_planning_timeframes.sql` only if the repository's
 generator permits a stable custom name without breaking the journal.
 
-- [ ] **Step 7: Run DTO, schema, and migration gates**
+- [x] **Step 7: Run DTO, schema, and migration gates**
 
 Run: `pnpm --filter @docket/types test -- tests/dto/planning-timeframes.test.ts && pnpm --filter @docket/db test -- tests/schema/planning-timeframe-schema.test.ts tests/schema/initiative-experience-schema.test.ts && pnpm --filter @docket/types typecheck && pnpm --filter @docket/db typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit the contract and persistence slice**
+- [x] **Step 8: Commit the contract and persistence slice**
 
 Commit type/scope: `feat(projects)` with a body that explains additive migration safety, Linear
 field parity, and why fiscal snapshots are read-only.

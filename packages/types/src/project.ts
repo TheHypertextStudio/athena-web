@@ -2,6 +2,7 @@
  * `@docket/types` — Project slice DTOs.
  */
 import { z } from 'zod';
+import { DateResolution } from '@docket/work/planning-timeframe';
 
 import { SessionActivityOut } from './agent';
 import { Health } from './capability';
@@ -71,12 +72,18 @@ export const ProjectCreate = z
       .describe(
         'Planned start date (ISO-8601 `YYYY-MM-DD`). Optional; positions the project’s bar on roadmaps.',
       ),
+    startDateResolution: DateResolution.nullable()
+      .optional()
+      .describe('Linear-compatible broad resolution, or null/omitted for a precise start day.'),
     targetDate: z.iso
       .date()
       .optional()
       .describe(
         'Planned completion/end date (ISO-8601 `YYYY-MM-DD`). Optional; the right edge of the project’s bar.',
       ),
+    targetDateResolution: DateResolution.nullable()
+      .optional()
+      .describe('Linear-compatible broad resolution, or null/omitted for a precise target day.'),
     initiativeIds: z
       .array(InitiativeId)
       .optional()
@@ -147,12 +154,22 @@ export const ProjectUpdate = z
       .describe(
         'New start date (ISO-8601 `YYYY-MM-DD`). Omit to leave unchanged; `null` clears it.',
       ),
+    startDateResolution: DateResolution.nullable()
+      .optional()
+      .describe(
+        'New broad start resolution. Omit with the date for a precise day; null clears it.',
+      ),
     targetDate: z.iso
       .date()
       .nullable()
       .optional()
       .describe(
         'New target/end date (ISO-8601 `YYYY-MM-DD`). Omit to leave unchanged; `null` clears it.',
+      ),
+    targetDateResolution: DateResolution.nullable()
+      .optional()
+      .describe(
+        'New broad target resolution. Omit with the date for a precise day; null clears it.',
       ),
     labelIds: z
       .array(LabelId)
@@ -209,11 +226,31 @@ export const ProjectOut = z
       .nullable()
       .optional()
       .describe('Planned start date (ISO-8601 string), or `null` when unscheduled.'),
+    startDateResolution: DateResolution.nullable().describe(
+      'Broad start resolution, or `null` when the saved start is a precise day or unset.',
+    ),
+    startDateFiscalYearStartMonth: z
+      .number()
+      .int()
+      .min(0)
+      .max(11)
+      .nullable()
+      .describe('Read-only saved zero-based fiscal basis for a broad start value.'),
     targetDate: z
       .string()
       .nullable()
       .optional()
       .describe('Planned target/end date (ISO-8601 string), or `null` when unscheduled.'),
+    targetDateResolution: DateResolution.nullable().describe(
+      'Broad target resolution, or `null` when the saved target is a precise day or unset.',
+    ),
+    targetDateFiscalYearStartMonth: z
+      .number()
+      .int()
+      .min(0)
+      .max(11)
+      .nullable()
+      .describe('Read-only saved zero-based fiscal basis for a broad target value.'),
     createdAt: z.string().describe('When the project was created (ISO-8601 timestamp).'),
   })
   .meta({ id: 'ProjectOut', description: 'A project.' });

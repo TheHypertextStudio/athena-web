@@ -153,6 +153,7 @@ export const organization = pgTable(
     approvalRouting: jsonb('approval_routing').$type<ApprovalRouting>(),
     initiativeMaxDepth: integer('initiative_max_depth').notNull().default(2),
     estimationScale: estimationScale('estimation_scale').notNull().default('fibonacci'),
+    fiscalYearStartMonth: integer('fiscal_year_start_month').notNull().default(0),
     lifecycleState: orgLifecycleState('lifecycle_state').notNull().default('trialing'),
     exportReadyAt: timestamp('export_ready_at'),
     /**
@@ -179,6 +180,10 @@ export const organization = pgTable(
     uniqueIndex('organization_slug_uq').on(t.slug),
     index('organization_lifecycle_idx').on(t.lifecycleState),
     check('organization_initiative_max_depth_check', sql`${t.initiativeMaxDepth} between 1 and 5`),
+    check(
+      'organization_fiscal_year_start_month_check',
+      sql`${t.fiscalYearStartMonth} >= 0 and ${t.fiscalYearStartMonth} <= 11`,
+    ),
     // Mirrors `PublicSlug` (`@docket/types`): the slug is now always a workspace's default brief
     // address too, unless a custom domain is set, so it takes the same public-path-segment shape
     // — lowercase alphanumerics, single-hyphen separated, capped at 64 characters. Reserved-word

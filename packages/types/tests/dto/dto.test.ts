@@ -339,7 +339,11 @@ describe('project DTOs', () => {
       teamId: null,
       programId: null,
       startDate: null,
+      startDateResolution: null,
+      startDateFiscalYearStartMonth: null,
       targetDate: null,
+      targetDateResolution: null,
+      targetDateFiscalYearStartMonth: null,
       createdAt: 'x',
     });
     expect(parsed.health).toBe('on_track');
@@ -708,6 +712,8 @@ describe('initiative DTOs', () => {
       priority: 'none',
       updateCadence: 'monthly',
       targetDate: null,
+      targetDateResolution: null,
+      targetDateFiscalYearStartMonth: null,
       health: null,
       createdAt: 'x',
     });
@@ -812,8 +818,11 @@ describe('workspace settings DTOs', () => {
     // Out is what the server sends, so every field is present — including estimationScale, which
     // has no default precisely because a workspace's scale is always a real stored choice.
     expect(
-      WorkspaceSettingsOut.parse({ initiativeMaxDepth: 2, estimationScale: 'fibonacci' })
-        .initiativeMaxDepth,
+      WorkspaceSettingsOut.parse({
+        initiativeMaxDepth: 2,
+        estimationScale: 'fibonacci',
+        fiscalYearStartMonth: 0,
+      }).initiativeMaxDepth,
     ).toBe(2);
     expect(WorkspaceSettingsUpdate.parse({ initiativeMaxDepth: 1 }).initiativeMaxDepth).toBe(1);
     expect(WorkspaceSettingsUpdate.parse({ initiativeMaxDepth: 5 }).initiativeMaxDepth).toBe(5);

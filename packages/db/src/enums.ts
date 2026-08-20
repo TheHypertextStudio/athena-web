@@ -111,6 +111,13 @@ export const projectStatus = pgEnum('project_status', [
 export const cycleStatus = pgEnum('cycle_status', ['upcoming', 'active', 'completed']);
 /** Judgment-based health for Projects/Programs/Initiatives. */
 export const health = pgEnum('health', ['on_track', 'at_risk', 'off_track']);
+/** Linear-compatible resolution metadata for broad Project and Initiative planning dates. */
+export const planningDateResolution = pgEnum('planning_date_resolution', [
+  'month',
+  'quarter',
+  'halfYear',
+  'year',
+]);
 /** Task priority. */
 export const taskPriority = pgEnum('task_priority', ['none', 'urgent', 'high', 'medium', 'low']);
 

@@ -31,6 +31,7 @@ import {
   health,
   initiativePriority,
   initiativeUpdateCadence,
+  planningDateResolution,
   provenanceSource,
   sourceSystem,
   syncMode,
@@ -92,6 +93,52 @@ function dateInRange(name: string, column: SQLWrapper) {
   return check(name, sql`${column} is null or (${column} >= ${floor} and ${column} < ${ceiling})`);
 }
 
+/** Require precise dates to have no fiscal metadata and broad dates to have a complete pair. */
+function planningTimeframePair(
+  name: string,
+  date: SQLWrapper,
+  resolution: SQLWrapper,
+  fiscalYearStartMonth: SQLWrapper,
+) {
+  return check(
+    name,
+    sql`(
+      (${resolution} is null and ${fiscalYearStartMonth} is null)
+      or
+      (${date} is not null and ${resolution} is not null and ${fiscalYearStartMonth} is not null and ${fiscalYearStartMonth} between 0 and 11)
+    )`,
+  );
+}
+
+/** Require a broad date anchor to sit on the first or final day of its saved fiscal period. */
+function planningTimeframeBoundary(
+  name: string,
+  date: SQLWrapper,
+  resolution: SQLWrapper,
+  fiscalYearStartMonth: SQLWrapper,
+  edge: 'start' | 'target',
+) {
+  const shifted = sql`(${date} - make_interval(months => ${fiscalYearStartMonth}))`;
+  const monthStart = sql`date_trunc('month', ${date})`;
+  const quarterStart = sql`date_trunc('quarter', ${shifted}) + make_interval(months => ${fiscalYearStartMonth})`;
+  const halfYearStart = sql`date_trunc('year', ${shifted}) + make_interval(months => ((extract(month from ${shifted})::int - 1) / 6) * 6 + ${fiscalYearStartMonth})`;
+  const yearStart = sql`date_trunc('year', ${shifted}) + make_interval(months => ${fiscalYearStartMonth})`;
+  const boundary = (start: SQLWrapper, months: number) =>
+    edge === 'start'
+      ? sql`(${start})`
+      : sql`(${start} + make_interval(months => ${sql.raw(String(months))}) - interval '1 day')`;
+  return check(
+    name,
+    sql`(
+      ${resolution} is null
+      or (${resolution} = 'month' and ${date}::date = (${boundary(monthStart, 1)})::date)
+      or (${resolution} = 'quarter' and ${date}::date = (${boundary(quarterStart, 3)})::date)
+      or (${resolution} = 'halfYear' and ${date}::date = (${boundary(halfYearStart, 6)})::date)
+      or (${resolution} = 'year' and ${date}::date = (${boundary(yearStart, 12)})::date)
+    )`,
+  );
+}
+
 /** A cross-cutting theme over Projects/Programs (m2m); contains no work itself. */
 export const initiative = pgTable(
   'initiative',
@@ -106,6 +153,8 @@ export const initiative = pgTable(
     priority: initiativePriority('priority').notNull().default('none'),
     updateCadence: initiativeUpdateCadence('update_cadence').notNull().default('monthly'),
     targetDate: timestamp('target_date'),
+    targetDateResolution: planningDateResolution('target_date_resolution'),
+    targetDateFiscalYearStartMonth: integer('target_date_fiscal_year_start_month'),
     health: health('health'),
   },
   (t) => [
@@ -121,6 +170,19 @@ export const initiative = pgTable(
     notBlank('initiative_name_not_blank', t.name),
     notBlank('initiative_status_not_blank', t.status),
     dateInRange('initiative_target_date_range', t.targetDate),
+    planningTimeframePair(
+      'initiative_target_timeframe_pair_check',
+      t.targetDate,
+      t.targetDateResolution,
+      t.targetDateFiscalYearStartMonth,
+    ),
+    planningTimeframeBoundary(
+      'initiative_target_timeframe_boundary_check',
+      t.targetDate,
+      t.targetDateResolution,
+      t.targetDateFiscalYearStartMonth,
+      'target',
+    ),
   ],
 );
 
@@ -173,7 +235,11 @@ export const project = pgTable(
     statusId: text('status_id').notNull(),
     health: health('health'),
     startDate: timestamp('start_date'),
+    startDateResolution: planningDateResolution('start_date_resolution'),
+    startDateFiscalYearStartMonth: integer('start_date_fiscal_year_start_month'),
     targetDate: timestamp('target_date'),
+    targetDateResolution: planningDateResolution('target_date_resolution'),
+    targetDateFiscalYearStartMonth: integer('target_date_fiscal_year_start_month'),
     visibility: visibility('visibility').notNull().default('public'),
     ancestorPath: text('ancestor_path')
       .array()
@@ -207,6 +273,32 @@ export const project = pgTable(
     notBlank('project_status_not_blank', t.status),
     dateInRange('project_start_date_range', t.startDate),
     dateInRange('project_target_date_range', t.targetDate),
+    planningTimeframePair(
+      'project_start_timeframe_pair_check',
+      t.startDate,
+      t.startDateResolution,
+      t.startDateFiscalYearStartMonth,
+    ),
+    planningTimeframeBoundary(
+      'project_start_timeframe_boundary_check',
+      t.startDate,
+      t.startDateResolution,
+      t.startDateFiscalYearStartMonth,
+      'start',
+    ),
+    planningTimeframePair(
+      'project_target_timeframe_pair_check',
+      t.targetDate,
+      t.targetDateResolution,
+      t.targetDateFiscalYearStartMonth,
+    ),
+    planningTimeframeBoundary(
+      'project_target_timeframe_boundary_check',
+      t.targetDate,
+      t.targetDateResolution,
+      t.targetDateFiscalYearStartMonth,
+      'target',
+    ),
   ],
 );
 

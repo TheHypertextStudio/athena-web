@@ -38,7 +38,7 @@
 - Accepts zero-based fiscal months from `0` through `11`.
 - Returns date-only strings and never returns a `Date` object.
 
-- [ ] **Step 1: Write the failing enum and boundary tests**
+- [x] **Step 1: Write the failing enum and boundary tests**
 
 ```typescript
 import { describe, expect, it } from 'vitest';
@@ -76,13 +76,13 @@ describe('planning timeframes', () => {
 });
 ```
 
-- [ ] **Step 2: Run the domain test and verify the missing module fails**
+- [x] **Step 2: Run the domain test and verify the missing module fails**
 
 Run: `pnpm --filter @docket/work test -- tests/planning-timeframe.test.ts`
 
 Expected: FAIL because `src/planning-timeframe.ts` does not exist.
 
-- [ ] **Step 3: Implement the public types and calendar-component helpers**
+- [x] **Step 3: Implement the public types and calendar-component helpers**
 
 ```typescript
 import { z } from 'zod';
@@ -107,7 +107,7 @@ export type TimeframeEdge = 'start' | 'target';
 Implement integer Gregorian helpers for parsing, leap years, month lengths, adding months, and
 formatting `YYYY-MM-DD`. Reject invalid dates and fiscal months outside `0..11` with `RangeError`.
 
-- [ ] **Step 4: Implement bounds, anchors, labels, keys, and validation**
+- [x] **Step 4: Implement bounds, anchors, labels, keys, and validation**
 
 ```typescript
 export function timeframeAnchor(
@@ -132,7 +132,7 @@ export function isCanonicalTimeframeAnchor(value: PlanningTimeframe, edge: Timef
 Use the fiscal year-ending convention. A July 2026 through June 2027 year formats as `FY 2027`.
 January workspaces format `year`, `halfYear`, and `quarter` as `2027`, `H1 2027`, and `Q2 2027`.
 
-- [ ] **Step 5: Add exhaustive leap-year and fiscal-month coverage**
+- [x] **Step 5: Add exhaustive leap-year and fiscal-month coverage**
 
 ```typescript
 for (let fiscalMonth = 0; fiscalMonth < 12; fiscalMonth += 1) {
@@ -146,7 +146,7 @@ for (let fiscalMonth = 0; fiscalMonth < 12; fiscalMonth += 1) {
 }
 ```
 
-- [ ] **Step 6: Export the module and run the domain package gates**
+- [x] **Step 6: Export the module and run the domain package gates**
 
 Add this package export:
 
@@ -158,7 +158,7 @@ Run: `pnpm --filter @docket/work test -- tests/planning-timeframe.test.ts && pnp
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit the domain slice**
+- [x] **Step 7: Commit the domain slice**
 
 Commit type/scope: `feat(projects)` with a body that explains the null precise-day resolution and
 the calendar-component invariant.

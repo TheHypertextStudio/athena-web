@@ -10,6 +10,7 @@
     "./task-drafting": "./src/task-drafting.ts",
     "./task-titles": "./src/task-titles.ts",
     "./parent-resolution": "./src/parent-resolution.ts",
+    "./planning-timeframe": "./src/planning-timeframe.ts",
     "./vocabulary": "./src/vocabulary.ts"
   },
   "scripts": {

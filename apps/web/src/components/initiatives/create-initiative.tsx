@@ -7,7 +7,7 @@
  * An Initiative is a cross-cutting *theme* that holds no work of its own — it associates
  * many-to-many with Projects + Programs (those links come later on the detail screen). The
  * composer captures the framing fields: a title + description body, and an inline strip of
- * compact pickers — its owner, its status, its target date, and its health verdict. Sensible
+ * compact pickers for its owner, status, target date, and health. Sensible
  * defaults keep it fast: only a name is required; status defaults to wherever the workspace starts
  * an Initiative.
  *

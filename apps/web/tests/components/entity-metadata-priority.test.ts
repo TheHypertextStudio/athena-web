@@ -24,7 +24,7 @@ describe('strategic-work metadata priority', () => {
 
   it('declares Initiative properties in their progressive inline order', () => {
     expect(priorities('apps/web/src/components/initiatives/properties-panel.tsx')).toEqual([
-      0, 1, 2, 3, 4, 5, 6, 7,
+      0, 1, 2, 3, 4, 5, 6,
     ]);
   });
 

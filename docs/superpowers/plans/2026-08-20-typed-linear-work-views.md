@@ -28,17 +28,17 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 - Test: `apps/web/tests/components/entity-detail-layout.test.tsx`
 - Test: `apps/web/tests/components/initiative-properties-panel.test.tsx`
 
-- [ ] Write component tests that mock `ResizeObserver`, place priorities 0 through 3 in the row,
+- [x] Write component tests that mock `ResizeObserver`, place priorities 0 through 3 in the row,
       resize below and above 40rem, and assert that inline and overflow labels are disjoint.
-- [ ] Run `pnpm --filter @docket/web exec vitest run tests/components/entity-detail-layout.test.tsx --maxWorkers=2` and verify the old duplicated overflow fails.
-- [ ] Partition `EntityMetadataItem` children by the measured maximum priority and omit the
+- [x] Run `pnpm --filter @docket/web exec vitest run tests/components/entity-detail-layout.test.tsx --maxWorkers=2` and verify the old duplicated overflow fails.
+- [x] Partition `EntityMetadataItem` children by the measured maximum priority and omit the
       overflow trigger when the hidden partition is empty.
-- [ ] Wrap inline and overflow lanes in `ControlGroup controlSize="md"`; remove local height,
+- [x] Wrap inline and overflow lanes in `ControlGroup controlSize="sm"`; remove local height,
       padding, type, and icon metrics from `ENTITY_METADATA_CHIP_CLASS`.
-- [ ] Remove `RolledUpHealthPill` from Initiative metadata and replace production Initiative
+- [x] Remove `RolledUpHealthPill` from Initiative metadata and replace production Initiative
       `verdict` copy with health copy.
-- [ ] Run the two focused component files and `pnpm --filter @docket/web typecheck`.
-- [ ] Commit the slice as `fix(ui): Keep visible properties out of header overflow` with a body
+- [x] Run the two focused component files and `pnpm --filter @docket/web typecheck`.
+- [x] Commit the slice as `fix(ui): Keep visible properties out of header overflow` with a body
       that records container ownership and the single-health decision.
 
 ### Task 2: Finish the generic typed view contract

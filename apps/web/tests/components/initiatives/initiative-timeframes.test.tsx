@@ -72,7 +72,6 @@ function renderPanel(
     <InitiativePropertiesPanel
       status="active"
       health={null}
-      rolledUpHealth={null}
       targetDate={null}
       targetDateResolution={null}
       targetDateFiscalYearStartMonth={null}

@@ -4,9 +4,9 @@
  * @remarks
  * An Initiative is a theme that holds no work of its own: its signal is *auto-derived*
  * from the Projects + Programs it associates with. The detail read returns a
- * `rolledUpHealth` (the worst child verdict — `off_track ≻ at_risk ≻ on_track`) and a
+ * `rolledUpHealth` (the worst child health — `off_track ≻ at_risk ≻ on_track`) and a
  * `distribution` (how many children fall in each {@link Health} bucket, plus the count with
- * no verdict). These helpers map those derived values onto display-ready copy and the
+ * no health data). These helpers map those derived values onto display-ready copy and the
  * semantic `--color-state-*` / `--color-destructive` token classes, so health color stays
  * consistent across the list, the rolled-up pill, the distribution bar, and the roadmap —
  * and never reaches for a raw hex value.
@@ -17,7 +17,7 @@
  */
 import type { Health } from '@docket/types';
 
-/** Human-readable label for each {@link Health} verdict. */
+/** Human-readable label for each {@link Health} value. */
 export const HEALTH_LABEL: Record<Health, string> = {
   on_track: 'On track',
   at_risk: 'At risk',
@@ -26,7 +26,7 @@ export const HEALTH_LABEL: Record<Health, string> = {
 
 /**
  * The Tailwind classes for a health pill (text + subtle tinted background + inset ring),
- * keyed by the derived {@link Health} verdict. Tokens resolve light/dark automatically.
+ * keyed by the derived {@link Health} value. Tokens resolve light/dark automatically.
  */
 export const HEALTH_PILL_CLASS: Record<Health, string> = {
   on_track: 'text-state-completed bg-state-completed/10 ring-1 ring-inset ring-state-completed/30',
@@ -34,15 +34,15 @@ export const HEALTH_PILL_CLASS: Record<Health, string> = {
   off_track: 'text-error bg-error/10 ring-1 ring-inset ring-error/30',
 };
 
-/** The solid fill color for a health swatch / distribution segment, keyed by verdict. */
+/** The solid fill color for a health swatch or distribution segment. */
 export const HEALTH_FILL_CLASS: Record<Health, string> = {
   on_track: 'bg-state-completed',
   at_risk: 'bg-state-canceled',
   off_track: 'bg-error',
 };
 
-/** The fill color used for children that carry no health verdict yet (the neutral bucket). */
+/** The fill color used for children that carry no health data yet. */
 export const HEALTH_UNKNOWN_FILL_CLASS = 'bg-on-surface-variant/30';
 
-/** The label used for the no-verdict bucket in distribution legends. */
-export const HEALTH_UNKNOWN_LABEL = 'No verdict';
+/** The label used for the unknown-health bucket in distribution legends. */
+export const HEALTH_UNKNOWN_LABEL = 'No health data';

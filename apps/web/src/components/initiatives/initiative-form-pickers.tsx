@@ -65,9 +65,9 @@ export interface InitiativeComposerPickersProps {
   planningCalendarLoading?: boolean;
   /** Report a changed target. Omit alongside `targetTimeframe` to hide the picker. */
   onTargetTimeframeChange?: (timeframe: PlanningTimeframe | null) => void;
-  /** The chosen health verdict, or null. */
+  /** The chosen health value, or null. */
   health: Health | null;
-  /** Report a changed health verdict. */
+  /** Report a changed health value. */
   onHealthChange: (health: Health | null) => void;
   /** The chosen priority. */
   priority: InitiativePriority;

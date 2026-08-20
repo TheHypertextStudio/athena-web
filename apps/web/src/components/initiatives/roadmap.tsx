@@ -35,7 +35,7 @@ import { formatAxisTick, formatPlanningDate, toMillis } from './format-date';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL, HEALTH_UNKNOWN_FILL_CLASS } from './health';
 import { computeWindow, pct, placeBars } from './roadmap-math';
 
-/** The health-keyed fill class for a bar/swatch, defaulting to the neutral no-verdict fill. */
+/** The health-keyed fill class for a bar or swatch, defaulting to the neutral unknown fill. */
 function fillFor(health: Health | null): string {
   return health ? HEALTH_FILL_CLASS[health] : HEALTH_UNKNOWN_FILL_CLASS;
 }
@@ -141,7 +141,7 @@ export function Roadmap({
                   {programStatusOf(lane.status).name}
                 </span>
                 <span className="text-on-surface-variant shrink-0 text-xs">
-                  {lane.health ? HEALTH_LABEL[lane.health] : 'No verdict'}
+                  {lane.health ? HEALTH_LABEL[lane.health] : 'No health data'}
                 </span>
               </li>
             ))}

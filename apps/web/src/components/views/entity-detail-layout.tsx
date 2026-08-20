@@ -15,8 +15,24 @@
 import { useOwnPageScroll } from '@docket/ui/components';
 import { Ellipsis } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, Popover, PopoverContent, PopoverTrigger } from '@docket/ui/primitives';
-import type { JSX, ReactNode } from 'react';
+import {
+  Button,
+  ControlGroup,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@docket/ui/primitives';
+import {
+  createContext,
+  type JSX,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { ObjectSurface } from '@/components/objects/object-surface';
 import type { ObjectRef } from '@/lib/actions/object';
@@ -196,10 +212,39 @@ export function EntityDetailLayout({
  * metadata row reads as the same calm, tappable chip.
  */
 export const ENTITY_METADATA_CHIP_CLASS =
-  'bg-surface-container-low hover:bg-surface-container-high min-h-10 min-w-0 max-w-full shrink gap-1.5 rounded-full px-3';
+  'bg-surface-container-low hover:bg-surface-container-high min-w-0 max-w-full shrink';
 
 /** Ordered visibility tier for one property in the inline metadata row. */
 export type EntityMetadataPriority = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+const ENTITY_METADATA_PRIORITY_MIN_WIDTH: Readonly<Record<EntityMetadataPriority, number>> = {
+  0: 0,
+  1: 28 * 16,
+  2: 40 * 16,
+  3: 52 * 16,
+  4: 64 * 16,
+  5: 76 * 16,
+  6: 88 * 16,
+  7: 100 * 16,
+};
+
+/** Return the highest metadata priority that fits the measured row width. */
+export function visibleEntityMetadataPriority(width: number): EntityMetadataPriority {
+  let visible: EntityMetadataPriority = 0;
+  for (const priority of [1, 2, 3, 4, 5, 6, 7] as const) {
+    if (width < ENTITY_METADATA_PRIORITY_MIN_WIDTH[priority]) break;
+    visible = priority;
+  }
+  return visible;
+}
+
+interface EntityMetadataLaneContext {
+  readonly lane: 'inline' | 'overflow';
+  readonly visiblePriority: EntityMetadataPriority;
+  readonly declarePriority?: (priority: EntityMetadataPriority) => () => void;
+}
+
+const MetadataLaneContext = createContext<EntityMetadataLaneContext | null>(null);
 
 /** Props for {@link EntityMetadataItem}. */
 export interface EntityMetadataItemProps {
@@ -221,7 +266,17 @@ export function EntityMetadataItem({
   priority,
   className,
   children,
-}: EntityMetadataItemProps): JSX.Element {
+}: EntityMetadataItemProps): JSX.Element | null {
+  const lane = useContext(MetadataLaneContext);
+
+  useEffect(() => {
+    if (lane?.lane !== 'inline') return;
+    return lane.declarePriority?.(priority);
+  }, [lane, priority]);
+
+  if (lane?.lane === 'inline' && priority > lane.visiblePriority) return null;
+  if (lane?.lane === 'overflow' && priority <= lane.visiblePriority) return null;
+
   return (
     <div
       data-entity-metadata-item=""
@@ -254,41 +309,90 @@ export interface EntityMetadataRowProps {
  * @returns a labelled group wrapping its property chips.
  */
 export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProps): JSX.Element {
+  const inlineRef = useRef<HTMLDivElement>(null);
+  const priorityCounts = useRef(new Map<EntityMetadataPriority, number>());
+  const [visiblePriority, setVisiblePriority] = useState<EntityMetadataPriority>(0);
+  const [declaredPriority, setDeclaredPriority] = useState<EntityMetadataPriority>(0);
+
+  const declarePriority = useCallback((priority: EntityMetadataPriority) => {
+    const counts = priorityCounts.current;
+    counts.set(priority, (counts.get(priority) ?? 0) + 1);
+    setDeclaredPriority(Math.max(...counts.keys()) as EntityMetadataPriority);
+
+    return () => {
+      const nextCount = (counts.get(priority) ?? 1) - 1;
+      if (nextCount === 0) counts.delete(priority);
+      else counts.set(priority, nextCount);
+      setDeclaredPriority(
+        counts.size === 0 ? 0 : (Math.max(...counts.keys()) as EntityMetadataPriority),
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    const row = inlineRef.current?.parentElement;
+    if (!row || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      setVisiblePriority(visibleEntityMetadataPriority(entry.contentRect.width));
+    });
+    observer.observe(row);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const inlineLane = useMemo<EntityMetadataLaneContext>(
+    () => ({ lane: 'inline', visiblePriority, declarePriority }),
+    [declarePriority, visiblePriority],
+  );
+  const overflowLane = useMemo<EntityMetadataLaneContext>(
+    () => ({ lane: 'overflow', visiblePriority }),
+    [visiblePriority],
+  );
+  const hasOverflow = declaredPriority > visiblePriority;
+
   return (
-    <div
+    <ControlGroup
       role="group"
       aria-label={ariaLabel}
-      className="entity-metadata-row flex min-w-0 flex-nowrap items-center gap-2"
+      controlSize="sm"
+      className="entity-metadata-row min-w-0 flex-nowrap"
     >
-      <div
-        data-entity-metadata-inline=""
-        className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden"
-      >
-        {children}
+      <div ref={inlineRef} className="min-w-0 flex-1 overflow-hidden">
+        <ControlGroup data-entity-metadata-inline="" className="flex-nowrap">
+          <MetadataLaneContext.Provider value={inlineLane}>{children}</MetadataLaneContext.Provider>
+        </ControlGroup>
       </div>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            iconOnly
-            className="shrink-0"
-            aria-label={`More ${ariaLabel}`}
-          >
-            <Ellipsis aria-hidden />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 max-w-[calc(100vw-1.5rem)] p-2">
-          <div
-            role="group"
-            aria-label={`More ${ariaLabel}`}
-            data-entity-metadata-overflow=""
-            className="flex min-w-0 flex-col items-stretch gap-1"
-          >
-            {children}
-          </div>
-        </PopoverContent>
-      </Popover>
-    </div>
+      {hasOverflow ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              iconOnly
+              className="shrink-0"
+              aria-label={`More ${ariaLabel}`}
+            >
+              <Ellipsis aria-hidden />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 max-w-[calc(100vw-1.5rem)] p-2">
+            <ControlGroup
+              role="group"
+              aria-label={`More ${ariaLabel}`}
+              controlSize="sm"
+              orientation="vertical"
+              data-entity-metadata-overflow=""
+              className="min-w-0 items-stretch"
+            >
+              <MetadataLaneContext.Provider value={overflowLane}>
+                {children}
+              </MetadataLaneContext.Provider>
+            </ControlGroup>
+          </PopoverContent>
+        </Popover>
+      ) : null}
+    </ControlGroup>
   );
 }

@@ -369,7 +369,6 @@ export default function InitiativeDetailPage(): JSX.Element {
             <InitiativePropertiesPanel
               status={detail.status}
               health={detail.health ?? null}
-              rolledUpHealth={detail.rolledUpHealth}
               targetDate={detail.targetDate ?? null}
               targetDateResolution={detail.targetDateResolution}
               targetDateFiscalYearStartMonth={detail.targetDateFiscalYearStartMonth}

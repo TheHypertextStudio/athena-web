@@ -34,19 +34,19 @@ import {
   toPlanningTimeframe,
 } from '@/lib/planning-timeframe';
 
-/** Human label for each health verdict. */
+/** Human label for each health value. */
 export const HEALTH_LABEL: Record<Health, string> = {
   on_track: 'On track',
   at_risk: 'At risk',
   off_track: 'Off track',
 };
 
-/** The health verdicts, ordered by severity, with their labels + glyph hints. */
+/** The health values, ordered by severity, with their labels and glyph hints. */
 const HEALTH_OPTIONS: readonly FieldOption[] = (
   ['on_track', 'at_risk', 'off_track'] as const satisfies readonly Health[]
 ).map((health) => ({ value: health, label: HEALTH_LABEL[health], hint: health }));
 
-/** Severity order rank for a health verdict (on track → at risk → off track; unset last). */
+/** Severity order rank for health (on track → at risk → off track; unset last). */
 function healthRank(value: string | number | null): number {
   const order = ['on_track', 'at_risk', 'off_track'];
   if (value === null) return order.length;

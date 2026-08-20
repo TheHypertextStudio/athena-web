@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { assertDefined } from '@docket/test-utils';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   EntityDetailLayout,
@@ -110,7 +111,40 @@ describe('EntityDetailLayout', () => {
 });
 
 describe('EntityMetadataRow', () => {
-  it('keeps one inline row and preserves every property in its overflow popover', async () => {
+  let resize: ResizeObserverCallback;
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class ResizeObserverMock {
+        constructor(callback: ResizeObserverCallback) {
+          resize = callback;
+        }
+
+        observe(): void {
+          return undefined;
+        }
+        unobserve(): void {
+          return undefined;
+        }
+        disconnect(): void {
+          return undefined;
+        }
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function resizeRow(width: number): void {
+    act(() => {
+      resize([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver);
+    });
+  }
+
+  it('partitions visible and overflow properties without duplicating either set', async () => {
     render(
       <EntityMetadataRow ariaLabel="Project properties">
         <EntityMetadataItem priority={0}>
@@ -119,18 +153,55 @@ describe('EntityMetadataRow', () => {
         <EntityMetadataItem priority={1}>
           <button type="button">Health</button>
         </EntityMetadataItem>
+        <EntityMetadataItem priority={2}>
+          <button type="button">Target date</button>
+        </EntityMetadataItem>
+        <EntityMetadataItem priority={3}>
+          <button type="button">Lead</button>
+        </EntityMetadataItem>
       </EntityMetadataRow>,
     );
 
+    resizeRow(700);
+
     const row = screen.getByRole('group', { name: 'Project properties' });
     expect(row).toHaveClass('flex-nowrap');
+    expect(row).toHaveAttribute('data-control-size', 'sm');
     expect(row.querySelector('[data-entity-metadata-inline]')).toHaveClass('flex-nowrap');
+    const inline = within(
+      assertDefined(row.querySelector<HTMLElement>('[data-entity-metadata-inline]')),
+    );
+    expect(inline.getByRole('button', { name: 'Status' })).toBeVisible();
+    expect(inline.getByRole('button', { name: 'Health' })).toBeVisible();
+    expect(inline.getByRole('button', { name: 'Target date' })).toBeVisible();
+    expect(inline.queryByRole('button', { name: 'Lead' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'More Project properties' }));
     const overflow = await screen.findByRole('group', {
       name: 'More Project properties',
     });
-    expect(within(overflow).getByRole('button', { name: 'Status' })).toBeVisible();
-    expect(within(overflow).getByRole('button', { name: 'Health' })).toBeVisible();
+    expect(within(overflow).queryByRole('button', { name: 'Status' })).not.toBeInTheDocument();
+    expect(within(overflow).queryByRole('button', { name: 'Health' })).not.toBeInTheDocument();
+    expect(within(overflow).queryByRole('button', { name: 'Target date' })).not.toBeInTheDocument();
+    expect(within(overflow).getByRole('button', { name: 'Lead' })).toBeVisible();
+  });
+
+  it('removes the overflow trigger when every declared property fits', () => {
+    render(
+      <EntityMetadataRow ariaLabel="Program properties">
+        <EntityMetadataItem priority={0}>
+          <button type="button">Status</button>
+        </EntityMetadataItem>
+        <EntityMetadataItem priority={1}>
+          <button type="button">Owner</button>
+        </EntityMetadataItem>
+      </EntityMetadataRow>,
+    );
+
+    resizeRow(700);
+
+    expect(
+      screen.queryByRole('button', { name: 'More Program properties' }),
+    ).not.toBeInTheDocument();
   });
 });

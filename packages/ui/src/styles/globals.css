@@ -1015,69 +1015,9 @@
   animation-name: detail-tabs-collapse;
 }
 
-/*
- * Strategic-work properties are one row at every width. Lower-priority items disappear from the
- * inline lane at conservative container thresholds and remain available in the adjacent overflow
- * popover. The popover copy is vertical and always reveals every item.
- */
-.entity-metadata-row {
-  container-type: inline-size;
-}
-
-[data-entity-metadata-inline] [data-entity-metadata-item] {
-  display: none;
-}
-
-[data-entity-metadata-inline] [data-entity-metadata-priority='0'],
-[data-entity-metadata-overflow] [data-entity-metadata-item] {
-  display: flex;
-}
-
 [data-entity-metadata-overflow] [data-entity-metadata-item] {
   width: 100%;
   max-width: none;
-}
-
-@container (min-width: 28rem) {
-  [data-entity-metadata-inline] [data-entity-metadata-priority='1'] {
-    display: flex;
-  }
-}
-
-@container (min-width: 40rem) {
-  [data-entity-metadata-inline] [data-entity-metadata-priority='2'] {
-    display: flex;
-  }
-}
-
-@container (min-width: 52rem) {
-  [data-entity-metadata-inline] [data-entity-metadata-priority='3'] {
-    display: flex;
-  }
-}
-
-@container (min-width: 64rem) {
-  [data-entity-metadata-inline] [data-entity-metadata-priority='4'] {
-    display: flex;
-  }
-}
-
-@container (min-width: 76rem) {
-  [data-entity-metadata-inline] [data-entity-metadata-priority='5'] {
-    display: flex;
-  }
-}
-
-@container (min-width: 88rem) {
-  [data-entity-metadata-inline] [data-entity-metadata-priority='6'] {
-    display: flex;
-  }
-}
-
-@container (min-width: 100rem) {
-  [data-entity-metadata-inline] [data-entity-metadata-priority='7'] {
-    display: flex;
-  }
 }
 
 /*

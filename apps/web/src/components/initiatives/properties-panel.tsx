@@ -18,7 +18,6 @@ import {
 } from '@docket/ui/components';
 import { type JSX, useMemo } from 'react';
 
-import { RolledUpHealthPill } from '@/components/initiatives/health-pill';
 import {
   enumOptions,
   HEALTH_OPTIONS,
@@ -60,7 +59,6 @@ const CADENCE_ORDER: readonly InitiativeUpdateCadence[] = [
 export interface InitiativePropertiesPanelProps {
   status: InitiativeStatus;
   health: Health | null;
-  rolledUpHealth: Health | null;
   targetDate: string | null;
   targetDateResolution: DateResolution | null;
   targetDateFiscalYearStartMonth: number | null;
@@ -98,10 +96,9 @@ const CHIP = { triggerVariant: 'ghost', triggerClassName: ENTITY_METADATA_CHIP_C
  *
  * @remarks
  * Returns the property chips directly (no wrapper) so the caller can drop them into an
- * {@link EntityMetadataRow}. Order follows the canonical matrix: Status → Health →
- * Connected-work health (read-only roll-up) → Target → Owner → Priority → Cadence → Labels. The
- * rolled-up health is a non-interactive {@link RolledUpHealthPill} because it is auto-derived from
- * the associated children. Label editing runs through {@link LabelsPicker}.
+ * {@link EntityMetadataRow}. Order follows the canonical matrix: Status → Health → Target → Owner
+ * → Priority → Cadence → Labels. Connected-work rollups belong in analysis rather than beside the
+ * editable Initiative health property. Label editing runs through {@link LabelsPicker}.
  *
  * @param props - The {@link InitiativePropertiesPanelProps}.
  * @returns the inline property chips.
@@ -109,7 +106,6 @@ const CHIP = { triggerVariant: 'ghost', triggerClassName: ENTITY_METADATA_CHIP_C
 export function InitiativePropertiesPanel({
   status,
   health,
-  rolledUpHealth,
   targetDate,
   targetDateResolution,
   targetDateFiscalYearStartMonth,
@@ -174,9 +170,6 @@ export function InitiativePropertiesPanel({
         />
       </EntityMetadataItem>
       <EntityMetadataItem priority={2}>
-        <RolledUpHealthPill health={rolledUpHealth} className="min-h-10 px-3" />
-      </EntityMetadataItem>
-      <EntityMetadataItem priority={3}>
         <TimeframePicker
           label="Target date"
           value={targetTimeframe}
@@ -187,7 +180,7 @@ export function InitiativePropertiesPanel({
           {...CHIP}
         />
       </EntityMetadataItem>
-      <EntityMetadataItem priority={4}>
+      <EntityMetadataItem priority={3}>
         <ActorPicker
           options={memberOptions}
           value={ownerId}
@@ -199,7 +192,7 @@ export function InitiativePropertiesPanel({
           {...CHIP}
         />
       </EntityMetadataItem>
-      <EntityMetadataItem priority={5}>
+      <EntityMetadataItem priority={4}>
         <EnumPicker<InitiativePriority>
           options={enumOptions(PRIORITY_ORDER, INITIATIVE_PRIORITY_LABEL)}
           value={priority}
@@ -212,7 +205,7 @@ export function InitiativePropertiesPanel({
           {...CHIP}
         />
       </EntityMetadataItem>
-      <EntityMetadataItem priority={6}>
+      <EntityMetadataItem priority={5}>
         <EnumPicker<InitiativeUpdateCadence>
           options={enumOptions(CADENCE_ORDER, INITIATIVE_CADENCE_LABEL)}
           value={updateCadence}
@@ -225,7 +218,7 @@ export function InitiativePropertiesPanel({
           {...CHIP}
         />
       </EntityMetadataItem>
-      <EntityMetadataItem priority={7}>
+      <EntityMetadataItem priority={6}>
         <LabelsPicker
           options={labelPickerOptions}
           value={labelIds}

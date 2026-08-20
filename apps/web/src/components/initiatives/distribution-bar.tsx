@@ -8,7 +8,7 @@
  * the most honest summary is *how its children are distributed across the health buckets*.
  * This renders the `distribution` roll-up (`onTrack` / `atRisk` / `offTrack` / `unknown`)
  * as a single stacked, token-colored bar — a calm green run, an amber run, a red run, and a
- * neutral run for children with no verdict yet — sized proportionally to the child counts.
+ * neutral run for children with no health data yet, sized proportionally to the child counts.
  *
  * The bar is decorative (`aria-hidden`); the accompanying legend carries the real,
  * screen-reader-accessible numbers so the signal is never color-only. When there are no

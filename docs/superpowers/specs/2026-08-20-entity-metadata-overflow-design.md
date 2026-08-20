@@ -14,8 +14,8 @@ thresholds remain the policy. One measurement hook will convert the container wi
 highest visible priority. The React renderer will then partition the canonical child list. CSS
 will no longer maintain a second visibility implementation.
 
-The row will wrap both lanes in the existing `ControlGroup` at the `md` step. That step provides a
-32px control height, 12px horizontal inset, an 18px icon, and the MD3 `label-large` type role.
+The row will wrap both lanes in the existing `ControlGroup` at the `sm` step. That step provides a
+28px control height, 10px horizontal inset, a 16px icon, and the MD3 `label-medium` type role.
 Property triggers will stop overriding those metrics with `min-h-10`, local padding, or icon sizes.
 The shared class will retain only surface, truncation, and shape behavior that the control primitive
 does not own. No arbitrary value, inline style, or new type class will be added.

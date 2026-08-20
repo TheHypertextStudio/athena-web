@@ -125,12 +125,8 @@ export default function MentionMenu({
       >
         <ul role="listbox" id={listboxId} aria-label="Mention a resource" className="space-y-0.5">
           {groups.map((group, index) => (
-            <li
-              key={group.key}
-              role="group"
-              aria-labelledby={`${listboxId}-group-${group.key}`}
-              className={index > 0 ? GROUP_DIVIDER : undefined}
-            >
+            <li key={group.key} role="group" aria-labelledby={`${listboxId}-group-${group.key}`}>
+              {index > 0 ? <div aria-hidden className={GROUP_DIVIDER} /> : null}
               <p id={`${listboxId}-group-${group.key}`} className={HEADING_CLASS}>
                 {group.label}
               </p>
@@ -154,11 +150,8 @@ export default function MentionMenu({
           ))}
 
           {externalPending ? (
-            <li
-              aria-hidden
-              role="presentation"
-              className={groups.length > 0 ? GROUP_DIVIDER : undefined}
-            >
+            <li aria-hidden role="presentation">
+              {groups.length > 0 ? <div aria-hidden className={GROUP_DIVIDER} /> : null}
               <p className={HEADING_CLASS}>
                 Files
                 <span className="ml-1 opacity-70">searching…</span>
@@ -171,7 +164,8 @@ export default function MentionMenu({
           ) : null}
 
           {externalFailed && !externalPending ? (
-            <li role="presentation" className={groups.length > 0 ? GROUP_DIVIDER : undefined}>
+            <li role="presentation">
+              {groups.length > 0 ? <div aria-hidden className={GROUP_DIVIDER} /> : null}
               <p className={HEADING_CLASS}>
                 Files <span className="opacity-70">· unavailable</span>
               </p>

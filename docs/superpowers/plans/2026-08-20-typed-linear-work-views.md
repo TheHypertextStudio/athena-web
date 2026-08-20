@@ -38,7 +38,7 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 - [x] Remove `RolledUpHealthPill` from Initiative metadata and replace production Initiative
       `verdict` copy with health copy.
 - [x] Run the two focused component files and `pnpm --filter @docket/web typecheck`.
-- [x] Commit the slice as `fix(ui): Keep visible properties out of header overflow` with a body
+- [x] Commit the slice as `fix: Keep visible properties out of header overflow` with a body
       that records container ownership and the single-health decision.
 
 ### Task 2: Finish the generic typed view contract
@@ -49,12 +49,12 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 - Create: `domains/work/tests/view-contract.test.ts`
 - Modify: `domains/work/package.json`
 
-- [ ] Keep the failing type tests for invalid field/operator/operand/layout combinations.
-- [ ] Implement const-generic field declarations, precomputed predicate unions, recursive boolean
+- [x] Keep the failing type tests for invalid field/operator/operand/layout combinations.
+- [x] Implement const-generic field declarations, precomputed predicate unions, recursive boolean
       nodes, arrangements, presentations, drafts, runtime schemas, and deterministic canonicalization.
-- [ ] Run `pnpm --filter @docket/work exec vitest run tests/view-contract.test.ts --maxWorkers=2`
+- [x] Run `pnpm --filter @docket/work exec vitest run tests/view-contract.test.ts --maxWorkers=2`
       and `pnpm --filter @docket/work typecheck`.
-- [ ] Commit the slice as `feat(work): Define typed work-view queries`.
+- [x] Commit the slice as `feat: Define typed work-view queries`.
 
 ### Task 3: Instantiate all four entity contracts
 
@@ -73,7 +73,7 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
       instance keys, definitions, rows, facets, ordering requests, defaults, and saved-view schemas.
 - [ ] Add v1-to-v2 saved-view migration and preference-precedence domain tests.
 - [ ] Run focused Types tests plus `pnpm --filter @docket/types typecheck`.
-- [ ] Commit the slice as `feat(work): Close work views over every planning level`.
+- [ ] Commit the slice as `feat: Close work views over every planning level`.
 
 ### Task 4: Add compatible storage and migration
 
@@ -94,7 +94,7 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 - [ ] Generate the migration, add primary-edge and v1-definition backfills, and assert idempotent
       additive deployment against existing fixtures.
 - [ ] Run focused DB tests, schema typecheck, and migration validation.
-- [ ] Commit the slice as `feat(data): Store typed work views and shared ordering`.
+- [ ] Commit the slice as `feat: Store typed work views and shared ordering`.
 
 ### Task 5: Compile authorized server queries
 
@@ -115,7 +115,7 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 - [ ] Apply authorization before filters, facets, counts, grouping, and keyset pagination.
 - [ ] Bind cursor fingerprints to the canonical query, group path, sort tuple, and entity id.
 - [ ] Run focused API integration tests and `pnpm --filter @docket/api typecheck`.
-- [ ] Commit the slice as `feat(api): Query authorized typed work views`.
+- [ ] Commit the slice as `feat: Query authorized typed work views`.
 
 ### Task 6: Expose query, facet, ordering, default, and saved-view routes
 
@@ -132,7 +132,7 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 - [ ] Add the four `/v1/orgs/:orgId/work-views/*` operations and migrate saved-view persistence.
 - [ ] Reject computed/read-only reorder groups and route mutable drops through canonical mutations.
 - [ ] Run focused route tests, API lint, and API typecheck.
-- [ ] Commit the slice as `feat(api): Expose typed work-view operations`.
+- [ ] Commit the slice as `feat: Expose typed work-view operations`.
 
 ### Task 7: Build the shared web view controller and toolbar
 
@@ -153,7 +153,7 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 - [ ] Keep incomplete editor state in `FilterDraft`; parse before applying or saving.
 - [ ] Use named MD3 type roles, semantic colors, `ControlGroup`, and shared primitives only.
 - [ ] Run focused controller/toolbar tests plus web typecheck and lint.
-- [ ] Commit the slice as `feat(web): Add one controller for typed work views`.
+- [ ] Commit the slice as `feat: Add one controller for typed work views`.
 
 ### Task 8: Add list, board, and timeline adapters
 
@@ -173,7 +173,7 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
       replacing their proven interaction code.
 - [ ] Add board columns/swimlanes and route drops through the typed ordering operation.
 - [ ] Run focused renderer tests and web typecheck.
-- [ ] Commit the slice as `feat(web): Render typed work views across supported layouts`.
+- [ ] Commit the slice as `feat: Render typed work views across supported layouts`.
 
 ### Task 9: Switch all four main pages and validate rollout
 
@@ -196,4 +196,4 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
       Initiatives; fail when p95 exceeds 300ms or mounted rows/cards become unbounded.
 - [ ] Run focused checks, then bounded root typecheck, lint, test, and build gates.
 - [ ] Complete the WORKLOG entry with evidence, remaining compatibility cleanup, and rollout risks.
-- [ ] Commit the page switch as `feat(web): Replace flat rosters with typed work views`.
+- [ ] Commit the page switch as `feat: Replace flat rosters with typed work views`.

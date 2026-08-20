@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { CalendarItemCreateIntent } from './calendar';
 import { CalendarLayerId } from './primitives';
+import { PersonalWorkViewState } from './work-view';
 
 /** Where the Hub lands on open: the Hub, the last-used context, or a specific org. */
 export const HubLanding = z
@@ -90,6 +91,12 @@ export const HubPreferences = z
     athena: AthenaPreferences.optional().describe(
       'Personal instructions and approval policy that follow the user across workspaces.',
     ),
+    viewState: z
+      .array(PersonalWorkViewState)
+      .optional()
+      .describe(
+        'Sparse personal work-view overrides, collapsed groups, hidden columns, favorites, and last-used layouts keyed by a stable view instance.',
+      ),
     digest: z
       .object({
         enabled: z

@@ -201,6 +201,18 @@ type OperandOf<TField extends ViewFieldDefinition> = TField extends {
   ? z.infer<TSchema>
   : z.infer<TField['schema']>;
 
+/** Projected runtime value for one declared field. */
+export type FieldValueFor<
+  TContract extends ViewContract,
+  TField extends StringKey<FieldsOf<TContract>>,
+> = z.infer<FieldsOf<TContract>[TField]['schema']>;
+
+/** Predicate and mutable-group operand for one declared field. */
+export type FieldOperandFor<
+  TContract extends ViewContract,
+  TField extends StringKey<FieldsOf<TContract>>,
+> = OperandOf<FieldsOf<TContract>[TField]>;
+
 type SetFilterOperator = 'isAnyOf' | 'isNoneOf' | 'includesAny' | 'includesAll' | 'includesNone';
 
 type PredicateForOperator<

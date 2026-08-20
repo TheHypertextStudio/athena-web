@@ -306,3 +306,10 @@ export const DateString = z.iso
   .date()
   .describe('A calendar date with no time component, ISO-8601 `YYYY-MM-DD`.')
   .meta({ example: '2026-06-29' });
+/** A validated ISO calendar date. */
+export type DateString = z.infer<typeof DateString>;
+
+/** A branded ISO timestamp that cannot be exchanged with a calendar date. */
+export const TimestampString = z.iso.datetime().brand<'TimestampString'>();
+/** A validated ISO timestamp. */
+export type TimestampString = z.infer<typeof TimestampString>;

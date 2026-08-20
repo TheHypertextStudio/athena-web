@@ -66,14 +66,14 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 - Modify: `packages/types/src/saved-view.ts`
 - Modify: `packages/types/src/hub-preferences.ts`
 
-- [ ] Keep type tests that reject cross-target status keys, Initiative boards, Program timelines,
+- [x] Keep type tests that reject cross-target status keys, Initiative boards, Program timelines,
       invalid contexts, and read-only group mutations.
-- [ ] Declare the complete Task, Project, Program, and Initiative field catalogs and target layouts.
-- [ ] Add symbolic actor/date operands, ranks, target cursors, canonical query fingerprints,
+- [x] Declare the complete Task, Project, Program, and Initiative field catalogs and target layouts.
+- [x] Add symbolic actor/date operands, ranks, target cursors, canonical query fingerprints,
       instance keys, definitions, rows, facets, ordering requests, defaults, and saved-view schemas.
-- [ ] Add v1-to-v2 saved-view migration and preference-precedence domain tests.
-- [ ] Run focused Types tests plus `pnpm --filter @docket/types typecheck`.
-- [ ] Commit the slice as `feat: Close work views over every planning level`.
+- [x] Add v1-to-v2 saved-view migration and preference-precedence domain tests.
+- [x] Run focused Types tests plus `pnpm --filter @docket/types typecheck`.
+- [x] Commit the slice as `feat: Close work views over every planning level`.
 
 ### Task 4: Add compatible storage and migration
 

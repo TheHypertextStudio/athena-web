@@ -4,6 +4,17 @@
 import { z } from 'zod';
 
 import { ActorId, OrganizationId, SavedViewId, TeamId } from './primitives';
+import {
+  FractionalRank,
+  InitiativeHierarchyWorkViewContext,
+  InitiativeViewDefinition,
+  ProgramViewDefinition,
+  ProgramWorkViewContext,
+  ProjectViewDefinition,
+  ProjectWorkViewContext,
+  TaskViewDefinition,
+  TaskWorkViewContext,
+} from './work-view';
 
 /** A saved view's sharing scope. */
 export const ViewScope = z.enum(['personal', 'team', 'organization']);
@@ -152,3 +163,250 @@ export const SavedViewOut = z
   .meta({ id: 'SavedViewOut', description: 'A saved view.' });
 /** Saved-view representation value. */
 export type SavedViewOut = z.infer<typeof SavedViewOut>;
+
+const savedWorkViewBase = {
+  name: z.string().min(1),
+  scope: ViewScope.default('personal'),
+  ownerActorId: ActorId.optional(),
+  teamId: TeamId.optional(),
+  position: FractionalRank,
+  schemaVersion: z.literal(2).default(2),
+};
+
+function savedWorkViewCreateVariant<
+  const TTarget extends 'task' | 'project' | 'program' | 'initiative',
+  const TDefinition extends z.ZodType,
+  const TContext extends z.ZodType,
+>(target: TTarget, definition: TDefinition, context: TContext) {
+  return z
+    .object({
+      ...savedWorkViewBase,
+      target: z.literal(target),
+      context,
+      definition,
+    })
+    .strict();
+}
+
+/** Body for creating a v2 saved work view. */
+export const SavedWorkViewCreate = z.discriminatedUnion('target', [
+  savedWorkViewCreateVariant('task', TaskViewDefinition, TaskWorkViewContext),
+  savedWorkViewCreateVariant('project', ProjectViewDefinition, ProjectWorkViewContext),
+  savedWorkViewCreateVariant('program', ProgramViewDefinition, ProgramWorkViewContext),
+  savedWorkViewCreateVariant(
+    'initiative',
+    InitiativeViewDefinition,
+    InitiativeHierarchyWorkViewContext,
+  ),
+]);
+/** A validated v2 saved-work-view create body. */
+export type SavedWorkViewCreate = z.infer<typeof SavedWorkViewCreate>;
+
+const savedWorkViewOutBase = {
+  id: SavedViewId,
+  organizationId: OrganizationId,
+  name: z.string().min(1),
+  scope: ViewScope,
+  ownerActorId: ActorId.nullable(),
+  teamId: TeamId.nullable().optional(),
+  position: FractionalRank,
+  schemaVersion: z.literal(2),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  filters: z.array(ViewFilter),
+  grouping: ViewGrouping.nullable(),
+  sort: z.array(ViewSort),
+};
+
+function savedWorkViewOutVariant<
+  const TTarget extends 'task' | 'project' | 'program' | 'initiative',
+  const TDefinition extends z.ZodType,
+  const TContext extends z.ZodType,
+>(target: TTarget, definition: TDefinition, context: TContext) {
+  return z
+    .object({
+      ...savedWorkViewOutBase,
+      target: z.literal(target),
+      context,
+      definition,
+    })
+    .strict();
+}
+
+/** Saved work view with v2 state and one-window legacy response fields. */
+export const SavedWorkViewOut = z.discriminatedUnion('target', [
+  savedWorkViewOutVariant('task', TaskViewDefinition, TaskWorkViewContext),
+  savedWorkViewOutVariant('project', ProjectViewDefinition, ProjectWorkViewContext),
+  savedWorkViewOutVariant('program', ProgramViewDefinition, ProgramWorkViewContext),
+  savedWorkViewOutVariant(
+    'initiative',
+    InitiativeViewDefinition,
+    InitiativeHierarchyWorkViewContext,
+  ),
+]);
+/** A validated saved work view. */
+export type SavedWorkViewOut = z.infer<typeof SavedWorkViewOut>;
+
+/** Partial update for a v2 saved work view. The target remains immutable. */
+export const SavedWorkViewUpdate = z
+  .object({
+    name: z.string().min(1).optional(),
+    scope: ViewScope.optional(),
+    ownerActorId: ActorId.nullable().optional(),
+    teamId: TeamId.nullable().optional(),
+    context: z
+      .union([
+        TaskWorkViewContext,
+        ProjectWorkViewContext,
+        ProgramWorkViewContext,
+        InitiativeHierarchyWorkViewContext,
+      ])
+      .optional(),
+    position: FractionalRank.optional(),
+    definition: z
+      .union([
+        TaskViewDefinition,
+        ProjectViewDefinition,
+        ProgramViewDefinition,
+        InitiativeViewDefinition,
+      ])
+      .optional(),
+  })
+  .strict();
+/** A validated saved-work-view update. */
+export type SavedWorkViewUpdate = z.infer<typeof SavedWorkViewUpdate>;
+
+function organizationDefaultVariant<
+  const TTarget extends 'task' | 'project' | 'program' | 'initiative',
+  const TDefinition extends z.ZodType,
+>(target: TTarget, definition: TDefinition) {
+  return z
+    .object({
+      target: z.literal(target),
+      definition,
+      updatedBy: ActorId,
+      updatedAt: z.iso.datetime(),
+    })
+    .strict();
+}
+
+/** Organization-owned built-in page default. Updating it requires `manage`. */
+export const OrganizationWorkViewDefault = z.discriminatedUnion('target', [
+  organizationDefaultVariant('task', TaskViewDefinition),
+  organizationDefaultVariant('project', ProjectViewDefinition),
+  organizationDefaultVariant('program', ProgramViewDefinition),
+  organizationDefaultVariant('initiative', InitiativeViewDefinition),
+]);
+/** A validated organization work-view default. */
+export type OrganizationWorkViewDefault = z.infer<typeof OrganizationWorkViewDefault>;
+
+const LEGACY_TASK_FIELD = {
+  state: 'status',
+  status: 'status',
+  priority: 'priority',
+  assigneeId: 'assignee',
+  delegateId: 'delegate',
+  teamId: 'team',
+  projectId: 'project',
+  programId: 'program',
+  cycleId: 'cycle',
+  milestoneId: 'milestone',
+  parentTaskId: 'parent',
+  labels: 'labels',
+  title: 'title',
+  createdBy: 'creator',
+  startDate: 'startDate',
+  dueDate: 'dueDate',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  estimate: 'estimate',
+  estimateMinutes: 'estimateMinutes',
+  blocked: 'blocked',
+  blocking: 'blocking',
+  archived: 'archived',
+} as const;
+
+type LegacyTaskField = keyof typeof LEGACY_TASK_FIELD;
+
+function legacyTaskField(field: string): (typeof LEGACY_TASK_FIELD)[LegacyTaskField] {
+  if (field in LEGACY_TASK_FIELD) return LEGACY_TASK_FIELD[field as LegacyTaskField];
+  throw new TypeError(`Legacy Task view field "${field}" is not supported.`);
+}
+
+function legacyTaskOperand(field: string, value: unknown): unknown {
+  if (field === 'assignee' || field === 'delegate' || field === 'creator') {
+    const actor = (actorId: unknown) => ({ kind: 'actor', actorId });
+    return Array.isArray(value) ? value.map(actor) : actor(value);
+  }
+  if (
+    field === 'startDate' ||
+    field === 'dueDate' ||
+    field === 'createdAt' ||
+    field === 'updatedAt'
+  ) {
+    const absolute = (date: unknown) => ({ kind: 'absolute', value: date });
+    return Array.isArray(value) ? value.map(absolute) : absolute(value);
+  }
+  return value;
+}
+
+function legacyTaskPredicate(filter: ViewFilter): unknown {
+  const field = legacyTaskField(filter.field);
+  const relationMany = field === 'labels';
+  const temporal =
+    field === 'startDate' || field === 'dueDate' || field === 'createdAt' || field === 'updatedAt';
+  const operator = (() => {
+    switch (filter.op) {
+      case 'eq':
+        return relationMany ? 'includesAny' : 'is';
+      case 'neq':
+        return relationMany ? 'includesNone' : 'isNot';
+      case 'in':
+        return relationMany ? 'includesAny' : 'isAnyOf';
+      case 'nin':
+        return relationMany ? 'includesNone' : 'isNoneOf';
+      case 'gt':
+        return temporal ? 'after' : 'greaterThan';
+      case 'lt':
+        return temporal ? 'before' : 'lessThan';
+      case 'contains':
+        return 'contains';
+    }
+  })();
+  const rawOperand = relationMany && !Array.isArray(filter.value) ? [filter.value] : filter.value;
+  return {
+    kind: 'predicate',
+    field,
+    operator,
+    operand: legacyTaskOperand(field, rawOperand),
+  };
+}
+
+/** Convert the legacy flat Task view state into one validated v2 definition. */
+export function migrateLegacyTaskViewDefinition(
+  legacy: Pick<SavedViewOut, 'filters' | 'grouping' | 'sort'>,
+): TaskViewDefinition {
+  const definition = {
+    version: 2,
+    target: 'task',
+    filter:
+      legacy.filters.length === 0
+        ? null
+        : { kind: 'all', children: legacy.filters.map(legacyTaskPredicate) },
+    arrangement: {
+      groupBy: legacy.grouping ? legacyTaskField(legacy.grouping.by) : null,
+      subGroupBy: legacy.grouping?.subBy ? legacyTaskField(legacy.grouping.subBy) : null,
+      orderBy: legacy.sort.map((term) => ({
+        field: legacyTaskField(term.field),
+        direction: term.order,
+      })),
+    },
+    presentation: {
+      layout: 'list',
+      properties: ['status', 'priority', 'assignee', 'dueDate'],
+      density: 'comfortable',
+      showEmptyGroups: false,
+    },
+  };
+  return TaskViewDefinition.parse(definition);
+}

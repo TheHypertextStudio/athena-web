@@ -8,6 +8,7 @@ import {
   initiative,
   initiativeProject,
   milestone,
+  organization,
   program,
   project,
   projectDependency,
@@ -33,6 +34,7 @@ import { NotFoundError } from '../error';
 import { deferAfterResponse } from '../lib/after-response';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { guardsInOrder } from '../lib/guards-in-order';
+import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
 import { replaceLabels, resolveLabelSet } from '../lib/labels';
 import { created, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
@@ -60,7 +62,11 @@ function toOut(p: ProjectRow): z.input<typeof ProjectOut> {
     teamId: p.teamId,
     programId: p.programId,
     startDate: p.startDate?.toISOString() ?? null,
+    startDateResolution: p.startDateResolution,
+    startDateFiscalYearStartMonth: p.startDateFiscalYearStartMonth,
     targetDate: p.targetDate?.toISOString() ?? null,
+    targetDateResolution: p.targetDateResolution,
+    targetDateFiscalYearStartMonth: p.targetDateFiscalYearStartMonth,
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -218,6 +224,28 @@ const projects = new Hono<AppEnv>()
       ]);
 
       const row = await db.transaction(async (tx) => {
+        const [settings] = await tx
+          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
+          .from(organization)
+          .where(eq(organization.id, orgId))
+          .limit(1);
+        /* v8 ignore next -- @preserve actor context proves the workspace exists */
+        if (!settings) throw new NotFoundError('Organization not found');
+        const start = planningDatePatch(
+          { date: body.startDate, resolution: body.startDateResolution },
+          settings.fiscalYearStartMonth,
+          'start',
+          'startDate',
+          'startDateResolution',
+        );
+        const target = planningDatePatch(
+          { date: body.targetDate, resolution: body.targetDateResolution },
+          settings.fiscalYearStartMonth,
+          'target',
+          'targetDate',
+          'targetDateResolution',
+        );
+        assertPlanningDateRange(start?.date ?? null, target?.date ?? null);
         const inserted = await tx
           .insert(project)
           .values({
@@ -231,8 +259,20 @@ const projects = new Hono<AppEnv>()
             status: status.status,
             statusId: status.statusId,
             health: body.health,
-            startDate: body.startDate ? new Date(body.startDate) : undefined,
-            targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
+            ...(start === undefined
+              ? {}
+              : {
+                  startDate: start.date,
+                  startDateResolution: start.resolution,
+                  startDateFiscalYearStartMonth: start.fiscalYearStartMonth,
+                }),
+            ...(target === undefined
+              ? {}
+              : {
+                  targetDate: target.date,
+                  targetDateResolution: target.resolution,
+                  targetDateFiscalYearStartMonth: target.fiscalYearStartMonth,
+                }),
             createdBy: actorId,
           })
           .returning();
@@ -495,40 +535,66 @@ const projects = new Hono<AppEnv>()
         body.status === undefined
           ? undefined
           : await resolveContainerStatus(orgId, 'project', body.status);
-      const patch = {
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...clearableTextPatch('summary', body.summary),
-        ...clearableTextPatch('description', body.description),
-        ...(body.leadId !== undefined ? { leadId: body.leadId } : {}),
-        ...(body.programId !== undefined ? { programId: body.programId } : {}),
-        ...(body.teamId !== undefined ? { teamId: body.teamId } : {}),
-        ...(nextStatus === undefined
-          ? {}
-          : { status: nextStatus.status, statusId: nextStatus.statusId }),
-        ...(body.health !== undefined ? { health: body.health } : {}),
-        ...(body.startDate !== undefined
-          ? { startDate: body.startDate ? new Date(body.startDate) : null }
-          : {}),
-        ...(body.targetDate !== undefined
-          ? { targetDate: body.targetDate ? new Date(body.targetDate) : null }
-          : {}),
-      };
       const where = and(eq(project.id, id), eq(project.organizationId, orgId));
 
-      // An empty patch body is a valid no-op: Drizzle rejects an empty `.set({})`, so
-      // re-read the row (still enforcing the org-scoped existence check) and return it.
-      if (Object.keys(patch).length === 0 && body.labelIds === undefined) {
-        const rows = await db.select().from(project).where(where).limit(1);
-        const existing = rows[0];
-        if (!existing) throw new NotFoundError('Project not found');
-        return ok(c, ProjectOut, toOut(existing));
-      }
-
       const row = await db.transaction(async (tx) => {
+        const [current] = await tx.select().from(project).where(where).limit(1).for('update');
+        if (!current) return undefined;
+        const [settings] = await tx
+          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
+          .from(organization)
+          .where(eq(organization.id, orgId))
+          .limit(1);
+        /* v8 ignore next -- @preserve the Project's organization FK proves this row exists */
+        if (!settings) throw new NotFoundError('Organization not found');
+        const start = planningDatePatch(
+          { date: body.startDate, resolution: body.startDateResolution },
+          settings.fiscalYearStartMonth,
+          'start',
+          'startDate',
+          'startDateResolution',
+        );
+        const target = planningDatePatch(
+          { date: body.targetDate, resolution: body.targetDateResolution },
+          settings.fiscalYearStartMonth,
+          'target',
+          'targetDate',
+          'targetDateResolution',
+        );
+        assertPlanningDateRange(
+          start === undefined ? current.startDate : start.date,
+          target === undefined ? current.targetDate : target.date,
+        );
+        const patch: Partial<typeof project.$inferInsert> = {
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...clearableTextPatch('summary', body.summary),
+          ...clearableTextPatch('description', body.description),
+          ...(body.leadId !== undefined ? { leadId: body.leadId } : {}),
+          ...(body.programId !== undefined ? { programId: body.programId } : {}),
+          ...(body.teamId !== undefined ? { teamId: body.teamId } : {}),
+          ...(nextStatus === undefined
+            ? {}
+            : { status: nextStatus.status, statusId: nextStatus.statusId }),
+          ...(body.health !== undefined ? { health: body.health } : {}),
+          ...(start === undefined
+            ? {}
+            : {
+                startDate: start.date,
+                startDateResolution: start.resolution,
+                startDateFiscalYearStartMonth: start.fiscalYearStartMonth,
+              }),
+          ...(target === undefined
+            ? {}
+            : {
+                targetDate: target.date,
+                targetDateResolution: target.resolution,
+                targetDateFiscalYearStartMonth: target.fiscalYearStartMonth,
+              }),
+        };
         const updated =
           Object.keys(patch).length > 0
             ? await tx.update(project).set(patch).where(where).returning()
-            : await tx.select().from(project).where(where).limit(1);
+            : [current];
         const changed = updated[0];
         if (!changed) return undefined;
         if (body.labelIds !== undefined) {

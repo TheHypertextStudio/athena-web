@@ -293,7 +293,7 @@ field parity, and why fiscal snapshots are read-only.
 - Modify: `apps/api/src/routes/orgs.ts`
 - Modify: `apps/api/tests/routes/projects-detail.test.ts`
 - Modify: `apps/api/tests/routes/initiatives-detail.test.ts`
-- Create: `apps/api/tests/routes/work-structure-timeframes.test.ts`
+- Modify: `apps/api/tests/routes/group-d.test.ts`
 
 **Interfaces:**
 
@@ -301,7 +301,7 @@ field parity, and why fiscal snapshots are read-only.
 - Rejects partial broad pairs and noncanonical boundaries with stable `ValidationError` details.
 - Clears stale resolution and fiscal data when an old client writes a precise date.
 
-- [ ] **Step 1: Write failing pair-normalization tests**
+- [x] **Step 1: Write failing pair-normalization tests**
 
 ```typescript
 expect(
@@ -327,13 +327,13 @@ expect(() =>
 ).toThrow('Choose the last day of the selected month');
 ```
 
-- [ ] **Step 2: Run the helper test and verify the missing helper fails**
+- [x] **Step 2: Run the helper test and verify the missing helper fails**
 
 Run: `pnpm --filter @docket/api test -- tests/lib/planning-timeframe.test.ts`
 
 Expected: FAIL because the helper does not exist.
 
-- [ ] **Step 3: Implement the strict server-owned patch builder**
+- [x] **Step 3: Implement the strict server-owned patch builder**
 
 ```typescript
 export function planningDatePatch(input: {
@@ -365,7 +365,7 @@ export function planningDatePatch(input: {
 }
 ```
 
-- [ ] **Step 4: Write failing route tests for create, update, clear, and old clients**
+- [x] **Step 4: Write failing route tests for create, update, clear, and old clients**
 
 Cover these requests:
 
@@ -386,7 +386,7 @@ Assert that the first response returns resolution plus fiscal snapshots. Assert 
 update clears previous target metadata. Assert that null clears all three columns. Assert that a
 resolution without its date returns 422.
 
-- [ ] **Step 5: Wire Project and Initiative serializers and transactions**
+- [x] **Step 5: Wire Project and Initiative serializers and transactions**
 
 Load `organization.fiscalYearStartMonth` inside the same transaction that writes a broad date.
 Map the helper result onto the three database columns. Return these fields from every Project and
@@ -401,7 +401,7 @@ targetDateFiscalYearStartMonth: row.targetDateFiscalYearStartMonth,
 
 Keep Project range validation after normalization so it compares canonical anchors.
 
-- [ ] **Step 6: Add the fiscal setting to the existing work-structure routes**
+- [x] **Step 6: Add the fiscal setting to the existing work-structure routes**
 
 ```typescript
 const rows = await db.select({
@@ -414,13 +414,13 @@ const rows = await db.select({
 The update transaction changes only the organization row. It never rewrites a Project or
 Initiative. Extend the route description with that stability rule.
 
-- [ ] **Step 7: Run the focused API gates**
+- [x] **Step 7: Run the focused API gates**
 
 Run: `pnpm --filter @docket/api test -- tests/lib/planning-timeframe.test.ts tests/routes/projects-detail.test.ts tests/routes/initiatives-detail.test.ts tests/routes/work-structure-timeframes.test.ts && pnpm --filter @docket/api typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit the API slice**
+- [x] **Step 8: Commit the API slice**
 
 Commit type/scope: `feat(projects)` with a body that explains atomic pairs, old-client behavior,
 and the no-rewrite fiscal setting.

@@ -47,6 +47,8 @@ export function toOut(i: InitiativeRow): z.input<typeof InitiativeOut> {
     priority: i.priority,
     updateCadence: i.updateCadence,
     targetDate: i.targetDate?.toISOString() ?? null,
+    targetDateResolution: i.targetDateResolution,
+    targetDateFiscalYearStartMonth: i.targetDateFiscalYearStartMonth,
     health: i.health,
     createdAt: i.createdAt.toISOString(),
   };

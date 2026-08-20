@@ -71,6 +71,85 @@ async function seedTask(args: {
 }
 
 describe('projects detail router', () => {
+  it('creates and updates exact or broad planning dates as atomic fiscal snapshots', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    await db
+      .update(schema.organization)
+      .set({ fiscalYearStartMonth: 3 })
+      .where(eq(schema.organization.id, orgId));
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Fiscal launch',
+        startDate: '2026-04-01',
+        startDateResolution: 'quarter',
+        targetDate: '2027-03-31',
+        targetDateResolution: 'year',
+      }),
+    });
+    expect(created.status).toBe(201);
+    const body = await json<{
+      id: string;
+      startDateResolution: string | null;
+      startDateFiscalYearStartMonth: number | null;
+      targetDateResolution: string | null;
+      targetDateFiscalYearStartMonth: number | null;
+    }>(created);
+    expect(body).toMatchObject({
+      startDateResolution: 'quarter',
+      startDateFiscalYearStartMonth: 3,
+      targetDateResolution: 'year',
+      targetDateFiscalYearStartMonth: 3,
+    });
+
+    await db
+      .update(schema.organization)
+      .set({ fiscalYearStartMonth: 0 })
+      .where(eq(schema.organization.id, orgId));
+    expect(await json(await writer.request(`/${body.id}`))).toMatchObject({
+      startDateResolution: 'quarter',
+      startDateFiscalYearStartMonth: 3,
+      targetDateResolution: 'year',
+      targetDateFiscalYearStartMonth: 3,
+    });
+
+    const exact = await writer.request(`/${body.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targetDate: '2026-12-15' }),
+    });
+    expect(exact.status).toBe(200);
+    expect(await json(exact)).toMatchObject({
+      targetDate: '2026-12-15T00:00:00.000Z',
+      targetDateResolution: null,
+      targetDateFiscalYearStartMonth: null,
+    });
+
+    const resolutionOnly = await writer.request(`/${body.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targetDateResolution: 'month' }),
+    });
+    expect(resolutionOnly.status).toBe(422);
+
+    const noncanonical = await writer.request(`/${body.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targetDate: '2026-12-01', targetDateResolution: 'quarter' }),
+    });
+    expect(noncanonical.status).toBe(422);
+
+    const reversed = await writer.request(`/${body.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targetDate: '2026-03-01' }),
+    });
+    expect(reversed.status).toBe(422);
+  });
+
   it('gets a project by id', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);

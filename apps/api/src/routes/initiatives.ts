@@ -39,6 +39,7 @@ import type { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
+import { planningDatePatch } from '../lib/planning-timeframe';
 import { replaceLabels, resolveLabelSet } from '../lib/labels';
 import { deferAfterResponse } from '../lib/after-response';
 import { created, memberUrl, ok } from '../lib/ok';
@@ -119,6 +120,20 @@ const initiatives = new Hono<AppEnv>()
       const labels = await resolveLabelSet(orgId, body.labelIds);
       const status = await resolveContainerStatus(orgId, 'initiative', body.status ?? 'active');
       const row = await db.transaction(async (tx) => {
+        const [settings] = await tx
+          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
+          .from(organization)
+          .where(eq(organization.id, orgId))
+          .limit(1);
+        /* v8 ignore next -- @preserve actor context proves the workspace exists */
+        if (!settings) throw new NotFoundError('Organization not found');
+        const target = planningDatePatch(
+          { date: body.targetDate, resolution: body.targetDateResolution },
+          settings.fiscalYearStartMonth,
+          'target',
+          'targetDate',
+          'targetDateResolution',
+        );
         const inserted = await tx
           .insert(initiative)
           .values({
@@ -131,7 +146,13 @@ const initiatives = new Hono<AppEnv>()
             statusId: status.statusId,
             priority: body.priority ?? 'none',
             updateCadence: body.updateCadence ?? 'monthly',
-            targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
+            ...(target === undefined
+              ? {}
+              : {
+                  targetDate: target.date,
+                  targetDateResolution: target.resolution,
+                  targetDateFiscalYearStartMonth: target.fiscalYearStartMonth,
+                }),
             health: body.health,
             createdBy: actorId,
           })
@@ -250,6 +271,28 @@ const initiatives = new Hono<AppEnv>()
           ? undefined
           : await resolveContainerStatus(orgId, 'initiative', body.status);
       const row = await db.transaction(async (tx) => {
+        const currentRows = await tx
+          .select()
+          .from(initiative)
+          .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
+          .limit(1)
+          .for('update');
+        const current = currentRows[0];
+        if (!current) return undefined;
+        const [settings] = await tx
+          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
+          .from(organization)
+          .where(eq(organization.id, orgId))
+          .limit(1);
+        /* v8 ignore next -- @preserve the Initiative's organization FK proves this row exists */
+        if (!settings) throw new NotFoundError('Organization not found');
+        const target = planningDatePatch(
+          { date: body.targetDate, resolution: body.targetDateResolution },
+          settings.fiscalYearStartMonth,
+          'target',
+          'targetDate',
+          'targetDateResolution',
+        );
         const values: Partial<typeof initiative.$inferInsert> = {
           ...(body.name !== undefined ? { name: body.name } : {}),
           ...clearableTextPatch('summary', body.summary),
@@ -260,9 +303,13 @@ const initiatives = new Hono<AppEnv>()
             : { status: nextStatus.status, statusId: nextStatus.statusId }),
           ...(body.priority !== undefined ? { priority: body.priority } : {}),
           ...(body.updateCadence !== undefined ? { updateCadence: body.updateCadence } : {}),
-          ...(body.targetDate !== undefined
-            ? { targetDate: body.targetDate ? new Date(body.targetDate) : null }
-            : {}),
+          ...(target === undefined
+            ? {}
+            : {
+                targetDate: target.date,
+                targetDateResolution: target.resolution,
+                targetDateFiscalYearStartMonth: target.fiscalYearStartMonth,
+              }),
           ...(body.health !== undefined ? { health: body.health } : {}),
         };
         const updated =
@@ -272,11 +319,7 @@ const initiatives = new Hono<AppEnv>()
                 .set(values)
                 .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
                 .returning()
-            : await tx
-                .select()
-                .from(initiative)
-                .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
-                .limit(1);
+            : [current];
         const changed = updated[0];
         if (!changed) return undefined;
         if (body.labelIds !== undefined) {

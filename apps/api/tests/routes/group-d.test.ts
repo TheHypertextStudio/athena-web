@@ -220,7 +220,11 @@ describe('orgs router', () => {
 
     const initial = await app.request(`/${orgId}/settings/work-structure`);
     expect(initial.status).toBe(200);
-    expect(await body(initial)).toEqual({ initiativeMaxDepth: 2, estimationScale: 'fibonacci' });
+    expect(await body(initial)).toEqual({
+      initiativeMaxDepth: 2,
+      estimationScale: 'fibonacci',
+      fiscalYearStartMonth: 0,
+    });
 
     const raised = await app.request(`/${orgId}/settings/work-structure`, {
       method: 'PATCH',
@@ -228,7 +232,11 @@ describe('orgs router', () => {
       body: JSON.stringify({ initiativeMaxDepth: 3 }),
     });
     expect(raised.status).toBe(200);
-    expect(await body(raised)).toEqual({ initiativeMaxDepth: 3, estimationScale: 'fibonacci' });
+    expect(await body(raised)).toEqual({
+      initiativeMaxDepth: 3,
+      estimationScale: 'fibonacci',
+      fiscalYearStartMonth: 0,
+    });
 
     const rescaled = await app.request(`/${orgId}/settings/work-structure`, {
       method: 'PATCH',
@@ -236,7 +244,23 @@ describe('orgs router', () => {
       body: JSON.stringify({ estimationScale: 't_shirt' }),
     });
     expect(rescaled.status).toBe(200);
-    expect(await body(rescaled)).toEqual({ initiativeMaxDepth: 3, estimationScale: 't_shirt' });
+    expect(await body(rescaled)).toEqual({
+      initiativeMaxDepth: 3,
+      estimationScale: 't_shirt',
+      fiscalYearStartMonth: 0,
+    });
+
+    const fiscal = await app.request(`/${orgId}/settings/work-structure`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ fiscalYearStartMonth: 6 }),
+    });
+    expect(fiscal.status).toBe(200);
+    expect(await body(fiscal)).toEqual({
+      initiativeMaxDepth: 3,
+      estimationScale: 't_shirt',
+      fiscalYearStartMonth: 6,
+    });
 
     const statusId = await seedStatuses(db, schema, orgId);
     const activeInitiative = statusId('initiative', 'active');
@@ -273,7 +297,11 @@ describe('orgs router', () => {
     });
     expect(conflict.status).toBe(409);
     const unchanged = await app.request(`/${orgId}/settings/work-structure`);
-    expect(await body(unchanged)).toEqual({ initiativeMaxDepth: 3, estimationScale: 't_shirt' });
+    expect(await body(unchanged)).toEqual({
+      initiativeMaxDepth: 3,
+      estimationScale: 't_shirt',
+      fiscalYearStartMonth: 6,
+    });
   });
 
   it('POST / without slug derives one via slugify (incl. fallback for symbol-only names)', async () => {

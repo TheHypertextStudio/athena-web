@@ -319,7 +319,7 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
       tag: 'Orgs',
       summary: 'Get workspace work-structure settings',
       description:
-        'Returns the workspace-owned structural constraints that govern strategic work: the maximum total depth permitted for Initiative hierarchies, and the task-estimation scale.',
+        'Returns the workspace-owned structural constraints that govern strategic work: the maximum total depth permitted for Initiative hierarchies, the task-estimation scale, and the zero-based month that begins the fiscal year for new broad planning dates.',
       response: WorkspaceSettingsOut,
     }),
     async (c) => {
@@ -328,6 +328,7 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
         .select({
           initiativeMaxDepth: organization.initiativeMaxDepth,
           estimationScale: organization.estimationScale,
+          fiscalYearStartMonth: organization.fiscalYearStartMonth,
         })
         .from(organization)
         .where(eq(organization.id, orgId))
@@ -346,7 +347,7 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
       tag: 'Orgs',
       summary: 'Update workspace work-structure settings',
       description:
-        'Updates workspace-owned structural constraints. Reducing Initiative depth is rejected when an existing hierarchy would exceed the requested maximum, so no links are silently discarded. Changing the estimation scale re-interprets existing task estimates under the new scale rather than clearing them.',
+        'Updates workspace-owned structural constraints. Reducing Initiative depth is rejected when an existing hierarchy would exceed the requested maximum, so no links are silently discarded. Changing the estimation scale re-interprets existing task estimates under the new scale rather than clearing them. Changing the fiscal-year start affects only broad planning dates selected afterward because each saved period keeps its original fiscal snapshot.',
       capability: 'manage',
       response: WorkspaceSettingsOut,
     }),
@@ -379,6 +380,7 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
           .returning({
             initiativeMaxDepth: organization.initiativeMaxDepth,
             estimationScale: organization.estimationScale,
+            fiscalYearStartMonth: organization.fiscalYearStartMonth,
           });
         return rows[0];
       });

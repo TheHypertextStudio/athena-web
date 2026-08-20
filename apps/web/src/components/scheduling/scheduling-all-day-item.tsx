@@ -1,7 +1,14 @@
 'use client';
 
 import { DRAGGABLE } from '@docket/ui/lib/draggable';
-import { type DragEvent as ReactDragEvent, type JSX, type RefObject, useId, useState } from 'react';
+import {
+  type CSSProperties,
+  type DragEvent as ReactDragEvent,
+  type JSX,
+  type RefObject,
+  useId,
+  useState,
+} from 'react';
 
 import { readScheduleDragObject, SCHEDULE_DRAG_MIME } from './scheduling-drag-object';
 import {
@@ -14,12 +21,7 @@ import {
 } from './scheduling-all-day-edit-controls';
 import { isScheduleItemEditable } from './scheduling-date-lanes';
 import { SchedulingLinkIcon } from './scheduling-item-icons';
-import {
-  scheduleAvailabilityFill,
-  scheduleBusyFill,
-  scheduleEventFill,
-  scheduleTimeboxFill,
-} from './scheduling-item-surface';
+import { scheduleItemSurfacePalette } from './scheduling-item-surface';
 import {
   SchedulingRelationshipSourceControl,
   SchedulingRelationshipTargetControl,
@@ -94,7 +96,8 @@ export function SchedulingAllDayItem({
   const exposesEndResize = editCapabilities.canResizeEnd && onResizeAllDayItem !== undefined;
   const isRelationshipTarget = relationshipMode.isTarget(item);
   const appearance = item.appearance ?? 'event';
-  const itemTextClassName = appearance === 'event' ? 'text-on-primary' : 'text-on-surface';
+  const surfaceState = dropActive ? 'drop' : gesture.preview ? 'preview' : 'rest';
+  const surfacePalette = scheduleItemSurfacePalette(appearance, item.color, surfaceState);
   const edgePadding = `${exposesStartResize ? 'pl-3 [@media(pointer:coarse)]:pl-10' : ''} ${exposesEndResize ? 'pr-3 [@media(pointer:coarse)]:pr-10' : ''}`;
   const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
     item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
@@ -103,17 +106,20 @@ export function SchedulingAllDayItem({
     <div
       className={
         dropActive
-          ? `${DRAGGABLE} ring-primary bg-primary-container group relative flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
+          ? `${DRAGGABLE} ring-primary bg-primary-container group relative isolate flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
           : gesture.preview
-            ? `${DRAGGABLE} bg-primary-container ring-primary group relative z-40 flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
-            : `${DRAGGABLE} group relative flex max-w-full items-center rounded-sm ${edgePadding}`
+            ? `${DRAGGABLE} bg-surface-container-high ring-primary group relative isolate z-40 flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
+            : `${DRAGGABLE} group relative isolate flex max-w-full items-center rounded-sm ${edgePadding}`
       }
       data-schedule-all-day-item={item.id}
       data-schedule-item-appearance={appearance}
       data-schedule-all-day-preview={gesture.preview ? gesture.previewMode : undefined}
-      style={{
-        transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
-      }}
+      style={
+        {
+          transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
+          '--schedule-item-foreground': surfacePalette.foreground,
+        } as CSSProperties
+      }
       onDragOver={(event) => {
         if (!acceptsDrop(event)) return;
         event.preventDefault();
@@ -134,33 +140,25 @@ export function SchedulingAllDayItem({
     >
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 rounded-sm ${
-          dropActive || gesture.preview
+        className={`pointer-events-none absolute inset-0 -z-10 rounded-sm ${
+          dropActive
             ? 'bg-primary-container'
-            : appearance === 'timebox'
-              ? 'border-outline border border-dashed'
-              : appearance === 'availability' || appearance === 'busy'
-                ? 'border-outline-variant border'
-                : ''
+            : gesture.preview
+              ? 'bg-surface-container-high'
+              : appearance === 'timebox'
+                ? 'border-outline border border-dashed'
+                : appearance === 'availability' || appearance === 'busy'
+                  ? 'border-outline-variant border'
+                  : ''
         }`}
         data-schedule-item-surface=""
-        style={
-          dropActive || gesture.preview
-            ? undefined
-            : appearance === 'event'
-              ? { backgroundColor: scheduleEventFill(item.color) }
-              : appearance === 'timebox'
-                ? {
-                    backgroundColor: scheduleTimeboxFill(item.color),
-                    borderLeftColor: 'var(--color-outline)',
-                  }
-                : {
-                    backgroundColor:
-                      appearance === 'availability'
-                        ? scheduleAvailabilityFill(item.color)
-                        : scheduleBusyFill(),
-                  }
-        }
+        style={{
+          backgroundColor: surfaceState === 'rest' ? surfacePalette.fill : undefined,
+          borderLeftColor:
+            surfaceState === 'rest' && appearance === 'timebox'
+              ? 'var(--color-outline)'
+              : undefined,
+        }}
       />
       <div
         className="contents"
@@ -171,7 +169,7 @@ export function SchedulingAllDayItem({
           <button
             type="button"
             aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
-            className={`${itemTextClassName} text-label-medium focus-visible:ring-ring min-w-0 flex-1 touch-none truncate rounded px-1.5 py-0.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:min-h-10 ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+            className={`text-label-medium focus-visible:ring-ring min-w-0 flex-1 touch-none truncate rounded px-1.5 py-0.5 text-left text-(--schedule-item-foreground) transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:min-h-10 ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
             data-schedule-item-body={item.id}
             onPointerDown={gesture.onBodyPointerDown}
             onClick={gesture.onBodyClick}
@@ -184,7 +182,7 @@ export function SchedulingAllDayItem({
         ) : (
           <span
             aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
-            className={`${itemTextClassName} text-label-medium min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left`}
+            className="text-label-medium min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left text-(--schedule-item-foreground)"
             data-schedule-item-body={item.id}
           >
             {renderItem?.({ item, lane, allDay: true, density: 'compact' }) ?? item.title}
@@ -208,8 +206,8 @@ export function SchedulingAllDayItem({
             item={item}
             object={dragObject}
             mode={relationshipMode}
-            className="text-on-secondary-container focus-visible:ring-ring hover:bg-surface-container-high mx-0.5 size-4 shrink-0 cursor-grab rounded opacity-0 transition-[color,background-color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-10 [@media(pointer:coarse)]:opacity-100"
-            activeClassName="bg-primary-container ring-primary/40 opacity-100 ring-2"
+            className="focus-visible:ring-ring mx-0.5 size-4 shrink-0 cursor-grab rounded text-(--schedule-item-foreground) opacity-0 transition-[color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-10 [@media(pointer:coarse)]:opacity-100"
+            activeClassName="bg-primary-container text-on-primary-container ring-primary/40 opacity-100 ring-2"
           >
             {/* Was a raw `↗` text glyph — a different symbol from the chain link the timed card
                 uses for this same relationship-drag control, at a stroke weight nothing else on the

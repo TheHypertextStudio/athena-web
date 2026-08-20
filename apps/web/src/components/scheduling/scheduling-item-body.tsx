@@ -60,17 +60,11 @@ const TITLE_CLAMP_CLASS = {
 
 /** Render the visible title/time content shared by interactive and opaque item bodies. */
 function ItemBodyContent({
-  item,
   density,
   height,
   timeRange,
   content,
-}: Pick<
-  SchedulingItemBodyProps,
-  'item' | 'density' | 'height' | 'timeRange' | 'content'
->): JSX.Element {
-  const secondaryTextClassName =
-    (item.appearance ?? 'event') === 'event' ? 'text-on-primary/80' : 'text-on-surface-variant';
+}: Pick<SchedulingItemBodyProps, 'density' | 'height' | 'timeRange' | 'content'>): JSX.Element {
   // A block too short for a time line still gets its title. It used to render as a featureless
   // coloured bar with the title only in the accessibility tree — a dead element on the one surface
   // whose entire job is saying what is happening. Solid leading (line-height = the token's own
@@ -92,7 +86,7 @@ function ItemBodyContent({
       <span className="sticky block w-full truncate" style={STICKY_LABEL_STYLE}>
         {content}
         <span aria-hidden="true"> · </span>
-        <span className={`${secondaryTextClassName} text-body-medium tabular-nums`}>
+        <span className="text-body-medium text-(--schedule-item-foreground) tabular-nums">
           {timeRange}
         </span>
       </span>
@@ -114,9 +108,7 @@ function ItemBodyContent({
       <span className={`text-title-small w-full ${TITLE_CLAMP_CLASS[titleLineClamp(height)]}`}>
         {content}
       </span>
-      <span
-        className={`${secondaryTextClassName} text-body-medium block w-full truncate tabular-nums`}
-      >
+      <span className="text-body-medium block w-full truncate text-(--schedule-item-foreground) tabular-nums">
         {timeRange}
       </span>
     </span>
@@ -126,15 +118,13 @@ function ItemBodyContent({
 /** Render readable timed-item content without presenting controls the item cannot use. */
 export function SchedulingItemBody(props: SchedulingItemBodyProps): JSX.Element {
   const { item, density, timeRange, readOnlyDescriptionId, editable, openable, movable } = props;
-  const itemTextClassName =
-    (item.appearance ?? 'event') === 'event' ? 'text-on-primary' : 'text-on-surface';
   // No `overflow-hidden` on a labelled body: it would establish a scrollport of its own and strand
   // the sticky label at the item's top edge (see {@link STICKY_LABEL_STYLE}). The label's own
   // `truncate` clips instead, and the canvas clips everything past its edges.
   const bodyClassName =
     density === 'marker'
-      ? `${itemTextClassName} focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col justify-center rounded-sm px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset`
-      : `${itemTextClassName} text-label-large focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col rounded-sm px-2 py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset`;
+      ? 'text-(--schedule-item-foreground) focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col justify-center rounded-sm px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset'
+      : 'text-(--schedule-item-foreground) text-label-large focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col rounded-sm px-2 py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset';
   const describedBy = !editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined;
   const title = `${item.title} · ${timeRange}`;
   const children = <ItemBodyContent {...props} />;

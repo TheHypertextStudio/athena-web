@@ -1255,6 +1255,9 @@ describe('SchedulingCanvas', () => {
     fireEvent.dragOver(screen.getByRole('button', { name: /^Focus block/ }), {
       dataTransfer: transfer,
     });
+    expect(renderedItem('focus').style.getPropertyValue('--schedule-item-foreground')).toBe(
+      'var(--color-on-primary-container)',
+    );
     fireEvent.drop(screen.getByRole('button', { name: /^Focus block/ }), {
       dataTransfer: transfer,
     });
@@ -1330,6 +1333,11 @@ describe('SchedulingCanvas', () => {
       getData: (type: string) => (type === SCHEDULE_DRAG_MIME ? JSON.stringify(taskPayload) : ''),
     };
     fireEvent.dragOver(pill, { dataTransfer: taskTransfer });
+    expect(
+      pill
+        .closest<HTMLElement>('[data-schedule-all-day-item]')
+        ?.style.getPropertyValue('--schedule-item-foreground'),
+    ).toBe('var(--color-on-primary-container)');
     fireEvent.drop(pill, { dataTransfer: taskTransfer });
     expect(onDropObjectOnItem).toHaveBeenCalledWith({
       object: taskPayload,
@@ -1985,7 +1993,7 @@ describe('SchedulingCanvas', () => {
     }
   });
 
-  it('gives timed move and relationship controls visible interaction states', () => {
+  it('keeps timed move and relationship controls visible without replacing matched colors', () => {
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -2008,12 +2016,14 @@ describe('SchedulingCanvas', () => {
       screen.getByRole('button', { name: 'Drag Focus block to create a relationship' }),
     ]) {
       expect(control).toHaveClass(
-        'hover:bg-surface-container-high',
-        'active:bg-surface-container-highest',
-        'transition-[color,background-color,opacity]',
+        'text-(--schedule-item-foreground)',
         'group-hover:opacity-100',
         '[@media(pointer:coarse)]:opacity-100',
         'motion-reduce:transition-none',
+      );
+      expect(control).not.toHaveClass(
+        'hover:bg-surface-container-high',
+        'active:bg-surface-container-highest',
       );
     }
   });
@@ -2061,9 +2071,10 @@ describe('SchedulingCanvas', () => {
     expect(compactVisibleRange).toBeDefined();
     expect(compactVisibleRange).not.toHaveClass('sr-only');
     expect(renderedItem('full')).toHaveTextContent(/11:00.*12:00/);
-    expect(renderedItem('full').querySelector('[data-schedule-item-surface]')).toHaveStyle({
-      backgroundColor: '#7c3aed',
-    });
+    expect(
+      renderedItem('full').querySelector<HTMLElement>('[data-schedule-item-surface]')?.style
+        .backgroundColor,
+    ).toBe('color-mix(in oklab, #7c3aed 8%, var(--color-primary))');
     expect(renderItem).toHaveBeenCalledTimes(4);
   });
 
@@ -2169,7 +2180,9 @@ describe('SchedulingCanvas', () => {
     const surface = renderedItem('focus').querySelector('[data-schedule-item-surface]');
     expect(surface).toHaveClass('motion-reduce:transition-none');
     expect(surface).not.toHaveClass('group-hover:bg-(--schedule-item-fill-raised)');
-    expect(surface).toHaveStyle({ backgroundColor: '#2563eb' });
+    expect((surface as HTMLElement | null)?.style.backgroundColor).toBe(
+      'color-mix(in oklab, #2563eb 8%, var(--color-primary))',
+    );
     expect(`${renderedItem('focus').className} ${surface?.className ?? ''}`).not.toMatch(
       /shadow-|scale-|translate-/,
     );

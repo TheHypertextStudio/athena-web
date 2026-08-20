@@ -11,28 +11,11 @@ import {
   scheduleDateRange,
   scheduleInstantAt,
   type ScheduleItem,
-  type ScheduleItemAppearance,
   type ScheduleLane,
 } from '@/components/scheduling';
+import { calendarScheduleItemAppearance } from '@/components/calendar/calendar-schedule-appearance';
 
 const DERIVED_READ_ONLY_KINDS = new Set(['task_timebox', 'availability_block']);
-
-/** Map calendar-domain kinds into the shared schedule surface vocabulary. */
-function calendarItemAppearance(
-  kind: CalendarItemOut['kind'],
-): Exclude<ScheduleItemAppearance, 'busy'> {
-  switch (kind) {
-    case 'provider_event':
-    case 'native_event':
-      return 'event';
-    case 'native_block':
-    case 'timebox':
-    case 'task_timebox':
-      return 'timebox';
-    case 'availability_block':
-      return 'availability';
-  }
-}
 
 /** The resource dimension rendered by the calendar canvas. */
 export type CalendarAxis = 'dates' | 'people';
@@ -149,7 +132,7 @@ export function toScheduleItem(
     endsAt,
     allDay,
     color: color ?? undefined,
-    appearance: calendarItemAppearance(item.kind),
+    appearance: calendarScheduleItemAppearance(item.kind),
     editable:
       canPersistCalendarItemBounds(item) &&
       (allDay ||
@@ -220,7 +203,8 @@ export function buildComparisonLane(
               displayTimezone,
             ),
           allDay,
-          appearance: item.access === 'details' ? calendarItemAppearance(item.kind) : 'busy',
+          appearance:
+            item.access === 'details' ? calendarScheduleItemAppearance(item.kind) : 'busy',
           editable: false,
           openable: item.access === 'details',
         };

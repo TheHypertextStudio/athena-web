@@ -1,7 +1,14 @@
 'use client';
 
 import { DRAGGABLE } from '@docket/ui/lib/draggable';
-import { type DragEvent as ReactDragEvent, type JSX, type RefObject, useId, useState } from 'react';
+import {
+  type CSSProperties,
+  type DragEvent as ReactDragEvent,
+  type JSX,
+  type RefObject,
+  useId,
+  useState,
+} from 'react';
 
 import {
   isScheduleItemEditable,
@@ -16,12 +23,7 @@ import {
 } from './scheduling-overlap-layout';
 import { SchedulingItemBody } from './scheduling-item-body';
 import { SchedulingGripIcon, SchedulingLinkIcon } from './scheduling-item-icons';
-import {
-  scheduleAvailabilityFill,
-  scheduleBusyFill,
-  scheduleEventFill,
-  scheduleTimeboxFill,
-} from './scheduling-item-surface';
+import { scheduleItemSurfacePalette } from './scheduling-item-surface';
 import {
   SchedulingRelationshipSourceControl,
   SchedulingRelationshipTargetControl,
@@ -160,7 +162,7 @@ export function SchedulingItemCard({
   const resizeTargetClassName =
     'focus-visible:ring-ring absolute z-20 size-6 max-w-full cursor-ns-resize touch-none bg-transparent pointer-events-none outline-none group-focus-within:pointer-events-auto group-hover:pointer-events-auto focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:pointer-events-auto';
   const resizeIndicatorClassName =
-    'bg-primary/70 pointer-events-none absolute h-0.5 w-3 max-w-full rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:opacity-100';
+    'bg-(--schedule-item-foreground) pointer-events-none absolute h-0.5 w-3 max-w-full rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:opacity-100';
   const timeRange = formatScheduleItemTimeRange({
     item,
     lane,
@@ -178,6 +180,8 @@ export function SchedulingItemCard({
   const bodyMovable = editCapabilities.canMove && onMoveItem !== undefined;
   const isRelationshipTarget = relationshipMode.isTarget(item);
   const appearance = item.appearance ?? 'event';
+  const surfaceState = dropActive ? 'drop' : gesture.preview ? 'preview' : 'rest';
+  const surfacePalette = scheduleItemSurfacePalette(appearance, item.color, surfaceState);
   const horizontalStyle = scheduleOverlapHorizontalStyle(placement);
   const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
     item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
@@ -218,12 +222,15 @@ export function SchedulingItemCard({
         if (!object || (object.kind === 'calendar_item' && object.itemId === item.id)) return;
         onDropObjectOnItem({ object, targetItem: item, targetLane: lane });
       }}
-      style={{
-        top: visibleTop,
-        ...horizontalStyle,
-        height: visibleHeight,
-        transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
-      }}
+      style={
+        {
+          top: visibleTop,
+          ...horizontalStyle,
+          height: visibleHeight,
+          transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
+          '--schedule-item-foreground': surfacePalette.foreground,
+        } as CSSProperties
+      }
     >
       <span
         aria-hidden="true"
@@ -239,23 +246,13 @@ export function SchedulingItemCard({
                   : 'border-outline-variant border'
         }`}
         data-schedule-item-surface=""
-        style={
-          dropActive || gesture.preview
-            ? undefined
-            : appearance === 'event'
-              ? { backgroundColor: scheduleEventFill(item.color) }
-              : appearance === 'timebox'
-                ? {
-                    backgroundColor: scheduleTimeboxFill(item.color),
-                    borderLeftColor: 'var(--color-outline)',
-                  }
-                : {
-                    backgroundColor:
-                      appearance === 'availability'
-                        ? scheduleAvailabilityFill(item.color)
-                        : scheduleBusyFill(),
-                  }
-        }
+        style={{
+          backgroundColor: surfaceState === 'rest' ? surfacePalette.fill : undefined,
+          borderLeftColor:
+            surfaceState === 'rest' && appearance === 'timebox'
+              ? 'var(--color-outline)'
+              : undefined,
+        }}
       />
       <div
         className="contents"
@@ -302,7 +299,7 @@ export function SchedulingItemCard({
           <button
             type="button"
             aria-label={`Move ${item.title}`}
-            className="text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-highest focus-visible:ring-ring absolute top-0.5 right-0.5 z-30 size-6 cursor-grab rounded opacity-0 transition-[color,background-color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset active:cursor-grabbing motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
+            className="focus-visible:ring-ring absolute top-0.5 right-0.5 z-30 size-6 cursor-grab rounded text-(--schedule-item-foreground) opacity-0 transition-[color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset active:cursor-grabbing motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
             onPointerDown={gesture.onMovePointerDown}
             onKeyDown={gesture.onMoveKeyDown}
           >
@@ -314,9 +311,9 @@ export function SchedulingItemCard({
             item={item}
             object={dragObject}
             mode={relationshipMode}
-            className="hover:bg-surface-container-high active:bg-surface-container-highest focus-visible:ring-ring absolute bottom-0.5 left-0.5 z-30 size-6 cursor-grab rounded transition-[color,background-color,opacity] outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
+            className="focus-visible:ring-ring absolute bottom-0.5 left-0.5 z-30 size-6 cursor-grab rounded transition-[color,opacity] outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
             activeClassName="bg-primary-container text-on-primary-container ring-primary/40 opacity-100 ring-2"
-            inactiveClassName="text-on-surface-variant opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
+            inactiveClassName="text-(--schedule-item-foreground) opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
           >
             <SchedulingLinkIcon />
           </SchedulingRelationshipSourceControl>

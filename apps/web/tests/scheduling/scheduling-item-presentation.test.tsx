@@ -118,10 +118,26 @@ describe('SchedulingCanvas item presentation', () => {
     expect(surface).toHaveClass('bottom-px');
     expect(surface).toHaveClass('rounded-sm');
     expect(allDaySurface).toHaveClass('rounded-sm');
-    expect(surface).toHaveStyle({ backgroundColor: '#316eb4' });
-    expect(allDaySurface).toHaveStyle({ backgroundColor: '#316eb4' });
-    expect(card.querySelector('[data-schedule-item-body]')).toHaveClass('text-on-primary');
-    expect(allDayItem.querySelector('[data-schedule-item-body]')).toHaveClass('text-on-primary');
+    expect(allDayItem).toHaveClass('isolate');
+    expect(allDaySurface).toHaveClass('-z-10');
+    expect(surface.style.backgroundColor).toBe(
+      'color-mix(in oklab, #316eb4 8%, var(--color-primary))',
+    );
+    expect(allDaySurface.style.backgroundColor).toBe(
+      'color-mix(in oklab, #316eb4 8%, var(--color-primary))',
+    );
+    expect(card.style.getPropertyValue('--schedule-item-foreground')).toBe(
+      'var(--color-on-primary)',
+    );
+    expect(allDayItem.style.getPropertyValue('--schedule-item-foreground')).toBe(
+      'var(--color-on-primary)',
+    );
+    expect(card.querySelector('[data-schedule-item-body]')).toHaveClass(
+      'text-(--schedule-item-foreground)',
+    );
+    expect(allDayItem.querySelector('[data-schedule-item-body]')).toHaveClass(
+      'text-(--schedule-item-foreground)',
+    );
     expect(card.style.borderLeftWidth).toBe('');
     expect(card.querySelector('[data-schedule-item-accent]')).not.toBeInTheDocument();
     expect(allDayItem.querySelector('[data-schedule-item-accent]')).not.toBeInTheDocument();
@@ -144,7 +160,9 @@ describe('SchedulingCanvas item presentation', () => {
         '[data-schedule-item="focus"] [data-schedule-item-surface]',
       ),
     );
-    expect(surface).toHaveStyle({ backgroundColor: 'var(--color-primary)' });
+    expect(surface.style.backgroundColor).toBe(
+      'color-mix(in oklab, var(--color-primary) 8%, var(--color-primary))',
+    );
   });
 
   it('renders timeboxes as dashed provisional surfaces without changing timed or all-day gestures', () => {
@@ -410,7 +428,10 @@ describe('SchedulingCanvas item presentation', () => {
         expect(surface).toHaveClass('border', 'border-outline-variant');
         expect(surface.style.backgroundColor).toContain('color-mix');
         expect(surface).not.toHaveStyle({ backgroundColor: '#316eb4' });
-        expect(body).toHaveClass('text-on-surface');
+        expect(body).toHaveClass('text-(--schedule-item-foreground)');
+        expect(renderedItem.style.getPropertyValue('--schedule-item-foreground')).toBe(
+          'var(--color-on-surface)',
+        );
         expect(renderedItem.className).not.toMatch(/\bopacity-/);
       }
     },
@@ -469,6 +490,9 @@ describe('SchedulingCanvas item presentation', () => {
     expect(
       preview?.querySelector<HTMLElement>('[data-schedule-item-surface]')?.style.backgroundColor,
     ).toBe('');
+    expect(
+      (preview as HTMLElement | null)?.style.getPropertyValue('--schedule-item-foreground'),
+    ).toBe('var(--color-on-surface)');
     expect(preview?.className).not.toMatch(/shadow-/);
   });
 

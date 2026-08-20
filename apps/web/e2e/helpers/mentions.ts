@@ -42,10 +42,10 @@ export async function seedMentionFixtures(page: Page, orgId: string): Promise<Me
   const teamId = (teams.body as { items: { id: string }[] }).items[0]?.id ?? '';
   expect(teamId, 'onboarding should have left a team to file tasks under').not.toBe('');
 
-  // Distinctive enough that a three-letter query cannot also match the project.
+  // The shared prefix deliberately yields multiple result groups for the visual regression spec.
   const taskTitle = 'Zephyr rollout checklist';
   const projectId = await create(page, `/v1/orgs/${orgId}/projects`, {
-    name: 'Quantum platform rebuild',
+    name: 'Zephyr platform rebuild',
     description: 'The umbrella for the migration.',
   });
   const taskId = await create(page, `/v1/orgs/${orgId}/tasks`, { title: taskTitle, teamId });

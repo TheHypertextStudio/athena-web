@@ -25,10 +25,23 @@
  * property pills, not from extra surfaces or outlines.
  */
 import { Button, Dialog, DialogContent, DialogTitle } from '@docket/ui/primitives';
+import { Maximize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, type RefObject, useId, useState } from 'react';
 
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
+import MentionHydrationProvider from '@/components/mentions/mention-hydration';
+
+/** The shared controls for submitting a composer and keeping it open. */
+export interface ComposerContinuation {
+  /** Whether ordinary submission should create another object afterward. */
+  checked: boolean;
+  /** Change whether ordinary submission should continue. */
+  onCheckedChange: (checked: boolean) => void;
+  /** Create and continue regardless of the current checked state. */
+  onSubmit: () => void;
+}
+
 /** Props for {@link ComposerShell}. */
 export interface ComposerShellProps {
   /** Whether the dialog is open (the host page owns this state). */
@@ -73,16 +86,8 @@ export interface ComposerShellProps {
    * the no-context title spacing without inferring visibility from a ReactNode.
    */
   templateSlotVisible?: boolean | undefined;
-  /**
-   * An optional action aligned to the leading side of the footer.
-   *
-   * @remarks
-   * It is intentionally outside the primary-submit button so a composer can offer a continuation
-   * such as "Create more" without making that path look like the default action.
-   */
-  leadingAction?: ReactNode | undefined;
-  /** Run the continuation action when Cmd/Ctrl+Shift+Enter is pressed. */
-  onLeadingAction?: (() => void) | undefined;
+  /** Shared create-and-continue state and submission behavior. */
+  continuation?: ComposerContinuation | undefined;
   /**
    * Extra fields rendered above the title, for composers whose subject is not the entity itself.
    *
@@ -129,6 +134,8 @@ export interface ComposerShellProps {
   onBodyChange: (body: string) => void;
   /** Placeholder for the description field (omit to hide the description body entirely). */
   bodyPlaceholder?: string | undefined;
+  /** The destination organization whose entities the body editor may mention. */
+  mentionOrgId?: string | undefined;
   /** The inline row of compact property pickers. */
   children: ReactNode;
   /** A server/validation error to surface under the pickers, if any. */
@@ -164,8 +171,7 @@ export function ComposerShell({
   contextRow,
   templateSlot,
   templateSlotVisible,
-  leadingAction,
-  onLeadingAction,
+  continuation,
   leadingFields,
   title,
   onTitleChange,
@@ -179,6 +185,7 @@ export function ComposerShell({
   bodyResetKey,
   onBodyChange,
   bodyPlaceholder,
+  mentionOrgId,
   children,
   error,
   statusMessage,
@@ -192,6 +199,8 @@ export function ComposerShell({
   const formId = useId();
   // Whether the user is being asked to confirm discarding a non-empty draft.
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  // Expansion belongs to one opening. Radix resets it through `onOpenAutoFocus` on every reopen.
+  const [expanded, setExpanded] = useState(false);
 
   // A draft worth protecting is one with typed text; bare default property picks are not.
   const isDirty =
@@ -208,6 +217,26 @@ export function ComposerShell({
   const hasLegacyIcon = icon !== undefined && icon !== null && icon !== false;
   const hasLegacyContext = context !== undefined && context !== null && context !== false;
   const legacyContextVisible = hasLegacyIcon || hasLegacyContext || legacyTemplateSlotVisible;
+
+  const bodyEditor =
+    bodyPlaceholder === undefined ? null : (
+      <FreeformTextEditor
+        key={bodyResetKey}
+        value={body}
+        disabled={editDisabled}
+        onChange={onBodyChange}
+        placeholder={bodyPlaceholder}
+        ariaLabel={bodyPlaceholder}
+        mentionOrgId={mentionOrgId}
+        onSubmit={() => {
+          if (canSubmit && !creating) onSubmit();
+        }}
+        className={cn(
+          'bg-surface-container-low mt-3 min-h-0 overflow-y-auto overscroll-contain rounded-lg p-3',
+          expanded ? 'flex flex-1 flex-col [&>div]:flex-1' : 'h-28 max-h-[40vh]',
+        )}
+      />
+    );
 
   /** Gate every dismiss path (Esc, backdrop, X) so a dirty draft is never silently discarded. */
   const requestClose = (): void => {
@@ -234,14 +263,20 @@ export function ComposerShell({
       }}
     >
       <DialogContent
-        className="max-w-3xl gap-0 p-0"
+        className={cn(
+          'max-w-2xl gap-0 overflow-hidden p-0',
+          expanded && 'h-[min(48rem,85dvh)] max-w-5xl',
+        )}
         aria-describedby={undefined}
         // The whole form goes inert while a create is in flight. Without this, assistive tech has
         // no way to tell that apart from a form that is simply not editable.
         aria-busy={creating}
+        onOpenAutoFocus={() => {
+          setExpanded(false);
+        }}
         onKeyDownCapture={(event) => {
           if (
-            !onLeadingAction ||
+            !continuation ||
             event.key !== 'Enter' ||
             !event.shiftKey ||
             (!event.metaKey && !event.ctrlKey) ||
@@ -253,7 +288,7 @@ export function ComposerShell({
           }
           event.preventDefault();
           event.stopPropagation();
-          onLeadingAction();
+          continuation.onSubmit();
         }}
       >
         {/* The dialog's accessible name — never shown; the title field is the only visible heading. */}
@@ -262,6 +297,27 @@ export function ComposerShell({
           <p role="status" aria-live="polite" className="sr-only">
             {statusMessage}
           </p>
+        ) : null}
+
+        {bodyPlaceholder !== undefined ? (
+          <Button
+            type="button"
+            variant="ghost"
+            iconOnly
+            controlSize="lg"
+            aria-label={expanded ? 'Collapse editor' : 'Expand editor'}
+            aria-pressed={expanded}
+            disabled={editDisabled}
+            onClick={() => {
+              setExpanded((current) => !current);
+            }}
+            className="absolute top-4 right-14 z-10"
+          >
+            <Maximize
+              aria-hidden="true"
+              className={cn('transition-transform', expanded && 'rotate-180')}
+            />
+          </Button>
         ) : null}
 
         {/* A migrated composer owns the order of its whole context row. Older page-owned composers
@@ -306,7 +362,7 @@ export function ComposerShell({
             if (canSubmit && !creating) onSubmit();
           }}
           className={cn(
-            'flex flex-col px-6',
+            'flex min-h-0 flex-1 flex-col px-6',
             contextRow !== undefined || legacyContextVisible ? 'pt-3' : 'pt-5',
           )}
         >
@@ -345,7 +401,7 @@ export function ComposerShell({
             ) : null}
           </div>
 
-          {bodyPlaceholder !== undefined ? (
+          {bodyEditor !== null ? (
             <>
               {/*
                * The background/padding lives on the editor's own surface, not a wrapping div —
@@ -355,18 +411,13 @@ export function ComposerShell({
                * and nothing would happen. `p-3`, not `px-3 py-2`, so the inset reads the same on
                * every side.
                */}
-              <FreeformTextEditor
-                key={bodyResetKey}
-                value={body}
-                disabled={editDisabled}
-                onChange={onBodyChange}
-                placeholder={bodyPlaceholder}
-                ariaLabel={bodyPlaceholder}
-                onSubmit={() => {
-                  if (canSubmit && !creating) onSubmit();
-                }}
-                className="bg-surface-container-low mt-3 max-h-[40vh] min-h-28 overflow-y-auto rounded-lg p-3"
-              />
+              {mentionOrgId === undefined ? (
+                bodyEditor
+              ) : (
+                <MentionHydrationProvider orgId={mentionOrgId}>
+                  {bodyEditor}
+                </MentionHydrationProvider>
+              )}
             </>
           ) : null}
         </form>
@@ -403,7 +454,29 @@ export function ComposerShell({
             </>
           ) : (
             <>
-              {leadingAction ? <div className="mr-auto">{leadingAction}</div> : null}
+              {continuation ? (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={continuation.checked}
+                  disabled={editDisabled}
+                  onClick={() => {
+                    continuation.onCheckedChange(!continuation.checked);
+                  }}
+                  className="text-on-surface-variant hover:bg-surface-container-high text-label-large mr-auto inline-flex h-8 items-center gap-2 rounded-md px-2 disabled:opacity-50"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'bg-outline-variant inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
+                      continuation.checked && 'bg-primary justify-end',
+                    )}
+                  >
+                    <span className="bg-surface h-3 w-3 rounded-full" />
+                  </span>
+                  Create more
+                </button>
+              ) : null}
               <Button
                 type="submit"
                 form={formId}
@@ -411,7 +484,7 @@ export function ComposerShell({
                 // the first one is under way, so the state is announced rather than merely drawn.
                 disabled={creating || !canSubmit}
                 aria-busy={creating}
-                className={leadingAction ? undefined : 'ml-auto'}
+                className={continuation ? undefined : 'ml-auto'}
               >
                 {creating ? 'Creating…' : submitLabel}
               </Button>

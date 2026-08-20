@@ -231,6 +231,94 @@ describe('clicking an editor-shaped surface starts editing', () => {
     });
   });
 
+  it('keeps composer chrome fixed while the body owns contained scrolling in both size states', async () => {
+    const user = userEvent.setup();
+
+    function Harness(): ReactElement {
+      const [body, setBody] = useState('A durable draft');
+      return (
+        <ComposerShell
+          open
+          onOpenChange={vi.fn()}
+          heading="New task"
+          title="Draft title"
+          onTitleChange={vi.fn()}
+          titlePlaceholder="Task name"
+          body={body}
+          onBodyChange={setBody}
+          bodyPlaceholder="Add description"
+          mentionOrgId="org_1"
+          creating={false}
+          canSubmit
+          onSubmit={vi.fn()}
+          submitLabel="Create"
+        >
+          <div />
+        </ComposerShell>
+      );
+    }
+
+    renderEditor(<Harness />);
+    const dialog = await screen.findByRole('dialog', { name: 'New task' });
+    const body = await screen.findByRole('textbox', { name: 'Add description' });
+    const scrollSurface = body.closest('[data-editor-surface]');
+
+    expect(dialog).toHaveClass('max-w-2xl', 'overflow-hidden');
+    expect(dialog).not.toHaveClass('overflow-y-auto');
+    expect(scrollSurface).toHaveClass('min-h-0', 'overflow-y-auto', 'overscroll-contain');
+
+    const bodyNode = body;
+    await user.click(screen.getByRole('button', { name: 'Expand editor' }));
+
+    expect(screen.getByRole('textbox', { name: 'Add description' })).toBe(bodyNode);
+    expect(bodyNode).toHaveTextContent('A durable draft');
+    expect(dialog).toHaveClass('h-[min(48rem,85dvh)]', 'max-w-5xl');
+    expect(screen.getByRole('button', { name: 'Collapse editor' })).toHaveFocus();
+  });
+
+  it('renders the shared continuation switch and routes the keyboard continuation through it', async () => {
+    const user = userEvent.setup();
+    const onCheckedChange = vi.fn();
+    const onSubmitAndContinue = vi.fn();
+
+    renderEditor(
+      <ComposerShell
+        open
+        onOpenChange={vi.fn()}
+        heading="New initiative"
+        title="FY2027"
+        onTitleChange={vi.fn()}
+        titlePlaceholder="Initiative name"
+        body=""
+        onBodyChange={vi.fn()}
+        bodyPlaceholder="Add description"
+        creating={false}
+        canSubmit
+        onSubmit={vi.fn()}
+        submitLabel="Create initiative"
+        continuation={{
+          checked: false,
+          onCheckedChange,
+          onSubmit: onSubmitAndContinue,
+        }}
+      >
+        <div />
+      </ComposerShell>,
+    );
+
+    const createMore = await screen.findByRole('switch', { name: 'Create more' });
+    expect(createMore).toHaveAttribute('aria-checked', 'false');
+    await user.click(createMore);
+    expect(onCheckedChange).toHaveBeenCalledWith(true);
+
+    fireEvent.keyDown(screen.getByLabelText('Initiative name'), {
+      key: 'Enter',
+      metaKey: true,
+      shiftKey: true,
+    });
+    expect(onSubmitAndContinue).toHaveBeenCalledTimes(1);
+  });
+
   it('focuses the comment composer from a click on its own tinted background/padding', async () => {
     renderEditor(
       <CommentActivityFeed

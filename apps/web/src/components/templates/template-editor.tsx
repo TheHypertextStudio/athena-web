@@ -237,6 +237,7 @@ export const TemplateEditorDialog = withComposerReset(function TemplateEditor({
   const shared = {
     open,
     onOpenChange,
+    mentionOrgId: orgId,
     heading: template ? `Edit ${template.name}` : `New ${noun.toLowerCase()} template`,
     leadingFields,
     error,
@@ -263,6 +264,7 @@ export const TemplateEditorDialog = withComposerReset(function TemplateEditor({
 interface SharedBodyProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mentionOrgId: string;
   heading: string;
   leadingFields: ReactNode;
   error: string | null;

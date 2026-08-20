@@ -45,13 +45,13 @@ import type { Priority } from '@docket/work/task-contract';
 import { todayIso } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
-import { cn } from '@docket/ui/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { templateMerge } from '@/components/templates/merge';
@@ -190,9 +190,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
 }: CreateTaskDialogProps): JSX.Element {
   const projectNoun = useVocabulary('project');
   const cycleNoun = useVocabulary('cycle');
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const submitting = useRef(false);
-  const focusTitleAfterContinuation = useRef(false);
   const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
   const contextualRequestDefaultsApply =
     globalCreation === undefined ||
@@ -222,11 +219,12 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   const [creating, setCreating] = useState(false);
   const [completionFailed, setCompletionFailed] = useState(false);
   const [completedTask, setCompletedTask] = useState<TaskOut | null>(null);
-  const [createMore, setCreateMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [bodyResetGeneration, setBodyResetGeneration] = useState(0);
   const [legacyTemplateSlotVisible, setLegacyTemplateSlotVisible] = useState(false);
+  const continuation = useComposerContinuation({
+    creating,
+    successMessage: 'Task created. Ready to create another.',
+  });
 
   const teamId = draft.teamOverride ?? defaultTeamId;
 
@@ -260,14 +258,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       labelIds: [],
     }));
   }, [globalCreation, updateDraft]);
-
-  // The title is disabled until the successful POST's `finally` runs. Focus only after that
-  // commit; calling `.focus()` earlier is ignored by the browser and leaves focus on the dialog.
-  useEffect(() => {
-    if (creating || !focusTitleAfterContinuation.current) return;
-    focusTitleAfterContinuation.current = false;
-    titleInputRef.current?.focus();
-  }, [bodyResetGeneration, creating]);
 
   // Load the chosen team's workflow states, defaulting the status to its first (the create
   // default the API would pick) so the status chip is never blank.
@@ -349,11 +339,9 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         return;
       }
       const trimmed = draft.title.trim();
-      if (trimmed.length === 0 || !teamId || !canSubmit || submitting.current) return;
-      submitting.current = true;
+      if (trimmed.length === 0 || !teamId || !canSubmit || !continuation.beginSubmission()) return;
       setCreating(true);
       setError(null);
-      setStatusMessage(null);
       let createdTask: TaskOut | null = null;
       try {
         const trimmedBody = draft.description.trim();
@@ -409,10 +397,9 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           await globalCreation.onCreated(createdTask, references, continueCreating);
         }
         if (continueCreating) {
-          focusTitleAfterContinuation.current = true;
-          updateDraft(() => ({ title: '', description: '' }));
-          setBodyResetGeneration((current) => current + 1);
-          setStatusMessage('Task created. Ready to create another.');
+          continuation.completeContinuation(() => {
+            updateDraft(() => ({ title: '', description: '' }));
+          });
           return;
         }
         onOpenChange(false);
@@ -424,13 +411,14 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         }
         setError(userErrorMessage(caught, 'Something went wrong creating the task.'));
       } finally {
-        submitting.current = false;
+        continuation.finishSubmission();
         setCreating(false);
       }
     },
     [
       canSubmit,
       completedTask,
+      continuation,
       draft,
       globalCreation,
       onCreated,
@@ -513,35 +501,14 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           />
         ) : undefined
       }
-      leadingAction={
-        globalCreation && completedTask === null ? (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={createMore}
-            disabled={creating}
-            onClick={() => {
-              setCreateMore((current) => !current);
-            }}
-            className="text-on-surface-variant hover:bg-surface-container-high text-label-large inline-flex h-8 items-center gap-2 rounded-md px-2 disabled:opacity-50"
-          >
-            <span
-              aria-hidden
-              className={cn(
-                'bg-outline-variant inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
-                createMore && 'bg-primary justify-end',
-              )}
-            >
-              <span className="bg-surface h-3 w-3 rounded-full" />
-            </span>
-            Create more
-          </button>
-        ) : undefined
-      }
-      onLeadingAction={
-        globalCreation && completedTask === null
-          ? () => {
-              void submit(true);
+      continuation={
+        completedTask === null
+          ? {
+              checked: continuation.createMore,
+              onCheckedChange: continuation.setCreateMore,
+              onSubmit: () => {
+                void submit(true);
+              },
             }
           : undefined
       }
@@ -549,21 +516,22 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       onTitleChange={(next) => {
         setField('title', next);
       }}
-      titleInputRef={titleInputRef}
+      titleInputRef={continuation.titleInputRef}
       titlePlaceholder="Task title"
       body={draft.description}
-      bodyResetKey={bodyResetGeneration}
+      bodyResetKey={continuation.bodyResetGeneration}
       onBodyChange={(next) => {
         setField('description', next);
       }}
       bodyPlaceholder="Add a description…"
+      mentionOrgId={orgId}
       error={error ?? globalCreation?.loadError ?? null}
-      statusMessage={statusMessage}
+      statusMessage={continuation.statusMessage}
       draftCommitted={completedTask !== null}
       contentDisabled={completedTask !== null}
       creating={creating}
       canSubmit={completedTask !== null || canSubmit}
-      onSubmit={() => void submit(createMore)}
+      onSubmit={() => void submit(continuation.createMore)}
       submitLabel={
         completedTask !== null
           ? 'Open created task'

@@ -1,6 +1,11 @@
 export { default as SchedulingCanvas } from './scheduling-canvas';
 export type { SchedulingCanvasProps } from './scheduling-canvas';
 export {
+  partitionScheduleRangeByContext,
+  type ScheduleContextRegion,
+  type ScheduleContextSegment,
+} from './scheduling-context-intersections';
+export {
   readScheduleDragObject,
   SCHEDULE_DRAG_MIME,
   writeScheduleDragObject,
@@ -34,6 +39,7 @@ export {
   type ScheduleAxisPresentation,
   type ScheduleLaneGeometry,
 } from './scheduling-geometry';
+export { projectInstantRangeToScheduleLane } from './scheduling-lane-projection';
 export { moveScheduleInstantRange, type MovedScheduleInstantRange } from './scheduling-exact-move';
 export {
   resizeScheduleInstantRange,
@@ -72,16 +78,21 @@ export {
 export type {
   ScheduleAllDayItemMove,
   ScheduleAllDayItemResize,
+  ScheduleAllDayLaneRenderContext,
+  ScheduleDragObject,
+  ScheduleInstantRange,
   ScheduleItem,
   ScheduleItemAppearance,
   ScheduleItemDensity,
+  ScheduleItemRenderContext,
   ScheduleItemMove,
   ScheduleItemOpen,
-  ScheduleItemRenderContext,
   ScheduleItemResize,
   ScheduleLane,
-  ScheduleDragObject,
+  ScheduleMinuteBounds,
   ScheduleObjectDrop,
   ScheduleObjectGridDrop,
   ScheduleRegionSelection,
+  ScheduleTimedItemDecorationContext,
+  ScheduleTimedLaneRenderContext,
 } from './scheduling-types';

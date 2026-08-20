@@ -118,6 +118,7 @@ export function SchedulingCanvasHeader({
   contentWidth,
   laneWidth,
   renderItem,
+  renderAllDayLaneContext,
   onOpenItem,
   onMoveAllDayItem,
   onResizeAllDayItem,
@@ -154,6 +155,7 @@ export function SchedulingCanvasHeader({
   readonly contentWidth: number;
   readonly laneWidth: number;
   readonly renderItem?: SchedulingCanvasProps['renderItem'] | undefined;
+  readonly renderAllDayLaneContext?: SchedulingCanvasProps['renderAllDayLaneContext'] | undefined;
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'] | undefined;
   readonly onMoveAllDayItem?: SchedulingCanvasProps['onMoveAllDayItem'] | undefined;
   readonly onResizeAllDayItem?: SchedulingCanvasProps['onResizeAllDayItem'] | undefined;
@@ -209,6 +211,7 @@ export function SchedulingCanvasHeader({
               laneWidth={laneWidth}
               viewportRef={viewportRef}
               renderItem={renderItem}
+              renderAllDayLaneContext={renderAllDayLaneContext}
               onOpenItem={onOpenItem}
               onMoveAllDayItem={onMoveAllDayItem}
               onResizeAllDayItem={onResizeAllDayItem}

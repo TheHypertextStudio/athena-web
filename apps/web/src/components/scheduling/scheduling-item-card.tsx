@@ -58,6 +58,7 @@ export interface SchedulingItemCardProps {
   readonly viewportRef: RefObject<HTMLElement | null>;
   readonly renderItem?: SchedulingCanvasProps['renderItem'];
   readonly renderItemAction?: SchedulingCanvasProps['renderItemAction'];
+  readonly renderTimedItemDecoration?: SchedulingCanvasProps['renderTimedItemDecoration'];
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'];
   readonly onResizeItem?: SchedulingCanvasProps['onResizeItem'];
@@ -104,6 +105,7 @@ export function SchedulingItemCard({
   viewportRef,
   renderItem,
   renderItemAction,
+  renderTimedItemDecoration,
   onOpenItem,
   onMoveItem,
   onResizeItem,
@@ -175,6 +177,22 @@ export function SchedulingItemCard({
   });
   const content = renderItem?.({ item, lane, allDay: false, density }) ?? item.title;
   const action = renderItemAction?.({ item, lane, allDay: false, density }) ?? null;
+  const decoration =
+    renderTimedItemDecoration?.({
+      item,
+      lane,
+      geometry: {
+        bounds: visibleBounds,
+        top: visibleTop,
+        height: visibleHeight,
+        laneWidth,
+        pixelsPerHour,
+      },
+      placement: {
+        columnIndex: placement.columnIndex,
+        columnCount: placement.columnCount,
+      },
+    }) ?? null;
   const dragObject = item.dragObject;
   const bodyOpenable = item.openable !== false;
   const bodyMovable = editCapabilities.canMove && onMoveItem !== undefined;
@@ -190,7 +208,7 @@ export function SchedulingItemCard({
     <article
       // The visual surface stops one pixel before the item's exact geometry. Adjacent blocks keep
       // separate silhouettes without shrinking the hit targets or changing gesture math.
-      className={`${DRAGGABLE} ${
+      className={`${DRAGGABLE} isolate ${
         dropActive
           ? 'ring-primary group absolute z-30 overflow-visible rounded-sm ring-2'
           : gesture.preview
@@ -237,7 +255,7 @@ export function SchedulingItemCard({
     >
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-x-0 top-0 bottom-px rounded-sm transition-colors motion-reduce:transition-none ${
+        className={`pointer-events-none absolute inset-x-0 top-0 bottom-px -z-20 rounded-sm transition-colors motion-reduce:transition-none ${
           surfaceState !== 'rest' || appearance === 'event'
             ? ''
             : appearance === 'timebox'
@@ -253,6 +271,16 @@ export function SchedulingItemCard({
               : undefined,
         }}
       />
+      {decoration === null ? null : (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 bottom-px -z-10 overflow-hidden rounded-sm"
+          data-schedule-item-decoration=""
+          inert
+        >
+          {decoration}
+        </div>
+      )}
       <div
         className="contents"
         data-schedule-relationship-covered=""

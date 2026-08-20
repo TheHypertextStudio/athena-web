@@ -15,6 +15,7 @@ export function SchedulingAllDayLane({
   laneWidth,
   viewportRef,
   renderItem,
+  renderAllDayLaneContext,
   onOpenItem,
   onMoveAllDayItem,
   onResizeAllDayItem,
@@ -30,6 +31,7 @@ export function SchedulingAllDayLane({
   readonly laneWidth: number;
   readonly viewportRef: RefObject<HTMLElement | null>;
   readonly renderItem?: SchedulingCanvasProps['renderItem'];
+  readonly renderAllDayLaneContext?: SchedulingCanvasProps['renderAllDayLaneContext'];
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveAllDayItem?: SchedulingCanvasProps['onMoveAllDayItem'];
   readonly onResizeAllDayItem?: SchedulingCanvasProps['onResizeAllDayItem'];
@@ -66,6 +68,14 @@ export function SchedulingAllDayLane({
       className="relative mt-1 flex min-h-5 flex-col items-start gap-1"
       data-schedule-all-day-lane={lane.id}
     >
+      {renderAllDayLaneContext ? (
+        <div className="relative z-10 w-full" data-schedule-all-day-lane-context={lane.id}>
+          {renderAllDayLaneContext({
+            lane,
+            geometry: { laneIndex, laneWidth },
+          })}
+        </div>
+      ) : null}
       {primary.map((item) => (
         <div key={item.id} className="w-full" data-schedule-all-day-primary="">
           {render(item)}

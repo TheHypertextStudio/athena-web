@@ -10,6 +10,7 @@ import {
   minutesToPixels,
   pixelDeltaToMinutes,
   pixelsToMinutes,
+  projectInstantRangeToScheduleLane,
   type ScheduleItem,
   type ScheduleLane,
 } from '@/components/scheduling';
@@ -85,6 +86,25 @@ describe('fluid scheduling geometry', () => {
 });
 
 describe('schedule date lanes', () => {
+  it('clips a domain-neutral instant range across schedule lane boundaries', () => {
+    const range = {
+      startsAt: '2026-07-01T23:30:00.000Z',
+      endsAt: '2026-07-02T00:30:00.000Z',
+    };
+
+    expect(projectInstantRangeToScheduleLane(range, lane('july-1', '2026-07-01'), 'UTC')).toEqual({
+      startMinutes: 23 * 60 + 30,
+      endMinutes: 24 * 60,
+    });
+    expect(projectInstantRangeToScheduleLane(range, lane('july-2', '2026-07-02'), 'UTC')).toEqual({
+      startMinutes: 0,
+      endMinutes: 30,
+    });
+    expect(
+      projectInstantRangeToScheduleLane(range, lane('july-3', '2026-07-03'), 'UTC'),
+    ).toBeNull();
+  });
+
   it('maps every lane with the one explicit canvas timezone instead of resource metadata', () => {
     const lanes = [
       lane('utc-july-1', '2026-07-01', 'Asia/Tokyo'),

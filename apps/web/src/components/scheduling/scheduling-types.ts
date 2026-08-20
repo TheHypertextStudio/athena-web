@@ -1,5 +1,21 @@
 import type { ReactNode, Ref } from 'react';
 
+/** An inclusive-start, exclusive-end range of exact ISO instants. */
+export interface ScheduleInstantRange {
+  /** Inclusive exact instant at which the range begins. */
+  readonly startsAt: string;
+  /** Exclusive exact instant at which the range ends. */
+  readonly endsAt: string;
+}
+
+/** Minute-of-day bounds clipped to one schedule lane. */
+export interface ScheduleMinuteBounds {
+  /** Inclusive minute position at which the range begins. */
+  readonly startMinutes: number;
+  /** Exclusive minute position at which the range ends. */
+  readonly endMinutes: number;
+}
+
 /** Semantic surface treatment for a domain-neutral scheduling item. */
 export type ScheduleItemAppearance = 'event' | 'timebox' | 'availability' | 'busy';
 
@@ -153,6 +169,76 @@ export interface ScheduleItemRenderContext {
   readonly density: ScheduleItemDensity;
 }
 
+/** Geometry supplied to a consumer-owned timed-lane underlay. */
+export interface ScheduleTimedLaneGeometry {
+  /** Zero-based lane position in the current canvas. */
+  readonly laneIndex: number;
+  /** Rendered lane width in CSS pixels. */
+  readonly laneWidth: number;
+  /** Full 24-hour lane height in CSS pixels. */
+  readonly laneHeight: number;
+  /** Current vertical scale in CSS pixels per hour. */
+  readonly pixelsPerHour: number;
+}
+
+/** Context supplied to a consumer-owned timed-lane underlay renderer. */
+export interface ScheduleTimedLaneRenderContext {
+  /** Lane receiving the underlay. */
+  readonly lane: ScheduleLane;
+  /** Current lane placement and scale. */
+  readonly geometry: ScheduleTimedLaneGeometry;
+}
+
+/** Geometry supplied to a consumer-owned all-day lane context renderer. */
+export interface ScheduleAllDayLaneGeometry {
+  /** Zero-based lane position in the current canvas. */
+  readonly laneIndex: number;
+  /** Rendered lane width in CSS pixels. */
+  readonly laneWidth: number;
+}
+
+/** Context supplied to a consumer-owned all-day lane context renderer. */
+export interface ScheduleAllDayLaneRenderContext {
+  /** Lane receiving the context content. */
+  readonly lane: ScheduleLane;
+  /** Current all-day lane placement. */
+  readonly geometry: ScheduleAllDayLaneGeometry;
+}
+
+/** Geometry supplied to a decorative renderer for one timed item. */
+export interface ScheduleTimedItemGeometry {
+  /** Current projected bounds, including any direct-manipulation preview. */
+  readonly bounds: ScheduleMinuteBounds;
+  /** Current top offset in CSS pixels within the timed lane. */
+  readonly top: number;
+  /** Current rendered height in CSS pixels. */
+  readonly height: number;
+  /** Rendered lane width in CSS pixels. */
+  readonly laneWidth: number;
+  /** Current vertical scale in CSS pixels per hour. */
+  readonly pixelsPerHour: number;
+}
+
+/** Collision placement supplied to a decorative renderer for one timed item. */
+export interface ScheduleTimedItemPlacement {
+  /** Zero-based visual overlap column. */
+  readonly columnIndex: number;
+  /** Peak column count in the item's overlap cluster. */
+  readonly columnCount: number;
+}
+
+/** Context supplied to a consumer-owned timed-item decoration renderer. */
+export interface ScheduleTimedItemDecorationContext {
+  /** Readonly item receiving decoration. */
+  readonly item: ScheduleItem;
+  /** Lane that contains the projected item segment. */
+  readonly lane: ScheduleLane;
+  /** Current item bounds and rendered dimensions. */
+  readonly geometry: ScheduleTimedItemGeometry;
+  /** Current collision column without any interaction callbacks. */
+  readonly placement: ScheduleTimedItemPlacement;
+}
+
 /** Public contract for the pure, callback-driven scheduling canvas. */
 export interface SchedulingCanvasProps {
   /** Surface-specific chrome while geometry and interactions remain shared. */
@@ -204,6 +290,30 @@ export interface SchedulingCanvasProps {
   readonly emptyAction?: ReactNode | undefined;
   /** Customize item content without transferring gesture or geometry ownership. */
   readonly renderItem?: ((context: ScheduleItemRenderContext) => ReactNode) | undefined;
+  /**
+   * Render decorative context beneath timed items in each lane.
+   *
+   * @remarks
+   * The canvas wraps this output in an inert, pointer-disabled layer. Consumers receive geometry
+   * but no mutation callbacks, so the underlay can show rails without taking gesture ownership.
+   */
+  readonly renderTimedLaneUnderlay?:
+    | ((context: ScheduleTimedLaneRenderContext) => ReactNode)
+    | undefined;
+  /** Render consumer-owned content above the existing all-day items in each lane. */
+  readonly renderAllDayLaneContext?:
+    | ((context: ScheduleAllDayLaneRenderContext) => ReactNode)
+    | undefined;
+  /**
+   * Render decoration above a timed item's base surface and below its text and controls.
+   *
+   * @remarks
+   * The canvas wraps this output in an inert, pointer-disabled layer. The renderer receives only
+   * readonly scheduling data and cannot take ownership of item mutation or gestures.
+   */
+  readonly renderTimedItemDecoration?:
+    | ((context: ScheduleTimedItemDecorationContext) => ReactNode)
+    | undefined;
   /**
    * Optional per-item action control (e.g. a start-timer button), rendered as a fixed corner
    * control alongside the built-in resize/move/relationship controls.

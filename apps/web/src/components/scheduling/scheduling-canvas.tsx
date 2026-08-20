@@ -62,6 +62,9 @@ export default function SchedulingCanvas({
   emptyAction,
   renderItem,
   renderItemAction,
+  renderTimedLaneUnderlay,
+  renderAllDayLaneContext,
+  renderTimedItemDecoration,
   selectedRegion,
   selectedRegionAnchorRef,
   onSelectRegion,
@@ -261,6 +264,7 @@ export default function SchedulingCanvas({
           contentWidth={geometry.contentWidth}
           laneWidth={geometry.laneWidth}
           renderItem={renderItem}
+          renderAllDayLaneContext={renderAllDayLaneContext}
           onOpenItem={onOpenItem}
           onMoveAllDayItem={onMoveAllDayItem}
           onResizeAllDayItem={onResizeAllDayItem}
@@ -376,6 +380,24 @@ export default function SchedulingCanvas({
                       : undefined
                   }
                 >
+                  {renderTimedLaneUnderlay ? (
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 z-[1]"
+                      data-schedule-timed-lane-underlay={lane.id}
+                      inert
+                    >
+                      {renderTimedLaneUnderlay({
+                        lane,
+                        geometry: {
+                          laneIndex,
+                          laneWidth: geometry.laneWidth,
+                          laneHeight: 24 * effectivePixelsPerHour,
+                          pixelsPerHour: effectivePixelsPerHour,
+                        },
+                      })}
+                    </div>
+                  ) : null}
                   {selectedRegion?.lane.id === lane.id && selectedRegionPresentation ? (
                     <SchedulingRegionPreview
                       laneId={lane.id}
@@ -416,6 +438,7 @@ export default function SchedulingCanvas({
                         viewportRef={viewportRef}
                         renderItem={renderItem}
                         renderItemAction={renderItemAction}
+                        renderTimedItemDecoration={renderTimedItemDecoration}
                         onOpenItem={onOpenItem}
                         onMoveItem={onMoveItem}
                         onResizeItem={onResizeItem}

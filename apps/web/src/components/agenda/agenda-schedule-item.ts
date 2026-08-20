@@ -2,6 +2,7 @@ import {
   isInlineEditableScheduleItem,
   scheduleInstantAt,
   type ScheduleItem,
+  type ScheduleItemAppearance,
 } from '@/components/scheduling';
 
 import type { AgendaEntry } from './agenda-model';
@@ -13,6 +14,23 @@ const RELATIONSHIP_TARGET_KINDS = new Set([
   'native_block',
   'timebox',
 ]);
+
+/** Map Agenda calendar kinds into the shared schedule surface vocabulary. */
+function agendaCalendarItemAppearance(
+  kind: NonNullable<AgendaEntry['calendarItem']>['kind'],
+): Exclude<ScheduleItemAppearance, 'busy'> {
+  switch (kind) {
+    case 'provider_event':
+    case 'native_event':
+      return 'event';
+    case 'native_block':
+    case 'timebox':
+    case 'task_timebox':
+      return 'timebox';
+    case 'availability_block':
+      return 'availability';
+  }
+}
 
 /** Return whether an Agenda entry is a domain-valid calendar relationship target. */
 export function isAgendaRelationshipTarget(entry: AgendaEntry): boolean {
@@ -53,7 +71,7 @@ export function isAgendaEntryInlineEditable(entry: AgendaEntry, displayTimezone:
   });
 }
 
-/** Map one timed or all-day Agenda entry into the shared scheduling contract. */
+/** Map one timed or all-day Agenda entry into the shared scheduling contract and appearance. */
 export function toAgendaScheduleItem(
   entry: AgendaEntry,
   date: string,
@@ -78,6 +96,11 @@ export function toAgendaScheduleItem(
     endsAt,
     allDay,
     color: entry.layerColor ?? entry.calendar?.color ?? undefined,
+    appearance: calendarItem
+      ? agendaCalendarItemAppearance(calendarItem.kind)
+      : entry.source === 'task'
+        ? 'timebox'
+        : 'event',
     editable: isAgendaEntryInlineEditable(entry, displayTimezone),
     readOnlyLabel: agendaReadOnlyLabel(entry),
     dragObject:

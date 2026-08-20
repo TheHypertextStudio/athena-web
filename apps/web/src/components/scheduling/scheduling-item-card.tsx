@@ -1,14 +1,7 @@
 'use client';
 
 import { DRAGGABLE } from '@docket/ui/lib/draggable';
-import {
-  type CSSProperties,
-  type DragEvent as ReactDragEvent,
-  type JSX,
-  type RefObject,
-  useId,
-  useState,
-} from 'react';
+import { type DragEvent as ReactDragEvent, type JSX, type RefObject, useId, useState } from 'react';
 
 import {
   isScheduleItemEditable,
@@ -24,9 +17,10 @@ import {
 import { SchedulingItemBody } from './scheduling-item-body';
 import { SchedulingGripIcon, SchedulingLinkIcon } from './scheduling-item-icons';
 import {
-  scheduleItemFill,
-  scheduleItemRaisedFill,
-  scheduleItemStripe,
+  scheduleAvailabilityFill,
+  scheduleBusyFill,
+  scheduleEventFill,
+  scheduleTimeboxFill,
 } from './scheduling-item-surface';
 import {
   SchedulingRelationshipSourceControl,
@@ -90,7 +84,7 @@ function itemDensity(height: number, width: number): ScheduleItemDensity {
   return 'full';
 }
 
-/** Render and gesture-wire one timed item without owning any persistence. */
+/** Render and gesture-wire one timed semantic surface without owning any persistence. */
 export function SchedulingItemCard({
   item,
   lane,
@@ -183,31 +177,27 @@ export function SchedulingItemCard({
   const bodyOpenable = item.openable !== false;
   const bodyMovable = editCapabilities.canMove && onMoveItem !== undefined;
   const isRelationshipTarget = relationshipMode.isTarget(item);
+  const appearance = item.appearance ?? 'event';
   const horizontalStyle = scheduleOverlapHorizontalStyle(placement);
   const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
     item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
 
   return (
     <article
-      // The card's visual fill is a child surface with one transparent pixel at its bottom. Exact
-      // schedule geometry and hit targets keep the true height while adjacent fills never merge.
-      //
-      // The resting fill comes from {@link scheduleItemFill} rather than a `bg-*` token, because the
-      // tonal ramp has no single container step that moves *away* from the canvas in both themes
-      // (see that module). It is published as two custom properties in `style` and consumed by
-      // ordinary utilities here, so rest / hover / focus stay one CSS cascade rather than a
-      // JavaScript hover state.
+      // The visual surface stops one pixel before the item's exact geometry. Adjacent blocks keep
+      // separate silhouettes without shrinking the hit targets or changing gesture math.
       className={`${DRAGGABLE} ${
         dropActive
-          ? 'ring-primary group absolute z-30 overflow-visible rounded-md ring-2'
+          ? 'ring-primary group absolute z-30 overflow-visible rounded-sm ring-2'
           : gesture.preview
-            ? 'ring-primary group absolute z-40 overflow-visible rounded-md ring-2'
-            : 'group absolute z-10 overflow-visible rounded-md focus-within:z-20 hover:z-20'
+            ? 'ring-primary group absolute z-40 overflow-visible rounded-sm ring-2'
+            : 'group absolute z-10 overflow-visible rounded-sm focus-within:z-20 hover:z-20'
       }`}
       data-item-density={density}
       data-layout-column={placement.columnIndex}
       data-layout-column-count={placement.columnCount}
       data-schedule-item={item.id}
+      data-schedule-item-appearance={appearance}
       data-gesture-preview={gesture.preview ? gesture.previewMode : undefined}
       onDragOver={(event) => {
         if (!acceptsDrop(event)) return;
@@ -228,33 +218,44 @@ export function SchedulingItemCard({
         if (!object || (object.kind === 'calendar_item' && object.itemId === item.id)) return;
         onDropObjectOnItem({ object, targetItem: item, targetLane: lane });
       }}
-      style={
-        {
-          top: visibleTop,
-          ...horizontalStyle,
-          height: visibleHeight,
-          transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
-          '--schedule-item-fill': scheduleItemFill(item.color),
-          '--schedule-item-fill-raised': scheduleItemRaisedFill(item.color),
-        } as CSSProperties
-      }
+      style={{
+        top: visibleTop,
+        ...horizontalStyle,
+        height: visibleHeight,
+        transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
+      }}
     >
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-x-0 top-0 bottom-px rounded-md transition-colors motion-reduce:transition-none ${
+        className={`pointer-events-none absolute inset-x-0 top-0 bottom-px rounded-sm transition-colors motion-reduce:transition-none ${
           dropActive
             ? 'bg-primary-container'
             : gesture.preview
               ? 'bg-surface-container-high'
-              : 'bg-(--schedule-item-fill) group-focus-within:bg-(--schedule-item-fill-raised) group-hover:bg-(--schedule-item-fill-raised)'
+              : appearance === 'event'
+                ? ''
+                : appearance === 'timebox'
+                  ? 'border-outline border border-dashed'
+                  : 'border-outline-variant border'
         }`}
         data-schedule-item-surface=""
-      />
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute top-0.5 bottom-1.5 left-1 z-[1]"
-        data-schedule-item-accent=""
-        style={{ backgroundColor: scheduleItemStripe(item.color), width: '2px' }}
+        style={
+          dropActive || gesture.preview
+            ? undefined
+            : appearance === 'event'
+              ? { backgroundColor: scheduleEventFill(item.color) }
+              : appearance === 'timebox'
+                ? {
+                    backgroundColor: scheduleTimeboxFill(item.color),
+                    borderLeftColor: 'var(--color-outline)',
+                  }
+                : {
+                    backgroundColor:
+                      appearance === 'availability'
+                        ? scheduleAvailabilityFill(item.color)
+                        : scheduleBusyFill(),
+                  }
+        }
       />
       <div
         className="contents"

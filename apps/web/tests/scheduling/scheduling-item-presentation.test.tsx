@@ -86,7 +86,49 @@ describe('SchedulingCanvas item presentation', () => {
     );
   });
 
-  it('paces adjacent events with a separate surface and a flat inset accent', () => {
+  it('renders omitted appearances as flat calendar-colour events in timed and all-day lanes', () => {
+    const timed = { ...item('focus', 'Focus block'), color: '#316eb4' };
+    const allDay = {
+      ...item('offsite', 'Team offsite'),
+      color: '#316eb4',
+      allDay: true,
+      startsAt: '2026-07-01T00:00:00.000Z',
+      endsAt: '2026-07-02T00:00:00.000Z',
+    };
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane([timed, allDay])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    const card = assertDefined(document.querySelector<HTMLElement>('[data-schedule-item="focus"]'));
+    const surface = assertDefined(card.querySelector<HTMLElement>('[data-schedule-item-surface]'));
+    const allDayItem = assertDefined(
+      document.querySelector<HTMLElement>('[data-schedule-all-day-item="offsite"]'),
+    );
+    const allDaySurface = assertDefined(
+      allDayItem.querySelector<HTMLElement>('[data-schedule-item-surface]'),
+    );
+    expect(card).toHaveAttribute('data-schedule-item-appearance', 'event');
+    expect(allDayItem).toHaveAttribute('data-schedule-item-appearance', 'event');
+    expect(surface).toHaveClass('bottom-px');
+    expect(surface).toHaveClass('rounded-sm');
+    expect(allDaySurface).toHaveClass('rounded-sm');
+    expect(surface).toHaveStyle({ backgroundColor: '#316eb4' });
+    expect(allDaySurface).toHaveStyle({ backgroundColor: '#316eb4' });
+    expect(card.querySelector('[data-schedule-item-body]')).toHaveClass('text-on-primary');
+    expect(allDayItem.querySelector('[data-schedule-item-body]')).toHaveClass('text-on-primary');
+    expect(card.style.borderLeftWidth).toBe('');
+    expect(card.querySelector('[data-schedule-item-accent]')).not.toBeInTheDocument();
+    expect(allDayItem.querySelector('[data-schedule-item-accent]')).not.toBeInTheDocument();
+    expect(card.className).not.toMatch(/shadow-/);
+    expect(allDayItem.className).not.toMatch(/shadow-/);
+  });
+
+  it('uses a solid semantic event color when a consumer supplies no color', () => {
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -96,14 +138,130 @@ describe('SchedulingCanvas item presentation', () => {
       />,
     );
 
-    const card = assertDefined(document.querySelector<HTMLElement>('[data-schedule-item="focus"]'));
-    const surface = assertDefined(card.querySelector<HTMLElement>('[data-schedule-item-surface]'));
-    const accent = assertDefined(card.querySelector<HTMLElement>('[data-schedule-item-accent]'));
-    expect(surface).toHaveClass('bottom-px');
-    expect(accent).toHaveStyle({ width: '2px' });
-    expect(card.style.borderLeftWidth).toBe('');
-    expect(accent.className).not.toMatch(/rounded/);
+    const surface = assertDefined(
+      document.querySelector<HTMLElement>(
+        '[data-schedule-item="focus"] [data-schedule-item-surface]',
+      ),
+    );
+    expect(surface).toHaveStyle({ backgroundColor: 'var(--color-primary)' });
   });
+
+  it('renders timeboxes as dashed provisional surfaces without changing timed or all-day gestures', () => {
+    const dragObject = {
+      kind: 'calendar_item' as const,
+      itemId: 'timebox',
+      title: 'Focus block',
+    };
+    const timed = {
+      ...item('timebox', 'Focus block'),
+      appearance: 'timebox' as const,
+      color: '#316eb4',
+      dragObject,
+    };
+    const allDay = {
+      ...item('all-day-timebox', 'Planning day'),
+      appearance: 'timebox' as const,
+      color: '#316eb4',
+      allDay: true,
+      startsAt: '2026-07-01T00:00:00.000Z',
+      endsAt: '2026-07-02T00:00:00.000Z',
+      dragObject: { ...dragObject, itemId: 'all-day-timebox', title: 'Planning day' },
+    };
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane([timed, allDay])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onOpenItem={vi.fn()}
+        onMoveItem={vi.fn()}
+        onResizeItem={vi.fn()}
+        onMoveAllDayItem={vi.fn()}
+        onResizeAllDayItem={vi.fn()}
+      />,
+    );
+
+    const card = assertDefined(
+      document.querySelector<HTMLElement>('[data-schedule-item="timebox"]'),
+    );
+    const allDayItem = assertDefined(
+      document.querySelector<HTMLElement>('[data-schedule-all-day-item="all-day-timebox"]'),
+    );
+    const surfaces = [
+      assertDefined(card.querySelector<HTMLElement>('[data-schedule-item-surface]')),
+      assertDefined(allDayItem.querySelector<HTMLElement>('[data-schedule-item-surface]')),
+    ];
+    for (const surface of surfaces) {
+      expect(surface).toHaveClass('border', 'border-dashed');
+      expect(surface.style.backgroundColor).toContain('color-mix');
+      expect(surface).toHaveStyle({ borderLeftColor: 'var(--color-outline)' });
+    }
+    expect(card.querySelector('[data-schedule-item-accent]')).not.toBeInTheDocument();
+    expect(allDayItem.querySelector('[data-schedule-item-accent]')).not.toBeInTheDocument();
+
+    expect(card.querySelector('[data-schedule-resize-target="start"]')).toBeInTheDocument();
+    expect(card.querySelector('[data-schedule-resize-target="end"]')).toBeInTheDocument();
+    expect(card.querySelector('[aria-label="Move Focus block"]')).toBeInTheDocument();
+    expect(
+      card.querySelector('[aria-label="Drag Focus block to create a relationship"]'),
+    ).toBeInTheDocument();
+    expect(allDayItem.querySelector('[data-schedule-all-day-resize="start"]')).toBeInTheDocument();
+    expect(allDayItem.querySelector('[data-schedule-all-day-resize="end"]')).toBeInTheDocument();
+    expect(allDayItem.querySelector('[aria-label="Move Planning day"]')).toBeInTheDocument();
+    expect(
+      allDayItem.querySelector('[aria-label="Drag Planning day to create a relationship"]'),
+    ).toBeInTheDocument();
+  });
+
+  it.each(['availability', 'busy'] as const)(
+    'keeps %s surfaces subordinate without dimming their text',
+    (appearance) => {
+      const timed = {
+        ...item(`${appearance}-timed`, appearance === 'busy' ? 'Busy' : 'Available'),
+        appearance,
+        color: '#316eb4',
+        openable: false,
+      };
+      const allDay = {
+        ...item(`${appearance}-all-day`, appearance === 'busy' ? 'Busy all day' : 'Available'),
+        appearance,
+        color: '#316eb4',
+        openable: false,
+        allDay: true,
+        startsAt: '2026-07-01T00:00:00.000Z',
+        endsAt: '2026-07-02T00:00:00.000Z',
+      };
+      render(
+        <SchedulingCanvas
+          displayTimezone="UTC"
+          lanes={[lane([timed, allDay])]}
+          pixelsPerHour={60}
+          viewportWidth={500}
+        />,
+      );
+
+      const timedItem = assertDefined(
+        document.querySelector<HTMLElement>(`[data-schedule-item="${appearance}-timed"]`),
+      );
+      const allDayItem = assertDefined(
+        document.querySelector<HTMLElement>(`[data-schedule-all-day-item="${appearance}-all-day"]`),
+      );
+      for (const renderedItem of [timedItem, allDayItem]) {
+        const surface = assertDefined(
+          renderedItem.querySelector<HTMLElement>('[data-schedule-item-surface]'),
+        );
+        const body = assertDefined(
+          renderedItem.querySelector<HTMLElement>('[data-schedule-item-body]'),
+        );
+        expect(renderedItem).toHaveAttribute('data-schedule-item-appearance', appearance);
+        expect(surface).toHaveClass('border', 'border-outline-variant');
+        expect(surface.style.backgroundColor).toContain('color-mix');
+        expect(surface).not.toHaveStyle({ backgroundColor: '#316eb4' });
+        expect(body).toHaveClass('text-on-surface');
+        expect(renderedItem.className).not.toMatch(/\bopacity-/);
+      }
+    },
+  );
 
   it('keeps read-only state accessible without painting ambient lock glyphs', () => {
     const timed = { ...item('focus', 'Focus block'), editable: false, readOnlyLabel: 'Read-only' };
@@ -155,6 +313,9 @@ describe('SchedulingCanvas item presentation', () => {
     expect(preview?.querySelector('[data-schedule-item-surface]')).toHaveClass(
       'bg-surface-container-high',
     );
+    expect(
+      preview?.querySelector<HTMLElement>('[data-schedule-item-surface]')?.style.backgroundColor,
+    ).toBe('');
     expect(preview?.className).not.toMatch(/shadow-/);
   });
 

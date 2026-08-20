@@ -193,6 +193,19 @@ describe('calendar schedule timezone model', () => {
   );
 
   it.each([
+    ['provider_event', 'event'],
+    ['native_event', 'event'],
+    ['native_block', 'timebox'],
+    ['timebox', 'timebox'],
+    ['task_timebox', 'timebox'],
+    ['availability_block', 'availability'],
+  ] as const)('maps %s to the %s schedule appearance', (kind, appearance) => {
+    expect(
+      toScheduleItem(calendarItem({ kind }), '2026-07-02', null, 'America/Los_Angeles').appearance,
+    ).toBe(appearance);
+  });
+
+  it.each([
     {
       label: 'provider permission denial',
       readOnlyLabel: 'Read-only',
@@ -274,6 +287,7 @@ describe('calendar schedule timezone model', () => {
     expect(resourceLane.items[0]).toMatchObject({
       startsAt: '2026-07-01T15:00:00Z',
       endsAt: '2026-07-02T15:00:00Z',
+      appearance: 'busy',
     });
     expect(resourceLane.items[0]).not.toHaveProperty('readOnlyLabel');
   });

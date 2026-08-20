@@ -73,6 +73,7 @@ export type {
   ScheduleAllDayItemMove,
   ScheduleAllDayItemResize,
   ScheduleItem,
+  ScheduleItemAppearance,
   ScheduleItemDensity,
   ScheduleItemMove,
   ScheduleItemOpen,

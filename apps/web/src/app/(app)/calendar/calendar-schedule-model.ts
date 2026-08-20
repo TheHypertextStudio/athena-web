@@ -11,10 +11,28 @@ import {
   scheduleDateRange,
   scheduleInstantAt,
   type ScheduleItem,
+  type ScheduleItemAppearance,
   type ScheduleLane,
 } from '@/components/scheduling';
 
 const DERIVED_READ_ONLY_KINDS = new Set(['task_timebox', 'availability_block']);
+
+/** Map calendar-domain kinds into the shared schedule surface vocabulary. */
+function calendarItemAppearance(
+  kind: CalendarItemOut['kind'],
+): Exclude<ScheduleItemAppearance, 'busy'> {
+  switch (kind) {
+    case 'provider_event':
+    case 'native_event':
+      return 'event';
+    case 'native_block':
+    case 'timebox':
+    case 'task_timebox':
+      return 'timebox';
+    case 'availability_block':
+      return 'availability';
+  }
+}
 
 /** The resource dimension rendered by the calendar canvas. */
 export type CalendarAxis = 'dates' | 'people';
@@ -111,7 +129,7 @@ function calendarReadOnlyLabel(item: CalendarItemOut): string | undefined {
   return !item.permissions.canEditCore ? 'Read-only' : undefined;
 }
 
-/** Convert one calendar item into the geometry-only scheduling contract. */
+/** Convert one calendar item into the domain-neutral scheduling contract and appearance. */
 export function toScheduleItem(
   item: CalendarItemOut,
   date: string,
@@ -131,6 +149,7 @@ export function toScheduleItem(
     endsAt,
     allDay,
     color: color ?? undefined,
+    appearance: calendarItemAppearance(item.kind),
     editable:
       canPersistCalendarItemBounds(item) &&
       (allDay ||
@@ -167,7 +186,7 @@ export function buildDateLane(
   };
 }
 
-/** Convert one permission-filtered person response into a read-only resource lane. */
+/** Convert one permission-filtered person response into a read-only lane with redacted busy items. */
 export function buildComparisonLane(
   person: ScheduleComparisonOut['people'][number],
   date: string,
@@ -201,6 +220,7 @@ export function buildComparisonLane(
               displayTimezone,
             ),
           allDay,
+          appearance: item.access === 'details' ? calendarItemAppearance(item.kind) : 'busy',
           editable: false,
           openable: item.access === 'details',
         };

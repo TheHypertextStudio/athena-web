@@ -1,5 +1,8 @@
 import type { ReactNode, Ref } from 'react';
 
+/** Semantic surface treatment for a domain-neutral scheduling item. */
+export type ScheduleItemAppearance = 'event' | 'timebox' | 'availability' | 'busy';
+
 /** One schedulable item rendered inside a {@link ScheduleLane}. */
 export interface ScheduleItem {
   /** Stable consumer-owned item identifier. */
@@ -14,6 +17,8 @@ export interface ScheduleItem {
   readonly allDay?: boolean | undefined;
   /** Optional item color supplied by the consuming surface. */
   readonly color?: string | undefined;
+  /** Semantic surface treatment. Consumers that omit it receive the safe `event` default. */
+  readonly appearance?: ScheduleItemAppearance | undefined;
   /** Whether move and resize affordances are available. Defaults to the lane's policy. */
   readonly editable?: boolean | undefined;
   /** Whether activating the item opens consumer-owned details. Defaults to `true`. */

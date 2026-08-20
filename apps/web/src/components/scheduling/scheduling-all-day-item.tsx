@@ -14,7 +14,12 @@ import {
 } from './scheduling-all-day-edit-controls';
 import { isScheduleItemEditable } from './scheduling-date-lanes';
 import { SchedulingLinkIcon } from './scheduling-item-icons';
-import { scheduleItemStripe } from './scheduling-item-surface';
+import {
+  scheduleAvailabilityFill,
+  scheduleBusyFill,
+  scheduleEventFill,
+  scheduleTimeboxFill,
+} from './scheduling-item-surface';
 import {
   SchedulingRelationshipSourceControl,
   SchedulingRelationshipTargetControl,
@@ -41,7 +46,7 @@ interface SchedulingAllDayItemProps {
   readonly onGestureAnnouncementChange: (announcement: string) => void;
 }
 
-/** Render one all-day segment with true-edge date manipulation and relationship controls. */
+/** Render one all-day semantic surface with date manipulation and relationship controls. */
 export function SchedulingAllDayItem({
   item,
   lane,
@@ -88,6 +93,8 @@ export function SchedulingAllDayItem({
   const exposesStartResize = editCapabilities.canResizeStart && onResizeAllDayItem !== undefined;
   const exposesEndResize = editCapabilities.canResizeEnd && onResizeAllDayItem !== undefined;
   const isRelationshipTarget = relationshipMode.isTarget(item);
+  const appearance = item.appearance ?? 'event';
+  const itemTextClassName = appearance === 'event' ? 'text-on-primary' : 'text-on-surface';
   const edgePadding = `${exposesStartResize ? 'pl-3 [@media(pointer:coarse)]:pl-10' : ''} ${exposesEndResize ? 'pr-3 [@media(pointer:coarse)]:pr-10' : ''}`;
   const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
     item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
@@ -96,12 +103,13 @@ export function SchedulingAllDayItem({
     <div
       className={
         dropActive
-          ? `${DRAGGABLE} ring-primary bg-primary-container group relative flex max-w-full items-center rounded ring-2 ${edgePadding}`
+          ? `${DRAGGABLE} ring-primary bg-primary-container group relative flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
           : gesture.preview
-            ? `${DRAGGABLE} bg-primary-container ring-primary group relative z-40 flex max-w-full items-center rounded ring-2 ${edgePadding}`
-            : `${DRAGGABLE} bg-secondary-container group relative flex max-w-full items-center rounded ${edgePadding}`
+            ? `${DRAGGABLE} bg-primary-container ring-primary group relative z-40 flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
+            : `${DRAGGABLE} group relative flex max-w-full items-center rounded-sm ${edgePadding}`
       }
       data-schedule-all-day-item={item.id}
+      data-schedule-item-appearance={appearance}
       data-schedule-all-day-preview={gesture.preview ? gesture.previewMode : undefined}
       style={{
         transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
@@ -126,9 +134,33 @@ export function SchedulingAllDayItem({
     >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute top-0.5 bottom-0.5 left-1 w-0.5"
-        data-schedule-item-accent=""
-        style={{ backgroundColor: scheduleItemStripe(item.color) }}
+        className={`pointer-events-none absolute inset-0 rounded-sm ${
+          dropActive || gesture.preview
+            ? 'bg-primary-container'
+            : appearance === 'timebox'
+              ? 'border-outline border border-dashed'
+              : appearance === 'availability' || appearance === 'busy'
+                ? 'border-outline-variant border'
+                : ''
+        }`}
+        data-schedule-item-surface=""
+        style={
+          dropActive || gesture.preview
+            ? undefined
+            : appearance === 'event'
+              ? { backgroundColor: scheduleEventFill(item.color) }
+              : appearance === 'timebox'
+                ? {
+                    backgroundColor: scheduleTimeboxFill(item.color),
+                    borderLeftColor: 'var(--color-outline)',
+                  }
+                : {
+                    backgroundColor:
+                      appearance === 'availability'
+                        ? scheduleAvailabilityFill(item.color)
+                        : scheduleBusyFill(),
+                  }
+        }
       />
       <div
         className="contents"
@@ -139,7 +171,7 @@ export function SchedulingAllDayItem({
           <button
             type="button"
             aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
-            className={`text-on-secondary-container text-label-medium focus-visible:ring-ring hover:bg-surface-container-high min-w-0 flex-1 touch-none truncate rounded px-1.5 py-0.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:min-h-10 ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+            className={`${itemTextClassName} text-label-medium focus-visible:ring-ring min-w-0 flex-1 touch-none truncate rounded px-1.5 py-0.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:min-h-10 ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
             data-schedule-item-body={item.id}
             onPointerDown={gesture.onBodyPointerDown}
             onClick={gesture.onBodyClick}
@@ -152,7 +184,7 @@ export function SchedulingAllDayItem({
         ) : (
           <span
             aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
-            className="text-on-secondary-container text-label-medium min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left"
+            className={`${itemTextClassName} text-label-medium min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left`}
             data-schedule-item-body={item.id}
           >
             {renderItem?.({ item, lane, allDay: true, density: 'compact' }) ?? item.title}

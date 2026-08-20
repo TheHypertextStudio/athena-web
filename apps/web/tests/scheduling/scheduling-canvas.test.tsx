@@ -1294,10 +1294,14 @@ describe('SchedulingCanvas', () => {
 
     const pill = screen.getByRole('button', { name: ALL_DAY_ITEM.title });
     expect(pill).toHaveClass(
-      'hover:bg-surface-container-high',
       'focus-visible:ring-2',
       'transition-colors',
       'motion-reduce:transition-none',
+    );
+    expect(pill).not.toHaveClass('hover:bg-surface-container-high');
+    expect(pill.closest('[data-schedule-all-day-item]')).toHaveAttribute(
+      'data-schedule-item-appearance',
+      'event',
     );
     fireEvent.click(pill);
     expect(onOpenItem).toHaveBeenCalledWith({ item: target, lane: sourceLane });
@@ -2057,7 +2061,9 @@ describe('SchedulingCanvas', () => {
     expect(compactVisibleRange).toBeDefined();
     expect(compactVisibleRange).not.toHaveClass('sr-only');
     expect(renderedItem('full')).toHaveTextContent(/11:00.*12:00/);
-    expect(renderedItem('full').getAttribute('style')).toContain('color-mix');
+    expect(renderedItem('full').querySelector('[data-schedule-item-surface]')).toHaveStyle({
+      backgroundColor: '#7c3aed',
+    });
     expect(renderItem).toHaveBeenCalledTimes(4);
   });
 
@@ -2147,7 +2153,7 @@ describe('SchedulingCanvas', () => {
     expect(buttons[1]).toHaveAccessibleName(/Duplicate.*9:30.*10:30/);
   });
 
-  it('marks hover with tone alone, never a shadow or a transform', () => {
+  it('keeps hover flat without replacing the event color', () => {
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -2157,22 +2163,15 @@ describe('SchedulingCanvas', () => {
       />,
     );
 
-    // Colour and stacking only: no shadow at any state, and no scale/translate — growing on
-    // hover is never how interactivity is signalled here. The resting and raised fills are two
-    // custom properties published by `scheduling-item-surface`, because no single tonal token steps
-    // away from the canvas in both themes.
+    // Stacking alone keeps the active hit target above overlaps. Hover does not turn an event back
+    // into a card through a shadow, transform, or raised neutral fill.
     expect(renderedItem('focus')).toHaveClass('hover:z-20');
     const surface = renderedItem('focus').querySelector('[data-schedule-item-surface]');
-    expect(surface).toHaveClass(
-      'bg-(--schedule-item-fill)',
-      'group-hover:bg-(--schedule-item-fill-raised)',
-      'motion-reduce:transition-none',
-    );
+    expect(surface).toHaveClass('motion-reduce:transition-none');
+    expect(surface).not.toHaveClass('group-hover:bg-(--schedule-item-fill-raised)');
+    expect(surface).toHaveStyle({ backgroundColor: '#2563eb' });
     expect(`${renderedItem('focus').className} ${surface?.className ?? ''}`).not.toMatch(
       /shadow-|scale-|translate-/,
-    );
-    expect(renderedItem('focus').style.getPropertyValue('--schedule-item-fill')).toContain(
-      'color-mix(in oklab, var(--color-on-surface)',
     );
   });
 

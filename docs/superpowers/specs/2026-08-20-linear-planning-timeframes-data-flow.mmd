@@ -1,0 +1,8 @@
+%% Data-flow diagram: one saved planning timeframe from workspace policy to every reader.
+flowchart LR
+  settings["Workspace fiscal-year start month"] --> picker["Project and Initiative timeframe picker"]
+  picker --> mutation["Typed date and resolution mutation"]
+  settings --> validation["Planning timeframe validation"]
+  mutation --> validation
+  validation --> storage["Date anchor, resolution, and fiscal snapshot"]
+  storage --> presentation["Labels, timelines, filters, grouping, exports, and sync"]

@@ -7,6 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SchedulingCanvas, type ScheduleItem, type ScheduleLane } from '@/components/scheduling';
 import { assertDefined } from '@docket/test-utils';
 
+import {
+  SCHEDULE_TEST_THEMES,
+  scheduleSurfaceContrast,
+} from './scheduling-surface-contrast-test-utils';
+
 function item(id: string, title: string): ScheduleItem {
   return {
     id,
@@ -120,12 +125,14 @@ describe('SchedulingCanvas item presentation', () => {
     expect(allDaySurface).toHaveClass('rounded-sm');
     expect(allDayItem).toHaveClass('isolate');
     expect(allDaySurface).toHaveClass('-z-10');
-    expect(surface.style.backgroundColor).toBe(
+    expect(card.style.getPropertyValue('--schedule-item-fill')).toBe(
       'color-mix(in oklab, #316eb4 8%, var(--color-primary))',
     );
-    expect(allDaySurface.style.backgroundColor).toBe(
+    expect(allDayItem.style.getPropertyValue('--schedule-item-fill')).toBe(
       'color-mix(in oklab, #316eb4 8%, var(--color-primary))',
     );
+    expect(surface.style.backgroundColor).toBe('var(--schedule-item-fill)');
+    expect(allDaySurface.style.backgroundColor).toBe('var(--schedule-item-fill)');
     expect(card.style.getPropertyValue('--schedule-item-foreground')).toBe(
       'var(--color-on-primary)',
     );
@@ -155,15 +162,72 @@ describe('SchedulingCanvas item presentation', () => {
       />,
     );
 
-    const surface = assertDefined(
-      document.querySelector<HTMLElement>(
-        '[data-schedule-item="focus"] [data-schedule-item-surface]',
-      ),
+    const renderedItem = assertDefined(
+      document.querySelector<HTMLElement>('[data-schedule-item="focus"]'),
     );
-    expect(surface.style.backgroundColor).toBe(
+    expect(renderedItem.style.getPropertyValue('--schedule-item-fill')).toBe(
       'color-mix(in oklab, var(--color-primary) 8%, var(--color-primary))',
     );
+    expect(
+      renderedItem.querySelector<HTMLElement>('[data-schedule-item-surface]')?.style
+        .backgroundColor,
+    ).toBe('var(--schedule-item-fill)');
   });
+
+  it.each(['#000000', '#ffffff'])(
+    'publishes a measurable focus indicator for timed and all-day controls with hostile color %s',
+    (color) => {
+      const timed = {
+        ...item('focus', 'Focus block'),
+        color,
+        dragObject: { kind: 'calendar_item' as const, itemId: 'focus', title: 'Focus block' },
+      };
+      const allDay = {
+        ...item('offsite', 'Team offsite'),
+        color,
+        allDay: true,
+        startsAt: '2026-07-01T00:00:00.000Z',
+        endsAt: '2026-07-02T00:00:00.000Z',
+        dragObject: { kind: 'calendar_item' as const, itemId: 'offsite', title: 'Team offsite' },
+      };
+      render(
+        <SchedulingCanvas
+          displayTimezone="UTC"
+          lanes={[lane([timed, allDay])]}
+          pixelsPerHour={60}
+          viewportWidth={500}
+          onOpenItem={vi.fn()}
+          onMoveItem={vi.fn()}
+          onResizeItem={vi.fn()}
+          onMoveAllDayItem={vi.fn()}
+          onResizeAllDayItem={vi.fn()}
+        />,
+      );
+
+      const roots = [
+        assertDefined(document.querySelector<HTMLElement>('[data-schedule-item="focus"]')),
+        assertDefined(
+          document.querySelector<HTMLElement>('[data-schedule-all-day-item="offsite"]'),
+        ),
+      ];
+      for (const root of roots) {
+        const fill = root.style.getPropertyValue('--schedule-item-fill');
+        const focusIndicator = root.style.getPropertyValue('--schedule-item-focus');
+        expect(fill).not.toBe('');
+        expect(focusIndicator).not.toBe('');
+        expect(
+          root.querySelector<HTMLElement>('[data-schedule-item-surface]')?.style.backgroundColor,
+        ).toBe('var(--schedule-item-fill)');
+        for (const theme of SCHEDULE_TEST_THEMES) {
+          expect(scheduleSurfaceContrast(fill, focusIndicator, theme)).toBeGreaterThanOrEqual(3);
+        }
+        for (const control of root.querySelectorAll<HTMLElement>('.outline-none')) {
+          expect(control).toHaveClass('focus-visible:ring-ring');
+        }
+        expect(root.style.getPropertyValue('--color-ring')).toBe(focusIndicator);
+      }
+    },
+  );
 
   it('renders timeboxes as dashed provisional surfaces without changing timed or all-day gestures', () => {
     const dragObject = {
@@ -206,13 +270,13 @@ describe('SchedulingCanvas item presentation', () => {
     const allDayItem = assertDefined(
       document.querySelector<HTMLElement>('[data-schedule-all-day-item="all-day-timebox"]'),
     );
-    const surfaces = [
-      assertDefined(card.querySelector<HTMLElement>('[data-schedule-item-surface]')),
-      assertDefined(allDayItem.querySelector<HTMLElement>('[data-schedule-item-surface]')),
-    ];
-    for (const surface of surfaces) {
+    for (const renderedItem of [card, allDayItem]) {
+      const surface = assertDefined(
+        renderedItem.querySelector<HTMLElement>('[data-schedule-item-surface]'),
+      );
       expect(surface).toHaveClass('border', 'border-dashed');
-      expect(surface.style.backgroundColor).toContain('color-mix');
+      expect(surface.style.backgroundColor).toBe('var(--schedule-item-fill)');
+      expect(renderedItem.style.getPropertyValue('--schedule-item-fill')).toContain('color-mix');
       expect(surface).toHaveStyle({ borderLeftColor: 'var(--color-outline)' });
     }
     expect(card.querySelector('[data-schedule-item-accent]')).not.toBeInTheDocument();
@@ -277,7 +341,11 @@ describe('SchedulingCanvas item presentation', () => {
       fireEvent.keyDown(screen.getByRole('button', { name: `Resize ${title} from end` }), {
         key: 'ArrowUp',
       });
-      await user.click(screen.getByRole('button', { name: `Create relationship from ${title}` }));
+      const relationshipSource = screen.getByRole('button', {
+        name: `Create relationship from ${title}`,
+      });
+      await user.click(relationshipSource);
+      expect(relationshipSource).toHaveClass('[--color-ring:var(--color-on-primary-container)]');
       await user.click(screen.getByRole('button', { name: `Link ${title} to Planning review` }));
 
       expect(onOpenItem).toHaveBeenCalledWith({ item: source, lane: sourceLane });
@@ -357,7 +425,11 @@ describe('SchedulingCanvas item presentation', () => {
       fireEvent.keyDown(screen.getByRole('button', { name: `Resize ${title} from end` }), {
         key: 'ArrowRight',
       });
-      await user.click(screen.getByRole('button', { name: `Create relationship from ${title}` }));
+      const relationshipSource = screen.getByRole('button', {
+        name: `Create relationship from ${title}`,
+      });
+      await user.click(relationshipSource);
+      expect(relationshipSource).toHaveClass('[--color-ring:var(--color-on-primary-container)]');
       await user.click(screen.getByRole('button', { name: `Link ${title} to Planning review` }));
 
       expect(onOpenItem).toHaveBeenCalledWith({ item: source, lane: sourceLane });
@@ -426,7 +498,8 @@ describe('SchedulingCanvas item presentation', () => {
         );
         expect(renderedItem).toHaveAttribute('data-schedule-item-appearance', appearance);
         expect(surface).toHaveClass('border', 'border-outline-variant');
-        expect(surface.style.backgroundColor).toContain('color-mix');
+        expect(surface.style.backgroundColor).toBe('var(--schedule-item-fill)');
+        expect(renderedItem.style.getPropertyValue('--schedule-item-fill')).toContain('color-mix');
         expect(surface).not.toHaveStyle({ backgroundColor: '#316eb4' });
         expect(body).toHaveClass('text-(--schedule-item-foreground)');
         expect(renderedItem.style.getPropertyValue('--schedule-item-foreground')).toBe(
@@ -484,15 +557,23 @@ describe('SchedulingCanvas item presentation', () => {
     // A live preview is marked by a primary ring and a raised tone — never a drop shadow.
     const preview = document.querySelector('[data-schedule-item="focus"]');
     expect(preview).toHaveClass('ring-2', 'ring-primary', 'z-40');
-    expect(preview?.querySelector('[data-schedule-item-surface]')).toHaveClass(
+    expect(preview?.querySelector('[data-schedule-item-surface]')).not.toHaveClass(
       'bg-surface-container-high',
     );
     expect(
       preview?.querySelector<HTMLElement>('[data-schedule-item-surface]')?.style.backgroundColor,
-    ).toBe('');
+    ).toBe('var(--schedule-item-fill)');
+    const previewFill =
+      (preview as HTMLElement | null)?.style.getPropertyValue('--schedule-item-fill') ?? '';
+    const previewFocus =
+      (preview as HTMLElement | null)?.style.getPropertyValue('--schedule-item-focus') ?? '';
+    expect(previewFill).toBe('var(--color-surface-container-high)');
     expect(
       (preview as HTMLElement | null)?.style.getPropertyValue('--schedule-item-foreground'),
     ).toBe('var(--color-on-surface)');
+    for (const theme of SCHEDULE_TEST_THEMES) {
+      expect(scheduleSurfaceContrast(previewFill, previewFocus, theme)).toBeGreaterThanOrEqual(3);
+    }
     expect(preview?.className).not.toMatch(/shadow-/);
   });
 

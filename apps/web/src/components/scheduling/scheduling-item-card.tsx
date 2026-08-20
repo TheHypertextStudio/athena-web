@@ -228,26 +228,25 @@ export function SchedulingItemCard({
           ...horizontalStyle,
           height: visibleHeight,
           transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
+          '--schedule-item-fill': surfacePalette.fill,
           '--schedule-item-foreground': surfacePalette.foreground,
+          '--schedule-item-focus': surfacePalette.focusIndicator,
+          '--color-ring': surfacePalette.focusIndicator,
         } as CSSProperties
       }
     >
       <span
         aria-hidden="true"
         className={`pointer-events-none absolute inset-x-0 top-0 bottom-px rounded-sm transition-colors motion-reduce:transition-none ${
-          dropActive
-            ? 'bg-primary-container'
-            : gesture.preview
-              ? 'bg-surface-container-high'
-              : appearance === 'event'
-                ? ''
-                : appearance === 'timebox'
-                  ? 'border-outline border border-dashed'
-                  : 'border-outline-variant border'
+          surfaceState !== 'rest' || appearance === 'event'
+            ? ''
+            : appearance === 'timebox'
+              ? 'border-outline border border-dashed'
+              : 'border-outline-variant border'
         }`}
         data-schedule-item-surface=""
         style={{
-          backgroundColor: surfaceState === 'rest' ? surfacePalette.fill : undefined,
+          backgroundColor: 'var(--schedule-item-fill)',
           borderLeftColor:
             surfaceState === 'rest' && appearance === 'timebox'
               ? 'var(--color-outline)'
@@ -312,7 +311,7 @@ export function SchedulingItemCard({
             object={dragObject}
             mode={relationshipMode}
             className="focus-visible:ring-ring absolute bottom-0.5 left-0.5 z-30 size-6 cursor-grab rounded transition-[color,opacity] outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
-            activeClassName="bg-primary-container text-on-primary-container ring-primary/40 opacity-100 ring-2"
+            activeClassName="bg-primary-container text-on-primary-container ring-primary/40 opacity-100 ring-2 [--color-ring:var(--color-on-primary-container)]"
             inactiveClassName="text-(--schedule-item-foreground) opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
           >
             <SchedulingLinkIcon />

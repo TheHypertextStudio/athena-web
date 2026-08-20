@@ -18,6 +18,11 @@ import {
 } from '@/components/scheduling';
 import { assertDefined } from '@docket/test-utils';
 
+import {
+  SCHEDULE_TEST_THEMES,
+  scheduleSurfaceContrast,
+} from './scheduling-surface-contrast-test-utils';
+
 const TIMED_ITEM: ScheduleItem = {
   id: 'focus',
   title: 'Focus block',
@@ -1255,9 +1260,19 @@ describe('SchedulingCanvas', () => {
     fireEvent.dragOver(screen.getByRole('button', { name: /^Focus block/ }), {
       dataTransfer: transfer,
     });
-    expect(renderedItem('focus').style.getPropertyValue('--schedule-item-foreground')).toBe(
+    const dropItem = renderedItem('focus');
+    const dropFill = dropItem.style.getPropertyValue('--schedule-item-fill');
+    const dropFocus = dropItem.style.getPropertyValue('--schedule-item-focus');
+    expect(dropFill).toBe('var(--color-primary-container)');
+    expect(dropItem.style.getPropertyValue('--schedule-item-foreground')).toBe(
       'var(--color-on-primary-container)',
     );
+    expect(
+      dropItem.querySelector<HTMLElement>('[data-schedule-item-surface]')?.style.backgroundColor,
+    ).toBe('var(--schedule-item-fill)');
+    for (const theme of SCHEDULE_TEST_THEMES) {
+      expect(scheduleSurfaceContrast(dropFill, dropFocus, theme)).toBeGreaterThanOrEqual(3);
+    }
     fireEvent.drop(screen.getByRole('button', { name: /^Focus block/ }), {
       dataTransfer: transfer,
     });
@@ -1333,11 +1348,22 @@ describe('SchedulingCanvas', () => {
       getData: (type: string) => (type === SCHEDULE_DRAG_MIME ? JSON.stringify(taskPayload) : ''),
     };
     fireEvent.dragOver(pill, { dataTransfer: taskTransfer });
+    const allDayDropItem = assertDefined(pill.closest<HTMLElement>('[data-schedule-all-day-item]'));
+    const allDayDropFill = allDayDropItem.style.getPropertyValue('--schedule-item-fill');
+    const allDayDropFocus = allDayDropItem.style.getPropertyValue('--schedule-item-focus');
+    expect(allDayDropFill).toBe('var(--color-primary-container)');
+    expect(allDayDropItem.style.getPropertyValue('--schedule-item-foreground')).toBe(
+      'var(--color-on-primary-container)',
+    );
     expect(
-      pill
-        .closest<HTMLElement>('[data-schedule-all-day-item]')
-        ?.style.getPropertyValue('--schedule-item-foreground'),
-    ).toBe('var(--color-on-primary-container)');
+      allDayDropItem.querySelector<HTMLElement>('[data-schedule-item-surface]')?.style
+        .backgroundColor,
+    ).toBe('var(--schedule-item-fill)');
+    for (const theme of SCHEDULE_TEST_THEMES) {
+      expect(
+        scheduleSurfaceContrast(allDayDropFill, allDayDropFocus, theme),
+      ).toBeGreaterThanOrEqual(3);
+    }
     fireEvent.drop(pill, { dataTransfer: taskTransfer });
     expect(onDropObjectOnItem).toHaveBeenCalledWith({
       object: taskPayload,
@@ -2071,10 +2097,13 @@ describe('SchedulingCanvas', () => {
     expect(compactVisibleRange).toBeDefined();
     expect(compactVisibleRange).not.toHaveClass('sr-only');
     expect(renderedItem('full')).toHaveTextContent(/11:00.*12:00/);
+    expect(renderedItem('full').style.getPropertyValue('--schedule-item-fill')).toBe(
+      'color-mix(in oklab, #7c3aed 8%, var(--color-primary))',
+    );
     expect(
       renderedItem('full').querySelector<HTMLElement>('[data-schedule-item-surface]')?.style
         .backgroundColor,
-    ).toBe('color-mix(in oklab, #7c3aed 8%, var(--color-primary))');
+    ).toBe('var(--schedule-item-fill)');
     expect(renderItem).toHaveBeenCalledTimes(4);
   });
 
@@ -2180,8 +2209,11 @@ describe('SchedulingCanvas', () => {
     const surface = renderedItem('focus').querySelector('[data-schedule-item-surface]');
     expect(surface).toHaveClass('motion-reduce:transition-none');
     expect(surface).not.toHaveClass('group-hover:bg-(--schedule-item-fill-raised)');
-    expect((surface as HTMLElement | null)?.style.backgroundColor).toBe(
+    expect(renderedItem('focus').style.getPropertyValue('--schedule-item-fill')).toBe(
       'color-mix(in oklab, #2563eb 8%, var(--color-primary))',
+    );
+    expect((surface as HTMLElement | null)?.style.backgroundColor).toBe(
+      'var(--schedule-item-fill)',
     );
     expect(`${renderedItem('focus').className} ${surface?.className ?? ''}`).not.toMatch(
       /shadow-|scale-|translate-/,

@@ -106,9 +106,9 @@ export function SchedulingAllDayItem({
     <div
       className={
         dropActive
-          ? `${DRAGGABLE} ring-primary bg-primary-container group relative isolate flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
+          ? `${DRAGGABLE} ring-primary group relative isolate flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
           : gesture.preview
-            ? `${DRAGGABLE} bg-surface-container-high ring-primary group relative isolate z-40 flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
+            ? `${DRAGGABLE} ring-primary group relative isolate z-40 flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
             : `${DRAGGABLE} group relative isolate flex max-w-full items-center rounded-sm ${edgePadding}`
       }
       data-schedule-all-day-item={item.id}
@@ -117,7 +117,10 @@ export function SchedulingAllDayItem({
       style={
         {
           transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
+          '--schedule-item-fill': surfacePalette.fill,
           '--schedule-item-foreground': surfacePalette.foreground,
+          '--schedule-item-focus': surfacePalette.focusIndicator,
+          '--color-ring': surfacePalette.focusIndicator,
         } as CSSProperties
       }
       onDragOver={(event) => {
@@ -141,19 +144,15 @@ export function SchedulingAllDayItem({
       <span
         aria-hidden="true"
         className={`pointer-events-none absolute inset-0 -z-10 rounded-sm ${
-          dropActive
-            ? 'bg-primary-container'
-            : gesture.preview
-              ? 'bg-surface-container-high'
-              : appearance === 'timebox'
-                ? 'border-outline border border-dashed'
-                : appearance === 'availability' || appearance === 'busy'
-                  ? 'border-outline-variant border'
-                  : ''
+          surfaceState !== 'rest' || appearance === 'event'
+            ? ''
+            : appearance === 'timebox'
+              ? 'border-outline border border-dashed'
+              : 'border-outline-variant border'
         }`}
         data-schedule-item-surface=""
         style={{
-          backgroundColor: surfaceState === 'rest' ? surfacePalette.fill : undefined,
+          backgroundColor: 'var(--schedule-item-fill)',
           borderLeftColor:
             surfaceState === 'rest' && appearance === 'timebox'
               ? 'var(--color-outline)'
@@ -207,7 +206,7 @@ export function SchedulingAllDayItem({
             object={dragObject}
             mode={relationshipMode}
             className="focus-visible:ring-ring mx-0.5 size-4 shrink-0 cursor-grab rounded text-(--schedule-item-foreground) opacity-0 transition-[color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-10 [@media(pointer:coarse)]:opacity-100"
-            activeClassName="bg-primary-container text-on-primary-container ring-primary/40 opacity-100 ring-2"
+            activeClassName="bg-primary-container text-on-primary-container ring-primary/40 opacity-100 ring-2 [--color-ring:var(--color-on-primary-container)]"
           >
             {/* Was a raw `↗` text glyph — a different symbol from the chain link the timed card
                 uses for this same relationship-drag control, at a stroke weight nothing else on the

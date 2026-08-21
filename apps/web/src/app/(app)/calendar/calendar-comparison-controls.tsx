@@ -34,7 +34,8 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useId } from 'react';
 
-import { CALENDAR_CONTROL_CLASS } from './calendar-view-settings';
+import { CALENDAR_CONTROL_CLASS } from '@/components/calendar/calendar-toolbar-control';
+
 import type { ComparisonMember } from './use-calendar-people-axis';
 
 /**

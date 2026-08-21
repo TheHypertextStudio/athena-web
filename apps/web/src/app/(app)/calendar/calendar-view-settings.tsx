@@ -13,9 +13,10 @@
  *
  * The vocabulary is deliberately borrowed, not invented: `views/filter-toolbar.tsx` already solved
  * this problem for every list page ("a surface with more capabilities does not grow more
- * *buttons*"), and its Display trigger recipe is reused verbatim here plus `shrink-0`. MD3 tone and
- * elevation come from `@docket/ui`'s shared `menu-styles` (a `surface-container-low` container with
- * an `outline-variant` hairline) — never a drop shadow added at this layer.
+ * *buttons*"). The trigger uses the shared Calendar toolbar geometry and the toolbar's trailing
+ * slot pins it in place. MD3 tone and elevation come from `@docket/ui`'s shared `menu-styles` (a
+ * `surface-container-low` container with an `outline-variant` hairline) — never a drop shadow added
+ * at this layer.
  *
  * ## Zoom model
  *
@@ -51,49 +52,9 @@ import {
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
-import type { CalendarAxis } from './calendar-schedule-model';
+import { CALENDAR_CONTROL_CLASS } from '@/components/calendar/calendar-toolbar-control';
 
-/**
- * The geometry every control in the calendar's one toolbar row carries.
- *
- * @remarks
- * Inline neighbours must share a height exactly, and the row must never wrap (the row itself is
- * `flex-nowrap`, which is what guarantees that — not `shrink-0`). Below `@2xl` a trailing control
- * collapses to a glyph-only square. `px-2` overrides the `size="sm"` recipe's `px-3` at that width
- * and is restored above it; breakpoints are container queries because `<main>` is the `@container`,
- * so the row responds to the space it actually has rather than to the window.
- *
- * ## Three widths, and the arithmetic each one has to satisfy
- *
- * The row is six controls plus a heading, and its width budget is the only thing standing between
- * this surface and a primary action that falls off the screen — which is exactly what happened: at
- * 320px the `New` button's right edge measured 324px in a 320px viewport, its border visibly cut.
- * So the sizes are chosen against the arithmetic, per container step, rather than as one fluid rule:
- *
- * | viewport | container      | control | gap | row budget | controls + gaps | left for the heading |
- * | -------- | -------------- | ------- | --- | ---------- | --------------- | -------------------- |
- * | 320      | 304 (`< 22rem`)| 40px    | 2px | 304px      | 250px           | 54px (truncates)     |
- * | 375      | 364 (`@22rem`) | 44px    | 2px | 348px      | 274px           | 74px (`Aug 2026`)    |
- * | 390      | 379 (`@22rem`) | 44px    | 2px | 363px      | 274px           | 89px (`Aug 2026`)    |
- * | ≥ 672    | `@2xl`         | 32px    | 8px | ≥ 600px    | labels + gaps   | the remainder        |
- *
- * The 44px middle step is not decoration: below `@2xl` every control is icon-only, and a phone-width
- * calendar has to offer real touch targets — 44 × 44 CSS px is the floor a finger needs. The step
- * begins at a 22rem *container* rather than at `@sm` (24rem) because `<main>` can reserve a stable
- * scrollbar gutter, so a 390px phone reports a 379px container and would otherwise miss `@sm`
- * entirely. The 40px bottom step keeps the accessibility floor at 320px without allowing the
- * primary action to wrap or leave the viewport.
- *
- * `[&_svg]:size-4` is required, not decorative: `Button`'s base recipe sets `[&_svg]:size-6`, whose
- * descendant selector outranks a plain `size-4` on the glyph itself, so a 24px icon would sit in a
- * 32px control. Overriding at the same specificity — `cn` merges `className` last — is what actually
- * lands the intended 16px glyph.
- *
- * `create-block-form.tsx` repeats this literal rather than importing it, because a `components/`
- * module must not depend on an `app/` route module.
- */
-export const CALENDAR_CONTROL_CLASS =
-  'min-h-10 w-10 min-w-10 shrink gap-1.5 px-2 [&_svg]:size-4 @min-[22rem]:min-h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
+import type { CalendarAxis } from './calendar-schedule-model';
 
 // The zoom scale and its clamp moved to `components/scheduling/scheduling-geometry.ts` when the
 // rail's own scale stepper needed the identical funnel: a `components/` module must not import an

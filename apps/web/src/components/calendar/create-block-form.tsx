@@ -31,6 +31,7 @@ import { type JSX, type SubmitEventHandler, useEffect, useMemo, useRef, useState
 
 import { CalendarCreateFailureNotice } from './calendar-create-failure-notice';
 import { useCreateCalendarItem } from './calendar-mutations';
+import { CALENDAR_CONTROL_CLASS } from './calendar-toolbar-control';
 import {
   type CalendarRegionSelection,
   calendarTimeDraftForDate,
@@ -49,9 +50,6 @@ export type {
   CalendarRegionSelection,
   CalendarTimedRegionSelection,
 } from './calendar-time-draft';
-
-const CALENDAR_CONTROL_CLASS =
-  'min-h-10 w-10 min-w-10 shrink gap-1.5 px-2 [&_svg]:size-4 @min-[22rem]:min-h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
 
 function focusCreatedCalendarItem(itemId: string): void {
   let attempts = 0;

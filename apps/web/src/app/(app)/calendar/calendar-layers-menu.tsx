@@ -10,8 +10,8 @@
  * moved behind a trailing toolbar control that costs one button of width and nothing when closed.
  *
  * The trigger follows the same recipe as every other control in the row — leading glyph, label
- * revealed at `@2xl`, trailing chevron, identical height and `shrink-0` — so inline neighbours
- * share a height exactly and the row never wraps. The panel body is unchanged:
+ * revealed at `@2xl`, trailing chevron, and identical responsive height. The toolbar's trailing
+ * slot pins its width, and the toolbar's `flex-nowrap` rule keeps the row intact. The panel body is unchanged:
  * {@link CalendarLayerPanel} still owns row anatomy, dedup, and the optimistic visibility toggle.
  *
  * @see {@link CalendarLayersMenu}
@@ -22,8 +22,7 @@ import { Button, Popover, PopoverContent, PopoverTrigger } from '@docket/ui/prim
 import type { JSX } from 'react';
 
 import CalendarLayerPanel from '@/components/calendar/calendar-layer-panel';
-
-import { CALENDAR_CONTROL_CLASS } from './calendar-view-settings';
+import { CALENDAR_CONTROL_CLASS } from '@/components/calendar/calendar-toolbar-control';
 
 /** Props for {@link CalendarLayersMenu}. */
 export interface CalendarLayersMenuProps {

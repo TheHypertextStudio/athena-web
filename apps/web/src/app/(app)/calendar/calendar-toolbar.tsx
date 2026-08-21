@@ -18,9 +18,9 @@
  *
  * Three rules hold that shape:
  *
- * - **`flex-nowrap` with one flexible child.** The heading is the only element allowed to give up
- *   width (`min-w-0 flex-1 truncate`); every control is `shrink-0`. Narrowing squeezes the label,
- *   never the layout.
+ * - **`flex-nowrap` with one flexible child.** The heading is the only element without an explicit
+ *   minimum width (`min-w-0 flex-1 truncate`). Narrowing squeezes the label before a control can
+ *   leave the row.
  * - **Controls collapse to their glyph, not to a new line.** Below `@2xl` each trailing control
  *   renders icon-only with an `aria-label`, so four controls cost ~4 × 44px on a phone.
  * - **One control per concern.** Presentation options live inside {@link CalendarViewSettings}, so
@@ -41,8 +41,10 @@ import { CalendarToday, ChevronLeft, ChevronRight } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 
+import { CALENDAR_CONTROL_CLASS } from '@/components/calendar/calendar-toolbar-control';
+
 import type { CalendarAxis } from './calendar-schedule-model';
-import { CALENDAR_CONTROL_CLASS, CalendarViewSettings } from './calendar-view-settings';
+import { CalendarViewSettings } from './calendar-view-settings';
 
 /**
  * Shared geometry for every icon-only control in the row.
@@ -50,8 +52,8 @@ import { CALENDAR_CONTROL_CLASS, CalendarViewSettings } from './calendar-view-se
  * @remarks
  * The same three container steps as {@link CALENDAR_CONTROL_CLASS} — 40px, then a 44px touch target
  * from `@min-[22rem]`, then 32px once the row is wide enough for labels. Inline neighbours share a height
- * exactly, so these two recipes must move together. `flex-nowrap` on the row — not `shrink-0` on the
- * children — is what forbids a second line.
+ * exactly, so these two recipes must move together. The controls carry explicit minimum widths;
+ * `flex-nowrap` on the row is what forbids a second line.
  */
 const ROW_ICON_CONTROL =
   'h-10 w-10 min-w-10 shrink [&_svg]:size-4 @min-[22rem]:h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:h-8 @2xl:w-8 @2xl:min-w-8 @2xl:shrink-0';

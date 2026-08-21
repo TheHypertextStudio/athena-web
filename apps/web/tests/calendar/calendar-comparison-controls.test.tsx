@@ -68,11 +68,11 @@ describe('CalendarComparisonControls', () => {
     );
 
     const trigger = screen.getByRole('button', { name: 'People' });
-    // Shared row geometry: one fixed height, and a width that may compress to its `min-w` floor
-    // under pressure but is rigid once the row has room for labels.
+    // Shared row geometry: a 40px floor at 320px, a 44px touch target at the phone step, and a
+    // compact labelled control once the row is wide enough.
     expect(trigger).toHaveClass(
-      'min-h-9',
-      'min-w-9',
+      'min-h-10',
+      'min-w-10',
       '@min-[22rem]:min-h-11',
       '@2xl:min-h-8',
       '@2xl:shrink-0',

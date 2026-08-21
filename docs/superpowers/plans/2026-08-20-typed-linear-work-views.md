@@ -101,21 +101,33 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 **Files:**
 
 - Create: `apps/api/src/lib/work-views/contracts.ts`
+- Create: `apps/api/src/lib/work-views/authorization-sql.ts`
+- Create: `apps/api/src/lib/work-views/context-sql.ts`
 - Create: `apps/api/src/lib/work-views/filter-sql.ts`
+- Create: `apps/api/src/lib/work-views/temporal-sql.ts`
 - Create: `apps/api/src/lib/work-views/sort-sql.ts`
 - Create: `apps/api/src/lib/work-views/group-sql.ts`
+- Create: `apps/api/src/lib/work-views/group-query-sql.ts`
+- Create: `apps/api/src/lib/work-views/projection-sql.ts`
+- Create: `apps/api/src/lib/work-views/project-team-sql.ts`
+- Create: `apps/api/src/lib/work-views/relation-sql.ts`
 - Create: `apps/api/src/lib/work-views/cursor.ts`
 - Create: `apps/api/src/lib/work-views/query.ts`
 - Test: `apps/api/tests/work-views/query.test.ts`
+- Test: `apps/api/tests/work-views/compiler.test.ts`
+- Test: `apps/api/tests/work-views/query-plan.test.ts`
+- Test support: `apps/api/tests/work-views/request-fixtures.ts`
+- Test: `apps/api/tests/work-views/scalar-relations.test.ts`
+- Test: `apps/api/tests/work-views/tenant-relations.test.ts`
 - Test: `apps/api/tests/work-views/cursor.test.ts`
 
-- [ ] Write SQL integration cases for each operator family, nested logic, authorization, relation
+- [x] Write SQL integration cases for each operator family, nested logic, authorization, relation
       `EXISTS`, semantic/null ordering, fan-out groups, ancestor closure, and cursor continuation.
-- [ ] Define field compiler maps with `satisfies` against each target's derived keys.
-- [ ] Apply authorization before filters, facets, counts, grouping, and keyset pagination.
-- [ ] Bind cursor fingerprints to the canonical query, group path, sort tuple, and entity id.
-- [ ] Run focused API integration tests and `pnpm --filter @docket/api typecheck`.
-- [ ] Commit the slice as `feat: Query authorized typed work views`.
+- [x] Define field compiler maps with `satisfies` against each target's derived keys.
+- [x] Apply authorization before filters, counts, grouping, and keyset pagination.
+- [x] Bind cursor fingerprints to the canonical query, group path, sort tuple, and entity id.
+- [x] Run focused API integration tests, raised-heap API typecheck, and changed-file lint.
+- [x] Commit the slice as `feat: Query authorized typed work views`.
 
 ### Task 6: Expose query, facet, ordering, default, and saved-view routes
 

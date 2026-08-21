@@ -432,14 +432,21 @@ and the no-rewrite fiscal setting.
 - Modify: `packages/integrations/src/work-graph.ts`
 - Modify: `packages/integrations/src/linear.ts`
 - Modify: `packages/integrations/src/fixtures.ts`
+- Modify: `packages/integrations/src/mock-connector.ts`
 - Modify: `packages/integrations/tests/providers/linear.test.ts`
 - Modify: `apps/api/src/routes/integration-reconcile-graph.ts`
 - Modify: `apps/api/tests/routes/integration-reconcile-graph-appliers.test.ts`
 - Modify: `apps/api/src/mcp/list-work.ts`
+- Modify: `apps/api/src/mcp/change-set.ts`
+- Modify: `apps/api/src/mcp/resource-work-hydrators.ts`
 - Modify: `apps/api/src/mcp/update-tool.ts`
-- Create: `apps/api/tests/mcp/planning-timeframes.test.ts`
-- Modify: `apps/api/src/lib/export-collect.ts`
-- Modify: `apps/api/tests/account/export.test.ts`
+- Modify: `apps/api/tests/mcp/mcp-update-tool.test.ts`
+- Modify: `apps/api/tests/mcp/mcp-surface.test.ts`
+- Modify: `apps/api/src/search/projectors/work.ts`
+- Modify: `apps/api/tests/search/projectors.test.ts`
+- Modify: `apps/api/tests/routes/billing-lifecycle.test.ts`
+- Modify: `packages/integrations/package.json`
+- Modify: `pnpm-lock.yaml`
 
 **Interfaces:**
 
@@ -449,7 +456,7 @@ and the no-rewrite fiscal setting.
 - MCP reads return date, resolution, and fiscal snapshot. MCP writes accept date plus resolution.
 - Account exports retain every planning metadata column beside its date.
 
-- [ ] **Step 1: Write failing Linear mapping tests**
+- [x] **Step 1: Write failing Linear mapping tests**
 
 ```typescript
 expect(
@@ -467,7 +474,7 @@ expect(
 ).toMatchObject({ startDateResolution: 'month', targetDateResolution: 'month' });
 ```
 
-- [ ] **Step 2: Add resolution fields to the provider boundary and GraphQL query**
+- [x] **Step 2: Add resolution fields to the provider boundary and GraphQL query**
 
 ```typescript
 export interface ExternalProject {
@@ -487,14 +494,14 @@ Add `startDateResolution targetDateResolution` to `PROJECTS_QUERY`, the raw node
 fixtures. Parse the values through `DateResolution` instead of casting provider text. Add an
 organization query for `fiscalYearStartMonth` and return it on the work-graph snapshot.
 
-- [ ] **Step 3: Write failing reconciliation tests for broad and precise Linear projects**
+- [x] **Step 3: Write failing reconciliation tests for broad and precise Linear projects**
 
 Assert that a broad imported target stores the resolution and Linear's source fiscal month, even
 when Athena's workspace uses a different month. Assert that a later Linear exact-date payload
 clears both fields. Assert that a Linear payload with a bad boundary fails the sync item instead of
 shifting it.
 
-- [ ] **Step 4: Extend `applyProject` through the shared patch builder**
+- [x] **Step 4: Extend `applyProject` through the shared patch builder**
 
 ```typescript
 const start = externalPlanningDatePatch({
@@ -515,7 +522,7 @@ Load the source fiscal month once from `WorkGraphSnapshot` into `GraphApplyConte
 per Project. Fall back to Athena's workspace setting only for providers that omit source fiscal
 metadata. Linear must never take that fallback.
 
-- [ ] **Step 5: Write failing MCP read and update tests**
+- [x] **Step 5: Write failing MCP read and update tests**
 
 ```typescript
 expect(projectRow).toMatchObject({
@@ -532,24 +539,25 @@ await callUpdateTool({
 });
 ```
 
-- [ ] **Step 6: Add timeframe fields to MCP schemas and mutation dispatch**
+- [x] **Step 6: Add timeframe fields to MCP schemas and mutation dispatch**
 
 Add `startDate`, `startDateResolution`, `targetDate`, and `targetDateResolution` where the entity
 supports them. Use the same atomic route/service helper. Do not accept fiscal snapshot input.
 
-- [ ] **Step 7: Lock export completeness**
+- [x] **Step 7: Lock export completeness**
 
-Extend the account export fixture with one broad Project and Initiative. Assert that the exported
-database rows contain the date, resolution, and fiscal snapshot. Do not replace semantic fields
-with display labels in the machine-readable archive.
+Extend the organization work-layer export fixture with one broad Project and Initiative. Assert
+that the exported database rows contain the date, resolution, and fiscal snapshot. Do not replace
+semantic fields with display labels in the machine-readable archive. The existing full-row export
+collector already includes additive columns, so this step only needs a behavioral export test.
 
-- [ ] **Step 8: Run integration, reconciliation, MCP, and export tests**
+- [x] **Step 8: Run integration, reconciliation, MCP, and export tests**
 
 Run: `pnpm --filter @docket/integrations test -- tests/providers/linear.test.ts && pnpm --filter @docket/api test -- tests/routes/integration-reconcile-graph-appliers.test.ts tests/mcp/planning-timeframes.test.ts tests/account/export.test.ts && pnpm --filter @docket/integrations typecheck && pnpm --filter @docket/api typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit the machine-surface slice**
+- [x] **Step 9: Commit the machine-surface slice**
 
 Commit type/scope: `feat(projects)` with a body that explains Linear field pass-through and why all
 machine-readable surfaces retain semantic metadata.

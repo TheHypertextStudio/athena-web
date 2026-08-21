@@ -327,6 +327,107 @@ describe('update by scope', () => {
     expect(row).toEqual({ name: 'Platform Rebuild', status: 'active' });
   });
 
+  it('updates Project planning periods as atomic fiscal snapshots', async () => {
+    const s = await seedOrg(['contribute']);
+    await db
+      .update(schema.organization)
+      .set({ fiscalYearStartMonth: 3 })
+      .where(eq(schema.organization.id, s.orgId));
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: s.orgId,
+        entity: 'project',
+        scope: { ids: [s.projectId] },
+        set: {
+          startDate: '2026-04-01',
+          startDateResolution: 'quarter',
+          targetDate: '2026-06-30',
+          targetDateResolution: 'quarter',
+        },
+      },
+    })) as CallToolResult;
+    expect(res.isError).toBeFalsy();
+    const changeSetId = String(payload(res)['changeSetId']);
+
+    const [row] = await db.select().from(schema.project).where(eq(schema.project.id, s.projectId));
+    expect(row).toMatchObject({
+      startDateResolution: 'quarter',
+      startDateFiscalYearStartMonth: 3,
+      targetDateResolution: 'quarter',
+      targetDateFiscalYearStartMonth: 3,
+    });
+
+    const partial = (await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: s.orgId,
+        entity: 'project',
+        scope: { ids: [s.projectId] },
+        set: { targetDateResolution: 'month' },
+      },
+    })) as CallToolResult;
+    expect(partial.isError).toBe(true);
+
+    const undone = (await client.callTool({
+      name: 'undo',
+      arguments: { orgId: s.orgId, changeSetId },
+    })) as CallToolResult;
+    expect(payload(undone)).toMatchObject({ reverted: 1, skipped: [] });
+    const [restored] = await db
+      .select()
+      .from(schema.project)
+      .where(eq(schema.project.id, s.projectId));
+    expect(restored).toMatchObject({
+      startDate: null,
+      startDateResolution: null,
+      startDateFiscalYearStartMonth: null,
+      targetDate: null,
+      targetDateResolution: null,
+      targetDateFiscalYearStartMonth: null,
+    });
+  });
+
+  it('updates an Initiative broad target using the workspace fiscal basis', async () => {
+    const s = await seedOrg(['contribute']);
+    await db
+      .update(schema.organization)
+      .set({ fiscalYearStartMonth: 6 })
+      .where(eq(schema.organization.id, s.orgId));
+    const [initiative] = await db
+      .insert(schema.initiative)
+      .values({
+        organizationId: s.orgId,
+        name: 'Annual initiative',
+        status: 'active',
+        statusId: s.statusId('initiative', 'active'),
+        createdBy: s.actorId,
+      })
+      .returning({ id: schema.initiative.id });
+    const initiativeId = assertDefined(initiative).id;
+    const client = await connect(s.ctx);
+
+    const result = (await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: s.orgId,
+        entity: 'initiative',
+        scope: { ids: [initiativeId] },
+        set: { targetDate: '2027-06-30', targetDateResolution: 'halfYear' },
+      },
+    })) as CallToolResult;
+    expect(result.isError).toBeFalsy();
+    const [row] = await db
+      .select()
+      .from(schema.initiative)
+      .where(eq(schema.initiative.id, initiativeId));
+    expect(row).toMatchObject({
+      targetDateResolution: 'halfYear',
+      targetDateFiscalYearStartMonth: 6,
+    });
+  });
+
   it('is reversible as one change, not one per row', async () => {
     const s = await seedOrg(['contribute']);
     const first = await seedTask(s, { projectId: s.projectId, priority: 'high' });

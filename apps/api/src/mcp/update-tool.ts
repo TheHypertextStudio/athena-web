@@ -20,8 +20,9 @@
  *   how many it found, and a scope with no narrowing filter at all refuses outright — a patch that
  *   quietly rewrote every task in an organization is not a recoverable mistake, even with undo.
  */
-import { db, initiative, program, project, task } from '@docket/db';
+import { db, initiative, organization, program, project, task } from '@docket/db';
 import { Health, InitiativePriority } from '@docket/types';
+import { DateResolution } from '@docket/work/planning-timeframe';
 import { Priority } from '@docket/work/task-contract';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
@@ -29,6 +30,7 @@ import { z } from 'zod';
 
 import { ApiError, ValidationError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
+import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
 import { resolveContainerStatus } from '../lib/work-status';
 import { buildTaskViewFilter } from '../routes/task-helpers';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -124,11 +126,22 @@ export const updateSetFields = {
     .nullable()
     .optional()
     .describe('When the task is due, as `YYYY-MM-DD`, or null to clear.'),
+  startDate: z.iso
+    .date()
+    .nullable()
+    .optional()
+    .describe('The planned start for a project, or null to clear.'),
+  startDateResolution: DateResolution.nullable()
+    .optional()
+    .describe('The broad Project start resolution; send it with startDate.'),
   targetDate: z.iso
     .date()
     .nullable()
     .optional()
     .describe('The target finish for a project or initiative, or null to clear.'),
+  targetDateResolution: DateResolution.nullable()
+    .optional()
+    .describe('The broad target resolution; send it with targetDate.'),
 };
 
 /** One settable field's name. */
@@ -157,9 +170,30 @@ const SETTABLE: Record<WorkEntity, readonly SetName[]> = {
     'team',
     'dueDate',
   ],
-  project: ['title', 'description', 'status', 'health', 'lead', 'program', 'team', 'targetDate'],
+  project: [
+    'title',
+    'description',
+    'status',
+    'health',
+    'lead',
+    'program',
+    'team',
+    'startDate',
+    'startDateResolution',
+    'targetDate',
+    'targetDateResolution',
+  ],
   program: ['title', 'description', 'status', 'health', 'owner'],
-  initiative: ['title', 'description', 'status', 'health', 'priority', 'owner', 'targetDate'],
+  initiative: [
+    'title',
+    'description',
+    'status',
+    'health',
+    'priority',
+    'owner',
+    'targetDate',
+    'targetDateResolution',
+  ],
 };
 
 /**
@@ -278,6 +312,7 @@ async function buildPatch(
   row: Record<string, unknown>,
   set: UpdateSet,
   refs: ResolvedRefs,
+  fiscalYearStartMonth: number,
   containerStatus?: { statusId: string; status: string },
 ): Promise<Record<string, unknown>> {
   const patch: Record<string, unknown> = {
@@ -299,8 +334,50 @@ async function buildPatch(
     ...(refs.programId !== undefined ? { programId: refs.programId } : {}),
     ...(refs.teamId !== undefined ? { teamId: refs.teamId } : {}),
     ...datePatch('dueDate', set.dueDate),
-    ...datePatch('targetDate', set.targetDate),
   };
+  if (entity === 'project') {
+    const start = planningDatePatch(
+      { date: set.startDate, resolution: set.startDateResolution },
+      fiscalYearStartMonth,
+      'start',
+      'set.startDate',
+      'set.startDateResolution',
+    );
+    const target = planningDatePatch(
+      { date: set.targetDate, resolution: set.targetDateResolution },
+      fiscalYearStartMonth,
+      'target',
+      'set.targetDate',
+      'set.targetDateResolution',
+    );
+    assertPlanningDateRange(
+      start === undefined ? (row['startDate'] as Date | null) : start.date,
+      target === undefined ? (row['targetDate'] as Date | null) : target.date,
+    );
+    if (start !== undefined) {
+      patch['startDate'] = start.date;
+      patch['startDateResolution'] = start.resolution;
+      patch['startDateFiscalYearStartMonth'] = start.fiscalYearStartMonth;
+    }
+    if (target !== undefined) {
+      patch['targetDate'] = target.date;
+      patch['targetDateResolution'] = target.resolution;
+      patch['targetDateFiscalYearStartMonth'] = target.fiscalYearStartMonth;
+    }
+  } else if (entity === 'initiative') {
+    const target = planningDatePatch(
+      { date: set.targetDate, resolution: set.targetDateResolution },
+      fiscalYearStartMonth,
+      'target',
+      'set.targetDate',
+      'set.targetDateResolution',
+    );
+    if (target !== undefined) {
+      patch['targetDate'] = target.date;
+      patch['targetDateResolution'] = target.resolution;
+      patch['targetDateFiscalYearStartMonth'] = target.fiscalYearStartMonth;
+    }
+  }
   if (set.state !== undefined) {
     const transition = await resolveStateTransition(orgId, String(row['teamId']), set.state);
     // The key and the status it names move together; the composite foreign key refuses a row
@@ -539,6 +616,13 @@ export function registerUpdateTool(
           : rows;
 
         const refs = await resolveReferences(input.orgId, set);
+        const [workspaceSettings] = await db
+          .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
+          .from(organization)
+          .where(eq(organization.id, input.orgId))
+          .limit(1);
+        /* v8 ignore next -- @preserve scopedActor proved the workspace exists */
+        if (!workspaceSettings) throw new Error('workspace settings missing');
         // Changing who is accountable is an `assign`-level act, exactly as the tasks router
         // gates it; everything else on this tool is `contribute`.
         const needsAssign =
@@ -564,7 +648,15 @@ export function registerUpdateTool(
             continue;
           }
 
-          const patch = await buildPatch(entity, input.orgId, row, set, refs, containerStatus);
+          const patch = await buildPatch(
+            entity,
+            input.orgId,
+            row,
+            set,
+            refs,
+            workspaceSettings.fiscalYearStartMonth,
+            containerStatus,
+          );
           const before = trackedFields(entity, row);
           const updated = await db
             .update(table)

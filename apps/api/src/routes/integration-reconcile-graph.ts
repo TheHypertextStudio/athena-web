@@ -35,7 +35,7 @@
  * integration's existing rows — this keeps existence checks batched, never per-item selects.
  */
 import { and, eq, gt, inArray, isNotNull } from 'drizzle-orm';
-import { cycle, db, label, project, task, taskLabel } from '@docket/db';
+import { cycle, db, label, organization, project, task, taskLabel } from '@docket/db';
 import { ConnectorConfig, type WorkStatusCategory } from '@docket/types';
 import type {
   ExternalCycle,
@@ -51,6 +51,7 @@ import type {
 } from '@docket/integrations';
 
 import { ConflictError } from '../error';
+import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
 import { loadStatusSets, type ResolvedStatus } from '../lib/work-status';
 
 import { externalActorReverseMap, syncExternalActors } from './integration-identity';
@@ -100,6 +101,8 @@ export interface GraphApplyContext {
   readonly orgId: string;
   readonly actorId: string;
   readonly integrationId: string;
+  /** The source provider workspace's zero-based fiscal start month for broad Project dates. */
+  readonly sourceFiscalYearStartMonth: number;
   /** Whether local→provider pushes are enabled for this integration. */
   readonly writeBack: boolean;
   /** The reconcile clock (cycle-status derivation, tombstone stamps). */
@@ -428,6 +431,23 @@ export async function applyProject(ctx: GraphApplyContext, ext: ExternalProject)
   if (status === undefined) {
     throw new ConflictError('This workspace has no statuses to map an external project onto');
   }
+  const start = planningDatePatch(
+    { date: ext.startDate ?? null, resolution: ext.startDateResolution ?? null },
+    ctx.sourceFiscalYearStartMonth,
+    'start',
+    'startDate',
+    'startDateResolution',
+  );
+  const target = planningDatePatch(
+    { date: ext.targetDate ?? null, resolution: ext.targetDateResolution ?? null },
+    ctx.sourceFiscalYearStartMonth,
+    'target',
+    'targetDate',
+    'targetDateResolution',
+  );
+  /* v8 ignore next -- @preserve both calls supply an explicit date or null */
+  if (start === undefined || target === undefined) throw new Error('external timeframe missing');
+  assertPlanningDateRange(start.date, target.date);
   const fields = {
     name: ext.name,
     description: ext.description ?? null,
@@ -435,8 +455,12 @@ export async function applyProject(ctx: GraphApplyContext, ext: ExternalProject)
     teamId,
     status: status.key,
     statusId: status.id,
-    startDate: toDate(ext.startDate),
-    targetDate: toDate(ext.targetDate),
+    startDate: start.date,
+    startDateResolution: start.resolution,
+    startDateFiscalYearStartMonth: start.fiscalYearStartMonth,
+    targetDate: target.date,
+    targetDateResolution: target.resolution,
+    targetDateFiscalYearStartMonth: target.fiscalYearStartMonth,
     externalUrl: ext.url,
     externalUpdatedAt: anchor,
     updatedAt: anchor,
@@ -791,6 +815,18 @@ export async function reconcileWorkGraph(input: {
     resolveTeam,
   );
 
+  const [workspaceSettings] = await db
+    .select({ fiscalYearStartMonth: organization.fiscalYearStartMonth })
+    .from(organization)
+    .where(eq(organization.id, orgId))
+    .limit(1);
+  if (!workspaceSettings) throw new ConflictError('Workspace settings are unavailable');
+  if (row.provider === 'linear' && snapshot.fiscalYearStartMonth === undefined) {
+    throw new ConflictError('Linear work graph is missing its fiscal year start month');
+  }
+  const sourceFiscalYearStartMonth =
+    snapshot.fiscalYearStartMonth ?? workspaceSettings.fiscalYearStartMonth;
+
   // Preload the integration's existing mirrored rows (authoritative existence — no per-item reads).
   const [existingLabels, existingProjects, existingCycles, existingTasks] = await Promise.all([
     db.select().from(label).where(eq(label.organizationId, orgId)),
@@ -824,6 +860,7 @@ export async function reconcileWorkGraph(input: {
     orgId,
     actorId,
     integrationId: row.id,
+    sourceFiscalYearStartMonth,
     writeBack: row.writeBack,
     now,
     identityMap,

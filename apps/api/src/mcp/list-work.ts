@@ -48,6 +48,7 @@ import { z } from 'zod';
 
 import { WorkflowStateType } from '@docket/types';
 import { Priority } from '@docket/work/task-contract';
+import { DateResolution } from '@docket/work/planning-timeframe';
 
 import { ValidationError } from '../error';
 import { buildTaskViewFilter, type ViewableTaskParts } from '../routes/task-helpers';
@@ -196,6 +197,16 @@ export const WorkRow = z.object({
   status: z.string().optional().describe("A project, program, or initiative's status."),
   assigneeId: z.string().optional().describe('Who is accountable, when set.'),
   projectId: z.string().optional().describe('The project it belongs to, when set.'),
+  startDate: z.string().nullable().optional().describe("A project's planned start date."),
+  startDateResolution: DateResolution.nullable()
+    .optional()
+    .describe("A project's broad start resolution, or null for an exact day."),
+  startDateFiscalYearStartMonth: z.number().int().min(0).max(11).nullable().optional(),
+  targetDate: z.string().nullable().optional().describe("A project or initiative's target date."),
+  targetDateResolution: DateResolution.nullable()
+    .optional()
+    .describe('The broad target resolution, or null for an exact day.'),
+  targetDateFiscalYearStartMonth: z.number().int().min(0).max(11).nullable().optional(),
 });
 /** One listed row. */
 export type WorkRow = z.infer<typeof WorkRow>;
@@ -591,6 +602,22 @@ async function listContainers(
       title: table.name,
       status: table.status,
       createdAt: table.createdAt,
+      ...(entity === 'project'
+        ? {
+            startDate: project.startDate,
+            startDateResolution: project.startDateResolution,
+            startDateFiscalYearStartMonth: project.startDateFiscalYearStartMonth,
+            targetDate: project.targetDate,
+            targetDateResolution: project.targetDateResolution,
+            targetDateFiscalYearStartMonth: project.targetDateFiscalYearStartMonth,
+          }
+        : entity === 'initiative'
+          ? {
+              targetDate: initiative.targetDate,
+              targetDateResolution: initiative.targetDateResolution,
+              targetDateFiscalYearStartMonth: initiative.targetDateFiscalYearStartMonth,
+            }
+          : {}),
     })
     .from(table)
     .where(and(...where))
@@ -602,6 +629,20 @@ async function listContainers(
     title: row.title,
     status: row.status,
     createdAt: row.createdAt,
+    ...('startDate' in row
+      ? {
+          startDate: row.startDate?.toISOString() ?? null,
+          startDateResolution: row.startDateResolution,
+          startDateFiscalYearStartMonth: row.startDateFiscalYearStartMonth,
+        }
+      : {}),
+    ...('targetDate' in row
+      ? {
+          targetDate: row.targetDate?.toISOString() ?? null,
+          targetDateResolution: row.targetDateResolution,
+          targetDateFiscalYearStartMonth: row.targetDateFiscalYearStartMonth,
+        }
+      : {}),
   }));
 }
 

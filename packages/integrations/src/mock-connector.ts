@@ -381,6 +381,7 @@ export class MockConnector implements Connector {
       (project) => !scoped || project.externalTeamIds.some((id) => selected.has(id)),
     );
     return {
+      fiscalYearStartMonth: LINEAR_WORK_GRAPH.fiscalYearStartMonth,
       users: [...LINEAR_WORK_GRAPH.users],
       labels: [...LINEAR_WORK_GRAPH.labels],
       projects,

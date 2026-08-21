@@ -25,6 +25,10 @@ import type {
 import type { ResolvedAccount, WorkGraphProviderClient } from './provider-client';
 import type { ProviderHttp } from './provider-http';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
+import {
+  DateResolution,
+  type DateResolution as PlanningDateResolution,
+} from '@docket/work/planning-timeframe';
 
 /** The lifecycle state a Linear project can be in (mirrors {@link ExternalProject.state}). */
 type ExternalProjectState = ExternalProject['state'];
@@ -189,7 +193,9 @@ interface RawProjectNode {
   readonly state: string;
   readonly url: string;
   readonly startDate?: string | null;
+  readonly startDateResolution?: string | null;
   readonly targetDate?: string | null;
+  readonly targetDateResolution?: string | null;
   readonly archivedAt?: string | null;
   readonly updatedAt: string;
   readonly lead?: RawIdRef | null;
@@ -280,12 +286,25 @@ export function toExternalProject(node: RawProjectNode): ExternalProject {
     state: mapLinearProjectState(node.state),
     ...(node.lead != null ? { leadExternalId: node.lead.id } : {}),
     ...(node.startDate != null ? { startDate: node.startDate } : {}),
+    ...(node.startDateResolution != null
+      ? { startDateResolution: mapLinearDateResolution(node.startDateResolution) }
+      : {}),
     ...(node.targetDate != null ? { targetDate: node.targetDate } : {}),
+    ...(node.targetDateResolution != null
+      ? { targetDateResolution: mapLinearDateResolution(node.targetDateResolution) }
+      : {}),
     url: node.url,
     updatedAt: node.updatedAt,
     ...(node.archivedAt != null ? { removed: true } : {}),
     externalTeamIds: (node.teams?.nodes ?? []).map((t) => t.id),
   };
+}
+
+/** Validate one Linear planning-date resolution without casting provider text. */
+function mapLinearDateResolution(value: string): PlanningDateResolution {
+  const parsed = DateResolution.safeParse(value);
+  if (!parsed.success) throw mappingError(`unknown project date resolution "${value}"`);
+  return parsed.data;
 }
 
 /** Map a raw Linear `Cycle` node onto an {@link ExternalCycle} (a cycle always belongs to a team). */
@@ -377,7 +396,10 @@ const LABELS_QUERY =
 
 /** Projects query (archived included so tombstones are pulled; team ids for client-side scoping). */
 const PROJECTS_QUERY =
-  'query($after: String) { projects(first: 100, after: $after, includeArchived: true) { nodes { id name description state url startDate targetDate archivedAt updatedAt lead { id } teams(first: 50) { nodes { id } } } pageInfo { hasNextPage endCursor } } }';
+  'query($after: String) { projects(first: 100, after: $after, includeArchived: true) { nodes { id name description state url startDate startDateResolution targetDate targetDateResolution archivedAt updatedAt lead { id } teams(first: 50) { nodes { id } } } pageInfo { hasNextPage endCursor } } }';
+
+/** Source fiscal calendar query used to preserve broad Project date meaning. */
+const ORGANIZATION_TIMEFRAME_QUERY = '{ organization { fiscalYearStartMonth } }';
 
 /** The rich issues query — `$filter` composes team scope and/or the incremental `updatedAt` cutoff. */
 const ISSUES_QUERY = `query($after: String, $filter: IssueFilter) {
@@ -608,6 +630,18 @@ export class LinearProviderClient implements WorkGraphProviderClient {
     return projects.filter((project) => project.externalTeamIds.some((id) => selected.has(id)));
   }
 
+  /** Read and validate Linear's zero-based fiscal start month once for the graph snapshot. */
+  private async fetchFiscalYearStartMonth(): Promise<number> {
+    const data = await this.query<{ organization?: { fiscalYearStartMonth?: number } }>(
+      ORGANIZATION_TIMEFRAME_QUERY,
+    );
+    const value = data.organization?.fiscalYearStartMonth;
+    if (!Number.isInteger(value) || value === undefined || value < 0 || value > 11) {
+      throw mappingError('organization has an invalid fiscal year start month');
+    }
+    return value;
+  }
+
   /** Pull every cycle, scoping to the selected teams server-side when the selection is non-empty. */
   private async fetchCycles(externalTeamIds: readonly string[]): Promise<ExternalCycle[]> {
     const scoped = externalTeamIds.length > 0;
@@ -656,7 +690,8 @@ export class LinearProviderClient implements WorkGraphProviderClient {
     const projects = await this.fetchProjects(input.externalTeamIds);
     const cycles = await this.fetchCycles(input.externalTeamIds);
     const items = await this.fetchWorkItems(input.externalTeamIds, input.updatedAfter);
-    return { users, labels, projects, cycles, items };
+    const fiscalYearStartMonth = await this.fetchFiscalYearStartMonth();
+    return { fiscalYearStartMonth, users, labels, projects, cycles, items };
   }
 
   /**

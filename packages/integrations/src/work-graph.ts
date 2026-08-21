@@ -71,8 +71,12 @@ export interface ExternalProject {
   readonly leadExternalId?: string;
   /** The project's start date (RFC3339 date), when set. */
   readonly startDate?: string;
+  /** Linear-compatible broad start resolution; absent means an exact day. */
+  readonly startDateResolution?: DateResolution;
   /** The project's target date (RFC3339 date), when set. */
   readonly targetDate?: string;
+  /** Linear-compatible broad target resolution; absent means an exact day. */
+  readonly targetDateResolution?: DateResolution;
   /** Canonical URL of the project in the provider. */
   readonly url: string;
   /**
@@ -172,6 +176,8 @@ export interface ExternalWorkItem {
 
 /** One full or incremental pull of a provider workspace's work graph. */
 export interface WorkGraphSnapshot {
+  /** The source workspace's zero-based fiscal start month, when the provider exposes it. */
+  readonly fiscalYearStartMonth?: number | undefined;
   /** Every user pulled in this snapshot. */
   readonly users: readonly ExternalUser[];
   /** Every label pulled in this snapshot. */
@@ -288,3 +294,4 @@ export interface WorkGraphConnector {
    */
   pushWorkItem(op: WorkItemPushOp): Promise<ExternalWriteResult>;
 }
+import type { DateResolution } from '@docket/work/planning-timeframe';

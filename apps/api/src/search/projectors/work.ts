@@ -25,6 +25,12 @@ interface NamedWorkRow extends OrgScopedRow {
   status?: string | null | undefined;
   health?: string | null | undefined;
   visibility?: string | null | undefined;
+  startDate?: Date | null | undefined;
+  startDateResolution?: string | null | undefined;
+  startDateFiscalYearStartMonth?: number | null | undefined;
+  targetDate?: Date | null | undefined;
+  targetDateResolution?: string | null | undefined;
+  targetDateFiscalYearStartMonth?: number | null | undefined;
 }
 
 /**
@@ -100,10 +106,32 @@ function workDocument(
 }
 
 function namedWorkDocument(row: NamedWorkRow, kind: SearchDocumentKind): SearchDocumentDraft {
+  const timeframeFacet = {
+    ...(row.startDate !== undefined
+      ? {
+          startDate: row.startDate?.toISOString() ?? null,
+          startDateResolution: row.startDateResolution ?? null,
+          startDateFiscalYearStartMonth: row.startDateFiscalYearStartMonth ?? null,
+        }
+      : {}),
+    ...(row.targetDate !== undefined
+      ? {
+          targetDate: row.targetDate?.toISOString() ?? null,
+          targetDateResolution: row.targetDateResolution ?? null,
+          targetDateFiscalYearStartMonth: row.targetDateFiscalYearStartMonth ?? null,
+        }
+      : {}),
+  };
   return workDocument(row, kind, row.name, {
     summary: displaySummary(row.summary, row.description),
     body: row.description,
-    facet: { ownerId: row.ownerId, leadId: row.leadId, status: row.status, health: row.health },
+    facet: {
+      ownerId: row.ownerId,
+      leadId: row.leadId,
+      status: row.status,
+      health: row.health,
+      ...timeframeFacet,
+    },
     visibility: row.visibility,
   });
 }

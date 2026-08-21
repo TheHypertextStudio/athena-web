@@ -229,6 +229,23 @@ describe('billing: POST /export', () => {
       name: 'Q3 Goals',
       status: 'active',
       statusId: statusId('initiative', 'active'),
+      targetDate: new Date('2026-06-30T00:00:00.000Z'),
+      targetDateResolution: 'quarter',
+      targetDateFiscalYearStartMonth: 0,
+      createdBy: humanActorId,
+    });
+    await db.insert(schema.project).values({
+      organizationId: orgId,
+      teamId,
+      name: 'Q2 launch',
+      status: 'planned',
+      statusId: statusId('project', 'planned'),
+      startDate: new Date('2026-04-01T00:00:00.000Z'),
+      startDateResolution: 'quarter',
+      startDateFiscalYearStartMonth: 0,
+      targetDate: new Date('2026-06-30T00:00:00.000Z'),
+      targetDateResolution: 'quarter',
+      targetDateFiscalYearStartMonth: 0,
       createdBy: humanActorId,
     });
     await db.insert(schema.task).values({
@@ -252,6 +269,23 @@ describe('billing: POST /export', () => {
     expect(body.downloadUrl).not.toContain('blob.vercel-storage.com');
     // expiresAt is in the future.
     expect(new Date(body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+
+    const download = appWithActor(exportDownload, orgId, ['manage']);
+    const file = await download.request('/file');
+    expect(file.status).toBe(200);
+    const archive = (await file.json()) as {
+      tables: { project: Record<string, unknown>[]; initiative: Record<string, unknown>[] };
+    };
+    expect(archive.tables.project[0]).toMatchObject({
+      startDateResolution: 'quarter',
+      startDateFiscalYearStartMonth: 0,
+      targetDateResolution: 'quarter',
+      targetDateFiscalYearStartMonth: 0,
+    });
+    expect(archive.tables.initiative[0]).toMatchObject({
+      targetDateResolution: 'quarter',
+      targetDateFiscalYearStartMonth: 0,
+    });
 
     // exportReadyAt is stamped on the org.
     const persisted = await lifecycleOf(orgId);

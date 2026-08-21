@@ -74,6 +74,7 @@ async function baseCtx(
     orgId,
     actorId,
     integrationId,
+    sourceFiscalYearStartMonth: 0,
     writeBack: false,
     now: NOW,
     identityMap: new Map(),
@@ -264,6 +265,97 @@ describe('applyLabel', () => {
 });
 
 describe('applyProject', () => {
+  it('stores Linear broad dates with the source workspace fiscal basis', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    await db
+      .update(schema.organization)
+      .set({ fiscalYearStartMonth: 0 })
+      .where(eq(schema.organization.id, orgId));
+    const integrationId = await seedIntegrationRow(orgId, humanActorId);
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
+      sourceFiscalYearStartMonth: 3,
+      resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
+    });
+
+    await applyProject(
+      ctx,
+      extProject({
+        startDate: '2026-04-01',
+        startDateResolution: 'quarter',
+        targetDate: '2026-06-30',
+        targetDateResolution: 'quarter',
+      }),
+    );
+
+    const created = one(
+      await db
+        .select()
+        .from(schema.project)
+        .where(eq(schema.project.sourceIntegrationId, integrationId)),
+    );
+    expect(created).toMatchObject({
+      startDateResolution: 'quarter',
+      startDateFiscalYearStartMonth: 3,
+      targetDateResolution: 'quarter',
+      targetDateFiscalYearStartMonth: 3,
+    });
+  });
+
+  it('clears imported broad metadata when Linear later sends an exact day', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integrationId = await seedIntegrationRow(orgId, humanActorId);
+    const firstCtx = await baseCtx(orgId, humanActorId, integrationId, {
+      sourceFiscalYearStartMonth: 3,
+      resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
+    });
+    await applyProject(
+      firstCtx,
+      extProject({ targetDate: '2026-06-30', targetDateResolution: 'quarter' }),
+    );
+    const existing = one(
+      await db
+        .select()
+        .from(schema.project)
+        .where(eq(schema.project.sourceIntegrationId, integrationId)),
+    );
+    const secondCtx = await baseCtx(orgId, humanActorId, integrationId, {
+      sourceFiscalYearStartMonth: 3,
+      resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
+      existingProjectsByExternal: new Map([['proj-1', existing]]),
+    });
+    await applyProject(
+      secondCtx,
+      extProject({
+        targetDate: '2026-06-18',
+        updatedAt: '2026-07-03T12:00:00.000Z',
+      }),
+    );
+
+    const updated = one(
+      await db.select().from(schema.project).where(eq(schema.project.id, existing.id)),
+    );
+    expect(updated.targetDateResolution).toBeNull();
+    expect(updated.targetDateFiscalYearStartMonth).toBeNull();
+  });
+
+  it('rejects a noncanonical broad boundary instead of shifting it', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integrationId = await seedIntegrationRow(orgId, humanActorId);
+    const ctx = await baseCtx(orgId, humanActorId, integrationId, {
+      sourceFiscalYearStartMonth: 3,
+      resolveTeam: (id) => (id === 'ext-team-1' ? teamId : undefined),
+    });
+    await expect(
+      applyProject(ctx, extProject({ targetDate: '2026-06-01', targetDateResolution: 'quarter' })),
+    ).rejects.toThrow();
+    expect(
+      await db
+        .select()
+        .from(schema.project)
+        .where(eq(schema.project.sourceIntegrationId, integrationId)),
+    ).toHaveLength(0);
+  });
+
   it('skips a project shared only with unmapped teams', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const integrationId = await seedIntegrationRow(orgId, humanActorId);

@@ -337,7 +337,9 @@ const LINEAR_PROJECT_ACTIVE: ExternalProject = {
   state: 'started',
   leadExternalId: 'lin-user-member',
   startDate: '2026-01-01',
-  targetDate: '2026-06-01',
+  startDateResolution: 'year',
+  targetDate: '2026-06-30',
+  targetDateResolution: 'month',
   url: 'https://linear.app/docket/project/platform-revamp',
   updatedAt: '2026-01-05T00:00:00.000Z',
   externalTeamIds: ['lin-team-eng', 'lin-team-ops'],
@@ -499,6 +501,7 @@ const LINEAR_ISSUE_7: ExternalWorkItem = {
  * any edit here is a fixture-contract change.
  */
 export const LINEAR_WORK_GRAPH: WorkGraphSnapshot = {
+  fiscalYearStartMonth: 0,
   users: [LINEAR_USER_MEMBER, LINEAR_USER_EXTERNAL],
   labels: [LINEAR_LABEL_BUG, LINEAR_LABEL_CHORE, LINEAR_LABEL_ENG_DESIGN],
   projects: [LINEAR_PROJECT_ACTIVE, LINEAR_PROJECT_DONE],

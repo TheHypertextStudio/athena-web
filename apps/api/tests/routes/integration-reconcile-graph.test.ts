@@ -290,6 +290,12 @@ describe('reconcileWorkGraph', () => {
     expect(issue1?.cycleId).toBe(activeCycle.id);
     expect(issue1?.teamId).toBe(teamId);
     expect(issue1?.state).toBe('in_progress'); // started → team's started-type key
+    expect(activeProject).toMatchObject({
+      startDateResolution: 'year',
+      startDateFiscalYearStartMonth: 0,
+      targetDateResolution: 'month',
+      targetDateFiscalYearStartMonth: 0,
+    });
 
     // Matched assignee resolves; unmatched assignee stays null (never a fallback).
     const memberActorRows = await db

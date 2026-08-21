@@ -23,6 +23,7 @@
     "@docket/connections": "workspace:*",
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",
+    "@docket/work": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",
     "@notionhq/client": "^5.24.0",
     "zod": "catalog:"

@@ -76,7 +76,7 @@ function emptyConnection(): { nodes: never[]; pageInfo: { hasNextPage: false } }
   return { nodes: [], pageInfo: { hasNextPage: false } };
 }
 
-/** The five responses (users, labels, projects, cycles, issues) `pullWorkGraph` consumes, in order. */
+/** The six responses (users, labels, projects, cycles, issues, organization) a graph pull consumes. */
 function emptyPullResponses(): Response[] {
   return [
     gql({ users: emptyConnection() }),
@@ -84,6 +84,7 @@ function emptyPullResponses(): Response[] {
     gql({ projects: emptyConnection() }),
     gql({ cycles: emptyConnection() }),
     gql({ issues: emptyConnection() }),
+    gql({ organization: { fiscalYearStartMonth: 3 } }),
   ];
 }
 
@@ -190,6 +191,7 @@ describe('LinearProviderClient — pagination', () => {
       gql({ projects: emptyConnection() }),
       gql({ cycles: emptyConnection() }),
       gql({ issues: emptyConnection() }),
+      gql({ organization: { fiscalYearStartMonth: 3 } }),
     ]);
     const snapshot = await client.pullWorkGraph({ externalTeamIds: [] });
     expect(snapshot.users.map((u) => u.externalId)).toEqual(['u1', 'u2']);
@@ -201,7 +203,7 @@ describe('LinearProviderClient — pagination', () => {
 
   it('stops at MAX_IMPORT_PAGES and logs a truncation warning', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    // 100 user pages that all claim another page, then labels/projects/cycles/issues empties.
+    // 100 user pages that all claim another page, then the other graph responses.
     const pages = Array.from({ length: 100 }, (_unused, i) =>
       gql({
         users: {
@@ -216,11 +218,12 @@ describe('LinearProviderClient — pagination', () => {
       gql({ projects: emptyConnection() }),
       gql({ cycles: emptyConnection() }),
       gql({ issues: emptyConnection() }),
+      gql({ organization: { fiscalYearStartMonth: 3 } }),
     ]);
     const snapshot = await client.pullWorkGraph({ externalTeamIds: [] });
     expect(snapshot.users).toHaveLength(100);
-    // Exactly 100 user requests were made (the safety bound), plus 4 other collections.
-    expect(calls).toHaveLength(104);
+    // Exactly 100 user requests were made (the safety bound), plus five graph requests.
+    expect(calls).toHaveLength(105);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(assertDefined(warn.mock.calls[0])[0]).toContain('import_truncated');
     warn.mockRestore();
@@ -228,6 +231,13 @@ describe('LinearProviderClient — pagination', () => {
 });
 
 describe('LinearProviderClient — filter composition', () => {
+  it('reads the source organization fiscal month once per work-graph pull', async () => {
+    const { client, calls } = fakeHttp(emptyPullResponses());
+    const snapshot = await client.pullWorkGraph({ externalTeamIds: [] });
+    expect(snapshot.fiscalYearStartMonth).toBe(3);
+    expect(assertDefined(calls[5]).body.query).toContain('fiscalYearStartMonth');
+  });
+
   it('omits the issue filter and cycle team filter on a full unscoped pull', async () => {
     const { client, calls } = fakeHttp(emptyPullResponses());
     await client.pullWorkGraph({ externalTeamIds: [] });
@@ -302,6 +312,7 @@ describe('LinearProviderClient — pullWorkGraph project scoping', () => {
       }),
       gql({ cycles: emptyConnection() }),
       gql({ issues: emptyConnection() }),
+      gql({ organization: { fiscalYearStartMonth: 3 } }),
     ]);
     const snapshot = await client.pullWorkGraph({ externalTeamIds: ['t1'] });
     expect(snapshot.projects.map((p) => p.externalId)).toEqual(['p1']);
@@ -531,7 +542,9 @@ describe('edge mapping — project tombstone', () => {
         state: 'completed',
         url: 'https://linear.app/p/p1',
         startDate: '2026-01-01',
+        startDateResolution: 'year',
         targetDate: '2026-03-01',
+        targetDateResolution: 'quarter',
         archivedAt: '2026-04-01T00:00:00.000Z',
         updatedAt: '2026-04-01T00:00:00.000Z',
         lead: { id: 'u1' },
@@ -544,7 +557,9 @@ describe('edge mapping — project tombstone', () => {
       state: 'completed',
       leadExternalId: 'u1',
       startDate: '2026-01-01',
+      startDateResolution: 'year',
       targetDate: '2026-03-01',
+      targetDateResolution: 'quarter',
       url: 'https://linear.app/p/p1',
       updatedAt: '2026-04-01T00:00:00.000Z',
       removed: true,
@@ -562,6 +577,20 @@ describe('edge mapping — project tombstone', () => {
     });
     expect(project).not.toHaveProperty('removed');
     expect(project.externalTeamIds).toEqual([]);
+  });
+
+  it('rejects an unknown planning date resolution', () => {
+    expect(() =>
+      toExternalProject({
+        id: 'p3',
+        name: 'Bad resolution',
+        state: 'started',
+        url: 'https://linear.app/p/p3',
+        targetDate: '2026-03-31',
+        targetDateResolution: 'season',
+        updatedAt: '2026-02-01T00:00:00.000Z',
+      }),
+    ).toThrow(ConnectorError);
   });
 });
 

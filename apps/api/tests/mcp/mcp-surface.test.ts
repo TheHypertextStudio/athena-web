@@ -828,13 +828,49 @@ describe('list_work / find tools', () => {
 
   it('gets a project by name', async () => {
     const s = await seedOrg(['view']);
+    await db
+      .update(schema.project)
+      .set({
+        startDate: new Date('2026-01-01T00:00:00.000Z'),
+        startDateResolution: 'quarter',
+        startDateFiscalYearStartMonth: 0,
+        targetDate: new Date('2026-03-31T00:00:00.000Z'),
+        targetDateResolution: 'quarter',
+        targetDateFiscalYearStartMonth: 0,
+      })
+      .where(eq(schema.project.id, s.projectId));
     const client = await connect(s.ctx);
     const res = (await client.callTool({
       name: 'get',
       arguments: { orgId: s.orgId, type: 'project', refs: ['Proj'] },
     })) as CallToolResult;
-    const body = payload(res) as { items: { id: string }[] };
+    const body = payload(res) as {
+      items: {
+        id: string;
+        startDateResolution: string | null;
+        startDateFiscalYearStartMonth: number | null;
+        targetDateResolution: string | null;
+        targetDateFiscalYearStartMonth: number | null;
+      }[];
+    };
     expect(body.items[0]?.id).toBe(s.projectId);
+    expect(body.items[0]).toMatchObject({
+      startDateResolution: 'quarter',
+      startDateFiscalYearStartMonth: 0,
+      targetDateResolution: 'quarter',
+      targetDateFiscalYearStartMonth: 0,
+    });
+
+    const listed = (await client.callTool({
+      name: 'list_work',
+      arguments: { orgId: s.orgId, entity: 'project' },
+    })) as CallToolResult;
+    expect((payload(listed)['items'] as Record<string, unknown>[])[0]).toMatchObject({
+      startDateResolution: 'quarter',
+      startDateFiscalYearStartMonth: 0,
+      targetDateResolution: 'quarter',
+      targetDateFiscalYearStartMonth: 0,
+    });
   });
 
   it('rejects a filter the entity has no column for, naming the ones it does', async () => {

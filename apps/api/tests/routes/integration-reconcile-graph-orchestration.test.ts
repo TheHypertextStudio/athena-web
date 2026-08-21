@@ -58,7 +58,7 @@ async function seedLegacyIntegration(
 }
 
 function emptySnapshot(): WorkGraphSnapshot {
-  return { users: [], labels: [], projects: [], cycles: [], items: [] };
+  return { fiscalYearStartMonth: 0, users: [], labels: [], projects: [], cycles: [], items: [] };
 }
 
 function workItem(over: Partial<ExternalWorkItem> = {}): ExternalWorkItem {
@@ -112,6 +112,33 @@ async function taskRow(integrationId: string, externalId: string) {
       ),
   );
 }
+
+describe('source fiscal calendar', () => {
+  it('rejects a Linear snapshot that omits its fiscal year start month', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = await seedLegacyIntegration(orgId, humanActorId, { teamId });
+    const snapshot = emptySnapshot();
+    const withoutFiscal: WorkGraphSnapshot = {
+      users: snapshot.users,
+      labels: snapshot.labels,
+      projects: snapshot.projects,
+      cycles: snapshot.cycles,
+      items: snapshot.items,
+    };
+    const { connector } = fakeConnector({ snapshot: withoutFiscal });
+
+    await expect(
+      reconcileWorkGraph({
+        orgId,
+        actorId: humanActorId,
+        row,
+        snapshot: withoutFiscal,
+        connector,
+        now: NOW,
+      }),
+    ).rejects.toThrow('Linear work graph is missing its fiscal year start month');
+  });
+});
 
 describe('legacy team routing (no config.teamMappings)', () => {
   it('honors config.listIds to include one external team and skip another', async () => {

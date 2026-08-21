@@ -976,6 +976,9 @@ importers:
       '@docket/types':
         specifier: workspace:*
         version: link:../types
+      '@docket/work':
+        specifier: workspace:*
+        version: link:../../domains/work
       '@modelcontextprotocol/sdk':
         specifier: 'catalog:'
         version: 1.29.0(zod@4.4.3)

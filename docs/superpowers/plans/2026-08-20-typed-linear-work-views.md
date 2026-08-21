@@ -82,19 +82,19 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 - Modify: `packages/db/src/schema/work.ts`
 - Modify: `packages/db/src/schema/joins.ts`
 - Modify: `packages/db/src/schema/crosscutting.ts`
-- Modify: `packages/db/src/schema/hub.ts`
+- Modify: `packages/db/src/types.ts`
 - Create: the next numbered SQL migration under `packages/db/drizzle/`
 - Modify: `packages/db/drizzle/meta/_journal.json`
 - Test: `packages/db/tests/schema/work-view-schema.test.ts`
 - Test: `packages/db/tests/migrations/work-view-migration.test.ts`
 
-- [ ] Write failing schema and migration tests for Project priority, primary/multiple teams,
+- [x] Write failing schema and migration tests for Project priority, primary/multiple teams,
       members, Initiative lead team, shared ranks, v2 saved views, defaults, and personal state.
-- [ ] Add tables and columns without removing `project.teamId` or legacy saved-view columns.
-- [ ] Generate the migration, add primary-edge and v1-definition backfills, and assert idempotent
-      additive deployment against existing fixtures.
-- [ ] Run focused DB tests, schema typecheck, and migration validation.
-- [ ] Commit the slice as `feat: Store typed work views and shared ordering`.
+- [x] Add tables and columns without removing `project.teamId` or legacy saved-view columns.
+- [x] Generate the migration, add primary-edge and v1-definition backfills, and assert additive
+      deployment against fresh and existing fixtures.
+- [x] Run focused DB tests, schema typecheck, and migration validation.
+- [x] Commit the slice as `feat: Store typed work views and shared ordering`.
 
 ### Task 5: Compile authorized server queries
 

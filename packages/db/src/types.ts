@@ -9,6 +9,7 @@
  */
 import {
   DEFAULT_WORKFLOW_STATES,
+  type HubPreferences as HubPreferencesShape,
   type WorkflowState as WorkflowStateShape,
   type WorkStatusCategory,
 } from '@docket/types';
@@ -46,61 +47,8 @@ export { defaultVocabularySkin as presetStartup } from '@docket/work/vocabulary'
 /** Where the Hub lands on open: the Hub, the last-used context, or a specific org. */
 export type HubLanding = 'hub' | 'last' | { readonly orgId: string };
 
-/** Personal Hub preferences. */
-export interface HubPreferences {
-  /** Landing surface on open. */
-  readonly landing?: HubLanding | undefined;
-  /** Row density. */
-  readonly density?: 'comfortable' | 'compact' | undefined;
-  /** Theme preference. */
-  readonly theme?: 'system' | 'light' | 'dark' | undefined;
-  /** IANA timezone for the daily plan (also the digest's day boundary + send time). */
-  readonly timezone?: string | undefined;
-  /** Continuous scheduling-canvas preferences and quick-create defaults. */
-  readonly calendar?:
-    | {
-        /** Continuous vertical zoom in pixels per hour. */
-        readonly pixelsPerHour?: number | undefined;
-        /** Minimum date-lane width in pixels before horizontal scrolling. */
-        readonly minLaneWidth?: number | undefined;
-        /** Whether new selected regions default to events or timeboxes. */
-        readonly defaultCreateIntent?: 'event' | 'timebox' | undefined;
-        /** Preferred native or writable provider layer for event creation. */
-        readonly defaultLayerId?: string | null | undefined;
-      }
-    | undefined;
-  /** Persistent instructions and approval policy for the user-owned Athena assistant. */
-  readonly athena?:
-    | {
-        /** Personal guidance Athena follows across every workspace. */
-        readonly instructions?: string | undefined;
-        /** How much autonomy Athena has for state-changing work. */
-        readonly approvalMode?:
-          | 'ask_before_acting'
-          | 'routine_autonomy'
-          | 'suggest_only'
-          | undefined;
-      }
-    | undefined;
-  /** Daily digest delivery settings (the Sunsama-style end-of-day summary). */
-  readonly digest?:
-    | {
-        /** Whether the daily digest is generated and delivered. */
-        readonly enabled?: boolean | undefined;
-        /** Local clock time to send, `"HH:MM"` 24-hour (interpreted in `timezone`). */
-        readonly sendAtLocalTime?: string | undefined;
-        /** Where to deliver the digest. */
-        readonly channels?: readonly ('email' | 'inApp')[] | undefined;
-      }
-    | undefined;
-  /** Proactive-agent settings — whether incoming mentions/assignments auto-draft a plan. */
-  readonly proactive?:
-    | {
-        /** When true, a mention/assignment observation spawns an (approval-gated) agent plan. */
-        readonly enabled?: boolean | undefined;
-      }
-    | undefined;
-}
+/** Personal Hub preferences, shared with the validated API contract. */
+export type HubPreferences = HubPreferencesShape;
 
 /** The wire protocol an agent's runtime speaks. */
 export type AgentProtocol = 'mcp' | 'a2a' | 'webhook';

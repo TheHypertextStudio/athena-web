@@ -14,7 +14,11 @@ import {
   type EntityDisplayColorKey,
   type EntityDisplayIconKey,
   type EntityDisplaySubjectType,
+  type FractionalRank,
+  type OrganizationWorkViewDefault,
+  type SavedWorkViewOut,
   type TemplateDraft,
+  type WorkViewContext,
 } from '@docket/types';
 import {
   boolean,
@@ -24,6 +28,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -96,6 +101,19 @@ const entityDisplayIconKeyList = sql.raw(
 const entityDisplayColorKeyList = sql.raw(
   ENTITY_DISPLAY_COLOR_KEYS.map((key) => `'${key}'`).join(', '),
 );
+
+const defaultTaskViewDefinition: SavedWorkViewOut['definition'] = {
+  version: 2,
+  target: 'task',
+  filter: null,
+  arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+  presentation: {
+    layout: 'list',
+    properties: ['status', 'priority', 'assignee', 'dueDate'],
+    density: 'comfortable',
+    showEmptyGroups: false,
+  },
+};
 
 /** A named org-level capability bundle (Owner/Admin/Member/Guest defaults + custom). */
 export const role = pgTable(
@@ -949,11 +967,57 @@ export const savedView = pgTable(
     scope: viewScope('scope').notNull().default('personal'),
     ownerActorId: text('owner_actor_id').references(() => actor.id, { onDelete: 'set null' }),
     teamId: text('team_id').references(() => team.id, { onDelete: 'cascade' }),
+    target: text('target').$type<SavedWorkViewOut['target']>().notNull().default('task'),
+    context: jsonb('context').$type<WorkViewContext>().notNull().default({ kind: 'organization' }),
+    position: text('position')
+      .$type<FractionalRank>()
+      .notNull()
+      .default('a0' as FractionalRank),
+    schemaVersion: integer('schema_version').notNull().default(2),
+    definition: jsonb('definition')
+      .$type<SavedWorkViewOut['definition']>()
+      .notNull()
+      .default(defaultTaskViewDefinition),
     filters: jsonb('filters').$type<ViewFilter[]>().notNull().default([]),
     grouping: jsonb('grouping').$type<ViewGrouping>(),
     sort: jsonb('sort').$type<ViewSort[]>().notNull().default([]),
   },
-  (t) => [index('saved_view_org_idx').on(t.organizationId)],
+  (t) => [
+    index('saved_view_org_idx').on(t.organizationId),
+    index('saved_view_org_target_position_idx').on(t.organizationId, t.target, t.position),
+    check(
+      'saved_view_target_check',
+      sql`${t.target} in ('task', 'project', 'program', 'initiative')`,
+    ),
+    check('saved_view_schema_version_check', sql`${t.schemaVersion} = 2`),
+    notBlank('saved_view_position_not_blank', t.position),
+  ],
+);
+
+/** The workspace-owned default definition for one planning level. */
+export const organizationWorkViewDefault = pgTable(
+  'organization_work_view_default',
+  {
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    target: text('target').$type<OrganizationWorkViewDefault['target']>().notNull(),
+    definition: jsonb('definition').$type<OrganizationWorkViewDefault['definition']>().notNull(),
+    updatedBy: text('updated_by')
+      .notNull()
+      .references(() => actor.id, { onDelete: 'restrict' }),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    primaryKey({ columns: [t.organizationId, t.target] }),
+    check(
+      'organization_work_view_default_target_check',
+      sql`${t.target} in ('task', 'project', 'program', 'initiative')`,
+    ),
+  ],
 );
 
 /**

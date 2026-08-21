@@ -8,6 +8,7 @@
  */
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   pgTable,
@@ -18,10 +19,54 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { genId } from '../id';
-import { actor, organization } from './identity';
+import { actor, organization, team } from './identity';
 import { initiative, program, project, task } from './work';
 import { label } from './crosscutting';
 import { externalResource } from './resources';
+
+/** Many-to-many: a Project can belong to several Teams, with at most one primary Team. */
+export const projectTeam = pgTable(
+  'project_team',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    teamId: text('team_id')
+      .notNull()
+      .references(() => team.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    isPrimary: boolean('is_primary').notNull().default(false),
+  },
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.teamId] }),
+    uniqueIndex('project_team_one_primary_uq')
+      .on(t.projectId)
+      .where(sql`${t.isPrimary} = true`),
+    index('project_team_team_idx').on(t.teamId),
+  ],
+);
+
+/** Many-to-many: participating Project members, separate from the accountable lead. */
+export const projectMember = pgTable(
+  'project_member',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    actorId: text('actor_id')
+      .notNull()
+      .references(() => actor.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.actorId] }),
+    index('project_member_actor_idx').on(t.actorId),
+  ],
+);
 
 /** Many-to-many: an Initiative groups bounded Projects. */
 export const initiativeProject = pgTable(

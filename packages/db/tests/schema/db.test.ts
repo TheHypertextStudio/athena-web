@@ -94,6 +94,7 @@ import {
   oauthRefreshToken,
   operatorAuditEvent,
   organization,
+  organizationWorkViewDefault,
   passkey,
   personalMcpConnection,
   personalMcpCredential,
@@ -117,6 +118,8 @@ import {
   project,
   projectDependency,
   projectLabel,
+  projectMember,
+  projectTeam,
   publication,
   rateLimit,
   recurrenceException,
@@ -155,6 +158,7 @@ import {
   verification,
   voiceSession,
   workspaceDomain,
+  workItemOrder,
 } from '../../src/schema';
 import {
   seedWorkspaceStatuses,
@@ -356,6 +360,7 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
     comment,
     auditEvent,
     savedView,
+    organizationWorkViewDefault,
     initiative,
     program,
     project,
@@ -367,6 +372,8 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
     initiativeHierarchyLink,
     initiativeLabel,
     projectLabel,
+    projectMember,
+    projectTeam,
     taskLabel,
     taskDependency,
     projectDependency,
@@ -446,6 +453,7 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
     agentExecution,
     timeSubmission,
     timeSubmissionItem,
+    workItemOrder,
   };
 
   it('resolves the lazy FK reference of every table', () => {

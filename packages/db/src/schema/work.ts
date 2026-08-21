@@ -21,10 +21,13 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import type { FractionalRank } from '@docket/types';
+import type { ViewTarget } from '@docket/work/view-contract';
 
 import {
   cycleStatus,
@@ -148,6 +151,7 @@ export const initiative = pgTable(
     summary: text('summary'),
     description: text('description'),
     ownerId: text('owner_id').references(() => actor.id, { onDelete: 'set null' }),
+    leadTeamId: text('lead_team_id').references(() => team.id, { onDelete: 'set null' }),
     status: text('status').notNull().default('active'),
     statusId: text('status_id').notNull(),
     priority: initiativePriority('priority').notNull().default('none'),
@@ -220,6 +224,50 @@ export const program = pgTable(
   ],
 );
 
+/** A planning item's shared fractional rank inside one workspace-owned context. */
+export const workItemOrder = pgTable(
+  'work_item_order',
+  {
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    contextType: text('context_type')
+      .$type<'organization' | 'team' | 'project' | 'program' | 'initiative'>()
+      .notNull(),
+    contextId: text('context_id').notNull(),
+    target: text('target').$type<ViewTarget>().notNull(),
+    itemId: text('item_id').notNull(),
+    rank: text('rank').$type<FractionalRank>().notNull(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.organizationId, t.contextType, t.contextId, t.target, t.itemId],
+    }),
+    index('work_item_order_context_rank_idx').on(
+      t.organizationId,
+      t.contextType,
+      t.contextId,
+      t.target,
+      t.rank,
+    ),
+    check(
+      'work_item_order_context_type_check',
+      sql`${t.contextType} in ('organization', 'team', 'project', 'program', 'initiative')`,
+    ),
+    check(
+      'work_item_order_target_check',
+      sql`${t.target} in ('task', 'project', 'program', 'initiative')`,
+    ),
+    notBlank('work_item_order_context_id_not_blank', t.contextId),
+    notBlank('work_item_order_item_id_not_blank', t.itemId),
+    notBlank('work_item_order_rank_not_blank', t.rank),
+  ],
+);
+
 /** A bounded effort with an outcome and optional deadline; sits under a Program or Org. */
 export const project = pgTable(
   'project',
@@ -233,6 +281,7 @@ export const project = pgTable(
     teamId: text('team_id').references(() => team.id, { onDelete: 'set null' }),
     status: text('status').notNull().default('planned'),
     statusId: text('status_id').notNull(),
+    priority: taskPriority('priority').notNull().default('none'),
     health: health('health'),
     startDate: timestamp('start_date'),
     startDateResolution: planningDateResolution('start_date_resolution'),

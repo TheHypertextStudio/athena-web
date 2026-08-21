@@ -27,11 +27,18 @@ export function subGroupKey(groupId: string, subGroupId: string): string {
  */
 export function flattenGroups<TItem>(
   items: readonly TItem[],
-  groupBy: (item: TItem) => GroupKey | null,
+  groupBy: ((item: TItem) => GroupKey | null) | null | undefined,
   subGroupBy: ((item: TItem) => GroupKey | null) | undefined,
   collapsed: ReadonlySet<string>,
   getItemKey: (item: TItem, index: number) => string,
 ): FlatRow<TItem>[] {
+  if (!groupBy) {
+    return items.map((item, index) => ({
+      kind: 'row',
+      key: `r:${getItemKey(item, index)}`,
+      item,
+    }));
+  }
   const groupOrder: string[] = [];
   const groups = new Map<
     string,

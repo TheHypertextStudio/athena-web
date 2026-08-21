@@ -51,8 +51,8 @@ export type FlatRow<TItem> =
 export interface ListViewProps<TItem> {
   /** The flat list of items to group, sub-group, and render. */
   items: readonly TItem[];
-  /** Partition items into top-level groups; `null` routes to the no-group bucket. */
-  groupBy: (item: TItem) => GroupKey | null;
+  /** Partition items into top-level groups; omit it for one flat virtualized list. */
+  groupBy?: ((item: TItem) => GroupKey | null) | null | undefined;
   /** Optionally partition each group into sub-groups; omit for single-level grouping. */
   subGroupBy?: ((item: TItem) => GroupKey | null) | undefined;
   /** Render one data row. */

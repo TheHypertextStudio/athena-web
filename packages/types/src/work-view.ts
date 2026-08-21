@@ -698,6 +698,7 @@ function queryRequest<const TContract extends ViewContract, const TContext exten
       definition,
       temporaryFilter: createFilterNodeSchema(contract).nullable().default(null),
       context: context.default(organizationContext as never),
+      groupPath: z.array(z.string()).max(2).optional(),
       cursor: ViewCursorValue.nullable().optional(),
       limit: z.number().int().min(1).max(100).default(100),
     })
@@ -1205,6 +1206,26 @@ const baseRow = {
   isContext: z.boolean().default(false),
 };
 
+/** Dated Project checkpoint retained by the timeline projection. */
+export const ProjectViewMilestone = z
+  .object({ id: MilestoneId, name: z.string(), targetDate: nullableDate })
+  .strict();
+/** A validated Project checkpoint in a work-view row. */
+export type ProjectViewMilestone = z.infer<typeof ProjectViewMilestone>;
+
+/** Contributing Project schedule retained by an Initiative timeline rollup. */
+export const InitiativeContributingProject = z
+  .object({
+    id: ProjectId,
+    name: z.string(),
+    startDate: nullableDate,
+    targetDate: nullableDate,
+    progress: ratio,
+  })
+  .strict();
+/** A validated contributing Project schedule in an Initiative work-view row. */
+export type InitiativeContributingProject = z.infer<typeof InitiativeContributingProject>;
+
 /** Task projection returned by the work-view query operation. */
 export const TaskViewRow = z
   .object({
@@ -1263,6 +1284,9 @@ export const ProjectViewRow = z
     progress: ratio,
     taskCount: count,
     dependencyCount: count,
+    milestones: z.array(ProjectViewMilestone).default([]),
+    blockedByIds: z.array(ProjectId).default([]),
+    blocksIds: z.array(ProjectId).default([]),
   })
   .strict();
 /** A validated Project work-view row. */
@@ -1309,6 +1333,7 @@ export const InitiativeViewRow = z
     activeProjectCount: count,
     parent: InitiativeId.nullable(),
     organization: OrganizationId,
+    contributingProjects: z.array(InitiativeContributingProject).default([]),
   })
   .strict();
 /** A validated Initiative work-view row. */
@@ -1323,6 +1348,8 @@ export const WorkViewGroup = z
     count: count,
   })
   .strict();
+/** A validated materialized group or subgroup summary. */
+export type WorkViewGroup = z.infer<typeof WorkViewGroup>;
 
 function queryResponse<const TTarget extends ViewTarget, const TRow extends z.ZodType>(
   target: TTarget,

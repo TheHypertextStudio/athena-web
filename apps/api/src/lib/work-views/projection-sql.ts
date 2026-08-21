@@ -110,7 +110,19 @@ const projections = {
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'created_by')} as creator,
     e.created_at, e.updated_at,
     e._progress progress, e._task_count::int task_count,
-    e._dependency_count::int dependency_count`,
+    e._dependency_count::int dependency_count,
+    coalesce((select json_agg(json_build_object(
+      'id', m.id, 'name', m.name,
+      'targetDate', case when m.target_date is null then null
+        else to_char(m.target_date at time zone 'UTC', 'YYYY-MM-DD') end
+    ) order by m.sort,m.id) from milestone m
+      where m.project_id=e.id and m.organization_id=e.organization_id), '[]'::json) milestones,
+    coalesce((select json_agg(d.blocking_project_id order by d.blocking_project_id)
+      from project_dependency d join authorized related on related.id=d.blocking_project_id
+      where d.blocked_project_id=e.id and d.organization_id=e.organization_id), '[]'::json) blocked_by_ids,
+    coalesce((select json_agg(d.blocked_project_id order by d.blocked_project_id)
+      from project_dependency d join authorized related on related.id=d.blocked_project_id
+      where d.blocking_project_id=e.id and d.organization_id=e.organization_id), '[]'::json) blocks_ids`,
   program: (
     context: WorkViewSqlContext,
     organizationId: string,
@@ -147,7 +159,20 @@ const projections = {
       join authorized parent on parent.id=h.parent_initiative_id
       where h.child_initiative_id=e.id
         and h.context_organization_id=${organizationId} limit 1) parent,
-    e.organization_id as organization`,
+    e.organization_id as organization,
+    coalesce((select json_agg(json_build_object(
+      'id', p.id, 'name', p.name,
+      'startDate', case when p.start_date is null then null
+        else to_char(p.start_date at time zone 'UTC', 'YYYY-MM-DD') end,
+      'targetDate', case when p.target_date is null then null
+        else to_char(p.target_date at time zone 'UTC', 'YYYY-MM-DD') end,
+      'progress', coalesce((select count(*) filter(where t.completed_at is not null)::float
+        / nullif(count(*),0) from task t where t.project_id=p.id
+          and t.organization_id=p.organization_id),0)
+    ) order by p.name,p.id) from initiative_project ip join project p
+      on p.id=ip.project_id and p.organization_id=ip.organization_id
+      where ip.initiative_id=e.id and ip.organization_id=e.organization_id
+        and p.archived_at is null), '[]'::json) contributing_projects`,
 } satisfies Record<ViewTarget, (context: WorkViewSqlContext, organizationId: string) => SQL>;
 
 /** Target-indexed projection builders used by the typed SQL registry. */

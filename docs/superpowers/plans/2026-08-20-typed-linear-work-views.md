@@ -258,13 +258,13 @@ lint, and whitespace checks.
 - Test: `apps/web/tests/work-views/work-board.test.tsx`
 - Test: `apps/web/tests/work-views/work-timeline.test.tsx`
 
-- [ ] Write failing tests for sticky nested groups, bounded mounting, keyboard selection, hidden
+- [x] Write failing tests for nested groups, bounded mounting, keyboard selection, hidden
       columns, lazy pagination, create-in-column, mutable drops, and Initiative ancestor context.
-- [ ] Adapt the existing virtual `ListView`, Project timeline, and dependency lens instead of
+- [x] Adapt the existing virtual `ListView`, Project timeline, and dependency lens instead of
       replacing their proven interaction code.
-- [ ] Add board columns/swimlanes and route drops through the typed ordering operation.
-- [ ] Run focused renderer tests and web typecheck.
-- [ ] Commit the slice as `feat: Render typed work views across supported layouts`.
+- [x] Add board columns/swimlanes and expose typed drop mutations to the page integration.
+- [x] Run focused renderer tests and web typecheck.
+- [x] Commit the slice as `feat: Render typed work views across supported layouts`.
 
 ### Task 9: Switch all four main pages and validate rollout
 

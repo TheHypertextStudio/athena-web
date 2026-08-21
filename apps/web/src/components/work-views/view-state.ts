@@ -249,6 +249,7 @@ export interface WorkViewFieldMetadata<TTarget extends ViewTarget = ViewTarget> 
   readonly sortable: boolean;
   readonly groupable: boolean;
   readonly displayable: boolean;
+  readonly mutableGroup: boolean;
   readonly acceptsCurrentActor: boolean;
 }
 
@@ -277,6 +278,7 @@ export function workViewFieldCatalog<TTarget extends ViewTarget>(
       sortable: field.capabilities.sort === true,
       groupable: field.capabilities.group === true,
       displayable: field.capabilities.display === true,
+      mutableGroup: field.capabilities.mutateGroup === true,
       acceptsCurrentActor: (field.operandSchema ?? field.schema).safeParse({
         kind: 'current-actor',
       }).success,

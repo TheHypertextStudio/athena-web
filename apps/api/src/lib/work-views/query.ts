@@ -54,6 +54,7 @@ interface InternalRequest {
   };
   readonly temporaryFilter: ExecutableFilterNode | null;
   readonly context: WorkViewSqlContext;
+  readonly groupPath: readonly string[];
   readonly cursor?: string | null;
   readonly limit: number;
 }
@@ -105,6 +106,7 @@ function internalRequest(request: WorkViewQueryRequest): InternalRequest {
     definition: request.definition,
     temporaryFilter: request.temporaryFilter,
     context: z.object({ kind: z.string() }).loose().parse(request.context),
+    groupPath: request.groupPath ?? [],
     limit: request.limit,
     ...(request.cursor !== undefined ? { cursor: request.cursor } : {}),
   };
@@ -157,7 +159,7 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
           },
         }
       : baseSorts;
-  const groupPath = input.groupPath ?? [];
+  const groupPath = input.groupPath ?? request.groupPath;
   const suppliedCursor =
     request.cursor !== undefined && request.cursor !== null
       ? decodeWorkViewCursor(request.cursor, undefined, groupPath)

@@ -30,6 +30,7 @@ import {
   type WorkViewQueryResponse as WorkViewQueryResponseValue,
 } from '@docket/types';
 import type { ViewTarget } from '@docket/work/view-contract';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -57,6 +58,7 @@ import {
   removePersonalViewState,
   workViewFilterFieldCatalog,
 } from './view-state';
+import type { WorkViewGroupPage } from './renderer-types';
 
 interface QueryRequestByTarget {
   readonly task: ReturnType<typeof TaskWorkViewQueryRequest.parse>;
@@ -206,6 +208,7 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   readonly definition: WorkViewDefinitionFor<TTarget>;
   readonly effectiveDefinition: WorkViewDefinitionFor<TTarget>;
   readonly response: QueryResponseFor<TTarget> | undefined;
+  readonly groupPages: readonly WorkViewGroupPage<TTarget>[];
   readonly facetResponse: WorkViewFacetResponseForTarget<TTarget> | undefined;
   readonly facetMetadataResponse: WorkViewFacetResponseForTarget<TTarget> | undefined;
   readonly loading: boolean;
@@ -219,6 +222,7 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   readonly setDefinition: (definition: WorkViewDefinitionFor<TTarget>) => void;
   readonly requestFacet: (field: WorkViewFilterFieldKey<TTarget>, search: string) => void;
   readonly loadMoreFacets: () => void;
+  readonly loadMoreGroup: (path: readonly string[]) => void;
   readonly resetPersonalOverride: () => void;
   readonly saveView: (input: SaveWorkViewInput) => void;
   readonly setAsDefault: () => void;
@@ -347,6 +351,7 @@ export function useWorkView<TTarget extends ViewTarget>(
   options: UseWorkViewOptions<TTarget>,
 ): WorkViewController<TTarget> {
   const { organizationId, target, instanceKey } = options;
+  const queryClient = useQueryClient();
   const preferencesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.hubPreferences(),
@@ -398,6 +403,11 @@ export function useWorkView<TTarget extends ViewTarget>(
     readonly key: string;
     readonly response: WorkViewFacetResponseValue;
   } | null>(null);
+  const [groupPageState, setGroupPageState] = useState<{
+    readonly key: string;
+    readonly pages: readonly WorkViewGroupPage<TTarget>[];
+    readonly error: unknown;
+  } | null>(null);
   const workingDefinition = workingState?.key === controllerKey ? workingState.definition : null;
   const ignorePersistedPersonal = ignoredPersonalKey === controllerKey;
   const facetInput = facetState?.key === controllerKey ? facetState : null;
@@ -435,6 +445,7 @@ export function useWorkView<TTarget extends ViewTarget>(
     limit: options.limit ?? 100,
   });
   const requestKey = JSON.stringify(request);
+  const executionKey = `${controllerKey}:${requestKey}:${timezone}`;
   const readyToQuery =
     !preferencesQ.isPending && (options.savedView != null || !defaultQ.isPending);
   const queryQ = useApiListQuery(
@@ -453,6 +464,115 @@ export function useWorkView<TTarget extends ViewTarget>(
       { enabled: readyToQuery },
     ),
   );
+
+  const fetchGroupPage = useCallback(
+    async (path: readonly string[], cursor: string | null): Promise<void> => {
+      const pathKey = JSON.stringify(path);
+      setGroupPageState((current) => {
+        const pages = current?.key === executionKey ? current.pages : [];
+        const existing = pages.find((page) => JSON.stringify(page.path) === pathKey);
+        const nextPage: WorkViewGroupPage<TTarget> = {
+          path,
+          rows: existing?.rows ?? [],
+          nextCursor: existing?.nextCursor ?? null,
+          loading: true,
+        };
+        return {
+          key: executionKey,
+          error: null,
+          pages: [...pages.filter((page) => JSON.stringify(page.path) !== pathKey), nextPage],
+        };
+      });
+      const pageRequest = parseQueryRequest(target, {
+        ...request,
+        groupPath: path,
+        ...(cursor ? { cursor } : {}),
+      });
+      try {
+        const page = await queryClient.fetchQuery(
+          apiQueryOptions<QueryResponseFor<TTarget>>(
+            queryKeys.workView(
+              organizationId,
+              target,
+              instanceKey,
+              JSON.stringify(pageRequest),
+              timezone,
+            ),
+            () =>
+              validatedRpcResponse(
+                () =>
+                  api.v1.orgs[':orgId']['work-views'].query.$post({
+                    param: { orgId: organizationId },
+                    json: pageRequest,
+                  }),
+                { parse: (value) => parseQueryResponse(target, value) },
+              ),
+            `Could not load ${target}s in this group.`,
+          ),
+        );
+        setGroupPageState((current) => {
+          if (current?.key !== executionKey) return current;
+          const existing = current.pages.find(
+            (candidate) => JSON.stringify(candidate.path) === pathKey,
+          );
+          // `parseQueryResponse` validated the target discriminator above. TypeScript cannot retain
+          // that correlation through an indexed generic response union, so restore it at this one
+          // target-checked boundary instead of weakening the renderer contract.
+          const pageRows =
+            page.rows as unknown as readonly WorkViewGroupPage<TTarget>['rows'][number][];
+          const combined = cursor
+            ? [...(existing?.rows ?? []), ...pageRows].filter(
+                (row, index, all) =>
+                  all.findIndex((candidate) => candidate.id === row.id) === index,
+              )
+            : pageRows;
+          return {
+            ...current,
+            pages: [
+              ...current.pages.filter((candidate) => JSON.stringify(candidate.path) !== pathKey),
+              { path, rows: combined, nextCursor: page.nextCursor, loading: false },
+            ],
+          };
+        });
+      } catch {
+        setGroupPageState((current) =>
+          current?.key === executionKey
+            ? {
+                ...current,
+                error: new UserFacingError(`Could not load ${target}s in this group.`),
+                pages: current.pages.map((page) =>
+                  JSON.stringify(page.path) === pathKey ? { ...page, loading: false } : page,
+                ),
+              }
+            : current,
+        );
+      }
+    },
+    [executionKey, instanceKey, organizationId, queryClient, request, target, timezone],
+  );
+
+  useEffect(() => {
+    const response = queryQ.data;
+    const groupField = definition.arrangement.groupBy as string | null;
+    const subGroupField = definition.arrangement.subGroupBy as string | null;
+    if (!response || groupField === null) return;
+    const depth = subGroupField === null ? 1 : 2;
+    const paths = response.groups
+      .filter((group) => group.path.length === depth)
+      .map((group) => group.path);
+    const current = groupPageState?.key === executionKey ? groupPageState.pages : [];
+    for (const path of paths) {
+      if (current.some((page) => JSON.stringify(page.path) === JSON.stringify(path))) continue;
+      void fetchGroupPage(path, null);
+    }
+  }, [
+    definition.arrangement.groupBy,
+    definition.arrangement.subGroupBy,
+    executionKey,
+    fetchGroupPage,
+    groupPageState,
+    queryQ.data,
+  ]);
 
   const facetMetadataResponse =
     facetMetadataState?.key === controllerKey
@@ -682,12 +802,27 @@ export function useWorkView<TTarget extends ViewTarget>(
     }
   }, [facetQ]);
 
+  const loadMoreGroup = useCallback(
+    (path: readonly string[]): void => {
+      const page =
+        groupPageState?.key === executionKey
+          ? groupPageState.pages.find(
+              (candidate) => JSON.stringify(candidate.path) === JSON.stringify(path),
+            )
+          : undefined;
+      if (!page || page.loading || page.nextCursor === null) return;
+      void fetchGroupPage(path, page.nextCursor);
+    },
+    [executionKey, fetchGroupPage, groupPageState],
+  );
+
   return useMemo(
     () => ({
       timezone,
       definition,
       effectiveDefinition,
       response: queryQ.isPlaceholderData ? undefined : queryQ.data,
+      groupPages: groupPageState?.key === executionKey ? groupPageState.pages : [],
       facetResponse,
       facetMetadataResponse,
       loading: !readyToQuery || queryQ.isPending,
@@ -696,6 +831,7 @@ export function useWorkView<TTarget extends ViewTarget>(
       facetLoadingMore: facetQ.isFetchingNextPage,
       error:
         queryQ.error ??
+        (groupPageState?.key === executionKey ? groupPageState.error : null) ??
         facetQ.error ??
         preferenceError ??
         saveMutation.error ??
@@ -708,6 +844,7 @@ export function useWorkView<TTarget extends ViewTarget>(
       setDefinition,
       requestFacet,
       loadMoreFacets,
+      loadMoreGroup,
       resetPersonalOverride,
       saveView: saveMutation.mutate,
       setAsDefault: () => {
@@ -727,7 +864,10 @@ export function useWorkView<TTarget extends ViewTarget>(
       facetQ.isPending,
       facetResponse,
       facetMetadataResponse,
+      executionKey,
+      groupPageState,
       loadMoreFacets,
+      loadMoreGroup,
       preferenceError,
       preferenceWritesPending,
       preferencesQ.error,

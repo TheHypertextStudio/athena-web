@@ -98,7 +98,11 @@ describe('date picker inventory', () => {
     const imports = FILES.flatMap(({ path, text }) => {
       const matches = [...text.matchAll(/import\s+\{([^}]*)\}\s+from\s+'([^']+)'/g)];
       return matches
-        .filter(([, names]) => /\bDatePicker\b|\bDateRangePicker\b/.test(names ?? ''))
+        .filter(([, names]) =>
+          /\bDatePicker\b|\bDateRangePicker\b|\bTimeframePicker\b|\bTimeframeRangePicker\b/.test(
+            names ?? '',
+          ),
+        )
         .map(([, , specifier]) => ({ path, specifier: specifier ?? '' }));
     });
     expect(imports.length).toBeGreaterThan(0);
@@ -127,9 +131,9 @@ describe('date picker inventory', () => {
 
   it('lists every date-picker call site in the committed audit', () => {
     const audit = readFileSync(join(REPO_ROOT, AUDIT_PATH), 'utf8');
-    const callSites = FILES.filter(({ text }) => /<DatePicker\b|<DateRangePicker\b/.test(text)).map(
-      ({ path }) => path,
-    );
+    const callSites = FILES.filter(({ text }) =>
+      /<DatePicker\b|<DateRangePicker\b|<TimeframePicker\b|<TimeframeRangePicker\b/.test(text),
+    ).map(({ path }) => path);
     expect(callSites.length).toBeGreaterThan(0);
     const missing = callSites.filter((path) => !audit.includes(path));
     expect(missing).toEqual([]);

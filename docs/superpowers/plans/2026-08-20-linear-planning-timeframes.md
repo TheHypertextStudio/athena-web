@@ -580,7 +580,7 @@ machine-readable surfaces retain semantic metadata.
 - `TimeframeRangePicker` composes two `TimeframePicker` instances and enforces anchor order.
 - `Specific date` delegates to the existing `CalendarGrid` contract.
 
-- [ ] **Step 1: Write failing picker-contract tests**
+- [x] **Step 1: Write failing picker-contract tests**
 
 ```tsx
 render(
@@ -604,13 +604,13 @@ expect(screen.getByRole('option', { name: 'Specific date' })).toBeVisible();
 Add tests for Enter, arrow navigation, Escape without save, outside click, Clear, fiscal labels,
 specific-day delegation, and the 1970 through 2200 bounds inherited from `CalendarGrid`.
 
-- [ ] **Step 2: Run the picker test and verify the missing component fails**
+- [x] **Step 2: Run the picker test and verify the missing component fails**
 
 Run: `pnpm --filter @docket/web test -- tests/pickers/timeframe-picker-contract.test.tsx`
 
 Expected: FAIL because `TimeframePicker` does not exist.
 
-- [ ] **Step 3: Implement pure option generation around the active period**
+- [x] **Step 3: Implement pure option generation around the active period**
 
 ```typescript
 export interface TimeframeOption {
@@ -631,7 +631,7 @@ export function nearbyTimeframeOptions(
 Return the previous two, current, and next four periods. Previous and next controls shift that
 window without changing the selected value.
 
-- [ ] **Step 4: Implement `TimeframePicker` with one committed value**
+- [x] **Step 4: Implement `TimeframePicker` with one committed value**
 
 ```typescript
 export interface TimeframePickerProps {
@@ -648,7 +648,7 @@ Use `PropertyTrigger`, Radix Popover, roving option focus, and the existing `Cal
 the semantic label from the value's saved snapshot. New broad selections use the current workspace
 setting. Precise selections return a null resolution and null snapshot.
 
-- [ ] **Step 5: Implement `TimeframeRangePicker`**
+- [x] **Step 5: Implement `TimeframeRangePicker`**
 
 ```typescript
 export interface TimeframeRangeValue {
@@ -660,18 +660,18 @@ export interface TimeframeRangeValue {
 Reject a change when both anchors exist and `start.date > target.date`. Render application-owned
 copy: `Start must be on or before target.` The two fields may use different resolutions.
 
-- [ ] **Step 6: Export the pickers and lock the inventory boundary**
+- [x] **Step 6: Export the pickers and lock the inventory boundary**
 
 Update the inventory test so Project start/target and Initiative target are the only broad planning
 surfaces. Assert that Task, Milestone, and Cycle files still use the exact-day picker.
 
-- [ ] **Step 7: Run picker, UI type, and accessibility gates**
+- [x] **Step 7: Run picker, UI type, and accessibility gates**
 
 Run: `pnpm --filter @docket/web test -- tests/pickers/timeframe-picker-contract.test.tsx tests/pickers/date-picker-contract.test.tsx tests/pickers/date-picker-inventory.test.ts && pnpm --filter @docket/ui typecheck && pnpm --filter @docket/ui lint`
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit the picker slice**
+- [x] **Step 8: Commit the picker slice**
 
 Commit type/scope: `feat(projects)` with a body that explains why broad planning composes the exact
 calendar instead of changing it.

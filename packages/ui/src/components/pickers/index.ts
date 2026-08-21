@@ -61,4 +61,16 @@ export { EntityMultiPicker, type EntityMultiPickerProps } from './EntityMultiPic
 export { OptionPicker, type OptionPickerProps } from './OptionPicker';
 export { PickerList, type PickerListProps } from './PickerList';
 export { PropertyTrigger, type PropertyTriggerProps } from './PropertyTrigger';
+export {
+  TimeframePicker,
+  type TimeframePickerProps,
+  TimeframeRangePicker,
+  type TimeframeRangePickerProps,
+  type TimeframeRangeValue,
+} from './TimeframePicker';
+export {
+  nearbyTimeframeOptions,
+  type TimeframeOption,
+  timeframeResolutionMonths,
+} from './timeframe-options';
 export { type PickerOption, optionMatches } from './types';

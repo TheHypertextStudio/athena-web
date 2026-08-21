@@ -30,6 +30,13 @@ promises repeated per surface:
 Asserted in `apps/web/tests/pickers/date-picker-contract.test.tsx` (17 cases) and
 `apps/web/tests/pickers/calendar-date.test.ts` (13 cases).
 
+Planning periods use `TimeframePicker.tsx`, which composes the same `CalendarGrid` for a specific
+day and adds Linear-compatible month, quarter, half-year, and year choices. Broad values commit a
+canonical boundary, resolution, and fiscal snapshot together. Their trigger renders the semantic
+period label instead of exposing that boundary. `TimeframeRangePicker` keeps Project start and
+target values independent while rejecting an inverted pair. Its interaction and calendar
+delegation are asserted in `apps/web/tests/pickers/timeframe-picker-contract.test.tsx`.
+
 ## Calendar-day pickers (`DatePicker` / `DateRangePicker`)
 
 | #   | Surface                                   | File                                                                        | Field(s)                          | Status                                        |

@@ -41,6 +41,7 @@ export { default as Circle } from '@mui/icons-material/Circle';
 export { default as CircleAlert } from '@mui/icons-material/ErrorOutlineOutlined';
 export { default as CircleDashed } from '@mui/icons-material/RadioButtonUnchecked';
 export { default as CircleDot } from '@mui/icons-material/RadioButtonChecked';
+export { default as CircleStop } from '@mui/icons-material/StopCircleOutlined';
 export { default as CloudOff } from '@mui/icons-material/CloudOff';
 export { default as Code } from '@mui/icons-material/Code';
 export { default as Copy } from '@mui/icons-material/ContentCopyOutlined';

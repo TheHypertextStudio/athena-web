@@ -340,7 +340,7 @@ describe('FocusPanel', () => {
     expect(await screen.findByTestId('timer-elapsed')).toHaveTextContent('07:00');
   });
 
-  it('opens the tracked task in one click and keeps renaming behind a separate control', async () => {
+  it('gives the wrapping task title its own row and puts task actions at the row end', async () => {
     activeGet.mockResolvedValue(
       jsonResponse(activePayload({ startedMinutesAgo: 7, running: true })),
     );
@@ -348,11 +348,23 @@ describe('FocusPanel', () => {
 
     const taskLink = await screen.findByRole('link', { name: 'Rewrite the onboarding email' });
     expect(taskLink).toHaveAttribute('href', '/orgs/org_1/tasks/task_1');
+    expect(taskLink).toHaveClass('w-full', 'whitespace-normal');
+    expect(taskLink.querySelector('svg')).toBeNull();
+    expect(taskLink.parentElement?.querySelector('button')).toBeNull();
     expect(screen.queryByRole('textbox', { name: 'What you are working on' })).toBeNull();
 
-    const rename = screen.getByRole('button', { name: 'Rename tracked task' });
-    expect(rename).toHaveClass('size-10');
-    fireEvent.click(rename);
+    const pause = screen.getByTestId('timer-pause');
+    const finish = screen.getByTestId('timer-stop');
+    expect(screen.getByText('Pause', { selector: 'span' })).not.toHaveClass('hidden');
+    expect(screen.getByText('Finish', { selector: 'span' })).not.toHaveClass('hidden');
+    expect(pause).toHaveClass('min-h-10');
+    expect(finish).toHaveClass('min-h-10');
+
+    const taskActions = screen.getByRole('button', { name: 'Task actions' });
+    expect(taskActions).toHaveClass('ml-auto');
+    fireEvent.pointerDown(taskActions, { button: 0, ctrlKey: false });
+    expect(await screen.findByRole('menuitem', { name: 'Open task' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename task' }));
     expect(screen.getByRole('textbox', { name: 'What you are working on' })).toBeInTheDocument();
   });
 
@@ -461,6 +473,21 @@ describe('FocusPanel', () => {
         json: { context: { label: 'Write the launch notes' } },
       });
     });
+  });
+
+  it('compacts Focus mode into one end-aligned menu', async () => {
+    activeGet.mockResolvedValue(
+      jsonResponse(activePayload({ startedMinutesAgo: 7, running: true })),
+    );
+    renderPanel();
+
+    expect(screen.queryByText('Open in this tab')).toBeNull();
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Focus mode' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(await screen.findByRole('menuitem', { name: 'Open focus mode' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Open in this tab' })).toBeInTheDocument();
   });
 
   it('shows the newest two earlier sessions from the API ascending timeline', async () => {
@@ -630,7 +657,11 @@ describe('FocusPanel', () => {
     recordPatch.mockRejectedValue(new Error('network provider detail'));
     renderPanel();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Rename tracked task' }));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Task actions' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rename task' }));
     const field = screen.getByRole('textbox', { name: 'What you are working on' });
     fireEvent.change(field, { target: { value: 'A clearer onboarding email' } });
     fireEvent.keyDown(field, { key: 'Enter' });

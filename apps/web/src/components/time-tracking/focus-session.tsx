@@ -13,10 +13,14 @@
  * before the clock will run at all. Naming an unanchored session is what creates its ordinary
  * Docket task, so the field is the same control whether it is anchoring or renaming.
  */
-import { Edit, OpenInNew, Pause, Play, Stop } from '@docket/ui/icons';
+import { CircleStop, Edit, Ellipsis, OpenInNew, Pause, Play } from '@docket/ui/icons';
 import {
   Button,
   ControlGroup,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Text,
   Tooltip,
   TooltipContent,
@@ -155,29 +159,14 @@ export default function FocusSession({
         </Text>
       </div>
 
-      <div id={nameFieldId} className="flex min-w-0 items-center gap-1">
+      <div id={nameFieldId} className="min-w-0">
         {taskHref && !editing ? (
-          <>
-            <Link
-              href={taskHref}
-              className="text-on-surface text-body-medium hover:text-primary focus-visible:outline-primary flex min-h-10 min-w-0 flex-1 items-center truncate rounded-sm underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              {title}
-            </Link>
-            <OpenInNew aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
-            <Button
-              variant="ghost"
-              controlSize="sm"
-              aria-label="Rename tracked task"
-              className="size-10 px-0"
-              onClick={() => {
-                setRenameDraft(title);
-                setEditing(true);
-              }}
-            >
-              <Edit aria-hidden="true" />
-            </Button>
-          </>
+          <Link
+            href={taskHref}
+            className="text-on-surface text-body-medium hover:text-primary focus-visible:outline-primary block min-h-10 w-full min-w-0 rounded-sm py-2 break-words whitespace-normal underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            {title}
+          </Link>
         ) : (
           <input
             type="text"
@@ -214,9 +203,7 @@ export default function FocusSession({
         </Text>
       ) : null}
 
-      {/* One row at every rail width: the labels are hidden below the panel's `@sm` container
-          breakpoint rather than allowed to wrap onto a second line. */}
-      <ControlGroup controlSize={comfortable ? 'xl' : 'sm'} className="min-w-0">
+      <ControlGroup controlSize={comfortable ? 'xl' : 'sm'} className="w-full min-w-0">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -230,7 +217,7 @@ export default function FocusSession({
               }}
             >
               {running ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
-              <span className="hidden @sm:inline">{running ? 'Pause' : 'Resume'}</span>
+              <span>{running ? 'Pause' : 'Resume'}</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>{running ? 'Pause' : 'Resume'}</TooltipContent>
@@ -254,12 +241,43 @@ export default function FocusSession({
                 void updateTimer(() => controls.stop(unanchored ? unanchoredTitle : undefined));
               }}
             >
-              <Stop aria-hidden="true" />
-              <span className="hidden @sm:inline">Finish</span>
+              <CircleStop aria-hidden="true" />
+              <span>Finish</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>Finish</TooltipContent>
         </Tooltip>
+        {taskHref && !editing ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                iconOnly
+                aria-label="Task actions"
+                className="ml-auto min-h-10 min-w-10"
+              >
+                <Ellipsis aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link href={taskHref}>
+                  <OpenInNew aria-hidden="true" />
+                  Open task
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  setRenameDraft(title);
+                  setEditing(true);
+                }}
+              >
+                <Edit aria-hidden="true" />
+                Rename task
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </ControlGroup>
 
       {notice ? (

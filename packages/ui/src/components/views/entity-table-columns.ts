@@ -45,6 +45,12 @@ export interface Column<T> {
 
 /** The props an {@link EntityTableProps.renderRowLink} slot receives. */
 export interface EntityTableRowLinkProps {
+  /** Stable DOM id used by the owning grid's `aria-activedescendant`. */
+  id?: string | undefined;
+  /** Logical one-based row position in the owning grid. */
+  'aria-rowindex'?: number | undefined;
+  /** Grid row role when the link owns the complete row. */
+  role?: 'row' | undefined;
   href: string;
   className: string;
   onClick: () => void;

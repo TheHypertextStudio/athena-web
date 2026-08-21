@@ -115,6 +115,23 @@ describe('parseViewState', () => {
     expect(parse('')).toEqual({ filters: [], groupBy: null, sort: [] });
   });
 
+  it('applies a declared default grouping while preserving an explicit no-grouping choice', () => {
+    const defaults = { groupBy: { field: 'usedIn' } } as const;
+    expect(parseViewState(new URLSearchParams(), defaults)).toEqual({
+      filters: [],
+      groupBy: { field: 'usedIn' },
+      sort: [],
+    });
+
+    const explicitNone = serializeViewState(
+      { filters: [], groupBy: null, sort: [] },
+      new URLSearchParams(),
+      defaults,
+    );
+    expect(explicitNone.get('group')).toBe('__none__');
+    expect(parseViewState(explicitNone, defaults).groupBy).toBeNull();
+  });
+
   it('drops malformed tokens rather than throwing', () => {
     const state = parse(
       'filter=no-colons&filter=field%3Abadop%3Av&sort=field-only&group=&filter=status%3Aeq%3Aok',

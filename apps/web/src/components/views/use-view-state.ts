@@ -22,7 +22,7 @@
 import { useRouter } from 'next/navigation';
 import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { useImmediateUrlState } from '@/lib/interactions/immediate-url-state';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import {
   DEFAULT_VIEW_DISPLAY,
@@ -37,6 +37,7 @@ import {
   parseViewState,
   serializeViewDisplay,
   serializeViewState,
+  VIEW_PARAM_KEYS,
 } from './view-state-url';
 
 /** The value returned by {@link useViewState}: the current state plus its setters. */
@@ -60,21 +61,36 @@ export interface UseViewStateResult {
   setSort: (sort: readonly ViewSortTerm[]) => void;
   /** Replace the presentation toggles. */
   setDisplay: (display: ViewDisplayState) => void;
+  /** Replace one URL parameter that is not owned by the view codec. */
+  setSearchParam: (name: string, value: string | null) => void;
+  /** Push one non-view URL parameter while preserving pending view and search writes. */
+  pushSearchParam: (name: string, value: string | null) => void;
   /** Clear all filters / grouping / sort and restore the default presentation. */
   reset: () => void;
 }
+
+/** Surface defaults that still preserve explicit contrary choices in the shared URL codec. */
+export interface UseViewStateDefaults {
+  /** Grouping used when the URL carries no group value. */
+  readonly groupBy?: ViewGroupTerm | null;
+}
+
+const EMPTY_VIEW_STATE_DEFAULTS: UseViewStateDefaults = {};
 
 /**
  * Hold a list page's view state in the URL search params.
  *
  * @remarks
  * Reads the current {@link ViewState} from `useSearchParams` and writes mutations back with
- * `router.replace` (history-quiet, scroll-stable), preserving any unrelated params. All four
- * setters funnel through one `commit` so the whole state is re-encoded atomically.
+ * `router.replace` (history-quiet, scroll-stable), preserving any unrelated params. View setters
+ * funnel through one `commit`, and non-view replace/push writes share its pending URL transaction
+ * so rapid actions cannot overwrite one another.
  *
  * @returns the {@link UseViewStateResult}.
  */
-export function useViewState(): UseViewStateResult {
+export function useViewState(
+  defaults: UseViewStateDefaults = EMPTY_VIEW_STATE_DEFAULTS,
+): UseViewStateResult {
   const router = useRouter();
   const pathname = useAppPathname();
   const searchParams = useAppSearchParams();
@@ -82,9 +98,21 @@ export function useViewState(): UseViewStateResult {
   // `useSearchParams` returns a stable `ReadonlyURLSearchParams`; key the parse on its string form
   // so the memo only recomputes when the query actually changes.
   const search = searchParams.toString();
+  const pendingSearch = useRef(search);
+  const requestedSearch = useRef<string | null>(null);
+  useEffect(() => {
+    if (requestedSearch.current !== null) {
+      if (search === requestedSearch.current) {
+        requestedSearch.current = null;
+        pendingSearch.current = search;
+      }
+      return;
+    }
+    pendingSearch.current = search;
+  }, [search]);
   const canonicalState = useMemo<ViewState>(
-    () => parseViewState(new URLSearchParams(search)),
-    [search],
+    () => parseViewState(new URLSearchParams(search), defaults),
+    [defaults, search],
   );
   const canonicalDisplay = useMemo<ViewDisplayState>(
     () => parseViewDisplay(new URLSearchParams(search)),
@@ -96,16 +124,59 @@ export function useViewState(): UseViewStateResult {
     sameSerializedValue,
   );
 
+  const navigateParams = useCallback(
+    (params: URLSearchParams, mode: 'replace' | 'push'): void => {
+      const query = params.toString();
+      if (mode === 'replace' && query === pendingSearch.current) return;
+      pendingSearch.current = query;
+      requestedSearch.current = query;
+      router[mode](query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router],
+  );
+
+  const replaceParams = useCallback(
+    (params: URLSearchParams): void => {
+      navigateParams(params, 'replace');
+    },
+    [navigateParams],
+  );
+
   const commit = useCallback(
     (next: ViewState, nextDisplay: ViewDisplayState): void => {
       setImmediateState(next);
       setImmediateDisplay(nextDisplay);
-      const params = serializeViewState(next, new URLSearchParams(search));
+      const params = serializeViewState(next, new URLSearchParams(pendingSearch.current), defaults);
       serializeViewDisplay(nextDisplay, params);
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      replaceParams(params);
     },
-    [pathname, router, search, setImmediateDisplay, setImmediateState],
+    [defaults, replaceParams, setImmediateDisplay, setImmediateState],
+  );
+
+  const setSearchParam = useCallback(
+    (name: string, value: string | null): void => {
+      if (VIEW_PARAM_KEYS.includes(name)) {
+        throw new Error(`View-owned URL parameter cannot be written directly: ${name}`);
+      }
+      const params = new URLSearchParams(pendingSearch.current);
+      if (value === null || value.length === 0) params.delete(name);
+      else params.set(name, value);
+      replaceParams(params);
+    },
+    [replaceParams],
+  );
+
+  const pushSearchParam = useCallback(
+    (name: string, value: string | null): void => {
+      if (VIEW_PARAM_KEYS.includes(name)) {
+        throw new Error(`View-owned URL parameter cannot be written directly: ${name}`);
+      }
+      const params = new URLSearchParams(pendingSearch.current);
+      if (value === null || value.length === 0) params.delete(name);
+      else params.set(name, value);
+      navigateParams(params, 'push');
+    },
+    [navigateParams],
   );
 
   const setFilters = useCallback(
@@ -133,10 +204,20 @@ export function useViewState(): UseViewStateResult {
     [commit, state],
   );
   const reset = useCallback((): void => {
-    commit({ filters: [], groupBy: null, sort: [] }, DEFAULT_VIEW_DISPLAY);
-  }, [commit]);
+    commit({ filters: [], groupBy: defaults.groupBy ?? null, sort: [] }, DEFAULT_VIEW_DISPLAY);
+  }, [commit, defaults.groupBy]);
 
-  return { state, display, setFilters, setGroupBy, setSort, setDisplay, reset };
+  return {
+    state,
+    display,
+    setFilters,
+    setGroupBy,
+    setSort,
+    setDisplay,
+    setSearchParam,
+    pushSearchParam,
+    reset,
+  };
 }
 
 /** Compare URL-codec values without treating a fresh parse of the same query as a new intent. */

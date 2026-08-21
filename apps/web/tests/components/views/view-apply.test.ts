@@ -347,7 +347,8 @@ describe('multi-valued fields', () => {
   const docCatalog: FieldCatalog<Doc> = [
     {
       key: 'usedIn',
-      label: 'Used in',
+      label: 'Work context',
+      emptyGroupLabel: 'Unreferenced',
       type: 'relation',
       // The primary value, which is what sorting reads.
       accessor: (d) => d.usedIn[0] ?? null,
@@ -391,7 +392,7 @@ describe('multi-valued fields', () => {
     expect((applied.groups ?? []).map((group) => group.label)).toEqual([
       'Q3 launch',
       'Billing v2',
-      'No used in',
+      'Unreferenced',
     ]);
   });
 

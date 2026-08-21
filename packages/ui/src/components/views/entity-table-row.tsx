@@ -22,6 +22,10 @@ const TABLE_ROW_INTERACTIVE = cn(
 
 /** Props for the internal {@link EntityTableRow}. */
 export interface EntityTableRowProps<T> {
+  /** Stable DOM id used by the owning grid's `aria-activedescendant`. */
+  id?: string | undefined;
+  /** Logical one-based row position in the owning grid. */
+  ariaRowIndex?: number | undefined;
   columns: readonly Column<T>[];
   row: T;
   active: boolean;
@@ -50,6 +54,8 @@ export interface EntityTableRowProps<T> {
  * element (a router `Link`). Activating fires `onActivate` (open) and, when wired, `onSelect`.
  */
 export function EntityTableRow<T>({
+  id,
+  ariaRowIndex,
   columns,
   row,
   active,
@@ -141,10 +147,12 @@ export function EntityTableRow<T>({
   if (linkColumnKey !== undefined) {
     return (
       <div
-        role="row"
-        aria-current={ariaCurrent}
         {...interaction?.rowProps}
         {...dragProps}
+        id={id}
+        role="row"
+        aria-rowindex={ariaRowIndex}
+        aria-current={ariaCurrent}
         className={cn(rowClassName, 'group/row', interaction?.className)}
       >
         {cells}
@@ -156,6 +164,9 @@ export function EntityTableRow<T>({
     return (
       <>
         {renderRowLink({
+          id,
+          role: 'row',
+          'aria-rowindex': ariaRowIndex,
           href,
           className: rowClassName,
           onClick: handleClick,
@@ -179,7 +190,9 @@ export function EntityTableRow<T>({
   if (href !== undefined) {
     return (
       <a
+        id={id}
         role="row"
+        aria-rowindex={ariaRowIndex}
         href={href}
         aria-current={ariaCurrent}
         aria-selected={selected || undefined}
@@ -200,8 +213,10 @@ export function EntityTableRow<T>({
 
   return (
     <button
+      id={id}
       type="button"
       role="row"
+      aria-rowindex={ariaRowIndex}
       aria-pressed={selected || undefined}
       aria-current={ariaCurrent}
       data-active={active ? '' : undefined}

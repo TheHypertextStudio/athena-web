@@ -638,12 +638,267 @@ describe('search query service', () => {
     expect(secondPage.items).toHaveLength(1);
     expect(secondPage.items[0]?.id).not.toBe(firstPage.items[0]?.id);
 
+    const expectedCursorOrder = (
+      await searchWorkspace({
+        scope: 'hub',
+        caller: { kind: 'user', userId },
+        params: { q: 'cursorword', limit: 100 },
+      })
+    ).items.map((item) => item.id);
+    const pagedCursorOrder: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const result = await searchWorkspace({
+        scope: 'hub',
+        caller: { kind: 'user', userId },
+        params: { q: 'cursorword', limit: 1, ...(cursor ? { cursor } : {}) },
+      });
+      pagedCursorOrder.push(...result.items.map((item) => item.id));
+      cursor = result.nextCursor;
+    } while (cursor);
+    expect(pagedCursorOrder).toEqual(expectedCursorOrder);
+
     await db.delete(schema.searchDocument).where(
       inArray(
         schema.searchDocument.id,
         [...orgScoped.items, ...withArchived.items].map((item) => item.id),
       ),
     );
+  });
+
+  it('searches beyond five hundred candidates before applying page filters', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchFullCorpusUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    await db.insert(schema.searchDocument).values([
+      ...Array.from({ length: 500 }, (_, index) => {
+        const suffix = index.toString().padStart(3, '0');
+        return {
+          id: `task:${orgId}:fullcorpus_${suffix}`,
+          organizationId: orgId,
+          kind: 'task' as const,
+          family: 'work' as const,
+          sourceTable: 'task',
+          entityId: `fullcorpus_${suffix}`,
+          title: `Fullcorpusneedle ${suffix}`,
+          facet: {},
+          route: entityRoute(orgId, 'task', `fullcorpus_${suffix}`),
+          visibility: { mode: 'org_members' as const },
+          baseRank: 100,
+        };
+      }),
+      {
+        id: `attachment:${orgId}:fullcorpus_attachment`,
+        organizationId: orgId,
+        kind: 'attachment',
+        family: 'content',
+        sourceTable: 'attachment',
+        entityId: 'fullcorpus_attachment',
+        title: 'Fullcorpusneedle attachment',
+        facet: { attachmentKind: 'url' },
+        route: entityRoute(orgId, 'attachment', 'fullcorpus_attachment'),
+        visibility: { mode: 'org_members' },
+        baseRank: 0,
+      },
+    ]);
+
+    const result = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { q: 'fullcorpusneedle', kinds: ['attachment'], limit: 1 },
+    });
+
+    expect(result.items.map((item) => item.entityId)).toEqual(['fullcorpus_attachment']);
+  });
+
+  it('keeps ranked cursor boundaries fixed when the request clock advances', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchRankClockUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    const updatedAt = new Date('2026-08-20T10:00:00.000Z');
+    await db.insert(schema.searchDocument).values(
+      ['alpha', 'beta'].map((suffix) => ({
+        id: `attachment:${orgId}:rankclock_${suffix}`,
+        organizationId: orgId,
+        kind: 'attachment' as const,
+        family: 'content' as const,
+        sourceTable: 'attachment',
+        entityId: `rankclock_${suffix}`,
+        title: `Rankclock ${suffix}`,
+        facet: { attachmentKind: 'url' },
+        route: entityRoute(orgId, 'attachment', `rankclock_${suffix}`),
+        visibility: { mode: 'org_members' as const },
+        updatedAt,
+      })),
+    );
+
+    const first = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { q: 'rankclock', kinds: ['attachment'], limit: 1 },
+      rankedAt: new Date('2026-08-20T12:00:00.000Z').getTime(),
+    });
+    const second = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: {
+        q: 'rankclock',
+        kinds: ['attachment'],
+        limit: 1,
+        cursor: first.nextCursor,
+      },
+      rankedAt: new Date('2026-08-21T12:00:00.000Z').getTime(),
+    });
+
+    expect(first.items).toHaveLength(1);
+    expect(second.items).toHaveLength(1);
+    expect(second.items[0]?.id).not.toBe(first.items[0]?.id);
+  });
+
+  it('treats LIKE metacharacters as literal search text', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchLiteralWildcardUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `attachment:${orgId}:literal_percent`,
+        organizationId: orgId,
+        kind: 'attachment',
+        family: 'content',
+        sourceTable: 'attachment',
+        entityId: 'literal_percent',
+        title: 'Literal % resource',
+        facet: { attachmentKind: 'url' },
+        route: entityRoute(orgId, 'attachment', 'literal_percent'),
+        visibility: { mode: 'org_members' },
+      },
+      {
+        id: `attachment:${orgId}:ordinary_resource`,
+        organizationId: orgId,
+        kind: 'attachment',
+        family: 'content',
+        sourceTable: 'attachment',
+        entityId: 'ordinary_resource',
+        title: 'Ordinary resource',
+        facet: { attachmentKind: 'url' },
+        route: entityRoute(orgId, 'attachment', 'ordinary_resource'),
+        visibility: { mode: 'org_members' },
+      },
+    ]);
+
+    const result = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { q: '%', kinds: ['attachment'], limit: 10 },
+    });
+
+    expect(result.items.map((item) => item.entityId)).toEqual(['literal_percent']);
+  });
+
+  it('stops a ranked corpus scan when its caller aborts', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchAbortUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      searchWorkspace({
+        scope: 'org',
+        caller: { kind: 'user', userId },
+        orgId,
+        params: { q: 'cancelled corpus scan', kinds: ['attachment'], limit: 10 },
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('continues browse after a bounded refill finds only hidden rows', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'BrowseHiddenRefillUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    const updatedAt = new Date('2026-08-20T12:00:00.000Z');
+
+    await db.insert(schema.searchDocument).values([
+      ...Array.from({ length: 48 }, (_, index) => {
+        const suffix = index.toString().padStart(2, '0');
+        const entityId = `hidden_refill_${suffix}`;
+        return {
+          id: `attachment:${orgId}:${entityId}`,
+          organizationId: orgId,
+          kind: 'attachment' as const,
+          family: 'content' as const,
+          sourceTable: 'attachment',
+          entityId,
+          subjectKind: 'task',
+          subjectId: `missing_task_${suffix}`,
+          title: `Hidden refill ${suffix}`,
+          facet: { attachmentKind: 'url' },
+          route: {
+            type: 'content' as const,
+            organizationId: orgId,
+            subjectKind: 'task' as const,
+            subjectId: `missing_task_${suffix}`,
+            contentKind: 'attachment' as const,
+            contentId: entityId,
+            href: `/orgs/${orgId}/tasks/missing_task_${suffix}?attachmentId=${entityId}`,
+          },
+          visibility: {
+            mode: 'grantable' as const,
+            subjectKind: 'task',
+            subjectId: `missing_task_${suffix}`,
+          },
+          updatedAt,
+        };
+      }),
+      {
+        id: `attachment:${orgId}:aaa_visible_refill`,
+        organizationId: orgId,
+        kind: 'attachment',
+        family: 'content',
+        sourceTable: 'attachment',
+        entityId: 'aaa_visible_refill',
+        subjectKind: 'task',
+        subjectId: 'visible_refill_task',
+        title: 'Visible refill result',
+        facet: { attachmentKind: 'url' },
+        route: entityRoute(orgId, 'attachment', 'aaa_visible_refill'),
+        visibility: { mode: 'org_members' },
+        updatedAt,
+      },
+    ]);
+
+    const first = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { kinds: ['attachment'], limit: 1 },
+    });
+    expect(first.items).toHaveLength(0);
+    expect(first.nextCursor).toEqual(expect.any(String));
+
+    const second = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { kinds: ['attachment'], limit: 1, cursor: first.nextCursor },
+    });
+    expect(second.items.map((item) => item.entityId)).toEqual(['aaa_visible_refill']);
   });
 
   it('boosts active workspaces and caller relationships without bypassing search semantics', async () => {
@@ -1293,5 +1548,60 @@ describe('search query service', () => {
         href: 'https://linear.app/issue/externalonly',
       },
     ]);
+  });
+
+  it('adds the authenticated download action for an uploaded task attachment', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'AttachmentDownloadActionUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    const attachmentId = 'attachment_download_action';
+    const taskId = 'task_download_host';
+    await db.insert(schema.searchDocument).values({
+      id: `attachment:${orgId}:${attachmentId}`,
+      organizationId: orgId,
+      kind: 'attachment',
+      family: 'content',
+      sourceTable: 'attachment',
+      entityId: attachmentId,
+      subjectKind: 'task',
+      subjectId: taskId,
+      sourceSystem: 'docket',
+      title: 'Downloadable launch brief',
+      facet: {
+        subjectKind: 'task',
+        subjectId: taskId,
+        attachmentKind: 'file',
+        fileName: 'launch-brief.pdf',
+        mimeType: 'application/pdf',
+        byteSize: 48_721,
+      },
+      route: {
+        type: 'content',
+        organizationId: orgId,
+        subjectKind: 'task',
+        subjectId: taskId,
+        contentKind: 'attachment',
+        contentId: attachmentId,
+        href: `/orgs/${orgId}/search?subjectKind=task&subjectId=${taskId}&attachmentId=${attachmentId}`,
+      },
+      visibility: { mode: 'org_members' },
+      baseRank: 55,
+    });
+
+    const result = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { q: 'Downloadable launch brief', limit: 10, kinds: ['attachment'] },
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.actions).toContainEqual({
+      kind: 'download',
+      label: 'Download',
+      href: `/v1/orgs/${orgId}/tasks/${taskId}/attachments/${attachmentId}/download`,
+    });
   });
 });

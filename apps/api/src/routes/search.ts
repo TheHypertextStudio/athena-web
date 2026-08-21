@@ -37,6 +37,7 @@ const searchRouter = new Hono<AppEnv>().get(
         orgId,
         activeOrgId: orgId,
         params,
+        signal: c.req.raw.signal,
       }),
     );
   },

@@ -184,6 +184,8 @@ export interface FieldDescriptor<T> {
   key: string;
   /** Human noun shown in menus and chips (vocabulary-resolved by the page before being passed). */
   label: string;
+  /** Custom label for the trailing group whose rows have no value for this field. */
+  emptyGroupLabel?: string;
   /** The value type, which selects the operator set + value-entry affordance. */
   type: FieldValueType;
   /**

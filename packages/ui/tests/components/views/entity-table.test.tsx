@@ -212,7 +212,7 @@ describe('EntityTable — rows + chrome', () => {
     render(<EntityTable aria-label="Items" columns={COLUMNS} getRowKey={getRowKey} />);
     // Only the header row remains; there are no data rows.
     expect(screen.getAllByRole('row')).toHaveLength(1);
-    expect(screen.getByRole('grid', { name: 'Items' })).toHaveAttribute('aria-rowcount', '0');
+    expect(screen.getByRole('grid', { name: 'Items' })).toHaveAttribute('aria-rowcount', '1');
   });
 
   it('marks a link row both active (keyboard) and selected with the matching data/aria attributes', () => {

@@ -1,45 +1,67 @@
 'use client';
 
-/**
- * The workspace Library: everything this workspace writes, links, and refers back to.
- *
- * @remarks
- * Docket already knew which documents a workspace runs on and showed that to nobody. Every Drive
- * file, Figma board, and web page anyone references in prose becomes an `external_resource` row,
- * deduped per workspace. This page is the first surface that reads them.
- *
- * The column that matters is **Used in**, not a reference count. A count says a document is
- * popular; the container says what it is *for*, and "Not referenced yet" says the opposite — which
- * is how orphaned documentation becomes visible instead of hiding among the ones and twos.
- */
-import type { ExternalResourceType, SearchResult } from '@docket/types';
+/** The workspace Library: full-corpus resource search and work-context browsing. */
+import type {
+  ExternalResourceType,
+  SearchDocumentKind,
+  SearchOut,
+  SearchResult,
+} from '@docket/types';
 import { type Column, EntityTable, type EntityTableGroup, EmptyState } from '@docket/ui/components';
-import { Library, Link as LinkIcon, type LucideIcon } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
-import type { JSX } from 'react';
-import { useMemo, useRef } from 'react';
-
+import {
+  Info,
+  Library,
+  Link as LinkIcon,
+  RefreshCw,
+  Search,
+  type LucideIcon,
+} from '@docket/ui/icons';
+import { Button, Input, Skeleton } from '@docket/ui/primitives';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-
-import { useAppSearchParams } from '@/lib/app-location';
+import {
+  type JSX,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { relativeTime } from '@/components/project-detail/format-time';
-import ResourceDetailPanel from '@/components/library/resource-detail-panel';
 import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
+import ResourceDetailPanel from '@/components/library/resource-detail-panel';
 import { RESOURCE_TYPE_ICON } from '@/components/mentions/mention-glyphs';
-import { applyView } from '@/components/views/apply-view';
+import { relativeTime } from '@/components/project-detail/format-time';
+import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
-import { useViewState } from '@/components/views/use-view-state';
+import { type UseViewStateDefaults, useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
+import { useAppSearchParams } from '@/lib/app-location';
 import { userErrorMessage } from '@/lib/problem';
-import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
+import {
+  apiInfiniteQueryOptions,
+  apiQueryOptions,
+  queryKeys,
+  useApiListQuery,
+  useInfiniteApiQuery,
+} from '@/lib/query';
+import { useDebouncedValue } from '@/lib/use-debounced-value';
 
-import { buildResourceCatalog, LIBRARY_KINDS, titleResolved } from './resource-catalog';
+import { buildLibrarySearchQuery, libraryQueryKeyPart, mergeLibraryPages } from './library-data';
+import { primaryResourceAction } from './resource-actions';
+import {
+  buildResourceCatalog,
+  LIBRARY_KINDS,
+  sourceLabel,
+  sourceOf,
+  titleResolved,
+} from './resource-catalog';
 
-/** How many resources one page of the Library loads. */
-const PAGE_SIZE = 100;
+const SEARCH_DEBOUNCE_MS = 180;
+const LIBRARY_VIEW_DEFAULTS: UseViewStateDefaults = { groupBy: { field: 'usedIn' } };
 
 /** Props for {@link LibraryClient}. */
 export interface LibraryClientProps {
@@ -47,14 +69,7 @@ export interface LibraryClientProps {
   readonly orgId: string;
 }
 
-/**
- * The glyph for one row: the resource's own type when it has one, else its search kind.
- *
- * @remarks
- * A spreadsheet and a design board should not share a mark. `RESOURCE_TYPE_ICON` already carries
- * that vocabulary for the mention chips, so the Library reuses it rather than starting a second
- * one that would drift.
- */
+/** Pick the most specific glyph already used by resource mentions and search. */
 function glyphFor(row: SearchResult): LucideIcon {
   const resourceType = row.facets['resourceType'];
   if (typeof resourceType === 'string' && resourceType in RESOURCE_TYPE_ICON) {
@@ -63,7 +78,7 @@ function glyphFor(row: SearchResult): LucideIcon {
   return SEARCH_KIND_ICON[row.kind];
 }
 
-/** The host of a resource URL, shown beside its title so the row says where it lives. */
+/** Return the visible host name for an external URL. */
 function hostOf(url: string | null): string | null {
   if (!url) return null;
   try {
@@ -73,75 +88,112 @@ function hostOf(url: string | null): string | null {
   }
 }
 
-/**
- * Render the Library.
- *
- * @param props - The active workspace.
- * @returns the filtered, grouped resource roster.
- */
+/** Return an icon for a work-context group hint. */
+function contextIcon(hint: string | undefined): LucideIcon | null {
+  if (!hint || !(hint in SEARCH_KIND_ICON)) return null;
+  return SEARCH_KIND_ICON[hint as SearchDocumentKind];
+}
+
+/** Render the Library. */
 export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Element {
-  const { state, setFilters, setGroupBy, setSort } = useViewState();
+  const { state, setFilters, setGroupBy, setSort, setSearchParam, pushSearchParam } =
+    useViewState(LIBRARY_VIEW_DEFAULTS);
   const { activeOrg } = useActiveOrg();
   const router = useRouter();
-  // Not Next's `useSearchParams`: with the offline shell, the router reports the route the cached
-  // document was rendered for, not the one the reader is on. See docs/engineering/specs/offline.md.
   const searchParams = useAppSearchParams();
-  // The opened entry lives in the URL, so a detail view is linkable and the back button closes it.
-  // `entityHref` and the command palette both already hand out `?resourceId=`.
+  const urlQuery = searchParams.get('q')?.trim() ?? '';
   const openedId = searchParams.get('resourceId');
-  /** Wraps the list so closing the panel can hand focus back to the grid inside it. */
+  const [draft, setDraft] = useState(urlQuery);
+  const query = useDebouncedValue(draft.trim(), SEARCH_DEBOUNCE_MS);
+  const searchActive = query.length > 0;
   const gridRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLElement | null>(null);
+  const scrollPositions = useRef({ browse: 0, search: 0 });
+  const restoredMode = useRef<'browse' | 'search' | null>(null);
+  const pendingUrlQuery = useRef<string | null>(null);
 
-  /**
-   * Open or close the detail panel without disturbing the active filters.
-   *
-   * @remarks
-   * `push` on open and `back` on close, because opening a record is navigation — the browser Back
-   * button and a phone's back swipe must close the panel rather than leave the Library. Filters use
-   * `replace` (see `useViewState`) because changing a filter is state, not a destination.
-   */
-  function setOpened(resourceId: string | null): void {
-    if (resourceId === null) {
-      router.back();
-      // Closing removes the panel — and with it whatever held focus. Hand focus back to the grid
-      // the reader came from, rather than letting it fall to `<body>`. The frame lets the list
-      // finish un-hiding first; a `display: none` element cannot take focus.
-      requestAnimationFrame(() => {
-        gridRef.current?.querySelector<HTMLElement>('[role="grid"]')?.focus();
-      });
+  useEffect(() => {
+    if (urlQuery === pendingUrlQuery.current) {
+      pendingUrlQuery.current = null;
       return;
     }
-    const next = new URLSearchParams(searchParams.toString());
-    next.set('resourceId', resourceId);
-    router.push(`?${next.toString()}`, { scroll: false });
-  }
+    setDraft(urlQuery);
+  }, [urlQuery]);
 
-  const resourcesQ = useApiListQuery(
-    apiQueryOptions(
-      queryKeys.search('org', `library:${LIBRARY_KINDS.join(',')}`, orgId),
-      () =>
-        api.v1.orgs[':orgId'].search.$get({
-          param: { orgId },
-          // No `q`: browse mode. Same endpoint, same permission filter, ordered by recency.
-          query: { kinds: LIBRARY_KINDS.join(','), limit: String(PAGE_SIZE) },
-        }),
-      'Could not load the library.',
-    ),
+  useEffect(() => {
+    if (urlQuery === query) return;
+    // Ignore the matching location update. The user may have typed more text while the router
+    // applied this debounced value, and copying it back into the input would erase those keys.
+    pendingUrlQuery.current = query;
+    setSearchParam('q', query || null);
+  }, [query, setSearchParam, urlQuery]);
+
+  const setOpened = useCallback(
+    (resourceId: string | null): void => {
+      if (resourceId === null) {
+        router.back();
+        requestAnimationFrame(() => {
+          gridRef.current?.querySelector<HTMLElement>('[role="grid"]')?.focus();
+        });
+        return;
+      }
+      pushSearchParam('resourceId', resourceId);
+    },
+    [pushSearchParam, router],
   );
 
-  const rows = useMemo(() => resourcesQ.data?.items ?? [], [resourcesQ.data]);
+  const resourcesDef = useMemo(
+    () =>
+      apiInfiniteQueryOptions<SearchOut>(
+        queryKeys.search('org', libraryQueryKeyPart(query), orgId),
+        (cursor, signal) =>
+          api.v1.orgs[':orgId'].search.$get(
+            {
+              param: { orgId },
+              query: buildLibrarySearchQuery(query, cursor),
+            },
+            { init: { signal } },
+          ),
+        (lastPage) => lastPage.nextCursor,
+        query ? 'Could not search the library.' : 'Could not load the library.',
+      ),
+    [orgId, query],
+  );
+  const resourcesQ = useInfiniteApiQuery(resourcesDef);
+  const rows = useMemo(() => mergeLibraryPages(resourcesQ.data?.pages ?? []), [resourcesQ.data]);
   const catalog = useMemo(() => buildResourceCatalog(rows), [rows]);
-
-  // Group by type and order newest-first until the reader says otherwise.
-  const effective = useMemo(
-    () => ({
-      filters: state.filters,
-      groupBy: state.groupBy ?? { field: 'type' },
-      sort: state.sort.length > 0 ? state.sort : [{ field: 'updated', dir: 'desc' as const }],
-    }),
-    [state],
+  const presentationState = useMemo(
+    () => (searchActive ? { filters: state.filters, groupBy: null, sort: [] } : state),
+    [searchActive, state],
   );
-  const applied = useMemo(() => applyView(rows, effective, catalog), [rows, effective, catalog]);
+  const applied = useMemo(
+    () => applyView(rows, presentationState, catalog),
+    [catalog, presentationState, rows],
+  );
+
+  const loadNextPage = useCallback(() => {
+    if (
+      resourcesQ.hasNextPage &&
+      !resourcesQ.isFetchingNextPage &&
+      !resourcesQ.isFetchNextPageError
+    ) {
+      void resourcesQ.fetchNextPage();
+    }
+  }, [resourcesQ]);
+
+  const filtered = state.filters.length > 0;
+  useEffect(() => {
+    if (applied.rows.length === 0 && (rows.length === 0 || filtered)) loadNextPage();
+  }, [applied.rows.length, filtered, loadNextPage, rows.length]);
+
+  useLayoutEffect(() => {
+    const table = tableRef.current;
+    if (!table) return;
+    const mode = searchActive ? 'search' : 'browse';
+    if (restoredMode.current === mode) return;
+    restoredMode.current = mode;
+    table.scrollTop = scrollPositions.current[mode];
+  }, [applied.rows.length, resourcesQ.isPending, searchActive]);
 
   const columns: readonly Column<SearchResult>[] = useMemo(
     () => [
@@ -153,7 +205,6 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
         render: (row) => {
           const Icon = glyphFor(row);
           const resolved = titleResolved(row);
-          // When the title is a URL stand-in it already names the host, so repeating it is noise.
           const host = resolved ? hostOf(row.externalUrl) : null;
           return (
             <span className="flex min-w-0 items-center gap-2">
@@ -163,9 +214,6 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
               >
                 {row.title}
               </span>
-              {/* Deliberately the only thing that survives a narrow width. On a phone this page is
-                  for finding a document and opening it; which initiative it serves is a question
-                  asked at a desk, and answering it here would cost the title its room. */}
               {host ? (
                 <span className="text-on-surface-variant text-label-small hidden shrink-0 @lg/table:inline">
                   · {host}
@@ -176,28 +224,18 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
         },
       },
       {
-        key: 'usedIn',
-        header: 'Used in',
-        minWidth: '13rem',
-        // Sheds last: what a resource is for outranks when it changed. Provider is deliberately
-        // not a column — the host already sits beside the title, and duplicating it cost ~8rem to
-        // say the same thing twice. It stays a Filter/Display dimension, where controls belong.
+        key: 'source',
+        header: 'Source',
+        width: '9rem',
         priority: 1,
-        render: (row) =>
-          row.usedIn.length === 0 ? (
-            <span className="text-on-surface-variant text-label-small">Not referenced yet</span>
-          ) : (
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="bg-surface-container text-label-small min-w-0 truncate rounded-md px-2 py-0.5">
-                {row.usedIn[0]?.title}
-              </span>
-              {row.usedIn.length > 1 ? (
-                <span className="text-on-surface-variant text-label-small shrink-0">
-                  +{row.usedIn.length - 1}
-                </span>
-              ) : null}
+        render: (row) => {
+          const source = sourceOf(row);
+          return (
+            <span className="text-on-surface-variant text-label-small truncate">
+              {source ? sourceLabel(source) : 'Docket'}
             </span>
-          ),
+          );
+        },
       },
       {
         key: 'updated',
@@ -211,26 +249,53 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
           </span>
         ),
       },
+      {
+        key: 'info',
+        header: <span className="sr-only">Context</span>,
+        width: '3rem',
+        align: 'end',
+        priority: 'always',
+        render: (row) => (
+          <Button
+            type="button"
+            variant="ghost"
+            iconOnly
+            controlSize="lg"
+            aria-label={`Show context for ${row.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              setOpened(row.entityId);
+            }}
+          >
+            <Info aria-hidden className="size-4" />
+          </Button>
+        ),
+      },
     ],
-    [catalog],
+    [setOpened],
   );
 
   const groups: readonly EntityTableGroup<SearchResult>[] = useMemo(
     () =>
-      (applied.groups ?? []).map((group) => ({
-        id: group.id,
-        label: group.label,
-        rows: group.rows,
-      })),
+      (applied.groups ?? []).map((group) => {
+        const Icon = group.id === EMPTY_GROUP_ID ? null : contextIcon(group.hint);
+        return {
+          id: group.id,
+          label: group.label,
+          rows: group.rows,
+          ...(Icon
+            ? {
+                decoration: (
+                  <Icon aria-hidden className="text-on-surface-variant size-4! shrink-0" />
+                ),
+              }
+            : {}),
+        };
+      }),
     [applied.groups],
   );
 
-  const filtered = state.filters.length > 0;
   const onPage = openedId === null ? null : (rows.find((row) => row.entityId === openedId) ?? null);
-
-  // A `?resourceId=` link — from the command palette, or a URL someone shared — can name a row
-  // that sits past the loaded page. Without this the panel silently rendered nothing: no error,
-  // no empty state, and a URL that looked like it had worked.
   const deepLinkQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.search('org', `library:id:${openedId ?? ''}`, orgId),
@@ -244,70 +309,201 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
     ),
   );
   const opened = onPage ?? deepLinkQ.data?.items[0] ?? null;
-  // The drill-down stands the list down only while there is something to stand it down *for* —
-  // including the moment a deep link is still resolving, so the panel does not pop in beside a
-  // list that then vanishes.
   const panelOpen = opened !== null || deepLinkQ.isPending;
+  const initialError = resourcesQ.isError && rows.length === 0 && !resourcesQ.isFetchNextPageError;
+  const refillingSparsePage =
+    applied.rows.length === 0 &&
+    (rows.length === 0 || filtered) &&
+    (resourcesQ.hasNextPage || resourcesQ.isFetchingNextPage || resourcesQ.isFetchNextPageError);
+
+  const endAdornment =
+    resourcesQ.isFetchingNextPage ||
+    (refillingSparsePage && resourcesQ.hasNextPage && !resourcesQ.isFetchNextPageError) ? (
+      <div
+        role="status"
+        className="text-on-surface-variant text-body-small flex min-h-12 items-center justify-center gap-2"
+      >
+        <RefreshCw aria-hidden className="size-4 animate-spin" />
+        Loading more resources
+      </div>
+    ) : resourcesQ.isFetchNextPageError ? (
+      <div
+        role="alert"
+        className="text-error text-body-small flex min-h-14 items-center justify-between gap-3 px-3"
+      >
+        <span>Could not load more resources.</span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void resourcesQ.fetchNextPage();
+          }}
+        >
+          Retry
+        </Button>
+      </div>
+    ) : undefined;
 
   return (
     <ListPageLayout
       title="Library"
+      fill
       toolbar={
-        <FilterToolbar
-          catalog={catalog}
-          state={effective}
-          onFiltersChange={setFilters}
-          onGroupByChange={setGroupBy}
-          onSortChange={setSort}
-        />
+        <div className="flex min-w-0 flex-col gap-3">
+          <form
+            role="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+            }}
+          >
+            <label className="sr-only" htmlFor="library-search">
+              Search the Library
+            </label>
+            <div className="border-outline-variant bg-surface-container-low flex min-h-12 items-center gap-2 rounded-xl border px-3">
+              <Search aria-hidden className="text-on-surface-variant size-5 shrink-0" />
+              <Input
+                id="library-search"
+                value={draft}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                }}
+                placeholder="Search documents, links, and files"
+                className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+              />
+            </div>
+          </form>
+          <FilterToolbar
+            catalog={catalog}
+            state={state}
+            onFiltersChange={setFilters}
+            onGroupByChange={setGroupBy}
+            onSortChange={setSort}
+          />
+        </div>
       }
     >
       {resourcesQ.isPending ? (
         <div className="flex flex-col gap-1" aria-hidden="true">
-          {Array.from({ length: 6 }, (_, index) => (
+          {Array.from({ length: 8 }, (_, index) => (
             <Skeleton key={index} className="h-10 w-full" />
           ))}
         </div>
-      ) : resourcesQ.error ? (
+      ) : initialError ? (
         <p role="alert" className="text-error text-body-medium">
           {userErrorMessage(resourcesQ.error, 'Could not load the library.')}
         </p>
-      ) : applied.rows.length === 0 ? (
-        filtered ? (
+      ) : applied.rows.length === 0 && !refillingSparsePage ? (
+        searchActive || filtered ? (
           <EmptyState
             icon={LinkIcon}
             title="Nothing matches"
-            body="No document or link matches the active filters."
-            cta={{
-              label: 'Clear filters',
-              onClick: () => {
-                setFilters([]);
-              },
-            }}
+            body="No document, link, or file matches this search and the active filters."
+            {...(filtered
+              ? {
+                  cta: {
+                    label: 'Clear filters',
+                    onClick: () => {
+                      setFilters([]);
+                    },
+                  },
+                }
+              : {})}
           />
         ) : (
           <EmptyState
             icon={Library}
             title="Nothing referenced yet"
-            body={`Link a document or page from anywhere in ${activeOrg?.name ?? 'this workspace'} and it shows up here.`}
+            body={`Link a document or add a file anywhere in ${activeOrg?.name ?? 'this workspace'} and it shows up here.`}
           />
         )
       ) : (
-        <div className="grid min-w-0 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
-          {/*
-           * On a narrow container the panel takes the whole page and the list stands down: a
-           * drill-down, not a squeeze. Driven by whether an entry is open, never by a device check.
-           */}
-          <div ref={gridRef} className={panelOpen ? 'hidden min-w-0 @4xl:block' : 'min-w-0'}>
+        <div className="grid min-h-0 min-w-0 flex-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
+          <div
+            ref={gridRef}
+            className={panelOpen ? 'hidden min-h-0 min-w-0 @4xl:block' : 'min-h-0 min-w-0'}
+          >
             <EntityTable
               columns={columns}
-              groups={groups}
+              {...(searchActive ? { rows: applied.rows } : { groups })}
               getRowKey={(row) => row.id}
-              {...(opened ? { selected: new Set([opened.id]) } : {})}
-              onRowClick={(row) => {
-                setOpened(row.entityId);
+              rowHref={(row) => primaryResourceAction(row)?.href}
+              rowLinkColumnKey="name"
+              renderRowLink={(linkProps) => {
+                const {
+                  children,
+                  href,
+                  className,
+                  onClick,
+                  onMouseEnter,
+                  onFocus,
+                  tabIndex,
+                  'aria-current': ariaCurrent,
+                  draggable,
+                  onDragStart,
+                  onDragEnd,
+                } = linkProps;
+                if (href.startsWith('/v1/')) {
+                  return (
+                    <a
+                      href={href}
+                      className={className}
+                      onClick={onClick}
+                      tabIndex={tabIndex}
+                      aria-current={ariaCurrent}
+                      download
+                    >
+                      {children}
+                    </a>
+                  );
+                }
+                if (/^https?:\/\//.test(href)) {
+                  return (
+                    <a
+                      href={href}
+                      className={className}
+                      onClick={onClick}
+                      tabIndex={tabIndex}
+                      aria-current={ariaCurrent}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {children}
+                    </a>
+                  );
+                }
+                return (
+                  <Link
+                    href={href}
+                    className={className}
+                    onClick={onClick}
+                    tabIndex={tabIndex}
+                    aria-current={ariaCurrent}
+                    {...(onMouseEnter ? { onMouseEnter } : {})}
+                    {...(onFocus ? { onFocus } : {})}
+                    {...(draggable === undefined ? {} : { draggable })}
+                    {...(onDragStart ? { onDragStart } : {})}
+                    {...(onDragEnd ? { onDragEnd } : {})}
+                  >
+                    {children}
+                  </Link>
+                );
               }}
-              aria-label="Library"
+              containerInteraction={{
+                ref: (element) => {
+                  tableRef.current = element;
+                },
+                onScroll: (event) => {
+                  const mode = searchActive ? 'search' : 'browse';
+                  scrollPositions.current[mode] = event.currentTarget.scrollTop;
+                },
+              }}
+              {...(opened ? { selected: new Set([opened.id]) } : {})}
+              virtualized
+              onEndReached={loadNextPage}
+              endAdornment={endAdornment}
+              className="h-full"
+              aria-label={searchActive ? 'Library search results' : 'Library resources'}
             />
           </div>
           {opened ? (
@@ -329,8 +525,6 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
               ))}
             </aside>
           ) : openedId !== null ? (
-            // The link named something this reader cannot see, or that no longer exists. Both
-            // read the same on purpose — distinguishing them would confirm the id exists.
             <aside
               aria-label="Entry unavailable"
               className="bg-surface-container-low flex min-w-0 flex-col gap-2 rounded-xl p-4"

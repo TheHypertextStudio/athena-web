@@ -315,7 +315,10 @@ function groupRows<T>(sorted: readonly T[], field: FieldDescriptor<T>): readonly
     const hint = hintOf(id);
     return {
       id,
-      label: id === EMPTY_GROUP_ID ? `No ${field.label.toLowerCase()}` : labelForValue(field, id),
+      label:
+        id === EMPTY_GROUP_ID
+          ? (field.emptyGroupLabel ?? `No ${field.label.toLowerCase()}`)
+          : labelForValue(field, id),
       ...(hint === undefined ? {} : { hint }),
       rows: buckets.get(id) ?? [],
     };

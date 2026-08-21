@@ -25,6 +25,10 @@ import { focusRingInset } from '../../primitives/focus';
 
 /** Props for {@link GroupHeader}. */
 export interface GroupHeaderProps {
+  /** Stable DOM id used by the owning grid's `aria-activedescendant`. */
+  id?: string | undefined;
+  /** Logical one-based row position in the owning grid. */
+  'aria-rowindex'?: number | undefined;
   /** The display-ready group label (entity labels must already be vocabulary-resolved). */
   label: string;
   /** Whether the group is expanded (its descendants are rendered). */
@@ -49,6 +53,8 @@ export interface GroupHeaderProps {
  * navigation provided by `useListKeyboard`.
  */
 export function GroupHeader({
+  id,
+  'aria-rowindex': ariaRowIndex,
   label,
   expanded,
   onToggle,
@@ -60,7 +66,9 @@ export function GroupHeader({
   const Chevron = expanded ? ChevronDown : ChevronRight;
   return (
     <div
+      id={id}
       role="row"
+      aria-rowindex={ariaRowIndex}
       aria-expanded={expanded}
       data-level={level}
       className={cn(

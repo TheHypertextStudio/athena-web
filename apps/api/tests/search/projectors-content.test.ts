@@ -10,7 +10,11 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { commentSearchProjector, updateSearchProjector } from '../../src/search/projectors/content';
+import {
+  attachmentSearchProjector,
+  commentSearchProjector,
+  updateSearchProjector,
+} from '../../src/search/projectors/content';
 
 const BASE_ROW = {
   id: 'row-1',
@@ -48,5 +52,29 @@ describe('updateSearchProjector summary', () => {
     expect(doc?.summary).toBe('Status We shipped the fix today.');
     expect(doc?.summary).not.toContain('#');
     expect(doc?.summary).not.toContain('*');
+  });
+});
+
+describe('attachmentSearchProjector facets', () => {
+  it('projects uploaded-file metadata without changing the SearchResult schema', async () => {
+    const doc = await attachmentSearchProjector.project({
+      entityId: 'attachment-1',
+      row: {
+        ...BASE_ROW,
+        id: 'attachment-1',
+        kind: 'file',
+        title: 'Launch brief',
+        fileName: 'launch-brief.pdf',
+        mimeType: 'application/pdf',
+        byteSize: 48_721,
+      },
+    });
+
+    expect(doc?.facet).toMatchObject({
+      attachmentKind: 'file',
+      fileName: 'launch-brief.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 48_721,
+    });
   });
 });

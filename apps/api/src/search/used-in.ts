@@ -2,13 +2,11 @@
  * `@docket/api` — resolve which work each resource is actually used by.
  *
  * @remarks
- * The Library's central column. It exists because a reference *count* is a graph statistic, not an
- * answer: knowing a document is linked eighteen times tells you it is popular, while knowing it is
- * linked from the Q3 launch tells you what it is for.
+ * The Library's central browse dimension. A reference count says a document is popular. The Q3
+ * launch says what the document is for.
  *
- * The data is already there. `reconcileMentions` writes one `mention` row per reference authored
- * in prose, and `mention_target_entity_idx` plus `mention_resource_idx` make both lookup
- * directions index scans. Nothing here adds a table or a write path.
+ * The data is already there. Prose links use `mention` rows. Attachments carry their host subject
+ * directly. Nothing here adds a table or a write path.
  *
  * Everything is batched per page. A per-row query here would be one round trip per resource on
  * every Library render and every palette keystroke.
@@ -23,10 +21,9 @@ type ContainerKind = SearchUsedIn['kind'];
  * Container altitude, lowest number wins.
  *
  * @remarks
- * Used twice, for two different jobs. {@link rollUp} picks the highest-altitude container a
- * mentioning subject rolls up to, so a document referenced from eleven tasks reads "Q3 launch"
- * rather than naming one arbitrary task's project. The final sort then uses it only as a tiebreak,
- * after reference count.
+ * The resolver keeps every candidate through visibility filtering, then uses this order to select
+ * the highest visible level. A document referenced from eleven tasks can therefore read "Q3
+ * launch" without leaking a hidden initiative or losing a visible project fallback.
  *
  * Initiative outranks program outranks project because that is the order a person describes their
  * own work in — nobody says "the API surface freeze document" when they mean the launch's.
@@ -37,20 +34,6 @@ const CONTAINER_ALTITUDE: Record<ContainerKind, number> = {
   project: 2,
   team: 3,
 };
-
-/** Pick the highest-altitude container among the candidates, or `null` when there are none. */
-function rollUp(candidates: readonly ContainerRef[]): ContainerRef | null {
-  let best: ContainerRef | null = null;
-  for (const candidate of candidates) {
-    if (!best || CONTAINER_ALTITUDE[candidate.kind] < CONTAINER_ALTITUDE[best.kind]) {
-      best = candidate;
-    }
-  }
-  return best;
-}
-
-/** How many containers one row reports before collapsing the rest into a `+N` on the client. */
-const MAX_CONTAINERS_PER_ROW = 4;
 
 /**
  * The visibility gate this module filters through, supplied by the caller.
@@ -73,7 +56,7 @@ export interface UsedInTarget {
   readonly documentId: string;
   /** The row's semantic kind, which selects which mention arm to match. */
   readonly kind: SearchDocumentKind;
-  /** The source entity id the mention points at. */
+  /** The source entity id represented by this search document. */
   readonly entityId: string;
 }
 
@@ -91,18 +74,14 @@ function containerKey(ref: ContainerRef): string {
  * Resolve the work containers referencing each target, in one batch.
  *
  * @remarks
- * Absence is a real answer: a target with no mentions maps to an empty array, which the Library
- * renders as "Not referenced yet". That state is the point — it surfaces documentation nothing
- * points at, which a count would bury among the ones and twos.
+ * Absence is a real answer. A target with no visible work context maps to an empty array, which the
+ * Library renders as "Unreferenced".
  *
- * Two visibility passes, both necessary. A mention is dropped unless its *subject* is visible,
- * because otherwise the column reveals that some record the reader cannot open points at this
- * document. A container is then dropped unless it too is visible, because a public task can sit
- * inside a private project and naming that project would leak it. Mentions are queried by
- * organization alone — the `mention` table carries no visibility of its own — so neither pass is
- * optional.
+ * Two visibility passes are necessary. A reference is dropped unless its host subject is visible.
+ * A container is then dropped unless it is visible because a public task can sit inside a private
+ * project. Naming that project would leak it.
  *
- * @param organizationId - The workspace to resolve within; mentions never cross it.
+ * @param organizationId - The workspace to resolve within; references never cross it.
  * @param targets - The page's rows.
  * @param visible - The caller's visibility gate; see {@link VisibleEntityLookup}.
  * @returns A map from `documentId` to its containers, most-referencing first.
@@ -119,7 +98,12 @@ export async function resolveUsedIn(
   const externalIds = targets
     .filter((target) => target.kind === 'external_resource')
     .map((target) => target.entityId);
-  const entityTargets = targets.filter((target) => target.kind !== 'external_resource');
+  const attachmentIds = targets
+    .filter((target) => target.kind === 'attachment')
+    .map((target) => target.entityId);
+  const entityTargets = targets.filter(
+    (target) => target.kind !== 'external_resource' && target.kind !== 'attachment',
+  );
 
   // The two arms of `mention`: a reference points either at an external resource or at a Docket
   // entity, never both, and each arm has its own index.
@@ -135,30 +119,83 @@ export async function resolveUsedIn(
       ),
     );
   }
-  if (arms.length === 0) return empty;
+  const [mentions, attachments] = await Promise.all([
+    arms.length > 0
+      ? schema.db
+          .select({
+            subjectType: schema.mention.subjectType,
+            subjectId: schema.mention.subjectId,
+            targetEntityKind: schema.mention.targetEntityKind,
+            targetEntityId: schema.mention.targetEntityId,
+            externalResourceId: schema.mention.externalResourceId,
+          })
+          .from(schema.mention)
+          .where(and(eq(schema.mention.organizationId, organizationId), or(...arms)))
+      : Promise.resolve([]),
+    attachmentIds.length > 0
+      ? schema.db
+          .select({
+            id: schema.attachment.id,
+            subjectType: schema.attachment.subjectType,
+            subjectId: schema.attachment.subjectId,
+          })
+          .from(schema.attachment)
+          .where(
+            and(
+              eq(schema.attachment.organizationId, organizationId),
+              inArray(schema.attachment.id, attachmentIds),
+            ),
+          )
+      : Promise.resolve([]),
+  ]);
 
-  const mentions = await schema.db
-    .select({
-      subjectType: schema.mention.subjectType,
-      subjectId: schema.mention.subjectId,
-      targetEntityKind: schema.mention.targetEntityKind,
-      targetEntityId: schema.mention.targetEntityId,
-      externalResourceId: schema.mention.externalResourceId,
-    })
-    .from(schema.mention)
-    .where(and(eq(schema.mention.organizationId, organizationId), or(...arms)));
-  if (mentions.length === 0) return empty;
+  const references: {
+    subjectType: string;
+    subjectId: string;
+    entityId: string;
+    targetKind: SearchDocumentKind | null;
+  }[] = [];
+  for (const mention of mentions) {
+    const entityId = mention.externalResourceId ?? mention.targetEntityId;
+    if (!entityId) continue;
+    references.push({
+      subjectType: mention.subjectType,
+      subjectId: mention.subjectId,
+      entityId,
+      targetKind: mention.externalResourceId
+        ? 'external_resource'
+        : (mention.targetEntityKind as SearchDocumentKind | null),
+    });
+  }
+  for (const attachment of attachments) {
+    references.push({
+      subjectType: attachment.subjectType,
+      subjectId: attachment.subjectId,
+      entityId: attachment.id,
+      targetKind: 'attachment',
+    });
+  }
+  if (references.length === 0) return empty;
 
   const visibleSubjects = await visible(organizationId, [
-    ...new Set(mentions.map((mention) => mention.subjectId)),
+    ...new Set(references.map((reference) => reference.subjectId)),
   ]);
-  const readableMentions = mentions.filter((mention) => visibleSubjects.has(mention.subjectId));
-  if (readableMentions.length === 0) return empty;
+  const readableReferences = references.filter((reference) =>
+    visibleSubjects.has(reference.subjectId),
+  );
+  if (readableReferences.length === 0) return empty;
 
   const { containers: containersBySubject, knownTitles } = await resolveSubjectContainers(
     organizationId,
-    readableMentions,
+    readableReferences,
   );
+
+  const candidateRefs = [...containersBySubject.values()].flat();
+  // Keep every hierarchy candidate until this point. Choosing an initiative before the visibility
+  // pass can discard a visible sibling or prevent a fallback to a visible project.
+  const visibleContainers = await visible(organizationId, [
+    ...new Set(candidateRefs.map((ref) => ref.id)),
+  ]);
 
   // Count containers per target so the most-referencing one leads the row.
   const counts = new Map<string, Map<string, { ref: ContainerRef; count: number }>>();
@@ -169,47 +206,44 @@ export async function resolveUsedIn(
     targetByEntity.set(target.entityId, list);
   }
 
-  for (const mention of readableMentions) {
-    const entityId = mention.externalResourceId ?? mention.targetEntityId;
-    if (!entityId) continue;
-    const container = containersBySubject.get(`${mention.subjectType}:${mention.subjectId}`);
-    if (!container) continue;
-    for (const target of targetByEntity.get(entityId) ?? []) {
-      // Guard the entity arm: two kinds can share an id space, so match the kind too.
-      if (
-        target.kind !== 'external_resource' &&
-        mention.targetEntityKind !== null &&
-        mention.targetEntityKind !== target.kind
-      ) {
-        continue;
-      }
+  for (const reference of readableReferences) {
+    const candidates = (
+      containersBySubject.get(`${reference.subjectType}:${reference.subjectId}`) ?? []
+    ).filter((candidate) => visibleContainers.has(candidate.id));
+    if (candidates.length === 0) continue;
+    const highestAltitude = Math.min(
+      ...candidates.map((candidate) => CONTAINER_ALTITUDE[candidate.kind]),
+    );
+    const containers = candidates.filter(
+      (candidate) => CONTAINER_ALTITUDE[candidate.kind] === highestAltitude,
+    );
+    for (const target of targetByEntity.get(reference.entityId) ?? []) {
+      // Entity ids share one text space, so a same-valued attachment and work id must not inherit
+      // each other's context. Older entity mentions can lack a kind and keep their legacy match.
+      if (reference.targetKind !== null && reference.targetKind !== target.kind) continue;
       let perTarget = counts.get(target.documentId);
       if (!perTarget) {
         perTarget = new Map();
         counts.set(target.documentId, perTarget);
       }
-      const key = containerKey(container);
-      const existing = perTarget.get(key);
-      if (existing) existing.count += 1;
-      else perTarget.set(key, { ref: container, count: 1 });
+      for (const container of containers) {
+        const key = containerKey(container);
+        const existing = perTarget.get(key);
+        if (existing) existing.count += 1;
+        else perTarget.set(key, { ref: container, count: 1 });
+      }
     }
   }
 
   const containerRefs = [...counts.values()].flatMap((perTarget) =>
     [...perTarget.values()].map((entry) => entry.ref),
   );
-  // A public task can sit inside a private project; naming that project would leak it.
-  const visibleContainers = await visible(organizationId, [
-    ...new Set(containerRefs.map((ref) => ref.id)),
-  ]);
-  const titles = await loadContainerTitles(
-    organizationId,
-    containerRefs.filter((ref) => visibleContainers.has(ref.id)),
-    knownTitles,
-  );
+  const titles = await loadContainerTitles(organizationId, containerRefs, knownTitles);
 
   const resolved = new Map<string, readonly SearchUsedIn[]>();
   for (const [documentId, perTarget] of counts) {
+    // Keep every visible context. Library duplicates a resource into each work-context group, so
+    // truncating here would make the resource undiscoverable from later groups.
     const ordered = [...perTarget.values()]
       .sort(
         (a, b) =>
@@ -222,24 +256,20 @@ export async function resolveUsedIn(
         // A container whose title did not resolve is dropped rather than rendered as its id: a raw
         // ULID in this column is noise, and the row still reads correctly without it.
         return title ? [{ kind: entry.ref.kind, id: entry.ref.id, title }] : [];
-      })
-      // Trim AFTER dropping title-less containers. Slicing first would let a row whose top few
-      // titles failed to load come back empty, and the Library renders that as "Not referenced
-      // yet" — the opposite of the truth for a resource that is in fact referenced.
-      .slice(0, MAX_CONTAINERS_PER_ROW);
+      });
     if (ordered.length > 0) resolved.set(documentId, ordered);
   }
   return resolved;
 }
 
 /**
- * Map each mentioning subject to the highest-altitude container it rolls up to.
+ * Map each referencing subject to every hierarchy container it can roll up to.
  *
  * @remarks
  * The roll-up is the whole point of the column. A resource linked from eleven tasks across three
  * projects of one launch should read "Q3 launch" once, not name three projects or eleven tasks.
- * So a task resolves to its project, a project to the initiative that contains it, and a program
- * likewise — and {@link rollUp} then keeps the highest one reached.
+ * This function preserves every altitude and sibling initiative because visibility filtering must
+ * happen before the caller chooses the highest visible level.
  *
  * Initiatives are *not* reachable through `ancestorPath`: they relate to projects and programs
  * through the `initiative_project` and `initiative_program` join tables, on a separate axis from
@@ -253,13 +283,13 @@ async function resolveSubjectContainers(
   organizationId: string,
   mentions: readonly { subjectType: string; subjectId: string }[],
 ): Promise<{
-  containers: ReadonlyMap<string, ContainerRef>;
+  containers: ReadonlyMap<string, readonly ContainerRef[]>;
   /** Titles already read while walking, so the title load need not re-select them. */
   knownTitles: ReadonlyMap<string, string>;
 }> {
   const schema = await import('@docket/db');
-  // The container each subject sits in before any roll-up.
-  const direct = new Map<string, ContainerRef>();
+  // The containers each subject sits in before any roll-up.
+  const direct = new Map<string, ContainerRef[]>();
   const taskIds = new Set<string>();
   const knownTitles = new Map<string, string>();
 
@@ -271,7 +301,7 @@ async function resolveSubjectContainers(
       case 'program':
       case 'project':
       case 'team':
-        direct.set(key, { kind: mention.subjectType, id: mention.subjectId });
+        direct.set(key, [{ kind: mention.subjectType, id: mention.subjectId }]);
         break;
       case 'task':
         taskIds.add(mention.subjectId);
@@ -294,20 +324,17 @@ async function resolveSubjectContainers(
         and(eq(schema.task.organizationId, organizationId), inArray(schema.task.id, [...taskIds])),
       );
     for (const row of rows) {
-      const ref: ContainerRef | null = row.projectId
-        ? { kind: 'project', id: row.projectId }
-        : row.programId
-          ? { kind: 'program', id: row.programId }
-          : row.teamId
-            ? { kind: 'team', id: row.teamId }
-            : null;
-      if (ref) direct.set(`task:${row.id}`, ref);
+      const refs: ContainerRef[] = [];
+      if (row.projectId) refs.push({ kind: 'project', id: row.projectId });
+      if (row.programId) refs.push({ kind: 'program', id: row.programId });
+      if (row.teamId) refs.push({ kind: 'team', id: row.teamId });
+      if (refs.length > 0) direct.set(`task:${row.id}`, refs);
     }
   }
 
   const projectIds = new Set<string>();
   const programIds = new Set<string>();
-  for (const ref of direct.values()) {
+  for (const ref of [...direct.values()].flat()) {
     if (ref.kind === 'project') projectIds.add(ref.id);
     if (ref.kind === 'program') programIds.add(ref.id);
   }
@@ -359,17 +386,14 @@ async function resolveSubjectContainers(
     }
   }
 
-  // A project or program can belong to several initiatives; keeping the first collapses that to
-  // one chip rather than counting the same reference under both. The column answers "what is this
-  // for", and two answers to that is worse than the most likely one.
-  const projectInitiative = new Map<string, string>();
+  const projectInitiative = new Map<string, Set<string>>();
   for (const row of projectInitiativeRows) {
-    if (!projectInitiative.has(row.projectId)) {
-      projectInitiative.set(row.projectId, row.initiativeId);
-    }
+    const ids = projectInitiative.get(row.projectId) ?? new Set<string>();
+    ids.add(row.initiativeId);
+    projectInitiative.set(row.projectId, ids);
   }
 
-  const programInitiative = new Map<string, string>();
+  const programInitiative = new Map<string, Set<string>>();
   if (programIds.size > 0) {
     const rows = await schema.db
       .select({
@@ -384,31 +408,39 @@ async function resolveSubjectContainers(
         ),
       );
     for (const row of rows) {
-      if (!programInitiative.has(row.programId)) {
-        programInitiative.set(row.programId, row.initiativeId);
-      }
+      const ids = programInitiative.get(row.programId) ?? new Set<string>();
+      ids.add(row.initiativeId);
+      programInitiative.set(row.programId, ids);
     }
   }
 
-  const resolved = new Map<string, ContainerRef>();
-  for (const [key, ref] of direct) {
-    const candidates: ContainerRef[] = [ref];
-    if (ref.kind === 'project') {
-      const initiativeId = projectInitiative.get(ref.id);
-      if (initiativeId) candidates.push({ kind: 'initiative', id: initiativeId });
-      const programId = projectProgram.get(ref.id);
-      if (programId) {
-        candidates.push({ kind: 'program', id: programId });
-        const viaProgram = programInitiative.get(programId);
-        if (viaProgram) candidates.push({ kind: 'initiative', id: viaProgram });
+  const resolved = new Map<string, readonly ContainerRef[]>();
+  for (const [key, refs] of direct) {
+    const candidates = new Map<string, ContainerRef>();
+    const add = (ref: ContainerRef): void => {
+      candidates.set(containerKey(ref), ref);
+    };
+    for (const ref of refs) {
+      add(ref);
+      if (ref.kind === 'project') {
+        for (const initiativeId of projectInitiative.get(ref.id) ?? []) {
+          add({ kind: 'initiative', id: initiativeId });
+        }
+        const programId = projectProgram.get(ref.id);
+        if (programId) {
+          add({ kind: 'program', id: programId });
+          for (const initiativeId of programInitiative.get(programId) ?? []) {
+            add({ kind: 'initiative', id: initiativeId });
+          }
+        }
+      }
+      if (ref.kind === 'program') {
+        for (const initiativeId of programInitiative.get(ref.id) ?? []) {
+          add({ kind: 'initiative', id: initiativeId });
+        }
       }
     }
-    if (ref.kind === 'program') {
-      const initiativeId = programInitiative.get(ref.id);
-      if (initiativeId) candidates.push({ kind: 'initiative', id: initiativeId });
-    }
-    const best = rollUp(candidates);
-    if (best) resolved.set(key, best);
+    resolved.set(key, [...candidates.values()]);
   }
   return { containers: resolved, knownTitles };
 }

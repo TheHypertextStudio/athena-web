@@ -15,6 +15,7 @@
  * `priority`; lower-priority columns hide first via `@container/table` queries so the app never
  * overflows horizontally. Keyboard: `role="grid"` + {@link useListKeyboard}.
  */
+import { useVirtualizer } from '@tanstack/react-virtual';
 import * as React from 'react';
 
 import { cn } from '../../lib/utils';
@@ -130,6 +131,12 @@ export interface EntityTableProps<T> {
   defaultCollapsed?: Iterable<string> | undefined;
   /** Hide the light header row. */
   hideHeader?: boolean | undefined;
+  /** Render group headers and data rows through one measured, bounded virtual sequence. */
+  virtualized?: boolean | undefined;
+  /** Called when the virtual viewport reaches the final 12 loaded entries. */
+  onEndReached?: (() => void) | undefined;
+  /** Content rendered after the final virtual row, such as loading state or Retry. */
+  endAdornment?: React.ReactNode;
   /** Accessible label for the grid. */
   'aria-label'?: string | undefined;
   /** Extra classes merged onto the table's outer (scroll) container. */
@@ -179,10 +186,15 @@ export function EntityTable<T>({
   onToggleGroup,
   defaultCollapsed,
   hideHeader = false,
+  virtualized = false,
+  onEndReached,
+  endAdornment,
   'aria-label': ariaLabel,
   className,
 }: EntityTableProps<T>): React.JSX.Element {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const rowIdPrefix = React.useId().replaceAll(':', '');
+  const activeKeyRef = React.useRef<string | null>(null);
 
   const [internalCollapsed, setInternalCollapsed] = React.useState<ReadonlySet<string>>(
     () => new Set(defaultCollapsed ?? []),
@@ -213,7 +225,12 @@ export function EntityTable<T>({
         out.push({ kind: 'group', key: `g:${group.id}`, group });
         if (collapsedSet.has(group.id)) continue;
         for (const row of group.rows) {
-          out.push({ kind: 'row', key: `r:${getRowKey(row)}`, row, groupId: group.id });
+          out.push({
+            kind: 'row',
+            key: `r:${group.id}:${getRowKey(row)}`,
+            row,
+            groupId: group.id,
+          });
         }
       }
       return out;
@@ -225,6 +242,25 @@ export function EntityTable<T>({
     }));
   }, [groups, rows, collapsedSet, getRowKey]);
 
+  const virtualCount = virtualized ? flat.length + (endAdornment === undefined ? 0 : 1) : 0;
+  const virtualizer = useVirtualizer({
+    count: virtualCount,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 40,
+    overscan: 12,
+    enabled: virtualized,
+    getItemKey: (index) => flat[index]?.key ?? '__end_adornment__',
+  });
+
+  React.useEffect(() => {
+    if (virtualized) virtualizer.measure();
+  }, [virtualized, virtualizer, flat.length]);
+
+  const rowDomId = React.useCallback(
+    (index: number): string => `entity-table-${rowIdPrefix}-row-${String(index)}`,
+    [rowIdPrefix],
+  );
+
   const activateRow = React.useCallback(
     (index: number) => {
       const entry = flat[index];
@@ -232,9 +268,16 @@ export function EntityTable<T>({
       if (!entry) return;
       /* v8 ignore stop */
       if (entry.kind === 'group') toggleGroup(entry.group.id);
-      else onRowClick?.(entry.row);
+      else if (onRowClick) onRowClick(entry.row);
+      else {
+        const rowElement = document.getElementById(rowDomId(index));
+        const link = rowElement?.matches('a[href]')
+          ? rowElement
+          : rowElement?.querySelector<HTMLElement>('a[href]');
+        link?.click();
+      }
     },
-    [flat, toggleGroup, onRowClick],
+    [flat, toggleGroup, onRowClick, rowDomId],
   );
 
   const handlePropertyKey = React.useCallback(
@@ -248,11 +291,40 @@ export function EntityTable<T>({
     [flat, onRowPropertyKey],
   );
 
-  const { activeIndex, onKeyDown } = useListKeyboard({
+  const { activeIndex, setActiveIndex, onKeyDown } = useListKeyboard({
     rowCount: flat.length,
     onActivate: activateRow,
     onPropertyKey: handlePropertyKey,
+    onActiveChange: (index: number) => {
+      activeKeyRef.current = flat[index]?.key ?? null;
+      if (virtualized) virtualizer.scrollToIndex(index, { align: 'auto' });
+    },
   });
+
+  React.useEffect(() => {
+    const activeKey = activeKeyRef.current;
+    if (activeKey === null) return;
+    const nextIndex = flat.findIndex((entry) => entry.key === activeKey);
+    if (nextIndex < 0) {
+      activeKeyRef.current = null;
+      setActiveIndex(-1);
+    } else if (nextIndex !== activeIndex) {
+      setActiveIndex(nextIndex);
+    }
+  }, [activeIndex, flat, setActiveIndex]);
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const lastVirtualIndex = virtualItems.at(-1)?.index ?? -1;
+  React.useEffect(() => {
+    if (
+      virtualized &&
+      onEndReached &&
+      flat.length > 0 &&
+      lastVirtualIndex >= Math.max(0, flat.length - 13)
+    ) {
+      onEndReached();
+    }
+  }, [virtualized, onEndReached, flat.length, lastVirtualIndex]);
 
   const handleSelectRow = React.useCallback(
     (row: T) => {
@@ -278,10 +350,80 @@ export function EntityTable<T>({
   const handleGridKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       containerInteraction?.onKeyDown?.(event);
-      if (!event.defaultPrevented) onKeyDown(event);
+      if (!event.defaultPrevented) {
+        onKeyDown(event);
+        if (event.key === 'Escape') activeKeyRef.current = null;
+      }
     },
     [containerInteraction, onKeyDown],
   );
+
+  const renderFlatEntry = (entry: FlatTableRow<T>, index: number): React.ReactNode => {
+    const ariaRowIndex = index + (hideHeader ? 1 : 2);
+    const id = rowDomId(index);
+    if (entry.kind === 'group') {
+      return (
+        <GroupHeader
+          key={entry.key}
+          id={id}
+          aria-rowindex={ariaRowIndex}
+          label={entry.group.label}
+          decoration={entry.group.decoration}
+          count={entry.group.rows.length}
+          expanded={!collapsedSet.has(entry.group.id)}
+          onToggle={() => {
+            toggleGroup(entry.group.id);
+          }}
+          className={cn(activeIndex === index && 'bg-surface-container-high')}
+        />
+      );
+    }
+    const key = getRowKey(entry.row);
+    const renderRow = (interaction?: EntityTableRowInteraction): React.ReactNode => (
+      <EntityTableRow
+        key={entry.key}
+        id={id}
+        ariaRowIndex={ariaRowIndex}
+        columns={columns}
+        row={entry.row}
+        active={interaction?.active ?? activeIndex === index}
+        selected={interaction?.selected ?? selected?.has(key) ?? false}
+        href={rowHref?.(entry.row)}
+        renderRowLink={renderRowLink}
+        drag={rowDrag?.(entry.row)}
+        interaction={interaction}
+        linkColumnKey={rowLinkColumnKey}
+        onRowPrefetch={
+          onRowPrefetch
+            ? () => {
+                onRowPrefetch(entry.row);
+              }
+            : undefined
+        }
+        onActivate={
+          onRowClick
+            ? () => {
+                onRowClick(entry.row);
+              }
+            : undefined
+        }
+        onSelect={
+          onSelect
+            ? () => {
+                handleSelectRow(entry.row);
+              }
+            : undefined
+        }
+      />
+    );
+    return renderRowInteraction ? (
+      <React.Fragment key={entry.key}>
+        {renderRowInteraction({ row: entry.row, children: renderRow })}
+      </React.Fragment>
+    ) : (
+      renderRow()
+    );
+  };
 
   return (
     <div
@@ -289,11 +431,13 @@ export function EntityTable<T>({
       ref={setScrollElement}
       role="grid"
       aria-label={ariaLabel}
-      aria-rowcount={flat.length}
+      aria-rowcount={flat.length + (hideHeader ? 0 : 1)}
+      aria-activedescendant={activeIndex < 0 ? undefined : rowDomId(activeIndex)}
       tabIndex={0}
       onKeyDown={handleGridKeyDown}
       className={cn(
-        'border-outline-variant bg-surface @container/table flex w-full flex-col overflow-x-auto overflow-y-hidden rounded-xl border outline-none',
+        'border-outline-variant bg-surface @container/table flex w-full flex-col overflow-x-auto rounded-xl border outline-none',
+        virtualized ? 'relative h-full min-h-0 overflow-y-auto' : 'overflow-y-hidden',
         focusRingInset,
         className,
       )}
@@ -301,6 +445,7 @@ export function EntityTable<T>({
       {hideHeader ? null : (
         <div
           role="row"
+          aria-rowindex={1}
           className="border-outline-variant text-on-surface-variant flex min-h-8 w-full items-center gap-2 border-b px-3 py-1.5 text-xs font-medium select-none"
         >
           {columns.map((column) => (
@@ -318,66 +463,39 @@ export function EntityTable<T>({
         </div>
       )}
 
-      {flat.map((entry, index) => {
-        if (entry.kind === 'group') {
-          return (
-            <GroupHeader
-              key={entry.key}
-              label={entry.group.label}
-              decoration={entry.group.decoration}
-              count={entry.group.rows.length}
-              expanded={!collapsedSet.has(entry.group.id)}
-              onToggle={() => {
-                toggleGroup(entry.group.id);
-              }}
-              className={cn(activeIndex === index && 'bg-surface-container-high')}
-            />
-          );
-        }
-        const key = getRowKey(entry.row);
-        const renderRow = (interaction?: EntityTableRowInteraction): React.ReactNode => (
-          <EntityTableRow
-            key={entry.key}
-            columns={columns}
-            row={entry.row}
-            active={interaction?.active ?? activeIndex === index}
-            selected={interaction?.selected ?? selected?.has(key) ?? false}
-            href={rowHref?.(entry.row)}
-            renderRowLink={renderRowLink}
-            drag={rowDrag?.(entry.row)}
-            interaction={interaction}
-            linkColumnKey={rowLinkColumnKey}
-            onRowPrefetch={
-              onRowPrefetch
-                ? () => {
-                    onRowPrefetch(entry.row);
-                  }
-                : undefined
-            }
-            onActivate={
-              onRowClick
-                ? () => {
-                    onRowClick(entry.row);
-                  }
-                : undefined
-            }
-            onSelect={
-              onSelect
-                ? () => {
-                    handleSelectRow(entry.row);
-                  }
-                : undefined
-            }
-          />
-        );
-        return renderRowInteraction ? (
-          <React.Fragment key={entry.key}>
-            {renderRowInteraction({ row: entry.row, children: renderRow })}
-          </React.Fragment>
-        ) : (
-          renderRow()
-        );
-      })}
+      {virtualized ? (
+        <div
+          role="rowgroup"
+          style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}
+        >
+          {virtualItems.map((virtualRow) => {
+            const entry = flat[virtualRow.index];
+            const key = entry?.key ?? '__end_adornment__';
+            return (
+              <div
+                key={key}
+                role="presentation"
+                data-index={virtualRow.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${String(virtualRow.start)}px)`,
+                }}
+              >
+                {entry ? renderFlatEntry(entry, virtualRow.index) : endAdornment}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          {flat.map(renderFlatEntry)}
+          {endAdornment}
+        </>
+      )}
     </div>
   );
 }

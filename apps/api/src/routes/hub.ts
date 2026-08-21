@@ -397,6 +397,7 @@ Built as a per-membership fan-out merged in application code: **tenant bands sta
           caller: { kind: 'user', userId: session.user.id },
           activeOrgId: params.activeOrgId ?? null,
           params,
+          signal: c.req.raw.signal,
         }),
       );
     },

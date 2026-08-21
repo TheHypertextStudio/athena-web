@@ -36,6 +36,8 @@ import {
 export const FILTER_PARAM = 'filter';
 /** The search-param key carrying the grouping field. */
 export const GROUP_PARAM = 'group';
+/** Explicit no-grouping value used when a surface declares a non-null default grouping. */
+export const NO_GROUPING_PARAM_VALUE = '__none__';
 /** The search-param key carrying sort terms (repeated, one per term). */
 export const SORT_PARAM = 'sort';
 /** The search-param key carrying presentation toggles (repeated, one per non-default option). */
@@ -146,7 +148,10 @@ function safeDecode(value: string): string {
  * @param params - The URL search params (e.g. from `useSearchParams`).
  * @returns the parsed {@link ViewState}.
  */
-export function parseViewState(params: URLSearchParams): ViewState {
+export function parseViewState(
+  params: URLSearchParams,
+  defaults: { readonly groupBy?: ViewState['groupBy'] } = {},
+): ViewState {
   const filters: ViewFilterTerm[] = [];
   for (const token of params.getAll(FILTER_PARAM)) {
     const term = parseFilterToken(token);
@@ -158,7 +163,12 @@ export function parseViewState(params: URLSearchParams): ViewState {
     if (term) sort.push(term);
   }
   const groupField = params.get(GROUP_PARAM);
-  const groupBy = groupField && groupField.length > 0 ? { field: groupField } : null;
+  const groupBy =
+    groupField === NO_GROUPING_PARAM_VALUE
+      ? null
+      : groupField && groupField.length > 0
+        ? { field: groupField }
+        : (defaults.groupBy ?? null);
   return { filters, groupBy, sort };
 }
 
@@ -178,6 +188,7 @@ export function parseViewState(params: URLSearchParams): ViewState {
 export function serializeViewState(
   state: ViewState,
   base: URLSearchParams = new URLSearchParams(),
+  defaults: { readonly groupBy?: ViewState['groupBy'] } = {},
 ): URLSearchParams {
   const next = new URLSearchParams();
   // Preserve any unrelated params (not owned by this codec), in their original order.
@@ -188,7 +199,11 @@ export function serializeViewState(
     const encoded = encodeFilterTerm(term);
     if (encoded) next.append(FILTER_PARAM, encoded);
   }
-  if (state.groupBy) next.set(GROUP_PARAM, state.groupBy.field);
+  if (state.groupBy) {
+    if (state.groupBy.field !== defaults.groupBy?.field) next.set(GROUP_PARAM, state.groupBy.field);
+  } else if (defaults.groupBy) {
+    next.set(GROUP_PARAM, NO_GROUPING_PARAM_VALUE);
+  }
   for (const term of state.sort) {
     next.append(SORT_PARAM, `${encodeURIComponent(term.field)}:${term.dir}`);
   }

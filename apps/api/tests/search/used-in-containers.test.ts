@@ -4,7 +4,7 @@
  * @remarks
  * The roll-up prefers the highest-altitude container a mentioning subject belongs to, and its
  * fallback chain — project, then program, then team, then nothing — is what keeps the Library's
- * central column answering "what is this document for" rather than naming one arbitrary task. Each
+ * work-context grouping useful instead of naming one arbitrary task. Each
  * rung matters on its own: a task filed directly under a program must not be reported as belonging
  * to its team. (The chain's final `null` arm is unreachable in practice — `task.team_id` is NOT
  * NULL, so every task has at least a team to fall back to.)

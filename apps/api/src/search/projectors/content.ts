@@ -121,6 +121,9 @@ export const attachmentSearchProjector = preloadedProjector<
     sourceIntegrationId?: string | null | undefined;
     externalId?: string | null | undefined;
     metadata?: Record<string, unknown> | null | undefined;
+    fileName?: string | null | undefined;
+    mimeType?: string | null | undefined;
+    byteSize?: number | null | undefined;
   }
 >('attachment', (row) => ({
   ...contentDocument(row, 'attachment', row.title, row.subjectType, row.subjectId, {
@@ -132,6 +135,9 @@ export const attachmentSearchProjector = preloadedProjector<
       sourceIntegrationId: row.sourceIntegrationId,
       externalId: row.externalId,
       metadata: row.metadata,
+      fileName: row.fileName,
+      mimeType: row.mimeType,
+      byteSize: row.byteSize,
     },
   }),
   sourceTable: 'attachment',

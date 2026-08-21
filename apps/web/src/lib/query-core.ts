@@ -356,28 +356,29 @@ export interface ApiInfiniteOptions {
  *
  * @remarks
  * Wraps TanStack `infiniteQueryOptions`: the fetcher takes the opaque `cursor` page-param and
- * returns one page; `getNextPageParam` reads the page's `nextCursor` (absent → end). The same
+ * and the query cancellation signal, and returns one page; `getNextPageParam` reads the page's
+ * `nextCursor` (absent → end). The same
  * RPC error handling as {@link apiQueryOptions} is baked in via {@link unwrap}. The page param
  * is `string | undefined` (the first page passes `undefined`).
  *
  * @typeParam TPage - The page response shape (e.g. `StreamPageOut`).
  * @param key - The query key (carries the serialized filter params so each variant caches apart).
- * @param call - Performs one page fetch for the given cursor.
+ * @param call - Performs one page fetch for the given cursor and cancellation signal.
  * @param getNextPageParam - Returns the next cursor from a page, or `undefined` when exhausted.
  * @param fallbackMessage - Application-owned copy for this operation.
  * @param options - Optional staleness / poll interval.
  */
 export function apiInfiniteQueryOptions<TPage>(
   key: QueryKey,
-  call: (cursor: string | undefined) => Promise<RpcResponse<TPage>>,
+  call: (cursor: string | undefined, signal: AbortSignal) => Promise<RpcResponse<TPage>>,
   getNextPageParam: (lastPage: TPage) => string | undefined,
   fallbackMessage: string,
   options?: ApiInfiniteOptions,
 ) {
   return infiniteQueryOptions({
     queryKey: key,
-    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
-      unwrap(() => call(pageParam), fallbackMessage),
+    queryFn: ({ pageParam, signal }: { pageParam: string | undefined; signal: AbortSignal }) =>
+      unwrap(() => call(pageParam, signal), fallbackMessage),
     initialPageParam: undefined as string | undefined,
     getNextPageParam,
     ...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),

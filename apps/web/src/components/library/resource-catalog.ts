@@ -30,6 +30,14 @@ const LIBRARY_KIND_GROUP_LABEL: Record<(typeof LIBRARY_KINDS)[number], string> =
   attachment: 'Attached',
 };
 
+const ATTACHMENT_KIND_LABEL: Record<string, string> = {
+  email: 'Email',
+  url: 'Web link',
+  calendar_event: 'Calendar',
+  file: 'Uploaded file',
+  athena_email: 'Athena email',
+};
+
 /** Read a string off a result's facet bag, which is typed as unknown per key. */
 function facetString(row: SearchResult, key: string): string | null {
   const value = row.facets[key];
@@ -55,6 +63,21 @@ export function providerOf(row: SearchResult): string | null {
   return facetString(row, 'provider');
 }
 
+/** Stable source value for provider resources and first-party attachment kinds. */
+export function sourceOf(row: SearchResult): string | null {
+  const provider = providerOf(row);
+  if (provider) return provider;
+  const attachmentKind = facetString(row, 'attachmentKind');
+  return attachmentKind ? `attachment:${attachmentKind}` : null;
+}
+
+/** Display label for one Library source value. */
+export function sourceLabel(value: string): string {
+  if (!value.startsWith('attachment:')) return providerLabel(value);
+  const kind = value.slice('attachment:'.length);
+  return ATTACHMENT_KIND_LABEL[kind] ?? kind.replaceAll('_', ' ');
+}
+
 /** Whether the row's title is the resource's real name or a URL standing in for one. */
 export function titleResolved(row: SearchResult): boolean {
   return row.facets['titleResolved'] !== false;
@@ -73,20 +96,26 @@ export function titleResolved(row: SearchResult): boolean {
  * @returns The catalog the shared toolbar and apply engine both read.
  */
 export function buildResourceCatalog(rows: readonly SearchResult[]): FieldCatalog<SearchResult> {
-  const containers = new Map<string, string>();
+  const containers = new Map<
+    string,
+    { title: string; kind: SearchResult['usedIn'][number]['kind'] }
+  >();
   const providers = new Set<string>();
   for (const row of rows) {
-    for (const container of row.usedIn) containers.set(container.id, container.title);
-    const provider = providerOf(row);
-    if (provider) providers.add(provider);
+    for (const container of row.usedIn) {
+      containers.set(container.id, { title: container.title, kind: container.kind });
+    }
+    const source = sourceOf(row);
+    if (source) providers.add(source);
   }
 
+  const contextRank = { initiative: 0, program: 1, project: 2, team: 3 } as const;
   const containerOptions: readonly FieldOption[] = [...containers.entries()]
-    .map(([value, label]) => ({ value, label }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .map(([value, context]) => ({ value, label: context.title, hint: context.kind }))
+    .sort((a, b) => contextRank[a.hint] - contextRank[b.hint] || a.label.localeCompare(b.label));
 
   const providerOptions: readonly FieldOption[] = [...providers]
-    .map((value) => ({ value, label: providerLabel(value) }))
+    .map((value) => ({ value, label: sourceLabel(value) }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   return [
@@ -110,7 +139,8 @@ export function buildResourceCatalog(rows: readonly SearchResult[]): FieldCatalo
     },
     {
       key: 'usedIn',
-      label: 'Used in',
+      label: 'Work context',
+      emptyGroupLabel: 'Unreferenced',
       type: 'relation',
       // The primary container, which is what a sort on this field orders by.
       accessor: (row) => row.usedIn[0]?.id ?? null,
@@ -122,7 +152,7 @@ export function buildResourceCatalog(rows: readonly SearchResult[]): FieldCatalo
       key: 'provider',
       label: 'Source',
       type: 'enum',
-      accessor: (row) => providerOf(row),
+      accessor: (row) => sourceOf(row),
       options: providerOptions,
       groupable: true,
     },

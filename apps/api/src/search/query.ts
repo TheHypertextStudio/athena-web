@@ -5,7 +5,7 @@ import {
   type SearchUsedIn,
 } from '@docket/types';
 import type { searchDocument } from '@docket/db';
-import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { markdownToPlainText } from '../content/markdown-links';
 import { encodeListCursor, seekAfter } from '../lib/list-cursor';
@@ -35,6 +35,10 @@ interface SearchWorkspaceInput {
   caller: SearchCaller;
   orgId?: string;
   activeOrgId?: string | null;
+  /** Stops a full-corpus ranked scan when the HTTP caller abandons the request. */
+  signal?: SearchAbortSignal | undefined;
+  /** Fixed request clock for deterministic internal callers; cursors always take precedence. */
+  rankedAt?: number | undefined;
   params: {
     /** Absent or blank selects browse mode: the same corpus, ordered by recency. */
     q?: string | undefined;
@@ -56,6 +60,12 @@ interface SearchWorkspaceInput {
     to?: string | undefined;
     includeArchived?: boolean;
   };
+}
+
+/** Minimal request-cancellation shape used without adding browser library types to the API. */
+interface SearchAbortSignal {
+  readonly aborted: boolean;
+  readonly reason?: unknown;
 }
 
 interface ScoredRow {
@@ -139,46 +149,38 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
     });
   }
 
-  const candidateRows = await loadCandidateRows({
+  const cursor = decodeCursor(input.params.cursor);
+  const rankedAt = cursor?.rankedAt ?? input.rankedAt ?? Date.now();
+  const { scored, facets } = await scanRankedCandidates({
     ownerUserId,
     orgIds: accessibleOrgIds,
     query,
     includeArchived: input.params.includeArchived ?? false,
-  });
-  const visible = await filterVisibleRows(candidateRows, {
-    ownerUserId,
+    params: input.params,
     accessByOrg: callerAccessByOrg,
+    activeOrgId: input.activeOrgId ?? null,
+    fromTime,
+    toTime,
+    cursor,
+    rankedAt,
+    limit,
+    signal: input.signal,
   });
-
-  const cursor = decodeCursor(input.params.cursor);
-  const scored = visible.rows
-    .filter((row) => filterRow(row, input.params, fromTime, toTime))
-    .map((row) =>
-      scoreRow(row, query, {
-        activeOrgId: input.activeOrgId ?? null,
-        ownerUserId,
-        callerActorId: row.organizationId
-          ? (callerAccessByOrg.get(row.organizationId)?.actorId ?? null)
-          : null,
-        activityRecipient: visible.recipientEventIds.has(row.entityId),
-      }),
-    )
-    .filter((row): row is ScoredRow => row !== null)
-    .sort(compareScoredRows)
-    .filter((row) => (cursor ? compareCursor(row, cursor) > 0 : true));
 
   const surfaced =
     input.params.surface === 'palette' && !cursor
       ? applyPaletteDiversityCap(scored, limit)
       : scored;
   const page = surfaced.slice(0, limit);
-  const next = surfaced[limit];
+  // The cursor names the final row already returned. The next request keeps rows strictly after
+  // it. Naming the first unreturned row would skip that row at every page boundary.
+  const next = surfaced.length > limit ? page.at(-1) : undefined;
   const usedIn = await usedInForPage(page, input.caller);
   return {
     query,
     items: page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
-    facets: buildFacetSummaries(scored),
-    ...(next ? { nextCursor: encodeCursor(next) } : {}),
+    facets,
+    ...(next ? { nextCursor: encodeCursor(next, rankedAt) } : {}),
   };
 }
 
@@ -261,6 +263,17 @@ async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
   const page = collected.slice(0, input.limit);
   const last = page[page.length - 1];
   const hasMore = collected.length > input.limit;
+  // When the bounded visibility refill stops before the database is exhausted, continue after the
+  // final raw row scanned. Every row before that cursor was either collected or rejected, so this
+  // advances without dropping an unseen candidate. If we already collected an extra visible row,
+  // continue after the last row returned instead so that extra row leads the next page.
+  const nextCursor = hasMore
+    ? last
+      ? encodeListCursor(last.row.updatedAt, last.row.id)
+      : undefined
+    : !exhausted
+      ? cursor
+      : undefined;
   const usedIn = await usedInForPage(page, input.caller);
   return {
     query: '',
@@ -269,7 +282,7 @@ async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
     // depends on them being complete.
     facets: buildFacetSummaries(page),
     items: page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
-    ...(hasMore && last ? { nextCursor: encodeListCursor(last.row.updatedAt, last.row.id) } : {}),
+    ...(nextCursor ? { nextCursor } : {}),
   };
 }
 
@@ -525,14 +538,129 @@ async function resolveCallerAccess(caller: SearchCaller): Promise<CallerOrgAcces
   }));
 }
 
+/** Maximum rows held for one permission and scoring batch during ranked search. */
+const SEARCH_CANDIDATE_BATCH_SIZE = 250;
+
+interface RankedCandidateScanInput {
+  ownerUserId: string | null;
+  orgIds: readonly string[];
+  query: string;
+  includeArchived: boolean;
+  params: SearchWorkspaceInput['params'];
+  accessByOrg: ReadonlyMap<string, CallerOrgAccess>;
+  activeOrgId: string | null;
+  fromTime: number | null;
+  toTime: number | null;
+  cursor: CursorShape | null;
+  rankedAt: number;
+  limit: number;
+  signal: SearchAbortSignal | undefined;
+}
+
+/**
+ * Scan every matching candidate through bounded batches while retaining only rows this page can
+ * return.
+ *
+ * @remarks
+ * Exact relevance ordering requires considering the complete visible corpus because relationship
+ * and recency boosts are application-owned. The scan therefore keyset-pages the database by id,
+ * applies permissions per batch, and keeps at most `limit + 1` scored rows in memory. Palette
+ * diversity keeps at most `limit` rows per family, which is sufficient to reproduce the existing
+ * cap without retaining the corpus. One extra row per family preserves the continuation signal.
+ * Facet counts accumulate as numbers rather than result rows.
+ */
+async function scanRankedCandidates(
+  input: RankedCandidateScanInput,
+): Promise<{ scored: readonly ScoredRow[]; facets: SearchOut['facets'] }> {
+  const diverse = input.params.surface === 'palette' && input.cursor === null;
+  const best = new Map<string, ScoredRow[]>();
+  const globalKey = '__global__';
+  const facetCounts = createFacetCounts();
+  let afterId: string | undefined;
+
+  for (;;) {
+    throwIfSearchAborted(input.signal);
+    const candidates = await loadCandidateRows({
+      ownerUserId: input.ownerUserId,
+      orgIds: input.orgIds,
+      query: input.query,
+      includeArchived: input.includeArchived,
+      kinds: input.params.kinds ?? [],
+      families: input.params.families ?? [],
+      sources: input.params.sources ?? [],
+      ids: input.params.ids ?? [],
+      afterId,
+      limit: SEARCH_CANDIDATE_BATCH_SIZE,
+    });
+    if (candidates.length === 0) break;
+    afterId = candidates.at(-1)?.id;
+
+    const visible = await filterVisibleRows(candidates, {
+      ownerUserId: input.ownerUserId,
+      accessByOrg: input.accessByOrg,
+    });
+    throwIfSearchAborted(input.signal);
+    for (const row of visible.rows) {
+      if (!filterRow(row, input.params, input.fromTime, input.toTime)) continue;
+      const scored = scoreRow(row, input.query, {
+        activeOrgId: input.activeOrgId,
+        ownerUserId: input.ownerUserId,
+        callerActorId: row.organizationId
+          ? (input.accessByOrg.get(row.organizationId)?.actorId ?? null)
+          : null,
+        activityRecipient: visible.recipientEventIds.has(row.entityId),
+        rankedAt: input.rankedAt,
+      });
+      if (!scored || (input.cursor && compareCursor(scored, input.cursor) <= 0)) continue;
+      addFacetCountRow(facetCounts, scored.row);
+      const key = diverse ? scored.row.family : globalKey;
+      const rows = best.get(key) ?? [];
+      keepBestScored(rows, scored, input.limit + 1);
+      best.set(key, rows);
+    }
+
+    if (candidates.length < SEARCH_CANDIDATE_BATCH_SIZE) break;
+  }
+
+  const scored = [...best.values()].flat().sort(compareScoredRows);
+  return { scored, facets: facetSummaries(facetCounts) };
+}
+
+/** Stop between bounded search batches after the HTTP request has been abandoned. */
+function throwIfSearchAborted(signal: SearchAbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+  if (signal.reason instanceof Error) throw signal.reason;
+  const error = new Error('Search request aborted.');
+  error.name = 'AbortError';
+  throw error;
+}
+
+/** Retain the best `max` rows in-place. */
+function keepBestScored(rows: ScoredRow[], candidate: ScoredRow, max: number): void {
+  rows.push(candidate);
+  rows.sort(compareScoredRows);
+  if (rows.length > max) rows.pop();
+}
+
+/** Escape PostgreSQL `LIKE` metacharacters so search input is always literal text. */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
 async function loadCandidateRows(input: {
   ownerUserId: string | null;
   orgIds: readonly string[];
   query: string;
   includeArchived: boolean;
+  kinds: readonly string[];
+  families: readonly string[];
+  sources: readonly string[];
+  ids: readonly string[];
+  afterId: string | undefined;
+  limit: number;
 }) {
   const schema = await import('@docket/db');
-  const pattern = `%${input.query}%`;
+  const pattern = `%${escapeLikePattern(input.query)}%`;
   const textVector = searchTextVector(schema.searchDocument);
   const tsQuery = sql`plainto_tsquery('simple', ${input.query})`;
   const fullTextMatch = sql`${textVector} @@ ${tsQuery}`;
@@ -555,6 +683,18 @@ async function loadCandidateRows(input: {
     ),
   ];
   if (!input.includeArchived) conditions.push(isNull(schema.searchDocument.archivedAt));
+  if (input.kinds.length > 0) {
+    conditions.push(inArray(schema.searchDocument.kind, [...input.kinds] as 'task'[]));
+  }
+  if (input.families.length > 0) {
+    conditions.push(inArray(schema.searchDocument.family, [...input.families] as 'work'[]));
+  }
+  if (input.sources.length > 0) {
+    conditions.push(inArray(schema.searchDocument.sourceSystem, [...input.sources] as 'docket'[]));
+  }
+  if (input.ids.length > 0)
+    conditions.push(inArray(schema.searchDocument.entityId, [...input.ids]));
+  if (input.afterId) conditions.push(gt(schema.searchDocument.id, input.afterId));
   const rows = await schema.db
     .select({
       document: schema.searchDocument,
@@ -562,12 +702,8 @@ async function loadCandidateRows(input: {
     })
     .from(schema.searchDocument)
     .where(and(...conditions))
-    .orderBy(
-      desc(sql`ts_rank_cd(${textVector}, ${tsQuery})`),
-      desc(schema.searchDocument.baseRank),
-      desc(schema.searchDocument.updatedAt),
-    )
-    .limit(500);
+    .orderBy(asc(schema.searchDocument.id))
+    .limit(input.limit);
   return rows.map((row) => ({ ...row.document, textRank: row.textRank || 0 }));
 }
 
@@ -732,6 +868,7 @@ function scoreRow(
     ownerUserId: string | null;
     callerActorId: string | null;
     activityRecipient: boolean;
+    rankedAt: number;
   },
 ): ScoredRow | null {
   const queryLower = query.toLowerCase();
@@ -779,7 +916,7 @@ function scoreRow(
   if (matchedFields.length === 0) return null;
 
   const sortTime = rowSortTime(row);
-  score += recencyBoost(sortTime);
+  score += recencyBoost(sortTime, context.rankedAt);
   return {
     row,
     score,
@@ -841,8 +978,8 @@ function containsAnyTerm(value: string, terms: readonly string[]): boolean {
   return terms.some((term) => value.includes(term));
 }
 
-function recencyBoost(sortTime: number): number {
-  const daysAgo = Math.max(0, (Date.now() - sortTime) / 86_400_000);
+function recencyBoost(sortTime: number, rankedAt: number): number {
+  const daysAgo = Math.max(0, (rankedAt - sortTime) / 86_400_000);
   return Math.max(0, 20 - Math.min(20, daysAgo));
 }
 
@@ -1067,43 +1204,83 @@ function normalizeSearchKind(kind: string): SearchDocumentKind {
 function actionFor(row: SearchDocumentRow): SearchOut['items'][number]['actions'] {
   const href = typeof row.route['href'] === 'string' ? row.route['href'] : undefined;
   const actions = href ? [{ kind: 'open', label: 'Open', href }] : [];
+  const facet = facetRecord(row.facet);
+  if (
+    row.kind === 'attachment' &&
+    facet['attachmentKind'] === 'file' &&
+    row.organizationId &&
+    row.subjectKind === 'task' &&
+    row.subjectId
+  ) {
+    actions.push({
+      kind: 'download',
+      label: 'Download',
+      href: `/v1/orgs/${row.organizationId}/tasks/${row.subjectId}/attachments/${row.entityId}/download`,
+    });
+  }
   if (row.externalUrl) {
     actions.push({ kind: 'open_external', label: 'Open source', href: row.externalUrl });
   }
   return actions;
 }
 
-function buildFacetSummaries(rows: readonly ScoredRow[]): SearchOut['facets'] {
-  const familyCounts = new Map<string, number>();
-  const kindCounts = new Map<string, number>();
-  const sourceCounts = new Map<string, number>();
-  const ownerCounts = new Map<string, number>();
-  const assigneeCounts = new Map<string, number>();
-  const labelCounts = new Map<string, number>();
-  const statusCounts = new Map<string, number>();
-  const healthCounts = new Map<string, number>();
-  for (const { row } of rows) {
-    familyCounts.set(row.family, (familyCounts.get(row.family) ?? 0) + 1);
-    kindCounts.set(row.kind, (kindCounts.get(row.kind) ?? 0) + 1);
-    if (row.sourceSystem)
-      sourceCounts.set(row.sourceSystem, (sourceCounts.get(row.sourceSystem) ?? 0) + 1);
-    const facet = facetRecord(row.facet);
-    addFacetValues(ownerCounts, facet, ['ownerId', 'leadId', 'ownerActorId', 'accountableOwnerId']);
-    addFacetValues(assigneeCounts, facet, ['assigneeId', 'delegateId']);
-    addFacetValues(labelCounts, facet, ['labelId', 'labelIds']);
-    addFacetValues(statusCounts, facet, ['status', 'state']);
-    addFacetValues(healthCounts, facet, ['health']);
+interface FacetCounts {
+  readonly family: Map<string, number>;
+  readonly kind: Map<string, number>;
+  readonly source: Map<string, number>;
+  readonly owner: Map<string, number>;
+  readonly assignee: Map<string, number>;
+  readonly label: Map<string, number>;
+  readonly status: Map<string, number>;
+  readonly health: Map<string, number>;
+}
+
+function createFacetCounts(): FacetCounts {
+  return {
+    family: new Map(),
+    kind: new Map(),
+    source: new Map(),
+    owner: new Map(),
+    assignee: new Map(),
+    label: new Map(),
+    status: new Map(),
+    health: new Map(),
+  };
+}
+
+function addFacetCountRow(counts: FacetCounts, row: SearchDocumentRow): void {
+  counts.family.set(row.family, (counts.family.get(row.family) ?? 0) + 1);
+  counts.kind.set(row.kind, (counts.kind.get(row.kind) ?? 0) + 1);
+  if (row.sourceSystem) {
+    counts.source.set(row.sourceSystem, (counts.source.get(row.sourceSystem) ?? 0) + 1);
   }
+  const facet = facetRecord(row.facet);
+  addFacetValues(counts.owner, facet, ['ownerId', 'leadId', 'ownerActorId', 'accountableOwnerId']);
+  addFacetValues(counts.assignee, facet, ['assigneeId', 'delegateId']);
+  addFacetValues(counts.label, facet, ['labelId', 'labelIds']);
+  addFacetValues(counts.status, facet, ['status', 'state']);
+  addFacetValues(counts.health, facet, ['health']);
+}
+
+function facetSummaries(counts: FacetCounts): SearchOut['facets'] {
   return [
-    facetSummary('family', 'Family', familyCounts),
-    facetSummary('kind', 'Kind', kindCounts),
-    facetSummary('source', 'Source', sourceCounts),
-    facetSummary('owner', 'Owner', ownerCounts),
-    facetSummary('assignee', 'Assignee', assigneeCounts),
-    facetSummary('label', 'Label', labelCounts),
-    facetSummary('status', 'Status', statusCounts),
-    facetSummary('health', 'Health', healthCounts),
+    facetSummary('family', 'Family', counts.family),
+    facetSummary('kind', 'Kind', counts.kind),
+    facetSummary('source', 'Source', counts.source),
+    facetSummary('owner', 'Owner', counts.owner),
+    facetSummary('assignee', 'Assignee', counts.assignee),
+    facetSummary('label', 'Label', counts.label),
+    facetSummary('status', 'Status', counts.status),
+    facetSummary('health', 'Health', counts.health),
   ].filter((facet) => facet.values.length > 0);
+}
+
+function buildFacetSummaries(rows: readonly ScoredRow[]): SearchOut['facets'] {
+  const counts = createFacetCounts();
+  for (const { row } of rows) {
+    addFacetCountRow(counts, row);
+  }
+  return facetSummaries(counts);
 }
 
 function facetRecord(value: unknown): Record<string, unknown> {
@@ -1159,6 +1336,7 @@ interface CursorShape {
   score: number;
   sortTime: number;
   id: string;
+  rankedAt: number;
 }
 
 function compareScoredRows(a: ScoredRow, b: ScoredRow): number {
@@ -1171,12 +1349,13 @@ function compareCursor(row: ScoredRow, cursor: CursorShape): number {
   return row.row.id.localeCompare(cursor.id);
 }
 
-function encodeCursor(row: ScoredRow): string {
+function encodeCursor(row: ScoredRow, rankedAt: number): string {
   return Buffer.from(
     JSON.stringify({
       score: row.score,
       sortTime: row.sortTime,
       id: row.row.id,
+      rankedAt,
     } satisfies CursorShape),
   ).toString('base64url');
 }
@@ -1188,7 +1367,8 @@ function decodeCursor(value: string | undefined): CursorShape | null {
     if (
       typeof parsed.score === 'number' &&
       typeof parsed.sortTime === 'number' &&
-      typeof parsed.id === 'string'
+      typeof parsed.id === 'string' &&
+      typeof parsed.rankedAt === 'number'
     ) {
       return parsed;
     }

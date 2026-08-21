@@ -81,6 +81,7 @@ export { default as ListChecks } from '@mui/icons-material/ChecklistRtl';
 export { default as ListView } from '@mui/icons-material/ViewList';
 export { default as Home } from '@mui/icons-material/Home';
 export { default as Inbox } from '@mui/icons-material/Inbox';
+export { default as Info } from '@mui/icons-material/InfoOutlined';
 export { default as Layers } from '@mui/icons-material/Layers';
 export { default as Link } from '@mui/icons-material/Link';
 export { default as LayoutGrid } from '@mui/icons-material/GridView';

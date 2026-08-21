@@ -131,6 +131,9 @@ export function FilterToolbar<T>({
 
   const primarySort = state.sort[0] ?? null;
   const hasDisplay = groupable.length > 0 || sortable.length > 0 || displayExtras !== undefined;
+  const activeGroupLabel = state.groupBy
+    ? groupable.find((field) => field.key === state.groupBy?.field)?.label
+    : undefined;
 
   /** Append a predicate to the active set. */
   function addFilter(field: string, op: FilterOperator, value: unknown): void {
@@ -165,9 +168,16 @@ export function FilterToolbar<T>({
         {hasDisplay ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="min-h-10 gap-1.5 @2xl:min-h-8">
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-10 gap-1.5 @2xl:min-h-8"
+                aria-label={activeGroupLabel ? `Display · ${activeGroupLabel}` : 'Display'}
+              >
                 <TuneRounded className="size-4" aria-hidden="true" />
-                <span className="hidden @2xl:inline">Display</span>
+                <span className="hidden @2xl:inline">
+                  {activeGroupLabel ? `Display · ${activeGroupLabel}` : 'Display'}
+                </span>
                 <ChevronDown className="size-4 opacity-60" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>

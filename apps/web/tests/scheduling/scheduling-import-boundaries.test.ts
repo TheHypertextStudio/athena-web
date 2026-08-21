@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest';
 
 const WEB_ROOT = resolve(import.meta.dirname, '../..');
 const SCHEDULING_ROOT = resolve(WEB_ROOT, 'src/components/scheduling');
-const DOMAIN_SYMBOL_UMBRELLAS = new Set(['@docket/types']);
 
 interface SchedulingSource {
   readonly path: string;
@@ -68,14 +67,9 @@ function namesConsumerDomain(value: string): boolean {
   );
 }
 
-/** Return the root package name for a bare or subpath package specifier. */
-function packageRoot(specifier: string): string {
-  const segments = specifier.split('/');
-  return specifier.startsWith('@') ? segments.slice(0, 2).join('/') : (segments[0] ?? specifier);
-}
-
 /** Return whether a parsed module boundary belongs to a forbidden scheduling consumer domain. */
 function isForbiddenSchedulingModule(sourcePath: string, specifier: string): boolean {
+  if (specifier === '@docket/types' || specifier.startsWith('@docket/types/')) return true;
   if (specifier === '@docket/work' || specifier.startsWith('@docket/work/')) return true;
   const resolvedModule = resolveInternalModule(sourcePath, specifier);
   if (resolvedModule) return namesConsumerDomain(resolvedModule);
@@ -111,37 +105,6 @@ function moduleSpecifier(node: ts.Node): ts.StringLiteralLike | undefined {
   return undefined;
 }
 
-/** Return source symbol names exposed by one named import or re-export. */
-function namedBindingSources(node: ts.Node): readonly string[] | null {
-  if (ts.isImportDeclaration(node)) {
-    const clause = node.importClause;
-    if (!clause) return null;
-    if (clause.name || !clause.namedBindings) return null;
-    if (ts.isNamespaceImport(clause.namedBindings)) return null;
-    return clause.namedBindings.elements.map(
-      (element) => (element.propertyName ?? element.name).text,
-    );
-  }
-  if (ts.isExportDeclaration(node)) {
-    if (!node.exportClause || ts.isNamespaceExport(node.exportClause)) return null;
-    const names = node.exportClause.elements.map(
-      (element) => (element.propertyName ?? element.name).text,
-    );
-    return names.includes('default') ? null : names;
-  }
-  if (ts.isImportTypeNode(node)) {
-    return node.qualifier ? [node.qualifier.getText()] : null;
-  }
-  return null;
-}
-
-/** Reject domain symbols and namespace access through an otherwise mixed umbrella package. */
-function isForbiddenUmbrellaAccess(node: ts.Node, specifier: string): boolean {
-  if (!DOMAIN_SYMBOL_UMBRELLAS.has(packageRoot(specifier))) return false;
-  const names = namedBindingSources(node);
-  return names === null || names.some(namesConsumerDomain);
-}
-
 /** Report forbidden domain imports from one shared scheduling source. */
 function forbiddenSchedulingImports(source: SchedulingSource): readonly string[] {
   const sourceFile = ts.createSourceFile(
@@ -154,11 +117,7 @@ function forbiddenSchedulingImports(source: SchedulingSource): readonly string[]
   const violations: string[] = [];
   const visit = (node: ts.Node): void => {
     const specifier = moduleSpecifier(node);
-    if (
-      specifier &&
-      (isForbiddenSchedulingModule(source.path, specifier.text) ||
-        isForbiddenUmbrellaAccess(node, specifier.text))
-    ) {
+    if (specifier && isForbiddenSchedulingModule(source.path, specifier.text)) {
       const { line, character } = sourceFile.getLineAndCharacterOfPosition(
         specifier.getStart(sourceFile),
       );
@@ -191,8 +150,8 @@ describe('shared scheduling import boundaries', () => {
     ['agenda symbol from the types umbrella', `import type { AgendaEntry } from '@docket/types';`],
     ['task symbol from the types umbrella', `import type { Task } from '@docket/types';`],
     [
-      'work-location symbol from the types umbrella',
-      `import type { WorkLocation } from '@docket/types';`,
+      'work-place symbol from the types umbrella',
+      `import type { WorkPlaceOut } from '@docket/types';`,
     ],
     ['calendar module behind lib', `import { calendarItemsDef } from '@/lib/calendar-data';`],
   ])('detects a forbidden %s import from parsed module syntax', (_label, text) => {
@@ -209,15 +168,6 @@ describe('shared scheduling import boundaries', () => {
       forbiddenSchedulingImports({
         path: 'src/components/scheduling/example.ts',
         text: `export const label = 'Calendar task agenda work-location';`,
-      }),
-    ).toEqual([]);
-  });
-
-  it('permits neutral scheduling primitives from an umbrella type package', () => {
-    expect(
-      forbiddenSchedulingImports({
-        path: 'src/components/scheduling/example.ts',
-        text: `import type { ScheduleLane, ScheduleMinuteBounds } from '@docket/types';`,
       }),
     ).toEqual([]);
   });

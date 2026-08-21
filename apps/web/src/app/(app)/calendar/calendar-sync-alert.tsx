@@ -18,7 +18,8 @@ export function CalendarSyncAlert({
   return (
     <div
       role="alert"
-      className="bg-error-container text-on-error-container text-body-medium shrink-0 rounded-lg px-3 py-2"
+      title={[conflicts, failures].filter(Boolean).join(' · ')}
+      className="bg-error-container text-on-error-container text-label-small min-w-0 shrink truncate rounded-md px-2 py-1"
     >
       {[conflicts, failures].filter(Boolean).join(' · ')}
     </div>

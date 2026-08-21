@@ -28,7 +28,7 @@
  *   own popovers for the same reason.
  *
  * Sizing is uniform on purpose — inline neighbours must share a height exactly, and it steps three
- * times: 36px below `@min-[22rem]`, a 44px touch target from there to `@2xl`, then 32px once the row
+ * times: 40px below `@min-[22rem]`, a 44px touch target from there to `@2xl`, then 32px once the row
  * is wide enough to carry labels. Every glyph is `size-4` (the `Button` base sets `[&_svg]:size-6`,
  * which is far too large here). Breakpoints are `@`-prefixed container queries because `<main>` is a
  * `@container` — the row responds to the space it actually has, not to the window. See
@@ -48,13 +48,13 @@ import { CALENDAR_CONTROL_CLASS, CalendarViewSettings } from './calendar-view-se
  * Shared geometry for every icon-only control in the row.
  *
  * @remarks
- * The same three container steps as {@link CALENDAR_CONTROL_CLASS} — 36px, then a 44px touch target
+ * The same three container steps as {@link CALENDAR_CONTROL_CLASS} — 40px, then a 44px touch target
  * from `@min-[22rem]`, then 32px once the row is wide enough for labels. Inline neighbours share a height
  * exactly, so these two recipes must move together. `flex-nowrap` on the row — not `shrink-0` on the
  * children — is what forbids a second line.
  */
 const ROW_ICON_CONTROL =
-  'h-9 w-9 min-w-9 shrink [&_svg]:size-4 @min-[22rem]:h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:h-8 @2xl:w-8 @2xl:min-w-8 @2xl:shrink-0';
+  'h-10 w-10 min-w-10 shrink [&_svg]:size-4 @min-[22rem]:h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:h-8 @2xl:w-8 @2xl:min-w-8 @2xl:shrink-0';
 
 /** Props for {@link TrailingSlot}. */
 interface TrailingSlotProps {
@@ -174,8 +174,8 @@ export function CalendarToolbar({
         `min-w-16` floor, which turns a too-narrow row into a *control* pushed past the viewport
         edge — the New button's right border was measurably cut off at 320px — instead of a slightly
         shorter month label. Every control now carries a width the row's budget was computed against
-        (see `CALENDAR_CONTROL_CLASS`), so the heading is never actually squeezed: 67px is left for
-        it at 320 and 71px at 390, where `Aug 2026` needs about 60. If a locale ever renders a
+        (see `CALENDAR_CONTROL_CLASS`). At 320px the heading takes the remaining space and truncates
+        while the primary New action remains visible. If a locale ever renders a
         longer form than that budget allows, this truncates and the primary action stays on screen,
         which is the right way round.
 

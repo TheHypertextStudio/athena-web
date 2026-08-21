@@ -268,6 +268,8 @@ function renderSurface(
     readonly selectedRegionAnchorRef?: React.RefObject<HTMLDivElement | null>;
     readonly dateItemsError?: boolean;
     readonly peopleError?: boolean;
+    readonly conflictCount?: number;
+    readonly failedCount?: number;
     readonly workLocationComposition?: WorkLocationCalendarComposition;
   } = {},
 ): {
@@ -290,6 +292,8 @@ function renderSurface(
           dateAxis={{
             ...dateAxisState(source, laneDate),
             itemsError: selectionOptions.dateItemsError ?? false,
+            conflictCount: selectionOptions.conflictCount ?? 0,
+            failedCount: selectionOptions.failedCount ?? 0,
           }}
           peopleAxis={{
             ...peopleAxisState(),
@@ -406,14 +410,30 @@ describe('CalendarSchedulingSurface persistence', () => {
     expect(canvasProps().error).toBeNull();
   });
 
-  it('fills the shell-owned remaining height and never falls below its readable floor', () => {
+  it('fills and can shrink to the shell-owned remaining height', () => {
     renderSurface();
 
     expect(canvasProps().viewportHeight).toBe('100%');
-    // `flex-1` takes every pixel the page column has left; the explicit minimum is the guarantee
-    // that no rail, notice, or comparison control can squeeze the schedule into a sliver.
+    // `min-h-0` lets the host fit the available page height. The canvas then owns vertical scroll
+    // instead of forcing the hidden page root to clip a hard minimum.
     const wrapper = screen.getByRole('region', { name: 'Schedule' }).parentElement;
-    expect(wrapper).toHaveClass('flex-1', 'min-w-0', 'min-h-[max(16rem,45dvh)]');
+    expect(wrapper).toHaveClass('flex-1', 'min-w-0', 'min-h-0');
+    expect(wrapper).not.toHaveClass('min-h-[max(16rem,45dvh)]');
+  });
+
+  it('keeps simultaneous read and sync state in one compact row', () => {
+    renderSurface('dates', calendarItem(), '2026-07-13', {
+      dateItemsError: true,
+      conflictCount: 1,
+      failedCount: 2,
+    });
+
+    const statusRow = assertDefined(
+      screen.getByText('1 sync conflict · 2 sync errors').parentElement,
+    );
+    expect(statusRow).toHaveAttribute('data-calendar-status-row');
+    expect(statusRow).toHaveClass('flex-nowrap', 'overflow-hidden');
+    expect(within(statusRow).getByRole('button', { name: 'Retry' })).toBeVisible();
   });
 
   it('renders exactly one schedule region and no side column beside it', () => {

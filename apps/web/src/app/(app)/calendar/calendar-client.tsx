@@ -13,9 +13,9 @@
  * surface. Nothing else is allowed to take a band of vertical budget above the grid — layer
  * visibility and people comparison were both inline blocks here and are now popovers hanging off
  * the toolbar row, because "which calendars / which people" is a setting and the events are the
- * content. Padding is deliberately modest (`p-3` → `p-6`) and the column scrolls
- * (`overflow-y-auto`), so the canvas's minimum height is honoured rather than clipped no matter how
- * the shell around it is sized.
+ * content. Padding is deliberately modest (`p-2` → `p-6`). The page column clips overflow while
+ * the shared canvas owns both axes, so wheel, touch, and keyboard scrolling never compete across
+ * nested vertical scrollports.
  *
  * ## Zoom
  *
@@ -200,7 +200,10 @@ export default function CalendarClient(): JSX.Element {
     // `p-2` at the narrowest step, not `p-3`: 8px of inset buys the control row 8px of budget, and
     // at 320px that row was 27px over its container — enough to push the New button's right border
     // off the viewport. From `@sm` up the inset returns to the app's normal rhythm.
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3 overflow-y-auto p-2 @sm:p-3 @2xl:p-4 @4xl:p-6">
+    <div
+      data-calendar-page=""
+      className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3 overflow-hidden p-2 @sm:p-3 @2xl:p-4 @4xl:p-6"
+    >
       <CalendarToolbar
         heading={heading}
         headingShort={headingShort}

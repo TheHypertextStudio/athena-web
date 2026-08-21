@@ -33,27 +33,30 @@ export function AgendaListArrangement({
   readonly onOpenCalendarItem: (itemId: string) => void;
 }): JSX.Element {
   const ordered = useMemo(() => chronological(entries), [entries]);
-  if (ordered.length === 0 && loading) return <></>;
-  if (ordered.length === 0) {
-    return (
-      // A link, not an instruction to go find one. `Use the calendar to plan this day` named the
-      // destination and then made the reader locate it themselves, which is a dead empty state by
-      // any reading of the rubric.
-      <Stack gap={2} role="status" className="px-1 py-3">
-        <p className="text-on-surface-variant text-body-medium">Nothing scheduled.</p>
-        <Button asChild variant="outline" size="sm" className="self-start">
-          <Link href="/calendar">Plan in the calendar</Link>
-        </Button>
-      </Stack>
-    );
-  }
   return (
-    <Stack as="ul" gap={2}>
-      {ordered.map((entry) => (
-        <li key={entry.id}>
-          <AgendaEntryCard entry={entry} onOpenCalendarItem={onOpenCalendarItem} />
-        </li>
-      ))}
-    </Stack>
+    <div
+      data-agenda-list-scroll=""
+      className="h-full min-h-0 overflow-y-auto overscroll-contain px-1 py-3"
+    >
+      {ordered.length === 0 && loading ? null : ordered.length === 0 ? (
+        // A link, not an instruction to go find one. `Use the calendar to plan this day` named the
+        // destination and then made the reader locate it themselves, which is a dead empty state by
+        // any reading of the rubric.
+        <Stack gap={2} role="status">
+          <p className="text-on-surface-variant text-body-medium">Nothing scheduled.</p>
+          <Button asChild variant="outline" size="sm" className="self-start">
+            <Link href="/calendar">Plan in the calendar</Link>
+          </Button>
+        </Stack>
+      ) : (
+        <Stack as="ul" gap={2}>
+          {ordered.map((entry) => (
+            <li key={entry.id}>
+              <AgendaEntryCard entry={entry} onOpenCalendarItem={onOpenCalendarItem} />
+            </li>
+          ))}
+        </Stack>
+      )}
+    </div>
   );
 }

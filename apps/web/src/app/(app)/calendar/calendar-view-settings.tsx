@@ -72,17 +72,17 @@ import type { CalendarAxis } from './calendar-schedule-model';
  *
  * | viewport | container      | control | gap | row budget | controls + gaps | left for the heading |
  * | -------- | -------------- | ------- | --- | ---------- | --------------- | -------------------- |
- * | 320      | 309 (`< 22rem`)| 36px    | 2px | 293px      | 226px           | 67px (`Aug 2026`)    |
+ * | 320      | 304 (`< 22rem`)| 40px    | 2px | 304px      | 250px           | 54px (truncates)     |
  * | 375      | 364 (`@22rem`) | 44px    | 2px | 348px      | 274px           | 74px (`Aug 2026`)    |
  * | 390      | 379 (`@22rem`) | 44px    | 2px | 363px      | 274px           | 89px (`Aug 2026`)    |
  * | ≥ 672    | `@2xl`         | 32px    | 8px | ≥ 600px    | labels + gaps   | the remainder        |
  *
  * The 44px middle step is not decoration: below `@2xl` every control is icon-only, and a phone-width
  * calendar has to offer real touch targets — 44 × 44 CSS px is the floor a finger needs. The step
- * begins at a 22rem *container* rather than at `@sm` (24rem) because `<main>` reserves a stable
+ * begins at a 22rem *container* rather than at `@sm` (24rem) because `<main>` can reserve a stable
  * scrollbar gutter, so a 390px phone reports a 379px container and would otherwise miss `@sm`
- * entirely — the exact off-by-a-gutter that left a phone with 36px targets. The 36px bottom step is
- * the concession 320px forces, on a width no touch device actually reports.
+ * entirely. The 40px bottom step keeps the accessibility floor at 320px without allowing the
+ * primary action to wrap or leave the viewport.
  *
  * `[&_svg]:size-4` is required, not decorative: `Button`'s base recipe sets `[&_svg]:size-6`, whose
  * descendant selector outranks a plain `size-4` on the glyph itself, so a 24px icon would sit in a
@@ -93,7 +93,7 @@ import type { CalendarAxis } from './calendar-schedule-model';
  * module must not depend on an `app/` route module.
  */
 export const CALENDAR_CONTROL_CLASS =
-  'min-h-9 w-9 min-w-9 shrink gap-1.5 px-2 [&_svg]:size-4 @min-[22rem]:min-h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
+  'min-h-10 w-10 min-w-10 shrink gap-1.5 px-2 [&_svg]:size-4 @min-[22rem]:min-h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
 
 // The zoom scale and its clamp moved to `components/scheduling/scheduling-geometry.ts` when the
 // rail's own scale stepper needed the identical funnel: a `components/` module must not import an

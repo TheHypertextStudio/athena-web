@@ -143,24 +143,30 @@ describe('CalendarToolbar', () => {
   it('keeps every inline control on one shared height at each of the three steps', () => {
     renderToolbar();
 
-    // Height is identical across the row at every step, and it steps three times: 36px on a 320px
-    // screen, a 44 x 44 touch target from a 22rem container (which is what a 390px phone reports
-    // once `<main>`'s stable scrollbar gutter is taken out), then 32px once the row carries labels.
+    // Height is identical across the row at every step. The narrowest 320px layout keeps a real
+    // 40px target, a 22rem container steps up to 44px, and wide rows compact to 32px once labels
+    // make the controls easier to identify.
     for (const name of ['Previous dates', 'Next dates']) {
       expect(screen.getByRole('button', { name })).toHaveClass(
-        'h-9',
+        'h-10',
+        'w-10',
+        'min-w-10',
         '@min-[22rem]:h-11',
         '@min-[22rem]:w-11',
         '@2xl:h-8',
       );
+      expect(screen.getByRole('button', { name })).not.toHaveClass('h-9', 'w-9', 'min-w-9');
     }
     for (const name of ['Today', 'Display settings']) {
       expect(screen.getByRole('button', { name })).toHaveClass(
-        'min-h-9',
+        'min-h-10',
+        'w-10',
+        'min-w-10',
         '@min-[22rem]:min-h-11',
         '@min-[22rem]:min-w-11',
         '@2xl:min-h-8',
       );
+      expect(screen.getByRole('button', { name })).not.toHaveClass('min-h-9', 'w-9', 'min-w-9');
     }
   });
 

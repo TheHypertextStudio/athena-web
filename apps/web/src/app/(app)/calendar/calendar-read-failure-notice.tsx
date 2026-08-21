@@ -18,13 +18,15 @@ export function CalendarReadFailureNotice({
   return (
     <div
       role="status"
-      className="bg-surface-container-high text-on-surface-variant text-body-small flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
+      className="bg-surface-container-high text-on-surface-variant text-label-small flex min-w-0 flex-1 flex-nowrap items-center gap-1 rounded-md px-2 py-1"
     >
-      <span>{message}</span>
+      <span className="min-w-0 flex-1 truncate" title={message}>
+        {message}
+      </span>
       <Button
         variant="outline"
-        size="sm"
-        className="shrink-0 [@media(pointer:coarse)]:h-10"
+        controlSize="sm"
+        className="shrink-0 [@media(pointer:coarse)]:min-h-10"
         disabled={retrying}
         onClick={onRetry}
       >

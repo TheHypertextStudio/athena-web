@@ -61,10 +61,10 @@ const MINUTES_PER_DAY = 24 * 60;
  * the basic time grid.
  *
  * The surface is a single flex column with exactly one growing child — the canvas — and an
- * unbroken `flex-1` + `min-h-0` chain from the page root down to `<section aria-label="Schedule">`,
- * plus a hard `min-h-[max(16rem,45dvh)]` floor on the canvas wrapper. That combination is what
- * makes it structurally impossible for a rail, a notice, or a comparison control to squeeze the
- * schedule into a sliver. Layer controls deliberately live in the toolbar's popover rather than in
+ * unbroken `flex-1` + `min-h-0` chain from the page root down to `<section aria-label="Schedule">`.
+ * The shared canvas is the only scroll owner, so its host must shrink to the shell's available
+ * height. Secondary read and sync state share one compact row rather than stacking several bands
+ * above the schedule. Layer controls deliberately live in the toolbar's popover rather than in
  * a permanent side column: a 16rem column that usually rendered "No calendar layers yet." was
  * costing the schedule a fifth of its width at exactly the widths where it had least to spare.
  */
@@ -106,6 +106,7 @@ export function CalendarSchedulingSurface({
   );
   const retryRead = axis === 'dates' ? dateAxis.retry : peopleAxis.retry;
   const readRetrying = axis === 'dates' ? dateAxis.retrying : peopleAxis.retrying;
+  const hasSyncStatus = dateAxis.conflictCount > 0 || dateAxis.failedCount > 0;
   const clearInlineFailures = useCallback(() => {
     resetUpdateItem();
     resetLinkTask();
@@ -171,16 +172,24 @@ export function CalendarSchedulingSurface({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-      <CalendarSyncAlert
-        conflictCount={dateAxis.conflictCount}
-        failedCount={dateAxis.failedCount}
-      />
+      {hasSyncStatus || readError ? (
+        <div
+          data-calendar-status-row=""
+          className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1 overflow-hidden"
+        >
+          <CalendarSyncAlert
+            conflictCount={dateAxis.conflictCount}
+            failedCount={dateAxis.failedCount}
+          />
+          <CalendarReadFailureNotice
+            message={readError}
+            onRetry={retryRead}
+            retrying={readRetrying}
+          />
+        </div>
+      ) : null}
 
-      <CalendarReadFailureNotice message={readError} onRetry={retryRead} retrying={readRetrying} />
-
-      {/* The schedule's floor. `flex-1` claims every pixel the column has left, and the explicit
-          minimum keeps it readable even when notices above it are all showing at once. */}
-      <div className="min-h-[max(16rem,45dvh)] min-w-0 flex-1">
+      <div data-calendar-canvas-host="" className="min-h-0 min-w-0 flex-1">
         <SchedulingCanvas
           displayTimezone={displayTimezone}
           lanes={axis === 'dates' ? dateAxis.lanes : peopleAxis.lanes}

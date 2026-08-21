@@ -77,6 +77,7 @@ export interface WorkLocationResolutionState {
 
 interface AssertionInterval {
   readonly assertionId: string;
+  readonly occurrenceDate: string;
   readonly placeId: string;
   readonly start: Date;
   readonly end: Date;
@@ -138,6 +139,10 @@ function assertionIntervals(
       ? [
           {
             assertionId: assertion.id,
+            occurrenceDate:
+              schedule.type === 'one_off_all_day'
+                ? schedule.date
+                : localDateString(interval.start, schedule.timezone),
             placeId: assertion.placeId,
             ...interval,
             revision: assertion.revision,
@@ -179,6 +184,7 @@ function assertionIntervals(
     if (interval.end <= windowStart || interval.start >= windowEnd) continue;
     intervals.push({
       assertionId: assertion.id,
+      occurrenceDate: date,
       placeId: exception?.action === 'replace' ? exception.placeId : assertion.placeId,
       ...interval,
       revision: assertion.revision,
@@ -189,11 +195,13 @@ function assertionIntervals(
   return intervals;
 }
 
+interface ExpectedResolution extends ResolvedExpectedWorkLocation {
+  readonly assertionId: string | null;
+  readonly occurrenceDate: string | null;
+}
+
 /** Resolve explicit assertions, including timed/all-day and equal-scope precedence. */
-function resolveAssertion(
-  at: Date,
-  state: WorkLocationResolutionState,
-): ResolvedExpectedWorkLocation | null {
+function resolveAssertion(at: Date, state: WorkLocationResolutionState): ExpectedResolution | null {
   const pointEnd = new Date(at.getTime() + 1);
   const active = state.assertions
     .flatMap((assertion) => assertionIntervals(assertion, at, pointEnd))
@@ -218,14 +226,13 @@ function resolveAssertion(
     effectiveEnd: winner.end.toISOString(),
     observedAt: null,
     expiresAt: null,
+    assertionId: winner.assertionId,
+    occurrenceDate: winner.occurrenceDate,
   };
 }
 
 /** Resolve an active location-bound work block or a conservative gap between two such blocks. */
-function resolveWorkBlock(
-  at: Date,
-  state: WorkLocationResolutionState,
-): ResolvedExpectedWorkLocation | null {
+function resolveWorkBlock(at: Date, state: WorkLocationResolutionState): ExpectedResolution | null {
   const ordered = [...state.workBlocks].sort(
     (left, right) => left.startsAt.getTime() - right.startsAt.getTime(),
   );
@@ -242,6 +249,8 @@ function resolveWorkBlock(
       effectiveEnd: locatedActive.endsAt.toISOString(),
       observedAt: null,
       expiresAt: null,
+      assertionId: null,
+      occurrenceDate: null,
     };
   }
 
@@ -266,11 +275,13 @@ function resolveWorkBlock(
     effectiveEnd: after.startsAt.toISOString(),
     observedAt: null,
     expiresAt: null,
+    assertionId: null,
+    occurrenceDate: null,
   };
 }
 
 /** The canonical unknown expected-location result. */
-function unknownExpected(): ResolvedExpectedWorkLocation {
+function unknownExpected(): ExpectedResolution {
   return {
     place: null,
     source: 'unknown',
@@ -279,7 +290,17 @@ function unknownExpected(): ResolvedExpectedWorkLocation {
     effectiveEnd: null,
     observedAt: null,
     expiresAt: null,
+    assertionId: null,
+    occurrenceDate: null,
   };
+}
+
+/** Resolve expected location with the range-only assertion occurrence provenance retained. */
+function resolveExpectedWithProvenance(
+  at: Date,
+  state: WorkLocationResolutionState,
+): ExpectedResolution {
+  return resolveAssertion(at, state) ?? resolveWorkBlock(at, state) ?? unknownExpected();
 }
 
 /** Resolve expected location at one instant using the documented domain precedence. */
@@ -287,7 +308,12 @@ export function resolveExpectedWorkLocation(
   at: Date,
   state: WorkLocationResolutionState,
 ): ResolvedExpectedWorkLocation {
-  return resolveAssertion(at, state) ?? resolveWorkBlock(at, state) ?? unknownExpected();
+  const {
+    assertionId: _assertionId,
+    occurrenceDate: _occurrenceDate,
+    ...resolution
+  } = resolveExpectedWithProvenance(at, state);
+  return resolution;
 }
 
 /** Resolve current location from manual, device, Time Ledger, and expected evidence. */
@@ -372,15 +398,17 @@ export function resolveWorkLocationPoint(input: {
 
 /** Equality used to coalesce adjacent range fragments without hiding a provenance change. */
 function sameResolution(
-  left: ResolvedExpectedWorkLocation,
-  right: ResolvedExpectedWorkLocation,
+  left: WorkLocationRangeOut['segments'][number],
+  right: ExpectedResolution,
 ): boolean {
   return (
     left.place?.id === right.place?.id &&
     left.source === right.source &&
     left.confidence === right.confidence &&
     left.observedAt === right.observedAt &&
-    left.expiresAt === right.expiresAt
+    left.expiresAt === right.expiresAt &&
+    left.assertionId === right.assertionId &&
+    left.occurrenceDate === right.occurrenceDate
   );
 }
 
@@ -413,7 +441,7 @@ export function resolveExpectedWorkLocationRange(input: {
     const startMs = ordered[index];
     const endMs = ordered[index + 1];
     if (startMs === undefined || endMs === undefined || endMs <= startMs) continue;
-    const resolution = resolveExpectedWorkLocation(new Date(startMs), input.state);
+    const resolution = resolveExpectedWithProvenance(new Date(startMs), input.state);
     const previous = segments.at(-1);
     if (
       previous?.effectiveEnd === new Date(startMs).toISOString() &&
@@ -424,6 +452,9 @@ export function resolveExpectedWorkLocationRange(input: {
     }
     segments.push({
       ...resolution,
+      assertionId:
+        resolution.assertionId as WorkLocationRangeOut['segments'][number]['assertionId'],
+      occurrenceDate: resolution.occurrenceDate,
       effectiveStart: new Date(startMs).toISOString(),
       effectiveEnd: new Date(endMs).toISOString(),
     });

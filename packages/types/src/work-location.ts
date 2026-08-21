@@ -383,6 +383,12 @@ export const WorkLocationExpectedSegment = z
     source: ExpectedWorkLocationSource,
     effectiveStart: z.iso.datetime(),
     effectiveEnd: z.iso.datetime(),
+    assertionId: WorkLocationAssertionId.nullable().describe(
+      'Winning editable assertion, or null when the segment came from inferred evidence.',
+    ),
+    occurrenceDate: DateString.nullable().describe(
+      'Civil date of the winning assertion occurrence, or null for non-assertion evidence.',
+    ),
   })
   .strict();
 /** Expected-location range-segment value. */

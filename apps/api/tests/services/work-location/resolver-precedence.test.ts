@@ -354,4 +354,88 @@ describe('resolving a range', () => {
     expect(sources).toContain('work_block');
     expect(sources).toContain('bridged_work_blocks');
   });
+
+  it('keeps adjacent assertions separate and exposes each editable occurrence', () => {
+    const range = resolveExpectedWorkLocationRange({
+      start: new Date('2026-08-12T16:00:00.000Z'),
+      end: new Date('2026-08-12T20:00:00.000Z'),
+      state: state({
+        assertions: [
+          timed({
+            id: 'morning',
+            placeId: LIBRARY.id,
+            schedule: {
+              type: 'one_off_timed',
+              startsAt: '2026-08-12T16:00:00.000Z',
+              endsAt: '2026-08-12T18:00:00.000Z',
+              timezone: 'America/Los_Angeles',
+            },
+          }),
+          timed({
+            id: 'afternoon',
+            placeId: LIBRARY.id,
+            schedule: {
+              type: 'one_off_timed',
+              startsAt: '2026-08-12T18:00:00.000Z',
+              endsAt: '2026-08-12T20:00:00.000Z',
+              timezone: 'America/Los_Angeles',
+            },
+          }),
+        ] as never,
+      }),
+    });
+
+    expect(range.segments).toHaveLength(2);
+    expect(
+      range.segments.map(({ assertionId, occurrenceDate }) => [assertionId, occurrenceDate]),
+    ).toEqual([
+      ['morning', '2026-08-12'],
+      ['afternoon', '2026-08-12'],
+    ]);
+  });
+
+  it('reports weekly occurrence dates and null provenance for inferred segments', () => {
+    const weekly = allDay({
+      id: 'weekly-library',
+      schedule: {
+        type: 'weekly_all_day',
+        effectiveFrom: '2026-08-10',
+        effectiveUntil: null,
+        weekdays: [2],
+        timezone: 'America/Los_Angeles',
+      },
+    });
+    const assertionRange = resolveExpectedWorkLocationRange({
+      start: new Date('2026-08-12T07:00:00.000Z'),
+      end: new Date('2026-08-13T07:00:00.000Z'),
+      state: state({ assertions: [weekly] as never }),
+    });
+    const inferredRange = resolveExpectedWorkLocationRange({
+      start: new Date('2026-08-12T18:00:00.000Z'),
+      end: new Date('2026-08-12T20:00:00.000Z'),
+      state: state({
+        workBlocks: [
+          {
+            startsAt: new Date('2026-08-12T16:00:00.000Z'),
+            endsAt: new Date('2026-08-12T18:00:00.000Z'),
+            placeId: LIBRARY.id,
+          },
+          {
+            startsAt: new Date('2026-08-12T20:00:00.000Z'),
+            endsAt: new Date('2026-08-12T22:00:00.000Z'),
+            placeId: LIBRARY.id,
+          },
+        ] as never,
+      }),
+    });
+
+    expect(assertionRange.segments[0]).toMatchObject({
+      assertionId: 'weekly-library',
+      occurrenceDate: '2026-08-12',
+    });
+    expect(inferredRange.segments[0]).toMatchObject({
+      assertionId: null,
+      occurrenceDate: null,
+    });
+  });
 });

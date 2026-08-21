@@ -9,6 +9,7 @@ import {
   WorkLocationObservationCreate,
   WorkLocationPointOut,
   WorkLocationProfileUpdate,
+  WorkLocationRangeOut,
   WorkLocationRangeQuery,
   WorkLocationSyncAccountOut,
   WorkLocationSyncOut,
@@ -261,6 +262,53 @@ describe('WorkLocationAssertion', () => {
 });
 
 describe('resolved work location and sync state', () => {
+  it('identifies the editable assertion occurrence on resolved range segments', () => {
+    const parsed = WorkLocationRangeOut.parse({
+      start: '2026-08-13T16:00:00.000Z',
+      end: '2026-08-13T20:00:00.000Z',
+      segments: [
+        {
+          place: { id: PLACE_ID, name: 'Downtown office' },
+          source: 'assertion',
+          confidence: 'declared',
+          effectiveStart: '2026-08-13T16:00:00.000Z',
+          effectiveEnd: '2026-08-13T20:00:00.000Z',
+          observedAt: null,
+          expiresAt: null,
+          assertionId: ASSERTION_ID,
+          occurrenceDate: '2026-08-13',
+        },
+      ],
+    });
+
+    expect(parsed.segments[0]).toMatchObject({
+      assertionId: ASSERTION_ID,
+      occurrenceDate: '2026-08-13',
+    });
+  });
+
+  it('uses null edit provenance for non-assertion range sources', () => {
+    const parsed = WorkLocationRangeOut.parse({
+      start: '2026-08-13T16:00:00.000Z',
+      end: '2026-08-13T20:00:00.000Z',
+      segments: [
+        {
+          place: null,
+          source: 'unknown',
+          confidence: 'unknown',
+          effectiveStart: '2026-08-13T16:00:00.000Z',
+          effectiveEnd: '2026-08-13T20:00:00.000Z',
+          observedAt: null,
+          expiresAt: null,
+          assertionId: null,
+          occurrenceDate: null,
+        },
+      ],
+    });
+
+    expect(parsed.segments[0]).toMatchObject({ assertionId: null, occurrenceDate: null });
+  });
+
   it('keeps current and expected independent and labels expected fallback honestly', () => {
     const parsed = WorkLocationPointOut.parse({
       at: '2026-08-13T17:00:00.000Z',

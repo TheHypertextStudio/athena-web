@@ -13,12 +13,12 @@ import {
   defineViewContract,
   type DisplayableFieldKey,
   type FieldOperandFor,
+  type FieldValueFor,
   type FilterableFieldKey,
   type FilterNodeFor,
   type GroupableFieldKey,
   type LayoutFor,
   type MutableGroupKey,
-  type NonEmptyReadonlyArray,
   type SortableFieldKey,
   type ViewArrangementFor,
   type ViewContract,
@@ -141,12 +141,7 @@ export type FractionalRank = z.infer<typeof FractionalRank>;
 declare const viewCursorTarget: unique symbol;
 
 /** An opaque keyset cursor validated before target-specific decoding. */
-export const ViewCursorValue = z
-  .string()
-  .min(8)
-  .max(4096)
-  .regex(/^wv2:[A-Za-z0-9_-]+$/)
-  .brand<'ViewCursor'>();
+export const ViewCursorValue = z.string().brand<'ViewCursor'>();
 /** An opaque cursor tied to one target by the type system. */
 export type ViewCursor<E extends ViewTarget> = z.infer<typeof ViewCursorValue> & {
   readonly [viewCursorTarget]: E;
@@ -572,7 +567,7 @@ function enumValues(values: readonly string[], label: string): [string, ...strin
 /** Build a strict runtime schema from a literal work-view contract. */
 export function createViewDefinitionSchema<const TContract extends ViewContract>(
   contract: TContract,
-): z.ZodType<ViewDefinitionFor<TContract>> {
+): z.ZodType<ViewDefinitionFor<TContract>, ViewDefinitionFor<TContract>> {
   const groupFields = Object.entries(contract.fields)
     .filter(([, field]) => field.capabilities.group === true)
     .map(([key]) => key);
@@ -616,7 +611,7 @@ export function createViewDefinitionSchema<const TContract extends ViewContract>
         })
         .strict(),
     })
-    .strict() as unknown as z.ZodType<ViewDefinitionFor<TContract>>;
+    .strict() as unknown as z.ZodType<ViewDefinitionFor<TContract>, ViewDefinitionFor<TContract>>;
 }
 
 /** Runtime schema for a Task view definition. */
@@ -691,17 +686,18 @@ export const WorkViewContext = z.discriminatedUnion('kind', [
 /** A validated contextual boundary. */
 export type WorkViewContext = z.infer<typeof WorkViewContext>;
 
-function queryRequest<const TContract extends ViewContract>(
+function queryRequest<const TContract extends ViewContract, const TContext extends z.ZodType>(
   contract: TContract,
-  definition: z.ZodType<ViewDefinitionFor<TContract>>,
-  context: z.ZodType,
+  definition: z.ZodType<ViewDefinitionFor<TContract>, ViewDefinitionFor<TContract>>,
+  context: TContext,
 ) {
+  const organizationContext = context.parse({ kind: 'organization' });
   return z
     .object({
       target: z.literal(contract.target),
       definition,
       temporaryFilter: createFilterNodeSchema(contract).nullable().default(null),
-      context: context.default({ kind: 'organization' }),
+      context: context.default(organizationContext as never),
       cursor: ViewCursorValue.nullable().optional(),
       limit: z.number().int().min(1).max(100).default(100),
     })
@@ -744,39 +740,80 @@ export const WorkViewQueryRequest = z.discriminatedUnion('target', [
 export type WorkViewQueryRequest = z.infer<typeof WorkViewQueryRequest>;
 
 /** Facet request derived from one target contract. */
-export interface WorkViewFacetRequestFor<TContract extends ViewContract> {
+export interface WorkViewFacetRequestFor<TContract extends ViewContract, TContext> {
   readonly target: TContract['target'];
-  readonly fields: NonEmptyReadonlyArray<FilterableFieldKey<TContract>>;
+  readonly fields: readonly [FilterableFieldKey<TContract>];
+  readonly definition: ViewDefinitionFor<TContract>;
+  readonly temporaryFilter: FilterNodeFor<TContract> | null;
+  readonly context: TContext;
   readonly search?: string;
   readonly cursor?: string;
   readonly limit: number;
 }
 
-function facetRequest<const TContract extends ViewContract>(
+/** Wire input for a facet request before Zod applies context and paging defaults. */
+export type WorkViewFacetRequestInputFor<TContract extends ViewContract, TContext> = Omit<
+  WorkViewFacetRequestFor<TContract, TContext>,
+  'temporaryFilter' | 'context' | 'limit'
+> & {
+  readonly temporaryFilter?: FilterNodeFor<TContract> | null;
+  readonly context?: TContext;
+  readonly limit?: number;
+};
+
+function facetRequest<const TContract extends ViewContract, const TContext extends z.ZodType>(
   contract: TContract,
-): z.ZodType<WorkViewFacetRequestFor<TContract>> {
+  definition: z.ZodType<ViewDefinitionFor<TContract>, ViewDefinitionFor<TContract>>,
+  context: TContext,
+): z.ZodType<
+  WorkViewFacetRequestFor<TContract, z.output<TContext>>,
+  WorkViewFacetRequestInputFor<TContract, z.input<TContext>>
+> {
+  const organizationContext = context.parse({ kind: 'organization' });
   const fields = Object.entries(contract.fields)
     .filter(([, field]) => field.capabilities.filter === true)
     .map(([key]) => key);
   return z
     .object({
       target: z.literal(contract.target),
-      fields: z.array(z.enum(enumValues(fields, 'Facet fields'))).min(1),
+      fields: z.array(z.enum(enumValues(fields, 'Facet fields'))).length(1),
+      definition,
+      temporaryFilter: createFilterNodeSchema(contract).nullable().default(null),
+      context: context.default(organizationContext as never),
       search: z.string().trim().min(1).optional(),
       cursor: z.string().optional(),
       limit: z.number().int().min(1).max(100).default(50),
     })
-    .strict() as unknown as z.ZodType<WorkViewFacetRequestFor<TContract>>;
+    .strict() as unknown as z.ZodType<
+    WorkViewFacetRequestFor<TContract, z.output<TContext>>,
+    WorkViewFacetRequestInputFor<TContract, z.input<TContext>>
+  >;
 }
 
 /** Facet request for Task fields. */
-export const TaskWorkViewFacetRequest = facetRequest(TASK_VIEW_CONTRACT);
+export const TaskWorkViewFacetRequest = facetRequest(
+  TASK_VIEW_CONTRACT,
+  TaskViewDefinition,
+  TaskWorkViewContext,
+);
 /** Facet request for Project fields. */
-export const ProjectWorkViewFacetRequest = facetRequest(PROJECT_VIEW_CONTRACT);
+export const ProjectWorkViewFacetRequest = facetRequest(
+  PROJECT_VIEW_CONTRACT,
+  ProjectViewDefinition,
+  ProjectWorkViewContext,
+);
 /** Facet request for Program fields. */
-export const ProgramWorkViewFacetRequest = facetRequest(PROGRAM_VIEW_CONTRACT);
+export const ProgramWorkViewFacetRequest = facetRequest(
+  PROGRAM_VIEW_CONTRACT,
+  ProgramViewDefinition,
+  ProgramWorkViewContext,
+);
 /** Facet request for Initiative fields. */
-export const InitiativeWorkViewFacetRequest = facetRequest(INITIATIVE_VIEW_CONTRACT);
+export const InitiativeWorkViewFacetRequest = facetRequest(
+  INITIATIVE_VIEW_CONTRACT,
+  InitiativeViewDefinition,
+  InitiativeHierarchyWorkViewContext,
+);
 
 /** Target-discriminated request for option counts and searchable relation facets. */
 export const WorkViewFacetRequest = z.union([
@@ -864,40 +901,105 @@ export const WorkViewFacetResponse = z.union([
 /** A validated work-view facet response. */
 export type WorkViewFacetResponse = z.infer<typeof WorkViewFacetResponse>;
 
-type WorkViewOrderFor<TContract extends ViewContract, TId> =
+type RelationManyMutableGroupKey<TContract extends ViewContract> = {
+  [TField in MutableGroupKey<TContract>]: TContract['fields'][TField]['kind'] extends 'relation-many'
+    ? TField
+    : never;
+}[MutableGroupKey<TContract>];
+
+type ScalarMutableGroupKey<TContract extends ViewContract> = Exclude<
+  MutableGroupKey<TContract>,
+  RelationManyMutableGroupKey<TContract>
+>;
+
+type WorkViewOrderFor<TContract extends ViewContract, TId, TContext> =
   | {
       readonly target: TContract['target'];
       readonly itemId: TId;
+      readonly context: TContext;
       readonly groupField: null;
       readonly groupValue: null;
       readonly beforeId: TId | null;
       readonly afterId: TId | null;
     }
   | {
-      [TField in MutableGroupKey<TContract>]: {
+      [TField in ScalarMutableGroupKey<TContract>]: {
         readonly target: TContract['target'];
         readonly itemId: TId;
+        readonly context: TContext;
         readonly groupField: TField;
-        readonly groupValue: FieldOperandFor<TContract, TField>;
+        readonly groupValue: null extends FieldValueFor<TContract, TField>
+          ? FieldOperandFor<TContract, TField> | null
+          : FieldOperandFor<TContract, TField>;
         readonly beforeId: TId | null;
         readonly afterId: TId | null;
       };
-    }[MutableGroupKey<TContract>];
+    }[ScalarMutableGroupKey<TContract>]
+  | {
+      [TField in RelationManyMutableGroupKey<TContract>]: {
+        readonly target: TContract['target'];
+        readonly itemId: TId;
+        readonly context: TContext;
+        readonly groupField: TField;
+        readonly sourceGroupValue: FieldOperandFor<TContract, TField> | null;
+        readonly groupValue: FieldOperandFor<TContract, TField> | null;
+        readonly beforeId: TId | null;
+        readonly afterId: TId | null;
+      };
+    }[RelationManyMutableGroupKey<TContract>];
 
-function orderRequest<const TContract extends ViewContract, const TId extends z.ZodType>(
+type WorkViewOrderInputFor<TContract extends ViewContract, TId, TContext> =
+  WorkViewOrderFor<TContract, TId, TContext> extends infer TRequest
+    ? TRequest extends { readonly context: TContext }
+      ? Omit<TRequest, 'context'> & { readonly context?: TContext }
+      : never
+    : never;
+
+function orderRequest<
+  const TContract extends ViewContract,
+  const TId extends z.ZodType,
+  const TContext extends z.ZodType,
+>(
   contract: TContract,
   itemId: TId,
-): z.ZodType<WorkViewOrderFor<TContract, z.infer<TId>>> {
+  context: TContext,
+): z.ZodType<
+  WorkViewOrderFor<TContract, z.output<TId>, z.output<TContext>>,
+  WorkViewOrderInputFor<TContract, z.input<TId>, z.input<TContext>>
+> {
+  const organizationContext = context.parse({ kind: 'organization' });
   const variants: z.ZodObject<z.ZodRawShape>[] = [];
   for (const [groupField, field] of Object.entries(contract.fields)) {
     if (field.capabilities.mutateGroup !== true) continue;
+    const operand = field.operandSchema ?? field.schema;
+    if (field.kind === 'relation-many') {
+      variants.push(
+        z
+          .object({
+            target: z.literal(contract.target),
+            itemId,
+            context: context.default(organizationContext as never),
+            groupField: z.literal(groupField),
+            sourceGroupValue: operand.nullable(),
+            groupValue: operand.nullable(),
+            beforeId: itemId.nullable(),
+            afterId: itemId.nullable(),
+          })
+          .strict(),
+      );
+      continue;
+    }
+    const groupValue = field.schema.safeParse(null).success
+      ? z.union([operand, z.null()])
+      : operand;
     variants.push(
       z
         .object({
           target: z.literal(contract.target),
           itemId,
+          context: context.default(organizationContext as never),
           groupField: z.literal(groupField),
-          groupValue: field.operandSchema ?? field.schema,
+          groupValue,
           beforeId: itemId.nullable(),
           afterId: itemId.nullable(),
         })
@@ -909,6 +1011,7 @@ function orderRequest<const TContract extends ViewContract, const TId extends z.
       .object({
         target: z.literal(contract.target),
         itemId,
+        context: context.default(organizationContext as never),
         groupField: z.null(),
         groupValue: z.null(),
         beforeId: itemId.nullable(),
@@ -918,17 +1021,36 @@ function orderRequest<const TContract extends ViewContract, const TId extends z.
   );
   return z.union(
     variants as [z.ZodObject<z.ZodRawShape>, z.ZodObject<z.ZodRawShape>],
-  ) as unknown as z.ZodType<WorkViewOrderFor<TContract, z.infer<TId>>>;
+  ) as unknown as z.ZodType<
+    WorkViewOrderFor<TContract, z.output<TId>, z.output<TContext>>,
+    WorkViewOrderInputFor<TContract, z.input<TId>, z.input<TContext>>
+  >;
 }
 
 /** Manual or property-changing Task reorder request. */
-export const TaskWorkViewOrderRequest = orderRequest(TASK_VIEW_CONTRACT, TaskId);
+export const TaskWorkViewOrderRequest = orderRequest(
+  TASK_VIEW_CONTRACT,
+  TaskId,
+  TaskWorkViewContext,
+);
 /** Manual or property-changing Project reorder request. */
-export const ProjectWorkViewOrderRequest = orderRequest(PROJECT_VIEW_CONTRACT, ProjectId);
+export const ProjectWorkViewOrderRequest = orderRequest(
+  PROJECT_VIEW_CONTRACT,
+  ProjectId,
+  ProjectWorkViewContext,
+);
 /** Manual or property-changing Program reorder request. */
-export const ProgramWorkViewOrderRequest = orderRequest(PROGRAM_VIEW_CONTRACT, ProgramId);
+export const ProgramWorkViewOrderRequest = orderRequest(
+  PROGRAM_VIEW_CONTRACT,
+  ProgramId,
+  ProgramWorkViewContext,
+);
 /** Manual or property-changing Initiative reorder request. */
-export const InitiativeWorkViewOrderRequest = orderRequest(INITIATIVE_VIEW_CONTRACT, InitiativeId);
+export const InitiativeWorkViewOrderRequest = orderRequest(
+  INITIATIVE_VIEW_CONTRACT,
+  InitiativeId,
+  InitiativeHierarchyWorkViewContext,
+);
 
 /** Target-discriminated manual or property-changing reorder request. */
 export const WorkViewOrderRequest = z.union([
@@ -939,6 +1061,17 @@ export const WorkViewOrderRequest = z.union([
 ]);
 /** A validated work-view reorder request. */
 export type WorkViewOrderRequest = z.infer<typeof WorkViewOrderRequest>;
+
+/** Acknowledgement for one persisted shared work-view reorder. */
+export const WorkViewOrderResponse = z
+  .object({
+    target: z.enum(['task', 'project', 'program', 'initiative']),
+    itemId: z.string(),
+    rank: FractionalRank,
+  })
+  .strict();
+/** A validated shared work-view reorder acknowledgement. */
+export type WorkViewOrderResponse = z.infer<typeof WorkViewOrderResponse>;
 
 /** A personal override that never copies the saved or workspace-default definition. */
 export interface WorkViewPersonalOverride<TContract extends ViewContract> {

@@ -414,7 +414,7 @@ function measureFilter(node: unknown, depth = 0): FilterMeasure {
 /** Build the recursive runtime filter schema derived from a literal field contract. */
 export function createFilterNodeSchema<const TContract extends ViewContract>(
   contract: TContract,
-): z.ZodType<FilterNodeFor<TContract>> {
+): z.ZodType<FilterNodeFor<TContract>, FilterNodeFor<TContract>> {
   const variants: z.ZodType[] = [];
   for (const [field, definition] of Object.entries(contract.fields)) {
     if (definition.capabilities.filter !== true) continue;
@@ -457,7 +457,10 @@ export function createFilterNodeSchema<const TContract extends ViewContract>(
         });
       }
     })
-    .transform((node) => node as FilterNodeFor<TContract>);
+    .transform((node) => node as FilterNodeFor<TContract>) as z.ZodType<
+    FilterNodeFor<TContract>,
+    FilterNodeFor<TContract>
+  >;
 }
 
 declare const canonicalFilter: unique symbol;

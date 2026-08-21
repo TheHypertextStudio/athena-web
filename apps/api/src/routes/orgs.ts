@@ -78,6 +78,7 @@ import projectRollup from './project-rollup';
 import projectResources from './project-resources';
 import roles from './roles';
 import savedViews from './saved-views';
+import workViews from './work-views';
 import templates from './templates';
 import { entityMentionRoutes } from './entity-mentions';
 import mentions from './mentions';
@@ -487,6 +488,7 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/images', documentImages)
   .route('/:orgId/updates', updates)
   .route('/:orgId/saved-views', savedViews)
+  .route('/:orgId/work-views', workViews)
   .route('/:orgId/templates', templates)
   .route('/:orgId/process-definitions', processDefinitions)
   .route('/:orgId/recurrence-series', recurrenceSeries)

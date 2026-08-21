@@ -137,16 +137,31 @@ function initiativePageCtes(ctes: SQL, groupScope: SQL, organizationId: string):
 export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkViewQueryResponse> {
   const request = internalRequest(input.request);
   const contract = WORK_VIEW_SQL_CONTRACTS[request.target];
-  const sorts: Readonly<Record<string, SortFieldCompiler>> = contract.sorts;
   const sortTerms = request.definition.arrangement.orderBy;
   const manualRank = {
     value: manualRankExpression(request.target, request.context, input.organizationId),
     cursor: z.string().nullable(),
   };
+  const baseSorts: Readonly<Record<string, SortFieldCompiler>> = contract.sorts;
+  const priority = baseSorts['priority'];
+  const sorts: Readonly<Record<string, SortFieldCompiler>> =
+    priority && sortTerms.some((term) => term.field === 'priority')
+      ? {
+          ...baseSorts,
+          priority: {
+            value: manualRank.value,
+            cursor: manualRank.cursor,
+            semanticRanks: [...(priority.semanticRanks ?? []), priority.value],
+            semanticCursorSchemas: [...(priority.semanticCursorSchemas ?? []), priority.cursor],
+            valueDirection: 'asc',
+          },
+        }
+      : baseSorts;
   const groupPath = input.groupPath ?? [];
-  const suppliedCursor = request.cursor
-    ? decodeWorkViewCursor(request.cursor, undefined, groupPath)
-    : null;
+  const suppliedCursor =
+    request.cursor !== undefined && request.cursor !== null
+      ? decodeWorkViewCursor(request.cursor, undefined, groupPath)
+      : null;
   if (suppliedCursor) {
     try {
       validateSortTuple(sortTerms, sorts, suppliedCursor.sortTuple, manualRank);

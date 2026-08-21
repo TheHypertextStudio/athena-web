@@ -134,17 +134,75 @@ Radix, Docket MD3 primitives, Vitest, Testing Library, and Playwright.
 **Files:**
 
 - Create: `apps/api/src/routes/work-views.ts`
-- Modify: `apps/api/src/app.ts`
+- Modify: `apps/api/src/routes/orgs.ts` so the work-view routes retain the organization context
+  middleware instead of bypassing it through direct `apps/api/src/app.ts` registration
 - Modify: existing saved-view route and service files found under `apps/api/src/routes/`
 - Test: `apps/api/tests/routes/work-views.test.ts`
 - Test: existing saved-view route tests
 
-- [ ] Write contract tests for all four query/result variants, typed facets, reorder rejection,
+- [x] Write contract tests for all four query/result variants, typed facets, reorder rejection,
       default permissions, contextual attachment, and legacy response compatibility.
-- [ ] Add the four `/v1/orgs/:orgId/work-views/*` operations and migrate saved-view persistence.
-- [ ] Reject computed/read-only reorder groups and route mutable drops through canonical mutations.
-- [ ] Run focused route tests, API lint, and API typecheck.
-- [ ] Commit the slice as `feat: Expose typed work-view operations`.
+- [x] Add the four `/v1/orgs/:orgId/work-views/*` operations and migrate saved-view persistence.
+- [x] Reject computed/read-only reorder groups and route mutable drops through canonical mutations.
+- [x] Enforce owner and Team visibility, scope-specific sharing invariants, and the validated v2
+      Task-to-legacy compatibility projection on every saved-view operation.
+- [x] Keep group mutations and rank writes atomic, require `assign` for assignment drops, preserve
+      canonical status side effects, and clear nullable groups without leaking database errors.
+- [x] Apply manual rank within equal explicit priority values, compile truthful options for every
+      filterable facet field, and bind facet and query cursors to their complete execution identity.
+- [x] Run focused route tests, API lint, and API typecheck.
+- [x] Commit the slice as `feat: Expose typed work-view operations`.
+
+**Evidence:** The Types contract suites pass 10 tests. The API query-engine suites pass 33 tests,
+the typed route suite passes 26 tests, and the shared group-route suite passes 29 tests. Empty
+query and facet cursors fail with application-owned `400` responses. Saved Team visibility joins
+both membership and Team ownership to the saved-view organization. Task and Project label drops
+resolve only against tenant-valid owning Teams. Task mutations require subject-level `contribute`,
+and assignment drops also require subject-level `assign`. Task milestone drops use the canonical
+Project compatibility check. Cross-Team Task drops use the canonical state-transition writer with
+the destination Team's default status and derived terminal timestamps; same-Team drops change only
+rank. Initiative order membership authorizes only the exact item and neighbor ids, then reverse
+walks their context ancestry without materializing the query-page roster. Rank candidates are
+validated before writes, so an exhausted 128-character tail triggers the same bounded 16/32/64
+neighborhood rebalance and retry. A separate 50,000-row test caps changed ranks at 129 and proves
+signed-cursor continuation. Foreign-owned Initiative nodes remain context-readable but reject
+context-organization property writes, and label clearing carries the join tenant. V2-only Task
+definitions remain authoritative. A definition that the legacy algebra cannot express receives a
+guaranteed no-match legacy filter, and legacy filter patches reject it instead of erasing v2 state.
+Each facet request accepts exactly one field and removes only that field's predicate while the
+response distinct count keeps the original effective filter. Date options use `YYYY-MM-DD`, and
+datetime options use canonical UTC ISO values without truncating PostgreSQL's six fractional
+digits; the returned absolute operand selects the original row. Compatible legacy patches replace
+only filter and arrangement while preserving the v2 layout, properties, density, and empty-group
+presentation. Project, Program, and Initiative saved views store and emit the same guaranteed
+no-match Task projection for rollback clients. Typed reads and updates preserve their target
+definitions, while legacy patches remain invalid. Independently authorized relation catalogs include
+searchable zero-count options when other filters produce an empty roster. The catalogs exclude
+private entities that the caller cannot read. Initiative catalogs use an unfiltered authorized
+context universe, so foreign parent, owner, lead Team, Label, organization, and status options
+remain available at zero count. Each option, including the status name, resolves through its owner
+organization. Query and facet routes resolve the same session Hub
+timezone and bind it into cursor identity. Relation-many order requests carry source and destination
+memberships, including an empty destination, so Label and Project Team moves preserve unrelated
+memberships. Project Team moves keep exactly one primary edge aligned with `project.team_id` when
+that compatibility field is non-null. Removing the primary promotes the lexically first remaining
+Team, while removing the last membership clears the scalar and every primary edge. Relation
+catalogs apply search, continuation, and the page limit before materialization. The one-field request
+cap keeps facet execution to one bounded bucket statement. A stable
+organization/target/context advisory lock serializes each rank transaction. Occupied candidates
+then allocate distinct positions for overlapping moves. Fresh validation passes
+12 Types contract tests, 33 query-engine tests, 41 typed route tests, and 35 shared group-route tests.
+The clean API declaration build and 16 core transport tests pass. The built RPC contract retains
+typed query, facet, order, default, saved-view v2, and Hub personal view-state inputs and outputs.
+Organization-default reads and writes leave runtime response validation to the shared output
+serializer. Corrupt stored or returned rows therefore produce the application-owned `500` problem
+without exposing Zod field paths.
+The consuming web typecheck and response-union contract preserve canonical Hub preference identity
+and allow legacy Task callers to validate the discriminated saved-view response without a cast.
+Named Hono routes keep Zod wire inputs separate from parsed handler values. RPC callers can omit
+defaulted query, facet, order-context, saved-view scope, and schema-version fields while responses
+retain their exact target-discriminated types.
+Both typechecks, changed-file lint, and whitespace validation pass.
 
 ### Task 7: Build the shared web view controller and toolbar
 

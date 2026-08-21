@@ -4,6 +4,8 @@ import type { FilterPredicateFor, LayoutFor, MutableGroupKey } from '@docket/wor
 
 import {
   ActorOperand,
+  ProjectWorkViewOrderRequest,
+  ProgramWorkViewOrderRequest,
   resolveWorkViewDefinition,
   TaskWorkViewFacetRequest,
   TaskWorkViewOrderRequest,
@@ -133,11 +135,60 @@ describe('work-view contracts', () => {
     expect(
       TaskWorkViewFacetRequest.parse({
         target: 'task',
-        fields: ['status', 'assignee', 'labels'],
+        fields: ['status'],
         search: 'will',
         limit: 25,
+        definition: TaskWorkViewQueryRequest.parse({
+          target: 'task',
+          definition: {
+            version: 2,
+            target: 'task',
+            filter: null,
+            arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+            presentation: {
+              layout: 'list',
+              properties: ['status'],
+              density: 'comfortable',
+              showEmptyGroups: false,
+            },
+          },
+        }).definition,
+        temporaryFilter: {
+          kind: 'predicate',
+          field: 'priority',
+          operator: 'is',
+          operand: 'high',
+        },
+        context: { kind: 'team', teamId: ACTOR_ID },
       }),
-    ).toMatchObject({ target: 'task', fields: ['status', 'assignee', 'labels'] });
+    ).toMatchObject({
+      target: 'task',
+      fields: ['status'],
+      context: { kind: 'team' },
+    });
+    expect(() =>
+      TaskWorkViewFacetRequest.parse({
+        target: 'task',
+        fields: ['status', 'assignee'],
+        definition: TaskWorkViewQueryRequest.parse({
+          target: 'task',
+          definition: {
+            version: 2,
+            target: 'task',
+            filter: null,
+            arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+            presentation: {
+              layout: 'list',
+              properties: ['status'],
+              density: 'comfortable',
+              showEmptyGroups: false,
+            },
+          },
+        }).definition,
+        temporaryFilter: null,
+        context: { kind: 'organization' },
+      }),
+    ).toThrow();
     expect(
       WorkViewFacetResponse.parse({
         target: 'task',
@@ -156,18 +207,85 @@ describe('work-view contracts', () => {
       TaskWorkViewOrderRequest.parse({
         target: 'task',
         itemId: ACTOR_ID,
+        context: { kind: 'project', projectId: ACTOR_ID },
         groupField: 'status',
         groupValue: 'active',
         beforeId: null,
         afterId: null,
       }),
-    ).toMatchObject({ target: 'task', groupField: 'status' });
+    ).toMatchObject({ target: 'task', groupField: 'status', context: { kind: 'project' } });
+    expect(
+      TaskWorkViewOrderRequest.parse({
+        target: 'task',
+        itemId: ACTOR_ID,
+        context: { kind: 'organization' },
+        groupField: 'assignee',
+        groupValue: null,
+        beforeId: null,
+        afterId: null,
+      }),
+    ).toMatchObject({ target: 'task', groupField: 'assignee', groupValue: null });
     expect(() =>
       TaskWorkViewOrderRequest.parse({
         target: 'task',
         itemId: ACTOR_ID,
         groupField: 'blocked',
         groupValue: true,
+        beforeId: null,
+        afterId: null,
+      }),
+    ).toThrow();
+    expect(() =>
+      ProgramWorkViewOrderRequest.parse({
+        target: 'program',
+        itemId: ACTOR_ID,
+        context: { kind: 'team', teamId: ACTOR_ID },
+        groupField: null,
+        groupValue: null,
+        beforeId: null,
+        afterId: null,
+      }),
+    ).toThrow();
+  });
+
+  it('carries relation-many drag source and empty-target semantics in typed order requests', () => {
+    const destination = '01ARZ3NDEKTSV4RRFFQ69G5FAW';
+    expect(
+      TaskWorkViewOrderRequest.parse({
+        target: 'task',
+        itemId: ACTOR_ID,
+        context: { kind: 'organization' },
+        groupField: 'labels',
+        sourceGroupValue: ACTOR_ID,
+        groupValue: destination,
+        beforeId: null,
+        afterId: null,
+      }),
+    ).toMatchObject({
+      groupField: 'labels',
+      sourceGroupValue: ACTOR_ID,
+      groupValue: destination,
+    });
+    expect(
+      ProjectWorkViewOrderRequest.parse({
+        target: 'project',
+        itemId: ACTOR_ID,
+        context: { kind: 'organization' },
+        groupField: 'teams',
+        sourceGroupValue: ACTOR_ID,
+        groupValue: null,
+        beforeId: null,
+        afterId: null,
+      }),
+    ).toMatchObject({ groupField: 'teams', sourceGroupValue: ACTOR_ID, groupValue: null });
+    expect(() =>
+      TaskWorkViewOrderRequest.parse({
+        target: 'task',
+        itemId: ACTOR_ID,
+        context: { kind: 'organization' },
+        groupField: 'priority',
+        sourceGroupValue: 'low',
+        groupValue: 'high',
         beforeId: null,
         afterId: null,
       }),

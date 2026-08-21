@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
+import type { hc, InferRequestType, InferResponseType } from 'hono/client';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { afterAll, beforeAll, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import type { z } from 'zod';
 import ts from 'typescript';
 
 import type { AdminAppType as SourceAdminAppType, AppType as SourceAppType } from '../../src/app';
@@ -13,6 +15,28 @@ import type {
   AdminAppType as RpcContractAdminAppType,
   AppType as RpcContractAppType,
 } from '@docket/api/rpc-contract';
+import { FractionalRank, TaskId } from '@docket/types';
+import type {
+  OrganizationWorkViewDefaultBody as OrganizationWorkViewDefaultBodySchema,
+  SavedViewCreate as SavedViewCreateSchema,
+  SavedViewUpdate as SavedViewUpdateSchema,
+  SavedWorkViewCreate as SavedWorkViewCreateSchema,
+  SavedWorkViewUpdate as SavedWorkViewUpdateSchema,
+  TaskViewDefinition as TaskViewDefinitionSchema,
+  WorkViewFacetRequest as WorkViewFacetRequestSchema,
+  WorkViewOrderRequest as WorkViewOrderRequestSchema,
+  WorkViewQueryRequest as WorkViewQueryRequestSchema,
+} from '@docket/types';
+import type {
+  HubPreferences,
+  OrganizationWorkViewDefault,
+  SavedWorkViewCreate,
+  SavedWorkViewUpdate,
+  ViewInstanceKey,
+  WorkViewFacetResponse,
+  WorkViewOrderResponse,
+  WorkViewQueryResponse,
+} from '@docket/types';
 
 /* eslint-disable @typescript-eslint/no-unused-vars -- Compiler-only package-export assertion. */
 // @ts-expect-error The API package root is not exported.
@@ -141,6 +165,116 @@ describe('env + RPC transport contract', () => {
     expectTypeOf<Identical<RpcContractAdminAppType, SourceAdminAppType>>().toEqualTypeOf<true>();
 
     expect(Object.keys(await import('@docket/api/rpc-contract'))).toEqual([]);
+  });
+
+  it('publishes work-view, saved-view v2, and personal view-state declarations', () => {
+    type RpcClient = ReturnType<typeof hc<RpcContractAppType>>;
+    type OrgClient = RpcClient['v1']['orgs'][':orgId'];
+    type WorkViews = OrgClient['work-views'];
+    const taskDefinition = {
+      version: 2,
+      target: 'task',
+      filter: null,
+      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: [],
+        density: 'comfortable',
+        showEmptyGroups: false,
+      },
+    } as const satisfies z.input<typeof TaskViewDefinitionSchema>;
+    type QueryJson = InferRequestType<WorkViews['query']['$post']>['json'];
+    type QueryWire = z.input<typeof WorkViewQueryRequestSchema>;
+
+    expectTypeOf<QueryJson>().toExtend<QueryWire>();
+    expectTypeOf<QueryWire>().toExtend<QueryJson>();
+    type MinimalTaskQuery = Pick<Extract<QueryWire, { target: 'task' }>, 'target' | 'definition'>;
+    expectTypeOf<MinimalTaskQuery>().toExtend<QueryJson>();
+    expectTypeOf({ target: 'task', definition: taskDefinition } as const).toExtend<QueryJson>();
+    expectTypeOf<
+      InferResponseType<WorkViews['query']['$post'], 200>
+    >().toEqualTypeOf<WorkViewQueryResponse>();
+    type FacetJson = InferRequestType<WorkViews['facets']['$post']>['json'];
+    type FacetWire = z.input<typeof WorkViewFacetRequestSchema>;
+    expectTypeOf<FacetJson>().toExtend<FacetWire>();
+    expectTypeOf<FacetWire>().toExtend<FacetJson>();
+    type MinimalTaskFacet = Pick<
+      Extract<FacetWire, { target: 'task' }>,
+      'target' | 'fields' | 'definition'
+    >;
+    expectTypeOf<MinimalTaskFacet>().toExtend<FacetJson>();
+    expectTypeOf({
+      target: 'task',
+      fields: ['status'],
+      definition: taskDefinition,
+    } as const).toExtend<FacetJson>();
+    expectTypeOf<
+      InferResponseType<WorkViews['facets']['$post'], 200>
+    >().toEqualTypeOf<WorkViewFacetResponse>();
+    type OrderJson = InferRequestType<WorkViews['order']['$patch']>['json'];
+    type OrderWire = z.input<typeof WorkViewOrderRequestSchema>;
+    expectTypeOf<OrderJson>().toExtend<OrderWire>();
+    expectTypeOf<OrderWire>().toExtend<OrderJson>();
+    expectTypeOf({
+      target: 'task',
+      itemId: TaskId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV'),
+      groupField: null,
+      groupValue: null,
+      beforeId: null,
+      afterId: null,
+    } as const).toExtend<OrderJson>();
+    expectTypeOf<
+      InferResponseType<WorkViews['order']['$patch'], 200>
+    >().toEqualTypeOf<WorkViewOrderResponse>();
+    expectTypeOf<
+      InferResponseType<WorkViews['defaults'][':target']['$get'], 200>
+    >().toEqualTypeOf<OrganizationWorkViewDefault>();
+    type DefaultJson = InferRequestType<WorkViews['defaults'][':target']['$patch']>['json'];
+    type DefaultWire = z.input<typeof OrganizationWorkViewDefaultBodySchema>;
+    expectTypeOf<DefaultJson>().toExtend<DefaultWire>();
+    expectTypeOf<DefaultWire>().toExtend<DefaultJson>();
+
+    type SavedCreateJson = InferRequestType<OrgClient['saved-views']['$post']>['json'];
+    type SavedUpdateJson = InferRequestType<OrgClient['saved-views'][':id']['$patch']>['json'];
+    type SavedCreateWire =
+      | z.input<typeof SavedWorkViewCreateSchema>
+      | z.input<typeof SavedViewCreateSchema>;
+    type SavedUpdateWire =
+      | z.input<typeof SavedWorkViewUpdateSchema>
+      | z.input<typeof SavedViewUpdateSchema>;
+    expectTypeOf<SavedCreateJson>().toExtend<SavedCreateWire>();
+    expectTypeOf<SavedCreateWire>().toExtend<SavedCreateJson>();
+    expectTypeOf<SavedUpdateJson>().toExtend<SavedUpdateWire>();
+    expectTypeOf<SavedUpdateWire>().toExtend<SavedUpdateJson>();
+    type MinimalTaskSavedCreate = Pick<
+      Extract<SavedCreateWire, { target: 'task' }>,
+      'target' | 'name' | 'position' | 'context' | 'definition'
+    >;
+    expectTypeOf<MinimalTaskSavedCreate>().toExtend<SavedCreateJson>();
+    expectTypeOf({
+      target: 'task',
+      name: 'Contract view',
+      position: FractionalRank.parse('a0'),
+      context: { kind: 'organization' },
+      definition: taskDefinition,
+    } as const).toExtend<SavedCreateJson>();
+    expectTypeOf<SavedWorkViewCreate>().toExtend<z.output<typeof SavedWorkViewCreateSchema>>();
+    expectTypeOf<SavedWorkViewUpdate>().toExtend<z.output<typeof SavedWorkViewUpdateSchema>>();
+
+    type HubPreferencesResponse = InferResponseType<
+      RpcClient['v1']['hub']['preferences']['$get'],
+      200
+    >;
+    type HubPreferencesPatch = InferRequestType<
+      RpcClient['v1']['hub']['preferences']['$patch']
+    >['json'];
+    expectTypeOf<HubPreferencesResponse>().toEqualTypeOf<HubPreferences>();
+    type PersonalViewState = NonNullable<HubPreferencesResponse['viewState']>[number];
+    expectTypeOf<PersonalViewState['instanceKey']>().toEqualTypeOf<ViewInstanceKey>();
+    expectTypeOf<PersonalViewState['target']>().toEqualTypeOf<
+      'task' | 'project' | 'program' | 'initiative'
+    >();
+    expectTypeOf<HubPreferencesPatch>().toEqualTypeOf<HubPreferences>();
   });
 });
 

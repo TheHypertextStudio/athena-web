@@ -6,6 +6,8 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
+import { InitiativeWorkViewQueryRequest } from '@docket/types';
+import { programRequest, projectRequest, taskRequest } from '../work-views/request-fixtures';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -277,8 +279,260 @@ describe('labels router', () => {
 });
 
 describe('saved-views router', () => {
+  const nonTaskDefinitions = [
+    ['project', projectRequest().definition, 'p0'],
+    ['program', programRequest().definition, 'r0'],
+    [
+      'initiative',
+      InitiativeWorkViewQueryRequest.parse({
+        target: 'initiative',
+        definition: {
+          version: 2,
+          target: 'initiative',
+          filter: null,
+          arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+          presentation: {
+            layout: 'list',
+            properties: ['status', 'priority'],
+            density: 'comfortable',
+            showEmptyGroups: false,
+          },
+        },
+        temporaryFilter: null,
+        context: { kind: 'organization' },
+        limit: 100,
+      }).definition,
+      'i0',
+    ],
+  ] as const;
+
+  it.each(nonTaskDefinitions)(
+    'keeps rollback-client fields fail-closed for typed %s saved views',
+    async (target, definition, position) => {
+      const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+      const writer = appWithActor(r['savedViews'], orgId, ['contribute'], humanActorId);
+      const noMatchLegacy = {
+        filters: [{ field: 'estimateMinutes', op: 'lt', value: 0 }],
+        grouping: null,
+        sort: [],
+      };
+      const createResponse = await writer.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({
+          name: `Typed ${target} view`,
+          target,
+          context: { kind: 'organization' },
+          position,
+          definition,
+        }),
+      });
+
+      expect(createResponse.status).toBe(201);
+      const created = await body<{ id: string } & Record<string, unknown>>(createResponse);
+      expect(created).toMatchObject({ target, definition, ...noMatchLegacy });
+      const [storedAfterCreate] = await db
+        .select({
+          filters: schema.savedView.filters,
+          grouping: schema.savedView.grouping,
+          sort: schema.savedView.sort,
+        })
+        .from(schema.savedView)
+        .where(eq(schema.savedView.id, created.id));
+      expect(storedAfterCreate).toEqual(noMatchLegacy);
+
+      await db
+        .update(schema.savedView)
+        .set({ filters: [], grouping: null, sort: [] })
+        .where(eq(schema.savedView.id, created.id));
+      const rollbackRead = await writer.request(`/${created.id}`);
+      expect(rollbackRead.status).toBe(200);
+      expect(await body<Record<string, unknown>>(rollbackRead)).toMatchObject({
+        target,
+        definition,
+        ...noMatchLegacy,
+      });
+
+      const updatedDefinition = {
+        ...definition,
+        presentation: {
+          ...definition.presentation,
+          density: 'compact' as const,
+          showEmptyGroups: true,
+        },
+      };
+      const typedUpdate = await writer.request(`/${created.id}`, {
+        method: 'PATCH',
+        headers: J,
+        body: JSON.stringify({ definition: updatedDefinition }),
+      });
+      expect(typedUpdate.status).toBe(200);
+      expect(await body<Record<string, unknown>>(typedUpdate)).toMatchObject({
+        target,
+        definition: updatedDefinition,
+        ...noMatchLegacy,
+      });
+      const [storedAfterUpdate] = await db
+        .select({
+          filters: schema.savedView.filters,
+          grouping: schema.savedView.grouping,
+          sort: schema.savedView.sort,
+        })
+        .from(schema.savedView)
+        .where(eq(schema.savedView.id, created.id));
+      expect(storedAfterUpdate).toEqual(noMatchLegacy);
+
+      const legacyPatch = await writer.request(`/${created.id}`, {
+        method: 'PATCH',
+        headers: J,
+        body: JSON.stringify({ filters: [], grouping: null, sort: [] }),
+      });
+      expect(legacyPatch.status).toBe(422);
+      const unchanged = await writer.request(`/${created.id}`);
+      expect(unchanged.status).toBe(200);
+      expect(await body<Record<string, unknown>>(unchanged)).toMatchObject({
+        target,
+        definition: updatedDefinition,
+        ...noMatchLegacy,
+      });
+    },
+  );
+
+  it('reads a v2-only Task definition through fail-closed rollback-client fields', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(r['savedViews'], orgId, ['contribute'], humanActorId);
+    const definition = {
+      ...taskRequest().definition,
+      filter: {
+        kind: 'any',
+        children: [
+          {
+            kind: 'predicate',
+            field: 'assignee',
+            operator: 'is',
+            operand: { kind: 'current-actor' },
+          },
+          {
+            kind: 'not',
+            child: {
+              kind: 'predicate',
+              field: 'dueDate',
+              operator: 'on',
+              operand: { kind: 'relative', anchor: 'today', unit: 'week', offset: 1 },
+            },
+          },
+        ],
+      },
+    };
+
+    const response = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        name: 'V2-only Task view',
+        target: 'task',
+        context: { kind: 'organization' },
+        position: 'v2',
+        definition,
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const created = await body<{ id: string } & Record<string, unknown>>(response);
+    expect(created).toMatchObject({
+      definition,
+      filters: [{ field: 'estimateMinutes', op: 'lt', value: 0 }],
+      grouping: null,
+      sort: [],
+    });
+    await db
+      .update(schema.savedView)
+      .set({ grouping: { by: 'priority' } })
+      .where(eq(schema.savedView.id, created.id));
+    const rollbackRead = await writer.request(`/${created.id}`);
+    expect(rollbackRead.status).toBe(200);
+    expect(await body<Record<string, unknown>>(rollbackRead)).toMatchObject({
+      definition,
+      filters: [{ field: 'estimateMinutes', op: 'lt', value: 0 }],
+      grouping: null,
+      sort: [],
+    });
+  });
+
+  it('rejects a legacy patch that would erase a v2-only Task definition', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(r['savedViews'], orgId, ['contribute'], humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        name: 'Typed Task view',
+        target: 'task',
+        context: { kind: 'organization' },
+        position: 'u0',
+        definition: taskRequest().definition,
+      }),
+    });
+    expect(created.status).toBe(201);
+    const stored = await body<{ id: string }>(created);
+    const definition = {
+      ...taskRequest().definition,
+      filter: {
+        kind: 'not',
+        child: {
+          kind: 'any',
+          children: [
+            {
+              kind: 'predicate',
+              field: 'creator',
+              operator: 'is',
+              operand: { kind: 'current-actor' },
+            },
+            {
+              kind: 'predicate',
+              field: 'startDate',
+              operator: 'on',
+              operand: { kind: 'preset', value: 'this-month' },
+            },
+          ],
+        },
+      },
+    };
+    const response = await writer.request(`/${stored.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ definition }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await body<Record<string, unknown>>(response)).toMatchObject({
+      definition,
+      filters: [{ field: 'estimateMinutes', op: 'lt', value: 0 }],
+      grouping: null,
+      sort: [],
+    });
+
+    const rollbackPatch = await writer.request(`/${stored.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ filters: [], grouping: null, sort: [] }),
+    });
+    expect(rollbackPatch.status).toBe(422);
+    const unchanged = await writer.request(`/${stored.id}`);
+    expect(unchanged.status).toBe(200);
+    expect(await body<Record<string, unknown>>(unchanged)).toMatchObject({
+      definition,
+      filters: [{ field: 'estimateMinutes', op: 'lt', value: 0 }],
+      grouping: null,
+      sort: [],
+    });
+  });
+
   it('CRUD with defaults + explicit fields + 403/404/422', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    await db
+      .insert(schema.teamMember)
+      .values({ organizationId: orgId, teamId, actorId: humanActorId });
     const w = appWithActor(r['savedViews'], orgId, ['contribute'], humanActorId);
     expect((await body<{ items: unknown[] }>(await w.request('/'))).items).toHaveLength(0);
 
@@ -286,10 +540,34 @@ describe('saved-views router', () => {
     const created = await w.request('/', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ name: 'My view' }),
+      body: JSON.stringify({
+        name: 'My view',
+        filters: [{ field: 'priority', op: 'eq', value: 'high' }],
+      }),
     });
     expect(created.status).toBe(201);
-    const id = (await body<{ id: string }>(created)).id;
+    const legacy = await body<{
+      id: string;
+      target: string;
+      schemaVersion: number;
+      context: { kind: string };
+      definition: { target: string; filter: unknown };
+      position: string;
+      filters: unknown[];
+      grouping: unknown;
+      sort: unknown[];
+    }>(created);
+    const id = legacy.id;
+    expect(legacy).toMatchObject({
+      target: 'task',
+      schemaVersion: 2,
+      context: { kind: 'organization' },
+      definition: { target: 'task' },
+      filters: [{ field: 'priority', op: 'eq', value: 'high' }],
+      grouping: null,
+      sort: [],
+    });
+    expect(legacy.position).toMatch(/^[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*$/);
 
     // Explicit fields path.
     const created2 = await w.request('/', {
@@ -298,7 +576,6 @@ describe('saved-views router', () => {
       body: JSON.stringify({
         name: 'Team view',
         scope: 'team',
-        ownerActorId: humanActorId,
         teamId,
         filters: [],
         grouping: null,
@@ -307,6 +584,138 @@ describe('saved-views router', () => {
     });
     expect(created2.status).toBe(201);
 
+    const projectDefinition = projectRequest().definition;
+    const typed = await w.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        name: 'Portfolio',
+        scope: 'team',
+        teamId,
+        target: 'project',
+        context: { kind: 'team', teamId },
+        position: 'b0',
+        definition: projectDefinition,
+      }),
+    });
+    expect(typed.status).toBe(201);
+    const typedBody = await body<{
+      id: string;
+      target: string;
+      context: { kind: string };
+      definition: { target: string };
+      filters: unknown[];
+      grouping: unknown;
+      sort: unknown[];
+    }>(typed);
+    expect(typedBody).toMatchObject({
+      target: 'project',
+      context: { kind: 'team' },
+      definition: { target: 'project' },
+      filters: [{ field: 'estimateMinutes', op: 'lt', value: 0 }],
+      grouping: null,
+      sort: [],
+    });
+    expect(
+      (
+        await w.request(`/${typedBody.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ context: { kind: 'project', projectId: typedBody.id } }),
+        })
+      ).status,
+    ).toBe(422);
+
+    const [contextProgram] = await db
+      .insert(schema.program)
+      .values({
+        organizationId: orgId,
+        name: 'Context program',
+        status: 'active',
+        statusId: statusId('program', 'active'),
+      })
+      .returning({ id: schema.program.id });
+    const [contextProject] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: orgId,
+        teamId,
+        name: 'Context project',
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
+      .returning({ id: schema.project.id });
+    const [contextInitiative] = await db
+      .insert(schema.initiative)
+      .values({
+        organizationId: orgId,
+        name: 'Context initiative',
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
+      .returning({ id: schema.initiative.id });
+    if (!contextProgram || !contextProject || !contextInitiative) {
+      throw new Error('saved-view contexts were not seeded');
+    }
+    const initiativeDefinition = InitiativeWorkViewQueryRequest.parse({
+      target: 'initiative',
+      definition: {
+        version: 2,
+        target: 'initiative',
+        filter: null,
+        arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+        presentation: {
+          layout: 'list',
+          properties: ['status'],
+          density: 'comfortable',
+          showEmptyGroups: false,
+        },
+      },
+    }).definition;
+    const typedCreates = [
+      {
+        name: 'Project Tasks',
+        target: 'task',
+        context: { kind: 'project', projectId: contextProject.id },
+        position: 'c0',
+        definition: taskRequest().definition,
+      },
+      {
+        name: 'Program Projects',
+        target: 'project',
+        context: { kind: 'program', programId: contextProgram.id },
+        position: 'd0',
+        definition: projectRequest().definition,
+      },
+      {
+        name: 'Initiative Programs',
+        scope: 'organization',
+        target: 'program',
+        context: { kind: 'initiative', initiativeId: contextInitiative.id },
+        position: 'e0',
+        definition: programRequest().definition,
+      },
+      {
+        name: 'Initiative branch',
+        target: 'initiative',
+        context: { kind: 'initiative', initiativeId: contextInitiative.id },
+        position: 'f0',
+        definition: initiativeDefinition,
+      },
+    ];
+    for (const input of typedCreates) {
+      const response = await w.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify(input),
+      });
+      expect(response.status).toBe(201);
+      expect(await body<{ target: string; context: { kind: string } }>(response)).toMatchObject({
+        target: input.target,
+        context: { kind: input.context.kind },
+      });
+    }
+
     expect((await w.request(`/${id}`)).status).toBe(200);
     const patched = await w.request(`/${id}`, {
       method: 'PATCH',
@@ -314,14 +723,17 @@ describe('saved-views router', () => {
       body: JSON.stringify({
         name: 'Renamed',
         scope: 'organization',
-        ownerActorId: humanActorId,
-        teamId,
+        ownerActorId: null,
+        teamId: null,
         filters: [],
         grouping: null,
         sort: [],
       }),
     });
     expect(patched.status).toBe(200);
+    expect(
+      await body<{ ownerActorId: string | null; teamId: string | null }>(patched),
+    ).toMatchObject({ ownerActorId: null, teamId: null });
     expect((await w.request(`/${id}`, { method: 'DELETE' })).status).toBe(200);
 
     const v = appWithActor(r['savedViews'], orgId, ['view']);
@@ -341,6 +753,281 @@ describe('saved-views router', () => {
       (await w.request('/', { method: 'POST', headers: J, body: JSON.stringify({ name: '' }) }))
         .status,
     ).toBe(422);
+  });
+
+  it('enforces personal and Team visibility plus scope-specific sharing invariants', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const [otherActor] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Grace' })
+      .returning({ id: schema.actor.id });
+    if (!otherActor) throw new Error('saved-view actor was not seeded');
+    await db.insert(schema.teamMember).values({
+      organizationId: orgId,
+      teamId,
+      actorId: humanActorId,
+    });
+    const owner = appWithActor(r['savedViews'], orgId, ['contribute'], humanActorId);
+    const outsider = appWithActor(r['savedViews'], orgId, ['contribute'], otherActor.id);
+    const create = async (input: Record<string, unknown>) => {
+      const response = await owner.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify(input),
+      });
+      expect(response.status).toBe(201);
+      return body<{ id: string }>(response);
+    };
+    const personal = await create({ name: 'Mine' });
+    const teamView = await create({ name: 'Team', scope: 'team', teamId });
+    const organizationView = await create({ name: 'Everyone', scope: 'organization' });
+    const foreign = await seedBaseOrg(db, schema);
+    await db.insert(schema.teamMember).values({
+      organizationId: orgId,
+      teamId: foreign.teamId,
+      actorId: otherActor.id,
+    });
+    const [corruptTeamView] = await db
+      .insert(schema.savedView)
+      .values({
+        organizationId: orgId,
+        name: 'Foreign Team',
+        scope: 'team',
+        teamId: foreign.teamId,
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.savedView.id });
+    if (!corruptTeamView) throw new Error('corrupt saved Team view was not seeded');
+
+    const outsiderList = await body<{ items: { id: string }[] }>(await outsider.request('/'));
+    expect(outsiderList.items.map((item) => item.id)).toEqual([organizationView.id]);
+    expect((await outsider.request(`/${corruptTeamView.id}`)).status).toBe(404);
+    expect(
+      (
+        await outsider.request(`/${corruptTeamView.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ name: 'Still foreign' }),
+        })
+      ).status,
+    ).toBe(404);
+    expect((await outsider.request(`/${corruptTeamView.id}`, { method: 'DELETE' })).status).toBe(
+      404,
+    );
+    expect((await outsider.request(`/${personal.id}`)).status).toBe(404);
+    expect((await outsider.request(`/${teamView.id}`)).status).toBe(404);
+    expect(
+      (
+        await outsider.request(`/${personal.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ name: 'Stolen' }),
+        })
+      ).status,
+    ).toBe(404);
+    expect((await outsider.request(`/${personal.id}`, { method: 'DELETE' })).status).toBe(404);
+    expect(
+      (
+        await outsider.request(`/${teamView.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ name: 'Stolen Team' }),
+        })
+      ).status,
+    ).toBe(404);
+    expect((await outsider.request(`/${teamView.id}`, { method: 'DELETE' })).status).toBe(404);
+
+    await db.insert(schema.teamMember).values({
+      organizationId: orgId,
+      teamId,
+      actorId: otherActor.id,
+    });
+    expect((await outsider.request(`/${teamView.id}`)).status).toBe(200);
+    expect(
+      (
+        await outsider.request(`/${teamView.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ name: 'Team renamed' }),
+        })
+      ).status,
+    ).toBe(200);
+    expect((await outsider.request(`/${organizationView.id}`)).status).toBe(200);
+
+    expect(
+      (
+        await owner.request('/', {
+          method: 'POST',
+          headers: J,
+          body: JSON.stringify({ name: 'Broken Team', scope: 'team' }),
+        })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await owner.request('/', {
+          method: 'POST',
+          headers: J,
+          body: JSON.stringify({ name: 'Fake personal', ownerActorId: otherActor.id }),
+        })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await owner.request(`/${personal.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ ownerActorId: null }),
+        })
+      ).status,
+    ).toBe(422);
+  });
+
+  it('projects typed Task creates and updates through the legacy fields', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const owner = appWithActor(r['savedViews'], orgId, ['contribute'], humanActorId);
+    const firstDefinition = taskRequest({
+      definition: {
+        ...taskRequest().definition,
+        filter: {
+          kind: 'predicate',
+          field: 'priority',
+          operator: 'is',
+          operand: 'high',
+        },
+        arrangement: {
+          groupBy: 'status',
+          subGroupBy: null,
+          orderBy: [{ field: 'dueDate', direction: 'asc' }],
+        },
+      },
+    }).definition;
+    const created = await owner.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        name: 'Typed Task',
+        target: 'task',
+        context: { kind: 'organization' },
+        position: 'g0',
+        definition: firstDefinition,
+      }),
+    });
+    expect(created.status).toBe(201);
+    const first = await body<{
+      id: string;
+      filters: unknown[];
+      grouping: unknown;
+      sort: unknown[];
+    }>(created);
+    expect(first).toMatchObject({
+      filters: [{ field: 'priority', op: 'eq', value: 'high' }],
+      grouping: { by: 'state' },
+      sort: [{ field: 'dueDate', order: 'asc' }],
+    });
+
+    const secondDefinition = taskRequest({
+      definition: {
+        ...taskRequest().definition,
+        filter: {
+          kind: 'predicate',
+          field: 'title',
+          operator: 'contains',
+          operand: 'launch',
+        },
+      },
+    }).definition;
+    const updated = await owner.request(`/${first.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ definition: secondDefinition }),
+    });
+    expect(updated.status).toBe(200);
+    expect(
+      await body<{ filters: unknown[]; grouping: unknown; sort: unknown[] }>(updated),
+    ).toMatchObject({
+      filters: [{ field: 'title', op: 'contains', value: 'launch' }],
+      grouping: null,
+      sort: [],
+    });
+  });
+
+  it('preserves typed Task presentation when a legacy client patches view behavior', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const owner = appWithActor(r['savedViews'], orgId, ['contribute'], humanActorId);
+    const presentation = {
+      layout: 'board' as const,
+      properties: ['status', 'priority', 'assignee', 'labels'] as const,
+      density: 'compact' as const,
+      showEmptyGroups: true,
+    };
+    const definition = taskRequest({
+      definition: {
+        ...taskRequest().definition,
+        filter: {
+          kind: 'predicate',
+          field: 'priority',
+          operator: 'is',
+          operand: 'high',
+        },
+        arrangement: {
+          groupBy: 'status',
+          subGroupBy: null,
+          orderBy: [{ field: 'dueDate', direction: 'asc' }],
+        },
+        presentation,
+      },
+    }).definition;
+    const created = await owner.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        name: 'Board with custom properties',
+        target: 'task',
+        context: { kind: 'organization' },
+        position: 'g1',
+        definition,
+      }),
+    });
+    expect(created.status).toBe(201);
+    const saved = await body<{ id: string }>(created);
+
+    const updated = await owner.request(`/${saved.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({
+        filters: [{ field: 'title', op: 'contains', value: 'launch' }],
+        grouping: { by: 'priority' },
+        sort: [{ field: 'createdAt', order: 'desc' }],
+      }),
+    });
+
+    expect(updated.status).toBe(200);
+    const result = await body<{
+      definition: {
+        filter: unknown;
+        arrangement: unknown;
+        presentation: unknown;
+      };
+    }>(updated);
+    expect(result.definition).toMatchObject({
+      filter: {
+        kind: 'all',
+        children: [{ kind: 'predicate', field: 'title', operator: 'contains', operand: 'launch' }],
+      },
+      arrangement: {
+        groupBy: 'priority',
+        subGroupBy: null,
+        orderBy: [{ field: 'createdAt', direction: 'desc' }],
+      },
+      presentation,
+    });
+
+    const reread = await owner.request(`/${saved.id}`);
+    expect(reread.status).toBe(200);
+    expect(
+      (await body<{ definition: { presentation: unknown } }>(reread)).definition.presentation,
+    ).toEqual(presentation);
   });
 });
 

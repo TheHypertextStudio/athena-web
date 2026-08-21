@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { HubPreferences } from '../src/hub-preferences';
+import { ProjectViewDefinition } from '../src/work-view';
 import {
   migrateLegacyTaskViewDefinition,
   OrganizationWorkViewDefault,
+  parseSavedWorkViewUpdate,
+  projectTaskViewDefinitionToLegacy,
+  projectTaskViewDefinitionToLegacyFallback,
   SavedWorkViewCreate,
   SavedWorkViewOut,
 } from '../src/saved-view';
@@ -11,6 +15,48 @@ import {
 const ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 describe('saved work views', () => {
+  it('projects a compatible v2 Task definition back to the legacy response fields', () => {
+    const definition = migrateLegacyTaskViewDefinition({
+      filters: [
+        { field: 'priority', op: 'eq', value: 'high' },
+        { field: 'assigneeId', op: 'in', value: [ID] },
+      ],
+      grouping: { by: 'state', subBy: 'assigneeId' },
+      sort: [{ field: 'dueDate', order: 'desc' }],
+    });
+
+    expect(projectTaskViewDefinitionToLegacy(definition)).toEqual({
+      filters: [
+        { field: 'priority', op: 'eq', value: 'high' },
+        { field: 'assigneeId', op: 'in', value: [ID] },
+      ],
+      grouping: { by: 'state', subBy: 'assigneeId' },
+      sort: [{ field: 'dueDate', order: 'desc' }],
+    });
+  });
+
+  it('uses a fail-closed legacy filter when a valid v2 Task definition cannot be projected', () => {
+    const definition = migrateLegacyTaskViewDefinition({ filters: [], grouping: null, sort: [] });
+    const v2Only = {
+      ...definition,
+      filter: {
+        kind: 'not',
+        child: {
+          kind: 'predicate',
+          field: 'assignee',
+          operator: 'is',
+          operand: { kind: 'current-actor' },
+        },
+      },
+    } as const;
+
+    expect(projectTaskViewDefinitionToLegacyFallback(v2Only)).toEqual({
+      filters: [{ field: 'estimateMinutes', op: 'lt', value: 0 }],
+      grouping: null,
+      sort: [],
+    });
+  });
+
   it('migrates a flat Task view without changing its boolean meaning or order', () => {
     expect(
       migrateLegacyTaskViewDefinition({
@@ -105,5 +151,43 @@ describe('saved work views', () => {
     ).toMatchObject({
       viewState: [{ target: 'task', lastUsedLayout: 'board', favoriteViewIds: [ID] }],
     });
+  });
+
+  it('parses updates against the stored immutable target', () => {
+    const taskDefinition = migrateLegacyTaskViewDefinition({
+      filters: [],
+      grouping: null,
+      sort: [],
+    });
+    const projectDefinition = ProjectViewDefinition.parse({
+      version: 2,
+      target: 'project',
+      filter: null,
+      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: ['status'],
+        density: 'comfortable',
+        showEmptyGroups: false,
+      },
+    });
+    expect(
+      parseSavedWorkViewUpdate('project', {
+        definition: projectDefinition,
+        context: { kind: 'program', programId: ID },
+      }),
+    ).toMatchObject({ definition: { target: 'project' }, context: { kind: 'program' } });
+    expect(() =>
+      parseSavedWorkViewUpdate('project', {
+        definition: taskDefinition,
+        context: { kind: 'organization' },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseSavedWorkViewUpdate('project', {
+        definition: projectDefinition,
+        context: { kind: 'project', projectId: ID },
+      }),
+    ).toThrow();
   });
 });

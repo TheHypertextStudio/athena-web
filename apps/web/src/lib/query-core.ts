@@ -242,6 +242,10 @@ export class ApiRequestError extends UserFacingError {
   }
 }
 
+type RpcResponseBody<TResponse extends RpcResponse<unknown>> = Awaited<
+  ReturnType<TResponse['json']>
+>;
+
 /**
  * Await a Hono RPC call and return its parsed body, throwing a readable error on failure.
  *
@@ -252,18 +256,23 @@ export class ApiRequestError extends UserFacingError {
  * `status`/`code`; response `title`/`detail` are ignored. A network rejection becomes the same safe
  * error type with status `0` and the original value retained only as its diagnostic cause.
  *
- * @typeParam T - The parsed response body type, inferred from the Hono client call.
+ * @typeParam TResponse - The RPC response type whose JSON body is inferred without flattening
+ * discriminated response unions.
  * @param call - A thunk performing exactly one Hono RPC call.
  * @param fallbackMessage - Application-owned copy for this operation.
  * @returns the parsed response body.
  * @throws {ApiRequestError} when the response is non-OK.
  * @throws {ApiRequestError} when the request itself rejects (network failure).
  */
-export async function unwrap<T>(
-  call: () => Promise<RpcResponse<T>>,
+export function unwrap<TResponse extends RpcResponse<unknown>>(
+  call: () => Promise<TResponse>,
   fallbackMessage: string,
-): Promise<T> {
-  let response: RpcResponse<T>;
+): Promise<RpcResponseBody<TResponse>>;
+export async function unwrap(
+  call: () => Promise<RpcResponse<unknown>>,
+  fallbackMessage: string,
+): Promise<unknown> {
+  let response: RpcResponse<unknown>;
   try {
     response = await call();
   } catch (caught) {

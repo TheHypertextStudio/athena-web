@@ -224,6 +224,7 @@ function requiredScalarRelationsSql(target: ViewTarget): SQL {
  * @param actorId - Authenticated actor in the requested organization.
  * @param userId - Caller identity used for foreign Initiative owners.
  * @param filter - Compiled direct-match filter.
+ * @param authorizationScope - Optional indexed candidate restriction for point authorization.
  * @returns Materialized CTE definitions reused by page, count, and group projections.
  */
 export function compileRosterCtes(
@@ -233,12 +234,14 @@ export function compileRosterCtes(
   actorId: string,
   userId: string | null,
   filter: SQL,
+  authorizationScope: SQL = sql`true`,
 ): SQL {
   const table = WORK_VIEW_SQL_CONTRACTS[target].table;
   if (target === 'initiative') {
     return sql`authorized_base as materialized (
         select ${baseColumns('initiative')}, ${organizationId}::text as _context_organization_id from initiative e
-        where ${compileAuthorizationSql('initiative', organizationId, actorId, userId)}
+        where ${authorizationScope}
+          and ${compileAuthorizationSql('initiative', organizationId, actorId, userId)}
       ), authorized as materialized (
         select e.*, ${enrichmentSql('initiative')} from authorized_base e
         left join work_status status_meta on status_meta.id=e.status_id
@@ -262,6 +265,7 @@ export function compileRosterCtes(
   return sql`authorized_base as materialized (
       select ${baseColumns(target)} from ${sql.raw(table)} e
       where e.organization_id=${organizationId}
+        and ${authorizationScope}
         and ${requiredScalarRelationsSql(target)}
         and ${compileAuthorizationSql(target, organizationId, actorId, userId)}
     ), authorized as materialized (

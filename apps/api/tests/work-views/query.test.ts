@@ -316,7 +316,7 @@ describe('queryWorkView', () => {
         },
       },
       temporaryFilter: null,
-      context: { kind: 'initiative', initiativeId: root.id },
+      context: { kind: 'initiative', initiativeId: InitiativeId.parse(root.id) },
       limit: 100,
     };
 

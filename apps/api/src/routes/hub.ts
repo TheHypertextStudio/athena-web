@@ -22,12 +22,14 @@ import {
   StreamPageOut,
   StreamQuery,
 } from '@docket/types';
+import type { HubPreferences as HubPreferencesValue } from '@docket/types';
 import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
+import type { JsonRoute } from '../lib/hono-rpc';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import {
@@ -105,8 +107,23 @@ async function resolveHubActivityCursor(
   return row ?? null;
 }
 
-/** Hub router: cross-org `today`, `inbox`, `activity`, `portfolio`, and `search` surfaces. */
-const hubRouter = new Hono<AppEnv>()
+/** Named RPC schema that preserves the canonical Hub preferences type in declarations. */
+export type HubPreferenceRoutes = JsonRoute<
+  'get',
+  '/preferences',
+  Record<never, never>,
+  Record<never, never>,
+  HubPreferencesValue
+> &
+  JsonRoute<
+    'patch',
+    '/preferences',
+    { json: HubPreferencesValue },
+    { json: HubPreferencesValue },
+    HubPreferencesValue
+  >;
+
+const hubPreferenceRoutes: Hono<AppEnv, HubPreferenceRoutes> = new Hono<AppEnv>()
   .get(
     '/preferences',
     apiDoc({
@@ -120,23 +137,6 @@ const hubRouter = new Hono<AppEnv>()
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
       return ok(c, HubPreferences, await readHubPreferences(session.user.id));
-    },
-  )
-  .post(
-    '/today/items/:planItemId/complete',
-    apiDoc({
-      tag: 'Hub',
-      summary: 'Complete one accepted Today item',
-      response: HubTodayCompleteOut,
-      description:
-        "Resolve a caller-owned personal plan row, require the caller's active membership to hold `contribute` in the Task's organization, advance the Task through the owning Team's completed workflow state, and mark the plan row done in one transaction. The client supplies no organization, Task, user, or state id.",
-    }),
-    zParam(todayItemParam),
-    async (c) => {
-      const session = c.get('session');
-      if (!session?.user) throw new AuthError();
-      const { planItemId } = c.req.valid('param');
-      return ok(c, HubTodayCompleteOut, await completeTodayItem(session.user.id, planItemId));
     },
   )
   .patch(
@@ -175,6 +175,27 @@ const hubRouter = new Hono<AppEnv>()
         return HubPreferences.parse(updated.preferences);
       });
       return ok(c, HubPreferences, preferences);
+    },
+  );
+
+/** Hub router: cross-org `today`, `inbox`, `activity`, `portfolio`, and `search` surfaces. */
+const hubRouter = new Hono<AppEnv>()
+  .route('/', hubPreferenceRoutes)
+  .post(
+    '/today/items/:planItemId/complete',
+    apiDoc({
+      tag: 'Hub',
+      summary: 'Complete one accepted Today item',
+      response: HubTodayCompleteOut,
+      description:
+        "Resolve a caller-owned personal plan row, require the caller's active membership to hold `contribute` in the Task's organization, advance the Task through the owning Team's completed workflow state, and mark the plan row done in one transaction. The client supplies no organization, Task, user, or state id.",
+    }),
+    zParam(todayItemParam),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { planItemId } = c.req.valid('param');
+      return ok(c, HubTodayCompleteOut, await completeTodayItem(session.user.id, planItemId));
     },
   )
   .get(

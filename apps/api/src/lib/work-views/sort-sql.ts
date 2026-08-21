@@ -13,6 +13,10 @@ export interface SortFieldCompiler {
   readonly semanticRanks?: readonly SQL[];
   /** Runtime schemas paired with semantic rank expressions. */
   readonly semanticCursorSchemas?: readonly z.ZodType<WorkViewCursorScalar>[];
+  /** Optional direction for each semantic expression instead of the requested term direction. */
+  readonly semanticDirections?: readonly ('term' | 'asc' | 'desc')[];
+  /** Optional direction for the stored value instead of the requested term direction. */
+  readonly valueDirection?: 'term' | 'asc' | 'desc';
 }
 
 /** An exhaustive SQL sort registry for a derived target field-key union. */
@@ -30,6 +34,13 @@ function ordered(expression: SQL, direction: 'asc' | 'desc'): SQL {
   return direction === 'asc'
     ? sql`${expression} asc nulls last`
     : sql`${expression} desc nulls last`;
+}
+
+function resolvedDirection(
+  requested: 'asc' | 'desc',
+  override: 'term' | 'asc' | 'desc' | undefined,
+): 'asc' | 'desc' {
+  return override === undefined || override === 'term' ? requested : override;
 }
 
 /**
@@ -50,10 +61,12 @@ export function compileSortSql<TKey extends string>(
   if (terms.length === 0 && fallback) result.push(ordered(fallback.value, 'asc'));
   for (const term of terms) {
     const field = fields[term.field];
-    for (const semanticRank of field.semanticRanks ?? []) {
-      result.push(ordered(semanticRank, term.direction));
+    for (const [index, semanticRank] of (field.semanticRanks ?? []).entries()) {
+      result.push(
+        ordered(semanticRank, resolvedDirection(term.direction, field.semanticDirections?.[index])),
+      );
     }
-    result.push(ordered(field.value, term.direction));
+    result.push(ordered(field.value, resolvedDirection(term.direction, field.valueDirection)));
   }
   result.push(sql`${entityId} asc`);
   return result;
@@ -92,10 +105,16 @@ export function compileKeysetSql<TKey extends string>(
 ): SQL {
   const positions = terms.flatMap((term) => {
     const field = fields[term.field];
-    return [...(field.semanticRanks ?? []), field.value].map((expression) => ({
-      expression,
-      direction: term.direction,
-    }));
+    return [
+      ...(field.semanticRanks ?? []).map((expression, index) => ({
+        expression,
+        direction: resolvedDirection(term.direction, field.semanticDirections?.[index]),
+      })),
+      {
+        expression: field.value,
+        direction: resolvedDirection(term.direction, field.valueDirection),
+      },
+    ];
   });
   if (terms.length === 0 && fallback) {
     positions.push({ expression: fallback.value, direction: 'asc' });

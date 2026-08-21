@@ -67,7 +67,7 @@ export interface ResolvedLabel extends LabelRefRow {
  * data separated. Two small closures per entity stay fully typed instead.
  */
 interface LabelJoin {
-  readonly clear: (tx: Tx, subjectId: string) => Promise<unknown>;
+  readonly clear: (tx: Tx, subjectId: string, orgId: string) => Promise<unknown>;
   readonly attach: (
     tx: Tx,
     subjectId: string,
@@ -89,7 +89,10 @@ const LABEL_REF_COLUMNS = { id: label.id, name: label.name, color: label.color }
 
 const JOINS: Record<LabelableKind, LabelJoin> = {
   task: {
-    clear: (tx, id) => tx.delete(taskLabel).where(eq(taskLabel.taskId, id)),
+    clear: (tx, id, orgId) =>
+      tx
+        .delete(taskLabel)
+        .where(and(eq(taskLabel.taskId, id), eq(taskLabel.organizationId, orgId))),
     attach: (tx, id, orgId, labelIds) =>
       tx
         .insert(taskLabel)
@@ -109,7 +112,10 @@ const JOINS: Record<LabelableKind, LabelJoin> = {
         .orderBy(label.name),
   },
   project: {
-    clear: (tx, id) => tx.delete(projectLabel).where(eq(projectLabel.projectId, id)),
+    clear: (tx, id, orgId) =>
+      tx
+        .delete(projectLabel)
+        .where(and(eq(projectLabel.projectId, id), eq(projectLabel.organizationId, orgId))),
     attach: (tx, id, orgId, labelIds) =>
       tx
         .insert(projectLabel)
@@ -134,7 +140,12 @@ const JOINS: Record<LabelableKind, LabelJoin> = {
         .orderBy(label.name),
   },
   initiative: {
-    clear: (tx, id) => tx.delete(initiativeLabel).where(eq(initiativeLabel.initiativeId, id)),
+    clear: (tx, id, orgId) =>
+      tx
+        .delete(initiativeLabel)
+        .where(
+          and(eq(initiativeLabel.initiativeId, id), eq(initiativeLabel.organizationId, orgId)),
+        ),
     attach: (tx, id, orgId, labelIds) =>
       tx
         .insert(initiativeLabel)
@@ -159,7 +170,10 @@ const JOINS: Record<LabelableKind, LabelJoin> = {
         .orderBy(label.name),
   },
   program: {
-    clear: (tx, id) => tx.delete(programLabel).where(eq(programLabel.programId, id)),
+    clear: (tx, id, orgId) =>
+      tx
+        .delete(programLabel)
+        .where(and(eq(programLabel.programId, id), eq(programLabel.organizationId, orgId))),
     attach: (tx, id, orgId, labelIds) =>
       tx
         .insert(programLabel)
@@ -184,7 +198,10 @@ const JOINS: Record<LabelableKind, LabelJoin> = {
         .orderBy(label.name),
   },
   resource: {
-    clear: (tx, id) => tx.delete(resourceLabel).where(eq(resourceLabel.resourceId, id)),
+    clear: (tx, id, orgId) =>
+      tx
+        .delete(resourceLabel)
+        .where(and(eq(resourceLabel.resourceId, id), eq(resourceLabel.organizationId, orgId))),
     attach: (tx, id, orgId, labelIds) =>
       tx
         .insert(resourceLabel)
@@ -250,28 +267,36 @@ export function applyExclusivity(labels: readonly ResolvedLabel[]): ResolvedLabe
  * Validate label ids against the org (and, when given, a team) and resolve exclusivity.
  *
  * @remarks
- * A label is offerable to a subject when it is workspace-wide (`teamId` null) or scoped to the
- * subject's own team. Passing `teamId` narrows to exactly that; omitting it accepts only
- * workspace-wide labels, which is the correct default for entities that have no team of their
- * own.
+ * A label is offerable to a subject when it is workspace-wide (`teamId` null) or scoped to one of
+ * the subject's owning Teams. Passing `teamId` or `teamIds` narrows to those Teams; omitting both
+ * accepts only workspace-wide labels, which is the correct default for entities that have no Team
+ * of their own.
  *
  * @param orgId - The verified tenant id.
  * @param labelIds - Requested label ids, in caller order; duplicates are collapsed.
- * @param options - Optional `teamId` to additionally admit that team's labels, and a `dbh` to
- *   read inside an open transaction.
+ * @param options - Optional `teamId` or `teamIds` to admit labels from valid owning Teams, and a
+ *   `dbh` to read inside an open transaction.
  * @returns The resolved, exclusivity-collapsed set in caller order.
  * @throws {NotFoundError} When any id is unknown, cross-org, or scoped to a different team.
  */
 export async function resolveLabelSet(
   orgId: string,
   labelIds: readonly string[] | undefined,
-  options: { teamId?: string | null | undefined; dbh?: Db | undefined } = {},
+  options: {
+    teamId?: string | null | undefined;
+    teamIds?: readonly string[] | undefined;
+    dbh?: Db | undefined;
+  } = {},
 ): Promise<ResolvedLabel[]> {
   const unique = [...new Set(labelIds ?? [])];
   if (unique.length === 0) return [];
 
-  const { teamId = null, dbh = db } = options;
-  const scope = teamId ? or(isNull(label.teamId), eq(label.teamId, teamId)) : isNull(label.teamId);
+  const { teamId = null, teamIds = [], dbh = db } = options;
+  const validTeamIds = [...new Set([...teamIds, ...(teamId ? [teamId] : [])])];
+  const scope =
+    validTeamIds.length > 0
+      ? or(isNull(label.teamId), inArray(label.teamId, validTeamIds))
+      : isNull(label.teamId);
 
   const rows = await dbh
     .select({
@@ -369,7 +394,7 @@ export async function replaceLabels(
   labels: readonly ResolvedLabel[],
 ): Promise<void> {
   const join = JOINS[kind];
-  await join.clear(tx, subjectId);
+  await join.clear(tx, subjectId, orgId);
   if (labels.length > 0) {
     await join.attach(
       tx,

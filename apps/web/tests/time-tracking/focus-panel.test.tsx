@@ -475,12 +475,13 @@ describe('FocusPanel', () => {
     });
   });
 
-  it('compacts Focus mode into one end-aligned menu', async () => {
+  it('removes the unrelated Athena handoff and compacts Focus mode into one menu', async () => {
     activeGet.mockResolvedValue(
       jsonResponse(activePayload({ startedMinutesAgo: 7, running: true })),
     );
     renderPanel();
 
+    expect(screen.queryByRole('textbox', { name: 'Hand something to Athena' })).toBeNull();
     expect(screen.queryByText('Open in this tab')).toBeNull();
     fireEvent.pointerDown(await screen.findByRole('button', { name: 'Focus mode' }), {
       button: 0,

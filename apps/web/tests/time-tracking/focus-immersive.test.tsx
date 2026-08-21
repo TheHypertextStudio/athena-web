@@ -52,8 +52,6 @@ vi.mock('@/components/time-tracking/use-focus-task', () => ({
 vi.mock('@/components/time-tracking/use-focus-today', () => ({
   useFocusToday: () => ({ records: [], isPending: false, error: null }),
 }));
-vi.mock('@/components/time-tracking/focus-athena-handoff', () => ({ default: () => null }));
-
 const { default: FocusImmersive } = await import('@/components/time-tracking/focus-immersive');
 
 afterEach(cleanup);
@@ -73,5 +71,6 @@ describe('FocusImmersive', () => {
     ).toBe(true);
     expect(screen.getByTestId('focus-task-loading')).toBeInTheDocument();
     expect(screen.queryByText(/Name this session/)).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Hand something to Athena' })).toBeNull();
   });
 });

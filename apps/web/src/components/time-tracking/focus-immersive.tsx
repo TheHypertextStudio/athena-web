@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type JSX, useId, useState } from 'react';
 
-import FocusAthenaHandoff from './focus-athena-handoff';
 import FocusIdle, { type FocusShortcut } from './focus-idle';
 import FocusSession from './focus-session';
 import FocusTaskContext from './focus-task-context';
@@ -184,7 +183,6 @@ export default function FocusImmersive(): JSX.Element {
               comfortable
             />
           ) : null}
-          <FocusAthenaHandoff comfortable />
           <FocusToday
             records={today.records}
             activeRecordId={timer.record?.id ?? null}

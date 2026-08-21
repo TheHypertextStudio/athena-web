@@ -1,11 +1,49 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-16
+> **Last Updated**: 2026-08-20
 
 ---
 
 ## Active Tasks
+
+### [FOCUS-002] Make task creation and switching native to the Focus sidebar
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-20
+- **Priority**: P1
+- **Description**: The Focus rail exposes a real atomic create-and-switch timer contract everywhere
+  except the rail itself. Once tracking begins, the active card consumes the surface with an
+  oversized control treatment, truncates the task title to preserve inline Open and Rename icons,
+  and leaves no coherent way to choose the next task. The separate Athena interruption field and
+  two-line Focus-mode launcher add more unrelated controls below the broken primary workflow.
+- **Subtasks**:
+  - [x] Replace the lone workflow label with real upcoming work and integrated task search/create.
+  - [x] Let the active task title wrap on its own row and move task actions into end-aligned overflow.
+  - [x] Normalize timer controls and use a Finish glyph that does not imply task completion.
+  - [x] Remove the Athena interruption field and compact the Focus-mode launcher.
+  - [x] Cover create, switch, long-title, menu, and keyboard behavior.
+- **Blockers**: None.
+- **Notes**: `POST /v1/time/records` already creates a first-class Personal task from a bare label
+  and atomically closes any active interval when an existing task is selected. This slice exposes
+  that contract. It does not change the API or add another task mutation path.
+- **Files changed**: Added the Focus task queue, revised the shared session and Focus-mode controls,
+  removed the Focus Athena handoff, updated the timer input contract and icon catalog, and replaced
+  the handoff browser journey with task creation and switching.
+- **Validation**: The six time-tracking suites pass with 47 tests. Web type checking and lint pass.
+  The production web build passes and emits the production service worker. The Playwright Focus
+  journey passes against the migrated local PGlite stack and verifies create, switch, pop-out,
+  timer continuity, and finish behavior. Rail captures cover 1440, 390, and 320 pixel widths in
+  light and dark. The 320 pixel probe found a 20 pixel search-input hit area inside its 44 pixel
+  frame; the input now owns the full 44 pixel height and a component assertion locks that boundary.
+  The full web Vitest run received SIGTERM after about eight minutes without reporting a test
+  failure, so this entry does not claim that broad suite passed.
+- **Learnings**: A switch pauses the previous task and starts the selected task in one request. When
+  the selected task finishes, Focus exposes the prior paused task rather than becoming idle. The
+  browser test now checks and clears both records instead of assuming that a switch discards the
+  earlier session.
+
+---
 
 ### [NOTION-UX-001] A broken Notion connection stops offering setup and starts offering repair
 

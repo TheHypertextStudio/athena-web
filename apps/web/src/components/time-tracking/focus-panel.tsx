@@ -17,7 +17,6 @@
 import { Skeleton, Text } from '@docket/ui/primitives';
 import { type JSX, useId, useState } from 'react';
 
-import FocusAthenaHandoff from './focus-athena-handoff';
 import FocusIdle from './focus-idle';
 import FocusModeLauncher from './focus-mode-launcher';
 import FocusSession from './focus-session';
@@ -126,8 +125,6 @@ export default function FocusPanel(): JSX.Element {
         ) : null}
 
         <FocusToday records={today.records} activeRecordId={record?.id ?? null} />
-
-        <FocusAthenaHandoff />
 
         {/* Degraded rather than replaced: losing today's totals must not take the running clock
             off screen, since that is the one thing this panel exists to keep visible. */}

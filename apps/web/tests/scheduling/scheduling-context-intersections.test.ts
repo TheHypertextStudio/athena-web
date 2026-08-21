@@ -53,4 +53,51 @@ describe('schedule context intersections', () => {
       { contextId: 'day-end', startMinutes: 23 * 60 + 30, endMinutes: 24 * 60 },
     ]);
   });
+
+  it('gives an earlier-starting region deterministic precedence across an overlap', () => {
+    expect(
+      partitionScheduleRangeByContext({ startMinutes: 0, endMinutes: 120 }, [
+        { id: 'later', startMinutes: 30, endMinutes: 90 },
+        { id: 'earlier', startMinutes: -30, endMinutes: 60 },
+      ]),
+    ).toEqual([
+      { contextId: 'earlier', startMinutes: 0, endMinutes: 60 },
+      { contextId: 'later', startMinutes: 60, endMinutes: 90 },
+      { contextId: null, startMinutes: 90, endMinutes: 120 },
+    ]);
+  });
+
+  it('breaks equal-start ties by earliest end and then opaque identifier', () => {
+    expect(
+      partitionScheduleRangeByContext({ startMinutes: 0, endMinutes: 120 }, [
+        { id: 'z-long', startMinutes: 0, endMinutes: 90 },
+        { id: 'b-short', startMinutes: 0, endMinutes: 60 },
+        { id: 'a-short', startMinutes: 0, endMinutes: 60 },
+      ]),
+    ).toEqual([
+      { contextId: 'a-short', startMinutes: 0, endMinutes: 60 },
+      { contextId: 'z-long', startMinutes: 60, endMinutes: 90 },
+      { contextId: null, startMinutes: 90, endMinutes: 120 },
+    ]);
+  });
+
+  it.each([
+    { startMinutes: Number.NaN, endMinutes: 60 },
+    { startMinutes: 0, endMinutes: Number.POSITIVE_INFINITY },
+    { startMinutes: 60, endMinutes: 60 },
+    { startMinutes: 90, endMinutes: 60 },
+  ])('returns no segments for invalid requested bounds $startMinutes:$endMinutes', (bounds) => {
+    expect(partitionScheduleRangeByContext(bounds, [])).toEqual([]);
+  });
+
+  it('ignores invalid and non-finite context regions', () => {
+    expect(
+      partitionScheduleRangeByContext({ startMinutes: 0, endMinutes: 60 }, [
+        { id: 'nan', startMinutes: Number.NaN, endMinutes: 30 },
+        { id: 'infinite', startMinutes: 0, endMinutes: Number.POSITIVE_INFINITY },
+        { id: 'empty', startMinutes: 15, endMinutes: 15 },
+        { id: 'reversed', startMinutes: 45, endMinutes: 30 },
+      ]),
+    ).toEqual([{ contextId: null, startMinutes: 0, endMinutes: 60 }]);
+  });
 });

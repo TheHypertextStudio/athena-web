@@ -43,6 +43,11 @@ export function SchedulingAllDayLane({
   const allDayItems = lane.items.filter((item) => item.allDay);
   const primary = allDayItems.slice(0, PRIMARY_ALL_DAY_ITEMS);
   const overflow = allDayItems.slice(PRIMARY_ALL_DAY_ITEMS);
+  const allDayLaneContext =
+    renderAllDayLaneContext?.({
+      lane,
+      geometry: { laneIndex, laneWidth },
+    }) ?? null;
   const render = (item: (typeof allDayItems)[number]): JSX.Element => (
     <SchedulingAllDayItem
       key={item.id}
@@ -68,14 +73,11 @@ export function SchedulingAllDayLane({
       className="relative mt-1 flex min-h-5 flex-col items-start gap-1"
       data-schedule-all-day-lane={lane.id}
     >
-      {renderAllDayLaneContext ? (
+      {allDayLaneContext === null ? null : (
         <div className="relative z-10 w-full" data-schedule-all-day-lane-context={lane.id}>
-          {renderAllDayLaneContext({
-            lane,
-            geometry: { laneIndex, laneWidth },
-          })}
+          {allDayLaneContext}
         </div>
-      ) : null}
+      )}
       {primary.map((item) => (
         <div key={item.id} className="w-full" data-schedule-all-day-primary="">
           {render(item)}

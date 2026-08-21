@@ -156,7 +156,10 @@ export function SchedulingItemCard({
         minutesToPixels(visibleBounds.endMinutes - visibleBounds.startMinutes, pixelsPerHour),
       )
     : height;
-  const laneTranslation = gesture.preview ? (gesture.preview.laneIndex - laneIndex) * laneWidth : 0;
+  const previewLane = gesture.preview ? lanes[gesture.preview.laneIndex] : undefined;
+  const visibleLane = previewLane ?? lane;
+  const visibleLaneIndex = previewLane && gesture.preview ? gesture.preview.laneIndex : laneIndex;
+  const laneTranslation = (visibleLaneIndex - laneIndex) * laneWidth;
   const estimatedWidth = Math.max(0, laneWidth / placement.columnCount - 2);
   const density = itemDensity(visibleHeight, estimatedWidth);
   const startsAtDayBoundary = visibleBounds.startMinutes === 0;
@@ -180,8 +183,9 @@ export function SchedulingItemCard({
   const decoration =
     renderTimedItemDecoration?.({
       item,
-      lane,
+      lane: visibleLane,
       geometry: {
+        laneIndex: visibleLaneIndex,
         bounds: visibleBounds,
         top: visibleTop,
         height: visibleHeight,

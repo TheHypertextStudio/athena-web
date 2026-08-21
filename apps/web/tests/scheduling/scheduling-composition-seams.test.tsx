@@ -7,8 +7,8 @@ import { SchedulingCanvas, type ScheduleItem, type ScheduleLane } from '@/compon
 import { assertDefined } from '@docket/test-utils';
 
 /** Build one neutral lane for composition tests. */
-function lane(items: readonly ScheduleItem[]): ScheduleLane {
-  return { id: 'date', label: 'Wed, Jul 1', date: '2026-07-01', items };
+function lane(items: readonly ScheduleItem[], id = 'date'): ScheduleLane {
+  return { id, label: id, date: '2026-07-01', items };
 }
 
 /** Build one item on the shared UTC fixture date. */
@@ -72,9 +72,25 @@ describe('SchedulingCanvas composition seams', () => {
       document.querySelector<HTMLElement>('[data-schedule-all-day-lane-context="date"]'),
     );
     expect(allDayContext.closest('[data-schedule-all-day-lane="date"]')).not.toBeNull();
+    expect(allDayContext).not.toHaveAttribute('inert');
+    expect(allDayContext).not.toHaveClass('pointer-events-none');
     expect(screen.getByTestId('all-day-context-chip')).toHaveAttribute('data-lane-index', '0');
     fireEvent.click(screen.getByTestId('all-day-context-chip'));
     expect(allDayContextClick).toHaveBeenCalledOnce();
+  });
+
+  it('omits the all-day context wrapper when the app renderer returns no content', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane([])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        renderAllDayLaneContext={() => null}
+      />,
+    );
+
+    expect(document.querySelector('[data-schedule-all-day-lane-context]')).not.toBeInTheDocument();
   });
 
   it('paints inert item decoration between the base surface and unchanged item content', () => {
@@ -130,6 +146,87 @@ describe('SchedulingCanvas composition seams', () => {
     expect(screen.getByTestId('item-decoration-content')).toHaveAttribute('data-top', '540');
     expect(screen.getByTestId('item-decoration-content')).toHaveAttribute('data-height', '60');
     expect(screen.getByTestId('item-decoration-content')).toHaveAttribute('data-column', '0:1');
+  });
+
+  it('supplies the visible target lane and preview geometry during a cross-lane move', () => {
+    const source = item('moving-timebox', 'timebox');
+    const sourceLane = lane([source], 'source');
+    const targetLane = lane([], 'target');
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[sourceLane, targetLane]}
+        pixelsPerHour={60}
+        viewportWidth={800}
+        renderTimedItemDecoration={({ lane: renderedLane, geometry, placement }) => (
+          <span
+            data-testid="moving-decoration"
+            data-lane={renderedLane.id}
+            data-lane-index={'laneIndex' in geometry ? geometry.laneIndex : 'missing'}
+            data-bounds={`${String(geometry.bounds.startMinutes)}:${String(geometry.bounds.endMinutes)}`}
+            data-top={geometry.top}
+            data-column={`${String(placement.columnIndex)}:${String(placement.columnCount)}`}
+          />
+        )}
+        onMoveItem={vi.fn()}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Planning timebox/ });
+    fireEvent.pointerDown(body, { button: 0, pointerId: 41, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 41, clientX: 500, clientY: 130 });
+
+    expect(screen.getByTestId('moving-decoration')).toHaveAttribute('data-lane', 'target');
+    expect(screen.getByTestId('moving-decoration')).toHaveAttribute('data-lane-index', '1');
+    expect(screen.getByTestId('moving-decoration')).toHaveAttribute('data-bounds', '570:630');
+    expect(screen.getByTestId('moving-decoration')).toHaveAttribute('data-top', '570');
+    expect(screen.getByTestId('moving-decoration')).toHaveAttribute('data-column', '0:1');
+
+    fireEvent.pointerCancel(window, { pointerId: 41 });
+  });
+
+  it('keeps item moves and empty-grid selection active above mounted decorative layers', () => {
+    const source = item('layered-timebox', 'timebox');
+    const sourceLane = lane([source]);
+    const onMoveItem = vi.fn();
+    const onSelectRegion = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[sourceLane]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        renderTimedLaneUnderlay={() => <span data-testid="mounted-underlay" />}
+        renderTimedItemDecoration={() => <span data-testid="mounted-decoration" />}
+        onMoveItem={onMoveItem}
+        onSelectRegion={onSelectRegion}
+      />,
+    );
+
+    const body = screen.getByRole('button', { name: /^Planning timebox/ });
+    fireEvent.pointerDown(body, { button: 0, pointerId: 51, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 51, clientX: 100, clientY: 130 });
+    fireEvent.pointerUp(window, { pointerId: 51, clientX: 100, clientY: 130 });
+
+    expect(onMoveItem).toHaveBeenCalledWith({
+      item: source,
+      fromLane: sourceLane,
+      toLane: sourceLane,
+      startMinutes: 570,
+      endMinutes: 630,
+    });
+
+    const grid = screen.getByLabelText('date time grid');
+    fireEvent.pointerDown(grid, { button: 0, pointerId: 52, clientY: 720 });
+    fireEvent.pointerUp(window, { pointerId: 52, clientY: 780 });
+
+    expect(onSelectRegion).toHaveBeenCalledWith({
+      lane: sourceLane,
+      startMinutes: 720,
+      endMinutes: 780,
+    });
+    expect(screen.getByTestId('mounted-underlay')).toBeInTheDocument();
+    expect(screen.getByTestId('mounted-decoration')).toBeInTheDocument();
   });
 
   it.each(['event', 'timebox'] as const)(

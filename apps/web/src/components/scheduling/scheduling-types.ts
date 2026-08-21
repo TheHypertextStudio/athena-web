@@ -197,7 +197,7 @@ export interface ScheduleAllDayLaneGeometry {
   readonly laneWidth: number;
 }
 
-/** Context supplied to a consumer-owned all-day lane context renderer. */
+/** Context supplied to an app-owned interactive all-day lane renderer. */
 export interface ScheduleAllDayLaneRenderContext {
   /** Lane receiving the context content. */
   readonly lane: ScheduleLane;
@@ -207,6 +207,8 @@ export interface ScheduleAllDayLaneRenderContext {
 
 /** Geometry supplied to a decorative renderer for one timed item. */
 export interface ScheduleTimedItemGeometry {
+  /** Zero-based lane position that matches the visible item segment. */
+  readonly laneIndex: number;
   /** Current projected bounds, including any direct-manipulation preview. */
   readonly bounds: ScheduleMinuteBounds;
   /** Current top offset in CSS pixels within the timed lane. */
@@ -300,7 +302,14 @@ export interface SchedulingCanvasProps {
   readonly renderTimedLaneUnderlay?:
     | ((context: ScheduleTimedLaneRenderContext) => ReactNode)
     | undefined;
-  /** Render consumer-owned content above the existing all-day items in each lane. */
+  /**
+   * Render app-owned interactive context above the existing all-day items in each lane.
+   *
+   * @remarks
+   * Unlike the timed decoration seams, this output remains interactive so an app can own compact
+   * buttons and drag behavior. The renderer receives neutral lane geometry and no scheduling item
+   * mutation callbacks. Returning `null` omits the wrapper and its flex gap.
+   */
   readonly renderAllDayLaneContext?:
     | ((context: ScheduleAllDayLaneRenderContext) => ReactNode)
     | undefined;

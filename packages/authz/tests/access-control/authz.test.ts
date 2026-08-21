@@ -152,6 +152,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       'canceled'
     );
     create type health as enum ('on_track', 'at_risk', 'off_track');
+    create type planning_date_resolution as enum ('month', 'quarter', 'halfYear', 'year');
     create type task_priority as enum ('none', 'urgent', 'high', 'medium', 'low');
     create type provenance_source as enum ('native', 'linked');
     create type sync_mode as enum ('import', 'mirror');
@@ -182,6 +183,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       approval_routing jsonb,
       initiative_max_depth integer not null default 2,
       estimation_scale estimation_scale not null default 'fibonacci',
+      fiscal_year_start_month integer not null default 0,
       lifecycle_state org_lifecycle_state not null default 'trialing',
       export_ready_at timestamp,
       -- Drizzle names every column of the table in its INSERT, so this fixture has to carry
@@ -296,7 +298,11 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       status_id text not null,
       health health,
       start_date timestamp,
+      start_date_resolution planning_date_resolution,
+      start_date_fiscal_year_start_month integer,
       target_date timestamp,
+      target_date_resolution planning_date_resolution,
+      target_date_fiscal_year_start_month integer,
       visibility visibility not null default 'public',
       ancestor_path text[] not null default '{}'::text[],
       source provenance_source not null default 'native',

@@ -5272,15 +5272,18 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Files Changed**: Added the planning-timeframe domain and its tests, migration
   `0094_mighty_martin_li.sql`, API and database contracts, the shared planning picker, Project and
   Initiative consumers, machine-facing adapters, authenticated Playwright coverage, 20 visual
-  captures, and the dated design audit. Updated the implementation plan, date-picker inventory,
-  domain registry, and schema-sensitive test fixtures.
+  captures, the dated design audit, and package-level picker behavior and calendar-rule coverage.
+  Updated the implementation plan, date-picker inventory, domain registry, and schema-sensitive
+  test fixtures.
 - **Validation**: The repository tree rebased onto `origin/main` passes typecheck for 26 of 26
   tasks, lint for 25 of 25 tasks, tests for 26 of 26 tasks, and all 4 production builds. The API
   suite passes 4,516 tests, and the web suite passes 2,697 tests. The authenticated Playwright
   journey passes at one worker. It verifies fiscal Q1 and H2 persistence, month and precise
   Initiative targets, range rejection, clearing, fiscal-setting changes, keyboard focus,
   320-pixel overflow, 40-pixel targets, and all five affected surfaces at desktop and mobile widths
-  in both themes.
+  in both themes. The UI package passes 629 tests and its coverage gate at 94.55% statements,
+  91.45% branches, 93.77% functions, and 95.12% lines. The authorization package passes all 49
+  tests with 100% coverage after its handwritten schema was reconciled.
 - **Compatibility and migration**: Migration `0094` is additive. Existing dates remain precise
   because their resolution and fiscal snapshot fields default to null. Old clients can keep sending
   date-only mutations, and those writes clear stale broad-period metadata. Initiative grouping was
@@ -5301,7 +5304,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   broad value prevents future workspace changes from rewriting history. The rebase preserved the
   newer create-more continuation behavior while applying timeframe payloads and calendar errors.
   Schema fixtures and the domain registry must change with additive database columns and public
-  exports, even when their focused feature tests do not exercise those repository contracts.
+  exports, even when their focused feature tests do not exercise those repository contracts. Fresh
+  CI exposed one remaining handwritten authorization schema that omitted the fiscal-month column;
+  the release fix now keeps that fixture aligned with the Drizzle organization insert.
 
 ### [EDITOR-TEMPLATE-003] Close the final template release review
 

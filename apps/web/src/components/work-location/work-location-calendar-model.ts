@@ -15,12 +15,21 @@ export interface WorkLocationCalendarRegion {
   readonly label: string;
   readonly startsAt: string;
   readonly endsAt: string;
+  readonly sourceStartsAt: string;
+  readonly sourceEndsAt: string;
   readonly allDay: boolean;
   readonly source: ExpectedWorkLocationSource;
   readonly editable: boolean;
   readonly assertionId: WorkLocationAssertionOut['id'] | null;
   readonly occurrenceDate: string | null;
   readonly assertionKind: 'one_off' | 'weekly' | null;
+  readonly ownsStart: boolean;
+  readonly ownsEnd: boolean;
+}
+
+interface TimedOccurrenceBounds {
+  readonly startsAt: string;
+  readonly endsAt: string;
 }
 
 /** One application-owned provider status line shown by the shared compact status control. */
@@ -127,6 +136,29 @@ function allDayOccurrence(
   return null;
 }
 
+/** Resolve the exact timed occurrence represented by one range provenance pair. */
+function timedOccurrenceBounds(
+  assertion: WorkLocationAssertionOut,
+  occurrenceDate: string | null,
+): TimedOccurrenceBounds | null {
+  const exception = occurrenceDate
+    ? assertion.exceptions.find((candidate) => candidate.date === occurrenceDate)
+    : undefined;
+  const schedule = exception?.action === 'replace' ? exception.schedule : assertion.schedule;
+  if (schedule.type === 'one_off_timed') {
+    return { startsAt: schedule.startsAt, endsAt: schedule.endsAt };
+  }
+  if (schedule.type !== 'weekly_timed' || !occurrenceDate) return null;
+  const startsAt = scheduleInstantAt(occurrenceDate, schedule.startMinute, schedule.timezone);
+  const endsAt = scheduleInstantAt(occurrenceDate, schedule.endMinute, schedule.timezone);
+  return startsAt && endsAt ? { startsAt, endsAt } : null;
+}
+
+/** Compare exact instants without depending on equivalent ISO string serialization. */
+function sameInstant(first: string, second: string): boolean {
+  return Date.parse(first) === Date.parse(second);
+}
+
 /** Build the normalized work-location regions and shared provider status for schedule composition. */
 export function buildWorkLocationCalendarModel(
   input: WorkLocationCalendarModelInput,
@@ -142,6 +174,9 @@ export function buildWorkLocationCalendarModel(
     const place = placeById.get(segment.place.id);
     const editable = segment.source === 'assertion' && assertion !== undefined;
     const assertionAllDay = assertion ? allDayOccurrence(assertion, segment.occurrenceDate) : null;
+    const assertionTimed = assertion
+      ? timedOccurrenceBounds(assertion, segment.occurrenceDate)
+      : null;
     const allDay = assertionAllDay
       ? true
       : isFullWorkLocationCivilDay(segment.effectiveStart, segment.effectiveEnd, input.timezone);
@@ -156,12 +191,16 @@ export function buildWorkLocationCalendarModel(
     const allDayEnd = assertionAllDay
       ? scheduleInstantAt(nextCivilDate(assertionAllDay.date), 0, assertionAllDay.timezone)
       : null;
+    const sourceStartsAt = assertionTimed?.startsAt ?? allDayStart ?? segment.effectiveStart;
+    const sourceEndsAt = assertionTimed?.endsAt ?? allDayEnd ?? segment.effectiveEnd;
     regions.push({
       id: `${segment.assertionId ?? segment.source}:${segment.occurrenceDate ?? 'none'}:${segment.effectiveStart}`,
       placeId: segment.place.id,
       label: place?.name ?? segment.place.name,
       startsAt: allDayStart ? new Date(allDayStart).toISOString() : segment.effectiveStart,
       endsAt: allDayEnd ? new Date(allDayEnd).toISOString() : segment.effectiveEnd,
+      sourceStartsAt: new Date(sourceStartsAt).toISOString(),
+      sourceEndsAt: new Date(sourceEndsAt).toISOString(),
       allDay,
       source: segment.source,
       editable,
@@ -172,6 +211,14 @@ export function buildWorkLocationCalendarModel(
           ? 'weekly'
           : 'one_off'
         : null,
+      ownsStart:
+        editable && assertionTimed !== null
+          ? sameInstant(segment.effectiveStart, assertionTimed.startsAt)
+          : false,
+      ownsEnd:
+        editable && assertionTimed !== null
+          ? sameInstant(segment.effectiveEnd, assertionTimed.endsAt)
+          : false,
     });
   }
 

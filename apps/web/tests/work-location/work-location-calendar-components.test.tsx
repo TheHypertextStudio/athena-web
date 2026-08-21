@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkLocationAssertionId, WorkPlaceId } from '@docket/types';
+import { assertDefined } from '@docket/test-utils';
 
 import type {
   ScheduleAllDayLaneRenderContext,
@@ -27,18 +28,24 @@ const assertionId = WorkLocationAssertionId.parse('01BX5ZZKBKACTAV9WEVGEMMVRZ');
 const placeId = WorkPlaceId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV');
 
 function region(overrides: Partial<WorkLocationCalendarRegion> = {}): WorkLocationCalendarRegion {
+  const startsAt = overrides.startsAt ?? '2026-07-01T09:00:00.000Z';
+  const endsAt = overrides.endsAt ?? '2026-07-01T12:00:00.000Z';
   return {
     id: 'location',
     placeId,
     label: 'Main library',
-    startsAt: '2026-07-01T09:00:00.000Z',
-    endsAt: '2026-07-01T12:00:00.000Z',
+    startsAt,
+    endsAt,
+    sourceStartsAt: overrides.sourceStartsAt ?? startsAt,
+    sourceEndsAt: overrides.sourceEndsAt ?? endsAt,
     allDay: false,
     source: 'assertion',
     editable: true,
     assertionId,
     occurrenceDate: '2026-07-01',
     assertionKind: 'one_off',
+    ownsStart: true,
+    ownsEnd: true,
     ...overrides,
   };
 }
@@ -50,13 +57,14 @@ function timedContext(
   lane = firstLane,
   laneIndex = 0,
   onAnnouncementChange = vi.fn(),
+  laneWidth = 200,
 ): ScheduleTimedLaneContextRenderContext {
   return {
     lane,
     lanes: [firstLane, secondLane],
     snapMinutes: 15,
     onAnnouncementChange,
-    geometry: { laneIndex, laneWidth: 200, laneHeight: 1_440, pixelsPerHour: 60 },
+    geometry: { laneIndex, laneWidth, laneHeight: 1_440, pixelsPerHour: 60 },
   };
 }
 
@@ -312,17 +320,192 @@ describe('work-location calendar components', () => {
     );
   });
 
-  it('keeps short and adjacent region control hit boxes in separate 44px tracks', () => {
+  it.each([
+    ['Calendar', 240],
+    ['Agenda', 180],
+  ] as const)(
+    'keeps adjacent short-region targets inside a %s lane without accumulated offsets',
+    (_surface, laneWidth) => {
+      const onEdit = vi.fn(() => ({ status: 'accepted' as const }));
+      render(
+        <WorkLocationTimedLaneContext
+          regions={[
+            region({ id: 'first-short', endsAt: '2026-07-01T09:15:00.000Z' }),
+            region({
+              id: 'second-short',
+              startsAt: '2026-07-01T09:15:00.000Z',
+              endsAt: '2026-07-01T09:30:00.000Z',
+            }),
+          ]}
+          context={timedContext(firstLane, 0, vi.fn(), laneWidth)}
+          displayTimezone="UTC"
+          onOpen={vi.fn()}
+          onEdit={onEdit}
+        />,
+      );
+
+      const moves = screen.getAllByRole('button', { name: /Move Main library work location/ });
+      const starts = screen.getAllByRole('button', { name: /Resize start of Main library/ });
+      const ends = screen.getAllByRole('button', { name: /Resize end of Main library/ });
+      expect(moves).toHaveLength(2);
+      expect(starts).toHaveLength(2);
+      expect(ends).toHaveLength(2);
+      for (const move of moves) {
+        expect(move).toHaveStyle({ left: '44px', width: `${String(laneWidth - 88)}px` });
+        expect(move).toHaveClass('min-h-11', 'min-w-11');
+        expect(move).toHaveTextContent('Main library');
+      }
+      for (const start of starts) {
+        expect(start).toHaveStyle({ left: '0px', width: '44px', height: '44px' });
+      }
+      for (const end of ends) {
+        expect(end).toHaveStyle({
+          left: `${String(laneWidth - 44)}px`,
+          width: '44px',
+          height: '44px',
+        });
+      }
+      expect(starts[0]).toHaveStyle({ top: '-22px' });
+      expect(ends[0]).toHaveStyle({ top: '-7px' });
+      expect(starts[1]).toHaveStyle({ top: '-22px' });
+      expect(ends[1]).toHaveStyle({ top: '-7px' });
+
+      fireEvent.pointerDown(assertDefined(moves[0]), {
+        button: 0,
+        pointerId: 76,
+        clientX: 80,
+        clientY: 555,
+      });
+      fireEvent.pointerMove(window, { pointerId: 76, clientX: 80, clientY: 570 });
+      fireEvent.pointerUp(window, { pointerId: 76, clientX: 80, clientY: 570 });
+      expect(onEdit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          region: expect.objectContaining({ id: 'second-short' }),
+          mode: 'move',
+        }),
+      );
+
+      fireEvent.pointerDown(assertDefined(starts[0]), {
+        button: 0,
+        pointerId: 78,
+        clientX: 10,
+        clientY: 555,
+      });
+      fireEvent.pointerMove(window, { pointerId: 78, clientX: 10, clientY: 540 });
+      fireEvent.pointerUp(window, { pointerId: 78, clientX: 10, clientY: 540 });
+      expect(onEdit).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          region: expect.objectContaining({ id: 'second-short' }),
+          mode: 'resize-start',
+        }),
+      );
+
+      fireEvent.pointerDown(assertDefined(ends[1]), {
+        button: 0,
+        pointerId: 79,
+        clientX: laneWidth - 10,
+        clientY: 555,
+      });
+      fireEvent.pointerMove(window, { pointerId: 79, clientX: laneWidth - 10, clientY: 570 });
+      fireEvent.pointerUp(window, { pointerId: 79, clientX: laneWidth - 10, clientY: 570 });
+      expect(onEdit).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          region: expect.objectContaining({ id: 'first-short' }),
+          mode: 'resize-end',
+        }),
+      );
+    },
+  );
+
+  it('routes resize handles only to lane fragments that own the true source endpoint', () => {
+    const source = {
+      ...region(),
+      startsAt: '2026-08-12T23:00:00.000Z',
+      endsAt: '2026-08-14T01:00:00.000Z',
+      sourceStartsAt: '2026-08-12T23:00:00.000Z',
+      sourceEndsAt: '2026-08-14T01:00:00.000Z',
+      ownsStart: true,
+      ownsEnd: true,
+    };
+    const lanes: readonly ScheduleLane[] = [
+      { id: 'aug-12', label: 'August 12', date: '2026-08-12', items: [] },
+      { id: 'aug-13', label: 'August 13', date: '2026-08-13', items: [] },
+      { id: 'aug-14', label: 'August 14', date: '2026-08-14', items: [] },
+    ];
+    const context = (laneIndex: number): ScheduleTimedLaneContextRenderContext => ({
+      lane: assertDefined(lanes[laneIndex]),
+      lanes,
+      snapMinutes: 15,
+      onAnnouncementChange: vi.fn(),
+      geometry: { laneIndex, laneWidth: 180, laneHeight: 1_440, pixelsPerHour: 60 },
+    });
+    const onEdit = vi.fn(() => ({ status: 'accepted' as const }));
+    const { rerender } = render(
+      <WorkLocationTimedLaneContext
+        regions={[source]}
+        context={context(0)}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onEdit={onEdit}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Resize start of Main library' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Resize end of Main library' })).toBeNull();
+    const start = screen.getByRole('button', { name: 'Resize start of Main library' });
+    fireEvent.pointerDown(start, { button: 0, pointerId: 80, clientX: 10, clientY: 1_380 });
+    fireEvent.pointerMove(window, { pointerId: 80, clientX: 10, clientY: 1_395 });
+    fireEvent.pointerUp(window, { pointerId: 80, clientX: 10, clientY: 1_395 });
+    expect(onEdit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'resize-start',
+        sourceDate: '2026-08-12',
+        sourceStartMinutes: 1_380,
+        sourceEndMinutes: 1_440,
+        startMinutes: 1_395,
+      }),
+    );
+
+    rerender(
+      <WorkLocationTimedLaneContext
+        regions={[source]}
+        context={context(1)}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onEdit={onEdit}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /Resize/ })).toBeNull();
+
+    rerender(
+      <WorkLocationTimedLaneContext
+        regions={[source]}
+        context={context(2)}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onEdit={onEdit}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Resize start of Main library' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Resize end of Main library' })).toBeVisible();
+    const end = screen.getByRole('button', { name: 'Resize end of Main library' });
+    fireEvent.pointerDown(end, { button: 0, pointerId: 81, clientX: 170, clientY: 60 });
+    fireEvent.pointerMove(window, { pointerId: 81, clientX: 170, clientY: 45 });
+    fireEvent.pointerUp(window, { pointerId: 81, clientX: 170, clientY: 45 });
+    expect(onEdit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        mode: 'resize-end',
+        sourceDate: '2026-08-14',
+        sourceStartMinutes: 0,
+        sourceEndMinutes: 60,
+        endMinutes: 45,
+      }),
+    );
+  });
+
+  it('does not expose either resize edge for a fragment clipped inside its source assertion', () => {
     render(
       <WorkLocationTimedLaneContext
-        regions={[
-          region({ id: 'first-short', endsAt: '2026-07-01T09:15:00.000Z' }),
-          region({
-            id: 'second-short',
-            startsAt: '2026-07-01T09:15:00.000Z',
-            endsAt: '2026-07-01T09:30:00.000Z',
-          }),
-        ]}
+        regions={[{ ...region(), ownsStart: false, ownsEnd: false }]}
         context={timedContext()}
         displayTimezone="UTC"
         onOpen={vi.fn()}
@@ -330,27 +513,8 @@ describe('work-location calendar components', () => {
       />,
     );
 
-    const controls = screen.getAllByRole('button');
-    expect(controls).toHaveLength(6);
-    for (const control of controls) {
-      expect(control).toHaveClass('size-11');
-      expect(control).toHaveAttribute('data-work-location-hit-track');
-    }
-    const routedRects = controls.map((control) =>
-      [
-        control.getAttribute('data-work-location-hit-track'),
-        control.getAttribute('data-work-location-hit-slot'),
-      ].join(':'),
-    );
-    expect(new Set(routedRects).size).toBe(routedRects.length);
-    expect(controls.map((control) => control.style.left)).toEqual([
-      '0px',
-      '44px',
-      '88px',
-      '132px',
-      '176px',
-      '220px',
-    ]);
+    expect(screen.getByRole('button', { name: 'Move Main library work location' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Resize/ })).toBeNull();
   });
 
   it('moves and resizes timed locations by keyboard using the scheduling snap interval', () => {
@@ -378,10 +542,7 @@ describe('work-location calendar components', () => {
     expect(onAnnouncementChange).toHaveBeenLastCalledWith(
       'Moved Main library work location to July 1, 9:15 AM to 12:15 PM.',
     );
-    expect(screen.getByTestId('work-location-rail-preview')).toHaveStyle({
-      top: '555px',
-      height: '180px',
-    });
+    expect(screen.queryByTestId('work-location-rail-preview')).toBeNull();
 
     fireEvent.keyDown(move, { key: 'ArrowRight' });
     expect(onEdit).toHaveBeenLastCalledWith(
@@ -428,6 +589,37 @@ describe('work-location calendar components', () => {
     expect(onAnnouncementChange).toHaveBeenLastCalledWith(
       'Moved Main library work location to July 2, 9:30 AM to 12:30 PM.',
     );
+    expect(screen.queryByTestId('work-location-rail-preview')).toBeNull();
+  });
+
+  it('clears an active preview when refetched regions replace its source id', async () => {
+    const { rerender } = render(
+      <WorkLocationTimedLaneContext
+        regions={[region()]}
+        context={timedContext()}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onEdit={vi.fn(() => ({ status: 'accepted' as const }))}
+      />,
+    );
+    const move = screen.getByRole('button', { name: 'Move Main library work location' });
+    fireEvent.pointerDown(move, { button: 0, pointerId: 77, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 77, clientX: 300, clientY: 130 });
+    expect(screen.getByTestId('work-location-rail-preview')).toBeVisible();
+
+    rerender(
+      <WorkLocationTimedLaneContext
+        regions={[region({ id: 'refetched-location' })]}
+        context={timedContext()}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onEdit={vi.fn(() => ({ status: 'accepted' as const }))}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.queryByTestId('work-location-rail-preview')).toBeNull();
+    });
+    fireEvent.pointerCancel(window, { pointerId: 77 });
   });
 
   it('moves all-day chips across visible dates without turning them into schedule items', () => {

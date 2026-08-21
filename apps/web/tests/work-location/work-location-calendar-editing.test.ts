@@ -20,12 +20,16 @@ function region(
     label: 'Main library',
     startsAt: allDay ? '2026-08-12T07:00:00.000Z' : '2026-08-12T16:00:00.000Z',
     endsAt: allDay ? '2026-08-13T07:00:00.000Z' : '2026-08-12T20:00:00.000Z',
+    sourceStartsAt: allDay ? '2026-08-12T07:00:00.000Z' : '2026-08-12T16:00:00.000Z',
+    sourceEndsAt: allDay ? '2026-08-13T07:00:00.000Z' : '2026-08-12T20:00:00.000Z',
     allDay,
     source: 'assertion',
     editable: true,
     assertionId,
     occurrenceDate: '2026-08-12',
     assertionKind,
+    ownsStart: true,
+    ownsEnd: true,
   };
 }
 
@@ -145,12 +149,16 @@ describe('work-location calendar edit payloads', () => {
       ...region('one_off'),
       startsAt: '2026-11-01T08:30:00.000Z',
       endsAt: '2026-11-01T10:30:00.000Z',
+      sourceStartsAt: '2026-11-01T08:30:00.000Z',
+      sourceEndsAt: '2026-11-01T10:30:00.000Z',
       occurrenceDate: '2026-11-01',
     };
     const later = {
       ...earlier,
       startsAt: '2026-11-01T09:30:00.000Z',
       endsAt: '2026-11-01T11:30:00.000Z',
+      sourceStartsAt: '2026-11-01T09:30:00.000Z',
+      sourceEndsAt: '2026-11-01T11:30:00.000Z',
     };
 
     const edit = (source: WorkLocationCalendarRegion) =>
@@ -205,12 +213,16 @@ describe('work-location calendar edit payloads', () => {
       ...region('one_off'),
       startsAt: '2026-11-01T08:30:00.000Z',
       endsAt: '2026-11-01T10:30:00.000Z',
+      sourceStartsAt: '2026-11-01T08:30:00.000Z',
+      sourceEndsAt: '2026-11-01T10:30:00.000Z',
       occurrenceDate: '2026-11-01',
     };
     const laterEnd = {
       ...region('one_off'),
       startsAt: '2026-11-01T07:30:00.000Z',
       endsAt: '2026-11-01T09:30:00.000Z',
+      sourceStartsAt: '2026-11-01T07:30:00.000Z',
+      sourceEndsAt: '2026-11-01T09:30:00.000Z',
       occurrenceDate: '2026-11-01',
     };
 
@@ -261,6 +273,8 @@ describe('work-location calendar edit payloads', () => {
       ...region('one_off'),
       startsAt: '2026-08-12T23:00:00.000Z',
       endsAt: '2026-08-14T01:00:00.000Z',
+      sourceStartsAt: '2026-08-12T23:00:00.000Z',
+      sourceEndsAt: '2026-08-14T01:00:00.000Z',
       occurrenceDate: '2026-08-12',
     };
     const base = {
@@ -314,6 +328,39 @@ describe('work-location calendar edit payloads', () => {
         schedule: {
           startsAt: '2026-08-12T23:00:00.000Z',
           endsAt: '2026-08-14T00:45:00.000Z',
+        },
+      },
+    });
+  });
+
+  it('preserves the hidden source endpoint when resizing a precedence-clipped fragment', () => {
+    const clipped = {
+      ...region('one_off'),
+      startsAt: '2026-08-12T23:00:00.000Z',
+      endsAt: '2026-08-13T12:00:00.000Z',
+      sourceStartsAt: '2026-08-12T23:00:00.000Z',
+      sourceEndsAt: '2026-08-14T01:00:00.000Z',
+      ownsStart: true,
+      ownsEnd: false,
+    };
+
+    expect(
+      workLocationTimedEdit({
+        region: clipped,
+        mode: 'resize-start',
+        sourceDate: '2026-08-12',
+        sourceStartMinutes: 1_380,
+        sourceEndMinutes: 1_440,
+        targetDate: '2026-08-12',
+        startMinutes: 1_395,
+        endMinutes: 1_440,
+        timezone: 'UTC',
+      }),
+    ).toMatchObject({
+      input: {
+        schedule: {
+          startsAt: '2026-08-12T23:15:00.000Z',
+          endsAt: '2026-08-14T01:00:00.000Z',
         },
       },
     });

@@ -50,7 +50,7 @@ function editedTimedBounds(input: WorkLocationTimedEditInput): {
     const editsEnd = input.mode === 'resize-end';
     const sourceMinutes = editsEnd ? input.sourceEndMinutes : input.sourceStartMinutes;
     const targetMinutes = editsEnd ? input.endMinutes : input.startMinutes;
-    const occurrenceSource = editsEnd ? input.region.endsAt : input.region.startsAt;
+    const occurrenceSource = editsEnd ? input.region.sourceEndsAt : input.region.sourceStartsAt;
     const sourceAnchor = resolveScheduleWallInstant(
       input.sourceDate,
       sourceMinutes,
@@ -65,8 +65,8 @@ function editedTimedBounds(input: WorkLocationTimedEditInput): {
     );
     if (sourceAnchor.kind !== 'resolved' || targetAnchor.kind !== 'resolved') return null;
 
-    const sourceStart = Temporal.Instant.from(input.region.startsAt);
-    const sourceEnd = Temporal.Instant.from(input.region.endsAt);
+    const sourceStart = Temporal.Instant.from(input.region.sourceStartsAt);
+    const sourceEnd = Temporal.Instant.from(input.region.sourceEndsAt);
     const delta =
       Temporal.Instant.from(targetAnchor.instant).epochNanoseconds -
       Temporal.Instant.from(sourceAnchor.instant).epochNanoseconds;

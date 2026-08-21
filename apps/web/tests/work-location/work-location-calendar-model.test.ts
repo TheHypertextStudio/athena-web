@@ -132,8 +132,8 @@ describe('buildWorkLocationCalendarModel', () => {
           effectiveFrom: '2026-03-01',
           effectiveUntil: null,
           weekdays: [6],
-          startMinute: 480,
-          endMinute: 720,
+          startMinute: 540,
+          endMinute: 780,
           timezone: 'America/Los_Angeles',
         }),
       ],
@@ -157,12 +157,60 @@ describe('buildWorkLocationCalendarModel', () => {
       allDay: false,
       editable: true,
       assertionKind: 'weekly',
+      ownsStart: true,
+      ownsEnd: true,
     });
     expect(inferred.regions[0]).toMatchObject({
       editable: false,
       assertionKind: null,
       assertionId: null,
+      ownsStart: false,
+      ownsEnd: false,
     });
+  });
+
+  it('marks only resolved fragments that retain the assertion occurrence endpoints', () => {
+    const source = assertion({
+      type: 'one_off_timed',
+      startsAt: '2026-08-12T23:00:00.000Z',
+      endsAt: '2026-08-14T01:00:00.000Z',
+      timezone: 'UTC',
+    });
+    const splitRange = range({
+      effectiveStart: '2026-08-12T23:00:00.000Z',
+      effectiveEnd: '2026-08-13T12:00:00.000Z',
+      occurrenceDate: '2026-08-12',
+    });
+    splitRange.start = '2026-08-12T00:00:00.000Z';
+    splitRange.end = '2026-08-15T00:00:00.000Z';
+    splitRange.segments.push({
+      ...assertDefined(splitRange.segments[0]),
+      effectiveStart: '2026-08-13T15:00:00.000Z',
+      effectiveEnd: '2026-08-14T01:00:00.000Z',
+    });
+
+    const model = buildWorkLocationCalendarModel({
+      timezone: 'UTC',
+      range: splitRange,
+      assertions: [source],
+      places: [place],
+      accounts: [],
+    });
+
+    expect(model.regions).toEqual([
+      expect.objectContaining({
+        ownsStart: true,
+        ownsEnd: false,
+        sourceStartsAt: '2026-08-12T23:00:00.000Z',
+        sourceEndsAt: '2026-08-14T01:00:00.000Z',
+      }),
+      expect.objectContaining({
+        ownsStart: false,
+        ownsEnd: true,
+        sourceStartsAt: '2026-08-12T23:00:00.000Z',
+        sourceEndsAt: '2026-08-14T01:00:00.000Z',
+      }),
+    ]);
   });
 
   it('keeps an all-day assertion as one chip when a timed winner splits its resolved fragments', () => {

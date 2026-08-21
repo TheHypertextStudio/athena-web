@@ -1,11 +1,12 @@
 'use client';
 
 import { MapPin } from '@docket/ui/icons';
-import { type JSX, useRef, useState } from 'react';
+import { type JSX, useEffect, useRef, useState } from 'react';
 
 import {
   partitionScheduleRangeByContext,
   projectInstantRangeToScheduleLane,
+  resolveScheduleWallInstant,
   type ScheduleAllDayLaneRenderContext,
   type ScheduleLane,
   type ScheduleTimedItemDecorationContext,
@@ -75,6 +76,20 @@ function regionBounds(
     lane,
     displayTimezone,
   );
+}
+
+/** Return whether one projected lane edge maps to the region's exact owned source endpoint. */
+function regionOwnsLaneEdge(
+  region: WorkLocationCalendarRegion,
+  lane: ScheduleLane,
+  minutes: number,
+  edge: 'start' | 'end',
+  displayTimezone: string,
+): boolean {
+  if (edge === 'start' ? !region.ownsStart : !region.ownsEnd) return false;
+  const exact = edge === 'start' ? region.sourceStartsAt : region.sourceEndsAt;
+  const resolution = resolveScheduleWallInstant(lane.date, minutes, displayTimezone, exact);
+  return resolution.kind === 'resolved' && Date.parse(resolution.instant) === Date.parse(exact);
 }
 
 /** Clamp a number into inclusive bounds. */
@@ -387,9 +402,55 @@ export function WorkLocationTimedLaneContext({
   const visible = regions.flatMap((region) => {
     if (region.allDay) return [];
     const bounds = regionBounds(region, context.lane, displayTimezone);
-    return bounds ? [{ region, bounds }] : [];
+    return bounds
+      ? [
+          {
+            region,
+            bounds,
+            ownsStart: regionOwnsLaneEdge(
+              region,
+              context.lane,
+              bounds.startMinutes,
+              'start',
+              displayTimezone,
+            ),
+            ownsEnd: regionOwnsLaneEdge(
+              region,
+              context.lane,
+              bounds.endMinutes,
+              'end',
+              displayTimezone,
+            ),
+          },
+        ]
+      : [];
   });
+  useEffect(() => {
+    setPreview(null);
+  }, [context.lane.id, regions]);
   if (visible.length === 0) return null;
+
+  const pointerOwner = (
+    mode: WorkLocationTimedPreview['mode'],
+    clientY: number,
+    target: HTMLElement,
+  ) => {
+    const laneTop =
+      target.closest<HTMLElement>('[data-schedule-timed-lane-context]')?.getBoundingClientRect()
+        .top ?? 0;
+    const pointerMinutes = ((clientY - laneTop) * 60) / context.geometry.pixelsPerHour;
+    const candidates = visible.filter(
+      (entry) =>
+        entry.region.editable &&
+        (mode === 'move' || (mode === 'resize-start' ? entry.ownsStart : entry.ownsEnd)),
+    );
+    return candidates.sort((left, right) => {
+      const leftAnchor = mode === 'resize-end' ? left.bounds.endMinutes : left.bounds.startMinutes;
+      const rightAnchor =
+        mode === 'resize-end' ? right.bounds.endMinutes : right.bounds.startMinutes;
+      return Math.abs(leftAnchor - pointerMinutes) - Math.abs(rightAnchor - pointerMinutes);
+    })[0];
+  };
   return (
     <>
       {preview ? (
@@ -413,7 +474,7 @@ export function WorkLocationTimedLaneContext({
           </span>
         </div>
       ) : null}
-      {visible.map(({ region, bounds }, visibleIndex) => {
+      {visible.map(({ region, bounds, ownsStart, ownsEnd }) => {
         const top = (bounds.startMinutes / 60) * context.geometry.pixelsPerHour;
         const height =
           ((bounds.endMinutes - bounds.startMinutes) / 60) * context.geometry.pixelsPerHour;
@@ -443,11 +504,13 @@ export function WorkLocationTimedLaneContext({
           event: React.PointerEvent<HTMLElement>,
           mode: 'move' | 'resize-start' | 'resize-end',
         ): void => {
+          const owner = pointerOwner(mode, event.clientY, event.currentTarget);
+          if (!owner) return;
           startTimedPointerSession({
             event,
             mode,
-            region,
-            bounds,
+            region: owner.region,
+            bounds: owner.bounds,
             context,
             onCommit: onEdit,
             onDragged: () => {
@@ -540,6 +603,7 @@ export function WorkLocationTimedLaneContext({
             context.onAnnouncementChange(outcome.announcement);
             return;
           }
+          setPreview(null);
           context.onAnnouncementChange(
             timedGestureAnnouncement({
               phase: 'complete',
@@ -551,8 +615,7 @@ export function WorkLocationTimedLaneContext({
             }),
           );
         };
-        const hitTrack = visibleIndex;
-        const hitLeft = (slot: number): number => hitTrack * 132 + slot * 44;
+        const moveWidth = Math.max(44, context.geometry.laneWidth - 88);
         return (
           <div
             key={region.id}
@@ -564,16 +627,19 @@ export function WorkLocationTimedLaneContext({
             <button
               type="button"
               aria-label={`Move ${region.label} work location`}
-              data-work-location-hit-track={hitTrack}
               data-work-location-hit-slot="move"
-              className="group focus-visible:outline-primary pointer-events-auto absolute -top-5 z-10 inline-flex size-11 min-h-11 min-w-11 items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{ left: hitLeft(0) }}
-              onClick={() => {
-                if (suppressedClick.current === region.id) {
+              className="group focus-visible:outline-primary pointer-events-auto absolute z-10 inline-flex min-h-11 min-w-11 items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ left: 44, top: -22, width: moveWidth, height: 44 }}
+              onClick={(event) => {
+                if (suppressedClick.current !== null) {
                   suppressedClick.current = null;
                   return;
                 }
-                onOpen(region);
+                const owner =
+                  event.detail === 0
+                    ? { region }
+                    : pointerOwner('move', event.clientY, event.currentTarget);
+                if (owner) onOpen(owner.region);
               }}
               onPointerDown={(event) => {
                 startSession(event, 'move');
@@ -582,39 +648,49 @@ export function WorkLocationTimedLaneContext({
                 commitKeyboardEdit(event, 'move');
               }}
             >
-              <span className="bg-surface-container-high text-on-surface-variant group-hover:bg-surface-container-highest group-active:bg-secondary-container text-label-small inline-flex min-h-7 max-w-full items-center gap-1 rounded-full px-2 motion-safe:transition-colors motion-reduce:transition-none">
+              <span
+                data-work-location-chip-visual=""
+                className="bg-surface-container-high text-on-surface-variant group-hover:bg-surface-container-highest group-active:bg-secondary-container text-label-small inline-flex min-h-7 max-w-full items-center gap-1 rounded-full px-2 motion-safe:transition-colors motion-reduce:transition-none"
+              >
                 <MapPin aria-hidden="true" className="size-3.5! shrink-0" />
                 <span className="truncate">{region.label}</span>
               </span>
             </button>
-            <button
-              type="button"
-              aria-label={`Resize start of ${region.label}`}
-              data-work-location-hit-track={hitTrack}
-              data-work-location-hit-slot="start"
-              className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute -top-5 z-20 size-11 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
-              style={{ left: hitLeft(1) }}
-              onPointerDown={(event) => {
-                startSession(event, 'resize-start');
-              }}
-              onKeyDown={(event) => {
-                commitKeyboardEdit(event, 'resize-start');
-              }}
-            />
-            <button
-              type="button"
-              aria-label={`Resize end of ${region.label}`}
-              data-work-location-hit-track={hitTrack}
-              data-work-location-hit-slot="end"
-              className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute -top-5 z-20 size-11 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
-              style={{ left: hitLeft(2) }}
-              onPointerDown={(event) => {
-                startSession(event, 'resize-end');
-              }}
-              onKeyDown={(event) => {
-                commitKeyboardEdit(event, 'resize-end');
-              }}
-            />
+            {ownsStart ? (
+              <button
+                type="button"
+                aria-label={`Resize start of ${region.label}`}
+                data-work-location-hit-slot="start"
+                className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-11 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
+                style={{ left: 0, top: -22, width: 44, height: 44 }}
+                onPointerDown={(event) => {
+                  startSession(event, 'resize-start');
+                }}
+                onKeyDown={(event) => {
+                  commitKeyboardEdit(event, 'resize-start');
+                }}
+              />
+            ) : null}
+            {ownsEnd ? (
+              <button
+                type="button"
+                aria-label={`Resize end of ${region.label}`}
+                data-work-location-hit-slot="end"
+                className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-11 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
+                style={{
+                  left: context.geometry.laneWidth - 44,
+                  top: height - 22,
+                  width: 44,
+                  height: 44,
+                }}
+                onPointerDown={(event) => {
+                  startSession(event, 'resize-end');
+                }}
+                onKeyDown={(event) => {
+                  commitKeyboardEdit(event, 'resize-end');
+                }}
+              />
+            ) : null}
           </div>
         );
       })}

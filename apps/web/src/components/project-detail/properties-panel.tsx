@@ -35,6 +35,7 @@ export interface PropertiesPanelProps {
   targetDateResolution: DateResolution | null;
   targetDateFiscalYearStartMonth: number | null;
   fiscalYearStartMonth: number;
+  planningCalendarLoading: boolean;
   programId: string | null;
   programOptions: readonly PickerOption[];
   initiativeIds: readonly string[];
@@ -83,6 +84,7 @@ export function PropertiesPanel({
   targetDateResolution,
   targetDateFiscalYearStartMonth,
   fiscalYearStartMonth,
+  planningCalendarLoading,
   programId,
   programOptions,
   initiativeIds,
@@ -157,6 +159,7 @@ export function PropertiesPanel({
           startLabel="Start date"
           targetLabel="Target date"
           readOnly={readOnly}
+          disabled={planningCalendarLoading}
           {...CHIP}
         />
       </EntityMetadataItem>

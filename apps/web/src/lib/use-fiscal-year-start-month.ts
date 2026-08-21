@@ -9,6 +9,8 @@ export interface FiscalYearStartMonthState {
   readonly fiscalYearStartMonth: number;
   /** Whether the picker must remain disabled to avoid committing against the fallback month. */
   readonly loading: boolean;
+  /** Application-owned read error shown beside the disabled planning control. */
+  readonly error: string | null;
 }
 
 /**
@@ -32,6 +34,7 @@ export function useFiscalYearStartMonth(orgId: string, enabled = true): FiscalYe
   });
   return {
     fiscalYearStartMonth: settings.data?.fiscalYearStartMonth ?? 0,
-    loading: enabled && settings.isPending,
+    loading: enabled && settings.data === undefined,
+    error: settings.isError ? 'Could not load planning calendar settings.' : null,
   };
 }

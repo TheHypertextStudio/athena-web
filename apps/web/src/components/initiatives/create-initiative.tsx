@@ -31,6 +31,7 @@ import {
   type InitiativeStatus,
   type InitiativeUpdateCadence,
 } from '@docket/types';
+import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import { ActorPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight } from '@docket/ui/icons';
@@ -62,6 +63,7 @@ import { useSession } from '@/lib/auth-client';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { seedInitiativeRecord } from '@/lib/entity-records';
 import { queryKeys } from '@/lib/query';
+import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 
 import { InitiativeComposerPickers } from './initiative-form-pickers';
 
@@ -75,7 +77,7 @@ export interface InitiativeDraft {
   description: string;
   ownerId: string | null;
   status: InitiativeStatus;
-  targetDate: string | null;
+  targetTimeframe: PlanningTimeframe | null;
   health: Health | null;
   priority: InitiativePriority;
   updateCadence: InitiativeUpdateCadence;
@@ -88,7 +90,7 @@ export const EMPTY_INITIATIVE_DRAFT: InitiativeDraft = {
   description: '',
   ownerId: null,
   status: 'active',
-  targetDate: null,
+  targetTimeframe: null,
   health: null,
   priority: 'none',
   updateCadence: 'monthly',
@@ -153,6 +155,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
   const destinationReady = globalCreation?.ready ?? true;
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
+  const planningCalendar = useFiscalYearStartMonth(orgId, open && destinationReady);
   const { draft, setField, updateDraft } =
     useComposerDraft<InitiativeDraft>(EMPTY_INITIATIVE_DRAFT);
 
@@ -168,14 +171,26 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
     successMessage: `${initiativeNoun} created. Ready to create another.`,
   });
 
-  // Keep copy, dates, and enum choices portable while dropping the prior workspace's person id.
+  // Exact days are portable. Broad periods are not because their fiscal basis belongs to the
+  // previous workspace, so a retarget clears those along with the prior workspace's person id.
   useEffect(() => {
     if (globalCreation === undefined) return;
-    if (previousWorkspaceId.current === globalCreation.targetWorkspaceId) return;
+    const previousTargetWorkspaceId = previousWorkspaceId.current;
+    if (previousTargetWorkspaceId === globalCreation.targetWorkspaceId) return;
     previousWorkspaceId.current = globalCreation.targetWorkspaceId;
+    if (
+      previousTargetWorkspaceId === null &&
+      globalCreation.targetWorkspaceId !== null &&
+      globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId
+    ) {
+      return;
+    }
     setError(null);
-    updateDraft(() => ({ ownerId: null }));
-  }, [globalCreation, updateDraft]);
+    updateDraft(() => ({
+      ownerId: null,
+      targetTimeframe: draft.targetTimeframe?.resolution ? null : draft.targetTimeframe,
+    }));
+  }, [draft.targetTimeframe, globalCreation, updateDraft]);
 
   const canSubmit =
     draft.name.trim().length > 0 && destinationReady && (globalCreation?.canContribute ?? true);
@@ -199,7 +214,12 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
             updateCadence: draft.updateCadence,
             ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
             ...(draft.ownerId ? { ownerId: ActorId.parse(draft.ownerId) } : {}),
-            ...(draft.targetDate ? { targetDate: draft.targetDate } : {}),
+            ...(draft.targetTimeframe
+              ? {
+                  targetDate: draft.targetTimeframe.date,
+                  targetDateResolution: draft.targetTimeframe.resolution,
+                }
+              : {}),
             ...(draft.health ? { health: draft.health } : {}),
           },
         });
@@ -343,7 +363,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       }}
       bodyPlaceholder="Add a description…"
       mentionOrgId={orgId}
-      error={error ?? globalCreation?.loadError ?? null}
+      error={error ?? planningCalendar.error ?? globalCreation?.loadError ?? null}
       statusMessage={continuation.statusMessage}
       creating={creating}
       canSubmit={canSubmit}
@@ -364,9 +384,11 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
         onStatusChange={(next) => {
           setField('status', next);
         }}
-        targetDate={draft.targetDate}
-        onTargetDateChange={(next) => {
-          setField('targetDate', next);
+        targetTimeframe={draft.targetTimeframe}
+        fiscalYearStartMonth={planningCalendar.fiscalYearStartMonth}
+        planningCalendarLoading={planningCalendar.loading}
+        onTargetTimeframeChange={(next) => {
+          setField('targetTimeframe', next);
         }}
         health={draft.health}
         onHealthChange={(next) => {

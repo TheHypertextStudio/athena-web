@@ -809,7 +809,7 @@ stability, and unchanged timeline anchors.
 - Initiative list and roadmap show semantic Initiative and Project timeframe labels.
 - Search facets and MCP resources carry the target resolution and saved fiscal basis.
 
-- [ ] **Step 1: Write failing Initiative picker and mutation tests**
+- [x] **Step 1: Write failing Initiative picker and mutation tests**
 
 ```tsx
 await chooseTimeframe('Initiative target', 'Half-year', 'H2 2026');
@@ -823,12 +823,12 @@ expect(updateInitiative).toHaveBeenCalledWith(
 
 Cover create, detail update, specific date, clear, Escape, and rendering an old fiscal snapshot.
 
-- [ ] **Step 2: Replace the Initiative target controls and mutation payloads**
+- [x] **Step 2: Replace the Initiative target controls and mutation payloads**
 
 Construct `PlanningTimeframe` from the three output fields. Use the current workspace fiscal month
 only for a new selection. Send `targetDate` and `targetDateResolution` together.
 
-- [ ] **Step 3: Update Initiative list and roadmap labels**
+- [x] **Step 3: Update Initiative list and roadmap labels**
 
 Change `formatDate` or add `formatPlanningDate` with this signature:
 
@@ -845,13 +845,14 @@ Pass all three Initiative fields to roadmap marker titles and accessible names. 
 plus fiscal snapshot. Use them for semantic bar span copy. Keep all marker and bar placement on the
 canonical anchors.
 
-- [ ] **Step 4: Add semantic Initiative grouping and filtering**
+- [x] **Step 4: Add semantic Initiative filtering**
 
 Add a `Target timeframe` field to `initiative-catalog.ts`. Use the same `timeframeKey`, label, and
 chronological rank as Projects. Build filter options from the loaded rows so the list never offers
-empty periods.
+empty periods. Keep it out of grouping because this roster is a hierarchy. Grouping would flatten
+parent and child Initiatives into unrelated buckets and break the page's nesting contract.
 
-- [ ] **Step 5: Preserve metadata in search and MCP resources**
+- [x] **Step 5: Preserve metadata in search and MCP resources**
 
 Add these fields to Project and Initiative search facets and MCP resource payloads:
 
@@ -864,13 +865,13 @@ targetDateFiscalYearStartMonth: row.targetDateFiscalYearStartMonth,
 Project resources also carry the corresponding start fields. Human-readable summaries use
 `timeframeLabel`; machine fields retain the raw values.
 
-- [ ] **Step 6: Run focused Initiative, search, MCP, and roadmap tests**
+- [x] **Step 6: Run focused Initiative, search, MCP, and roadmap tests**
 
 Run: `pnpm --filter @docket/web test -- tests/composers/create-initiative.test.tsx tests/components/initiatives/initiative-timeframes.test.tsx && pnpm --filter @docket/api test -- tests/search/projectors-work.test.ts tests/mcp/timeframe-resources.test.ts && pnpm --filter @docket/web typecheck && pnpm --filter @docket/api typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit the Initiative and semantic-reader slice**
+- [x] **Step 7: Commit the Initiative and semantic-reader slice**
 
 Commit type/scope: `feat(projects)` with a body that explains semantic labels and unchanged roadmap
 geometry.

@@ -33,7 +33,11 @@ import {
   initiativeDragObjectFromRef,
   resolveInitiativeHierarchyMutation,
 } from '@/components/initiatives/initiative-hierarchy-mutations';
-import { buildInitiativeCatalog, HEALTH_LABEL } from '@/components/initiatives/initiative-catalog';
+import {
+  buildInitiativeCatalog,
+  formatInitiativeTarget,
+  HEALTH_LABEL,
+} from '@/components/initiatives/initiative-catalog';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { WorkStatusIcon } from '@/components/entity-display/work-status';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
@@ -264,9 +268,15 @@ export default function InitiativesListClient(): JSX.Element {
   const { state, setFilters, setGroupBy, setSort } = useViewState();
   const statuses = useStatusRegistry();
   const statusOf = useWorkStatusResolver('initiative');
+  const overview = useApiQuery(initiativeOverviewDef(orgId, api));
+  const data: InitiativeOverviewOut | undefined = overview.data;
   const catalog = useMemo(
-    () => buildInitiativeCatalog({ statuses: statuses.statusesFor('initiative') }),
-    [statuses],
+    () =>
+      buildInitiativeCatalog({
+        initiatives: data?.items ?? [],
+        statuses: statuses.statusesFor('initiative'),
+      }),
+    [data?.items, statuses],
   );
   // The initiative currently being dragged, and the row it is hovering as a drop (nest) target.
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -274,8 +284,6 @@ export default function InitiativesListClient(): JSX.Element {
   // Set while a drag is in flight so the click some browsers synthesize after a drop does not
   // trigger row navigation; cleared on the next tick after the drag ends.
   const dragOccurredRef = useRef(false);
-  const overview = useApiQuery(initiativeOverviewDef(orgId, api));
-  const data: InitiativeOverviewOut | undefined = overview.data;
   const overviewKey = useMemo(() => queryKeys.initiatives(orgId), [orgId]);
 
   // Members + roles resolve whether the caller can rename an initiative inline. An Initiative PATCH
@@ -694,7 +702,7 @@ export default function InitiativesListClient(): JSX.Element {
               ) : null}
               {rosterRows.map(
                 ({ item, continuationDepths, hasVisibleChildren, isLastSibling }, rowIndex) => {
-                  const targetDate = formatDate(item.targetDate);
+                  const targetDate = formatInitiativeTarget(item);
                   const lastUpdate = formatDate(item.lastUpdateAt);
                   const hasSummary = Boolean(item.summary?.trim());
                   const itemLeft = ROSTER_CELL_INSET + (item.depth - 1) * ROSTER_INDENT_STEP;

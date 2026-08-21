@@ -65,6 +65,8 @@ import { useInitiativeMutations } from '@/lib/use-initiative-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { userErrorMessage } from '@/lib/problem';
 import { useSession } from '@/lib/auth-client';
+import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
+import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
 
@@ -91,6 +93,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   const programNoun = useVocabulary('program');
   const projectNoun = useVocabulary('project');
   const detailQ = useApiQuery(initiativeDetailDef(orgId, initiativeId));
+  const planningCalendar = useFiscalYearStartMonth(orgId);
   // The initiative's own row, read apart from the composite above it, so the masthead can paint
   // from whatever arrived first — the composer that just created it, a warmed list, or one read.
   const recordQ = useApiQuery(initiativeRecordDef(orgId, initiativeId));
@@ -364,6 +367,10 @@ export default function InitiativeDetailPage(): JSX.Element {
               health={detail.health ?? null}
               rolledUpHealth={detail.rolledUpHealth}
               targetDate={detail.targetDate ?? null}
+              targetDateResolution={detail.targetDateResolution}
+              targetDateFiscalYearStartMonth={detail.targetDateFiscalYearStartMonth}
+              fiscalYearStartMonth={planningCalendar.fiscalYearStartMonth}
+              planningCalendarLoading={planningCalendar.loading}
               ownerId={detail.ownerId ?? null}
               priority={detail.priority}
               updateCadence={detail.updateCadence}
@@ -377,8 +384,11 @@ export default function InitiativeDetailPage(): JSX.Element {
               onHealthChange={(health) => {
                 mutations.patchInitiative({ health });
               }}
-              onTargetChange={(targetDate) => {
-                mutations.patchInitiative({ targetDate });
+              onTargetChange={(target) => {
+                mutations.patchInitiative({
+                  targetDate: target?.date ?? null,
+                  targetDateResolution: target?.resolution ?? null,
+                });
               }}
               onOwnerChange={(ownerId) => {
                 mutations.patchInitiative({ ownerId });
@@ -424,9 +434,9 @@ export default function InitiativeDetailPage(): JSX.Element {
               </Button>
             </EntityMetadataItem>
           </EntityMetadataRow>
-          {mutations.propsError ? (
+          {mutations.propsError || planningCalendar.error ? (
             <p role="alert" className="text-error mt-2 text-sm">
-              {mutations.propsError}
+              {mutations.propsError ?? planningCalendar.error}
             </p>
           ) : null}
           {displayMutation.error ? (
@@ -541,7 +551,15 @@ export default function InitiativeDetailPage(): JSX.Element {
           <PrintProperty label="Owner" value={ownerName} />
           <PrintProperty
             label="Target"
-            value={detail.targetDate ? detail.targetDate.slice(0, 10) : '—'}
+            value={
+              formatPlanningTimeframe(
+                toPlanningTimeframe(
+                  detail.targetDate,
+                  detail.targetDateResolution,
+                  detail.targetDateFiscalYearStartMonth,
+                ),
+              ) ?? '—'
+            }
           />
           <PrintProperty
             label="Update cadence"

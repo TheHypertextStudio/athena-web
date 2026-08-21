@@ -9,6 +9,8 @@
  * forms the timeline uses, and parse ISO date strings to epoch millis for layout math.
  */
 import { formatCalendarDate } from '@/lib/format-date';
+import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
+import type { DateResolution } from '@docket/work/planning-timeframe';
 
 /**
  * Format an ISO date (or date-time) as a short, locale-aware calendar date.
@@ -29,6 +31,15 @@ import { formatCalendarDate } from '@/lib/format-date';
  */
 export function formatDate(iso: string | null | undefined): string | null {
   return formatCalendarDate(iso);
+}
+
+/** Format a saved planning date with its broad-period semantics. */
+export function formatPlanningDate(
+  date: string | null | undefined,
+  resolution: DateResolution | null | undefined,
+  fiscalYearStartMonth: number | null | undefined,
+): string | null {
+  return formatPlanningTimeframe(toPlanningTimeframe(date, resolution, fiscalYearStartMonth));
 }
 
 /**

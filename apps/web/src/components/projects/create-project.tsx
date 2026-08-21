@@ -434,7 +434,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       }}
       bodyPlaceholder="Add a description…"
       mentionOrgId={orgId}
-      error={error ?? globalCreation?.loadError ?? null}
+      error={error ?? planningCalendar.error ?? globalCreation?.loadError ?? null}
       statusMessage={continuation.statusMessage}
       creating={creating}
       canSubmit={canSubmit}

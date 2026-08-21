@@ -8,11 +8,12 @@ import type {
   InitiativeUpdateCadence,
   LabelOut,
 } from '@docket/types';
+import type { DateResolution, PlanningTimeframe } from '@docket/work/planning-timeframe';
 import {
   ActorPicker,
-  DatePicker,
   EnumPicker,
   LabelsPicker,
+  TimeframePicker,
   type PickerOption,
 } from '@docket/ui/components';
 import { type JSX, useMemo } from 'react';
@@ -29,7 +30,7 @@ import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityMetadataItem,
 } from '@/components/views/entity-detail-layout';
-import { formatCalendarDate } from '@/lib/format-date';
+import { toPlanningTimeframe } from '@/lib/planning-timeframe';
 
 /** Human labels for each Initiative priority (shared with the page's print block). */
 export const INITIATIVE_PRIORITY_LABEL: Record<InitiativePriority, string> = {
@@ -61,6 +62,10 @@ export interface InitiativePropertiesPanelProps {
   health: Health | null;
   rolledUpHealth: Health | null;
   targetDate: string | null;
+  targetDateResolution: DateResolution | null;
+  targetDateFiscalYearStartMonth: number | null;
+  fiscalYearStartMonth: number;
+  planningCalendarLoading: boolean;
   ownerId: string | null;
   priority: InitiativePriority;
   updateCadence: InitiativeUpdateCadence;
@@ -70,7 +75,7 @@ export interface InitiativePropertiesPanelProps {
   canEdit: boolean;
   onStatusChange: (status: InitiativeStatus) => void;
   onHealthChange: (health: Health | null) => void;
-  onTargetChange: (targetDate: string | null) => void;
+  onTargetChange: (target: PlanningTimeframe | null) => void;
   onOwnerChange: (ownerId: string | null) => void;
   onPriorityChange: (priority: InitiativePriority) => void;
   onCadenceChange: (updateCadence: InitiativeUpdateCadence) => void;
@@ -106,6 +111,10 @@ export function InitiativePropertiesPanel({
   health,
   rolledUpHealth,
   targetDate,
+  targetDateResolution,
+  targetDateFiscalYearStartMonth,
+  fiscalYearStartMonth,
+  planningCalendarLoading,
   ownerId,
   priority,
   updateCadence,
@@ -130,6 +139,11 @@ export function InitiativePropertiesPanel({
   );
   const labelIds = useMemo<readonly string[]>(() => labels.map((label) => label.id), [labels]);
   const labelPickerOptions = useMemo(() => labelOptions(availableLabels), [availableLabels]);
+  const targetTimeframe = toPlanningTimeframe(
+    targetDate,
+    targetDateResolution,
+    targetDateFiscalYearStartMonth,
+  );
 
   return (
     <>
@@ -143,6 +157,7 @@ export function InitiativePropertiesPanel({
           placeholder="Choose status"
           ariaLabel="Status"
           readOnly={readOnly}
+          disabled={planningCalendarLoading}
           {...CHIP}
         />
       </EntityMetadataItem>
@@ -162,12 +177,12 @@ export function InitiativePropertiesPanel({
         <RolledUpHealthPill health={rolledUpHealth} className="min-h-10 px-3" />
       </EntityMetadataItem>
       <EntityMetadataItem priority={3}>
-        <DatePicker
-          value={targetDate ? targetDate.slice(0, 10) : null}
+        <TimeframePicker
+          label="Target date"
+          value={targetTimeframe}
+          fiscalYearStartMonth={fiscalYearStartMonth}
+          edge="target"
           onChange={onTargetChange}
-          placeholder="Set target date"
-          formatLabel={(value) => formatCalendarDate(value) ?? undefined}
-          ariaLabel="Target date"
           readOnly={readOnly}
           {...CHIP}
         />

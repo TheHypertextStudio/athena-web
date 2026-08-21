@@ -496,7 +496,9 @@ export type InitiativeUnlinked = z.infer<typeof InitiativeUnlinked>;
  * @remarks
  * The roadmap-first roll-up (api-rpc-contract §3.3 `GET /:initiativeId/timeline`): each
  * associated Project becomes a dated bar with its current `status`/`health`. `startDate`
- * and `targetDate` may be null when the Project has not been scheduled.
+ * and `targetDate` may be null when the Project has not been scheduled. Each endpoint carries its
+ * broad resolution and saved fiscal basis so clients can describe the period without exposing the
+ * canonical geometry boundary as if it were a precise day.
  */
 export const InitiativeTimelineBar = z
   .object({
@@ -510,10 +512,30 @@ export const InitiativeTimelineBar = z
       .string()
       .nullable()
       .describe('ISO start date (the bar’s left edge), or `null` when the Project is unscheduled.'),
+    startDateResolution: DateResolution.nullable().describe(
+      'Broad start resolution, or `null` when the start is a precise day or unset.',
+    ),
+    startDateFiscalYearStartMonth: z
+      .number()
+      .int()
+      .min(0)
+      .max(11)
+      .nullable()
+      .describe('Saved zero-based fiscal basis for a broad start value.'),
     targetDate: z
       .string()
       .nullable()
       .describe('ISO target/end date (the bar’s right edge), or `null` when unscheduled.'),
+    targetDateResolution: DateResolution.nullable().describe(
+      'Broad target resolution, or `null` when the target is a precise day or unset.',
+    ),
+    targetDateFiscalYearStartMonth: z
+      .number()
+      .int()
+      .min(0)
+      .max(11)
+      .nullable()
+      .describe('Saved zero-based fiscal basis for a broad target value.'),
   })
   .meta({ id: 'InitiativeTimelineBar', description: 'A project bar on an initiative timeline.' });
 /** Initiative timeline project-bar value. */

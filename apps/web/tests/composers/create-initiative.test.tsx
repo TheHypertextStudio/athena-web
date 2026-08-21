@@ -9,6 +9,7 @@ const {
   membersGet,
   agentsGet,
   templatesGet,
+  settingsGet,
   creationState,
   createObjectState,
   sessionState,
@@ -21,6 +22,7 @@ const {
     membersGet: vi.fn(),
     agentsGet: vi.fn(),
     templatesGet: vi.fn(),
+    settingsGet: vi.fn(),
     creationState,
     createObjectState,
     sessionState: { data: { user: { id: 'user_1' } }, isPending: false },
@@ -37,6 +39,7 @@ vi.mock('../../src/lib/api', () => ({
           members: { $get: membersGet },
           agents: { $get: agentsGet },
           templates: { $get: templatesGet },
+          settings: { 'work-structure': { $get: settingsGet } },
         },
       },
     },
@@ -103,6 +106,13 @@ beforeEach(() => {
   membersGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MEMBERS }));
   agentsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
   templatesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
+  settingsGet.mockReset().mockResolvedValue(
+    jsonResponse(true, {
+      autoArchiveCompletedProjects: false,
+      defaultProjectStatus: 'planned',
+      fiscalYearStartMonth: 0,
+    }),
+  );
   createObjectState.current = {
     request: null,
     closeCreate: vi.fn(),
@@ -375,5 +385,41 @@ describe('GlobalInitiativeComposer', () => {
     expect(routerPush).not.toHaveBeenCalled();
     expect(closeCreate).not.toHaveBeenCalled();
     expect(onCreated).toHaveBeenCalledOnce();
+  });
+
+  it('sends a broad Initiative target with its canonical anchor and resolution', async () => {
+    initiativePost.mockResolvedValue(
+      jsonResponse(true, { id: 'initiative_timeframe', name: 'Timed initiative' }),
+    );
+    renderGlobalInitiative();
+
+    await waitFor(() => {
+      expect(settingsGet).toHaveBeenCalled();
+    });
+    fireEvent.change(screen.getByLabelText('Initiative name'), {
+      target: { value: 'Timed initiative' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Initiative target/ }));
+    fireEvent.click(screen.getByRole('option', { name: 'December 2026' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Initiative' }));
+
+    await waitFor(() => {
+      expect(initiativePost).toHaveBeenCalledTimes(1);
+    });
+    expect(firstJson(initiativePost.mock.calls)).toMatchObject({
+      targetDate: '2026-12-31',
+      targetDateResolution: 'month',
+    });
+  });
+
+  it('does not allow a broad target while the workspace planning calendar is unavailable', async () => {
+    settingsGet.mockResolvedValue(jsonResponse(false, { detail: 'Provider text.' }));
+    renderGlobalInitiative();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not load planning calendar settings.',
+    );
+    expect(screen.getByRole('button', { name: /Initiative target/ })).toBeDisabled();
+    expect(screen.queryByText('Provider text.')).toBeNull();
   });
 });

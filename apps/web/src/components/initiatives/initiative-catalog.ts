@@ -28,6 +28,11 @@ import {
   statusRankOf,
 } from '@/components/entity-display/work-status';
 import { type FieldCatalog, type FieldOption } from '@/components/views/field-catalog';
+import {
+  formatPlanningTimeframe,
+  planningTimeframeKey,
+  toPlanningTimeframe,
+} from '@/lib/planning-timeframe';
 
 /** Human label for each health verdict. */
 export const HEALTH_LABEL: Record<Health, string> = {
@@ -51,6 +56,8 @@ function healthRank(value: string | number | null): number {
 
 /** The workspace data a page supplies so the catalog can offer the statuses it actually has. */
 export interface InitiativeCatalogDeps {
+  /** Loaded Initiative rows used to derive non-empty semantic timeframe options. */
+  initiatives: readonly InitiativeOverviewItem[];
   /** The workspace's Initiative statuses, in board order, from the status registry. */
   statuses: readonly WorkStatusDisplay[];
 }
@@ -68,6 +75,19 @@ export interface InitiativeCatalogDeps {
 export function buildInitiativeCatalog(
   deps: InitiativeCatalogDeps,
 ): FieldCatalog<InitiativeOverviewItem> {
+  const timeframeByKey = new Map<string, { value: string; label: string; date: string }>();
+  for (const initiative of deps.initiatives) {
+    const value = initiativeTargetTimeframeKey(initiative);
+    const label = formatInitiativeTarget(initiative);
+    if (!value || !label || !initiative.targetDate) continue;
+    timeframeByKey.set(value, { value, label, date: initiative.targetDate });
+  }
+  const targetTimeframeOptions = [...timeframeByKey.values()]
+    .sort(
+      (left, right) => left.date.localeCompare(right.date) || left.label.localeCompare(right.label),
+    )
+    .map(({ value, label }) => ({ value, label }));
+
   return [
     {
       key: 'status',
@@ -101,5 +121,36 @@ export function buildInitiativeCatalog(
       accessor: (initiative) => initiative.targetDate ?? null,
       sortable: true,
     },
+    {
+      key: 'targetTimeframe',
+      label: 'Target timeframe',
+      type: 'enum',
+      accessor: initiativeTargetTimeframeKey,
+      options: targetTimeframeOptions,
+      rank: (value) =>
+        typeof value === 'string' ? Date.parse(`${value.slice(0, 10)}T00:00:00.000Z`) : Infinity,
+    },
   ];
+}
+
+/** Format one Initiative target with its saved planning semantics. */
+export function formatInitiativeTarget(initiative: InitiativeOverviewItem): string | null {
+  return formatPlanningTimeframe(
+    toPlanningTimeframe(
+      initiative.targetDate,
+      initiative.targetDateResolution,
+      initiative.targetDateFiscalYearStartMonth,
+    ),
+  );
+}
+
+/** Build one Initiative target's stable semantic filter key. */
+export function initiativeTargetTimeframeKey(initiative: InitiativeOverviewItem): string | null {
+  return planningTimeframeKey(
+    toPlanningTimeframe(
+      initiative.targetDate,
+      initiative.targetDateResolution,
+      initiative.targetDateFiscalYearStartMonth,
+    ),
+  );
 }

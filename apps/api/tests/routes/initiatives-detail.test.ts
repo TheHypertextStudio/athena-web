@@ -59,7 +59,11 @@ async function seedProject(
     health?: 'on_track' | 'at_risk' | 'off_track' | null;
     status?: 'planned' | 'active' | 'completed' | 'canceled';
     startDate?: Date | null;
+    startDateResolution?: 'month' | 'quarter' | 'halfYear' | 'year' | null;
+    startDateFiscalYearStartMonth?: number | null;
     targetDate?: Date | null;
+    targetDateResolution?: 'month' | 'quarter' | 'halfYear' | 'year' | null;
+    targetDateFiscalYearStartMonth?: number | null;
     name?: string;
   } = {},
 ): Promise<string> {
@@ -75,7 +79,11 @@ async function seedProject(
       status,
       statusId: statusId('project', status),
       startDate: fields.startDate ?? null,
+      startDateResolution: fields.startDateResolution ?? null,
+      startDateFiscalYearStartMonth: fields.startDateFiscalYearStartMonth ?? null,
       targetDate: fields.targetDate ?? null,
+      targetDateResolution: fields.targetDateResolution ?? null,
+      targetDateFiscalYearStartMonth: fields.targetDateFiscalYearStartMonth ?? null,
     })
     .returning({ id: schema.project.id });
   return assertDefined(row).id;
@@ -864,7 +872,11 @@ describe('initiatives timeline roll-up', () => {
         status: 'planned',
         health: null,
         startDate: null,
+        startDateResolution: null,
+        startDateFiscalYearStartMonth: null,
         targetDate: null,
+        targetDateResolution: null,
+        targetDateFiscalYearStartMonth: null,
       },
     ]);
   });
@@ -879,7 +891,11 @@ describe('initiatives timeline roll-up', () => {
       status: 'active',
       health: 'at_risk',
       startDate: new Date('2026-03-01T00:00:00.000Z'),
+      startDateResolution: 'month',
+      startDateFiscalYearStartMonth: 0,
       targetDate: new Date('2026-06-30T00:00:00.000Z'),
+      targetDateResolution: 'quarter',
+      targetDateFiscalYearStartMonth: 0,
     });
     const undated = await seedProject(orgId, humanActorId, { name: 'Undated' });
     const prog = await seedProgram(orgId, humanActorId, { name: 'Ops', health: 'on_track' });
@@ -907,7 +923,11 @@ describe('initiatives timeline roll-up', () => {
         status: string;
         health: string | null;
         startDate: string | null;
+        startDateResolution: string | null;
+        startDateFiscalYearStartMonth: number | null;
         targetDate: string | null;
+        targetDateResolution: string | null;
+        targetDateFiscalYearStartMonth: number | null;
       }[];
     }>(res);
     expect(tl.programs).toHaveLength(1);
@@ -915,10 +935,15 @@ describe('initiatives timeline roll-up', () => {
     expect(tl.projects).toHaveLength(2);
     const datedBar = assertDefined(tl.projects.find((p) => p.id === dated));
     expect(datedBar.startDate).toBe('2026-03-01T00:00:00.000Z');
+    expect(datedBar.startDateResolution).toBe('month');
+    expect(datedBar.startDateFiscalYearStartMonth).toBe(0);
     expect(datedBar.targetDate).toBe('2026-06-30T00:00:00.000Z');
+    expect(datedBar.targetDateResolution).toBe('quarter');
+    expect(datedBar.targetDateFiscalYearStartMonth).toBe(0);
     expect(datedBar.health).toBe('at_risk');
     const undatedBar = assertDefined(tl.projects.find((p) => p.id === undated));
     expect(undatedBar.startDate).toBeNull();
+    expect(undatedBar.startDateResolution).toBeNull();
   });
 
   it('filters project bars to those overlapping the from/to window (undated always shown)', async () => {

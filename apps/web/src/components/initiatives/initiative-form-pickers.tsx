@@ -15,13 +15,13 @@ import type {
   InitiativeStatus,
   InitiativeUpdateCadence,
 } from '@docket/types';
-import { ActorPicker, DatePicker, EnumPicker, type PickerOption } from '@docket/ui/components';
+import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
+import { ActorPicker, EnumPicker, type PickerOption, TimeframePicker } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';
 
 import { enumOptions, HEALTH_OPTIONS, statusOptions } from '@/components/pickers/options';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
-import { formatCalendarDate } from '@/lib/format-date';
 
 const PRIORITY_ORDER: readonly InitiativePriority[] = ['none', 'low', 'medium', 'high'];
 const PRIORITY_LABEL: Record<InitiativePriority, string> = {
@@ -45,11 +45,6 @@ const CADENCE_LABEL: Record<InitiativeUpdateCadence, string> = {
   none: 'No update cadence',
 };
 
-/** Format an ISO date for a picker trigger, narrowing the app helper's `null` to `undefined`. */
-function triggerDate(value: string | null): string | undefined {
-  return formatCalendarDate(value, { month: 'short', day: 'numeric' }) ?? undefined;
-}
-
 /** Props for {@link InitiativeComposerPickers}. */
 export interface InitiativeComposerPickersProps {
   /** The owner options, from `useComposerOptions`. */
@@ -62,10 +57,14 @@ export interface InitiativeComposerPickersProps {
   status: InitiativeStatus;
   /** Report a changed status. */
   onStatusChange: (status: InitiativeStatus) => void;
-  /** The chosen target date, or null. Omitted entirely when the composer has no date axis. */
-  targetDate?: string | null;
-  /** Report a changed target date. Omit alongside `targetDate` to hide the picker. */
-  onTargetDateChange?: (date: string | null) => void;
+  /** The chosen semantic target, or null. Omitted when the composer has no date axis. */
+  targetTimeframe?: PlanningTimeframe | null;
+  /** Current zero-based fiscal month used for new broad choices. */
+  fiscalYearStartMonth?: number;
+  /** Whether the workspace planning calendar is still loading. */
+  planningCalendarLoading?: boolean;
+  /** Report a changed target. Omit alongside `targetTimeframe` to hide the picker. */
+  onTargetTimeframeChange?: (timeframe: PlanningTimeframe | null) => void;
   /** The chosen health verdict, or null. */
   health: Health | null;
   /** Report a changed health verdict. */
@@ -100,8 +99,10 @@ export function InitiativeComposerPickers({
   onOwnerChange,
   status,
   onStatusChange,
-  targetDate,
-  onTargetDateChange,
+  targetTimeframe,
+  fiscalYearStartMonth = 0,
+  planningCalendarLoading = false,
+  onTargetTimeframeChange,
   health,
   onHealthChange,
   priority,
@@ -139,14 +140,14 @@ export function InitiativeComposerPickers({
         ariaLabel="Status"
         disabled={disabled}
       />
-      {onTargetDateChange ? (
-        <DatePicker
-          value={targetDate ?? null}
-          onChange={onTargetDateChange}
-          placeholder="Set target"
-          formatLabel={triggerDate}
-          ariaLabel="Target date"
-          disabled={disabled}
+      {onTargetTimeframeChange ? (
+        <TimeframePicker
+          label="Initiative target"
+          value={targetTimeframe ?? null}
+          fiscalYearStartMonth={fiscalYearStartMonth}
+          edge="target"
+          onChange={onTargetTimeframeChange}
+          disabled={disabled || planningCalendarLoading}
         />
       ) : null}
       <EnumPicker

@@ -11,6 +11,7 @@ import {
   ProgramId,
   ProjectId,
 } from '@docket/types';
+import type { DateResolution } from '@docket/work/planning-timeframe';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
@@ -30,6 +31,7 @@ export interface InitiativePatch {
   priority?: InitiativePriority | undefined;
   updateCadence?: InitiativeUpdateCadence | undefined;
   targetDate?: string | null | undefined;
+  targetDateResolution?: DateResolution | null | undefined;
   labelIds?: string[] | undefined;
 }
 
@@ -44,6 +46,9 @@ function toInitiativePatchBody(patch: InitiativePatch): InitiativeUpdate {
       ? { ownerId: patch.ownerId === null ? null : ActorId.parse(patch.ownerId) }
       : {}),
     ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
+    ...(patch.targetDateResolution !== undefined
+      ? { targetDateResolution: patch.targetDateResolution }
+      : {}),
     ...(patch.status !== undefined ? { status: patch.status } : {}),
     ...(patch.health !== undefined ? { health: patch.health } : {}),
     ...(patch.priority !== undefined ? { priority: patch.priority } : {}),

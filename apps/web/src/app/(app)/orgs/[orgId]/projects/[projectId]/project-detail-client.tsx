@@ -354,6 +354,7 @@ export default function ProjectDetailPage(): JSX.Element {
               targetDateResolution={project.targetDateResolution}
               targetDateFiscalYearStartMonth={project.targetDateFiscalYearStartMonth}
               fiscalYearStartMonth={planningCalendar.fiscalYearStartMonth}
+              planningCalendarLoading={planningCalendar.loading}
               programId={project.programId ?? null}
               programOptions={programOptions}
               initiativeIds={initiativeIds}
@@ -396,9 +397,9 @@ export default function ProjectDetailPage(): JSX.Element {
               }}
             />
           </EntityMetadataRow>
-          {propsError ? (
+          {propsError || planningCalendar.error ? (
             <p role="alert" className="text-error text-sm">
-              {propsError}
+              {propsError ?? planningCalendar.error}
             </p>
           ) : null}
         </div>

@@ -46,6 +46,7 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof PropertiesPa
       targetDateResolution={null}
       targetDateFiscalYearStartMonth={null}
       fiscalYearStartMonth={0}
+      planningCalendarLoading={false}
       programId={null}
       programOptions={PROGRAM_OPTIONS}
       initiativeIds={[]}

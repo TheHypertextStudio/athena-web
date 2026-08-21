@@ -618,7 +618,7 @@ const initiatives = new Hono<AppEnv>()
       tag: 'Initiatives',
       summary: 'Get initiative timeline',
       response: InitiativeTimelineOut,
-      description: `The roadmap-first roll-up for an initiative: its associated Programs returned as ongoing, undated lanes and its associated Projects returned as dated bars (each with current \`status\`/\`health\` and ISO \`startDate\`/\`targetDate\`, either of which may be null when unscheduled). The optional \`from\`/\`to\` query bounds (ISO dates, either side open) filter ONLY the Project bars to those overlapping the window — a Project overlaps when it has no dates at all (unscheduled projects always remain visible) or its \`[startDate, targetDate]\` intersects \`[from, to]\`. Program lanes are always returned in full, since they are ongoing and carry no end date. The initiative must exist in the caller's org (404 \`Initiative not found\`). Read-only; org membership suffices. Returns {@link InitiativeTimelineOut}. See \`GET /:id\` for the numeric health/status roll-up over the same children.`,
+      description: `The roadmap-first roll-up for an initiative: its associated Programs returned as ongoing, undated lanes and its associated Projects returned as dated bars. Each Project includes current \`status\`/\`health\`, ISO \`startDate\`/\`targetDate\`, and the saved resolution plus fiscal basis for each endpoint; either endpoint may be null when unscheduled. The optional \`from\`/\`to\` query bounds (ISO dates, either side open) filter ONLY the Project bars to those overlapping the window — a Project overlaps when it has no dates at all (unscheduled projects always remain visible) or its \`[startDate, targetDate]\` intersects \`[from, to]\`. Program lanes are always returned in full, since they are ongoing and carry no end date. The initiative must exist in the caller's org (404 \`Initiative not found\`). Read-only; org membership suffices. Returns {@link InitiativeTimelineOut}. See \`GET /:id\` for the numeric health/status roll-up over the same children.`,
     }),
     zParam(idParam),
     zQuery(InitiativeTimelineQuery),
@@ -708,7 +708,11 @@ const initiatives = new Hono<AppEnv>()
             status: p.status,
             health: p.health,
             startDate: p.startDate?.toISOString() ?? null,
+            startDateResolution: p.startDateResolution,
+            startDateFiscalYearStartMonth: p.startDateFiscalYearStartMonth,
             targetDate: p.targetDate?.toISOString() ?? null,
+            targetDateResolution: p.targetDateResolution,
+            targetDateFiscalYearStartMonth: p.targetDateFiscalYearStartMonth,
           })),
       };
       return ok(c, InitiativeTimelineOut, payload);

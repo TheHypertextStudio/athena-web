@@ -22,6 +22,7 @@
  * and every bar carries an `aria-label` describing its span + health for assistive tech.
  */
 import type { Health, InitiativeTimelineBar, InitiativeTimelineLane } from '@docket/types';
+import type { DateResolution } from '@docket/work/planning-timeframe';
 import { cn } from '@docket/ui';
 import { Flag, FolderKanban } from '@docket/ui/icons';
 import { dragSourceProps } from '@docket/ui/lib/draggable';
@@ -30,7 +31,7 @@ import type { JSX } from 'react';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { entityDragSource } from '@/lib/entity-drag';
 
-import { formatAxisTick, formatDate, toMillis } from './format-date';
+import { formatAxisTick, formatPlanningDate, toMillis } from './format-date';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL, HEALTH_UNKNOWN_FILL_CLASS } from './health';
 import { computeWindow, pct, placeBars } from './roadmap-math';
 
@@ -56,6 +57,10 @@ export interface RoadmapProps {
   bars: readonly InitiativeTimelineBar[];
   /** The target date of the Initiative itself (a roadmap milestone), when set (ISO). */
   targetDate: string | null;
+  /** Saved semantic resolution for the Initiative milestone. */
+  targetDateResolution: DateResolution | null;
+  /** Saved fiscal basis for the Initiative milestone. */
+  targetDateFiscalYearStartMonth: number | null;
   /** Singular Program noun (vocabulary-resolved). */
   programNoun: string;
   /** Singular Project noun (vocabulary-resolved). */
@@ -77,6 +82,8 @@ export function Roadmap({
   lanes,
   bars,
   targetDate,
+  targetDateResolution,
+  targetDateFiscalYearStartMonth,
   programNoun,
   projectNoun,
   projectNounPlural,
@@ -178,7 +185,13 @@ export function Roadmap({
                 <div
                   className="bg-error/70 absolute top-0 h-full w-px"
                   style={{ left: `${targetMarkerLeft}%` }}
-                  title={`Target — ${formatDate(targetDate) ?? ''}`}
+                  title={`Target — ${
+                    formatPlanningDate(
+                      targetDate,
+                      targetDateResolution,
+                      targetDateFiscalYearStartMonth,
+                    ) ?? ''
+                  }`}
                   aria-hidden="true"
                 />
               ) : null}
@@ -200,10 +213,20 @@ export function Roadmap({
               {placed.map(({ bar, start, end }) => {
                 const left = pct(start, window);
                 const width = Math.max(pct(end, window) - left, 1.5);
+                const startLabel = formatPlanningDate(
+                  bar.startDate,
+                  bar.startDateResolution,
+                  bar.startDateFiscalYearStartMonth,
+                );
+                const targetLabel = formatPlanningDate(
+                  bar.targetDate,
+                  bar.targetDateResolution,
+                  bar.targetDateFiscalYearStartMonth,
+                );
                 const spanCopy =
-                  formatDate(bar.startDate) && formatDate(bar.targetDate)
-                    ? `${formatDate(bar.startDate)} – ${formatDate(bar.targetDate)}`
-                    : (formatDate(bar.startDate) ?? formatDate(bar.targetDate) ?? 'Unscheduled');
+                  startLabel && targetLabel
+                    ? `${startLabel} – ${targetLabel}`
+                    : (startLabel ?? targetLabel ?? 'Unscheduled');
                 // The bar is the Project's row on this roadmap, so it is also its drag source.
                 const dragProps = dragSourceProps(
                   entityDragSource({

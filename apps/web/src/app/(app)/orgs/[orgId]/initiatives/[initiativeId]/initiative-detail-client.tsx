@@ -29,10 +29,9 @@ import { useAppParams, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
-import { ApplyDescriptionTemplateControl } from '@/components/editor/apply-description-template';
+import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { EntityDocument } from '@/components/editor/entity-document';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
@@ -661,25 +660,16 @@ export default function InitiativeDetailPage(): JSX.Element {
             </p>
           </section>
         ) : null}
-        <EntityDocument
+        <TemplateAwareEntityDocument
+          orgId={orgId}
+          kind="initiative"
+          currentActorId={currentActorId}
           value={detail.description}
           canEdit={canEdit}
           onSave={(description) => {
             mutations.patchInitiative({ description });
           }}
           placeholder="Add the Initiative brief…"
-          headerActions={
-            <ApplyDescriptionTemplateControl
-              orgId={orgId}
-              kind="initiative"
-              canEdit={canEdit}
-              current={detail.description}
-              currentActorId={currentActorId}
-              onApply={(description) => {
-                mutations.patchInitiative({ description });
-              }}
-            />
-          }
         />
       </div>
 

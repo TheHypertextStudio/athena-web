@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The create composer's template control.
+ * The shared template picker for create composers and empty persisted descriptions.
  *
  * @remarks
  * ## Why a menu and not a chip row
@@ -13,7 +13,7 @@
  * are managed. A row of chips does none of those things, and a wrapping row of nine chips is what
  * `packages/ui/src/primitives/chip.tsx` was written to stop.
  *
- * ## Why the top row and not the property strip
+ * ## Why create composers use the top row and not the property strip
  *
  * Every pill in the strip sets one field. A template rewrites the draft. The old initiative
  * picker sat among the pills — and below the description it silently overwrote — which is exactly
@@ -67,10 +67,16 @@ export interface TemplateMenuProps {
   onManage?: (() => void) | undefined;
   /** Whether the composer is submitting, which disables the control with everything else. */
   disabled: boolean;
+  /** Trigger copy for the surface using the menu. Defaults to “Template”. */
+  triggerLabel?: string;
+  /** Use the editor-inline control size instead of the composer's top-row size. */
+  compact?: boolean;
+  /** Show visibility-scope group headings. Defaults to true. */
+  showScopeLabels?: boolean;
 }
 
 /**
- * The composer's template dropdown.
+ * The shared template dropdown.
  *
  * @param props - The {@link TemplateMenuProps}.
  * @returns the rendered control, or nothing at all when the workspace has no templates for this
@@ -82,6 +88,9 @@ export function TemplateMenu({
   manageHref,
   onManage,
   disabled,
+  triggerLabel = 'Template',
+  compact = false,
+  showScopeLabels = true,
 }: TemplateMenuProps): JSX.Element | null {
   if (templates.length === 0) return null;
 
@@ -96,19 +105,22 @@ export function TemplateMenu({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size={compact ? undefined : 'sm'}
+          controlSize={compact ? 'sm' : undefined}
           disabled={disabled}
           className="text-on-surface-variant max-w-56"
         >
           <LayoutTemplate className="size-4 shrink-0" />
-          <span className="truncate">Template</span>
+          <span className="truncate">{triggerLabel}</span>
           <ChevronDown className="size-4 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         {groups.map((group) => (
           <div key={group.scope}>
-            <DropdownMenuLabel>{SCOPE_LABEL[group.scope]}</DropdownMenuLabel>
+            {showScopeLabels ? (
+              <DropdownMenuLabel>{SCOPE_LABEL[group.scope]}</DropdownMenuLabel>
+            ) : null}
             {group.items.map((template) => (
               <DropdownMenuItem
                 key={template.id}

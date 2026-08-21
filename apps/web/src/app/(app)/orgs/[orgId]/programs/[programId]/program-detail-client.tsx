@@ -20,10 +20,9 @@ import { useAppParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
-import { ApplyDescriptionTemplateControl } from '@/components/editor/apply-description-template';
+import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
-import { EntityDocument } from '@/components/editor/entity-document';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { PageContainer } from '@/components/views/page-layout';
 import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
@@ -304,25 +303,16 @@ export default function ProgramDetailPage(): JSX.Element {
     >
       {tab === 'overview' ? (
         <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview">
-          <EntityDocument
+          <TemplateAwareEntityDocument
+            orgId={orgId}
+            kind="program"
+            currentActorId={currentActorId}
             value={program.description}
             canEdit={canEdit}
             onSave={(description) => {
               patchProgram({ description });
             }}
             placeholder={`Add the ${programLabel} brief…`}
-            headerActions={
-              <ApplyDescriptionTemplateControl
-                orgId={orgId}
-                kind="program"
-                canEdit={canEdit}
-                current={program.description}
-                currentActorId={currentActorId}
-                onApply={(description) => {
-                  patchProgram({ description });
-                }}
-              />
-            }
           />
         </div>
       ) : null}

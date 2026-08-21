@@ -31,6 +31,8 @@ import { SuggestionMenu, type SuggestionItem } from './suggestion-menu';
 export interface SlashCommandsOptions {
   /** Turn the whole feature off (read-only editors, disabled fields). */
   readonly disabled?: boolean;
+  /** Feature-owned commands to dispatch through the same menu and keyboard contract. */
+  readonly commands?: readonly SlashCommand[];
 }
 
 /** What {@link useSlashCommands} returns. */
@@ -43,7 +45,13 @@ export interface SlashCommands {
   readonly menu: JSX.Element | null;
   /** True while the menu is open, so the host can mark the editor `aria-expanded`. */
   readonly isOpen: boolean;
+  /** Id of the owned listbox, for the host editor's `aria-controls`. */
+  readonly listboxId: string;
+  /** Id of the highlighted option, for the host editor's `aria-activedescendant`. */
+  readonly activeKey: string | undefined;
 }
+
+const SLASH_LISTBOX_ID = 'editor-slash-menu';
 
 /**
  * Wire `/` into an editor.
@@ -52,7 +60,7 @@ export interface SlashCommands {
  * @returns The {@link SlashCommands} bundle.
  */
 export function useSlashCommands(options: SlashCommandsOptions = {}): SlashCommands {
-  const { disabled = false } = options;
+  const { disabled = false, commands = [] } = options;
   const editorRef = useRef<Editor | null>(null);
   const [run, setRun] = useState<SuggestionRun | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -151,26 +159,26 @@ export function useSlashCommands(options: SlashCommandsOptions = {}): SlashComma
     () =>
       run === null
         ? []
-        : rankSlashCommands(run.query).map((command) => ({
+        : rankSlashCommands(run.query, commands).map((command) => ({
             id: command.id,
             label: command.label,
             hint: command.hint,
             icon: command.icon,
           })),
-    [run],
+    [run, commands],
   );
 
   const takers = useMemo(
     () =>
       run === null
         ? []
-        : rankSlashCommands(run.query).map((command) => ({
+        : rankSlashCommands(run.query, commands).map((command) => ({
             id: command.id,
             take: () => {
               runSlash(command);
             },
           })),
-    [run, runSlash],
+    [run, runSlash, commands],
   );
   itemsRef.current = takers;
 
@@ -186,7 +194,7 @@ export function useSlashCommands(options: SlashCommandsOptions = {}): SlashComma
         }}
         emptyText="No block matches that."
         ariaLabel="Insert a block"
-        listboxId="editor-slash-menu"
+        listboxId={SLASH_LISTBOX_ID}
       />
     );
 
@@ -197,5 +205,10 @@ export function useSlashCommands(options: SlashCommandsOptions = {}): SlashComma
     },
     menu,
     isOpen: run !== null,
+    listboxId: SLASH_LISTBOX_ID,
+    activeKey:
+      run === null || items[activeIndex] === undefined
+        ? undefined
+        : `${SLASH_LISTBOX_ID}-${items[activeIndex].id}`,
   };
 }

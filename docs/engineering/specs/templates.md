@@ -198,11 +198,14 @@ for the slash menu.
 graph LR
   API["GET /templates?targetType"] --> Q["components/templates/queries.ts"]
   Q --> MENU["ComposerTemplateControl<br/>(global composer top row)"]
+  Q --> SAVED["TemplateAwareEntityDocument<br/>(persisted description)"]
   Q --> SET["Settings → Templates"]
   Q --> PAL["Command palette"]
   SET --> ED["TemplateEditorDialog"]
   PAL -->|"direct openCreate request"| COMPOSER["Shell-global composer"]
   MENU --> DRAFT["useComposerDraft"]
+  SAVED --> CONTRIBUTION["EditorContribution"]
+  CONTRIBUTION --> LIVE["FreeformTextEditor<br/>(live Markdown)"]
   ED --> DRAFT
 ```
 
@@ -247,7 +250,27 @@ the properties and the primary action, in the slot that otherwise renders errors
 > dependencies are rebuilt each render; minting a fresh draft for a no-op patch made that effect
 > re-run forever. Pinned by `apps/web/tests/composers/use-composer-draft.test.tsx`.
 
-**3. Settings → Templates** — `app/(app)/orgs/[orgId]/settings/templates/page.tsx`, registered in
+**3. Existing entity descriptions** —
+`components/editor/apply-description-template.tsx`. Task, Project, Initiative, and Program detail
+pages use `TemplateAwareEntityDocument`; Team remains outside the template target set. The feature
+filters the same organization, team, and personal templates as the composer, then supplies an
+`EditorContribution` to the shared document editor. `EntityDocument` owns document layout only.
+It has no template branch and no action header.
+
+An empty editable description shows one compact inline action: **Start from template**. Its menu
+lists the eligible templates without a redundant scope heading. The action disappears as soon as
+the document contains non-whitespace content. A populated description exposes templates only
+through `/template`; the contextual slash rows stay hidden from the bare `/` menu until the author
+types a query. Selecting one removes the typed command and appends the template body to the
+editor's live Markdown. Reading the live document rather than the last persisted prop preserves
+typing that has not reached the two-second autosave boundary.
+
+The editor depends on the generic `EditorContribution` and `SlashCommand` contracts. Each feature
+implements those contracts with its own empty-state renderer and command collection. This keeps
+querying and template merge policy in the template feature while the shared editor dispatches all
+commands through one keyboard and accessibility path.
+
+**4. Settings → Templates** — `app/(app)/orgs/[orgId]/settings/templates/page.tsx`, registered in
 the Workflows group of `settings/sections.ts` and mirrored into the personal registry. Grouped by
 kind, rows separated by tonal steps rather than rules. The editor (`TemplateEditorDialog`) is the
 same `ComposerShell` and the same `*ComposerPickers` components the create dialog uses, with the
@@ -255,7 +278,7 @@ template's name, description, and scope above them — so authoring a template l
 the thing it makes. The picker components take their reference axes as _optional_ props precisely
 so the editor can omit them.
 
-**4. The command palette** — `command-palette/use-command-actions.ts`. Four "New {kind}" actions
+**5. The command palette** — `command-palette/use-command-actions.ts`. Four "New {kind}" actions
 plus a `Create from template` section that stays hidden until the user types (`requiresQuery` on
 `PaletteItem`), so a dozen seeded rows do not bury the destinations people open the palette for.
 

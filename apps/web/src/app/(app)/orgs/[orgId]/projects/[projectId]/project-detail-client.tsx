@@ -30,11 +30,10 @@ import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
-import { ApplyDescriptionTemplateControl } from '@/components/editor/apply-description-template';
+import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { FreeformText } from '@/components/editor/freeform-text';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { EntityDocument } from '@/components/editor/entity-document';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { AgentActivityFeed } from '@/components/project-detail/agent-activity-feed';
 import { AgentsStrip } from '@/components/project-detail/agents-strip';
@@ -476,26 +475,17 @@ export default function ProjectDetailPage(): JSX.Element {
           ) : null}
 
           <section aria-label="Project document">
-            <EntityDocument
+            <TemplateAwareEntityDocument
+              orgId={orgId}
+              kind="project"
+              currentActorId={currentActorId}
+              teamId={project.teamId ?? null}
               value={project.description}
               canEdit={canEdit}
               onSave={(description) => {
                 patchProject({ description });
               }}
               placeholder="Add the Project brief…"
-              headerActions={
-                <ApplyDescriptionTemplateControl
-                  orgId={orgId}
-                  kind="project"
-                  canEdit={canEdit}
-                  current={project.description}
-                  currentActorId={currentActorId}
-                  teamId={project.teamId ?? null}
-                  onApply={(description) => {
-                    patchProject({ description });
-                  }}
-                />
-              }
             />
           </section>
 

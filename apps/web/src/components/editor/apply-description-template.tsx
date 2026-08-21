@@ -1,81 +1,135 @@
 'use client';
 
 /**
- * Apply a template's description to an entity that already exists.
+ * Add template behavior to an existing entity's description editor.
  *
  * @remarks
- * `ComposerTemplateControl` (`@/components/composer/template-menu`) applies a template while a
- * task/project/initiative/program is still an unsaved draft. This is the same idea for an entity
- * that has already been created: pick a template, and its description is appended — never
- * substituted — to whatever is already written, via the same {@link templateMerge} the composers
- * use. Simpler than the composer control because there is no dialog lifecycle to track: no `open`
- * gate, no `?template=` auto-apply, no visibility reporting back to a parent shell.
+ * The shared editor consumes an {@link EditorContribution}; it does not know what a template is.
+ * This feature owns the template query, visibility rules, empty-state menu, slash commands, and
+ * append semantics, then supplies them through that generic boundary.
  */
-import type { TemplateTargetType } from '@docket/types';
+import type { TemplateOut, TemplateTargetType } from '@docket/types';
+import { LayoutTemplate } from '@docket/ui/icons';
+import type { Editor } from '@tiptap/react';
 import { type JSX, useMemo } from 'react';
 
 import { TemplateMenu } from '@/components/composer/template-menu';
 import { templateMerge } from '@/components/composer/use-composer-draft';
 import { sectionHref } from '@/components/settings/settings-registry';
 import {
+  sortTemplates,
   templateMatchesContext,
   templatePatch,
   templatesOfKindDef,
 } from '@/components/templates/queries';
 import { useApiQuery } from '@/lib/query';
 
-/** Props for {@link ApplyDescriptionTemplateControl}. */
-export interface ApplyDescriptionTemplateControlProps {
-  /** The org whose templates to offer. */
-  orgId: string;
-  /** The entity's kind, which selects the template list and the payload fields to read. */
-  kind: TemplateTargetType;
-  /** Whether the viewer may edit the entity's description — the only gate this control needs. */
-  canEdit: boolean;
-  /** The entity's current description, appended to rather than replaced. */
-  current: string | null | undefined;
-  /**
-   * The signed-in member's Actor id in this org, for personal-template scoping.
-   *
-   * @remarks
-   * `undefined` (together with `teamId` also `undefined`) shows every template of this kind,
-   * unfiltered — the same fallback `ComposerTemplateControl` uses for mounts that cannot resolve a
-   * scope. Pass `null` deliberately to exclude personal templates until a scope is known.
-   */
-  currentActorId?: string | null;
-  /**
-   * The entity's team, for team-template scoping.
-   *
-   * @remarks
-   * Only tasks and projects have a team. Leave `undefined` for initiatives and programs, which
-   * have no team concept to scope by.
-   */
-  teamId?: string | null;
-  /** Persist the merged description. */
-  onApply: (next: string) => void;
+import type { EditorContribution } from './editor-contribution';
+import { EntityDocument, type EntityDocumentProps } from './entity-document';
+
+/** Input for {@link createDescriptionTemplateContribution}. */
+export interface DescriptionTemplateContributionInput {
+  /** The entity kind whose payload body each command may append. */
+  readonly kind: TemplateTargetType;
+  /** Templates already filtered to the current actor and team. */
+  readonly templates: readonly TemplateOut[];
+  /** Destination for the menu's template-management action. */
+  readonly manageHref: string;
+}
+
+/** Append one template to the editor's live Markdown without discarding unsaved typing. */
+function applyTemplate(
+  editor: Editor,
+  template: TemplateOut,
+  kind: TemplateTargetType,
+  range?: { readonly from: number; readonly to: number },
+): void {
+  if (range) editor.chain().focus().deleteRange(range).run();
+  const current = editor.getMarkdown();
+  const patch = templatePatch(template.payload, kind);
+  const merged = templateMerge(
+    { description: current },
+    { description: patch.description },
+    { document: 'description' },
+  );
+  if (typeof merged.description !== 'string') return;
+  editor.commands.setContent(merged.description, { contentType: 'markdown' });
+  editor.commands.focus('end');
 }
 
 /**
- * The description card's template control.
+ * Build the template feature's polymorphic contribution to one editor instance.
  *
- * @param props - The {@link ApplyDescriptionTemplateControlProps}.
- * @returns the rendered control, or nothing while the viewer cannot edit, the read is still
- * pending, or no template of this kind carries a description to apply.
+ * @param input - The filtered templates and their entity context.
+ * @returns Empty-state UI and slash commands dispatched through the shared editor contracts.
  */
-export function ApplyDescriptionTemplateControl({
+export function createDescriptionTemplateContribution({
+  kind,
+  templates,
+  manageHref,
+}: DescriptionTemplateContributionInput): EditorContribution {
+  const ordered = sortTemplates(templates);
+  return {
+    id: `description-templates-${kind}`,
+    renderEmptyAction: (editor) => (
+      <TemplateMenu
+        templates={ordered}
+        manageHref={manageHref}
+        disabled={false}
+        triggerLabel="Start from template"
+        compact
+        showScopeLabels={false}
+        onApply={(template) => {
+          applyTemplate(editor, template, kind);
+        }}
+      />
+    ),
+    slashCommands: ordered.map((template) => ({
+      id: `template-${template.id}`,
+      label: template.name,
+      hint: template.description ?? 'Append this template',
+      keywords: ['template', template.name.toLowerCase()],
+      icon: LayoutTemplate,
+      requiresQuery: true,
+      run: (editor, range) => {
+        applyTemplate(editor, template, kind, range);
+      },
+    })),
+  };
+}
+
+/** Props for a template-aware persisted entity document. */
+export type TemplateAwareEntityDocumentProps = Omit<EntityDocumentProps, 'contributions'> & {
+  /** The org whose templates to offer. */
+  readonly orgId: string;
+  /** The entity kind, which selects the template list and payload body. */
+  readonly kind: TemplateTargetType;
+  /** The signed-in member's Actor id, for personal-template visibility. */
+  readonly currentActorId?: string | null;
+  /** The entity's team, for team-template visibility. */
+  readonly teamId?: string | null;
+};
+
+/**
+ * Render an existing entity document with template behavior supplied as an editor contribution.
+ *
+ * @param props - The document and template visibility context.
+ * @returns the shared document with a contribution when applicable templates exist.
+ */
+export function TemplateAwareEntityDocument({
   orgId,
   kind,
-  canEdit,
-  current,
   currentActorId,
   teamId,
-  onApply,
-}: ApplyDescriptionTemplateControlProps): JSX.Element | null {
-  const query = useApiQuery({ ...templatesOfKindDef(orgId, kind), enabled: canEdit });
+  ...documentProps
+}: TemplateAwareEntityDocumentProps): JSX.Element {
+  const query = useApiQuery({
+    ...templatesOfKindDef(orgId, kind),
+    enabled: documentProps.canEdit,
+  });
 
   const templates = useMemo(() => {
     const all = query.data?.items ?? [];
-    // A template with no description would be a menu entry that does nothing on select.
     const withDescription = all.filter((template) =>
       Boolean(templatePatch(template.payload, kind).description),
     );
@@ -85,24 +139,22 @@ export function ApplyDescriptionTemplateControl({
     );
   }, [query.data, kind, currentActorId, teamId]);
 
-  // A pending, failed, or empty read renders nothing rather than a disabled control — this is an
-  // accelerant for a description already being edited, not a feature someone is waiting on.
-  if (!canEdit || templates.length === 0) return null;
+  const contribution = useMemo(
+    () =>
+      templates.length === 0
+        ? null
+        : createDescriptionTemplateContribution({
+            kind,
+            templates,
+            manageHref: sectionHref(orgId, 'templates'),
+          }),
+    [kind, orgId, templates],
+  );
 
   return (
-    <TemplateMenu
-      templates={templates}
-      manageHref={sectionHref(orgId, 'templates')}
-      disabled={false}
-      onApply={(template) => {
-        const patch = templatePatch(template.payload, kind);
-        const merged = templateMerge(
-          { description: current ?? null },
-          { description: patch.description },
-          { document: 'description' },
-        );
-        if (typeof merged.description === 'string') onApply(merged.description);
-      }}
+    <EntityDocument
+      {...documentProps}
+      contributions={contribution === null ? [] : [contribution]}
     />
   );
 }

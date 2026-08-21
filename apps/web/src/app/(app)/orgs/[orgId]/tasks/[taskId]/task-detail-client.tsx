@@ -12,9 +12,8 @@ import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
-import { ApplyDescriptionTemplateControl } from '@/components/editor/apply-description-template';
+import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { EntityDocument } from '@/components/editor/entity-document';
 import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
 import { CommentActivityFeed } from '@/components/task-detail/CommentActivityFeed';
@@ -370,26 +369,17 @@ export default function TaskDetailPage(): JSX.Element {
             <h2 id="description-heading" className="sr-only">
               Description
             </h2>
-            <EntityDocument
+            <TemplateAwareEntityDocument
+              orgId={orgId}
+              kind="task"
+              currentActorId={currentActorId}
+              teamId={task.teamId}
               value={task.description}
               canEdit={canEdit}
               onSave={(description) => {
                 patchTask({ description: description ?? '' });
               }}
               placeholder="Add a description…"
-              headerActions={
-                <ApplyDescriptionTemplateControl
-                  orgId={orgId}
-                  kind="task"
-                  canEdit={canEdit}
-                  current={task.description}
-                  currentActorId={currentActorId}
-                  teamId={task.teamId}
-                  onApply={(description) => {
-                    patchTask({ description });
-                  }}
-                />
-              }
             />
           </section>
 

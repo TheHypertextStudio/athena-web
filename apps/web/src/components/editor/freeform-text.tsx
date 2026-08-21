@@ -43,6 +43,7 @@ import { useDocumentImageUpload } from '@/lib/use-document-image-upload';
 import { useSlashCommands } from './use-slash-commands';
 import { createCodeBlockExtension } from './code-block-extension';
 import CodeBlockNodeView from './code-block-node-view';
+import type { EditorContribution } from './editor-contribution';
 import { createMarkdownClipboardExtension } from './markdown-clipboard';
 import { createTaskListShortcutExtension } from './task-list-shortcut';
 
@@ -74,6 +75,8 @@ export interface FreeformTextEditorProps {
    * no workspace context rather than a reason to guess one.
    */
   mentionOrgId?: string | undefined;
+  /** Feature behavior supplied through the editor's generic contribution boundary. */
+  contributions?: readonly EditorContribution[] | undefined;
 }
 
 /** Render a bare freeform rich-text field backed by Markdown. */
@@ -88,6 +91,7 @@ export function FreeformTextEditor({
   onCancel,
   className,
   mentionOrgId,
+  contributions = [],
 }: FreeformTextEditorProps): JSX.Element | null {
   const onChangeRef = useRef(onChange);
   const onSubmitRef = useRef(onSubmit);
@@ -102,7 +106,18 @@ export function FreeformTextEditor({
   // `/` and `@` are separate runs on purpose. Slash inserts a block and never leaves the
   // document, so it stays on the plugin that owns it. Mentions reach across workspaces and
   // connected apps, so they ride the controller that knows how to search and hydrate them.
-  const slash = useSlashCommands({ disabled: disabled || readOnly });
+  const contextualSlashCommands = useMemo(
+    () => contributions.flatMap((contribution) => contribution.slashCommands ?? []),
+    [contributions],
+  );
+  const emptyContributions = useMemo(
+    () => contributions.filter((contribution) => contribution.renderEmptyAction !== undefined),
+    [contributions],
+  );
+  const slash = useSlashCommands({
+    disabled: disabled || readOnly,
+    commands: contextualSlashCommands,
+  });
   const slashExtensions = slash.extensions;
   const attachSlash = slash.attach;
   const slashMenu = slash.menu;
@@ -132,6 +147,7 @@ export function FreeformTextEditor({
   // Announced politely rather than rendered as text, so a screen-reader user learns that Tab is
   // temporarily bound without a stray fragment appearing mid-sentence.
   const [linkOffer, setLinkOffer] = useState<PendingLinkUpgrade | undefined>(undefined);
+  const [isEmpty, setIsEmpty] = useState(value.trim().length === 0);
   const editorRef = useRef<Editor | null>(null);
 
   const upgradeLink = useCallback((pending: PendingLinkUpgrade): boolean => {
@@ -243,6 +259,7 @@ export function FreeformTextEditor({
     },
     onUpdate: ({ editor: instance }) => {
       const next = instance.getMarkdown();
+      setIsEmpty(next.trim().length === 0);
       const pending = pendingLocalValuesRef.current;
       if (pending.at(-1) !== next) {
         pending.push(next);
@@ -268,6 +285,32 @@ export function FreeformTextEditor({
 
   useEffect(() => {
     if (!editor) return;
+    // EditorContent puts DOM props on its wrapper, while assistive technology reads the inner
+    // ProseMirror textbox. Keep the listbox relationship on the element that owns keyboard focus.
+    const textbox = editor.view.dom;
+    const controls = mentions.open
+      ? mentions.listboxId
+      : slash.isOpen
+        ? slash.listboxId
+        : undefined;
+    const activeKey = mentions.open ? mentions.activeKey : slash.activeKey;
+    textbox.setAttribute('aria-expanded', String(mentions.open || slash.isOpen));
+    if (controls === undefined) textbox.removeAttribute('aria-controls');
+    else textbox.setAttribute('aria-controls', controls);
+    if (activeKey === undefined) textbox.removeAttribute('aria-activedescendant');
+    else textbox.setAttribute('aria-activedescendant', activeKey);
+  }, [
+    editor,
+    mentions.activeKey,
+    mentions.listboxId,
+    mentions.open,
+    slash.activeKey,
+    slash.isOpen,
+    slash.listboxId,
+  ]);
+
+  useEffect(() => {
+    if (!editor) return;
     if (editor.getMarkdown() === value) {
       pendingLocalValuesRef.current = [];
       return;
@@ -282,6 +325,7 @@ export function FreeformTextEditor({
     }
     pendingLocalValuesRef.current = [];
     editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
+    setIsEmpty(value.trim().length === 0);
   }, [editor, value, mentions.suppressReconcile]);
 
   if (!editor) return null;
@@ -310,12 +354,14 @@ export function FreeformTextEditor({
         className,
       )}
     >
-      <EditorContent
-        editor={editor}
-        aria-expanded={mentions.open}
-        aria-controls={mentions.open ? mentions.listboxId : undefined}
-        aria-activedescendant={mentions.open ? mentions.activeKey : undefined}
-      />
+      <EditorContent editor={editor} />
+      {editor.isEditable && isEmpty && emptyContributions.length > 0 ? (
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {emptyContributions.map((contribution) => (
+            <span key={contribution.id}>{contribution.renderEmptyAction?.(editor)}</span>
+          ))}
+        </div>
+      ) : null}
       {images.status === 'failed' ? (
         <p className="text-error text-body-small mt-1">{images.announcement}</p>
       ) : null}
@@ -394,6 +440,8 @@ export interface EditableFreeformTextProps {
   onSave: (value: string | null) => void;
   /** Additional wrapper styling. */
   className?: string;
+  /** Feature behavior supplied through the editor's generic contribution boundary. */
+  contributions?: readonly EditorContribution[];
 }
 
 /**
@@ -410,6 +458,7 @@ export function EditableFreeformText({
   canEdit,
   onSave,
   className,
+  contributions = [],
 }: EditableFreeformTextProps): JSX.Element {
   const activeOrgId = useActiveOrgIdOptional();
   const [draft, setDraft] = useState(value ?? '');
@@ -471,6 +520,7 @@ export function EditableFreeformText({
           placeholder={placeholder}
           ariaLabel="Description"
           className="flex min-h-28 flex-1 flex-col [&>div]:flex-1"
+          contributions={contributions}
         />
       ) : (
         <MentionHydrationProvider orgId={activeOrgId}>
@@ -481,6 +531,7 @@ export function EditableFreeformText({
             ariaLabel="Description"
             className="flex min-h-28 flex-1 flex-col [&>div]:flex-1"
             mentionOrgId={activeOrgId}
+            contributions={contributions}
           />
         </MentionHydrationProvider>
       )}

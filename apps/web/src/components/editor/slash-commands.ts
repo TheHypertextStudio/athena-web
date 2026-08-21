@@ -39,6 +39,8 @@ export interface SlashCommand {
   readonly keywords: readonly string[];
   /** The glyph in the leading slot. */
   readonly icon: LucideIcon;
+  /** Hide the row until the author types a query, for contextual command collections. */
+  readonly requiresQuery?: boolean;
   /** Replace `[from, to)` with the block and leave the caret inside it. */
   readonly run: (editor: Editor, range: { from: number; to: number }) => void;
 }
@@ -155,12 +157,17 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
  * Filter the `/` commands against a typed query.
  *
  * @param query - What was typed after the slash.
+ * @param contextual - Feature-owned commands available in this editor instance.
  * @returns The matching commands, in menu order.
  */
-export function rankSlashCommands(query: string): readonly SlashCommand[] {
+export function rankSlashCommands(
+  query: string,
+  contextual: readonly SlashCommand[] = [],
+): readonly SlashCommand[] {
   const needle = query.trim().toLowerCase();
-  if (needle === '') return SLASH_COMMANDS;
-  return SLASH_COMMANDS.filter(
+  const commands = [...SLASH_COMMANDS, ...contextual];
+  if (needle === '') return commands.filter((command) => command.requiresQuery !== true);
+  return commands.filter(
     (command) =>
       command.label.toLowerCase().includes(needle) ||
       command.keywords.some((keyword) => keyword.startsWith(needle)),

@@ -241,9 +241,11 @@ test('saved planning periods retain their fiscal basis across every product surf
       name: '2026-12-15',
     })
     .click();
+  await revealPlanningField(page, 'Initiative', /Target date.*Dec 15, 2026/);
   await expect(page.getByRole('button', { name: /Target date.*Dec 15, 2026/ })).toBeVisible();
   await page.getByRole('button', { name: /Target date.*Dec 15, 2026/ }).click();
   await page.getByRole('button', { name: 'Clear' }).click();
+  await revealPlanningField(page, 'Initiative', /Target date.*not set/);
   await expect(page.getByRole('button', { name: 'Target date — not set' })).toBeVisible();
 
   await page.setViewportSize({ width: 320, height: 720 });

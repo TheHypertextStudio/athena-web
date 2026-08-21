@@ -5258,6 +5258,51 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [TIMEFRAME-001] Match Linear's Project and Initiative timeframes
+
+- **Completed**: 2026-08-21
+- **Priority**: P1
+- **Summary**: Project start and target dates and Initiative target dates now support Linear's
+  `month`, `quarter`, `halfYear`, and `year` resolutions alongside precise dates. Athena stores the
+  same canonical date anchors and nullable resolution fields that Linear exposes. Each broad value
+  also stores the fiscal month that defined it, so a later workspace fiscal-calendar change does
+  not move or relabel saved work. The shared picker, Project and Initiative create and detail
+  surfaces, Project grouping and filtering, Initiative filtering, timelines, roadmaps, print views,
+  search, exports, MCP tools, undo, and Linear reconciliation all preserve the same meaning.
+- **Files Changed**: Added the planning-timeframe domain and its tests, migration
+  `0094_mighty_martin_li.sql`, API and database contracts, the shared planning picker, Project and
+  Initiative consumers, machine-facing adapters, authenticated Playwright coverage, 20 visual
+  captures, and the dated design audit. Updated the implementation plan, date-picker inventory,
+  domain registry, and schema-sensitive test fixtures.
+- **Validation**: The repository tree rebased onto `origin/main` passes typecheck for 26 of 26
+  tasks, lint for 25 of 25 tasks, tests for 26 of 26 tasks, and all 4 production builds. The API
+  suite passes 4,516 tests, and the web suite passes 2,697 tests. The authenticated Playwright
+  journey passes at one worker. It verifies fiscal Q1 and H2 persistence, month and precise
+  Initiative targets, range rejection, clearing, fiscal-setting changes, keyboard focus,
+  320-pixel overflow, 40-pixel targets, and all five affected surfaces at desktop and mobile widths
+  in both themes.
+- **Compatibility and migration**: Migration `0094` is additive. Existing dates remain precise
+  because their resolution and fiscal snapshot fields default to null. Old clients can keep sending
+  date-only mutations, and those writes clear stale broad-period metadata. Initiative grouping was
+  not added because its roster preserves a parent-child hierarchy that a flat timeframe bucket
+  would destroy. Initiative filtering provides the semantic period access without losing that
+  structure.
+- **Known baselines**: The API TypeScript program exceeds Node's default 2 GB heap, so repository
+  typecheck, lint, and build use a command-local 4 GB heap with package concurrency capped at one.
+  The repository-wide E2E TypeScript project still reports unrelated branded-ID and stale-fixture
+  errors in existing calendar, scheduling, channel, widget, and header-evidence specs. The Project
+  detail route still emits its documented cold-open skeleton-to-cached-record hydration warning.
+  The new journey rejects every other page error and passes. The portless development launcher also
+  rewrites this worktree's origin variables into a loop, so validation uses direct API and web
+  processes. None of these baselines blocks the planning-timeframe behavior.
+- **Retrospective**: Linear's canonical date plus resolution metadata keeps all existing timeline
+  and roadmap geometry intact. Reading the provider organization's fiscal month during Linear sync
+  prevents Athena's local setting from changing imported meaning. Saving the fiscal basis with each
+  broad value prevents future workspace changes from rewriting history. The rebase preserved the
+  newer create-more continuation behavior while applying timeframe payloads and calendar errors.
+  Schema fixtures and the domain registry must change with additive database columns and public
+  exports, even when their focused feature tests do not exercise those repository contracts.
+
 ### [EDITOR-TEMPLATE-003] Close the final template release review
 
 - **Completed**: 2026-08-21

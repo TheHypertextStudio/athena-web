@@ -53,7 +53,8 @@ import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
-import { templateMerge, useComposerDraft } from '@/components/composer/use-composer-draft';
+import { useComposerDraft } from '@/components/composer/use-composer-draft';
+import { templateMerge } from '@/components/templates/merge';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { completeCreateObject } from '@/components/create-object/create-object-completion';
 import {

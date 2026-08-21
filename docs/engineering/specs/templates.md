@@ -221,9 +221,10 @@ team matches the selected Task or Project team. Initiative and Program intention
 so they do not expose a team-scoped template. The menu groups visible rows as Workspace, Team, and
 Yours.
 
-**2. The draft, and what applying actually does** — `components/composer/use-composer-draft.ts`.
-Each composer holds its fields as one value, and `templateMerge` decides how a template's fields
-land. The rule is one sentence: **a template never removes anything the author wrote.**
+**2. Draft state and merge policy** — `components/composer/use-composer-draft.ts` holds each
+composer's fields as one value. `components/templates/merge.ts` decides how a template's fields
+land in both create drafts and persisted documents. The rule is one sentence: **a template never
+removes anything the author wrote.**
 
 | Field kind                          | Behaviour                               | Why                                                                                         |
 | ----------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -269,6 +270,10 @@ The editor depends on the generic `EditorContribution` and `SlashCommand` contra
 implements those contracts with its own empty-state renderer and command collection. This keeps
 querying and template merge policy in the template feature while the shared editor dispatches all
 commands through one keyboard and accessibility path.
+
+`components/templates/merge.ts` owns the data-preserving merge policy. Create composers and
+persisted editors both depend on that template-domain function; neither surface owns a private
+version of the append and blank-label rules.
 
 **4. Settings → Templates** — `app/(app)/orgs/[orgId]/settings/templates/page.tsx`, registered in
 the Workflows group of `settings/sections.ts` and mirrored into the personal registry. Grouped by

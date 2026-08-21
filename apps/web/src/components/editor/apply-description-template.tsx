@@ -14,8 +14,8 @@ import type { Editor } from '@tiptap/react';
 import { type JSX, useMemo } from 'react';
 
 import { TemplateMenu } from '@/components/composer/template-menu';
-import { templateMerge } from '@/components/composer/use-composer-draft';
 import { sectionHref } from '@/components/settings/settings-registry';
+import { templateMerge } from '@/components/templates/merge';
 import {
   sortTemplates,
   templateMatchesContext,

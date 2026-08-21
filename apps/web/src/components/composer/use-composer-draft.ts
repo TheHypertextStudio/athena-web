@@ -27,7 +27,7 @@ export interface ComposerDraft<T extends object> {
    * Passing a recipe rather than a value keeps a caller's effect from having to depend on the
    * field it reads, which would make the effect re-run on every keystroke that touches it. Used
    * both for derived defaults (the task composer filling in a team's first workflow state) and
-   * for applying a template through {@link templateMerge}.
+   * for applying the template domain's merge policy.
    */
   readonly updateDraft: (recipe: (current: T) => Partial<T>) => void;
 }
@@ -68,87 +68,4 @@ export function useComposerDraft<T extends object>(initial: T): ComposerDraft<T>
   }, []);
 
   return useMemo(() => ({ draft, setField, updateDraft }), [draft, setField, updateDraft]);
-}
-
-/**
- * Like `Partial<T>`, but a present key may also hold `undefined` explicitly.
- *
- * @remarks
- * `Partial<T>` only makes keys optional; under `exactOptionalPropertyTypes` it still rejects an
- * explicit `undefined` value for a key that is present. Template patches are built by widening
- * scripts that produce exactly that shape, so {@link templateMerge} needs this instead.
- */
-type PartialWithUndefined<T> = { [K in keyof T]?: T[K] | undefined };
-
-/** How a composer's fields absorb a template's, per {@link templateMerge}. */
-export interface TemplateMergeRule<T> {
-  /**
-   * The long-form markdown field. A template's body is **appended** to whatever is there, never
-   * substituted for it.
-   */
-  readonly document?: keyof T;
-  /**
-   * The single-line text fields (a title, a one-sentence summary). Filled only while empty —
-   * appending to a title produces nonsense, and overwriting one would discard typed words.
-   */
-  readonly labels?: readonly (keyof T)[];
-}
-
-/** Whether a draft field currently holds nothing a person typed. */
-function isBlank(value: unknown): boolean {
-  return typeof value === 'string' ? value.trim().length === 0 : value === null;
-}
-
-/**
- * Merge a template's fields into a draft without removing anything the author wrote.
- *
- * @remarks
- * This is the whole contract of applying a template, and it is the fix for the defect this slice
- * exists to remove. The old initiative picker called `setBody(GUIDED_DOCUMENT)` on every click and
- * destroyed typed text; the answer is not a confirmation prompt or an undo affordance, it is for
- * the action to take nothing away in the first place.
- *
- * Three behaviours, one per kind of field:
- *
- * | Field | Behaviour | Why |
- * | --- | --- | --- |
- * | `document` | appended, separated by a blank line | Two outlines stacked is a readable document; a replaced one is lost work. |
- * | `labels` | filled only while blank | A title cannot be appended to, and overwriting one discards typed words. |
- * | everything else | set | Enums and dates show in the property strip and are one click to change, so nothing written is at risk. |
- *
- * Because nothing is destroyed, applying is repeatable and needs no undo: a second template adds
- * a second outline, and a template picked by mistake is deleted the way any other text is.
- *
- * @param current - The draft as it stands.
- * @param patch - The template's fields, already narrowed to this composer's kind.
- * @param rule - Which field is the document and which are single-line labels.
- * @returns the patch to merge, with the document and label fields resolved against `current`.
- */
-export function templateMerge<T extends object>(
-  current: T,
-  patch: PartialWithUndefined<T>,
-  rule: TemplateMergeRule<T>,
-): Partial<T> {
-  const merged: Partial<T> = {};
-  for (const key of Object.keys(patch) as (keyof T)[]) {
-    const incoming = patch[key];
-    if (incoming === undefined) continue;
-
-    if (key === rule.document && typeof incoming === 'string') {
-      const existing = current[key];
-      const existingText = typeof existing === 'string' ? existing.trim() : '';
-      merged[key] = (
-        existingText.length === 0 ? incoming : `${existingText}\n\n${incoming}`
-      ) as T[typeof key];
-      continue;
-    }
-
-    if (rule.labels?.includes(key)) {
-      if (isBlank(current[key])) merged[key] = incoming;
-      continue;
-    }
-
-    merged[key] = incoming;
-  }
-  return merged;
 }

@@ -7,35 +7,6 @@
 
 ## Active Tasks
 
-### [EDITOR-TEMPLATE-003] Close the final template release review
-
-- **Status**: REVIEW
-- **Started**: 2026-08-21
-- **Priority**: P0
-- **Description**: Resolve the security, content-preservation, and multi-editor accessibility
-  defects found by the final full-range review before the inline template editor reaches `main`.
-- **Subtasks**:
-  - [x] Enforce personal and team template visibility in API list and direct-read queries.
-  - [x] Reject reads, mutations, and scope assignments outside the caller's actor and teams.
-  - [x] Preserve authored Markdown indentation and trailing spaces while appending a template.
-  - [x] Preserve the editor's serialized Markdown at the autosave boundary.
-  - [x] Give each mounted slash-command editor distinct listbox and option ids.
-  - [x] Cover keyboard and pointer application without retaining the slash command's empty block.
-  - [ ] Pass the second independent review and exact-candidate validation gates.
-  - [ ] Fast-forward `main`, monitor the Git-driven deployment, and verify production.
-- **Blockers**: None.
-- **Notes**: Each defect was reproduced with a failing test before its production fix. The API had
-  treated client filtering as access control, `templateMerge` had used a trimmed copy as the
-  authored document, and the slash hook had reused one constant id across every editor instance.
-- **Validation**: The API template route suite passes all 15 tests. The six focused editor,
-  slash-command, composer, and merge suites pass all 77 tests. API and web typechecks pass.
-  Targeted type-aware lint and formatting checks pass. The design-token and owned-error policy
-  suites pass all 10 tests. The production web build emits all 75 pages and the production service
-  worker. A second independent full-range review found no remaining Critical, Important, or Minor
-  issue and marked the candidate ready to merge.
-
----
-
 ### [FOCUS-002] Make task creation and switching native to the Focus sidebar
 
 - **Status**: COMPLETED
@@ -5286,6 +5257,38 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [EDITOR-TEMPLATE-003] Close the final template release review
+
+- **Completed**: 2026-08-21
+- **Priority**: P0
+- **Summary**: Closed the template editor's release gaps before production. The API now enforces
+  personal and team visibility for every template read, write, and scope assignment. The editor
+  preserves authored Markdown at merge and autosave boundaries, removes the synthetic slash-command
+  block, and gives simultaneous editors distinct accessible listbox identities.
+- **Files Changed**: Template API authorization and route tests; template merge policy; editor save
+  and slash-command behavior; focused integration and accessibility tests; template documentation;
+  and this work log.
+- **Validation**: The API template route suite passes all 15 tests. The six focused editor,
+  slash-command, composer, and merge suites pass all 77 tests. API and web typechecks pass.
+  Targeted type-aware lint and formatting checks pass. The design-token and owned-error policy
+  suites pass all 10 tests. The production web build emits all 75 pages and the production service
+  worker. A second independent full-range review found no remaining Critical, Important, or Minor
+  issue. CI run `32459261568` passed the exact release revision and deployed the API and admin.
+  Vercel reported the same revision deployed. Public probes returned HTTP 200 from the web, admin,
+  and API health endpoints. An authenticated production check showed the inline **Start from
+  template** action only in an empty editor, showed no **Workspace** group in its menu, and showed
+  no template action or editor header row when content existed. The advisory end-to-end workflow
+  remained red on the same broad environment and fixture failures present on the prior `main` run;
+  it reported no template-editor failure.
+- **Learnings**: Client filtering cannot enforce access to template payloads. The API must apply the
+  same visibility predicate to lists, direct reads, updates, deletes, and scope changes. Markdown
+  whitespace can carry meaning, so merge and persistence code may use trimming only to test whether
+  a document is blank.
+- **Retrospective**: The second review found defects that the first UI-focused review could not see.
+  Route-level authorization tests and exact-content persistence tests now cover those boundaries.
+
+---
 
 ### [EDITOR-TEMPLATE-002] Close template-editor review findings
 

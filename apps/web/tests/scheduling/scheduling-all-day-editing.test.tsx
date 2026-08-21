@@ -101,7 +101,14 @@ describe('SchedulingCanvas all-day direct manipulation', () => {
           name: 'Drag Team offsite to create a relationship',
         })
         .closest('[data-schedule-all-day-item]'),
-    ).toHaveClass('pr-3', '[@media(pointer:coarse)]:pr-10');
+    ).toHaveClass('pr-1');
+    expect(
+      within(allDayLane(assertDefined(LANES[2])))
+        .getByRole('button', {
+          name: 'Drag Team offsite to create a relationship',
+        })
+        .closest('[data-schedule-all-day-item]'),
+    ).not.toHaveClass('[@media(pointer:coarse)]:pr-10');
     expect(
       within(allDayLane(assertDefined(LANES[2]))).queryByRole('button', {
         name: 'Move Team offsite',

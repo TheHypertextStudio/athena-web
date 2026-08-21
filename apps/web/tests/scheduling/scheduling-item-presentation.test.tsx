@@ -577,7 +577,7 @@ describe('SchedulingCanvas item presentation', () => {
     expect(preview?.className).not.toMatch(/shadow-/);
   });
 
-  it('uses recognizable, touch-sized move and relationship affordances', () => {
+  it('keeps edit affordances touch-sized but visually contextual', () => {
     const linked = {
       ...item('focus', 'Focus block'),
       dragObject: { kind: 'calendar_item' as const, itemId: 'focus', title: 'Focus block' },
@@ -598,6 +598,8 @@ describe('SchedulingCanvas item presentation', () => {
     });
     for (const control of [move, relationship]) {
       expect(control).toHaveClass('size-6', '[@media(pointer:coarse)]:size-11');
+      expect(control).toHaveClass('opacity-0', 'group-focus-within:opacity-100');
+      expect(control).not.toHaveClass('[@media(pointer:coarse)]:opacity-100');
     }
     expect(move.querySelector('[data-schedule-grip-icon]')).toBeInTheDocument();
     expect(relationship.querySelector('[data-schedule-link-icon]')).toBeInTheDocument();

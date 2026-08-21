@@ -19,10 +19,6 @@ import {
   DialogDescription,
   DialogTitle,
   Input,
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-  PopoverTrigger,
   type PopoverVirtualAnchorRef,
   Select,
   Textarea,
@@ -134,8 +130,9 @@ export default function CreateBlockForm({
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const intentEdited = useRef(false);
   const layerEdited = useRef(false);
+  const desktopHosted = agendaDesktop ? shellOverlayHost : null;
   const position = useClampedDialogPosition({
-    open: open && presentation === 'agenda' && agendaDesktop,
+    open: open && desktopHosted !== null,
     host: shellOverlayHost,
     anchorRef: selectionAnchorRef,
     anchorKey: calendarSelectionKey(selection),
@@ -425,91 +422,90 @@ export default function CreateBlockForm({
 
   const notice = <CalendarCreateFailureNotice visible={create.isError} />;
 
-  if (presentation === 'agenda') {
-    const desktopHosted = agendaDesktop ? shellOverlayHost : null;
-    const mobileHosted = !agendaDesktop ? (agendaMobileHost ?? null) : null;
-    const portalHost = desktopHosted ?? mobileHosted ?? null;
-    const overlayClassName = desktopHosted
-      ? 'pointer-events-none absolute inset-0 bg-transparent'
-      : mobileHosted
-        ? 'absolute inset-0 bg-surface'
-        : undefined;
-    return (
-      <>
-        <Dialog open={open} onOpenChange={handleOpenChange}>
-          <DialogContent
-            ref={position.dialogRef}
-            portalContainer={portalHost}
-            overlayClassName={overlayClassName}
-            showClose={false}
-            onOpenAutoFocus={(event) => {
-              event.preventDefault();
-              titleInputRef.current?.focus();
+  const mobileHosted =
+    presentation === 'agenda' && !agendaDesktop ? (agendaMobileHost ?? null) : null;
+  const portalHost = desktopHosted ?? mobileHosted ?? null;
+  const overlayClassName = desktopHosted
+    ? 'pointer-events-none absolute inset-0 bg-transparent'
+    : mobileHosted
+      ? 'absolute inset-0 bg-surface'
+      : undefined;
+  const desktopPresentation = presentation === 'agenda' ? 'agenda-desktop' : 'calendar-desktop';
+  const mobilePresentation = presentation === 'agenda' ? 'agenda-mobile' : 'calendar-mobile';
+  return (
+    <>
+      {trigger === 'visible' ? (
+        <Button
+          className={CALENDAR_CONTROL_CLASS}
+          size="sm"
+          variant="outline"
+          aria-label="New"
+          onClick={() => {
+            handleOpenChange(true);
+          }}
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          <span className="hidden @2xl:inline">New</span>
+        </Button>
+      ) : null}
+      <Dialog open={open} modal={desktopHosted === null} onOpenChange={handleOpenChange}>
+        <DialogContent
+          ref={position.dialogRef}
+          portalContainer={portalHost}
+          overlayClassName={overlayClassName}
+          showClose={false}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            titleInputRef.current?.focus();
+          }}
+          aria-label="Create calendar item"
+          className={
+            desktopHosted
+              ? 'pointer-events-auto absolute m-0 max-h-[calc(100%-2rem)] w-[min(34rem,calc(100%-2rem))] max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden p-0'
+              : mobileHosted
+                ? 'absolute inset-0 m-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0 shadow-none'
+                : 'inset-x-0 top-auto bottom-0 left-0 max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-t-xl rounded-b-none p-0'
+          }
+          style={desktopHosted ? position.style : undefined}
+          data-create-presentation={desktopHosted ? desktopPresentation : mobilePresentation}
+        >
+          {desktopHosted ? (
+            <div className="flex h-10 shrink-0 items-center justify-center px-12">
+              <button
+                type="button"
+                aria-label="Move create-event dialog"
+                onPointerDown={position.handlePointerDown}
+                onKeyDown={position.handleKeyDown}
+                className="group focus-visible:ring-ring flex h-8 w-16 cursor-grab touch-none items-center justify-center rounded-md select-none focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
+              >
+                <span className="bg-outline-variant group-hover:bg-outline h-1 w-10 rounded-full" />
+              </button>
+            </div>
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            iconOnly
+            aria-label="Close"
+            className="absolute top-2 right-2 z-10"
+            onClick={() => {
+              handleOpenChange(false);
             }}
-            aria-label="Create calendar item"
-            className={
-              desktopHosted
-                ? 'pointer-events-auto absolute m-0 max-h-[calc(100%-2rem)] w-[min(34rem,calc(100%-2rem))] max-w-none translate-x-0 translate-y-0 gap-3 overflow-y-auto p-5'
-                : mobileHosted
-                  ? 'absolute inset-0 m-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0 gap-3 overflow-y-auto rounded-none border-0 p-4 shadow-none'
-                  : 'inset-x-0 top-auto bottom-0 left-0 max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-t-xl rounded-b-none p-4'
-            }
-            style={desktopHosted ? position.style : undefined}
-            data-create-presentation={desktopHosted ? 'agenda-desktop' : 'agenda-mobile'}
           >
-            {desktopHosted ? (
-              <div className="-mx-2 -mt-2 flex h-8 items-center justify-center">
-                <button
-                  type="button"
-                  aria-label="Move create-event dialog"
-                  onPointerDown={position.handlePointerDown}
-                  onKeyDown={position.handleKeyDown}
-                  className="group focus-visible:ring-ring flex h-6 w-14 cursor-grab touch-none items-center justify-center rounded-md select-none focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
-                >
-                  <span className="bg-outline-variant group-hover:bg-outline h-1 w-10 rounded-full" />
-                </button>
-              </div>
-            ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              iconOnly
-              aria-label="Close"
-              className="absolute top-3 right-3"
-              onClick={() => {
-                handleOpenChange(false);
-              }}
-            >
-              <X aria-hidden="true" />
-            </Button>
+            <X aria-hidden="true" />
+          </Button>
+          <div
+            data-testid="calendar-dialog-scroll"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 @sm:p-5"
+          >
             <DialogTitle className="sr-only">Create calendar item</DialogTitle>
             <DialogDescription className="sr-only">
               Add a title, adjust the schedule, and save the selected calendar region.
             </DialogDescription>
             {form}
-          </DialogContent>
-        </Dialog>
-        {notice}
-      </>
-    );
-  }
-
-  return (
-    <>
-      <Popover open={open} onOpenChange={handleOpenChange}>
-        {selection && selectionAnchorRef ? <PopoverAnchor virtualRef={selectionAnchorRef} /> : null}
-        {trigger === 'visible' ? (
-          <PopoverTrigger asChild>
-            <Button className={CALENDAR_CONTROL_CLASS} size="sm" variant="outline" aria-label="New">
-              <Plus className="size-4" aria-hidden="true" />
-              <span className="hidden @2xl:inline">New</span>
-            </Button>
-          </PopoverTrigger>
-        ) : null}
-        <PopoverContent aria-label="Create calendar item" className="w-[26rem] p-4" align="start">
-          {form}
-        </PopoverContent>
-      </Popover>
+          </div>
+        </DialogContent>
+      </Dialog>
       {notice}
     </>
   );

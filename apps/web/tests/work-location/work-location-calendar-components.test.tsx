@@ -17,7 +17,6 @@ import {
   WorkLocationTimeboxDecoration,
   WorkLocationTimedLaneContext,
 } from '@/components/work-location/work-location-calendar-components';
-import { WorkLocationStatusControl } from '@/components/work-location/use-work-location-calendar-composition';
 import type { WorkLocationCalendarRegion } from '@/components/work-location/work-location-calendar-model';
 import {
   SCHEDULE_TEST_THEMES,
@@ -71,22 +70,44 @@ function timedContext(
 afterEach(cleanup);
 
 describe('work-location calendar components', () => {
-  it('uses one compact status control for deduplicated provider notices', () => {
-    render(
-      <WorkLocationStatusControl
-        warnings={[
-          { id: 'one', label: 'willie@example.com', message: 'Location sync needs attention.' },
-          { id: 'two', label: 'studio@example.com', message: 'Location sync is retrying.' },
-        ]}
+  it('reserves one fixed all-day location row before refreshed data arrives', () => {
+    const context = {
+      lane: firstLane,
+      geometry: { laneIndex: 0, laneWidth: 200 },
+      onAnnouncementChange: vi.fn(),
+    } satisfies ScheduleAllDayLaneRenderContext;
+    const { rerender } = render(
+      <WorkLocationAllDayContext
+        regions={[]}
+        context={context}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onMove={vi.fn()}
       />,
     );
 
-    const status = screen.getByRole('button', { name: 'Work-location status, 2 notices' });
-    expect(status).toHaveClass('min-h-7', '[@media(pointer:coarse)]:min-h-11');
-    expect(screen.queryByText('willie@example.com')).not.toBeInTheDocument();
-    fireEvent.click(status);
-    expect(screen.getByText('willie@example.com')).toBeInTheDocument();
-    expect(screen.getByText('studio@example.com')).toBeInTheDocument();
+    const slot = screen.getByLabelText('Expected work location');
+    expect(slot).toHaveClass('h-11', 'flex-nowrap', 'overflow-hidden');
+    expect(slot).not.toHaveClass('flex-wrap');
+
+    rerender(
+      <WorkLocationAllDayContext
+        regions={[
+          region({
+            allDay: true,
+            startsAt: '2026-07-01T00:00:00.000Z',
+            endsAt: '2026-07-02T00:00:00.000Z',
+          }),
+        ]}
+        context={context}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onMove={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('Expected work location')).toBe(slot);
+    expect(screen.getByRole('button', { name: 'Main library work location' })).toBeVisible();
   });
 
   it('renders a compact interactive all-day chip inside a 44px target for every pointer', () => {

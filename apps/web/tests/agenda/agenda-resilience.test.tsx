@@ -8,7 +8,7 @@
  */
 import type { ReactNode } from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const agendaState = vi.hoisted(() => ({
@@ -44,7 +44,7 @@ describe('Agenda degraded-data rendering', () => {
     agendaState.retry.mockReset();
   });
 
-  it('keeps the agenda controls and canvas visible when the server read fails', () => {
+  it('keeps the agenda fixed and silent when a background read fails', () => {
     agendaState.error = 'Internal server error';
 
     render(<Agenda />);
@@ -52,24 +52,20 @@ describe('Agenda degraded-data rendering', () => {
     expect(screen.getByText('Agenda date controls')).toBeTruthy();
     expect(screen.getByText('Agenda canvas')).toBeTruthy();
     expect(screen.queryByText('Internal server error')).toBeNull();
-    expect(
-      screen.getByText('Calendar updates are temporarily unavailable. Showing what we have.'),
-    ).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-
-    expect(agendaState.retry).toHaveBeenCalledOnce();
+    expect(screen.queryByText(/temporarily unavailable|sync|retry/i)).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
     expect(screen.getByText('Agenda date controls')).toBeTruthy();
     expect(screen.getByText('Agenda canvas')).toBeTruthy();
   });
 
-  it('keeps the agenda canvas mounted while the first read is pending', () => {
+  it('keeps the agenda canvas mounted without adding a loading band', () => {
     agendaState.loading = true;
 
     render(<Agenda />);
 
     expect(screen.getByText('Agenda date controls')).toBeTruthy();
     expect(screen.getByText('Agenda canvas')).toBeTruthy();
-    expect(screen.getByText('Loading calendar…')).toBeTruthy();
+    expect(screen.queryByText('Loading calendar…')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });

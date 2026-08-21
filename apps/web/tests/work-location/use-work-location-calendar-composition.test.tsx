@@ -131,8 +131,7 @@ describe('useWorkLocationCalendarComposition', () => {
         lanes: [{ id: 'first', label: 'July 1', date: '2026-07-01', items: [] }],
       }),
     );
-    render(<>{result.current.canvasProps.gutterSlot}</>);
-    expect(screen.getByRole('button', { name: 'Work-location status, 1 notice' })).toBeVisible();
+    expect('gutterSlot' in result.current.canvasProps).toBe(false);
 
     const renderer = result.current.canvasProps.renderTimedLaneContext;
     expect(renderer).toBeDefined();

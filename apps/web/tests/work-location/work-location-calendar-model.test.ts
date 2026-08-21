@@ -4,7 +4,6 @@ import {
   WorkPlaceId,
   type WorkLocationAssertionOut,
   type WorkLocationRangeOut,
-  type WorkLocationSyncAccountOut,
   type WorkPlaceOut,
 } from '@docket/types';
 import { assertDefined } from '@docket/test-utils';
@@ -63,29 +62,6 @@ function range(segment: Partial<WorkLocationRangeOut['segments'][number]>): Work
   };
 }
 
-function account(overrides: Partial<WorkLocationSyncAccountOut>): WorkLocationSyncAccountOut {
-  return {
-    connectionId: '01BX5ZZKBKACTAV9WEVGEMMVS0' as WorkLocationSyncAccountOut['connectionId'],
-    provider: 'google',
-    accountLabel: 'willie@example.com',
-    state: 'healthy',
-    reason: null,
-    capabilities: {
-      scheduledIntervals: true,
-      partialDays: true,
-      weeklyRecurrence: true,
-      currentPresence: false,
-      providerPlaceIds: true,
-      inboundChanges: true,
-      writes: true,
-    },
-    bootstrapCompletedAt: null,
-    lastSucceededAt: null,
-    pendingWrites: 0,
-    ...overrides,
-  };
-}
-
 describe('buildWorkLocationCalendarModel', () => {
   it('recognizes a full civil day across the DST spring-forward boundary', () => {
     const model = buildWorkLocationCalendarModel({
@@ -99,7 +75,6 @@ describe('buildWorkLocationCalendarModel', () => {
         }),
       ],
       places: [place],
-      accounts: [],
     });
 
     expect(model.regions).toEqual([
@@ -138,7 +113,6 @@ describe('buildWorkLocationCalendarModel', () => {
         }),
       ],
       places: [place],
-      accounts: [],
     });
     const inferred = buildWorkLocationCalendarModel({
       timezone: 'America/Los_Angeles',
@@ -150,7 +124,6 @@ describe('buildWorkLocationCalendarModel', () => {
       }),
       assertions: [],
       places: [place],
-      accounts: [],
     });
 
     expect(declared.regions[0]).toMatchObject({
@@ -194,7 +167,6 @@ describe('buildWorkLocationCalendarModel', () => {
       range: splitRange,
       assertions: [source],
       places: [place],
-      accounts: [],
     });
 
     expect(model.regions).toEqual([
@@ -235,7 +207,6 @@ describe('buildWorkLocationCalendarModel', () => {
         }),
       ],
       places: [place],
-      accounts: [],
     });
 
     expect(model.regions).toEqual([
@@ -243,37 +214,6 @@ describe('buildWorkLocationCalendarModel', () => {
         allDay: true,
         startsAt: '2026-03-08T08:00:00.000Z',
         endsAt: '2026-03-09T07:00:00.000Z',
-      }),
-    ]);
-  });
-
-  it('deduplicates provider warnings while retaining account labels', () => {
-    const duplicate = account({ state: 'action_required', reason: 'missing_scope' });
-    const model = buildWorkLocationCalendarModel({
-      timezone: 'UTC',
-      range: { start: '2026-08-14T00:00:00.000Z', end: '2026-08-15T00:00:00.000Z', segments: [] },
-      assertions: [],
-      places: [],
-      accounts: [
-        duplicate,
-        duplicate,
-        account({
-          connectionId: '01BX5ZZKBKACTAV9WEVGEMMVS1' as WorkLocationSyncAccountOut['connectionId'],
-          accountLabel: 'studio@example.com',
-          state: 'retrying',
-          reason: 'provider_unavailable',
-        }),
-      ],
-    });
-
-    expect(model.warnings).toEqual([
-      expect.objectContaining({
-        label: 'willie@example.com',
-        message: 'Location sync needs attention.',
-      }),
-      expect.objectContaining({
-        label: 'studio@example.com',
-        message: 'Location sync is retrying.',
       }),
     ]);
   });

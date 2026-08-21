@@ -14,7 +14,7 @@ import { useDetachCalendarItemRelation } from '../calendar-mutations';
 export interface CalendarItemRelationsSectionProps {
   /** Calendar item whose outgoing relationships are shown. */
   itemId: string;
-  /** Open a related calendar item in the same drawer surface. */
+  /** Open a related calendar item in the same dialog surface. */
   onOpenItem: (itemId: string) => void;
 }
 
@@ -29,7 +29,7 @@ export function CalendarItemRelationsSection({
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-on-surface text-title-small">Calendar relationships</h3>
+      <h3 className="text-on-surface text-title-small">Related events</h3>
       {relationsQuery.isPending ? (
         <div className="flex flex-col gap-2">
           <Skeleton className="h-8 w-full rounded-md" />
@@ -40,11 +40,11 @@ export function CalendarItemRelationsSection({
           We couldn&apos;t load related calendar items. Please try again.
         </p>
       ) : (contained?.length ?? 0) === 0 && (related?.length ?? 0) === 0 ? (
-        <p className="text-on-surface-variant text-body-small">No calendar items attached yet.</p>
+        <p className="text-on-surface-variant text-body-small">No related events yet.</p>
       ) : (
         <div className="flex flex-col gap-3">
           <RelationGroup
-            title="Contents"
+            title="Included events"
             relations={contained ?? []}
             sourceItemId={itemId}
             onOpenItem={onOpenItem}
@@ -99,6 +99,12 @@ interface RelationRowProps {
 function RelationRow({ relation, sourceItemId, onOpenItem }: RelationRowProps): JSX.Element {
   const detach = useDetachCalendarItemRelation(sourceItemId, relation.targetItemId);
   const title = relation.targetTitle ?? 'Calendar item';
+  const kindLabel =
+    relation.targetKind === 'provider_event'
+      ? 'Event'
+      : relation.targetKind
+        ? CALENDAR_ITEM_KIND_LABEL[relation.targetKind]
+        : null;
 
   return (
     <div className="border-outline-variant bg-surface-container-low flex flex-col gap-1 rounded-md border px-2.5 py-1.5">
@@ -112,9 +118,9 @@ function RelationRow({ relation, sourceItemId, onOpenItem }: RelationRowProps): 
         >
           {title}
         </button>
-        {relation.targetKind ? (
+        {kindLabel ? (
           <Badge variant="secondary" className="shrink-0">
-            {CALENDAR_ITEM_KIND_LABEL[relation.targetKind]}
+            {kindLabel}
           </Badge>
         ) : null}
         <Button

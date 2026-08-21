@@ -58,6 +58,23 @@ describe('fluid scheduling geometry', () => {
     });
   });
 
+  it('caps a wide date canvas at a seven-day week', () => {
+    expect(
+      deriveLaneGeometry({
+        viewportWidth: 1_760,
+        gutterWidth: 64,
+        minimumLaneWidth: 160,
+        maximumVisibleLaneCount: 7,
+        laneCount: 21,
+      }),
+    ).toEqual({
+      gutterWidth: 64,
+      laneWidth: 1696 / 7,
+      visibleLaneCount: 7,
+      contentWidth: (1696 / 7) * 21,
+    });
+  });
+
   it('preserves full grid width when there are no lanes', () => {
     expect(deriveLaneGeometry({ viewportWidth: 800, gutterWidth: 64, laneCount: 0 })).toEqual({
       gutterWidth: 64,

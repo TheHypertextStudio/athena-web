@@ -98,8 +98,6 @@ function dateAxis(source: CalendarItemOut, lane: ScheduleLane): CalendarDateAxis
     layersError: false,
     retrying: false,
     retry: vi.fn(),
-    conflictCount: 0,
-    failedCount: 0,
   };
 }
 

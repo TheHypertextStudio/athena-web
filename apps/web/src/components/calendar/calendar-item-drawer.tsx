@@ -1,14 +1,20 @@
 'use client';
 
 /**
- * Stable public entry point for the calendar-item workspace drawer.
+ * Stable public entry point for the calendar-item editor dialog.
  *
  * @remarks
- * The drawer shell owns selection and loading only. Focused sections live under `item-drawer/` so
+ * The dialog shell owns selection and loading only. Focused sections live under `item-drawer/` so
  * editing task links, relationships, fields, or sync actions does not grow this orchestrator.
  */
 import type { CalendarItemOut } from '@docket/types';
-import { Sheet, SheetContent, SheetDescription, SheetTitle, Skeleton } from '@docket/ui/primitives';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  Skeleton,
+} from '@docket/ui/primitives';
 import { type JSX, useEffect, useState } from 'react';
 
 import { useApiListQuery, useApiQuery } from '@/lib/query';
@@ -32,7 +38,7 @@ export interface CalendarItemDrawerProps {
    * discoverable, which is the condition on collapsing it at all.
    */
   duplicatesByItemId?: ReadonlyMap<string, readonly CalendarItemOut[]>;
-  /** Close the drawer. */
+  /** Close the dialog. */
   onClose: () => void;
   /** Navigate to a linked task detail page. */
   onOpenTask: (orgId: string, taskId: string) => void;
@@ -40,7 +46,7 @@ export interface CalendarItemDrawerProps {
   onOpenItem?: (itemId: string) => void;
 }
 
-/** Layered-calendar item workspace drawer. */
+/** Layered-calendar item editor dialog. */
 export default function CalendarItemDrawer({
   displayTimezone,
   itemId,
@@ -68,17 +74,20 @@ export default function CalendarItemDrawer({
     onOpenTask(orgId, taskId);
   };
   return (
-    <Sheet
+    <Dialog
       open={itemId !== null}
       onOpenChange={(open) => {
         if (!open) requestClose();
       }}
     >
-      <SheetContent side="right" className="w-[26rem]">
+      <DialogContent
+        showClose={false}
+        className="max-h-[calc(100dvh-2rem)] max-w-3xl gap-0 overflow-hidden p-0"
+      >
         {itemId === null ? (
           <>
-            <SheetTitle className="sr-only">Calendar item</SheetTitle>
-            <SheetDescription className="sr-only">Calendar item details.</SheetDescription>
+            <DialogTitle className="sr-only">Calendar item</DialogTitle>
+            <DialogDescription className="sr-only">Calendar item details.</DialogDescription>
           </>
         ) : (
           <CalendarItemDrawerContent
@@ -93,8 +102,8 @@ export default function CalendarItemDrawer({
             onOpenItem={onOpenItem}
           />
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -136,8 +145,8 @@ function CalendarItemDrawerContent({
     return (
       <div className="flex flex-col gap-3 p-4">
         <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
-        <SheetTitle className="sr-only">Loading calendar item</SheetTitle>
-        <SheetDescription className="sr-only">Loading calendar item details.</SheetDescription>
+        <DialogTitle className="sr-only">Loading calendar item</DialogTitle>
+        <DialogDescription className="sr-only">Loading calendar item details.</DialogDescription>
         <Skeleton className="h-6 w-2/3" />
         <Skeleton className="h-4 w-1/2" />
         <Skeleton className="h-32 w-full rounded-lg" />
@@ -148,10 +157,10 @@ function CalendarItemDrawerContent({
     return (
       <div className="flex flex-col gap-2 p-4">
         <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
-        <SheetTitle className="sr-only">Calendar item error</SheetTitle>
-        <SheetDescription className="sr-only">
+        <DialogTitle className="sr-only">Calendar item error</DialogTitle>
+        <DialogDescription className="sr-only">
           Calendar item details could not load.
-        </SheetDescription>
+        </DialogDescription>
         <p role="alert" className="text-error text-body-medium">
           We couldn&apos;t load this calendar item. Please try again.
         </p>

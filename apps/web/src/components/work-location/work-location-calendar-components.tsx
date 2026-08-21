@@ -283,9 +283,11 @@ export function WorkLocationAllDayContext({
     const bounds = regionBounds(region, context.lane, displayTimezone);
     return region.allDay && bounds?.startMinutes === 0 && bounds.endMinutes === 1_440;
   });
-  if (visible.length === 0) return null;
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1" aria-label="Expected work location">
+    <div
+      className="flex h-11 min-w-0 flex-nowrap items-center gap-1 overflow-hidden"
+      aria-label="Expected work location"
+    >
       {visible.map((region) =>
         region.editable ? (
           <button

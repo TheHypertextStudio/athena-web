@@ -32,9 +32,7 @@ import {
   calendarSchedulingEmptyMessage,
   calendarSchedulingError,
 } from './calendar-scheduling-copy';
-import { CalendarReadFailureNotice } from './calendar-read-failure-notice';
 import { CalendarScheduleItemContent } from './calendar-schedule-item-content';
-import { CalendarSyncAlert } from './calendar-sync-alert';
 
 export type {
   CalendarCanvasRegionSelection,
@@ -63,8 +61,8 @@ const MINUTES_PER_DAY = 24 * 60;
  * The surface is a single flex column with exactly one growing child — the canvas — and an
  * unbroken `flex-1` + `min-h-0` chain from the page root down to `<section aria-label="Schedule">`.
  * The shared canvas is the only scroll owner, so its host must shrink to the shell's available
- * height. Secondary read and sync state share one compact row rather than stacking several bands
- * above the schedule. Layer controls deliberately live in the toolbar's popover rather than in
+ * height. Read failures stay inside the canvas overlay, and provider sync state never changes the
+ * schedule's geometry. Layer controls deliberately live in the toolbar's popover rather than in
  * a permanent side column: a 16rem column that usually rendered "No calendar layers yet." was
  * costing the schedule a fifth of its width at exactly the widths where it had least to spare.
  */
@@ -75,7 +73,6 @@ export function CalendarSchedulingSurface({
   pixelsPerHour,
   displayTimezone,
   now,
-  preferences,
   dateAxis,
   peopleAxis,
   workLocationComposition,
@@ -93,20 +90,10 @@ export function CalendarSchedulingSurface({
   const linkTask = useLinkTaskToCalendarItem();
   const relateItems = useRelateCalendarItems();
   const createItem = useCreateCalendarItem();
-  const minLaneWidth = preferences?.minLaneWidth ?? 240;
   const resetUpdateItem = updateItem.reset;
   const resetLinkTask = linkTask.reset;
   const resetRelateItems = relateItems.reset;
   const inlineMutationFailed = updateItem.isError || linkTask.isError || relateItems.isError;
-  const readError = calendarSchedulingError(
-    axis,
-    false,
-    dateAxis.itemsError || dateAxis.layersError,
-    peopleAxis.error,
-  );
-  const retryRead = axis === 'dates' ? dateAxis.retry : peopleAxis.retry;
-  const readRetrying = axis === 'dates' ? dateAxis.retrying : peopleAxis.retrying;
-  const hasSyncStatus = dateAxis.conflictCount > 0 || dateAxis.failedCount > 0;
   const clearInlineFailures = useCallback(() => {
     resetUpdateItem();
     resetLinkTask();
@@ -171,24 +158,7 @@ export function CalendarSchedulingSurface({
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
-      {hasSyncStatus || readError ? (
-        <div
-          data-calendar-status-row=""
-          className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1 overflow-hidden"
-        >
-          <CalendarSyncAlert
-            conflictCount={dateAxis.conflictCount}
-            failedCount={dateAxis.failedCount}
-          />
-          <CalendarReadFailureNotice
-            message={readError}
-            onRetry={retryRead}
-            retrying={readRetrying}
-          />
-        </div>
-      ) : null}
-
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div data-calendar-canvas-host="" className="min-h-0 min-w-0 flex-1">
         <SchedulingCanvas
           displayTimezone={displayTimezone}
@@ -196,13 +166,19 @@ export function CalendarSchedulingSurface({
           pixelsPerHour={pixelsPerHour}
           now={now}
           viewportHeight="100%"
-          minimumLaneWidth={minLaneWidth}
+          minimumLaneWidth={160}
+          maximumVisibleLaneCount={7}
           {...(axis === 'dates' ? workLocationComposition?.canvasProps : {})}
           initialLaneIndex={axis === 'dates' ? dateAxis.initialLaneIndex : 0}
           horizontalAnchorKey={axis === 'dates' ? horizontalAnchorKey : undefined}
           selectedRegion={selectedRegion}
           selectedRegionAnchorRef={selectedRegionAnchorRef}
-          error={calendarSchedulingError(axis, inlineMutationFailed, false, false)}
+          error={calendarSchedulingError(
+            axis,
+            inlineMutationFailed,
+            dateAxis.itemsError || dateAxis.layersError,
+            peopleAxis.error,
+          )}
           emptyMessage={calendarSchedulingEmptyMessage(
             axis,
             dateAxis.itemsPending,

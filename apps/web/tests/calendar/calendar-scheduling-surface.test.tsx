@@ -192,8 +192,6 @@ function dateAxisState(
     layersError: false,
     retrying: false,
     retry: axisRetry.dates,
-    conflictCount: 0,
-    failedCount: 0,
   };
 }
 
@@ -268,8 +266,6 @@ function renderSurface(
     readonly selectedRegionAnchorRef?: React.RefObject<HTMLDivElement | null>;
     readonly dateItemsError?: boolean;
     readonly peopleError?: boolean;
-    readonly conflictCount?: number;
-    readonly failedCount?: number;
     readonly workLocationComposition?: WorkLocationCalendarComposition;
   } = {},
 ): {
@@ -292,8 +288,6 @@ function renderSurface(
           dateAxis={{
             ...dateAxisState(source, laneDate),
             itemsError: selectionOptions.dateItemsError ?? false,
-            conflictCount: selectionOptions.conflictCount ?? 0,
-            failedCount: selectionOptions.failedCount ?? 0,
           }}
           peopleAxis={{
             ...peopleAxisState(),
@@ -361,7 +355,6 @@ describe('CalendarSchedulingSurface persistence', () => {
     renderSurface('dates', calendarItem(), '2026-07-13', {
       workLocationComposition: {
         canvasProps: {
-          gutterSlot: <span>Location status</span>,
           renderAllDayLaneContext,
           renderTimedLaneContext,
           renderTimedItemDecoration,
@@ -386,28 +379,29 @@ describe('CalendarSchedulingSurface persistence', () => {
     );
   });
 
-  it('keeps the date grid mounted and offers Retry when its read fails', () => {
+  it('keeps read failures inside the fixed canvas instead of adding a status band', () => {
     renderSurface('dates', calendarItem(), '2026-07-13', { dateItemsError: true });
 
     expect(screen.getByRole('region', { name: 'Schedule' })).toBeInTheDocument();
     expect(screen.getByLabelText('Mon, Jul 13 lane')).toBeInTheDocument();
     expect(screen.getByText('Planning session')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-
-    expect(axisRetry.dates).toHaveBeenCalledOnce();
-    expect(canvasProps().error).toBeNull();
+    expect(document.querySelector('[data-calendar-status-row]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(canvasProps().error).toBe(
+      'Calendar updates are temporarily unavailable. Showing what we have.',
+    );
     expect(screen.getByRole('region', { name: 'Schedule' })).toBeInTheDocument();
   });
 
-  it('keeps shared lanes mounted and retries the people-axis read', () => {
+  it('keeps shared-lane read failures inside the fixed canvas', () => {
     renderSurface('people', calendarItem(), '2026-07-13', { peopleError: true });
 
     expect(screen.getByLabelText('Grace lane')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-
-    expect(axisRetry.people).toHaveBeenCalledOnce();
-    expect(axisRetry.dates).not.toHaveBeenCalled();
-    expect(canvasProps().error).toBeNull();
+    expect(document.querySelector('[data-calendar-status-row]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(canvasProps().error).toBe(
+      'Calendar updates are temporarily unavailable. Showing what we have.',
+    );
   });
 
   it('fills and can shrink to the shell-owned remaining height', () => {
@@ -421,19 +415,20 @@ describe('CalendarSchedulingSurface persistence', () => {
     expect(wrapper).not.toHaveClass('min-h-[max(16rem,45dvh)]');
   });
 
-  it('keeps simultaneous read and sync state in one compact row', () => {
+  it('targets a seven-day desktop week with compact readable lanes', () => {
+    renderSurface();
+
+    expect(canvasProps().minimumLaneWidth).toBe(160);
+    expect(canvasProps().maximumVisibleLaneCount).toBe(7);
+  });
+
+  it('never renders provider sync state as calendar chrome', () => {
     renderSurface('dates', calendarItem(), '2026-07-13', {
       dateItemsError: true,
-      conflictCount: 1,
-      failedCount: 2,
     });
 
-    const statusRow = assertDefined(
-      screen.getByText('1 sync conflict · 2 sync errors').parentElement,
-    );
-    expect(statusRow).toHaveAttribute('data-calendar-status-row');
-    expect(statusRow).toHaveClass('flex-nowrap', 'overflow-hidden');
-    expect(within(statusRow).getByRole('button', { name: 'Retry' })).toBeVisible();
+    expect(document.querySelector('[data-calendar-status-row]')).toBeNull();
+    expect(screen.queryByText(/sync conflict|sync error/i)).not.toBeInTheDocument();
   });
 
   it('renders exactly one schedule region and no side column beside it', () => {
@@ -445,25 +440,26 @@ describe('CalendarSchedulingSurface persistence', () => {
     expect(document.querySelector('aside')).toBeNull();
   });
 
-  it.each([
-    { syncState: 'push_pending' as const, expected: 'Saving…' },
-    { syncState: 'provider_error' as const, expected: 'Sync issue' },
-  ])('shows the $syncState state directly on its card', ({ syncState, expected }) => {
-    const source = { ...calendarItem(), syncState };
-    renderSurface('dates', source);
-    const props = canvasProps();
-    const lane = assertDefined(props.lanes[0]);
-    const content = props.renderItem?.({
-      item: assertDefined(lane.items[0]),
-      lane,
-      allDay: false,
-      density: 'full',
-    });
+  it.each(['push_pending', 'provider_error'] as const)(
+    'keeps the %s provider state out of event blocks',
+    (syncState) => {
+      const source = { ...calendarItem(), syncState };
+      renderSurface('dates', source);
+      const props = canvasProps();
+      const lane = assertDefined(props.lanes[0]);
+      const content = props.renderItem?.({
+        item: assertDefined(lane.items[0]),
+        lane,
+        allDay: false,
+        density: 'full',
+      });
 
-    render(<>{content}</>);
+      render(<div data-testid="full-item-content">{content}</div>);
 
-    expect(screen.getByText(expected)).toBeInTheDocument();
-  });
+      expect(screen.getByTestId('full-item-content').textContent).toBe(source.title);
+      expect(screen.queryByText(/Saving…|Sync issue/)).not.toBeInTheDocument();
+    },
+  );
 
   it('gives a healthy card its whole line, with no per-card kind label', () => {
     // The kind label (`Block`, `Calendar event`) took a fixed 32px of a 154px card and never

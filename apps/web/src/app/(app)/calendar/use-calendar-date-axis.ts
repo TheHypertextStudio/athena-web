@@ -43,8 +43,6 @@ export interface CalendarDateAxisState {
   readonly layersError: boolean;
   readonly retrying: boolean;
   readonly retry: () => void;
-  readonly conflictCount: number;
-  readonly failedCount: number;
 }
 
 /**
@@ -120,8 +118,5 @@ export function useCalendarDateAxis(
     layersError: layersQuery.isError,
     retrying: itemsQuery.isFetching || layersQuery.isFetching,
     retry,
-    conflictCount: items.filter((item) => item.hasConflict).length,
-    failedCount: items.filter((item) => !item.hasConflict && item.syncState === 'provider_error')
-      .length,
   };
 }

@@ -214,19 +214,19 @@ describe('CalendarItemCard', () => {
     expect(onResize).toHaveBeenCalledWith(ITEM_ID, expect.anything());
   });
 
-  it('surfaces a labeled badge for a non-clean sync state', () => {
+  it('keeps provider sync state out of the item card', () => {
     render(<CalendarItemCard item={makeItem({ syncState: 'provider_error' })} onOpen={vi.fn()} />);
-    expect(screen.getByLabelText('Sync failed')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Sync failed')).not.toBeInTheDocument();
   });
 
-  it('surfaces a labeled conflict badge, taking priority over the raw sync state', () => {
+  it('keeps provider conflict state out of the item card', () => {
     render(
       <CalendarItemCard
         item={makeItem({ syncState: 'local_dirty', hasConflict: true })}
         onOpen={vi.fn()}
       />,
     );
-    expect(screen.getByLabelText('Conflict')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Conflict')).not.toBeInTheDocument();
   });
 
   it('shows no sync badge for a clean, non-conflicted item', () => {

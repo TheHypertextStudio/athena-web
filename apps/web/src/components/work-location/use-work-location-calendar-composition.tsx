@@ -1,9 +1,7 @@
 'use client';
 
-import { CircleAlert } from '@docket/ui/icons';
-import { Popover, PopoverContent, PopoverTrigger } from '@docket/ui/primitives';
 import type { WorkLocationAssertionOut, WorkLocationOccurrenceException } from '@docket/types';
-import { type JSX, type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 
 import type { SchedulingCanvasProps } from '@/components/scheduling';
 import { api } from '@/lib/api';
@@ -33,14 +31,11 @@ import {
   workLocationSyncDef,
 } from './work-location-data';
 
-/** Shared canvas slots, status control, and editors for work-location composition. */
+/** Shared canvas slots and editors for work-location composition. */
 export interface WorkLocationCalendarComposition {
   readonly canvasProps: Pick<
     SchedulingCanvasProps,
-    | 'gutterSlot'
-    | 'renderAllDayLaneContext'
-    | 'renderTimedLaneContext'
-    | 'renderTimedItemDecoration'
+    'renderAllDayLaneContext' | 'renderTimedLaneContext' | 'renderTimedItemDecoration'
   >;
   readonly overlays: ReactNode;
 }
@@ -51,43 +46,6 @@ export interface UseWorkLocationCalendarCompositionInput {
   readonly end: string;
   readonly timezone: string;
   readonly lanes: SchedulingCanvasProps['lanes'];
-}
-
-/** Render one compact provider status control instead of repeated warning chips. */
-export function WorkLocationStatusControl({
-  warnings,
-}: {
-  readonly warnings: readonly {
-    readonly id: string;
-    readonly label: string;
-    readonly message: string;
-  }[];
-}): JSX.Element | null {
-  if (warnings.length === 0) return null;
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Work-location status, ${String(warnings.length)} ${warnings.length === 1 ? 'notice' : 'notices'}`}
-          className="bg-warning-container text-on-warning-container hover:bg-warning-container/80 focus-visible:outline-primary text-label-small inline-flex min-h-7 items-center gap-1 rounded-full px-2 focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
-        >
-          <CircleAlert aria-hidden="true" className="size-4!" />
-          <span>{warnings.length}</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-3 shadow-none">
-        <div className="space-y-2" aria-label="Work-location status details">
-          {warnings.map((warning) => (
-            <div key={warning.id} className="min-w-0">
-              <p className="text-on-surface text-label-medium truncate">{warning.label}</p>
-              <p className="text-on-surface-variant text-body-small">{warning.message}</p>
-            </div>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 /** Provide the same work-location model, gestures, editors, and mutations to every schedule. */
@@ -116,23 +74,9 @@ export function useWorkLocationCalendarComposition({
         range: range.data ?? null,
         assertions: assertions.data?.items ?? [],
         places: places.data?.items ?? [],
-        accounts: sync.data?.accounts ?? [],
       }),
-    [assertions.data?.items, places.data?.items, range.data, sync.data?.accounts, timezone],
+    [assertions.data?.items, places.data?.items, range.data, timezone],
   );
-  const warnings = useMemo(() => {
-    if (!sync.isError && !range.isError && !assertions.isError && !places.isError) {
-      return model.warnings;
-    }
-    return [
-      ...model.warnings,
-      {
-        id: 'work-location-read-failure',
-        label: 'Work locations',
-        message: 'Work locations are temporarily unavailable.',
-      },
-    ];
-  }, [assertions.isError, model.warnings, places.isError, range.isError, sync.isError]);
   const invalidateKeys = [queryKeys.workLocation()];
   const persistEdit = useApiMutation({
     mutationFn: (edit: WorkLocationCalendarEdit) => {
@@ -232,28 +176,12 @@ export function useWorkLocationCalendarComposition({
     persistEdit.mutate(edit, { onSuccess: resetMutationFailures });
     return { status: 'accepted' };
   };
-  const mutationFailed =
-    persistEdit.isError ||
-    updateAssertion.isError ||
-    setOccurrence.isError ||
-    clearOccurrence.isError;
-  const statusWarnings = mutationFailed
-    ? [
-        ...warnings,
-        {
-          id: 'work-location-write-failure',
-          label: 'Work locations',
-          message: 'Could not save that work-location change.',
-        },
-      ]
-    : warnings;
   const openRegion = (region: WorkLocationCalendarRegion): void => {
     if (region.editable) setEditingRegion(region);
   };
 
   return {
     canvasProps: {
-      gutterSlot: <WorkLocationStatusControl warnings={statusWarnings} />,
       renderAllDayLaneContext: (context) => (
         <WorkLocationAllDayContext
           regions={model.regions}

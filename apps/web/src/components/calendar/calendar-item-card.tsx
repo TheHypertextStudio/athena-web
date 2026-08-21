@@ -7,7 +7,7 @@
  * The full calendar view's and (via the agenda's `calendar_item` seam) the agenda rail's shared
  * item primitive: one component renders every {@link CalendarItemOut.kind} — `provider_event`,
  * `native_block`, `task_timebox`, `availability_block` — through a single set of visuals (a layer
- * color strip, a kind icon, a compact sync/conflict badge) rather than a one-off branch per kind
+ * color strip and a kind icon) rather than a one-off branch per kind
  * scattered across calendar surfaces (`docs/engineering/specs/calendar-ui.md` acceptance
  * criteria). Drag/resize affordances render only when `item.permissions.canEditCore` — never a
  * dead-looking handle for a read-only item — and read-only items instead surface their reason via
@@ -19,7 +19,7 @@
  * geometry and the actual `useUpdateCalendarItem` call.
  *
  * A task-shaped item with a `'contained'` task link ({@link containedTaskLink}) grows a
- * {@link TaskTimerButton} beside the sync/read-only badges — a scheduled block *of* a
+ * {@link TaskTimerButton} beside the read-only badge — a scheduled block *of* a
  * task is exactly where a person starting that work reaches to start tracking it. The control is
  * a sibling of the `onOpen` button, not nested inside it, so it never needs to fight the card's
  * own click-to-open handler.
@@ -28,7 +28,6 @@ import type {
   CalendarItemKind,
   CalendarItemOut,
   CalendarItemPermission,
-  CalendarItemSyncState,
   CalendarLayerOut,
 } from '@docket/types';
 import {
@@ -36,11 +35,9 @@ import {
   Layers,
   type LucideIcon,
   MoreHorizontal,
-  RefreshCw,
   Schedule,
   Shield,
   TaskAlt,
-  XCircle,
 } from '@docket/ui/icons';
 import { DRAGGABLE } from '@docket/ui/lib/draggable';
 import { cn } from '@docket/ui/lib/utils';
@@ -87,28 +84,8 @@ export const READ_ONLY_REASON_LABEL: Record<
   layer_access_role: 'Read-only — your role on this layer cannot edit',
   event_capability: 'Read-only — the provider marked this event un-editable',
   recurrence_unsupported: 'Read-only — recurring event editing is not yet supported',
-  conflict: 'Read-only until the sync conflict is resolved',
+  conflict: 'Read-only',
   kind: 'Read-only',
-};
-
-/** A sync-state badge's icon + label. */
-export interface SyncStateMeta {
-  /** The badge icon. */
-  icon: LucideIcon;
-  /** The badge label. */
-  label: string;
-}
-
-/**
- * Icon + label for a non-`clean` sync state (`null` for `clean`, which shows no badge). Reused by
- * the item workspace drawer's sync status section.
- */
-export const SYNC_STATE_META: Record<CalendarItemSyncState, SyncStateMeta | null> = {
-  clean: null,
-  local_dirty: { icon: RefreshCw, label: 'Unsaved changes' },
-  push_pending: { icon: RefreshCw, label: 'Syncing…' },
-  conflict: { icon: XCircle, label: 'Conflict' },
-  provider_error: { icon: XCircle, label: 'Sync failed' },
 };
 
 const KIND_ICON = CALENDAR_ITEM_KIND_ICON;
@@ -166,7 +143,6 @@ export default function CalendarItemCard({
   const canEdit = item.permissions.canEditCore;
   const time = timeLabel(item, block);
   const color = layer?.color ?? null;
-  const syncMeta = item.hasConflict ? SYNC_STATE_META.conflict : SYNC_STATE_META[item.syncState];
   const readOnlyLabel = item.permissions.readOnlyReason
     ? READ_ONLY_REASON_LABEL[item.permissions.readOnlyReason]
     : null;
@@ -185,7 +161,6 @@ export default function CalendarItemCard({
         DRAGGABLE,
         'border-outline-variant bg-surface-container-low hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg border pr-2 pl-3 transition-[opacity,background-color]',
         block ? 'py-2' : 'py-1.5',
-        item.hasConflict && 'border-error',
       )}
     >
       <span
@@ -248,23 +223,6 @@ export default function CalendarItemCard({
             className="text-on-surface-variant [&_svg]:size-4"
           >
             <Shield />
-          </span>
-        ) : null}
-        {syncMeta ? (
-          <span
-            role="img"
-            aria-label={syncMeta.label}
-            title={syncMeta.label}
-            className={cn(
-              'text-body-small flex items-center gap-1',
-              item.hasConflict || item.syncState === 'provider_error'
-                ? 'text-error'
-                : 'text-on-surface-variant',
-            )}
-          >
-            <syncMeta.icon
-              className={cn('[&_svg]:size-4', item.syncState === 'push_pending' && 'animate-spin')}
-            />
           </span>
         ) : null}
         {canEdit && onDragHandlePointerDown ? (

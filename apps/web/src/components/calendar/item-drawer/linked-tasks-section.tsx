@@ -63,7 +63,7 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-on-surface text-title-small">Linked tasks</h3>
+        <h3 className="text-on-surface text-title-small">Tasks</h3>
         <div className="flex flex-wrap gap-1">
           <Select
             aria-label="New task relationship"
@@ -108,7 +108,7 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
               setShowPlan(false);
             }}
           >
-            <Plus /> New
+            <Plus /> Create task
           </Button>
           <Button
             size="sm"
@@ -118,7 +118,7 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
               setShowPlan(false);
             }}
           >
-            <LinkIcon /> Link
+            <LinkIcon /> Link task
           </Button>
         </div>
       </div>
@@ -137,7 +137,9 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
       </Button>
 
       {grouped.length === 0 ? (
-        <p className="text-on-surface-variant text-body-small">No linked tasks yet.</p>
+        <p className="text-on-surface-variant text-body-small">
+          No tasks are linked to this event.
+        </p>
       ) : (
         <div className="flex flex-col gap-3">
           {grouped.map(({ role, links }) => (

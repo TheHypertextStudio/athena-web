@@ -129,8 +129,6 @@ vi.mock('../../src/app/(app)/calendar/use-calendar-date-axis', () => ({
     itemsPending: false,
     itemsError: false,
     layersError: false,
-    conflictCount: 0,
-    failedCount: 0,
   }),
 }));
 vi.mock('../../src/app/(app)/calendar/use-calendar-people-axis', () => ({

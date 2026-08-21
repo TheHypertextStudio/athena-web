@@ -123,8 +123,8 @@ export function SchedulingItemBody(props: SchedulingItemBodyProps): JSX.Element 
   // `truncate` clips instead, and the canvas clips everything past its edges.
   const bodyClassName =
     density === 'marker'
-      ? 'text-(--schedule-item-foreground) focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col justify-center rounded-sm px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset'
-      : 'text-(--schedule-item-foreground) text-label-large focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col rounded-sm px-2 py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset';
+      ? 'text-(--schedule-item-foreground) focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col justify-center rounded-sm px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-inset'
+      : 'text-(--schedule-item-foreground) text-label-large focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col rounded-sm px-1.5 py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset';
   const describedBy = !editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined;
   const title = `${item.title} · ${timeRange}`;
   const children = <ItemBodyContent {...props} />;

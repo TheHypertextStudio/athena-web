@@ -49,12 +49,19 @@ describe('Calendar responsive layout contract', () => {
     expect(surface).not.toContain('min-h-[max(16rem,45dvh)]');
   });
 
-  it('keeps secondary calendar state in one compact row above the grid', () => {
+  it('forbids refresh and sync state from taking space above the grid', () => {
     const surface = source('apps/web/src/app/(app)/calendar/calendar-scheduling-surface.tsx');
 
-    expect(surface).toMatch(
-      /data-calendar-status-row=""[^>]*\bflex-nowrap\b[^>]*\boverflow-hidden\b/,
-    );
+    expect(surface).not.toContain('data-calendar-status-row');
+    expect(surface).not.toContain('CalendarSyncAlert');
+    expect(surface).not.toContain('CalendarReadFailureNotice');
+  });
+
+  it('uses a seven-day desktop target instead of three oversized date lanes', () => {
+    const surface = source('apps/web/src/app/(app)/calendar/calendar-scheduling-surface.tsx');
+
+    expect(surface).toContain('minimumLaneWidth={160}');
+    expect(surface).toContain('maximumVisibleLaneCount={7}');
   });
 
   it('keeps the 320px toolbar on one row with a visible primary action', () => {

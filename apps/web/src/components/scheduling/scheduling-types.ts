@@ -273,6 +273,8 @@ export interface SchedulingCanvasProps {
   readonly viewportHeight?: string | number | undefined;
   /** Minimum readable lane width; the visible lane count is derived from this and the viewport. */
   readonly minimumLaneWidth?: number | undefined;
+  /** Optional upper bound for visible lanes, such as a seven-day calendar week. */
+  readonly maximumVisibleLaneCount?: number | undefined;
   /**
    * Consumer-owned chrome placed in the header's hour-gutter cell.
    *

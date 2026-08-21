@@ -259,7 +259,6 @@ describe('Agenda scheduling interactions', () => {
     const renderTimedItemDecoration = vi.fn(() => null);
     agendaState.workLocationComposition = {
       canvasProps: {
-        gutterSlot: <span>Location status</span>,
         renderAllDayLaneContext,
         renderTimedLaneContext,
         renderTimedItemDecoration,

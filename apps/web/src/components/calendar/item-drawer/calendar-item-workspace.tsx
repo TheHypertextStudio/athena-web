@@ -1,7 +1,7 @@
 'use client';
 
 import type { CalendarItemOut, CalendarLayerOut, WorkPlaceOut } from '@docket/types';
-import { Badge, SheetDescription, SheetTitle } from '@docket/ui/primitives';
+import { Badge, DialogDescription, DialogTitle } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { CALENDAR_ITEM_KIND_ICON, CALENDAR_ITEM_KIND_LABEL } from '../calendar-item-card';
@@ -11,7 +11,7 @@ import { CoreFieldsForm } from './core-fields-form';
 import { LinkedTasksSection } from './linked-tasks-section';
 import { itemTimeLabel } from './presentation';
 import { CalendarItemRelationsSection } from './relations-section';
-import { DeleteCalendarItemAction, SyncStatusSection } from './status-actions';
+import { DeleteCalendarItemAction } from './status-actions';
 
 /** Props for {@link CalendarItemWorkspace}. */
 export interface CalendarItemWorkspaceProps {
@@ -33,13 +33,13 @@ export interface CalendarItemWorkspaceProps {
   duplicates?: readonly CalendarItemOut[] | undefined;
   /** Arbitrary canonical saved places available for binding. */
   workPlaces?: readonly WorkPlaceOut[] | undefined;
-  /** Close the drawer after deletion. */
+  /** Close the dialog after deletion. */
   onClose: () => void;
   /** Report whether editable core fields differ from their saved values. */
   onDirtyChange: (dirty: boolean) => void;
   /** Navigate to a linked task detail page. */
   onOpenTask: (orgId: string, taskId: string) => void;
-  /** Open another calendar item in the drawer. */
+  /** Open another calendar item in the dialog. */
   onOpenItem: (itemId: string) => void;
 }
 
@@ -57,11 +57,12 @@ export function CalendarItemWorkspace({
   onOpenItem,
 }: CalendarItemWorkspaceProps): JSX.Element {
   const KindIcon = CALENDAR_ITEM_KIND_ICON[item.kind];
-  const attendeeCount = item.attendees.length;
+  const providerLabel = layer?.provider === 'google' ? 'Google Calendar' : 'source calendar';
+  const showKind = item.kind !== 'provider_event' && item.kind !== 'native_event';
 
   return (
-    <div className="flex h-full flex-col gap-5 overflow-y-auto p-4">
-      <header className="flex flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="border-outline-variant flex shrink-0 flex-col gap-2 border-b px-6 py-5 pr-16">
         <div className="flex items-start gap-2">
           <span
             aria-hidden="true"
@@ -70,13 +71,13 @@ export function CalendarItemWorkspace({
           >
             <KindIcon />
           </span>
-          <SheetTitle className="text-on-surface text-title-medium min-w-0 flex-1">
+          <DialogTitle className="text-on-surface text-title-large min-w-0 flex-1">
             {item.title}
-          </SheetTitle>
+          </DialogTitle>
           <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
-          <SheetDescription className="sr-only">
-            Calendar item details, relationships, and linked tasks.
-          </SheetDescription>
+          <DialogDescription className="sr-only">
+            Edit event details and manage related work.
+          </DialogDescription>
         </div>
         <p className="text-on-surface-variant text-body-medium">
           {itemTimeLabel(item, displayTimezone)}
@@ -92,7 +93,9 @@ export function CalendarItemWorkspace({
               {layer.title}
             </Badge>
           ) : null}
-          <Badge variant="secondary">{CALENDAR_ITEM_KIND_LABEL[item.kind]}</Badge>
+          {showKind ? (
+            <Badge variant="secondary">{CALENDAR_ITEM_KIND_LABEL[item.kind]}</Badge>
+          ) : null}
           {item.htmlLink ? (
             <a
               href={item.htmlLink}
@@ -100,47 +103,33 @@ export function CalendarItemWorkspace({
               rel="noreferrer"
               className="text-primary text-body-small hover:underline"
             >
-              Open in provider
+              Open in {providerLabel}
             </a>
           ) : null}
         </div>
       </header>
 
-      <SyncStatusSection item={item} />
-      <CalendarItemDuplicateSources duplicates={duplicates} layers={layers} />
+      <div
+        data-testid="calendar-item-dialog-scroll"
+        className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overscroll-contain px-6 py-5"
+      >
+        <CalendarItemDuplicateSources duplicates={duplicates} layers={layers} />
 
-      <section className="flex flex-col gap-2">
-        <h3 className="text-on-surface text-title-small">Details</h3>
-        <CoreFieldsForm
-          displayTimezone={displayTimezone}
-          item={item}
-          workPlaces={workPlaces}
-          onDirtyChange={onDirtyChange}
-        />
-      </section>
+        <section className="flex flex-col gap-3">
+          <h3 className="text-on-surface text-title-small">Event details</h3>
+          <CoreFieldsForm
+            displayTimezone={displayTimezone}
+            item={item}
+            workPlaces={workPlaces}
+            onDirtyChange={onDirtyChange}
+          />
+        </section>
 
-      <CalendarItemRelationsSection itemId={item.id} onOpenItem={onOpenItem} />
-      <LinkedTasksSection item={item} onOpenTask={onOpenTask} />
+        <CalendarItemRelationsSection itemId={item.id} onOpenItem={onOpenItem} />
+        <LinkedTasksSection item={item} onOpenTask={onOpenTask} />
+      </div>
 
-      <section className="flex flex-col gap-1.5">
-        <h3 className="text-on-surface text-title-small">Provider metadata</h3>
-        <p className="text-on-surface-variant text-body-small">
-          {[
-            layer?.provider ? `Provider: ${layer.provider}` : null,
-            layer?.accessRole ? `Access: ${layer.accessRole}` : null,
-            (item.organizer?.displayName ?? item.organizer?.email)
-              ? `Organizer: ${item.organizer.displayName ?? item.organizer.email}`
-              : null,
-            attendeeCount > 0
-              ? `${String(attendeeCount)} attendee${attendeeCount === 1 ? '' : 's'}`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(' · ') || 'No provider metadata.'}
-        </p>
-      </section>
-
-      <div className="mt-auto flex justify-between border-t pt-3">
+      <div className="border-outline-variant flex shrink-0 justify-between border-t px-6 py-3">
         <DeleteCalendarItemAction item={item} onDeleted={onClose} />
       </div>
     </div>

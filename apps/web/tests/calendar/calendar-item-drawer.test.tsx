@@ -7,8 +7,7 @@
  * - it shows multiple linked tasks, grouped by role;
  * - creating a task from the drawer opens the shell-global Task composer and links a successful
  *   same-workspace creation back to the calendar item;
- * - a conflicted item renders both conflict actions ("Open in provider" and "Retry with local
- *   changes").
+ * - provider implementation state stays out of the event editor.
  */
 import '@testing-library/jest-dom/vitest';
 
@@ -277,6 +276,48 @@ afterEach(() => {
 });
 
 describe('CalendarItemDrawer', () => {
+  it('opens a bounded event dialog with one internal scroll region', async () => {
+    renderDrawer(ITEM_ID);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Design review' });
+    expect(dialog).toHaveClass('overflow-hidden');
+    expect(within(dialog).getByTestId('calendar-item-dialog-scroll')).toHaveClass(
+      'overflow-y-auto',
+    );
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+  });
+
+  it('uses user-facing event language instead of provider and model metadata', async () => {
+    itemGet.mockResolvedValue(
+      okResponse(
+        makeItem({
+          kind: 'provider_event',
+          provider: 'google',
+          htmlLink: 'https://calendar.google.com/event/1',
+        }),
+      ),
+    );
+    layersGet.mockResolvedValue(
+      okResponse({
+        items: [makeLayer({ provider: 'google', title: 'Work calendar', accessRole: 'owner' })],
+      }),
+    );
+
+    renderDrawer(ITEM_ID);
+    await screen.findByRole('dialog', { name: 'Design review' });
+
+    expect(screen.getByRole('link', { name: 'Open in Google Calendar' })).toHaveAttribute(
+      'href',
+      'https://calendar.google.com/event/1',
+    );
+    expect(screen.queryByText('Provider event')).not.toBeInTheDocument();
+    expect(screen.queryByText('Provider metadata')).not.toBeInTheDocument();
+    expect(screen.queryByText('Calendar relationships')).not.toBeInTheDocument();
+    expect(screen.queryByText('Synced')).not.toBeInTheDocument();
+    expect(screen.getByText('Related events')).toBeInTheDocument();
+    expect(screen.getByText('Tasks')).toBeInTheDocument();
+  });
+
   it('keeps a visible close action while item details are loading', () => {
     itemGet.mockReturnValue(new Promise(() => undefined));
     const { onClose } = renderDrawer(ITEM_ID);
@@ -473,7 +514,7 @@ describe('CalendarItemDrawer', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'New task relationship' }), {
       target: { value: 'follow_up' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /New/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
 
     expect(openCreate).toHaveBeenCalledWith({
       kind: 'task',
@@ -506,7 +547,7 @@ describe('CalendarItemDrawer', () => {
     renderDrawer(ITEM_ID);
     await screen.findByText('Design review');
 
-    fireEvent.click(screen.getByRole('button', { name: /New/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
     const request = openCreate.mock.calls[0]?.[0] as {
       afterCreate?: (task: TaskOut) => Promise<void>;
     };
@@ -528,24 +569,17 @@ describe('CalendarItemDrawer', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('renders both conflict actions for a conflicted item', async () => {
+  it('does not expose provider sync state for a conflicted item', async () => {
     itemGet.mockResolvedValue(
       okResponse(makeItem({ hasConflict: true, htmlLink: 'https://calendar.google.com/event/1' })),
     );
     renderDrawer(ITEM_ID);
 
-    await waitFor(() => {
-      expect(screen.getByText('Sync conflict')).toBeInTheDocument();
-    });
-    // "Open in provider" appears twice (header link + conflict-banner action); both share the
-    // item's `htmlLink`, so asserting on the set covers the banner's copy without over-specifying
-    // which DOM node is "the" link.
-    const providerLinks = screen.getAllByRole('link', { name: 'Open in provider' });
-    expect(providerLinks.length).toBeGreaterThanOrEqual(1);
-    for (const link of providerLinks) {
-      expect(link).toHaveAttribute('href', 'https://calendar.google.com/event/1');
-    }
-    expect(screen.getByRole('button', { name: 'Retry with local changes' })).toBeInTheDocument();
+    await screen.findByRole('dialog', { name: 'Design review' });
+    expect(screen.queryByText('Sync conflict')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Retry with local changes' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows contained items, opens them in place, and detaches relationships', async () => {
@@ -575,8 +609,8 @@ describe('CalendarItemDrawer', () => {
     );
     renderDrawer(ITEM_ID);
 
-    expect(await screen.findByText('Contents')).toBeInTheDocument();
-    expect(screen.getByText('Provider event')).toBeInTheDocument();
+    expect(await screen.findByText('Included events')).toBeInTheDocument();
+    expect(screen.getByText('Event')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Detach Customer interview' }));
     await waitFor(() => {
       expect(itemRelationDelete).toHaveBeenCalledWith({

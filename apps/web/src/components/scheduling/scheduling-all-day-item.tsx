@@ -98,7 +98,7 @@ export function SchedulingAllDayItem({
   const appearance = item.appearance ?? 'event';
   const surfaceState = dropActive ? 'drop' : gesture.preview ? 'preview' : 'rest';
   const surfacePalette = scheduleItemSurfacePalette(appearance, item.color, surfaceState);
-  const edgePadding = `${exposesStartResize ? 'pl-3 [@media(pointer:coarse)]:pl-10' : ''} ${exposesEndResize ? 'pr-3 [@media(pointer:coarse)]:pr-10' : ''}`;
+  const edgePadding = `${exposesStartResize ? 'pl-1' : ''} ${exposesEndResize ? 'pr-1' : ''}`;
   const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
     item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
 
@@ -205,7 +205,7 @@ export function SchedulingAllDayItem({
             item={item}
             object={dragObject}
             mode={relationshipMode}
-            className="focus-visible:ring-ring mx-0.5 size-4 shrink-0 cursor-grab rounded text-(--schedule-item-foreground) opacity-0 transition-[color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-10 [@media(pointer:coarse)]:opacity-100"
+            className="focus-visible:ring-ring absolute top-1/2 left-0.5 z-30 size-4 -translate-y-1/2 cursor-grab rounded text-(--schedule-item-foreground) opacity-0 transition-[color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-10"
             activeClassName="bg-primary-container text-on-primary-container ring-primary/40 opacity-100 ring-2 [--color-ring:var(--color-on-primary-container)]"
           >
             {/* Was a raw `↗` text glyph — a different symbol from the chain link the timed card

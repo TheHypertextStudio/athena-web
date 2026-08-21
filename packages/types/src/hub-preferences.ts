@@ -30,7 +30,7 @@ export const CalendarPreferences = z
       .min(160)
       .max(640)
       .optional()
-      .describe('Minimum date-lane width in pixels before horizontal scrolling (default: 240).'),
+      .describe('Minimum date-lane width in pixels before horizontal scrolling (default: 160).'),
     defaultCreateIntent: CalendarItemCreateIntent.optional().describe(
       'Whether new selected regions default to events or timeboxes (default: event).',
     ),

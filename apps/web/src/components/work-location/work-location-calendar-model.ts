@@ -2,7 +2,6 @@ import type {
   ExpectedWorkLocationSource,
   WorkLocationAssertionOut,
   WorkLocationRangeOut,
-  WorkLocationSyncAccountOut,
   WorkPlaceOut,
 } from '@docket/types';
 
@@ -32,17 +31,9 @@ interface TimedOccurrenceBounds {
   readonly endsAt: string;
 }
 
-/** One application-owned provider status line shown by the shared compact status control. */
-export interface WorkLocationCalendarWarning {
-  readonly id: string;
-  readonly label: string;
-  readonly message: string;
-}
-
-/** Shared region and provider-status model used by every schedule surface. */
+/** Shared location-region model used by every schedule surface. */
 export interface WorkLocationCalendarModel {
   readonly regions: readonly WorkLocationCalendarRegion[];
-  readonly warnings: readonly WorkLocationCalendarWarning[];
 }
 
 /** Inputs needed to normalize canonical work-location reads for a schedule. */
@@ -51,7 +42,6 @@ export interface WorkLocationCalendarModelInput {
   readonly range: WorkLocationRangeOut | null;
   readonly assertions: readonly WorkLocationAssertionOut[];
   readonly places: readonly WorkPlaceOut[];
-  readonly accounts: readonly WorkLocationSyncAccountOut[];
 }
 
 interface LocalDayParts {
@@ -99,16 +89,6 @@ export function isFullWorkLocationCivilDay(
     end.month === next.getUTCMonth() + 1 &&
     end.day === next.getUTCDate()
   );
-}
-
-/** Convert one account delivery state into application-owned copy. */
-function warningMessage(account: WorkLocationSyncAccountOut): string | null {
-  if (account.state === 'action_required' || account.state === 'unsupported') {
-    return 'Location sync needs attention.';
-  }
-  if (account.state === 'retrying') return 'Location sync is retrying.';
-  if (account.pendingWrites > 0) return 'Location changes are syncing.';
-  return null;
 }
 
 /** Add one day to an ISO civil date without applying the host timezone. */
@@ -222,20 +202,5 @@ export function buildWorkLocationCalendarModel(
     });
   }
 
-  const warnings: WorkLocationCalendarWarning[] = [];
-  const warningIds = new Set<string>();
-  for (const account of input.accounts) {
-    const message = warningMessage(account);
-    if (!message) continue;
-    const id = `${account.connectionId}:${account.state}:${account.reason ?? 'none'}:${String(account.pendingWrites)}`;
-    if (warningIds.has(id)) continue;
-    warningIds.add(id);
-    warnings.push({
-      id,
-      label: account.accountLabel ?? (account.provider === 'google' ? 'Google' : account.provider),
-      message,
-    });
-  }
-
-  return { regions, warnings };
+  return { regions };
 }

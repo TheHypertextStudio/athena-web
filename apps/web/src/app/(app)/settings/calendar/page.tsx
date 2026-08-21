@@ -48,7 +48,7 @@ const DEFAULTS: Required<Omit<CalendarPreferences, 'defaultLayerId'>> & {
   defaultLayerId: null;
 } = {
   pixelsPerHour: DEFAULT_HOUR_HEIGHT,
-  minLaneWidth: 240,
+  minLaneWidth: 160,
   defaultCreateIntent: 'event',
   defaultLayerId: null,
 };

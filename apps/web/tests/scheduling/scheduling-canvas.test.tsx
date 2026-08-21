@@ -528,8 +528,8 @@ describe('SchedulingCanvas', () => {
       'h-0.5',
       'opacity-0',
       'motion-reduce:transition-none',
-      '[@media(pointer:coarse)]:opacity-100',
     );
+    expect(startIndicator).not.toHaveClass('[@media(pointer:coarse)]:opacity-100');
     fireEvent.pointerDown(startGrip, { button: 0, pointerId: 11, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 11, clientY: 130 });
     expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
@@ -554,12 +554,8 @@ describe('SchedulingCanvas', () => {
       '[@media(pointer:coarse)]:pointer-events-auto',
     );
     expect(endGrip).not.toHaveClass('-right-3', '[@media(pointer:coarse)]:-right-8');
-    expect(endIndicator).toHaveClass(
-      'top-2.5',
-      'h-0.5',
-      'opacity-0',
-      '[@media(pointer:coarse)]:opacity-100',
-    );
+    expect(endIndicator).toHaveClass('top-2.5', 'h-0.5', 'opacity-0');
+    expect(endIndicator).not.toHaveClass('[@media(pointer:coarse)]:opacity-100');
     fireEvent.pointerDown(endGrip, { button: 0, pointerId: 12, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 12, clientY: 130 });
     expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
@@ -697,8 +693,8 @@ describe('SchedulingCanvas', () => {
       'opacity-0',
       'group-hover:opacity-100',
       'group-focus-within:opacity-100',
-      '[@media(pointer:coarse)]:opacity-100',
     );
+    expect(startIndicator).not.toHaveClass('[@media(pointer:coarse)]:opacity-100');
 
     const lastCard = renderedItem('day-end');
     const endGrip = screen.getByRole('button', { name: 'Resize Day end from end' });
@@ -722,8 +718,8 @@ describe('SchedulingCanvas', () => {
       'opacity-0',
       'group-hover:opacity-100',
       'group-focus-within:opacity-100',
-      '[@media(pointer:coarse)]:opacity-100',
     );
+    expect(endIndicator).not.toHaveClass('[@media(pointer:coarse)]:opacity-100');
   });
 
   it('respects lane and item editability while preserving open behavior', () => {
@@ -2019,7 +2015,7 @@ describe('SchedulingCanvas', () => {
     }
   });
 
-  it('keeps timed move and relationship controls visible without replacing matched colors', () => {
+  it('reveals timed move and relationship controls only in item interaction context', () => {
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -2043,10 +2039,12 @@ describe('SchedulingCanvas', () => {
     ]) {
       expect(control).toHaveClass(
         'text-(--schedule-item-foreground)',
+        'opacity-0',
         'group-hover:opacity-100',
-        '[@media(pointer:coarse)]:opacity-100',
+        'group-focus-within:opacity-100',
         'motion-reduce:transition-none',
       );
+      expect(control).not.toHaveClass('[@media(pointer:coarse)]:opacity-100');
       expect(control).not.toHaveClass(
         'hover:bg-surface-container-high',
         'active:bg-surface-container-highest',

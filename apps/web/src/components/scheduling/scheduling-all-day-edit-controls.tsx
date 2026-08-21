@@ -15,7 +15,7 @@ export function SchedulingAllDayMoveControl({
     <button
       type="button"
       aria-label={`Move ${itemTitle}`}
-      className="focus-visible:ring-ring mx-0.5 size-5 shrink-0 cursor-grab touch-none rounded text-(--schedule-item-foreground) opacity-0 transition-opacity outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset active:cursor-grabbing motion-reduce:transition-none [@media(pointer:coarse)]:size-10 [@media(pointer:coarse)]:opacity-100"
+      className="focus-visible:ring-ring absolute top-1/2 right-0.5 z-30 size-5 -translate-y-1/2 cursor-grab touch-none rounded text-(--schedule-item-foreground) opacity-0 transition-opacity outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset active:cursor-grabbing motion-reduce:transition-none [@media(pointer:coarse)]:size-10"
       onPointerDown={gesture.onMovePointerDown}
       onKeyDown={gesture.onMoveKeyDown}
     >
@@ -46,7 +46,7 @@ export function SchedulingAllDayResizeControl({
     >
       <span
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-y-1 w-0.5 rounded-full bg-(--schedule-item-foreground) opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:opacity-100 ${start ? 'left-0.5' : 'right-0.5'}`}
+        className={`pointer-events-none absolute inset-y-1 w-0.5 rounded-full bg-(--schedule-item-foreground) opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none ${start ? 'left-0.5' : 'right-0.5'}`}
       />
     </button>
   );

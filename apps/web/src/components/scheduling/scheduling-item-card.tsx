@@ -168,7 +168,7 @@ export function SchedulingItemCard({
   const resizeTargetClassName =
     'focus-visible:ring-ring absolute z-20 size-6 max-w-full cursor-ns-resize touch-none bg-transparent pointer-events-none outline-none group-focus-within:pointer-events-auto group-hover:pointer-events-auto focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:pointer-events-auto';
   const resizeIndicatorClassName =
-    'bg-(--schedule-item-foreground) pointer-events-none absolute h-0.5 w-3 max-w-full rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:opacity-100';
+    'bg-(--schedule-item-foreground) pointer-events-none absolute h-0.5 w-3 max-w-full rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none';
   const timeRange = formatScheduleItemTimeRange({
     item,
     lane,
@@ -332,7 +332,7 @@ export function SchedulingItemCard({
           <button
             type="button"
             aria-label={`Move ${item.title}`}
-            className="focus-visible:ring-ring absolute top-0.5 right-0.5 z-30 size-6 cursor-grab rounded text-(--schedule-item-foreground) opacity-0 transition-[color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset active:cursor-grabbing motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
+            className="focus-visible:ring-ring absolute top-0.5 right-0.5 z-30 size-6 cursor-grab rounded text-(--schedule-item-foreground) opacity-0 transition-[color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset active:cursor-grabbing motion-reduce:transition-none [@media(pointer:coarse)]:size-11"
             onPointerDown={gesture.onMovePointerDown}
             onKeyDown={gesture.onMoveKeyDown}
           >
@@ -344,7 +344,7 @@ export function SchedulingItemCard({
             item={item}
             object={dragObject}
             mode={relationshipMode}
-            className="focus-visible:ring-ring absolute bottom-0.5 left-0.5 z-30 size-6 cursor-grab rounded transition-[color,opacity] outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
+            className="focus-visible:ring-ring absolute bottom-0.5 left-0.5 z-30 size-6 cursor-grab rounded transition-[color,opacity] outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-11"
             activeClassName="bg-primary-container text-on-primary-container ring-primary/40 opacity-100 ring-2 [--color-ring:var(--color-on-primary-container)]"
             inactiveClassName="text-(--schedule-item-foreground) opacity-0 group-focus-within:opacity-100 group-hover:opacity-100"
           >
@@ -353,7 +353,7 @@ export function SchedulingItemCard({
         ) : null}
         {action ? (
           <div
-            className="absolute right-0.5 bottom-0.5 z-30 flex size-6 items-center justify-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
+            className="absolute right-0.5 bottom-0.5 z-30 flex size-6 items-center justify-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:size-11"
             data-schedule-item-action=""
             // The move handle and relationship-source control each stop their own pointerdown
             // (see `beginSchedulingPointerSession`) so it never bubbles to the lane's

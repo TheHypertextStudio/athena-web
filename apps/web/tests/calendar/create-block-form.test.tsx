@@ -5,11 +5,23 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { mutate, reset, mutationState } = vi.hoisted(() => ({
+const { mutate, reset, mutationState, shellState } = vi.hoisted(() => ({
   mutate: vi.fn(),
   reset: vi.fn(),
   mutationState: { isError: false },
+  shellState: { isDesktop: false, host: null as HTMLElement | null },
 }));
+
+vi.mock('@docket/ui/components', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('@docket/ui/components');
+  return {
+    ...actual,
+    SHELL_DESKTOP_QUERY: '(min-width: 1024px)',
+    useShellOverlayHost: () => shellState.host,
+  };
+});
+
+vi.mock('@docket/ui/hooks', () => ({ useMediaQuery: () => shellState.isDesktop }));
 
 vi.mock('../../src/components/calendar/calendar-mutations', () => ({
   useCreateCalendarItem: () => ({
@@ -23,6 +35,20 @@ vi.mock('../../src/components/calendar/calendar-mutations', () => ({
 import CreateBlockForm, {
   type CalendarRegionSelection,
 } from '../../src/components/calendar/create-block-form';
+
+class NoopResizeObserver implements ResizeObserver {
+  observe(): void {
+    /* jsdom performs no layout, so there is nothing to report. */
+  }
+  unobserve(): void {
+    /* no-op */
+  }
+  disconnect(): void {
+    /* no-op */
+  }
+}
+
+globalThis.ResizeObserver = NoopResizeObserver;
 
 const SELECTION = {
   startsAt: '2026-08-10T17:00:00.000Z',
@@ -46,9 +72,26 @@ afterEach(() => {
   mutate.mockReset();
   mutationState.isError = false;
   reset.mockReset();
+  shellState.host?.remove();
+  shellState.isDesktop = false;
+  shellState.host = null;
 });
 
 describe('CreateBlockForm progressive quick create', () => {
+  it('uses a bounded draggable dialog for the desktop calendar editor', async () => {
+    shellState.isDesktop = true;
+    shellState.host = document.createElement('div');
+    document.body.append(shellState.host);
+
+    render(<CreateBlockForm displayTimezone="UTC" selection={SELECTION} />);
+    const dialog = await screen.findByRole('dialog', { name: 'Create calendar item' });
+
+    expect(dialog).toHaveAttribute('data-create-presentation', 'calendar-desktop');
+    expect(dialog).toHaveClass('overflow-hidden');
+    expect(screen.getByTestId('calendar-dialog-scroll')).toHaveClass('min-h-0', 'overflow-y-auto');
+    expect(screen.getByRole('button', { name: 'Move create-event dialog' })).toBeVisible();
+  });
+
   it('uses a triggerless focus-managed dialog for an Agenda-selected draft', async () => {
     render(
       <CreateBlockForm

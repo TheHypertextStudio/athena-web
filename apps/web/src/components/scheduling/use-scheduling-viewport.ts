@@ -27,6 +27,7 @@ interface UseSchedulingViewportOptions {
   readonly pixelsPerHour: number;
   readonly viewportWidth?: number | undefined;
   readonly minimumLaneWidth: number;
+  readonly maximumVisibleLaneCount?: number | undefined;
   readonly initialLaneIndex: number;
   readonly horizontalAnchorKey?: string | number | undefined;
   readonly initialScrollMinutes: number;
@@ -70,6 +71,7 @@ export function useSchedulingViewport({
   pixelsPerHour,
   viewportWidth,
   minimumLaneWidth,
+  maximumVisibleLaneCount,
   initialLaneIndex,
   horizontalAnchorKey,
   initialScrollMinutes,
@@ -127,8 +129,9 @@ export function useSchedulingViewport({
         laneCount: lanes.length,
         gutterWidth: axis.gutterWidth,
         minimumLaneWidth,
+        ...(maximumVisibleLaneCount === undefined ? {} : { maximumVisibleLaneCount }),
       }),
-    [axis.gutterWidth, lanes.length, measuredWidth, minimumLaneWidth],
+    [axis.gutterWidth, lanes.length, maximumVisibleLaneCount, measuredWidth, minimumLaneWidth],
   );
   const hasMeasuredViewport = viewportWidth !== undefined || observedWidth > 0;
 

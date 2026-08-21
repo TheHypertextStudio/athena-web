@@ -109,6 +109,7 @@ export interface DeriveLaneGeometryOptions {
   readonly laneCount: number;
   readonly gutterWidth?: number;
   readonly minimumLaneWidth?: number;
+  readonly maximumVisibleLaneCount?: number;
 }
 
 /**
@@ -123,11 +124,13 @@ export function deriveLaneGeometry({
   laneCount,
   gutterWidth = 64,
   minimumLaneWidth = 220,
+  maximumVisibleLaneCount = Number.POSITIVE_INFINITY,
 }: DeriveLaneGeometryOptions): ScheduleLaneGeometry {
   const safeViewport = Math.max(0, viewportWidth);
   const safeGutter = Math.max(0, Math.min(gutterWidth, safeViewport));
   const availableWidth = Math.max(0, safeViewport - safeGutter);
   const safeMinimum = Math.max(1, minimumLaneWidth);
+  const safeMaximum = Math.max(1, Math.floor(maximumVisibleLaneCount));
 
   if (laneCount <= 0) {
     return {
@@ -140,6 +143,7 @@ export function deriveLaneGeometry({
 
   const visibleLaneCount = Math.min(
     Math.floor(laneCount),
+    safeMaximum,
     Math.max(1, Math.floor(availableWidth / safeMinimum)),
   );
   const laneWidth = availableWidth > 0 ? availableWidth / visibleLaneCount : safeMinimum;

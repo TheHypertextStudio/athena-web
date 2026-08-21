@@ -12,98 +12,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@docket/ui/primitives';
-import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useState } from 'react';
 
-import { READ_ONLY_REASON_LABEL, SYNC_STATE_META } from '../calendar-item-card';
-import { useDeleteCalendarItem, useRetryCalendarItemWrite } from '../calendar-mutations';
+import { useDeleteCalendarItem } from '../calendar-mutations';
 import { CANCEL_CLASS, DESTRUCTIVE_CONFIRM_CLASS } from './presentation';
-
-/** Props for {@link SyncStatusSection}. */
-export interface SyncStatusSectionProps {
-  /** Calendar item whose sync status is shown. */
-  item: CalendarItemOut;
-}
-
-/** Compact sync state with safe retry actions and conflict guidance. */
-export function SyncStatusSection({ item }: SyncStatusSectionProps): JSX.Element {
-  const retry = useRetryCalendarItemWrite(item.id);
-  const readOnlyLabel = item.permissions.readOnlyReason
-    ? READ_ONLY_REASON_LABEL[item.permissions.readOnlyReason]
-    : null;
-
-  if (item.hasConflict) {
-    return (
-      <div
-        role="alert"
-        className="border-error/40 bg-error/10 flex flex-col gap-2 rounded-lg border p-3"
-      >
-        <p className="text-error text-title-small">Sync conflict</p>
-        <p className="text-on-surface-variant text-body-small">
-          Local changes and the provider diverged. Open the item in the provider to review, or retry
-          pushing your local changes.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {item.htmlLink ? (
-            <Button asChild size="sm" variant="outline">
-              <a href={item.htmlLink} target="_blank" rel="noreferrer">
-                Open in provider
-              </a>
-            </Button>
-          ) : null}
-          <Button
-            size="sm"
-            onClick={() => {
-              retry.mutate(undefined);
-            }}
-            disabled={retry.isPending}
-          >
-            {retry.isPending ? 'Retrying…' : 'Retry with local changes'}
-          </Button>
-        </div>
-        {retry.isError ? (
-          <p className="text-error text-body-small">
-            We couldn&apos;t retry this calendar update. Please try again.
-          </p>
-        ) : null}
-      </div>
-    );
-  }
-
-  const meta = SYNC_STATE_META[item.syncState];
-  return (
-    <div className="text-body-small flex flex-wrap items-center gap-2">
-      {meta ? (
-        <span
-          className={cn(
-            'flex items-center gap-1.5',
-            item.syncState === 'provider_error' ? 'text-error' : 'text-on-surface-variant',
-          )}
-        >
-          <meta.icon
-            className={cn('size-4', item.syncState === 'push_pending' && 'animate-spin')}
-          />
-          {meta.label}
-        </span>
-      ) : (
-        <span className="text-on-surface-variant">Synced</span>
-      )}
-      {readOnlyLabel ? <span className="text-on-surface-variant">· {readOnlyLabel}</span> : null}
-      {item.syncState === 'provider_error' ? (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            retry.mutate(undefined);
-          }}
-          disabled={retry.isPending}
-        >
-          Retry
-        </Button>
-      ) : null}
-    </div>
-  );
-}
 
 /** Props for {@link DeleteCalendarItemAction}. */
 export interface DeleteCalendarItemActionProps {

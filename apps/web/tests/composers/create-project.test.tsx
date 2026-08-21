@@ -788,6 +788,44 @@ describe('CreateProjectDialog — robust composer', () => {
     });
   });
 
+  it('continues with relationships retained while clearing only project copy', async () => {
+    projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_more', name: 'First' }));
+    const { onCreated, onOpenChange } = renderComposer();
+
+    await waitFor(() => {
+      expect(membersGet).toHaveBeenCalled();
+    });
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'First' } });
+    fireEvent.change(screen.getByLabelText('One-sentence summary'), {
+      target: { value: 'Clear this summary.' },
+    });
+    const description = screen.getByLabelText('Add a description…');
+    await act(async () => {
+      description.innerHTML = '<p>Clear this description.</p>';
+      fireEvent.input(description);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Lead/ }));
+    fireEvent.click(await screen.findByText('Grace Hopper'));
+    fireEvent.click(screen.getByRole('switch', { name: 'Create more' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Project name')).toHaveValue('');
+      expect(screen.getByLabelText('One-sentence summary')).toHaveValue('');
+      expect(screen.getByLabelText('Add a description…')).toHaveTextContent('');
+    });
+    expect(screen.getByRole('button', { name: /Lead — Grace Hopper/ })).toBeVisible();
+    expect(firstJson(projectPost.mock.calls)).toMatchObject({ teamId: TEAM_ID, leadId: GRACE_ID });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Project created. Ready to create another.',
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText('Project name')).toHaveFocus();
+    });
+    expect(onCreated).toHaveBeenCalledOnce();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
   it('surfaces application-owned copy when the create fails', async () => {
     projectPost.mockResolvedValue(jsonResponse(false, { detail: 'Name already used.' }));
     const { onCreated } = renderComposer();
@@ -799,5 +837,6 @@ describe('CreateProjectDialog — robust composer', () => {
     expect(within(alert).getByText('Could not create the project.')).toBeTruthy();
     expect(within(alert).queryByText('Name already used.')).toBeNull();
     expect(onCreated).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Project name')).toHaveValue('Dup');
   });
 });

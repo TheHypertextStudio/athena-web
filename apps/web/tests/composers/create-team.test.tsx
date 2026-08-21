@@ -234,4 +234,35 @@ describe('GlobalTeamComposer', () => {
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'team_origin' }));
     expect(routerPush).toHaveBeenCalledWith(`/orgs/${ORG_ID}/teams`);
   });
+
+  it('continues with triage retained while clearing all generated and authored Team copy', async () => {
+    teamPost.mockResolvedValue(jsonResponse(true, { id: 'team_more', name: 'First' }));
+    const { closeCreate, onCreated } = renderGlobalTeam();
+
+    fireEvent.change(screen.getByLabelText('Team name'), { target: { value: 'First' } });
+    fireEvent.change(screen.getByLabelText('One-sentence summary'), {
+      target: { value: 'Clear this.' },
+    });
+    fireEvent.change(screen.getByLabelText('Agent guidance'), {
+      target: { value: 'Clear this too.' },
+    });
+    fireEvent.click(screen.getByRole('switch', { name: 'Triage queue' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Create more' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create team' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Team name')).toHaveValue('');
+      expect(screen.getByLabelText('Team key')).toHaveValue('');
+      expect(screen.getByLabelText('One-sentence summary')).toHaveValue('');
+      expect(screen.getByLabelText('Agent guidance')).toHaveValue('');
+    });
+    expect(screen.getByRole('switch', { name: 'Triage queue' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Team created. Ready to create another.');
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(closeCreate).not.toHaveBeenCalled();
+    expect(onCreated).toHaveBeenCalledOnce();
+  });
 });

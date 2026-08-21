@@ -350,4 +350,30 @@ describe('GlobalInitiativeComposer', () => {
     expect(closeCreate).toHaveBeenCalledOnce();
     expect(onCreated).not.toHaveBeenCalled();
   });
+
+  it('continues with initiative properties retained while clearing its copy', async () => {
+    initiativePost.mockResolvedValue(jsonResponse(true, { id: 'initiative_more', name: 'First' }));
+    const { closeCreate, onCreated } = renderGlobalInitiative();
+
+    fireEvent.change(screen.getByLabelText('Initiative name'), { target: { value: 'First' } });
+    fireEvent.change(screen.getByLabelText('One-sentence summary'), {
+      target: { value: 'Clear this.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Priority — No priority' }));
+    fireEvent.click(await screen.findByText('High priority'));
+    fireEvent.click(screen.getByRole('switch', { name: 'Create more' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Initiative' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Initiative name')).toHaveValue('');
+      expect(screen.getByLabelText('One-sentence summary')).toHaveValue('');
+    });
+    expect(screen.getByRole('button', { name: 'Priority — High priority' })).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Initiative created. Ready to create another.',
+    );
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(closeCreate).not.toHaveBeenCalled();
+    expect(onCreated).toHaveBeenCalledOnce();
+  });
 });

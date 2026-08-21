@@ -30,10 +30,11 @@ import {
   type TeamOut,
 } from '@docket/types';
 import { DateRangePicker, EnumPicker } from '@docket/ui/components';
-import { type JSX, useCallback, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { enumOptions } from '@/components/pickers/options';
 import { TeamPicker } from '@/components/teams/team-picker';
@@ -59,6 +60,17 @@ function addDaysISO(startISO: string, days: number): string {
   const start = new Date(`${startISO}T00:00:00`);
   start.setDate(start.getDate() + days);
   return todayISODate(start);
+}
+
+/** Count calendar-day boundaries between two ISO dates without daylight-saving drift. */
+function calendarDayDistance(startISO: string, endISO: string): number {
+  const [startYear, startMonth, startDay] = startISO.split('-').map(Number);
+  const [endYear, endMonth, endDay] = endISO.split('-').map(Number);
+  return Math.round(
+    (Date.UTC(endYear ?? 0, (endMonth ?? 1) - 1, endDay ?? 1) -
+      Date.UTC(startYear ?? 0, (startMonth ?? 1) - 1, startDay ?? 1)) /
+      86_400_000,
+  );
 }
 
 /** Format an ISO date for a picker trigger, narrowing the app helper's `null` to `undefined`. */
@@ -106,6 +118,7 @@ export const CreateCycleDialog = withComposerReset(function CreateCycleComposer(
   onCreated,
 }: CreateCycleDialogProps): JSX.Element {
   const cycleNounLower = cycleNoun.toLowerCase();
+  const sequenceFloor = useRef(new Map<string, number>());
 
   const today = useMemo(() => todayISODate(), []);
 
@@ -116,6 +129,10 @@ export const CreateCycleDialog = withComposerReset(function CreateCycleComposer(
   const [status, setStatus] = useState<CycleStatus>('upcoming');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const continuation = useComposerContinuation({
+    creating,
+    successMessage: `${cycleNoun} created. Ready to create another.`,
+  });
 
   const teamId = teamOverride ?? defaultTeamId;
 
@@ -144,76 +161,106 @@ export const CreateCycleDialog = withComposerReset(function CreateCycleComposer(
   const canSubmit = teamId !== null && !teamsLoading && rangeValid;
 
   /** Create the cycle, then hand it to the parent for optimistic insertion + routing. */
-  const submit = useCallback(async (): Promise<void> => {
-    if (!teamId) {
-      setError(`Pick a team to create the ${cycleNounLower} in.`);
-      return;
-    }
-    if (startsAt === null || endsAt === null || endsAt <= startsAt) {
-      setError('Pick a start and end date — the end must come after the start.');
-      return;
-    }
-    setCreating(true);
-    setError(null);
-    try {
-      const trimmed = name.trim();
-      const res = await api.v1.orgs[':orgId'].cycles.$post({
-        param: { orgId },
-        json: {
-          teamId: TeamId.parse(teamId),
-          number: nextNumberForTeam(teamId),
-          startsAt,
-          endsAt,
-          status,
-          ...(trimmed.length > 0 ? { name: trimmed } : {}),
-        },
-      });
-      if (!res.ok) {
-        setError(
-          userErrorMessage(
-            await readProblemError(res, `Could not create the ${cycleNounLower}.`),
-            `Could not create the ${cycleNounLower}.`,
-          ),
-        );
+  const submit = useCallback(
+    async (continueCreating = false): Promise<void> => {
+      if (!teamId) {
+        setError(`Pick a team to create the ${cycleNounLower} in.`);
         return;
       }
-      const created = await res.json();
-      onOpenChange(false);
-      onCreated(created);
-    } catch (caught) {
-      setError(userErrorMessage(caught, `Something went wrong creating the ${cycleNounLower}.`));
-    } finally {
-      setCreating(false);
-    }
-  }, [
-    teamId,
-    startsAt,
-    endsAt,
-    status,
-    name,
-    orgId,
-    cycleNounLower,
-    nextNumberForTeam,
-    onOpenChange,
-    onCreated,
-  ]);
+      if (startsAt === null || endsAt === null || endsAt <= startsAt) {
+        setError('Pick a start and end date — the end must come after the start.');
+        return;
+      }
+      if (!continuation.beginSubmission()) return;
+      setCreating(true);
+      setError(null);
+      try {
+        const trimmed = name.trim();
+        const number = Math.max(
+          nextNumberForTeam(teamId),
+          sequenceFloor.current.get(teamId) ?? Number.NEGATIVE_INFINITY,
+        );
+        const durationDays = calendarDayDistance(startsAt, endsAt);
+        const res = await api.v1.orgs[':orgId'].cycles.$post({
+          param: { orgId },
+          json: {
+            teamId: TeamId.parse(teamId),
+            number,
+            startsAt,
+            endsAt,
+            status,
+            ...(trimmed.length > 0 ? { name: trimmed } : {}),
+          },
+        });
+        if (!res.ok) {
+          setError(
+            userErrorMessage(
+              await readProblemError(res, `Could not create the ${cycleNounLower}.`),
+              `Could not create the ${cycleNounLower}.`,
+            ),
+          );
+          return;
+        }
+        const created = await res.json();
+        sequenceFloor.current.set(teamId, number + 1);
+        onCreated(created);
+        if (continueCreating) {
+          continuation.completeContinuation(() => {
+            const nextStartsAt = addDaysISO(endsAt, 1);
+            setName('');
+            setStartsAt(nextStartsAt);
+            setEndsAt(addDaysISO(nextStartsAt, durationDays));
+          });
+          return;
+        }
+        onOpenChange(false);
+      } catch (caught) {
+        setError(userErrorMessage(caught, `Something went wrong creating the ${cycleNounLower}.`));
+      } finally {
+        continuation.finishSubmission();
+        setCreating(false);
+      }
+    },
+    [
+      teamId,
+      startsAt,
+      endsAt,
+      status,
+      name,
+      orgId,
+      cycleNounLower,
+      nextNumberForTeam,
+      onOpenChange,
+      onCreated,
+      continuation,
+    ],
+  );
 
   return (
     <ComposerShell
       open={open}
       onOpenChange={onOpenChange}
       heading={`New ${cycleNoun.toLowerCase()}`}
+      continuation={{
+        checked: continuation.createMore,
+        onCheckedChange: continuation.setCreateMore,
+        onSubmit: () => {
+          void submit(true);
+        },
+      }}
       title={name}
       onTitleChange={setName}
+      titleInputRef={continuation.titleInputRef}
       titlePlaceholder={titlePlaceholder}
       body=""
       onBodyChange={() => {
         /* Cycles carry no description; the body field is intentionally hidden. */
       }}
       error={error}
+      statusMessage={continuation.statusMessage}
       creating={creating}
       canSubmit={canSubmit}
-      onSubmit={() => void submit()}
+      onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${cycleNoun}`}
     >
       <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />

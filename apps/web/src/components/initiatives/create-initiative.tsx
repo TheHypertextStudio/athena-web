@@ -40,6 +40,7 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { templateMerge } from '@/components/templates/merge';
@@ -105,7 +106,7 @@ export interface InitiativeGlobalCreation {
   /** The signed-in member's Actor id in the destination, for personal templates. */
   readonly currentActorId: string | null;
   /** Complete destination-owned invalidation, callback, and routing after creation. */
-  readonly onCreated: (initiative: InitiativeOut) => void;
+  readonly onCreated: (initiative: InitiativeOut, continueCreating: boolean) => void;
 }
 
 /** Props for {@link CreateInitiativeDialog}. */
@@ -159,6 +160,10 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [legacyTemplateSlotVisible, setLegacyTemplateSlotVisible] = useState(false);
+  const continuation = useComposerContinuation({
+    creating,
+    successMessage: `${initiativeNoun} created. Ready to create another.`,
+  });
 
   // Keep copy, dates, and enum choices portable while dropping the prior workspace's person id.
   useEffect(() => {
@@ -173,48 +178,71 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
     draft.name.trim().length > 0 && destinationReady && (globalCreation?.canContribute ?? true);
 
   /** Create the theme with all set properties, then hand it to the parent. */
-  const submit = useCallback(async (): Promise<void> => {
-    const trimmed = draft.name.trim();
-    if (trimmed.length === 0 || !canSubmit) return;
-    setCreating(true);
-    setError(null);
-    try {
-      const trimmedBody = draft.description.trim();
-      const res = await api.v1.orgs[':orgId'].initiatives.$post({
-        param: { orgId },
-        json: {
-          name: trimmed,
-          ...(draft.summary.trim() ? { summary: draft.summary.trim() } : {}),
-          status: draft.status,
-          priority: draft.priority,
-          updateCadence: draft.updateCadence,
-          ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-          ...(draft.ownerId ? { ownerId: ActorId.parse(draft.ownerId) } : {}),
-          ...(draft.targetDate ? { targetDate: draft.targetDate } : {}),
-          ...(draft.health ? { health: draft.health } : {}),
-        },
-      });
-      if (!res.ok) {
+  const submit = useCallback(
+    async (continueCreating = false): Promise<void> => {
+      const trimmed = draft.name.trim();
+      if (trimmed.length === 0 || !canSubmit || !continuation.beginSubmission()) return;
+      setCreating(true);
+      setError(null);
+      try {
+        const trimmedBody = draft.description.trim();
+        const res = await api.v1.orgs[':orgId'].initiatives.$post({
+          param: { orgId },
+          json: {
+            name: trimmed,
+            ...(draft.summary.trim() ? { summary: draft.summary.trim() } : {}),
+            status: draft.status,
+            priority: draft.priority,
+            updateCadence: draft.updateCadence,
+            ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
+            ...(draft.ownerId ? { ownerId: ActorId.parse(draft.ownerId) } : {}),
+            ...(draft.targetDate ? { targetDate: draft.targetDate } : {}),
+            ...(draft.health ? { health: draft.health } : {}),
+          },
+        });
+        if (!res.ok) {
+          setError(
+            userErrorMessage(
+              await readProblemError(res, `Could not create the ${initiativeNounLower}.`),
+              `Could not create the ${initiativeNounLower}.`,
+            ),
+          );
+          return;
+        }
+        const created = await res.json();
+        if (globalCreation !== undefined) {
+          globalCreation.onCreated(created, continueCreating);
+        } else {
+          onCreated(created);
+        }
+        if (continueCreating) {
+          continuation.completeContinuation(() => {
+            updateDraft(() => ({ name: '', summary: '', description: '' }));
+          });
+          return;
+        }
+        onOpenChange(false);
+      } catch (caught) {
         setError(
-          userErrorMessage(
-            await readProblemError(res, `Could not create the ${initiativeNounLower}.`),
-            `Could not create the ${initiativeNounLower}.`,
-          ),
+          userErrorMessage(caught, `Something went wrong creating the ${initiativeNounLower}.`),
         );
-        return;
+      } finally {
+        continuation.finishSubmission();
+        setCreating(false);
       }
-      const created = await res.json();
-      globalCreation?.onCreated(created);
-      onOpenChange(false);
-      if (globalCreation === undefined) onCreated(created);
-    } catch (caught) {
-      setError(
-        userErrorMessage(caught, `Something went wrong creating the ${initiativeNounLower}.`),
-      );
-    } finally {
-      setCreating(false);
-    }
-  }, [canSubmit, draft, globalCreation, orgId, initiativeNounLower, onOpenChange, onCreated]);
+    },
+    [
+      canSubmit,
+      continuation,
+      draft,
+      globalCreation,
+      orgId,
+      initiativeNounLower,
+      onOpenChange,
+      onCreated,
+      updateDraft,
+    ],
+  );
 
   return (
     <ComposerShell
@@ -284,10 +312,18 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
           />
         ) : undefined
       }
+      continuation={{
+        checked: continuation.createMore,
+        onCheckedChange: continuation.setCreateMore,
+        onSubmit: () => {
+          void submit(true);
+        },
+      }}
       title={draft.name}
       onTitleChange={(next) => {
         setField('name', next);
       }}
+      titleInputRef={continuation.titleInputRef}
       titlePlaceholder={`${initiativeNoun} name`}
       summary={draft.summary}
       onSummaryChange={(next) => {
@@ -296,14 +332,17 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
       body={draft.description}
+      bodyResetKey={continuation.bodyResetGeneration}
       onBodyChange={(next) => {
         setField('description', next);
       }}
       bodyPlaceholder="Add a description…"
+      mentionOrgId={orgId}
       error={error ?? globalCreation?.loadError ?? null}
+      statusMessage={continuation.statusMessage}
       creating={creating}
       canSubmit={canSubmit}
-      onSubmit={() => void submit()}
+      onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${initiativeNoun}`}
     >
       <InitiativeComposerPickers
@@ -418,7 +457,7 @@ function GlobalInitiativeComposerBody({
         loadError: creation.loadError,
         canContribute: creation.permissions.canContribute,
         currentActorId,
-        onCreated: (initiative) => {
+        onCreated: (initiative, continueCreating) => {
           completeCreateObject({
             created: initiative,
             initialWorkspaceId,
@@ -429,6 +468,7 @@ function GlobalInitiativeComposerBody({
             invalidate: (queryKey) => {
               void queryClient.invalidateQueries({ queryKey });
             },
+            navigationEnabled: !continueCreating,
             seed: () => {
               seedInitiativeRecord(queryClient, initiativeOrgId, initiative);
             },

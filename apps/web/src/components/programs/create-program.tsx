@@ -35,6 +35,7 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { templateMerge } from '@/components/templates/merge';
@@ -85,7 +86,7 @@ export interface ProgramGlobalCreation {
   /** The signed-in member's Actor id in the destination, for personal templates. */
   readonly currentActorId: string | null;
   /** Complete destination-owned invalidation, callback, and routing after creation. */
-  readonly onCreated: (program: ProgramOut) => void;
+  readonly onCreated: (program: ProgramOut, continueCreating: boolean) => void;
 }
 
 /** Props for {@link CreateProgramDialog}. */
@@ -146,6 +147,10 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [legacyTemplateSlotVisible, setLegacyTemplateSlotVisible] = useState(false);
+  const continuation = useComposerContinuation({
+    creating,
+    successMessage: `${programNoun} created. Ready to create another.`,
+  });
 
   // Keep copy and generic enum choices portable while dropping the prior workspace's person id.
   useEffect(() => {
@@ -160,44 +165,69 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
     draft.name.trim().length > 0 && destinationReady && (globalCreation?.canManage ?? true);
 
   /** Create the program with all set properties, then hand it to the parent. */
-  const submit = useCallback(async (): Promise<void> => {
-    const trimmed = draft.name.trim();
-    if (trimmed.length === 0 || !canSubmit) return;
-    setCreating(true);
-    setError(null);
-    try {
-      const trimmedBody = draft.description.trim();
-      const res = await api.v1.orgs[':orgId'].programs.$post({
-        param: { orgId },
-        json: {
-          name: trimmed,
-          status: draft.status,
-          visibility: draft.visibility,
-          ...(draft.summary.trim().length > 0 ? { summary: draft.summary.trim() } : {}),
-          ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-          ...(draft.ownerId ? { ownerId: ActorId.parse(draft.ownerId) } : {}),
-          ...(draft.health ? { health: draft.health } : {}),
-        },
-      });
-      if (!res.ok) {
+  const submit = useCallback(
+    async (continueCreating = false): Promise<void> => {
+      const trimmed = draft.name.trim();
+      if (trimmed.length === 0 || !canSubmit || !continuation.beginSubmission()) return;
+      setCreating(true);
+      setError(null);
+      try {
+        const trimmedBody = draft.description.trim();
+        const res = await api.v1.orgs[':orgId'].programs.$post({
+          param: { orgId },
+          json: {
+            name: trimmed,
+            status: draft.status,
+            visibility: draft.visibility,
+            ...(draft.summary.trim().length > 0 ? { summary: draft.summary.trim() } : {}),
+            ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
+            ...(draft.ownerId ? { ownerId: ActorId.parse(draft.ownerId) } : {}),
+            ...(draft.health ? { health: draft.health } : {}),
+          },
+        });
+        if (!res.ok) {
+          setError(
+            userErrorMessage(
+              await readProblemError(res, `Could not create the ${programNounLower}.`),
+              `Could not create the ${programNounLower}.`,
+            ),
+          );
+          return;
+        }
+        const created = await res.json();
+        if (globalCreation !== undefined) {
+          globalCreation.onCreated(created, continueCreating);
+        } else {
+          onCreated(created);
+        }
+        if (continueCreating) {
+          continuation.completeContinuation(() => {
+            updateDraft(() => ({ name: '', summary: '', description: '' }));
+          });
+          return;
+        }
+        onOpenChange(false);
+      } catch (caught) {
         setError(
-          userErrorMessage(
-            await readProblemError(res, `Could not create the ${programNounLower}.`),
-            `Could not create the ${programNounLower}.`,
-          ),
+          userErrorMessage(caught, `Something went wrong creating the ${programNounLower}.`),
         );
-        return;
+      } finally {
+        continuation.finishSubmission();
+        setCreating(false);
       }
-      const created = await res.json();
-      globalCreation?.onCreated(created);
-      onOpenChange(false);
-      if (globalCreation === undefined) onCreated(created);
-    } catch (caught) {
-      setError(userErrorMessage(caught, `Something went wrong creating the ${programNounLower}.`));
-    } finally {
-      setCreating(false);
-    }
-  }, [canSubmit, draft, globalCreation, orgId, programNounLower, onOpenChange, onCreated]);
+    },
+    [
+      canSubmit,
+      continuation,
+      draft,
+      globalCreation,
+      orgId,
+      programNounLower,
+      onOpenChange,
+      onCreated,
+      updateDraft,
+    ],
+  );
 
   return (
     <ComposerShell
@@ -267,10 +297,18 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
           />
         ) : undefined
       }
+      continuation={{
+        checked: continuation.createMore,
+        onCheckedChange: continuation.setCreateMore,
+        onSubmit: () => {
+          void submit(true);
+        },
+      }}
       title={draft.name}
       onTitleChange={(next) => {
         setField('name', next);
       }}
+      titleInputRef={continuation.titleInputRef}
       titlePlaceholder={`${programNoun} name`}
       summary={draft.summary}
       onSummaryChange={(next) => {
@@ -279,14 +317,17 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
       body={draft.description}
+      bodyResetKey={continuation.bodyResetGeneration}
       onBodyChange={(next) => {
         setField('description', next);
       }}
       bodyPlaceholder="Add a description…"
+      mentionOrgId={orgId}
       error={error ?? globalCreation?.loadError ?? null}
+      statusMessage={continuation.statusMessage}
       creating={creating}
       canSubmit={canSubmit}
-      onSubmit={() => void submit()}
+      onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${programNoun}`}
     >
       <ProgramComposerPickers
@@ -393,7 +434,7 @@ function GlobalProgramComposerBody({
         loadError: creation.loadError,
         canManage: creation.permissions.canManage,
         currentActorId,
-        onCreated: (program) => {
+        onCreated: (program, continueCreating) => {
           completeCreateObject({
             created: program,
             initialWorkspaceId,
@@ -404,6 +445,7 @@ function GlobalProgramComposerBody({
             invalidate: (queryKey) => {
               void queryClient.invalidateQueries({ queryKey });
             },
+            navigationEnabled: !continueCreating,
             seed: () => {
               seedProgramRecord(queryClient, programOrgId, program);
             },

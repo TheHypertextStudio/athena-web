@@ -417,4 +417,29 @@ describe('CreateProgramDialog — visibility picker', () => {
     });
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'prog_1' }));
   });
+
+  it('continues with program properties retained while clearing its copy', async () => {
+    programPost.mockResolvedValue(jsonResponse(true, { id: 'prog_more', name: 'First' }));
+    const { onCreated, onOpenChange } = renderComposer();
+
+    fireEvent.change(screen.getByLabelText('Program name'), { target: { value: 'First' } });
+    fireEvent.change(screen.getByLabelText('One-sentence summary'), {
+      target: { value: 'Clear this.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Visibility — Public' }));
+    choosePickerOption(/Private/);
+    fireEvent.click(screen.getByRole('switch', { name: 'Create more' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Program' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Program name')).toHaveValue('');
+      expect(screen.getByLabelText('One-sentence summary')).toHaveValue('');
+    });
+    expect(screen.getByRole('button', { name: 'Visibility — Private' })).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Program created. Ready to create another.',
+    );
+    expect(onCreated).toHaveBeenCalledOnce();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
 });

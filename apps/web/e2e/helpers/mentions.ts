@@ -23,10 +23,10 @@ export interface MentionFixtures {
   readonly taskTitle: string;
 }
 
-/** POST `path` and return the created row's id, failing the test on a non-2xx. */
+/** POST `path` and return the created row's id, failing unless the API creates a resource. */
 async function create(page: Page, path: string, body: unknown): Promise<string> {
   const result = await apiFetch(page, path, { method: 'POST', body });
-  expect(result.status, `${path} should create`).toBe(200);
+  expect(result.status, `${path} should create`).toBe(201);
   return (result.body as { id: string }).id;
 }
 

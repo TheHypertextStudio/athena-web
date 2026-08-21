@@ -27,6 +27,7 @@ import { type JSX, useCallback, useId, useState } from 'react';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { completeCreateObject } from '@/components/create-object/create-object-completion';
 import {
@@ -58,7 +59,7 @@ export interface TeamGlobalCreation {
   /** Whether the signed-in member may manage the destination. */
   readonly canManage: boolean;
   /** Complete destination-owned invalidation, callback, and routing after creation. */
-  readonly onCreated: (team: TeamOut) => void;
+  readonly onCreated: (team: TeamOut, continueCreating: boolean) => void;
 }
 
 /** Props for {@link CreateTeamDialog}. */
@@ -106,6 +107,10 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
   const [agentGuidance, setAgentGuidance] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const continuation = useComposerContinuation({
+    creating,
+    successMessage: `${teamNoun} created. Ready to create another.`,
+  });
 
   /** Update the name, keeping the key in sync until the user takes the key over. */
   const onNameChange = useCallback(
@@ -123,56 +128,75 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
     (globalCreation?.canManage ?? true);
 
   /** Create the team with the default workflow, then prepend it via the parent. */
-  const submit = useCallback(async (): Promise<void> => {
-    if (!canSubmit) return;
-    setCreating(true);
-    setError(null);
-    try {
-      const trimmedDescription = description.trim();
-      const trimmedGuidance = agentGuidance.trim();
-      const res = await api.v1.orgs[':orgId'].teams.$post({
-        param: { orgId },
-        json: {
-          name: name.trim(),
-          key: key.trim().toUpperCase(),
-          triageEnabled,
-          ...(summary.trim().length > 0 ? { summary: summary.trim() } : {}),
-          ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
-          ...(trimmedGuidance.length > 0 ? { agentGuidance: trimmedGuidance } : {}),
-        },
-      });
-      if (!res.ok) {
-        setError(
-          userErrorMessage(
-            await readProblemError(res, `Could not create the ${teamNounLower}.`),
-            `Could not create the ${teamNounLower}.`,
-          ),
-        );
-        return;
+  const submit = useCallback(
+    async (continueCreating = false): Promise<void> => {
+      if (!canSubmit || !continuation.beginSubmission()) return;
+      setCreating(true);
+      setError(null);
+      try {
+        const trimmedDescription = description.trim();
+        const trimmedGuidance = agentGuidance.trim();
+        const res = await api.v1.orgs[':orgId'].teams.$post({
+          param: { orgId },
+          json: {
+            name: name.trim(),
+            key: key.trim().toUpperCase(),
+            triageEnabled,
+            ...(summary.trim().length > 0 ? { summary: summary.trim() } : {}),
+            ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
+            ...(trimmedGuidance.length > 0 ? { agentGuidance: trimmedGuidance } : {}),
+          },
+        });
+        if (!res.ok) {
+          setError(
+            userErrorMessage(
+              await readProblemError(res, `Could not create the ${teamNounLower}.`),
+              `Could not create the ${teamNounLower}.`,
+            ),
+          );
+          return;
+        }
+        const created = await res.json();
+        if (globalCreation !== undefined) {
+          globalCreation.onCreated(created, continueCreating);
+        } else {
+          onCreated(created);
+        }
+        if (continueCreating) {
+          continuation.completeContinuation(() => {
+            setName('');
+            setKey('');
+            setKeyDirty(false);
+            setSummary('');
+            setDescription('');
+            setAgentGuidance('');
+          });
+          return;
+        }
+        onOpenChange(false);
+      } catch (caught) {
+        setError(userErrorMessage(caught, `Something went wrong creating the ${teamNounLower}.`));
+      } finally {
+        continuation.finishSubmission();
+        setCreating(false);
       }
-      const created = await res.json();
-      globalCreation?.onCreated(created);
-      onOpenChange(false);
-      if (globalCreation === undefined) onCreated(created);
-    } catch (caught) {
-      setError(userErrorMessage(caught, `Something went wrong creating the ${teamNounLower}.`));
-    } finally {
-      setCreating(false);
-    }
-  }, [
-    canSubmit,
-    name,
-    key,
-    triageEnabled,
-    summary,
-    description,
-    agentGuidance,
-    orgId,
-    onOpenChange,
-    onCreated,
-    globalCreation,
-    teamNounLower,
-  ]);
+    },
+    [
+      canSubmit,
+      name,
+      key,
+      triageEnabled,
+      summary,
+      description,
+      agentGuidance,
+      orgId,
+      onOpenChange,
+      onCreated,
+      globalCreation,
+      teamNounLower,
+      continuation,
+    ],
+  );
 
   return (
     <ComposerShell
@@ -180,20 +204,31 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
       onOpenChange={onOpenChange}
       heading={`New ${teamNounLower}`}
       contextRow={globalCreation ? <WorkspacePicker disabled={creating} /> : undefined}
+      continuation={{
+        checked: continuation.createMore,
+        onCheckedChange: continuation.setCreateMore,
+        onSubmit: () => {
+          void submit(true);
+        },
+      }}
       title={name}
       onTitleChange={onNameChange}
+      titleInputRef={continuation.titleInputRef}
       titlePlaceholder={`${teamNoun} name`}
       summary={summary}
       onSummaryChange={setSummary}
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
       body={description}
+      bodyResetKey={continuation.bodyResetGeneration}
       onBodyChange={setDescription}
       bodyPlaceholder={`What does this ${teamNounLower} own? (optional)`}
+      mentionOrgId={orgId}
       error={error ?? globalCreation?.loadError ?? null}
+      statusMessage={continuation.statusMessage}
       creating={creating}
       canSubmit={canSubmit}
-      onSubmit={() => void submit()}
+      onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${teamNounLower}`}
     >
       <div className="flex flex-1 flex-wrap items-end gap-x-4 gap-y-3">
@@ -326,7 +361,7 @@ function GlobalTeamComposerBody({
         ready: destinationReady,
         loadError: creation.loadError,
         canManage: creation.permissions.canManage,
-        onCreated: (team) => {
+        onCreated: (team, continueCreating) => {
           completeCreateObject({
             created: team,
             initialWorkspaceId,
@@ -337,6 +372,7 @@ function GlobalTeamComposerBody({
             invalidate: (queryKey) => {
               void queryClient.invalidateQueries({ queryKey });
             },
+            navigationEnabled: !continueCreating,
             openDestination: () => {
               router.push(`/orgs/${teamOrgId}/teams`);
             },

@@ -42,6 +42,7 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { templateMerge } from '@/components/templates/merge';
@@ -105,7 +106,11 @@ export interface ProjectGlobalCreation {
   /** The signed-in member's Actor id in the destination, for personal templates. */
   readonly currentActorId: string | null;
   /** Complete destination-owned invalidation, callback, and routing after creation. */
-  readonly onCreated: (project: ProjectOut, references: ProjectCreationReferences) => void;
+  readonly onCreated: (
+    project: ProjectOut,
+    references: ProjectCreationReferences,
+    continueCreating: boolean,
+  ) => void;
 }
 
 /** Props for {@link CreateProjectDialog}. */
@@ -184,6 +189,10 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [legacyTemplateSlotVisible, setLegacyTemplateSlotVisible] = useState(false);
+  const continuation = useComposerContinuation({
+    creating,
+    successMessage: `${projectNoun} created. Ready to create another.`,
+  });
 
   const teamId = draft.teamOverride ?? defaultTeamId;
 
@@ -231,55 +240,83 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
     (globalCreation?.canContribute ?? true);
 
   /** Create the project with all set properties, then hand it to the parent. */
-  const submit = useCallback(async (): Promise<void> => {
-    const trimmed = draft.name.trim();
-    if (trimmed.length === 0 || !canSubmit) return;
-    setCreating(true);
-    setError(null);
-    try {
-      const trimmedBody = draft.description.trim();
-      const res = await api.v1.orgs[':orgId'].projects.$post({
-        param: { orgId },
-        json: {
-          name: trimmed,
-          ...(draft.summary.trim().length > 0 ? { summary: draft.summary.trim() } : {}),
-          ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-          ...(teamId ? { teamId: TeamId.parse(teamId) } : {}),
-          ...(draft.leadId ? { leadId: ActorId.parse(draft.leadId) } : {}),
-          ...(draft.programId ? { programId: ProgramId.parse(draft.programId) } : {}),
-          status: draft.status,
-          ...(draft.health ? { health: draft.health } : {}),
-          ...(draft.startDate ? { startDate: draft.startDate } : {}),
-          ...(draft.targetDate ? { targetDate: draft.targetDate } : {}),
-          ...(draft.initiativeIds.length > 0
-            ? { initiativeIds: draft.initiativeIds.map((id) => InitiativeId.parse(id)) }
-            : {}),
-        },
-      });
-      if (!res.ok) {
-        setError(
-          userErrorMessage(
-            await readProblemError(res, `Could not create the ${projectNounLower}.`),
-            `Could not create the ${projectNounLower}.`,
-          ),
-        );
-        return;
-      }
-      const created = await res.json();
-      if (globalCreation !== undefined) {
-        globalCreation.onCreated(created, {
-          programId: draft.programId,
-          initiativeIds: draft.initiativeIds,
+  const submit = useCallback(
+    async (continueCreating = false): Promise<void> => {
+      const trimmed = draft.name.trim();
+      if (trimmed.length === 0 || !canSubmit || !continuation.beginSubmission()) return;
+      setCreating(true);
+      setError(null);
+      try {
+        const trimmedBody = draft.description.trim();
+        const res = await api.v1.orgs[':orgId'].projects.$post({
+          param: { orgId },
+          json: {
+            name: trimmed,
+            ...(draft.summary.trim().length > 0 ? { summary: draft.summary.trim() } : {}),
+            ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
+            ...(teamId ? { teamId: TeamId.parse(teamId) } : {}),
+            ...(draft.leadId ? { leadId: ActorId.parse(draft.leadId) } : {}),
+            ...(draft.programId ? { programId: ProgramId.parse(draft.programId) } : {}),
+            status: draft.status,
+            ...(draft.health ? { health: draft.health } : {}),
+            ...(draft.startDate ? { startDate: draft.startDate } : {}),
+            ...(draft.targetDate ? { targetDate: draft.targetDate } : {}),
+            ...(draft.initiativeIds.length > 0
+              ? { initiativeIds: draft.initiativeIds.map((id) => InitiativeId.parse(id)) }
+              : {}),
+          },
         });
+        if (!res.ok) {
+          setError(
+            userErrorMessage(
+              await readProblemError(res, `Could not create the ${projectNounLower}.`),
+              `Could not create the ${projectNounLower}.`,
+            ),
+          );
+          return;
+        }
+        const created = await res.json();
+        if (globalCreation !== undefined) {
+          globalCreation.onCreated(
+            created,
+            {
+              programId: draft.programId,
+              initiativeIds: draft.initiativeIds,
+            },
+            continueCreating,
+          );
+        } else {
+          onCreated(created);
+        }
+        if (continueCreating) {
+          continuation.completeContinuation(() => {
+            updateDraft(() => ({ name: '', summary: '', description: '' }));
+          });
+          return;
+        }
+        onOpenChange(false);
+      } catch (caught) {
+        setError(
+          userErrorMessage(caught, `Something went wrong creating the ${projectNounLower}.`),
+        );
+      } finally {
+        continuation.finishSubmission();
+        setCreating(false);
       }
-      onOpenChange(false);
-      if (globalCreation === undefined) onCreated(created);
-    } catch (caught) {
-      setError(userErrorMessage(caught, `Something went wrong creating the ${projectNounLower}.`));
-    } finally {
-      setCreating(false);
-    }
-  }, [canSubmit, draft, globalCreation, teamId, orgId, projectNounLower, onOpenChange, onCreated]);
+    },
+    [
+      canSubmit,
+      continuation,
+      draft,
+      globalCreation,
+      teamId,
+      orgId,
+      projectNounLower,
+      onOpenChange,
+      onCreated,
+      updateDraft,
+    ],
+  );
 
   return (
     <ComposerShell
@@ -351,10 +388,18 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
           />
         ) : undefined
       }
+      continuation={{
+        checked: continuation.createMore,
+        onCheckedChange: continuation.setCreateMore,
+        onSubmit: () => {
+          void submit(true);
+        },
+      }}
       title={draft.name}
       onTitleChange={(next) => {
         setField('name', next);
       }}
+      titleInputRef={continuation.titleInputRef}
       titlePlaceholder={`${projectNoun} name`}
       summary={draft.summary}
       onSummaryChange={(next) => {
@@ -363,14 +408,17 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
       body={draft.description}
+      bodyResetKey={continuation.bodyResetGeneration}
       onBodyChange={(next) => {
         setField('description', next);
       }}
       bodyPlaceholder="Add a description…"
+      mentionOrgId={orgId}
       error={error ?? globalCreation?.loadError ?? null}
+      statusMessage={continuation.statusMessage}
       creating={creating}
       canSubmit={canSubmit}
-      onSubmit={() => void submit()}
+      onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${projectNoun}`}
     >
       <ProjectComposerPickers
@@ -496,7 +544,7 @@ function GlobalProjectComposerBody({
         loadError: creation.loadError,
         canContribute: creation.permissions.canContribute,
         currentActorId,
-        onCreated: (project, references) => {
+        onCreated: (project, references, continueCreating) => {
           const invalidationKeys: (readonly unknown[])[] = [
             queryKeys.projects(projectOrgId),
             queryKeys.portfolio(),
@@ -517,6 +565,7 @@ function GlobalProjectComposerBody({
             invalidate: (queryKey) => {
               void queryClient.invalidateQueries({ queryKey });
             },
+            navigationEnabled: !continueCreating,
             seed: () => {
               seedProjectRecord(queryClient, projectOrgId, project);
             },

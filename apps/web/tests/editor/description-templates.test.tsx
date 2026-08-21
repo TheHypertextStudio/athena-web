@@ -149,7 +149,15 @@ describe('description templates inside an existing entity editor', () => {
 
     const surface = await screen.findByRole('textbox', { name: 'Description' });
     const action = await screen.findByRole('button', { name: 'Start from template' });
-    expect(assertDefined(action.closest('[data-editor-surface]'))).toContainElement(surface);
+    const editorSurface = assertDefined(action.closest('[data-editor-surface]'));
+    expect(editorSurface).toContainElement(surface);
+    expect(editorSurface).toHaveClass('flex-1');
+    expect(surface).toHaveClass('flex-1');
+    expect(assertDefined(action.closest('[data-editor-empty-actions]'))).toHaveClass(
+      'absolute',
+      'top-8',
+    );
+    expect(action).toHaveClass('border-outline-variant', 'border');
 
     await user.click(surface);
     await user.keyboard('A direction I wrote');

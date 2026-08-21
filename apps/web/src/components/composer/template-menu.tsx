@@ -104,7 +104,7 @@ export function TemplateMenu({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant={compact ? 'outline' : 'ghost'}
           size={compact ? undefined : 'sm'}
           controlSize={compact ? 'sm' : undefined}
           disabled={disabled}

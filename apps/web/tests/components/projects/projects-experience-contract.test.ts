@@ -5,6 +5,10 @@ import { describe, expect, it } from 'vitest';
 
 const root = resolve(import.meta.dirname, '../../../../../');
 const overviewPath = join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx');
+const workPagePath = join(root, 'apps/web/src/components/work-views/work-view-page.tsx');
+const workListPath = join(root, 'apps/web/src/components/work-views/work-list.tsx');
+const timelinePath = join(root, 'apps/web/src/components/work-views/project-timeline-adapter.tsx');
+const dependencyPath = join(root, 'apps/web/src/components/work-views/project-dependency-lens.tsx');
 const detailPath = join(
   root,
   'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx',
@@ -21,65 +25,55 @@ function source(path: string): string {
 describe('Projects experience contract', () => {
   it('keeps list, dependencies, and timeline as equal lenses over shared view state', () => {
     const overview = source(overviewPath);
+    const workPage = source(workPagePath);
     // The list-page arrangement + canonical title token live once in the shared layout; the page
     // adopts ListPageLayout and supplies content, rather than restating the skeleton or the token.
     expect(source(pageLayoutPath)).toContain('text-headline-medium');
-    expect(overview).toContain('<ListPageLayout');
-    expect(overview).toContain("type Lens = 'list' | 'dependencies' | 'timeline'");
-    expect(overview).toContain('<FilterToolbar');
+    expect(overview).toContain('<WorkViewPage');
+    expect(workPage).toContain('<ListPageLayout');
+    expect(workPage).toContain('<WorkViewToolbar');
     // The dependencies lens now renders the shared React Flow canvas (lazy-loaded) instead of the
     // old hand-rolled SVG DependencyLens.
-    expect(overview).toContain('<ProjectGraphPanel');
+    expect(source(dependencyPath)).toContain('<ProjectGraphPanel');
     // The timeline lens renders the shared, entity-generic timeline engine rather than a
     // Projects-only implementation, so its axis, zoom, markers, and drag behavior are the same
     // code the Hub portfolio runs.
-    expect(overview).toContain('<TimelineCanvas');
-    expect(overview).toContain('buildProjectTimelineCatalog');
-    expect(overview).not.toContain('TimelineLens');
+    expect(source(timelinePath)).toContain('<TimelineCanvas');
+    expect(source(timelinePath)).toContain('buildProjectViewTimelineCatalog');
+    expect(workPage).not.toContain('TimelineLens');
   });
 
   it('renders grouping in both lenses instead of flattening it away', () => {
-    const overview = source(overviewPath);
-    // Regression guard: the page previously did
-    // `applied.groups ? applied.groups.flatMap((group) => group.rows) : applied.rows`
-    // for every lens, which discarded the band headers and made "Group by" a no-op on screen.
-    // Both the list and the timeline now consume `applied` and render its groups.
-    expect(overview).toContain('applied.groups');
-    expect(overview).toContain('applied={applied}');
-    expect(overview).toContain('<ListLens');
+    const workPage = source(workPagePath);
+    const workList = source(workListPath);
+    expect(workPage).toContain('groups={controller.response?.groups ?? []}');
+    expect(workPage).toContain('groupPages={controller.groupPages}');
+    expect(workList).toContain('subGroupBy=');
   });
 
   it('preserves dense, stable rows and full columns inside a local scroller', () => {
-    const overview = source(overviewPath);
-    expect(overview).toContain('overflow-x-auto overscroll-x-contain');
-    expect(overview).toContain("from '@/components/views/roster-grid'");
-    expect(overview).toContain('min-w-[72rem]');
-    expect(overview).toContain('min-h-14');
-    expect(overview).toContain('ROSTER_DATA_CELL_CLASS');
-    expect(overview).toContain('line-clamp-1 max-w-[52ch]');
-    expect(overview).not.toContain('min-h-[72px]');
-    expect(overview).toContain('{item.summary ? (');
+    const workList = source(workListPath);
+    expect(workList).toContain('<ListView');
+    expect(workList).toContain('className="h-full min-h-0"');
+    expect(workList).toContain('truncate');
   });
 
   it('keeps planning semantics in Project controls, lists, and timeline descriptions', () => {
-    const overview = source(overviewPath);
     const detail = source(detailPath);
-    const timelineCatalog = source(
-      join(root, 'apps/web/src/components/projects/project-timeline-catalog.ts'),
-    );
+    const timeline = source(timelinePath);
 
-    expect(overview).toContain('formatProjectTarget(item)');
-    expect(overview).toContain('startDateResolution: null');
-    expect(overview).toContain('targetDateResolution: null');
     expect(detail).toContain('startDateResolution={project.startDateResolution}');
     expect(detail).toContain('targetDateResolution={project.targetDateResolution}');
-    expect(timelineCatalog).toContain('spanLabel: formatProjectTimelineSpan');
+    expect(timeline).toContain('row.startDate');
+    expect(timeline).toContain('row.targetDate');
+    expect(timeline).toContain('milestones');
   });
 
-  it('uses decoupled customizable display icons with 40px targets', () => {
-    const overview = source(overviewPath);
-    expect(overview).toContain('<EntityIconPicker');
-    expect(overview).toContain("subjectType: 'project'");
+  it('uses target-derived properties instead of page-owned display columns', () => {
+    const workPage = source(workPagePath);
+    const workList = source(workListPath);
+    expect(workPage).toContain("properties: ['status', 'priority', 'health', 'lead'");
+    expect(workList).toContain('workViewDisplayFieldCatalog(target)');
   });
 
   it('keeps Project identity and work ahead of progressive metadata', () => {

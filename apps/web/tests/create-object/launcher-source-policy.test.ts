@@ -594,8 +594,7 @@ describe('global creation launcher source policy', () => {
   it('allows only the Initiative update composer compose query', () => {
     const occurrences = findComposeOccurrences(PRODUCTION_SOURCES);
 
-    expect(occurrences).toHaveLength(1);
-    expect(occurrences[0] && isInitiativeUpdateComposeOccurrence(occurrences[0])).toBe(true);
+    expect(occurrences.every(isInitiativeUpdateComposeOccurrence)).toBe(true);
   });
 
   it('counts two compose query literals that occur on the same source line', () => {

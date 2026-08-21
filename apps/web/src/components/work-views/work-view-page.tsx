@@ -1,0 +1,352 @@
+'use client';
+
+import {
+  InitiativeViewDefinition,
+  type InitiativeViewRow,
+  ProgramViewDefinition,
+  ProjectViewDefinition,
+  type ProjectViewRow,
+  TaskViewDefinition,
+  ViewInstanceKey,
+} from '@docket/types';
+import { EmptyState } from '@docket/ui/components';
+import { FolderKanban, Layers, ListChecks, Plus, Target, Workflow } from '@docket/ui/icons';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Skeleton,
+} from '@docket/ui/primitives';
+import type { ViewTarget } from '@docket/work/view-contract';
+import { useRouter } from 'next/navigation';
+import { type JSX, useState } from 'react';
+
+import { useCreateObject } from '@/components/create-object/create-object-provider';
+import { ListPageLayout } from '@/components/views/page-layout';
+import { userErrorMessage } from '@/lib/problem';
+
+import { InitiativeTimeline } from './initiative-timeline';
+import { ProjectDependencyLens } from './project-dependency-lens';
+import { ProjectTimelineAdapter } from './project-timeline-adapter';
+import type { WorkViewRowFor } from './renderer-types';
+import { useWorkView } from './use-work-view';
+import { useWorkViewOrder } from './use-work-view-order';
+import type { WorkViewDefinitionFor } from './view-state';
+import { WorkBoard } from './work-board';
+import { WorkList } from './work-list';
+import { WorkViewToolbar } from './work-view-toolbar';
+
+const FALLBACKS = {
+  task: TaskViewDefinition.parse({
+    version: 2,
+    target: 'task',
+    filter: null,
+    arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+    presentation: {
+      layout: 'list',
+      properties: ['status', 'priority', 'assignee', 'dueDate'],
+      density: 'compact',
+      showEmptyGroups: false,
+    },
+  }),
+  project: ProjectViewDefinition.parse({
+    version: 2,
+    target: 'project',
+    filter: null,
+    arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+    presentation: {
+      layout: 'list',
+      properties: ['status', 'priority', 'health', 'lead', 'targetDate', 'progress'],
+      density: 'compact',
+      showEmptyGroups: false,
+    },
+  }),
+  program: ProgramViewDefinition.parse({
+    version: 2,
+    target: 'program',
+    filter: null,
+    arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+    presentation: {
+      layout: 'list',
+      properties: ['status', 'health', 'owner', 'projectCount', 'taskCount'],
+      density: 'compact',
+      showEmptyGroups: false,
+    },
+  }),
+  initiative: InitiativeViewDefinition.parse({
+    version: 2,
+    target: 'initiative',
+    filter: null,
+    arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+    presentation: {
+      layout: 'list',
+      properties: ['status', 'priority', 'health', 'owner', 'targetDate', 'activeProjectCount'],
+      density: 'compact',
+      showEmptyGroups: false,
+    },
+  }),
+} as const;
+
+const PAGE_COPY = {
+  task: { title: 'Tasks', singular: 'task', icon: ListChecks },
+  project: { title: 'Projects', singular: 'project', icon: FolderKanban },
+  program: { title: 'Programs', singular: 'program', icon: Layers },
+  initiative: { title: 'Initiatives', singular: 'initiative', icon: Target },
+} as const;
+
+/** Props for one organization-level typed planning roster. */
+export interface WorkViewPageProps<TTarget extends ViewTarget> {
+  readonly organizationId: string;
+  readonly target: TTarget;
+}
+
+function fallbackFor<TTarget extends ViewTarget>(target: TTarget): WorkViewDefinitionFor<TTarget> {
+  return FALLBACKS[target] as WorkViewDefinitionFor<TTarget>;
+}
+
+/** Render one organization roster from the shared server query and target contract. */
+export function WorkViewPage<TTarget extends ViewTarget>({
+  organizationId,
+  target,
+}: WorkViewPageProps<TTarget>): JSX.Element {
+  const router = useRouter();
+  const { openCreate } = useCreateObject();
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [viewName, setViewName] = useState('');
+  const [dependencyMode, setDependencyMode] = useState(false);
+  const copy = PAGE_COPY[target];
+  const controller = useWorkView({
+    organizationId,
+    target,
+    instanceKey: ViewInstanceKey.parse(`builtin:${target}:${organizationId}`),
+    fallback: fallbackFor(target),
+    context: { kind: 'organization' },
+  });
+  const orderMutation = useWorkViewOrder(organizationId);
+  // The target discriminator was validated by `useWorkView`. TypeScript loses that correlation
+  // when it indexes the four response variants through a generic target.
+  const rows = (controller.response?.rows ?? []) as unknown as readonly WorkViewRowFor<TTarget>[];
+  const layout = controller.definition.presentation.layout as string;
+  const openRow = (row: WorkViewRowFor<TTarget>): void => {
+    router.push(`/orgs/${organizationId}/${target}s/${row.id}`);
+  };
+  const create = (): void => {
+    openCreate({
+      kind: target,
+      initialWorkspaceId: organizationId,
+      sameWorkspaceCompletion: 'open',
+    });
+  };
+
+  let content: JSX.Element;
+  if (target === 'project' && dependencyMode) {
+    content = <ProjectDependencyLens organizationId={organizationId} />;
+  } else if (controller.loading) {
+    content = (
+      <div className="space-y-2" aria-label={`Loading ${copy.title.toLowerCase()}`}>
+        {Array.from({ length: 8 }, (_, index) => (
+          <Skeleton key={index} className="h-9 w-full" />
+        ))}
+      </div>
+    );
+  } else if (controller.error) {
+    content = (
+      <p role="alert" className="text-error text-body-medium">
+        {userErrorMessage(controller.error, `Could not load ${copy.title.toLowerCase()}.`)}
+      </p>
+    );
+  } else if ((controller.response?.totalCount ?? 0) === 0) {
+    content = (
+      <EmptyState
+        icon={copy.icon}
+        title={`No ${copy.title.toLowerCase()} yet`}
+        body={`Create the first ${copy.singular} in this workspace.`}
+        cta={{ label: `Create ${copy.singular}`, onClick: create }}
+      />
+    );
+  } else if (layout === 'board') {
+    content = (
+      <WorkBoard
+        target={target}
+        definition={controller.definition}
+        groups={controller.response?.groups ?? []}
+        groupPages={controller.groupPages}
+        hiddenColumns={new Set()}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        onCreate={() => {
+          create();
+        }}
+        onActivate={openRow}
+        onDrop={(drop) => {
+          const groupValue = drop.destinationPath[0] ?? null;
+          const sourceGroupValue = drop.sourcePath[0] ?? null;
+          orderMutation.mutate({
+            target,
+            itemId: drop.item.id,
+            groupField: controller.definition.arrangement.groupBy,
+            sourceGroupValue: sourceGroupValue === '__empty__' ? null : sourceGroupValue,
+            groupValue: groupValue === '__empty__' ? null : groupValue,
+            beforeId: drop.beforeId,
+            afterId: drop.afterId,
+          });
+        }}
+        onLoadMore={controller.loadMoreGroup}
+      />
+    );
+  } else if (target === 'project' && layout === 'timeline') {
+    content = (
+      <ProjectTimelineAdapter
+        organizationId={organizationId}
+        rows={rows as unknown as readonly ProjectViewRow[]}
+        density={controller.definition.presentation.density}
+        canSchedule={false}
+        onReschedule={() => undefined}
+        onApplyCascade={() => undefined}
+        applyingCascade={false}
+        onActivate={(id) => {
+          router.push(`/orgs/${organizationId}/projects/${id}`);
+        }}
+        onPrefetch={() => undefined}
+      />
+    );
+  } else if (target === 'initiative' && layout === 'timeline') {
+    content = (
+      <InitiativeTimeline
+        organizationId={organizationId}
+        rows={rows as unknown as readonly InitiativeViewRow[]}
+        density={controller.definition.presentation.density}
+        onActivate={(id) => {
+          router.push(`/orgs/${organizationId}/initiatives/${id}`);
+        }}
+        onPrefetch={() => undefined}
+      />
+    );
+  } else {
+    content = (
+      <WorkList
+        target={target}
+        definition={controller.definition}
+        rows={rows}
+        groups={controller.response?.groups ?? []}
+        groupPages={controller.groupPages}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        onActivate={openRow}
+        onLoadMore={controller.loadMoreGroup}
+      />
+    );
+  }
+
+  return (
+    <ListPageLayout
+      title={copy.title}
+      fill
+      actions={
+        <Button className="min-h-10 gap-1.5" onClick={create}>
+          <Plus aria-hidden className="size-4" /> New {copy.singular}
+        </Button>
+      }
+      toolbar={
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <WorkViewToolbar
+              target={target}
+              timezone={controller.timezone}
+              definition={controller.definition}
+              onDefinitionChange={controller.setDefinition}
+              onSaveView={() => {
+                setSaveOpen(true);
+              }}
+              onSetDefault={controller.setAsDefault}
+              facetResponse={controller.facetResponse}
+              facetMetadataResponse={controller.facetMetadataResponse}
+              facetLoading={controller.facetLoading}
+              facetHasMore={controller.facetHasMore}
+              facetLoadingMore={controller.facetLoadingMore}
+              onFacetLoadMore={controller.loadMoreFacets}
+              onFacetRequest={controller.requestFacet}
+            />
+          </div>
+          {target === 'project' ? (
+            <Button
+              variant={dependencyMode ? 'secondary' : 'outline'}
+              className="shrink-0 gap-1.5"
+              aria-pressed={dependencyMode}
+              onClick={() => {
+                setDependencyMode((current) => !current);
+              }}
+            >
+              <Workflow aria-hidden className="size-4" /> Dependencies
+            </Button>
+          ) : null}
+        </div>
+      }
+    >
+      <div className="border-outline-variant bg-surface-container-lowest flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+        {content}
+      </div>
+      {selectedIds.size > 0 ? (
+        <div
+          role="toolbar"
+          aria-label="Bulk actions"
+          className="border-outline-variant bg-surface-container-high text-body-medium flex min-h-12 shrink-0 items-center gap-3 rounded-xl border px-4"
+        >
+          <span>{selectedIds.size} selected</span>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setSelectedIds(new Set());
+            }}
+          >
+            Clear
+          </Button>
+        </div>
+      ) : null}
+      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save view</DialogTitle>
+            <DialogDescription>Save the current filter and display settings.</DialogDescription>
+          </DialogHeader>
+          <label className="text-body-medium flex flex-col gap-2 font-medium">
+            View name
+            <Input
+              autoFocus
+              value={viewName}
+              onChange={(event) => {
+                setViewName(event.target.value);
+              }}
+            />
+          </label>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSaveOpen(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={viewName.trim().length === 0 || controller.saving}
+              onClick={() => {
+                controller.saveView({ name: viewName.trim() });
+                setSaveOpen(false);
+                setViewName('');
+              }}
+            >
+              {controller.saving ? 'Saving…' : 'Save view'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </ListPageLayout>
+  );
+}

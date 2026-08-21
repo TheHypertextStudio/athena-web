@@ -8,6 +8,8 @@ const overviewPath = join(
   root,
   'apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx',
 );
+const workPagePath = join(root, 'apps/web/src/components/work-views/work-view-page.tsx');
+const workListPath = join(root, 'apps/web/src/components/work-views/work-list.tsx');
 const detailPath = join(
   root,
   'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
@@ -48,15 +50,13 @@ function productionTypeSources(directory: string): string[] {
 
 describe('Initiative visual contract', () => {
   it('keeps the hierarchy dense and gives every data column a clipping gutter', () => {
-    const overview = source(overviewPath);
-    expect(overview).toContain("from '@/components/views/roster-grid'");
-    expect(overview).toContain('className={ROSTER_HEADER_CELL_CLASS}');
-    expect(overview).toContain('className={ROSTER_DATA_CELL_CLASS}');
-    expect(overview).toContain('className="relative h-full min-w-0 overflow-hidden pr-4"');
-    expect(overview).toContain('min-w-[76rem]');
-    expect(overview).toContain('h-14');
-    expect(overview).toContain('line-clamp-1 max-w-[44ch]');
-    expect(overview).not.toContain('h-[72px]');
+    const workList = source(workListPath);
+    expect(workList).toContain('<ListView');
+    expect(workList).toContain('className="h-full min-h-0"');
+    expect(workList).toContain('className={`min-w-40 flex-1');
+    expect(workList).toContain('hidden max-w-40 shrink-0');
+    expect(workList).toContain('truncate');
+    expect(workList).not.toContain('h-[72px]');
   });
 
   it('uses the canonical MD3 headline for detail titles and keeps status in the properties rail', () => {
@@ -80,11 +80,13 @@ describe('Initiative visual contract', () => {
   it('gives the Initiative overview a restrained canonical MD3 headline scale', () => {
     const typography = source(typographyPath);
     const overview = source(overviewPath);
+    const workPage = source(workPagePath);
     // The canonical title token now lives once in the shared layout; the overview adopts it by
     // composing ListPageLayout rather than restating the token or the header skeleton.
     expect(typography).toContain('--text-headline-medium: 1.75rem;');
     expect(source(pageLayoutPath)).toContain('text-headline-medium');
-    expect(overview).toContain('<ListPageLayout');
+    expect(overview).toContain('<WorkViewPage');
+    expect(workPage).toContain('<ListPageLayout');
   });
 
   it('defines the complete MD3 type scale and removes the ad hoc application scale', () => {
@@ -128,17 +130,17 @@ describe('Initiative visual contract', () => {
     }
   });
 
-  it('keeps attention content and controls in one borderless tonal surface', () => {
-    const overview = source(overviewPath);
-    expect(overview).toContain('bg-surface-container-low');
-    expect(overview).toContain('data-testid="initiative-attention-controls"');
-    expect(overview).toContain('data-testid="initiative-attention-footer"');
-    expect(overview).not.toContain('@4xl:flex-row @4xl:items-center @4xl:justify-between');
-    expect(overview).not.toContain('gap-3 border-y px-1 py-4');
+  it('keeps Initiative controls in the shared non-wrapping toolbar', () => {
+    const workPage = source(workPagePath);
+    expect(workPage).toContain('<WorkViewToolbar');
+    expect(workPage).toContain('min-w-0 flex-1');
+    expect(workPage).not.toContain('data-testid="initiative-attention-controls"');
+    expect(workPage).not.toContain('gap-3 border-y px-1 py-4');
   });
 
   it('separates the page header, attention surface, and roster with grouped spacing', () => {
     const overview = source(overviewPath);
+    const workPage = source(workPagePath);
     // The container measure + rhythm still live once in the shared layout; the page adopts
     // ListPageLayout rather than restating the utility string. Two things have become conditional
     // since: the rhythm is a container-query step (a phone gives up gutter and gap so the surface's
@@ -147,37 +149,32 @@ describe('Initiative visual contract', () => {
     expect(source(pageLayoutPath)).toContain('flex w-full flex-col gap-4');
     expect(source(pageLayoutPath)).toContain('@2xl:gap-5');
     expect(source(pageLayoutPath)).toContain("'max-w-7xl'");
-    expect(overview).toContain('<ListPageLayout');
-    expect(overview).toContain('bg-surface-container-low mb-2 flex flex-col rounded-xl p-4');
+    expect(overview).toContain('<WorkViewPage');
+    expect(workPage).toContain('<ListPageLayout');
+    expect(workPage).toContain('bg-surface-container-lowest');
     expect(overview).not.toContain('max-w-7xl flex-col gap-6');
   });
 
-  it('keeps the complete padded roster scrollable without wrapping metadata', () => {
-    const overview = source(overviewPath);
-    expect(overview).toContain('overflow-x-auto');
-    expect(overview).toContain('min-w-[76rem]');
-    expect(overview).toContain('role="treegrid"');
-    expect(overview).toContain('ROSTER_DATA_CELL_CLASS');
-    expect(overview).toContain('whitespace-nowrap');
-    expect(overview).toContain('line-clamp-1 min-w-0');
-    expect(overview).toContain('max-w-[44ch]');
-    expect(overview).toContain('{item.summary ? (');
-    expect(overview).not.toContain('border-b md:table-row');
+  it('keeps the complete roster inside the bounded shared virtual list', () => {
+    const workList = source(workListPath);
+    expect(workList).toContain('<ListView');
+    expect(workList).toContain('className="h-full min-h-0"');
+    expect(workList).toContain('text-on-surface-variant hidden max-w-40');
+    expect(workList).toContain('truncate');
+    expect(workList).not.toContain('border-b md:table-row');
   });
 
-  it('renders an always-visible hierarchy with curved semantic rails instead of collapse controls', () => {
-    const overview = source(overviewPath);
-    expect(overview).toContain('data-testid="initiative-hierarchy-rail"');
-    expect(overview).toContain('strokeWidth="2"');
-    expect(overview).toContain('strokeLinecap="round"');
-    expect(overview).toContain('strokeLinejoin="round"');
-    expect(overview).not.toContain('const [collapsed');
-    expect(overview).not.toContain('Collapse ${item.name}');
-    expect(overview).not.toContain('<ChevronDown');
+  it('keeps the five-level hierarchy and authorized ancestor context in the shared list', () => {
+    const workList = source(workListPath);
+    expect(workList).toContain('initiativeDepth');
+    expect(workList).toContain('while (parent && depth < 4');
+    expect(workList).toContain('data-context-row');
+    expect(workList).toContain('text-on-surface-variant');
+    expect(workList).not.toContain('Collapse ${item.name}');
   });
 
   it('keeps icon-only Initiative controls at least 40px and uses a 48px detail glyph', () => {
-    const overview = source(overviewPath);
+    const workPage = source(workPagePath);
     const detail = source(detailPath);
     const picker = source(iconPickerPath);
     const button = source(buttonPath);
@@ -191,25 +188,24 @@ describe('Initiative visual contract', () => {
     expect(control).toMatch(/xl:\s*\{[^}]*height: 'h-10'/);
     expect(control).toMatch(/xl:\s*\{[^}]*width: 'w-10'/);
     expect(dialog).toContain('h-10 w-10');
-    expect(overview).toContain('size="icon"');
+    expect(workPage).toContain('icon: Target');
     expect(picker).toContain('size = 32');
     expect(picker).toContain('Math.max(40, size)');
     expect(detail).toContain('size={48}');
-    expect(overview).not.toContain('@2xl:size-6');
+    expect(workPage).not.toContain('@2xl:size-6');
   });
 
   it('uses Material icon components instead of Unicode control glyphs', () => {
-    const overview = source(overviewPath);
+    const workPage = source(workPagePath);
     const picker = source(iconPickerPath);
-    expect(overview).toContain('<ChevronLeft');
-    expect(overview).toContain('<ChevronRight');
-    expect(overview).toContain('<EntityIconPicker');
+    expect(workPage).toContain('icon: Target');
+    expect(workPage).toContain('<Plus');
     expect(picker).toContain('<PopoverContent');
     expect(picker).toContain('Rounded');
     expect(picker).toContain('type="search"');
     expect(picker).toContain('aria-label="Entity icon"');
     expect(picker).toContain('aria-label="Entity color"');
-    expect(overview).not.toMatch(/[←→›⌄]/u);
+    expect(workPage).not.toMatch(/[←→›⌄]/u);
   });
 
   it('does not style semantic labels as uppercase overlines', () => {

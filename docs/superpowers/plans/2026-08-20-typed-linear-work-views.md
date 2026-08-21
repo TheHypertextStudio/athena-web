@@ -277,7 +277,7 @@ lint, and whitespace checks.
 - Test: `apps/web/e2e/work/work-views-responsive.spec.ts`
 - Create: seeded performance fixture and query benchmark under existing API test infrastructure
 
-- [ ] Switch all four pages together while retaining detail endpoints, dependency view, legacy URL
+- [x] Switch all four pages together while retaining detail endpoints, dependency view, legacy URL
       decoder, and rollback readers.
 - [ ] Exercise filter, nested filter, group, subgroup, ordered sort, save, reload, share, favorite,
       layout, selection, bulk action, drag, and reset for every target.

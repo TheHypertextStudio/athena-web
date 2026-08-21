@@ -243,8 +243,7 @@ afterEach(() => {
 });
 
 /** Render the composer open with the standard rosters; returns the spy callbacks. */
-function renderComposer() {
-  const onCreated = vi.fn();
+function renderComposer(onCreated = vi.fn()) {
   const onOpenChange = vi.fn();
   // The composer reads its option rosters through the shared useApiQuery layer, so it must run
   // under a QueryClientProvider (as it does in the app via providers.tsx). Retry-free for tests.
@@ -790,7 +789,10 @@ describe('CreateProjectDialog — robust composer', () => {
 
   it('continues with relationships retained while clearing only project copy', async () => {
     projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_more', name: 'First' }));
-    const { onCreated, onOpenChange } = renderComposer();
+    const onCreated = vi.fn(() => {
+      throw new Error('page roster update failed');
+    });
+    const { onOpenChange } = renderComposer(onCreated);
 
     await waitFor(() => {
       expect(membersGet).toHaveBeenCalled();
@@ -824,6 +826,7 @@ describe('CreateProjectDialog — robust composer', () => {
     });
     expect(onCreated).toHaveBeenCalledOnce();
     expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('surfaces application-owned copy when the create fails', async () => {

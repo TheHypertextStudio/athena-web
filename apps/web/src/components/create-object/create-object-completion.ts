@@ -1,5 +1,23 @@
 import type { SameWorkspaceCompletion } from './create-object-provider';
 
+/**
+ * Run a page-owned completion callback after the server has confirmed a create.
+ *
+ * @remarks
+ * A page may prepend or refresh its own roster from this callback. That work is best-effort: an
+ * exception must not relabel the successful server mutation as a failed create or leave its draft
+ * available for duplicate submission.
+ *
+ * @param callback - Page-owned effect to run after a confirmed create.
+ */
+export function runConfirmedCreateCallback(callback: () => void): void {
+  try {
+    callback();
+  } catch {
+    // The page can recover through its normal query refresh; the object already exists.
+  }
+}
+
 /** Inputs for the completion policy shared by every global composer host. */
 export interface CompleteCreateObjectOptions<Created> {
   /** Object returned by the destination workspace's create endpoint. */

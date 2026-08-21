@@ -63,6 +63,9 @@ export function useComposerContinuation({
   const beginSubmission = useCallback((): boolean => {
     if (submittingRef.current) return false;
     submittingRef.current = true;
+    // A live region announces repeated identical copy only when its text changes through an empty
+    // state. Clearing here also prevents an earlier success from surviving beside a later error.
+    setStatusMessage(null);
     return true;
   }, []);
 

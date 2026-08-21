@@ -264,8 +264,8 @@ export function ComposerShell({
     >
       <DialogContent
         className={cn(
-          'max-w-2xl gap-0 overflow-hidden p-0',
-          expanded && 'h-[min(48rem,85dvh)] max-w-5xl',
+          'gap-0 overflow-hidden p-0',
+          expanded ? 'h-[min(48rem,85dvh)] max-w-5xl' : 'max-w-2xl',
         )}
         aria-describedby={undefined}
         // The whole form goes inert while a create is in flight. Without this, assistive tech has
@@ -293,11 +293,9 @@ export function ComposerShell({
       >
         {/* The dialog's accessible name — never shown; the title field is the only visible heading. */}
         <DialogTitle className="sr-only">{heading}</DialogTitle>
-        {statusMessage ? (
-          <p role="status" aria-live="polite" className="sr-only">
-            {statusMessage}
-          </p>
-        ) : null}
+        <p role="status" aria-live="polite" className="sr-only">
+          {statusMessage ?? ''}
+        </p>
 
         {bodyPlaceholder !== undefined ? (
           <Button

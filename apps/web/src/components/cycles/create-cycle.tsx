@@ -35,6 +35,7 @@ import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
+import { runConfirmedCreateCallback } from '@/components/create-object/create-object-completion';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { enumOptions } from '@/components/pickers/options';
 import { TeamPicker } from '@/components/teams/team-picker';
@@ -203,7 +204,9 @@ export const CreateCycleDialog = withComposerReset(function CreateCycleComposer(
         }
         const created = await res.json();
         sequenceFloor.current.set(teamId, number + 1);
-        onCreated(created);
+        runConfirmedCreateCallback(() => {
+          onCreated(created);
+        });
         if (continueCreating) {
           continuation.completeContinuation(() => {
             const nextStartsAt = addDaysISO(endsAt, 1);

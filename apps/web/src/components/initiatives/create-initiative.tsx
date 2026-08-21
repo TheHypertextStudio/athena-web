@@ -45,7 +45,10 @@ import { ComposerTemplateControl } from '@/components/composer/template-menu';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { templateMerge } from '@/components/templates/merge';
 import { withComposerReset } from '@/components/composer/reset-on-open';
-import { completeCreateObject } from '@/components/create-object/create-object-completion';
+import {
+  completeCreateObject,
+  runConfirmedCreateCallback,
+} from '@/components/create-object/create-object-completion';
 import {
   type CreateInitiativeRequest,
   useCreateObject,
@@ -213,7 +216,9 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
         if (globalCreation !== undefined) {
           globalCreation.onCreated(created, continueCreating);
         } else {
-          onCreated(created);
+          runConfirmedCreateCallback(() => {
+            onCreated(created);
+          });
         }
         if (continueCreating) {
           continuation.completeContinuation(() => {

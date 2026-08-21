@@ -55,6 +55,7 @@ vi.mock('../../src/lib/auth-client', () => ({
 }));
 
 import { ActiveOrgContext } from '../../src/components/active-org';
+import { runConfirmedCreateCallback } from '../../src/components/create-object/create-object-completion';
 import {
   type CreateInitiativeRequest,
   completeCreateObject,
@@ -179,6 +180,17 @@ describe('completeCreateObject — seeding the created object', () => {
 });
 
 describe('completeCreateObject', () => {
+  it('contains a page-owned callback failure after a confirmed create', () => {
+    const callback = vi.fn(() => {
+      throw new Error('page roster update failed');
+    });
+
+    expect(() => {
+      runConfirmedCreateCallback(callback);
+    }).not.toThrow();
+    expect(callback).toHaveBeenCalledOnce();
+  });
+
   it('invalidates destination keys and runs a same-workspace stay callback without routing', () => {
     const invalidate = vi.fn();
     const onCreated = vi.fn();

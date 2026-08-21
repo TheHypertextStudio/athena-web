@@ -25,8 +25,14 @@ describe('useComposerContinuation', () => {
     expect(result.current.createMore).toBe(false);
     expect(result.current.bodyResetGeneration).toBe(0);
     expect(result.current.statusMessage).toBeNull();
-    expect(result.current.beginSubmission()).toBe(true);
-    expect(result.current.beginSubmission()).toBe(false);
+    let firstClaim = false;
+    let duplicateClaim = true;
+    act(() => {
+      firstClaim = result.current.beginSubmission();
+      duplicateClaim = result.current.beginSubmission();
+    });
+    expect(firstClaim).toBe(true);
+    expect(duplicateClaim).toBe(false);
 
     act(() => {
       result.current.setCreateMore(true);
@@ -46,6 +52,16 @@ describe('useComposerContinuation', () => {
     await vi.waitFor(() => {
       expect(focus).toHaveBeenCalledOnce();
     });
-    expect(result.current.beginSubmission()).toBe(true);
+    let nextClaim = false;
+    act(() => {
+      nextClaim = result.current.beginSubmission();
+    });
+    expect(nextClaim).toBe(true);
+    expect(result.current.statusMessage).toBeNull();
+
+    act(() => {
+      result.current.completeContinuation(() => undefined);
+    });
+    expect(result.current.statusMessage).toBe('Project created. Ready to create another.');
   });
 });

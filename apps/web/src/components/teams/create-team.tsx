@@ -29,7 +29,10 @@ import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
 import { withComposerReset } from '@/components/composer/reset-on-open';
-import { completeCreateObject } from '@/components/create-object/create-object-completion';
+import {
+  completeCreateObject,
+  runConfirmedCreateCallback,
+} from '@/components/create-object/create-object-completion';
 import {
   type CreateTeamRequest,
   useCreateObject,
@@ -160,7 +163,9 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
         if (globalCreation !== undefined) {
           globalCreation.onCreated(created, continueCreating);
         } else {
-          onCreated(created);
+          runConfirmedCreateCallback(() => {
+            onCreated(created);
+          });
         }
         if (continueCreating) {
           continuation.completeContinuation(() => {

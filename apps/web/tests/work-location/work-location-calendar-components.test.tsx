@@ -18,6 +18,10 @@ import {
 } from '@/components/work-location/work-location-calendar-components';
 import { WorkLocationStatusControl } from '@/components/work-location/use-work-location-calendar-composition';
 import type { WorkLocationCalendarRegion } from '@/components/work-location/work-location-calendar-model';
+import {
+  SCHEDULE_TEST_THEMES,
+  scheduleSurfaceContrast,
+} from '../scheduling/scheduling-surface-contrast-test-utils';
 
 const assertionId = WorkLocationAssertionId.parse('01BX5ZZKBKACTAV9WEVGEMMVRZ');
 const placeId = WorkPlaceId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV');
@@ -158,7 +162,7 @@ describe('work-location calendar components', () => {
   });
 
   it('renders a 2px rail with 44px move and resize targets and commits cross-lane gestures', () => {
-    const onEdit = vi.fn();
+    const onEdit = vi.fn(() => ({ status: 'accepted' as const }));
     render(
       <WorkLocationTimedLaneContext
         regions={[region()]}
@@ -223,8 +227,134 @@ describe('work-location calendar components', () => {
     );
   });
 
+  it('renders a rail preview and treats sub-snap pointer jitter as an ordinary click', () => {
+    const onEdit = vi.fn(() => ({ status: 'accepted' as const }));
+    const onOpen = vi.fn();
+    render(
+      <WorkLocationTimedLaneContext
+        regions={[region()]}
+        context={timedContext()}
+        displayTimezone="UTC"
+        onOpen={onOpen}
+        onEdit={onEdit}
+      />,
+    );
+
+    const move = screen.getByRole('button', { name: 'Move Main library work location' });
+    fireEvent.pointerDown(move, { button: 0, pointerId: 71, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 71, clientX: 300, clientY: 130 });
+    expect(screen.getByTestId('work-location-rail-preview')).toHaveStyle({
+      top: '570px',
+      height: '180px',
+      transform: 'translateX(200px)',
+    });
+    fireEvent.pointerCancel(window, { pointerId: 71 });
+    expect(screen.queryByTestId('work-location-rail-preview')).not.toBeInTheDocument();
+
+    fireEvent.pointerDown(move, { button: 0, pointerId: 72, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 72, clientX: 103, clientY: 102 });
+    fireEvent.pointerUp(window, { pointerId: 72, clientX: 103, clientY: 102 });
+    fireEvent.click(move);
+
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it('uses the timed pointer release position when a drag returns to its origin', () => {
+    const onEdit = vi.fn(() => ({ status: 'accepted' as const }));
+    const onOpen = vi.fn();
+    render(
+      <WorkLocationTimedLaneContext
+        regions={[region()]}
+        context={timedContext()}
+        displayTimezone="UTC"
+        onOpen={onOpen}
+        onEdit={onEdit}
+      />,
+    );
+
+    const move = screen.getByRole('button', { name: 'Move Main library work location' });
+    fireEvent.pointerDown(move, { button: 0, pointerId: 75, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 75, clientX: 300, clientY: 130 });
+    fireEvent.pointerUp(window, { pointerId: 75, clientX: 100, clientY: 100 });
+    fireEvent.click(move);
+
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it('does not announce completion when the exact edit rejects a repeated wall time', () => {
+    const onAnnouncementChange = vi.fn();
+    const onEdit = vi.fn(() => ({
+      status: 'rejected' as const,
+      announcement: 'That work-location time is unavailable.',
+    }));
+    render(
+      <WorkLocationTimedLaneContext
+        regions={[region()]}
+        context={timedContext(firstLane, 0, onAnnouncementChange)}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onEdit={onEdit}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move Main library work location' }), {
+      key: 'ArrowDown',
+    });
+
+    expect(onEdit).toHaveBeenCalledOnce();
+    expect(onAnnouncementChange).toHaveBeenLastCalledWith(
+      'That work-location time is unavailable.',
+    );
+    expect(onAnnouncementChange).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^Moved Main library/),
+    );
+  });
+
+  it('keeps short and adjacent region control hit boxes in separate 44px tracks', () => {
+    render(
+      <WorkLocationTimedLaneContext
+        regions={[
+          region({ id: 'first-short', endsAt: '2026-07-01T09:15:00.000Z' }),
+          region({
+            id: 'second-short',
+            startsAt: '2026-07-01T09:15:00.000Z',
+            endsAt: '2026-07-01T09:30:00.000Z',
+          }),
+        ]}
+        context={timedContext()}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onEdit={vi.fn(() => ({ status: 'accepted' as const }))}
+      />,
+    );
+
+    const controls = screen.getAllByRole('button');
+    expect(controls).toHaveLength(6);
+    for (const control of controls) {
+      expect(control).toHaveClass('size-11');
+      expect(control).toHaveAttribute('data-work-location-hit-track');
+    }
+    const routedRects = controls.map((control) =>
+      [
+        control.getAttribute('data-work-location-hit-track'),
+        control.getAttribute('data-work-location-hit-slot'),
+      ].join(':'),
+    );
+    expect(new Set(routedRects).size).toBe(routedRects.length);
+    expect(controls.map((control) => control.style.left)).toEqual([
+      '0px',
+      '44px',
+      '88px',
+      '132px',
+      '176px',
+      '220px',
+    ]);
+  });
+
   it('moves and resizes timed locations by keyboard using the scheduling snap interval', () => {
-    const onEdit = vi.fn();
+    const onEdit = vi.fn(() => ({ status: 'accepted' as const }));
     const onAnnouncementChange = vi.fn();
     render(
       <WorkLocationTimedLaneContext
@@ -248,6 +378,10 @@ describe('work-location calendar components', () => {
     expect(onAnnouncementChange).toHaveBeenLastCalledWith(
       'Moved Main library work location to July 1, 9:15 AM to 12:15 PM.',
     );
+    expect(screen.getByTestId('work-location-rail-preview')).toHaveStyle({
+      top: '555px',
+      height: '180px',
+    });
 
     fireEvent.keyDown(move, { key: 'ArrowRight' });
     expect(onEdit).toHaveBeenLastCalledWith(
@@ -280,7 +414,7 @@ describe('work-location calendar components', () => {
         context={timedContext(firstLane, 0, onAnnouncementChange)}
         displayTimezone="UTC"
         onOpen={vi.fn()}
-        onEdit={vi.fn()}
+        onEdit={vi.fn(() => ({ status: 'accepted' as const }))}
       />,
     );
 
@@ -324,6 +458,75 @@ describe('work-location calendar components', () => {
     fireEvent.pointerMove(window, { pointerId: 9, clientX: 300, clientY: 20 });
     fireEvent.pointerUp(window, { pointerId: 9, clientX: 300, clientY: 20 });
     expect(onMove).toHaveBeenCalledWith(expect.objectContaining({ id: 'location' }), '2026-07-02');
+  });
+
+  it('opens an all-day chip after a clamped zero-lane gesture without mutating it', () => {
+    const onMove = vi.fn();
+    const onOpen = vi.fn();
+    render(
+      <WorkLocationAllDayContext
+        regions={[
+          region({
+            allDay: true,
+            startsAt: '2026-07-02T00:00:00.000Z',
+            endsAt: '2026-07-03T00:00:00.000Z',
+          }),
+        ]}
+        context={{
+          lane: secondLane,
+          geometry: { laneIndex: 1, laneWidth: 200 },
+          onAnnouncementChange: vi.fn(),
+        }}
+        displayTimezone="UTC"
+        lanes={[firstLane, secondLane]}
+        onOpen={onOpen}
+        onMove={onMove}
+      />,
+    );
+
+    const chip = screen.getByRole('button', { name: 'Main library work location' });
+    fireEvent.pointerDown(chip, { button: 0, pointerId: 73, clientX: 300, clientY: 20 });
+    fireEvent.pointerMove(window, { pointerId: 73, clientX: 500, clientY: 20 });
+    fireEvent.pointerUp(window, { pointerId: 73, clientX: 500, clientY: 20 });
+    fireEvent.click(chip);
+
+    expect(onMove).not.toHaveBeenCalled();
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it('opens an all-day chip when a pointer returns to its source lane before release', () => {
+    const onMove = vi.fn();
+    const onOpen = vi.fn();
+    render(
+      <WorkLocationAllDayContext
+        regions={[
+          region({
+            allDay: true,
+            startsAt: '2026-07-01T00:00:00.000Z',
+            endsAt: '2026-07-02T00:00:00.000Z',
+          }),
+        ]}
+        context={{
+          lane: firstLane,
+          geometry: { laneIndex: 0, laneWidth: 200 },
+          onAnnouncementChange: vi.fn(),
+        }}
+        displayTimezone="UTC"
+        lanes={[firstLane, secondLane]}
+        onOpen={onOpen}
+        onMove={onMove}
+      />,
+    );
+
+    const chip = screen.getByRole('button', { name: 'Main library work location' });
+    fireEvent.pointerDown(chip, { button: 0, pointerId: 74, clientX: 100, clientY: 20 });
+    fireEvent.pointerMove(window, { pointerId: 74, clientX: 300, clientY: 20 });
+    fireEvent.pointerMove(window, { pointerId: 74, clientX: 100, clientY: 20 });
+    fireEvent.pointerUp(window, { pointerId: 74, clientX: 100, clientY: 20 });
+    fireEvent.click(chip);
+
+    expect(onMove).not.toHaveBeenCalled();
+    expect(onOpen).toHaveBeenCalledOnce();
   });
 
   it('moves all-day chips by keyboard and announces the completed date change', () => {
@@ -397,4 +600,52 @@ describe('work-location calendar components', () => {
     expect(connector).toHaveClass('pointer-events-none', 'h-0.5');
     expect(connector).toHaveStyle({ left: '-91px', width: '91px' });
   });
+
+  it.each(SCHEDULE_TEST_THEMES)(
+    'keeps the %s rail and connector above 3:1 non-text contrast',
+    (theme) => {
+      const item: ScheduleItem = {
+        id: 'timebox',
+        title: 'Write brief',
+        startsAt: '2026-07-01T09:00:00.000Z',
+        endsAt: '2026-07-01T10:00:00.000Z',
+        appearance: 'timebox',
+      };
+      const { rerender } = render(
+        <WorkLocationTimedLaneContext
+          regions={[region()]}
+          context={timedContext()}
+          displayTimezone="UTC"
+          onOpen={vi.fn()}
+          onEdit={vi.fn(() => ({ status: 'accepted' as const }))}
+        />,
+      );
+      expect(screen.getByTestId('work-location-rail')).toHaveClass('bg-outline');
+      expect(
+        scheduleSurfaceContrast('var(--color-surface)', 'var(--color-outline)', theme),
+      ).toBeGreaterThanOrEqual(3);
+
+      rerender(
+        <WorkLocationTimeboxDecoration
+          regions={[region()]}
+          context={{
+            item,
+            lane: { ...firstLane, items: [item] },
+            geometry: {
+              laneIndex: 0,
+              bounds: { startMinutes: 540, endMinutes: 600 },
+              top: 540,
+              height: 60,
+              laneWidth: 200,
+              leadingOffset: 101,
+              pixelsPerHour: 60,
+            },
+            placement: { columnIndex: 1, columnCount: 2 },
+          }}
+          displayTimezone="UTC"
+        />,
+      );
+      expect(screen.getByTestId('work-location-timebox-connector')).toHaveClass('bg-outline');
+    },
+  );
 });

@@ -3,6 +3,7 @@ import type {
   WorkLocationAssertionUpdate,
   WorkLocationOccurrenceException,
 } from '@docket/types';
+import { Temporal } from '@js-temporal/polyfill';
 
 import { resolveScheduleWallInstant } from '@/components/scheduling';
 
@@ -30,10 +31,61 @@ export type WorkLocationCalendarEdit =
 
 interface WorkLocationTimedEditInput {
   readonly region: WorkLocationCalendarRegion;
+  readonly mode: 'move' | 'resize-start' | 'resize-end';
+  readonly sourceDate: string;
+  readonly sourceStartMinutes: number;
+  readonly sourceEndMinutes: number;
   readonly targetDate: string;
   readonly startMinutes: number;
   readonly endMinutes: number;
   readonly timezone: string;
+}
+
+/** Apply one snapped lane delta to the source interval without replacing its clipped portions. */
+function editedTimedBounds(input: WorkLocationTimedEditInput): {
+  readonly startsAt: string;
+  readonly endsAt: string;
+} | null {
+  try {
+    const editsEnd = input.mode === 'resize-end';
+    const sourceMinutes = editsEnd ? input.sourceEndMinutes : input.sourceStartMinutes;
+    const targetMinutes = editsEnd ? input.endMinutes : input.startMinutes;
+    const occurrenceSource = editsEnd ? input.region.endsAt : input.region.startsAt;
+    const sourceAnchor = resolveScheduleWallInstant(
+      input.sourceDate,
+      sourceMinutes,
+      input.timezone,
+      occurrenceSource,
+    );
+    const targetAnchor = resolveScheduleWallInstant(
+      input.targetDate,
+      targetMinutes,
+      input.timezone,
+      occurrenceSource,
+    );
+    if (sourceAnchor.kind !== 'resolved' || targetAnchor.kind !== 'resolved') return null;
+
+    const sourceStart = Temporal.Instant.from(input.region.startsAt);
+    const sourceEnd = Temporal.Instant.from(input.region.endsAt);
+    const delta =
+      Temporal.Instant.from(targetAnchor.instant).epochNanoseconds -
+      Temporal.Instant.from(sourceAnchor.instant).epochNanoseconds;
+    const editedStart =
+      input.mode === 'resize-end'
+        ? sourceStart
+        : Temporal.Instant.fromEpochNanoseconds(sourceStart.epochNanoseconds + delta);
+    const editedEnd =
+      input.mode === 'resize-start'
+        ? sourceEnd
+        : Temporal.Instant.fromEpochNanoseconds(sourceEnd.epochNanoseconds + delta);
+    if (Temporal.Instant.compare(editedStart, editedEnd) >= 0) return null;
+    return {
+      startsAt: new Date(editedStart.epochMilliseconds).toISOString(),
+      endsAt: new Date(editedEnd.epochMilliseconds).toISOString(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 interface WorkLocationAllDayMoveInput {
@@ -69,13 +121,12 @@ function editForSchedule(
 export function workLocationTimedEdit(
   input: WorkLocationTimedEditInput,
 ): WorkLocationCalendarEdit | null {
-  const start = resolveScheduleWallInstant(input.targetDate, input.startMinutes, input.timezone);
-  const end = resolveScheduleWallInstant(input.targetDate, input.endMinutes, input.timezone);
-  if (start.kind !== 'resolved' || end.kind !== 'resolved') return null;
+  const bounds = editedTimedBounds(input);
+  if (!bounds) return null;
   return editForSchedule(input.region, {
     type: 'one_off_timed',
-    startsAt: new Date(start.instant).toISOString(),
-    endsAt: new Date(end.instant).toISOString(),
+    startsAt: bounds.startsAt,
+    endsAt: bounds.endsAt,
     timezone: input.timezone,
   });
 }

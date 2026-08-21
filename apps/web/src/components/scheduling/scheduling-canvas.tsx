@@ -401,7 +401,7 @@ export default function SchedulingCanvas({
                   ) : null}
                   {renderTimedLaneContext ? (
                     <div
-                      className="pointer-events-none absolute inset-0 z-[2]"
+                      className="pointer-events-none absolute inset-0 z-[35]"
                       data-schedule-timed-lane-context={lane.id}
                     >
                       {renderTimedLaneContext({

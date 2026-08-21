@@ -1,7 +1,7 @@
 'use client';
 
 import { MapPin } from '@docket/ui/icons';
-import { type JSX, useRef } from 'react';
+import { type JSX, useRef, useState } from 'react';
 
 import {
   partitionScheduleRangeByContext,
@@ -33,10 +33,29 @@ interface WorkLocationTimedLaneContextProps {
   readonly onOpen: (region: WorkLocationCalendarRegion) => void;
   readonly onEdit: (input: {
     readonly region: WorkLocationCalendarRegion;
+    readonly mode: 'move' | 'resize-start' | 'resize-end';
+    readonly sourceDate: string;
+    readonly sourceStartMinutes: number;
+    readonly sourceEndMinutes: number;
     readonly targetDate: string;
     readonly startMinutes: number;
     readonly endMinutes: number;
-  }) => void;
+  }) => WorkLocationTimedEditOutcome;
+}
+
+/** Explicit result of converting a visible gesture into exact work-location bounds. */
+export type WorkLocationTimedEditOutcome =
+  | { readonly status: 'accepted' }
+  | { readonly status: 'rejected'; readonly announcement: string };
+
+interface WorkLocationTimedPreview {
+  readonly regionId: string;
+  readonly mode: 'move' | 'resize-start' | 'resize-end';
+  readonly targetDate: string;
+  readonly targetLabel: string;
+  readonly targetIndex: number;
+  readonly startMinutes: number;
+  readonly endMinutes: number;
 }
 
 interface WorkLocationTimeboxDecorationProps {
@@ -102,19 +121,16 @@ function startTimedPointerSession(input: {
   readonly context: ScheduleTimedLaneContextRenderContext;
   readonly onCommit: WorkLocationTimedLaneContextProps['onEdit'];
   readonly onDragged: () => void;
+  readonly onPreview: (preview: WorkLocationTimedPreview | null) => void;
 }): void {
   if (input.event.button !== 0) return;
   input.event.preventDefault();
   input.event.stopPropagation();
+  input.onPreview(null);
   const pointerId = input.event.pointerId;
   const originX = input.event.clientX;
   const originY = input.event.clientY;
-  let preview: {
-    targetDate: string;
-    targetLabel: string;
-    startMinutes: number;
-    endMinutes: number;
-  } | null = null;
+  let preview: WorkLocationTimedPreview | null = null;
 
   const onMove = (event: PointerEvent): void => {
     if (event.pointerId !== pointerId) return;
@@ -133,15 +149,21 @@ function startTimedPointerSession(input: {
     if (input.mode === 'move') {
       const startMinutes = clamp(input.bounds.startMinutes + minuteDelta, 0, 1_440 - duration);
       preview = {
+        regionId: input.region.id,
+        mode: input.mode,
         targetDate: targetLane.date,
         targetLabel: targetLane.label,
+        targetIndex,
         startMinutes,
         endMinutes: startMinutes + duration,
       };
     } else if (input.mode === 'resize-start') {
       preview = {
+        regionId: input.region.id,
+        mode: input.mode,
         targetDate: targetLane.date,
         targetLabel: targetLane.label,
+        targetIndex,
         startMinutes: clamp(
           input.bounds.startMinutes + minuteDelta,
           0,
@@ -151,8 +173,11 @@ function startTimedPointerSession(input: {
       };
     } else {
       preview = {
+        regionId: input.region.id,
+        mode: input.mode,
         targetDate: targetLane.date,
         targetLabel: targetLane.label,
+        targetIndex,
         startMinutes: input.bounds.startMinutes,
         endMinutes: clamp(
           input.bounds.endMinutes + minuteDelta,
@@ -161,6 +186,17 @@ function startTimedPointerSession(input: {
         ),
       };
     }
+    const changed =
+      preview.targetDate !== input.context.lane.date ||
+      preview.startMinutes !== input.bounds.startMinutes ||
+      preview.endMinutes !== input.bounds.endMinutes;
+    if (!changed) {
+      preview = null;
+      input.onPreview(null);
+      input.context.onAnnouncementChange('');
+      return;
+    }
+    input.onPreview(preview);
     input.context.onAnnouncementChange(
       timedGestureAnnouncement({
         phase: 'preview',
@@ -171,29 +207,37 @@ function startTimedPointerSession(input: {
         endMinutes: preview.endMinutes,
       }),
     );
-    input.onDragged();
   };
   const finish = (event: PointerEvent): void => {
     if (event.pointerId !== pointerId) return;
+    onMove(event);
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', finish);
     window.removeEventListener('pointercancel', cancel);
     if (preview) {
-      input.onCommit({
+      input.onDragged();
+      const outcome = input.onCommit({
         region: input.region,
+        mode: input.mode,
+        sourceDate: input.context.lane.date,
+        sourceStartMinutes: input.bounds.startMinutes,
+        sourceEndMinutes: input.bounds.endMinutes,
         targetDate: preview.targetDate,
         startMinutes: preview.startMinutes,
         endMinutes: preview.endMinutes,
       });
+      input.onPreview(null);
       input.context.onAnnouncementChange(
-        timedGestureAnnouncement({
-          phase: 'complete',
-          mode: input.mode,
-          label: input.region.label,
-          laneLabel: preview.targetLabel,
-          startMinutes: preview.startMinutes,
-          endMinutes: preview.endMinutes,
-        }),
+        outcome.status === 'accepted'
+          ? timedGestureAnnouncement({
+              phase: 'complete',
+              mode: input.mode,
+              label: input.region.label,
+              laneLabel: preview.targetLabel,
+              startMinutes: preview.startMinutes,
+              endMinutes: preview.endMinutes,
+            })
+          : outcome.announcement,
       );
     }
   };
@@ -202,6 +246,7 @@ function startTimedPointerSession(input: {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', finish);
     window.removeEventListener('pointercancel', cancel);
+    input.onPreview(null);
     input.context.onAnnouncementChange('');
   };
   window.addEventListener('pointermove', onMove);
@@ -251,15 +296,14 @@ export function WorkLocationAllDayContext({
                 const laneDelta = Math.round(
                   (moveEvent.clientX - originX) / context.geometry.laneWidth,
                 );
-                if (laneDelta !== 0) {
-                  suppressedClick.current = region.id;
-                  const target =
-                    lanes[clamp(context.geometry.laneIndex + laneDelta, 0, lanes.length - 1)];
-                  if (target) {
-                    context.onAnnouncementChange(
-                      `Moving ${region.label} work location to ${target.label}.`,
-                    );
-                  }
+                const target =
+                  lanes[clamp(context.geometry.laneIndex + laneDelta, 0, lanes.length - 1)];
+                if (target && target.date !== context.lane.date) {
+                  context.onAnnouncementChange(
+                    `Moving ${region.label} work location to ${target.label}.`,
+                  );
+                } else {
+                  context.onAnnouncementChange('');
                 }
               };
               const finish = (upEvent: PointerEvent): void => {
@@ -271,6 +315,7 @@ export function WorkLocationAllDayContext({
                 const target =
                   lanes[clamp(context.geometry.laneIndex + laneDelta, 0, lanes.length - 1)];
                 if (target && target.date !== context.lane.date) {
+                  suppressedClick.current = region.id;
                   onMove(region, target.date);
                   context.onAnnouncementChange(
                     `Moved ${region.label} work location to ${target.label}.`,
@@ -338,6 +383,7 @@ export function WorkLocationTimedLaneContext({
   onEdit,
 }: WorkLocationTimedLaneContextProps): JSX.Element | null {
   const suppressedClick = useRef<string | null>(null);
+  const [preview, setPreview] = useState<WorkLocationTimedPreview | null>(null);
   const visible = regions.flatMap((region) => {
     if (region.allDay) return [];
     const bounds = regionBounds(region, context.lane, displayTimezone);
@@ -346,7 +392,28 @@ export function WorkLocationTimedLaneContext({
   if (visible.length === 0) return null;
   return (
     <>
-      {visible.map(({ region, bounds }) => {
+      {preview ? (
+        <div
+          data-testid="work-location-rail-preview"
+          aria-hidden="true"
+          className="pointer-events-none absolute right-0 left-0 z-40"
+          style={{
+            top: (preview.startMinutes / 60) * context.geometry.pixelsPerHour,
+            height:
+              ((preview.endMinutes - preview.startMinutes) / 60) * context.geometry.pixelsPerHour,
+            transform:
+              preview.targetIndex === context.geometry.laneIndex
+                ? undefined
+                : `translateX(${String((preview.targetIndex - context.geometry.laneIndex) * context.geometry.laneWidth)}px)`,
+          }}
+        >
+          <span className="bg-outline absolute top-0 left-2 h-full w-0.5 rounded-full" />
+          <span className="bg-secondary-container text-on-secondary-container text-label-small absolute top-0 left-3 rounded-full px-2 py-1">
+            {visible.find(({ region }) => region.id === preview.regionId)?.region.label}
+          </span>
+        </div>
+      ) : null}
+      {visible.map(({ region, bounds }, visibleIndex) => {
         const top = (bounds.startMinutes / 60) * context.geometry.pixelsPerHour;
         const height =
           ((bounds.endMinutes - bounds.startMinutes) / 60) * context.geometry.pixelsPerHour;
@@ -354,7 +421,7 @@ export function WorkLocationTimedLaneContext({
           <span
             data-testid="work-location-rail"
             aria-hidden="true"
-            className="bg-tertiary/60 absolute top-0 left-2 h-full w-0.5 rounded-full"
+            className="bg-outline absolute top-0 left-2 h-full w-0.5 rounded-full"
           />
         );
         if (!region.editable) {
@@ -386,6 +453,7 @@ export function WorkLocationTimedLaneContext({
             onDragged: () => {
               suppressedClick.current = region.id;
             },
+            onPreview: setPreview,
           });
         };
         const commitKeyboardEdit = (
@@ -437,7 +505,41 @@ export function WorkLocationTimedLaneContext({
           ) {
             return;
           }
-          onEdit({ region, targetDate: targetLane.date, startMinutes, endMinutes });
+          const nextPreview: WorkLocationTimedPreview = {
+            regionId: region.id,
+            mode,
+            targetDate: targetLane.date,
+            targetLabel: targetLane.label,
+            targetIndex,
+            startMinutes,
+            endMinutes,
+          };
+          setPreview(nextPreview);
+          context.onAnnouncementChange(
+            timedGestureAnnouncement({
+              phase: 'preview',
+              mode,
+              label: region.label,
+              laneLabel: targetLane.label,
+              startMinutes,
+              endMinutes,
+            }),
+          );
+          const outcome = onEdit({
+            region,
+            mode,
+            sourceDate: context.lane.date,
+            sourceStartMinutes: bounds.startMinutes,
+            sourceEndMinutes: bounds.endMinutes,
+            targetDate: targetLane.date,
+            startMinutes,
+            endMinutes,
+          });
+          if (outcome.status === 'rejected') {
+            setPreview(null);
+            context.onAnnouncementChange(outcome.announcement);
+            return;
+          }
           context.onAnnouncementChange(
             timedGestureAnnouncement({
               phase: 'complete',
@@ -449,6 +551,8 @@ export function WorkLocationTimedLaneContext({
             }),
           );
         };
+        const hitTrack = visibleIndex;
+        const hitLeft = (slot: number): number => hitTrack * 132 + slot * 44;
         return (
           <div
             key={region.id}
@@ -460,7 +564,10 @@ export function WorkLocationTimedLaneContext({
             <button
               type="button"
               aria-label={`Move ${region.label} work location`}
-              className="group focus-visible:outline-primary pointer-events-auto absolute -top-2 left-3 z-10 inline-flex min-h-11 max-w-[calc(100%-1rem)] min-w-11 items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+              data-work-location-hit-track={hitTrack}
+              data-work-location-hit-slot="move"
+              className="group focus-visible:outline-primary pointer-events-auto absolute -top-5 z-10 inline-flex size-11 min-h-11 min-w-11 items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ left: hitLeft(0) }}
               onClick={() => {
                 if (suppressedClick.current === region.id) {
                   suppressedClick.current = null;
@@ -483,7 +590,10 @@ export function WorkLocationTimedLaneContext({
             <button
               type="button"
               aria-label={`Resize start of ${region.label}`}
-              className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute -top-5 left-0 z-20 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
+              data-work-location-hit-track={hitTrack}
+              data-work-location-hit-slot="start"
+              className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute -top-5 z-20 size-11 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
+              style={{ left: hitLeft(1) }}
               onPointerDown={(event) => {
                 startSession(event, 'resize-start');
               }}
@@ -494,7 +604,10 @@ export function WorkLocationTimedLaneContext({
             <button
               type="button"
               aria-label={`Resize end of ${region.label}`}
-              className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute -bottom-5 left-0 z-20 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
+              data-work-location-hit-track={hitTrack}
+              data-work-location-hit-slot="end"
+              className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute -top-5 z-20 size-11 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
+              style={{ left: hitLeft(2) }}
               onPointerDown={(event) => {
                 startSession(event, 'resize-end');
               }}
@@ -544,7 +657,7 @@ export function WorkLocationTimeboxDecoration({
             {region && connectorWidth > 0 ? (
               <span
                 data-testid="work-location-timebox-connector"
-                className="bg-tertiary/50 pointer-events-none absolute h-0.5"
+                className="bg-outline pointer-events-none absolute h-0.5"
                 style={{
                   left: -connectorWidth,
                   top: `${String(top + height / 2)}%`,

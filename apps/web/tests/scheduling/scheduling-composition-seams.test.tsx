@@ -118,13 +118,54 @@ describe('SchedulingCanvas composition seams', () => {
       [...laneNode.children].indexOf(context),
     );
     expect(context).not.toHaveAttribute('inert');
-    expect(context).toHaveClass('pointer-events-none');
+    expect(context).toHaveClass('pointer-events-none', 'z-[35]');
     expect(screen.getByTestId('timed-context-control')).toHaveClass('pointer-events-auto');
     expect(screen.getByTestId('timed-context-control')).toHaveAttribute('data-lane', 'date');
     expect(screen.getByTestId('timed-context-control')).toHaveAttribute('data-height', '1440');
     expect(screen.getByTestId('timed-context-control')).toHaveAttribute('data-snap', '10');
     fireEvent.click(screen.getByTestId('timed-context-control'));
     expect(onActivate).toHaveBeenCalledOnce();
+  });
+
+  it('routes overlap input to timed context controls while item decoration remains inert', () => {
+    const source = item('overlapped-timebox', 'timebox');
+    const onContextPointerDown = vi.fn();
+    const onOpenItem = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane([source])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        renderTimedLaneContext={() => (
+          <button
+            type="button"
+            className="pointer-events-auto"
+            data-testid="overlap-context-control"
+            onPointerDown={onContextPointerDown}
+          >
+            Location
+          </button>
+        )}
+        renderTimedItemDecoration={() => <span data-testid="overlap-decoration" />}
+        onOpenItem={onOpenItem}
+      />,
+    );
+
+    const contextControl = screen.getByTestId('overlap-context-control');
+    const itemBody = screen.getByRole('button', { name: /^Planning timebox/ });
+    const decoration = assertDefined(
+      screen
+        .getByTestId('overlap-decoration')
+        .closest<HTMLElement>('[data-schedule-item-decoration]'),
+    );
+    fireEvent.pointerDown(contextControl, { button: 0, pointerId: 81 });
+    fireEvent.click(itemBody);
+
+    expect(onContextPointerDown).toHaveBeenCalledOnce();
+    expect(onOpenItem).toHaveBeenCalledOnce();
+    expect(decoration).toHaveClass('pointer-events-none');
+    expect(decoration).toHaveAttribute('inert');
   });
 
   it('omits the all-day context wrapper when the app renderer returns no content', () => {

@@ -15,6 +15,7 @@ import {
   WorkLocationAllDayContext,
   WorkLocationTimeboxDecoration,
   WorkLocationTimedLaneContext,
+  type WorkLocationTimedEditOutcome,
 } from './work-location-calendar-components';
 import {
   workLocationAllDayMove,
@@ -212,6 +213,25 @@ export function useWorkLocationCalendarComposition({
       setEditingRegion(null);
     },
   });
+  const resetMutationFailures = (): void => {
+    persistEdit.reset();
+    updateAssertion.reset();
+    setOccurrence.reset();
+    clearOccurrence.reset();
+  };
+  const persistCalendarEdit = (
+    edit: WorkLocationCalendarEdit | null,
+  ): WorkLocationTimedEditOutcome => {
+    if (!edit) {
+      return {
+        status: 'rejected',
+        announcement: 'That work-location time is unavailable.',
+      };
+    }
+    resetMutationFailures();
+    persistEdit.mutate(edit, { onSuccess: resetMutationFailures });
+    return { status: 'accepted' };
+  };
   const mutationFailed =
     persistEdit.isError ||
     updateAssertion.isError ||
@@ -243,7 +263,10 @@ export function useWorkLocationCalendarComposition({
           onOpen={openRegion}
           onMove={(region, targetDate) => {
             const edit = workLocationAllDayMove({ region, targetDate, timezone });
-            if (edit) persistEdit.mutate(edit);
+            if (edit) {
+              resetMutationFailures();
+              persistEdit.mutate(edit, { onSuccess: resetMutationFailures });
+            }
           }}
         />
       ),
@@ -253,15 +276,13 @@ export function useWorkLocationCalendarComposition({
           context={context}
           displayTimezone={timezone}
           onOpen={openRegion}
-          onEdit={({ region, targetDate, startMinutes, endMinutes }) => {
-            const edit = workLocationTimedEdit({
-              region,
-              targetDate,
-              startMinutes,
-              endMinutes,
-              timezone,
-            });
-            if (edit) persistEdit.mutate(edit);
+          onEdit={(gesture) => {
+            return persistCalendarEdit(
+              workLocationTimedEdit({
+                ...gesture,
+                timezone,
+              }),
+            );
           }}
         />
       ),
@@ -290,7 +311,11 @@ export function useWorkLocationCalendarComposition({
           pending={updateAssertion.isPending}
           onSave={(input) => {
             if (editingRegion?.assertionId) {
-              updateAssertion.mutate({ id: editingRegion.assertionId, input });
+              resetMutationFailures();
+              updateAssertion.mutate(
+                { id: editingRegion.assertionId, input },
+                { onSuccess: resetMutationFailures },
+              );
             }
           }}
         />
@@ -308,10 +333,12 @@ export function useWorkLocationCalendarComposition({
           places={places.data?.items ?? []}
           pending={setOccurrence.isPending || clearOccurrence.isPending}
           onSet={(id, date, input) => {
-            setOccurrence.mutate({ id, date, input });
+            resetMutationFailures();
+            setOccurrence.mutate({ id, date, input }, { onSuccess: resetMutationFailures });
           }}
           onRestore={(id, date) => {
-            clearOccurrence.mutate({ id, date });
+            resetMutationFailures();
+            clearOccurrence.mutate({ id, date }, { onSuccess: resetMutationFailures });
           }}
         />
       </>

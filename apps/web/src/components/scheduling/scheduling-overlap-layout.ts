@@ -35,6 +35,16 @@ export interface ScheduleOverlapHorizontalStyle {
   readonly width: string;
 }
 
+/** Resolve one collision column's leading edge in CSS pixels for decorative lane geometry. */
+export function scheduleOverlapLeadingOffset(
+  placement: ScheduleOverlapPlacement,
+  laneWidth: number,
+): number {
+  const columnCount = Math.max(1, placement.columnCount);
+  const columnIndex = Math.max(0, Math.min(columnCount - 1, placement.columnIndex));
+  return columnIndex === 0 ? 1 : (Math.max(0, laneWidth) / columnCount) * columnIndex + 1;
+}
+
 /** One lane item with vertical geometry and collision placement computed exactly once. */
 export interface PositionedScheduleItem {
   readonly item: ScheduleItem;

@@ -163,6 +163,7 @@ describe('SchedulingCanvas composition seams', () => {
             data-top={geometry.top}
             data-height={geometry.height}
             data-lane-width={geometry.laneWidth}
+            data-leading-offset={geometry.leadingOffset}
             data-pixels-per-hour={geometry.pixelsPerHour}
             data-column={`${String(placement.columnIndex)}:${String(placement.columnCount)}`}
           />
@@ -185,7 +186,7 @@ describe('SchedulingCanvas composition seams', () => {
     expect(children.indexOf(decoration)).toBeLessThan(children.indexOf(content));
     expect(card).toHaveClass('isolate');
     expect(surface).toHaveClass('-z-20');
-    expect(decoration).toHaveClass('-z-10', 'pointer-events-none');
+    expect(decoration).toHaveClass('-z-10', 'pointer-events-none', 'overflow-visible');
     expect(decoration).toHaveAttribute('aria-hidden', 'true');
     expect(decoration).toHaveAttribute('inert');
     expect(screen.getByTestId('item-decoration-content')).toHaveAttribute('data-item', 'timebox');
@@ -193,7 +194,42 @@ describe('SchedulingCanvas composition seams', () => {
     expect(screen.getByTestId('item-decoration-content')).toHaveAttribute('data-bounds', '540:600');
     expect(screen.getByTestId('item-decoration-content')).toHaveAttribute('data-top', '540');
     expect(screen.getByTestId('item-decoration-content')).toHaveAttribute('data-height', '60');
+    expect(screen.getByTestId('item-decoration-content')).toHaveAttribute(
+      'data-leading-offset',
+      '1',
+    );
     expect(screen.getByTestId('item-decoration-content')).toHaveAttribute('data-column', '0:1');
+  });
+
+  it('supplies the later overlap column offset without changing the item bounds', () => {
+    const first = item('first-event', 'event');
+    const later = item('later-timebox', 'timebox');
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane([first, later])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        renderTimedItemDecoration={({ item: renderedItem, geometry }) =>
+          renderedItem.id === later.id ? (
+            <span
+              data-testid="later-decoration-geometry"
+              data-leading-offset={geometry.leadingOffset}
+              data-top={geometry.top}
+              data-height={geometry.height}
+            />
+          ) : null
+        }
+      />,
+    );
+
+    const laterCard = assertDefined(
+      document.querySelector<HTMLElement>('[data-schedule-item="later-timebox"]'),
+    );
+    const decoration = screen.getByTestId('later-decoration-geometry');
+    expect(Number(decoration.dataset['leadingOffset'])).toBeGreaterThan(1);
+    expect(decoration).toHaveAttribute('data-top', laterCard.style.top.replace('px', ''));
+    expect(decoration).toHaveAttribute('data-height', laterCard.style.height.replace('px', ''));
   });
 
   it('supplies the visible target lane and preview geometry during a cross-lane move', () => {

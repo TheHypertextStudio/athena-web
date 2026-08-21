@@ -195,6 +195,8 @@ export interface ScheduleTimedLaneContextRenderContext extends ScheduleTimedLane
   readonly lanes: readonly ScheduleLane[];
   /** Current neutral wall-time snap interval. */
   readonly snapMinutes: number;
+  /** Publish app-owned gesture previews and completion copy through the canvas live region. */
+  readonly onAnnouncementChange: (announcement: string) => void;
 }
 
 /** Geometry supplied to a consumer-owned all-day lane context renderer. */
@@ -211,6 +213,8 @@ export interface ScheduleAllDayLaneRenderContext {
   readonly lane: ScheduleLane;
   /** Current all-day lane placement. */
   readonly geometry: ScheduleAllDayLaneGeometry;
+  /** Publish app-owned gesture previews and completion copy through the canvas live region. */
+  readonly onAnnouncementChange: (announcement: string) => void;
 }
 
 /** Geometry supplied to a decorative renderer for one timed item. */
@@ -225,6 +229,8 @@ export interface ScheduleTimedItemGeometry {
   readonly height: number;
   /** Rendered lane width in CSS pixels. */
   readonly laneWidth: number;
+  /** Horizontal distance in CSS pixels from the lane edge to the item's leading edge. */
+  readonly leadingOffset: number;
   /** Current vertical scale in CSS pixels per hour. */
   readonly pixelsPerHour: number;
 }

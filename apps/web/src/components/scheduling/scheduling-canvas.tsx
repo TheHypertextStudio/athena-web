@@ -408,6 +408,7 @@ export default function SchedulingCanvas({
                         lane,
                         lanes,
                         snapMinutes,
+                        onAnnouncementChange: setGestureAnnouncement,
                         geometry: {
                           laneIndex,
                           laneWidth: geometry.laneWidth,

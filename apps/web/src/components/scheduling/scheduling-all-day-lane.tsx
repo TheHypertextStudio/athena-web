@@ -47,6 +47,7 @@ export function SchedulingAllDayLane({
     renderAllDayLaneContext?.({
       lane,
       geometry: { laneIndex, laneWidth },
+      onAnnouncementChange: onGestureAnnouncementChange,
     }) ?? null;
   const render = (item: (typeof allDayItems)[number]): JSX.Element => (
     <SchedulingAllDayItem

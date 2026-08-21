@@ -14,6 +14,9 @@ import {
 
 import type { WorkLocationCalendarRegion } from './work-location-calendar-model';
 
+const WORK_LOCATION_RAIL_LEFT_PX = 8;
+const WORK_LOCATION_RAIL_WIDTH_PX = 2;
+
 interface WorkLocationAllDayContextProps {
   readonly regions: readonly WorkLocationCalendarRegion[];
   readonly context: ScheduleAllDayLaneRenderContext;
@@ -60,6 +63,36 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+/** Format one wall-clock minute using stable application-owned calendar gesture copy. */
+function wallTimeLabel(minutes: number): string {
+  const normalized = clamp(minutes, 0, 1_440) % 1_440;
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  const period = hour < 12 ? 'AM' : 'PM';
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${String(displayHour)}:${String(minute).padStart(2, '0')} ${period}`;
+}
+
+/** Build one consistent work-location preview or completion announcement. */
+function timedGestureAnnouncement(input: {
+  readonly phase: 'preview' | 'complete';
+  readonly mode: 'move' | 'resize-start' | 'resize-end';
+  readonly label: string;
+  readonly laneLabel: string;
+  readonly startMinutes: number;
+  readonly endMinutes: number;
+}): string {
+  const verb =
+    input.mode === 'move'
+      ? input.phase === 'preview'
+        ? 'Moving'
+        : 'Moved'
+      : input.phase === 'preview'
+        ? 'Resizing'
+        : 'Resized';
+  return `${verb} ${input.label} work location to ${input.laneLabel}, ${wallTimeLabel(input.startMinutes)} to ${wallTimeLabel(input.endMinutes)}.`;
+}
+
 /** Start one pointer session that resolves a visible target lane and snapped minute delta. */
 function startTimedPointerSession(input: {
   readonly event: React.PointerEvent<HTMLElement>;
@@ -78,6 +111,7 @@ function startTimedPointerSession(input: {
   const originY = input.event.clientY;
   let preview: {
     targetDate: string;
+    targetLabel: string;
     startMinutes: number;
     endMinutes: number;
   } | null = null;
@@ -98,10 +132,16 @@ function startTimedPointerSession(input: {
     const duration = input.bounds.endMinutes - input.bounds.startMinutes;
     if (input.mode === 'move') {
       const startMinutes = clamp(input.bounds.startMinutes + minuteDelta, 0, 1_440 - duration);
-      preview = { targetDate: targetLane.date, startMinutes, endMinutes: startMinutes + duration };
+      preview = {
+        targetDate: targetLane.date,
+        targetLabel: targetLane.label,
+        startMinutes,
+        endMinutes: startMinutes + duration,
+      };
     } else if (input.mode === 'resize-start') {
       preview = {
         targetDate: targetLane.date,
+        targetLabel: targetLane.label,
         startMinutes: clamp(
           input.bounds.startMinutes + minuteDelta,
           0,
@@ -112,6 +152,7 @@ function startTimedPointerSession(input: {
     } else {
       preview = {
         targetDate: targetLane.date,
+        targetLabel: targetLane.label,
         startMinutes: input.bounds.startMinutes,
         endMinutes: clamp(
           input.bounds.endMinutes + minuteDelta,
@@ -120,6 +161,16 @@ function startTimedPointerSession(input: {
         ),
       };
     }
+    input.context.onAnnouncementChange(
+      timedGestureAnnouncement({
+        phase: 'preview',
+        mode: input.mode,
+        label: input.region.label,
+        laneLabel: preview.targetLabel,
+        startMinutes: preview.startMinutes,
+        endMinutes: preview.endMinutes,
+      }),
+    );
     input.onDragged();
   };
   const finish = (event: PointerEvent): void => {
@@ -127,13 +178,31 @@ function startTimedPointerSession(input: {
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', finish);
     window.removeEventListener('pointercancel', cancel);
-    if (preview) input.onCommit({ region: input.region, ...preview });
+    if (preview) {
+      input.onCommit({
+        region: input.region,
+        targetDate: preview.targetDate,
+        startMinutes: preview.startMinutes,
+        endMinutes: preview.endMinutes,
+      });
+      input.context.onAnnouncementChange(
+        timedGestureAnnouncement({
+          phase: 'complete',
+          mode: input.mode,
+          label: input.region.label,
+          laneLabel: preview.targetLabel,
+          startMinutes: preview.startMinutes,
+          endMinutes: preview.endMinutes,
+        }),
+      );
+    }
   };
   const cancel = (event: PointerEvent): void => {
     if (event.pointerId !== pointerId) return;
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', finish);
     window.removeEventListener('pointercancel', cancel);
+    input.context.onAnnouncementChange('');
   };
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', finish);
@@ -163,7 +232,7 @@ export function WorkLocationAllDayContext({
             key={region.id}
             type="button"
             aria-label={`${region.label} work location`}
-            className="bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest active:bg-secondary-container focus-visible:outline-primary text-label-small inline-flex min-h-7 max-w-full items-center gap-1 rounded-full px-2 focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none [@media(pointer:coarse)]:min-h-11"
+            className="group focus-visible:outline-primary inline-flex min-h-11 max-w-full min-w-11 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
             onClick={() => {
               if (suppressedClick.current === region.id) {
                 suppressedClick.current = null;
@@ -182,7 +251,16 @@ export function WorkLocationAllDayContext({
                 const laneDelta = Math.round(
                   (moveEvent.clientX - originX) / context.geometry.laneWidth,
                 );
-                if (laneDelta !== 0) suppressedClick.current = region.id;
+                if (laneDelta !== 0) {
+                  suppressedClick.current = region.id;
+                  const target =
+                    lanes[clamp(context.geometry.laneIndex + laneDelta, 0, lanes.length - 1)];
+                  if (target) {
+                    context.onAnnouncementChange(
+                      `Moving ${region.label} work location to ${target.label}.`,
+                    );
+                  }
+                }
               };
               const finish = (upEvent: PointerEvent): void => {
                 if (upEvent.pointerId !== pointerId) return;
@@ -192,10 +270,18 @@ export function WorkLocationAllDayContext({
                 );
                 const target =
                   lanes[clamp(context.geometry.laneIndex + laneDelta, 0, lanes.length - 1)];
-                if (target && target.date !== context.lane.date) onMove(region, target.date);
+                if (target && target.date !== context.lane.date) {
+                  onMove(region, target.date);
+                  context.onAnnouncementChange(
+                    `Moved ${region.label} work location to ${target.label}.`,
+                  );
+                }
               };
               const cancel = (cancelEvent: PointerEvent): void => {
-                if (cancelEvent.pointerId === pointerId) cleanup();
+                if (cancelEvent.pointerId === pointerId) {
+                  cleanup();
+                  context.onAnnouncementChange('');
+                }
               };
               const cleanup = (): void => {
                 window.removeEventListener('pointermove', onPointerMove);
@@ -206,9 +292,27 @@ export function WorkLocationAllDayContext({
               window.addEventListener('pointerup', finish);
               window.addEventListener('pointercancel', cancel);
             }}
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+              event.preventDefault();
+              event.stopPropagation();
+              const delta = event.key === 'ArrowLeft' ? -1 : 1;
+              const target =
+                lanes[clamp(context.geometry.laneIndex + delta, 0, Math.max(0, lanes.length - 1))];
+              if (!target || target.date === context.lane.date) return;
+              onMove(region, target.date);
+              context.onAnnouncementChange(
+                `Moved ${region.label} work location to ${target.label}.`,
+              );
+            }}
           >
-            <MapPin aria-hidden="true" className="size-3.5! shrink-0" />
-            <span className="truncate">{region.label}</span>
+            <span
+              className="bg-surface-container-high text-on-surface-variant group-hover:bg-surface-container-highest group-active:bg-secondary-container text-label-small inline-flex min-h-7 max-w-full items-center gap-1 rounded-full px-2 motion-safe:transition-colors motion-reduce:transition-none"
+              data-work-location-chip-visual=""
+            >
+              <MapPin aria-hidden="true" className="size-3.5! shrink-0" />
+              <span className="truncate">{region.label}</span>
+            </span>
           </button>
         ) : (
           <span
@@ -284,6 +388,67 @@ export function WorkLocationTimedLaneContext({
             },
           });
         };
+        const commitKeyboardEdit = (
+          event: React.KeyboardEvent<HTMLButtonElement>,
+          mode: 'move' | 'resize-start' | 'resize-end',
+        ): void => {
+          const movesDate =
+            mode === 'move' && (event.key === 'ArrowLeft' || event.key === 'ArrowRight');
+          const movesTime = event.key === 'ArrowUp' || event.key === 'ArrowDown';
+          if (!movesDate && !movesTime) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const laneDelta = movesDate ? (event.key === 'ArrowLeft' ? -1 : 1) : 0;
+          const targetIndex = clamp(
+            context.geometry.laneIndex + laneDelta,
+            0,
+            context.lanes.length - 1,
+          );
+          const targetLane = context.lanes[targetIndex];
+          if (!targetLane) return;
+          const minuteDelta = movesTime
+            ? event.key === 'ArrowUp'
+              ? -context.snapMinutes
+              : context.snapMinutes
+            : 0;
+          const duration = bounds.endMinutes - bounds.startMinutes;
+          let startMinutes = bounds.startMinutes;
+          let endMinutes = bounds.endMinutes;
+          if (mode === 'move') {
+            startMinutes = clamp(bounds.startMinutes + minuteDelta, 0, 1_440 - duration);
+            endMinutes = startMinutes + duration;
+          } else if (mode === 'resize-start') {
+            startMinutes = clamp(
+              bounds.startMinutes + minuteDelta,
+              0,
+              bounds.endMinutes - context.snapMinutes,
+            );
+          } else {
+            endMinutes = clamp(
+              bounds.endMinutes + minuteDelta,
+              bounds.startMinutes + context.snapMinutes,
+              1_440,
+            );
+          }
+          if (
+            targetLane.date === context.lane.date &&
+            startMinutes === bounds.startMinutes &&
+            endMinutes === bounds.endMinutes
+          ) {
+            return;
+          }
+          onEdit({ region, targetDate: targetLane.date, startMinutes, endMinutes });
+          context.onAnnouncementChange(
+            timedGestureAnnouncement({
+              phase: 'complete',
+              mode,
+              label: region.label,
+              laneLabel: targetLane.label,
+              startMinutes,
+              endMinutes,
+            }),
+          );
+        };
         return (
           <div
             key={region.id}
@@ -295,7 +460,7 @@ export function WorkLocationTimedLaneContext({
             <button
               type="button"
               aria-label={`Move ${region.label} work location`}
-              className="bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest active:bg-secondary-container focus-visible:outline-primary text-label-small pointer-events-auto absolute top-0 left-3 inline-flex min-h-7 max-w-[calc(100%-1rem)] min-w-7 items-center gap-1 rounded-full px-2 focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+              className="group focus-visible:outline-primary pointer-events-auto absolute -top-2 left-3 z-10 inline-flex min-h-11 max-w-[calc(100%-1rem)] min-w-11 items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
               onClick={() => {
                 if (suppressedClick.current === region.id) {
                   suppressedClick.current = null;
@@ -306,24 +471,35 @@ export function WorkLocationTimedLaneContext({
               onPointerDown={(event) => {
                 startSession(event, 'move');
               }}
+              onKeyDown={(event) => {
+                commitKeyboardEdit(event, 'move');
+              }}
             >
-              <MapPin aria-hidden="true" className="size-3.5! shrink-0" />
-              <span className="truncate">{region.label}</span>
+              <span className="bg-surface-container-high text-on-surface-variant group-hover:bg-surface-container-highest group-active:bg-secondary-container text-label-small inline-flex min-h-7 max-w-full items-center gap-1 rounded-full px-2 motion-safe:transition-colors motion-reduce:transition-none">
+                <MapPin aria-hidden="true" className="size-3.5! shrink-0" />
+                <span className="truncate">{region.label}</span>
+              </span>
             </button>
             <button
               type="button"
               aria-label={`Resize start of ${region.label}`}
-              className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute -top-2 left-0 min-h-4 min-w-4 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none [@media(pointer:coarse)]:-top-5 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+              className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute -top-5 left-0 z-20 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
               onPointerDown={(event) => {
                 startSession(event, 'resize-start');
+              }}
+              onKeyDown={(event) => {
+                commitKeyboardEdit(event, 'resize-start');
               }}
             />
             <button
               type="button"
               aria-label={`Resize end of ${region.label}`}
-              className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute -bottom-2 left-0 min-h-4 min-w-4 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none [@media(pointer:coarse)]:-bottom-5 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+              className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute -bottom-5 left-0 z-20 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
               onPointerDown={(event) => {
                 startSession(event, 'resize-end');
+              }}
+              onKeyDown={(event) => {
+                commitKeyboardEdit(event, 'resize-end');
               }}
             />
           </div>
@@ -349,8 +525,12 @@ export function WorkLocationTimeboxDecoration({
   const sections = partitionScheduleRangeByContext(context.geometry.bounds, projected);
   const duration = context.geometry.bounds.endMinutes - context.geometry.bounds.startMinutes;
   if (duration <= 0) return null;
+  const connectorWidth = Math.max(
+    0,
+    context.geometry.leadingOffset - WORK_LOCATION_RAIL_LEFT_PX - WORK_LOCATION_RAIL_WIDTH_PX,
+  );
   return (
-    <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
+    <div className="absolute inset-0 overflow-visible rounded-[inherit]">
       {sections.map((section) => {
         const region = section.contextId ? regionById.get(section.contextId) : undefined;
         const top =
@@ -359,15 +539,30 @@ export function WorkLocationTimeboxDecoration({
         return (
           <span
             key={`${section.contextId ?? 'neutral'}:${String(section.startMinutes)}`}
-            data-testid="work-location-timebox-section"
-            data-context={region ? 'location' : 'neutral'}
-            className={
-              region
-                ? 'bg-tertiary-container/20 border-tertiary/50 absolute inset-x-0 border-l-2'
-                : 'absolute inset-x-0 bg-transparent'
-            }
-            style={{ top: `${String(top)}%`, height: `${String(height)}%` }}
-          />
+            className="contents"
+          >
+            {region && connectorWidth > 0 ? (
+              <span
+                data-testid="work-location-timebox-connector"
+                className="bg-tertiary/50 pointer-events-none absolute h-0.5"
+                style={{
+                  left: -connectorWidth,
+                  top: `${String(top + height / 2)}%`,
+                  width: connectorWidth,
+                }}
+              />
+            ) : null}
+            <span
+              data-testid="work-location-timebox-section"
+              data-context={region ? 'location' : 'neutral'}
+              className={
+                region
+                  ? 'bg-tertiary-container/20 border-tertiary/50 absolute inset-x-0 overflow-hidden border-l-2'
+                  : 'absolute inset-x-0 overflow-hidden bg-transparent'
+              }
+              style={{ top: `${String(top)}%`, height: `${String(height)}%` }}
+            />
+          </span>
         );
       })}
     </div>

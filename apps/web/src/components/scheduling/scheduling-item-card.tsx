@@ -19,6 +19,7 @@ import { readScheduleDragObject, SCHEDULE_DRAG_MIME } from './scheduling-drag-ob
 import { MINUTES_PER_DAY, minutesToPixels } from './scheduling-geometry';
 import {
   scheduleOverlapHorizontalStyle,
+  scheduleOverlapLeadingOffset,
   type ScheduleOverlapPlacement,
 } from './scheduling-overlap-layout';
 import { SchedulingItemBody } from './scheduling-item-body';
@@ -190,6 +191,7 @@ export function SchedulingItemCard({
         top: visibleTop,
         height: visibleHeight,
         laneWidth,
+        leadingOffset: scheduleOverlapLeadingOffset(placement, laneWidth),
         pixelsPerHour,
       },
       placement: {
@@ -278,7 +280,7 @@ export function SchedulingItemCard({
       {decoration === null ? null : (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 bottom-px -z-10 overflow-hidden rounded-sm"
+          className="pointer-events-none absolute inset-x-0 top-0 bottom-px -z-10 overflow-visible rounded-sm"
           data-schedule-item-decoration=""
           inert
         >

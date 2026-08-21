@@ -1,10 +1,17 @@
 'use client';
 
 import type { ScheduleComparisonItemOut } from '@docket/types';
-import { Badge, Sheet, SheetContent, SheetDescription, SheetTitle } from '@docket/ui/primitives';
+import {
+  Badge,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
+import { CALENDAR_ITEM_KIND_LABEL } from '@/components/calendar/calendar-item-card';
 import { CalendarDrawerClose } from '@/components/calendar/calendar-drawer-close';
 import { formatScheduleInstantRange } from '@/components/scheduling/scheduling-time-label';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -16,21 +23,12 @@ export interface SharedCalendarItemDetail {
   readonly item: Extract<ScheduleComparisonItemOut, { access: 'details' }>;
 }
 
-/** Props for the read-only workspace-shared calendar detail sheet. */
+/** Props for the read-only workspace-shared calendar detail dialog. */
 export interface CalendarSharedItemDetailsProps {
   readonly detail: SharedCalendarItemDetail | null;
   readonly displayTimezone: string;
   readonly onClose: () => void;
 }
-
-const KIND_LABEL: Record<SharedCalendarItemDetail['item']['kind'], string> = {
-  provider_event: 'Provider event',
-  native_event: 'Native event',
-  native_block: 'Block',
-  timebox: 'Timebox',
-  task_timebox: 'Timebox',
-  availability_block: 'Availability',
-};
 
 /** Format shared bounds without looking up the owner-scoped calendar item. */
 function timeLabel(detail: SharedCalendarItemDetail, displayTimezone: string): string {
@@ -77,31 +75,37 @@ export function CalendarSharedItemDetails({
   onClose,
 }: CalendarSharedItemDetailsProps): JSX.Element {
   return (
-    <Sheet
+    <Dialog
       open={detail !== null}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
     >
-      <SheetContent side="right" className="w-[26rem] p-4">
+      <DialogContent
+        showClose={false}
+        className="max-h-[calc(100dvh-2rem)] max-w-xl gap-0 overflow-hidden p-0"
+      >
         {detail ? (
-          <div className="flex flex-col gap-5">
-            <header className="flex flex-col gap-2">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <header className="border-outline-variant flex shrink-0 flex-col gap-2 border-b p-6">
               <div className="flex items-start gap-2">
-                <SheetTitle className="text-title-medium min-w-0 flex-1">
+                <DialogTitle className="text-title-medium min-w-0 flex-1">
                   {detail.item.title}
-                </SheetTitle>
+                </DialogTitle>
                 <CalendarDrawerClose label="Close shared calendar item" onClick={onClose} />
               </div>
-              <SheetDescription>
+              <DialogDescription>
                 Shared by {detail.personName} with this workspace.
-              </SheetDescription>
+              </DialogDescription>
               <div className="flex flex-wrap gap-2">
                 <Badge variant="secondary">Read-only</Badge>
-                <Badge variant="outline">{KIND_LABEL[detail.item.kind]}</Badge>
+                <Badge variant="outline">{CALENDAR_ITEM_KIND_LABEL[detail.item.kind]}</Badge>
               </div>
             </header>
-            <dl className="text-body-medium grid gap-4">
+            <dl
+              className="text-body-medium grid min-h-0 flex-1 gap-5 overflow-y-auto p-6"
+              data-testid="calendar-shared-item-dialog-scroll"
+            >
               <div>
                 <dt className="text-on-surface-variant text-label-medium">When</dt>
                 <dd className="text-on-surface mt-1">{timeLabel(detail, displayTimezone)}</dd>
@@ -121,13 +125,13 @@ export function CalendarSharedItemDetails({
           </div>
         ) : (
           <>
-            <SheetTitle className="sr-only">Shared calendar item</SheetTitle>
-            <SheetDescription className="sr-only">
+            <DialogTitle className="sr-only">Shared calendar item</DialogTitle>
+            <DialogDescription className="sr-only">
               Read-only shared calendar item details.
-            </SheetDescription>
+            </DialogDescription>
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

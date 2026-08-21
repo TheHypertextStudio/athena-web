@@ -752,7 +752,10 @@ describe('CalendarSchedulingSurface persistence', () => {
     const dialog = screen.getByRole('dialog', { name: 'Shared detail' });
     expect(dialog).toHaveTextContent('Grace');
     expect(dialog).toHaveTextContent('Read-only');
-    expect(dialog).toHaveTextContent('Native event');
+    expect(dialog).toHaveTextContent('Event');
+    expect(dialog).not.toHaveTextContent('Provider event');
+    expect(dialog).toHaveClass('top-1/2', 'left-1/2');
+    expect(dialog).not.toHaveClass('inset-y-0', 'right-0');
     expect(dialog).toHaveTextContent('Jul 13, 2026');
     expect(dialog).not.toHaveTextContent('01BX5ZZKBKACTAV9WEVGEMMVN1');
     expect(dialog.querySelector('input, textarea, select')).toBeNull();
@@ -861,6 +864,35 @@ describe('CalendarSchedulingSurface persistence', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close shared calendar item' }));
 
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('describes provider-backed shared items as events without exposing the provider model', () => {
+    render(
+      <CalendarSharedItemDetails
+        displayTimezone="UTC"
+        onClose={vi.fn()}
+        detail={{
+          personName: 'Grace',
+          personTimezone: 'America/Chicago',
+          item: {
+            access: 'details',
+            itemId: ITEM_ID,
+            layerId: LAYER_ID,
+            kind: 'provider_event',
+            title: 'Shared planning',
+            startsAt: '2026-07-13T16:00:00Z',
+            endsAt: '2026-07-13T17:00:00Z',
+            allDayStartDate: null,
+            allDayEndDate: null,
+          },
+        }}
+      />,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Shared planning' });
+    expect(dialog).toHaveTextContent('Event');
+    expect(dialog).not.toHaveTextContent('Provider event');
+    expect(dialog).toHaveClass('max-h-[calc(100dvh-2rem)]');
   });
 
   it('moves clipped timed items exactly and persists all-day edits only through date callbacks', () => {

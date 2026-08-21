@@ -145,7 +145,7 @@ afterEach(() => {
 
 describe('CalendarItemCard', () => {
   it.each<[CalendarItemKind, string]>([
-    ['provider_event', 'Provider event'],
+    ['provider_event', 'Event'],
     ['native_block', 'Block'],
     ['task_timebox', 'Timebox'],
     ['availability_block', 'Availability'],

@@ -14,7 +14,7 @@
  * an accessible badge, so they stay useful and linkable without a false promise of editability.
  *
  * Purely presentational: it never calls a mutation itself. `onOpen` opens the item workspace
- * drawer; `onDragHandlePointerDown`/`onResizeHandlePointerDown` (only invoked when supplied AND
+ * dialog; `onDragHandlePointerDown`/`onResizeHandlePointerDown` (only invoked when supplied AND
  * the item is editable) hand the pointer gesture to the caller, which owns the timeline's pixel
  * geometry and the actual `useUpdateCalendarItem` call.
  *
@@ -67,7 +67,7 @@ export const CALENDAR_ITEM_KIND_ICON: Record<CalendarItemKind, LucideIcon> = {
 
 /** The compact kind label shown in the card's metadata line. Reused by the item workspace drawer. */
 export const CALENDAR_ITEM_KIND_LABEL: Record<CalendarItemKind, string> = {
-  provider_event: 'Provider event',
+  provider_event: 'Event',
   native_event: 'Event',
   native_block: 'Block',
   timebox: 'Timebox',
@@ -80,9 +80,9 @@ export const READ_ONLY_REASON_LABEL: Record<
   NonNullable<CalendarItemPermission['readOnlyReason']>,
   string
 > = {
-  provider_scope: 'Read-only — no calendar write access granted',
+  provider_scope: 'Read-only — editing access was not granted',
   layer_access_role: 'Read-only — your role on this layer cannot edit',
-  event_capability: 'Read-only — the provider marked this event un-editable',
+  event_capability: 'Read-only — this event cannot be edited',
   recurrence_unsupported: 'Read-only — recurring event editing is not yet supported',
   conflict: 'Read-only',
   kind: 'Read-only',

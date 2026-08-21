@@ -5258,6 +5258,68 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [EDITOR-TEMPLATE-002] Close template-editor review findings
+
+- **Completed**: 2026-08-20
+- **Priority**: P1
+- **Summary**: Moved the data-preserving template merge policy out of the composer hook and into
+  the template domain. Every create composer and the persisted editor now depend on the same
+  domain function. Query-backed tests prove that `/template` preserves unsaved text, filters
+  organization, team, and personal templates against the current context, and stays unavailable
+  in read-only documents.
+- **Files Changed**: The template merge domain module and tests; composer and persisted-editor
+  imports; persisted-description integration tests; the template engineering spec; and this log.
+- **Validation**: The ownership test first failed because `components/templates/merge.ts` did not
+  exist. The final focused regression run passed all 72 editor, slash-command, composer, and
+  template tests. The updated web TypeScript program and targeted type-aware ESLint passed. Both
+  `git diff --check` and the second independent review found no implementation blocker.
+- **Learnings**: A shared invariant belongs to the feature domain that defines it, not the first UI
+  surface that used it. Seeding the real TanStack Query cache exercises permission and scope logic
+  without replacing the component under test with a mock.
+- **Retrospective**: The first committed behavior was correct, but its import direction contradicted
+  the ownership described in the spec. The follow-up made the dependency graph match the design
+  and added integration evidence at that boundary.
+
+---
+
+### [EDITOR-TEMPLATE-001] Keep templates inside the editor interaction
+
+- **Completed**: 2026-08-20
+- **Priority**: P1
+- **Summary**: Removed the persisted-description action header. Empty Task, Project, Initiative,
+  and Program descriptions now show a compact **Start from template** action inside the editor.
+  The action disappears after the author writes content, and `/template` appends an eligible
+  template to the live Markdown without discarding unsaved typing.
+- **Approach**: `EntityDocument` owns document layout only. The shared editor depends on a generic
+  `EditorContribution` contract for empty-state actions and contextual slash commands. The
+  template feature implements that contract and owns template queries, filtering, labels, and
+  merge behavior. The slash controller exposes its listbox identity and highlighted row through
+  the same polymorphic interface, so the focused ProseMirror textbox reports the active option to
+  assistive technology.
+- **Files Changed**: The shared editor and template-menu components; the four template-capable
+  entity detail clients; focused editor tests; the template engineering spec; and this work log.
+- **Validation**: The behavior test failed before implementation, and the accessibility assertion
+  failed before the slash controller exposed its active row. After both changes, all 59 focused
+  editor, slash-command, template-menu, and composer tests passed. The web TypeScript program
+  passed with a command-local 4 GB heap after Node's default 2 GB heap aborted. The serial root
+  typecheck passed all 26 tasks, the production web build generated all 75 pages and the service
+  worker, and the repository tooling suite passed all 155 tests. Targeted type-aware ESLint passed.
+  The design-token and owned-error source policy suites passed all 10 tests. An independent review
+  found no remaining Critical or Important issue. The repository-wide lint wrapper did not
+  complete because its unchanged API route-test batch received `SIGTERM` on both bounded attempts;
+  it emitted no lint diagnostic before either termination. The full web test wrapper also ended
+  without a final summary, so neither broad run is counted as verified.
+- **Learnings**: A persisted editor must apply a template against its live Markdown rather than the
+  last server prop, because `/template` can run before the two-second autosave boundary. A generic
+  contribution keeps feature policy out of the editor layout. `EditorContent` attaches DOM props
+  to its wrapper, so listbox relationships must reach the inner ProseMirror textbox that owns
+  keyboard focus.
+- **Retrospective**: The contribution boundary removed the layout leak without adding a template
+  branch to the shared editor. The first review caught the missing slash-menu active descendant;
+  the regression test now covers the accessible keyboard path as well as insertion behavior.
+
+---
+
 ### [EXPORTS-001] Tighten the workspace's package `exports` surface and naming
 
 - **Completed**: 2026-08-16

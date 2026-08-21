@@ -92,6 +92,7 @@
         "./task-drafting",
         "./task-titles",
         "./parent-resolution",
+        "./planning-timeframe",
         "./vocabulary"
       ],
       "allowedRuntimeDependencies": ["zod"],

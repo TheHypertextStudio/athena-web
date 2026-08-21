@@ -116,7 +116,11 @@ describe('picker option mappers', () => {
       teamId: null,
       programId: null,
       startDate: null,
+      startDateResolution: null,
+      startDateFiscalYearStartMonth: null,
       targetDate: null,
+      targetDateResolution: null,
+      targetDateFiscalYearStartMonth: null,
       createdAt: CREATED_AT,
     });
     const program = ProgramOut.parse({
@@ -142,6 +146,8 @@ describe('picker option mappers', () => {
       priority: 'none',
       updateCadence: 'monthly',
       targetDate: null,
+      targetDateResolution: null,
+      targetDateFiscalYearStartMonth: null,
       health: null,
       createdAt: CREATED_AT,
     });

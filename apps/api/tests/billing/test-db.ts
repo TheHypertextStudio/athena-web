@@ -44,6 +44,7 @@ export async function createBillingLifecycleDb(): Promise<BillingLifecycleDbFixt
       approval_routing jsonb,
       initiative_max_depth integer not null default 2,
       estimation_scale estimation_scale not null default 'fibonacci',
+      fiscal_year_start_month integer not null default 0,
       lifecycle_state org_lifecycle_state not null default 'trialing',
       export_ready_at timestamp,
       -- Drizzle names every column of the table in its INSERT, so this fixture has to carry

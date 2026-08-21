@@ -882,7 +882,7 @@ geometry.
 
 - Create: `apps/web/e2e/work/planning-timeframes.spec.ts`
 - Modify: `docs/design/audits/inventories/date-pickers.md`
-- Create: `docs/design/audits/2026-08-20-planning-timeframes.md`
+- Create: `docs/design/audits/2026-08-21-planning-timeframes.md`
 - Modify: `docs/WORKLOG.md`
 
 **Interfaces:**
@@ -891,7 +891,7 @@ geometry.
   create/detail/roadmap through the real app.
 - Produces desktop/mobile light/dark evidence and a Docket craft scorecard.
 
-- [ ] **Step 1: Add the authenticated end-to-end journey**
+- [x] **Step 1: Add the authenticated end-to-end journey**
 
 ```typescript
 test('saved planning timeframes retain their fiscal basis', async ({ page }) => {
@@ -904,49 +904,64 @@ test('saved planning timeframes retain their fiscal basis', async ({ page }) => 
 });
 ```
 
-Also cover a precise date, a month, clear, Project range rejection, Initiative target, semantic
-grouping, timeline placement, and a Linear-import fixture with resolution fields.
+Also cover a precise date, a month, clear, Project range rejection, Initiative target, and semantic
+grouping. The authenticated browser journey verifies the stored anchors that timeline and roadmap
+geometry consume. Focused timeline tests and the Linear integration package cover placement and
+provider fixtures without making the browser harness impersonate an external provider.
 
-- [ ] **Step 2: Run the focused package tests serially**
+- [x] **Step 2: Run the focused package tests serially**
 
-Run: `pnpm --filter @docket/work test -- --maxWorkers=2 && pnpm --filter @docket/types test -- --maxWorkers=2 && pnpm --filter @docket/db test -- --maxWorkers=2 && pnpm --filter @docket/integrations test -- --maxWorkers=2 && pnpm --filter @docket/api test -- tests/lib/planning-timeframe.test.ts tests/routes/projects-detail.test.ts tests/routes/initiatives-detail.test.ts tests/routes/work-structure-timeframes.test.ts tests/routes/integration-reconcile-graph-appliers.test.ts tests/mcp/planning-timeframes.test.ts tests/mcp/timeframe-resources.test.ts tests/account/export.test.ts --maxWorkers=2 && pnpm --filter @docket/web test -- tests/pickers tests/composers/create-project.test.tsx tests/composers/create-initiative.test.tsx tests/components/project-detail/project-properties-panel.test.tsx tests/components/projects/project-timeframe-catalog.test.ts tests/components/initiatives/initiative-timeframes.test.tsx --maxWorkers=2`
+Run each command serially with `--maxWorkers=1`:
+
+```bash
+pnpm --filter @docket/work exec vitest run --maxWorkers=1
+pnpm --filter @docket/types exec vitest run --maxWorkers=1
+pnpm --filter @docket/db exec vitest run --maxWorkers=1
+pnpm --filter @docket/integrations exec vitest run --maxWorkers=1
+pnpm --filter @docket/api exec vitest run tests/lib/planning-timeframe.test.ts tests/routes/projects-detail.test.ts tests/routes/initiatives-detail.test.ts tests/routes/integration-reconcile-graph-appliers.test.ts tests/mcp/mcp-surface.test.ts tests/mcp/mcp-update-tool.test.ts tests/search/projectors.test.ts tests/account/export.test.ts --maxWorkers=1
+NODE_OPTIONS=--no-experimental-webstorage pnpm --filter @docket/web exec vitest run tests/pickers tests/composers/create-project.test.tsx tests/composers/create-initiative.test.tsx tests/components/project-detail/project-properties-panel.test.tsx tests/components/projects/project-timeframe-catalog.test.ts tests/components/initiatives/initiative-timeframes.test.tsx --maxWorkers=1
+```
 
 Expected: PASS without skipped tests.
 
-- [ ] **Step 3: Run the authenticated Playwright journey**
+- [x] **Step 3: Run the authenticated Playwright journey**
 
-Run: `pnpm --filter @docket/web test:e2e -- e2e/work/planning-timeframes.spec.ts --workers=1`
+Start the direct API and web development processes on ports 4201 and 4200 when this worktree's
+portless targets are unavailable. Run:
+
+`APP_URL=http://localhost:4200 PASSKEY_RP_ID=localhost pnpm --filter @docket/web exec playwright test e2e/work/planning-timeframes.spec.ts --workers=1`
 
 Expected: PASS.
 
-- [ ] **Step 4: Run repository validation with bounded concurrency**
+- [x] **Step 4: Run repository validation with bounded concurrency**
 
-Run `~/.claude/resource-limits/agentctl status` first. If the process forest is below its ceiling,
-run these commands serially:
+The configured `~/.claude/resource-limits/agentctl` command is absent on this machine. Run these
+commands serially with package concurrency capped at one. The API TypeScript program exceeds
+Node's default 2 GB heap, so typecheck, lint, and build use a command-local 4 GB heap:
 
 ```bash
-TURBO_CONCURRENCY=2 pnpm typecheck
-TURBO_CONCURRENCY=2 pnpm lint
-TURBO_CONCURRENCY=2 pnpm test
-TURBO_CONCURRENCY=2 pnpm build
+TURBO_CONCURRENCY=1 NODE_OPTIONS=--max-old-space-size=4096 pnpm typecheck
+TURBO_CONCURRENCY=1 NODE_OPTIONS=--max-old-space-size=4096 pnpm lint
+TURBO_CONCURRENCY=1 pnpm test
+TURBO_CONCURRENCY=1 NODE_OPTIONS=--max-old-space-size=4096 pnpm build
 ```
 
 Expected: All four commands pass. Do not rerun an exit 137 unchanged.
 
-- [ ] **Step 5: Run the design review and capture evidence**
+- [x] **Step 5: Run the design review and capture evidence**
 
 Capture Project create, Project detail, Project list grouping, Initiative create, and Initiative
 detail at 1440 by 900 and 390 by 844 in both themes. Check 320-pixel overflow, keyboard navigation,
 Escape behavior, focus return, and accessible semantic labels. Record the eight-dimension score
-and screenshot paths in `docs/design/audits/2026-08-20-planning-timeframes.md`.
+and screenshot paths in `docs/design/audits/2026-08-21-planning-timeframes.md`.
 
-- [ ] **Step 6: Close the worklog with evidence and retrospective**
+- [x] **Step 6: Close the worklog with evidence and retrospective**
 
 Move `TIMEFRAME-001` to completed. Record exact test commands, the migration number, design-review
 score, any baseline failures, and the fact that existing date rows migrated as precise values.
 Record what changed in the approach and what maintainers should reuse.
 
-- [ ] **Step 7: Verify history and commit the closeout**
+- [x] **Step 7: Verify history and commit the closeout**
 
 Run: `git diff --check && git rev-list --merges --count origin/main..HEAD && git status --short`
 

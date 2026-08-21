@@ -537,12 +537,13 @@ describe('RealConnector — asWorkGraph capability seam', () => {
     const emptyConnection = { nodes: [], pageInfo: { hasNextPage: false } };
     const gql = (data: unknown) => new Response(JSON.stringify({ data }), { status: 200 });
     const { http } = fakeHttp([
-      // pullWorkGraph: users, labels, projects, cycles, issues.
+      // pullWorkGraph: users, labels, projects, cycles, issues, organization.
       gql({ users: emptyConnection }),
       gql({ issueLabels: emptyConnection }),
       gql({ projects: emptyConnection }),
       gql({ cycles: emptyConnection }),
       gql({ issues: emptyConnection }),
+      gql({ organization: { fiscalYearStartMonth: 0 } }),
       // listTeamStates
       gql({ team: { states: { nodes: [] } } }),
       // pushWorkItem (update)

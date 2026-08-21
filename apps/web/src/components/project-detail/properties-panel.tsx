@@ -2,13 +2,15 @@
 
 /** Progressive Project property controls rendered as an inline chip row in the entity masthead. */
 import type { Health, LabelOut, ProjectStatus } from '@docket/types';
+import type { DateResolution } from '@docket/work/planning-timeframe';
 import {
-  DateRangePicker,
   EntityMultiPicker,
   EntityPicker,
   EnumPicker,
   LabelsPicker,
   type PickerOption,
+  TimeframeRangePicker,
+  type TimeframeRangeValue,
 } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, Layers, Target } from '@docket/ui/icons';
@@ -20,14 +22,19 @@ import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityMetadataItem,
 } from '@/components/views/entity-detail-layout';
-import { formatCalendarDate } from '@/lib/format-date';
+import { toPlanningTimeframe } from '@/lib/planning-timeframe';
 
 /** Props for {@link PropertiesPanel}. */
 export interface PropertiesPanelProps {
   health: Health | null;
   status: ProjectStatus;
   startDate: string | null;
+  startDateResolution: DateResolution | null;
+  startDateFiscalYearStartMonth: number | null;
   targetDate: string | null;
+  targetDateResolution: DateResolution | null;
+  targetDateFiscalYearStartMonth: number | null;
+  fiscalYearStartMonth: number;
   programId: string | null;
   programOptions: readonly PickerOption[];
   initiativeIds: readonly string[];
@@ -37,7 +44,7 @@ export interface PropertiesPanelProps {
   canEdit: boolean;
   onHealthChange: (health: Health | null) => void;
   onStatusChange: (status: ProjectStatus) => void;
-  onTimelineChange: (range: { start: string | null; end: string | null }) => void;
+  onTimelineChange: (range: TimeframeRangeValue) => void;
   onProgramChange: (programId: string | null) => void;
   onInitiativesChange: (initiativeIds: readonly string[]) => void;
   onLabelsChange: (labelIds: readonly string[]) => void;
@@ -70,7 +77,12 @@ export function PropertiesPanel({
   health,
   status,
   startDate,
+  startDateResolution,
+  startDateFiscalYearStartMonth,
   targetDate,
+  targetDateResolution,
+  targetDateFiscalYearStartMonth,
+  fiscalYearStartMonth,
   programId,
   programOptions,
   initiativeIds,
@@ -97,6 +109,16 @@ export function PropertiesPanel({
   );
   const labelPickerOptions = useMemo(() => labelOptions(availableLabels), [availableLabels]);
   const labelIds = useMemo<readonly string[]>(() => labels.map((label) => label.id), [labels]);
+  const startTimeframe = toPlanningTimeframe(
+    startDate,
+    startDateResolution,
+    startDateFiscalYearStartMonth,
+  );
+  const targetTimeframe = toPlanningTimeframe(
+    targetDate,
+    targetDateResolution,
+    targetDateFiscalYearStartMonth,
+  );
 
   return (
     <>
@@ -127,15 +149,13 @@ export function PropertiesPanel({
         />
       </EntityMetadataItem>
       <EntityMetadataItem priority={2} className="max-w-none">
-        <DateRangePicker
-          value={{ start: startDate, end: targetDate }}
+        <TimeframeRangePicker
+          value={{ start: startTimeframe, target: targetTimeframe }}
+          fiscalYearStartMonth={fiscalYearStartMonth}
           onChange={onTimelineChange}
-          startPlaceholder="Set start date"
-          endPlaceholder="Set target date"
-          formatLabel={(value) => formatCalendarDate(value) ?? undefined}
           ariaLabel="Timeline"
-          startLabel="Start"
-          endLabel="Target"
+          startLabel="Start date"
+          targetLabel="Target date"
           readOnly={readOnly}
           {...CHIP}
         />

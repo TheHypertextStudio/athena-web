@@ -181,20 +181,35 @@ describe('useProjectMutations — project field edits', () => {
     });
   });
 
-  it('shows a new target date before the request settles', async () => {
+  it('shows and sends a new target date and resolution before the request settles', async () => {
     const pending = deferred<ReturnType<typeof okResponse>>();
     projectPatch.mockReturnValue(pending.promise);
     const { result, read } = mountMutations();
 
     act(() => {
-      result.current.patchProject({ targetDate: '2026-09-30' });
+      result.current.patchProject({
+        targetDate: '2026-09-30',
+        targetDateResolution: 'quarter',
+      });
     });
 
     await waitFor(() => {
       expect(read()?.project?.targetDate).toBe('2026-09-30');
     });
+    expect(read()?.project?.targetDateResolution).toBe('quarter');
+    expect(projectPatch).toHaveBeenCalledWith({
+      param: { orgId: ORG_ID, id: PROJECT_ID },
+      json: { targetDate: '2026-09-30', targetDateResolution: 'quarter' },
+    });
 
-    pending.resolve(okResponse({ ...baseDetail().project, targetDate: '2026-09-30' }));
+    pending.resolve(
+      okResponse({
+        ...baseDetail().project,
+        targetDate: '2026-09-30',
+        targetDateResolution: 'quarter',
+        targetDateFiscalYearStartMonth: 0,
+      }),
+    );
     await waitFor(() => {
       expect(result.current.propsPending).toBe(false);
     });

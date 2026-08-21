@@ -15,6 +15,7 @@
 import type { ProjectOverviewItem } from '@docket/types';
 
 import { entityDragSource } from '@/lib/entity-drag';
+import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
 
 import {
   type TimelineCatalog,
@@ -44,6 +45,22 @@ function statusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
 }
 
+/** Format a Project timeline span from its saved start and target planning semantics. */
+export function formatProjectTimelineSpan(row: ProjectOverviewItem): string | null {
+  const start = formatPlanningTimeframe(
+    toPlanningTimeframe(row.startDate, row.startDateResolution, row.startDateFiscalYearStartMonth),
+  );
+  const target = formatPlanningTimeframe(
+    toPlanningTimeframe(
+      row.targetDate,
+      row.targetDateResolution,
+      row.targetDateFiscalYearStartMonth,
+    ),
+  );
+  if (start && target) return start === target ? start : `${start} to ${target}`;
+  return start ?? target;
+}
+
 /**
  * Build the Projects timeline catalog.
  *
@@ -61,6 +78,7 @@ export function buildProjectTimelineCatalog(
     sublabel: (row) => (row.teamId === null ? null : resolveTeam(row.teamId)),
     href: (row) => `/orgs/${orgId}/projects/${row.id}`,
     span: (row) => resolveSpan(parseDate(row.startDate), parseDate(row.targetDate)),
+    spanLabel: formatProjectTimelineSpan,
     markers: (row): readonly TimelineMarker[] => {
       const markers: TimelineMarker[] = [];
       for (const milestone of row.milestones) {

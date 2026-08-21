@@ -800,9 +800,11 @@ const SPAN_FORMAT = new Intl.DateTimeFormat(undefined, {
 /** Build the accessible description for a bar: name, status, and span. */
 function describe<T>(catalog: TimelineCatalog<T>, row: T, span: TimelineSpan): string {
   const fmt = SPAN_FORMAT;
+  const semanticRange = catalog.spanLabel?.(row) ?? null;
   const range =
-    span.start === span.end
+    semanticRange ??
+    (span.start === span.end
       ? fmt.format(new Date(span.start))
-      : `${fmt.format(new Date(span.start))} to ${fmt.format(new Date(span.end))}`;
+      : `${fmt.format(new Date(span.start))} to ${fmt.format(new Date(span.end))}`);
   return `${catalog.label(row)} — ${catalog.statusLabel(row)}, ${range}`;
 }

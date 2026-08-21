@@ -1,7 +1,7 @@
 /** Behavior tests for progressive Project property controls. */
 import type { PickerOption } from '@docket/ui/components';
 import { LabelId, OrganizationId } from '@docket/types';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PropertiesPanel } from '../../../src/components/project-detail/properties-panel';
@@ -40,7 +40,12 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof PropertiesPa
       health={null}
       status="planned"
       startDate={null}
+      startDateResolution={null}
+      startDateFiscalYearStartMonth={null}
       targetDate={null}
+      targetDateResolution={null}
+      targetDateFiscalYearStartMonth={null}
+      fiscalYearStartMonth={0}
       programId={null}
       programOptions={PROGRAM_OPTIONS}
       initiativeIds={[]}
@@ -77,6 +82,57 @@ describe('Project PropertiesPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Status — Planned' }));
     choosePickerOption(/Completed/);
     expect(callbacks.onStatusChange).toHaveBeenCalledWith('completed');
+  });
+
+  it('updates a broad target as one semantic planning value', () => {
+    const callbacks = renderPanel();
+
+    fireEvent.click(screen.getByRole('button', { name: /Target date/ }));
+    fireEvent.click(screen.getByRole('option', { name: 'December 2026' }));
+    expect(callbacks.onTimelineChange).toHaveBeenCalledWith({
+      start: null,
+      target: {
+        date: '2026-12-31',
+        resolution: 'month',
+        fiscalYearStartMonth: 0,
+      },
+    });
+  });
+
+  it('sends a null resolution for a specific day and clears both target fields', () => {
+    const callbacks = renderPanel({
+      targetDate: '2026-08-20',
+      targetDateResolution: 'month',
+      targetDateFiscalYearStartMonth: 0,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Target date/ }));
+    fireEvent.click(screen.getByRole('option', { name: 'Specific date' }));
+    const grid = screen.getByRole('grid', { name: 'Target date' });
+    fireEvent.click(within(grid).getByRole('button', { name: '2026-08-25' }));
+    expect(callbacks.onTimelineChange).toHaveBeenLastCalledWith({
+      start: null,
+      target: {
+        date: '2026-08-25',
+        resolution: null,
+        fiscalYearStartMonth: null,
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Target date/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(callbacks.onTimelineChange).toHaveBeenLastCalledWith({ start: null, target: null });
+  });
+
+  it('renders a broad label from the saved fiscal basis instead of the current setting', () => {
+    renderPanel({
+      targetDate: '2026-06-30',
+      targetDateResolution: 'quarter',
+      targetDateFiscalYearStartMonth: 3,
+      fiscalYearStartMonth: 0,
+    });
+
+    expect(screen.getByRole('button', { name: /Target date/ })).toHaveTextContent('Q1 FY 2027');
   });
 
   it('attaches a Program through the entity picker', () => {

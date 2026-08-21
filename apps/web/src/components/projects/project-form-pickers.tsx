@@ -12,13 +12,15 @@
  * whose values would be dropped on save.
  */
 import type { Health, ProjectStatus } from '@docket/types';
+import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import {
   ActorPicker,
-  DateRangePicker,
   EntityPicker,
   EnumPicker,
   LabelsPicker,
   type PickerOption,
+  TimeframeRangePicker,
+  type TimeframeRangeValue,
 } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, Layers, Target } from '@docket/ui/icons';
@@ -28,12 +30,6 @@ import { type JSX, useMemo } from 'react';
 import { HEALTH_OPTIONS, statusOptions } from '@/components/pickers/options';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { TeamPicker } from '@/components/teams/team-picker';
-import { formatCalendarDate } from '@/lib/format-date';
-
-/** Format an ISO date for a picker trigger, narrowing the app helper's `null` to `undefined`. */
-function triggerDate(value: string | null): string | undefined {
-  return formatCalendarDate(value, { month: 'short', day: 'numeric' }) ?? undefined;
-}
 
 /** The optional reference axes, supplied together or not at all. */
 export interface ProjectComposerReferenceAxes {
@@ -57,12 +53,16 @@ export interface ProjectComposerReferenceAxes {
   onProgramChange: (id: string | null) => void;
   /** Whether Program remains in the lower strip instead of being promoted into global context. */
   showProgram?: boolean;
-  /** The planned start date, or null. */
-  startDate: string | null;
-  /** The planned target date, or null. */
-  targetDate: string | null;
+  /** The planned start value, or null. */
+  startTimeframe: PlanningTimeframe | null;
+  /** The planned target value, or null. */
+  targetTimeframe: PlanningTimeframe | null;
+  /** Current zero-based fiscal month used for new broad choices. */
+  fiscalYearStartMonth: number;
+  /** Whether the current fiscal setting is still loading. */
+  planningCalendarLoading?: boolean;
   /** Report a changed timeline. */
-  onTimelineChange: (range: { start: string | null; end: string | null }) => void;
+  onTimelineChange: (range: TimeframeRangeValue) => void;
   /** The initiative options. */
   initiativeOptions: readonly PickerOption[];
   /** The linked initiative ids. */
@@ -161,16 +161,14 @@ export function ProjectComposerPickers({
               disabled={disabled}
             />
           ) : null}
-          <DateRangePicker
-            value={{ start: references.startDate, end: references.targetDate }}
+          <TimeframeRangePicker
+            value={{ start: references.startTimeframe, target: references.targetTimeframe }}
+            fiscalYearStartMonth={references.fiscalYearStartMonth}
             onChange={references.onTimelineChange}
-            startPlaceholder="Set start date"
-            endPlaceholder="Set target date"
-            formatLabel={triggerDate}
             ariaLabel="Timeline"
-            startLabel="Start"
-            endLabel="Target"
-            disabled={disabled}
+            startLabel="Project start"
+            targetLabel="Project target"
+            disabled={disabled || references.planningCalendarLoading}
           />
           <LabelsPicker
             options={references.initiativeOptions}

@@ -25,7 +25,7 @@ import { useActiveOrg } from '@/components/active-org';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
-import { buildProjectCatalog } from '@/components/projects/project-catalog';
+import { buildProjectCatalog, formatProjectTarget } from '@/components/projects/project-catalog';
 import { buildProjectTimelineCatalog } from '@/components/projects/project-timeline-catalog';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge } from '@/components/entity-display/work-status';
@@ -101,14 +101,6 @@ const HEALTH_CLASS = {
   at_risk: 'text-state-canceled',
   off_track: 'text-error',
 } as const;
-const DATE_FORMAT = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
-
-function formatDate(value: string | null | undefined): string {
-  if (!value) return '—';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : DATE_FORMAT.format(date);
-}
-
 function progressPercent(item: ProjectOverviewItem): number {
   return item.taskCount === 0 ? 0 : Math.round((item.completedTaskCount / item.taskCount) * 100);
 }
@@ -243,7 +235,7 @@ function ListLens({
         role="row"
         {...dragProps}
         className={cn(
-          'hover:bg-surface-container-high relative grid min-h-[72px] cursor-pointer grid-cols-[minmax(25rem,1fr)_7rem_7rem_7rem_7rem_8rem] items-center rounded-lg transition-colors',
+          'hover:bg-surface-container-high relative grid min-h-[72px] cursor-pointer grid-cols-[minmax(25rem,1fr)_7rem_7rem_10rem_7rem_8rem] items-center rounded-lg transition-colors',
           dragProps?.className,
         )}
         onMouseEnter={() => {
@@ -276,7 +268,7 @@ function ListLens({
           )}
         </div>
         <div role="gridcell" className="px-3 whitespace-nowrap tabular-nums">
-          {formatDate(item.targetDate)}
+          {formatProjectTarget(item) ?? '—'}
         </div>
         <div role="gridcell" className="px-3">
           <span className="tabular-nums">{percent}%</span>
@@ -300,10 +292,10 @@ function ListLens({
 
   return (
     <div className="overflow-x-auto overscroll-x-contain pb-1">
-      <div role="grid" aria-label="Projects" className="min-w-[61rem] text-sm">
+      <div role="grid" aria-label="Projects" className="min-w-[64rem] text-sm">
         <div
           role="row"
-          className="text-on-surface-variant grid h-9 grid-cols-[minmax(25rem,1fr)_7rem_7rem_7rem_7rem_8rem] items-center text-xs"
+          className="text-on-surface-variant grid h-9 grid-cols-[minmax(25rem,1fr)_7rem_7rem_10rem_7rem_8rem] items-center text-xs"
         >
           <div role="columnheader" className="px-3 pl-14 font-medium">
             Project
@@ -412,6 +404,7 @@ export default function ProjectsListClient(): JSX.Element {
   const catalog = useMemo(
     () =>
       buildProjectCatalog({
+        projects,
         statuses,
         leadLabel: 'Person',
         teamLabel: teamNoun,
@@ -425,6 +418,7 @@ export default function ProjectsListClient(): JSX.Element {
       }),
     [
       statuses,
+      projects,
       leadNameById,
       members,
       membersQ.isPending,
@@ -538,7 +532,12 @@ export default function ProjectsListClient(): JSX.Element {
         () =>
           api.v1.orgs[':orgId'].projects[':id'].$patch({
             param: { orgId, id: projectId },
-            json: { startDate, targetDate },
+            json: {
+              startDate,
+              startDateResolution: null,
+              targetDate,
+              targetDateResolution: null,
+            },
           }),
         `Could not reschedule this ${projectNoun.toLowerCase()}.`,
       ),
@@ -551,7 +550,17 @@ export default function ProjectsListClient(): JSX.Element {
           ? {
               ...current,
               items: current.items.map((item) =>
-                item.id === projectId ? { ...item, startDate, targetDate } : item,
+                item.id === projectId
+                  ? {
+                      ...item,
+                      startDate,
+                      startDateResolution: null,
+                      startDateFiscalYearStartMonth: null,
+                      targetDate,
+                      targetDateResolution: null,
+                      targetDateFiscalYearStartMonth: null,
+                    }
+                  : item,
               ),
             }
           : current,
@@ -596,7 +605,9 @@ export default function ProjectsListClient(): JSX.Element {
                 param: { orgId, id: change.id },
                 json: {
                   startDate: toWireDate(change.to.start),
+                  startDateResolution: null,
                   targetDate: toWireDate(change.to.end),
+                  targetDateResolution: null,
                 },
               }),
             `Could not reschedule a dependent ${projectNoun.toLowerCase()}.`,

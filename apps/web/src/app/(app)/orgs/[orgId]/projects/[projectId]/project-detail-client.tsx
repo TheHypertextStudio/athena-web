@@ -62,6 +62,7 @@ import { useProjectDetailPage } from '@/lib/use-project-detail-page';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { userErrorMessage } from '@/lib/problem';
 import { useSession } from '@/lib/auth-client';
+import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 
@@ -80,6 +81,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [repeatProjectOpen, setRepeatProjectOpen] = useState(false);
   const entityMentions = useEntityMentions(orgId, 'project', projectId);
+  const planningCalendar = useFiscalYearStartMonth(orgId);
 
   const {
     detailKey,
@@ -346,7 +348,12 @@ export default function ProjectDetailPage(): JSX.Element {
               health={health}
               status={project.status}
               startDate={project.startDate ?? null}
+              startDateResolution={project.startDateResolution}
+              startDateFiscalYearStartMonth={project.startDateFiscalYearStartMonth}
               targetDate={project.targetDate ?? null}
+              targetDateResolution={project.targetDateResolution}
+              targetDateFiscalYearStartMonth={project.targetDateFiscalYearStartMonth}
+              fiscalYearStartMonth={planningCalendar.fiscalYearStartMonth}
               programId={project.programId ?? null}
               programOptions={programOptions}
               initiativeIds={initiativeIds}
@@ -360,8 +367,13 @@ export default function ProjectDetailPage(): JSX.Element {
               onStatusChange={(status) => {
                 patchProject({ status });
               }}
-              onTimelineChange={({ start, end }) => {
-                patchProject({ startDate: start, targetDate: end });
+              onTimelineChange={({ start, target }) => {
+                patchProject({
+                  startDate: start?.date ?? null,
+                  startDateResolution: start?.resolution ?? null,
+                  targetDate: target?.date ?? null,
+                  targetDateResolution: target?.resolution ?? null,
+                });
               }}
               onProgramChange={(programId) => {
                 patchProject({ programId });

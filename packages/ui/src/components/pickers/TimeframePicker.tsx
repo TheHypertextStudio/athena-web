@@ -339,6 +339,10 @@ export interface TimeframeRangePickerProps {
   readonly triggerClassName?: string | undefined;
   /** Accessible group and field prefix. */
   readonly ariaLabel?: string | undefined;
+  /** Label for the start field. Defaults to the group label plus `start`. */
+  readonly startLabel?: string | undefined;
+  /** Label for the target field. Defaults to the group label plus `target`. */
+  readonly targetLabel?: string | undefined;
 }
 
 /**
@@ -356,6 +360,8 @@ export function TimeframeRangePicker({
   triggerVariant = 'ghost',
   triggerClassName,
   ariaLabel = 'Timeline',
+  startLabel = `${ariaLabel} start`,
+  targetLabel = `${ariaLabel} target`,
 }: TimeframeRangePickerProps): React.JSX.Element {
   const [error, setError] = React.useState<string | null>(null);
   const errorId = React.useId();
@@ -373,7 +379,7 @@ export function TimeframeRangePicker({
     <div className="flex max-w-full flex-col gap-1">
       <div role="group" aria-label={ariaLabel} className="flex max-w-full flex-nowrap gap-2">
         <TimeframePicker
-          label={`${ariaLabel} start`}
+          label={startLabel}
           value={value.start}
           fiscalYearStartMonth={fiscalYearStartMonth}
           edge="start"
@@ -388,7 +394,7 @@ export function TimeframeRangePicker({
           describedBy={error ? errorId : undefined}
         />
         <TimeframePicker
-          label={`${ariaLabel} target`}
+          label={targetLabel}
           value={value.target}
           fiscalYearStartMonth={fiscalYearStartMonth}
           edge="target"

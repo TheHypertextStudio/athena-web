@@ -37,9 +37,16 @@ import {
   findField,
   labelForValue,
 } from '@/components/views/field-catalog';
+import {
+  formatPlanningTimeframe,
+  planningTimeframeKey,
+  toPlanningTimeframe,
+} from '@/lib/planning-timeframe';
 
 /** Injected resolvers a page supplies so the project catalog can skin relation fields. */
 export interface ProjectCatalogDeps {
+  /** Loaded Project rows used to derive non-empty semantic timeframe options. */
+  projects: readonly ProjectOut[];
   /** The workspace's Project statuses, in board order, from the status registry. */
   statuses: readonly WorkStatusDisplay[];
   /** Vocabulary label for the project "Lead" relation (kept neutral as "Lead"). */
@@ -63,6 +70,19 @@ export interface ProjectCatalogDeps {
  * @returns the catalog over {@link ProjectOut}.
  */
 export function buildProjectCatalog(deps: ProjectCatalogDeps): FieldCatalog<ProjectOut> {
+  const timeframeByKey = new Map<string, { value: string; label: string; date: string }>();
+  for (const project of deps.projects) {
+    const value = targetTimeframeKey(project);
+    const label = formatProjectTarget(project);
+    if (!value || !label || !project.targetDate) continue;
+    timeframeByKey.set(value, { value, label, date: project.targetDate });
+  }
+  const targetTimeframeOptions = [...timeframeByKey.values()]
+    .sort(
+      (left, right) => left.date.localeCompare(right.date) || left.label.localeCompare(right.label),
+    )
+    .map(({ value, label }) => ({ value, label }));
+
   return [
     {
       key: 'status',
@@ -100,6 +120,16 @@ export function buildProjectCatalog(deps: ProjectCatalogDeps): FieldCatalog<Proj
       sortable: true,
     },
     {
+      key: 'targetTimeframe',
+      label: 'Target timeframe',
+      type: 'enum',
+      accessor: targetTimeframeKey,
+      options: targetTimeframeOptions,
+      groupable: true,
+      rank: (value) =>
+        typeof value === 'string' ? Date.parse(`${value.slice(0, 10)}T00:00:00.000Z`) : Infinity,
+    },
+    {
       key: 'name',
       label: 'Name',
       type: 'text',
@@ -109,15 +139,26 @@ export function buildProjectCatalog(deps: ProjectCatalogDeps): FieldCatalog<Proj
   ];
 }
 
-/** A short, year-less day formatter for a project's target date (e.g. "Jun 21"). */
-const TARGET_DATE_FMT = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+/** Format one Project target with its saved planning semantics. */
+export function formatProjectTarget(project: ProjectOut): string | null {
+  return formatPlanningTimeframe(
+    toPlanningTimeframe(
+      project.targetDate,
+      project.targetDateResolution,
+      project.targetDateFiscalYearStartMonth,
+    ),
+  );
+}
 
-/** Format a project's nullable target date for the table cell, or `null` when unset/invalid. */
-function formatTargetDate(targetDate: string | null | undefined): string | null {
-  if (!targetDate) return null;
-  const date = new Date(targetDate);
-  if (Number.isNaN(date.getTime())) return null;
-  return TARGET_DATE_FMT.format(date);
+/** Build one Project target's stable semantic filter and grouping key. */
+export function targetTimeframeKey(project: ProjectOut): string | null {
+  return planningTimeframeKey(
+    toPlanningTimeframe(
+      project.targetDate,
+      project.targetDateResolution,
+      project.targetDateFiscalYearStartMonth,
+    ),
+  );
 }
 
 /** Page-supplied roll-ups the table cells need beyond the project row itself (task scope). */
@@ -217,10 +258,10 @@ export function projectColumns(
       key: 'targetDate',
       header: targetDate?.label ?? 'Target date',
       align: 'end',
-      width: '6.5rem',
+      width: '9.5rem',
       priority: 3,
       render: (project) => {
-        const formatted = formatTargetDate(project.targetDate);
+        const formatted = formatProjectTarget(project);
         return formatted
           ? createElement(
               'span',

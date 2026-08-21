@@ -6,7 +6,7 @@ import {
   type EstimationScale,
   type WorkspaceSettingsOut,
 } from '@docket/types';
-import { Skeleton } from '@docket/ui/primitives';
+import { Field, Select, Skeleton } from '@docket/ui/primitives';
 import { LoadFailure } from '@/components/settings/load-failure';
 import { useAppParams } from '@/lib/app-location';
 import { useEffect, useState, type JSX } from 'react';
@@ -26,6 +26,13 @@ const ESTIMATION_SCALE_ORDER: readonly EstimationScale[] = [
   'linear',
   't_shirt',
 ];
+
+/** Calendar month labels in the zero-based order stored by workspace settings. */
+const MONTH_NAMES = Array.from({ length: 12 }, (_, month) =>
+  new Intl.DateTimeFormat(undefined, { month: 'long', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(2026, month, 1)),
+  ),
+);
 
 /** The point values a scale offers, rendered as picker sub-copy (e.g. "1, 2, 4, 8, 16, 32"). */
 function scaleValuesCopy(scale: EstimationScale): string | null {
@@ -51,10 +58,12 @@ export default function WorkStructureSettingsPage(): JSX.Element {
   );
   const [depth, setDepth] = useState(2);
   const [scale, setScale] = useState<EstimationScale>('fibonacci');
+  const [fiscalMonth, setFiscalMonth] = useState(0);
   useEffect(() => {
     if (settingsQ.data) {
       setDepth(settingsQ.data.initiativeMaxDepth);
       setScale(settingsQ.data.estimationScale);
+      setFiscalMonth(settingsQ.data.fiscalYearStartMonth);
     }
   }, [settingsQ.data]);
 
@@ -84,10 +93,23 @@ export default function WorkStructureSettingsPage(): JSX.Element {
     invalidateKeys: [key],
   });
 
+  const saveFiscalMonth = useApiMutation<WorkspaceSettingsOut, number>({
+    mutationFn: (fiscalYearStartMonth) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].settings['work-structure'].$patch({
+            param: { orgId },
+            json: { fiscalYearStartMonth },
+          }),
+        'Could not save the fiscal year start month.',
+      ),
+    invalidateKeys: [key],
+  });
+
   return (
     <SettingsSectionPage
       title="Work structure"
-      description="Set how deeply initiatives can nest, and which scale the team estimates with."
+      description="Set planning calendars, Initiative depth, and the task estimation scale."
     >
       {/* placeholder: the workspace's configured initiative-nesting depth and estimation scale,
           and whether the caller is permitted to change them. The headings and explanations above
@@ -209,6 +231,51 @@ export default function WorkStructureSettingsPage(): JSX.Element {
                 : null
             }
             idleLabel={`Current scale: ${ESTIMATION_SCALE_LABEL[settingsQ.data.estimationScale]}`}
+          />
+
+          <div>
+            <h3 id="fiscal-calendar" className="text-on-surface text-title-small">
+              Planning calendar
+            </h3>
+            <p className="text-on-surface-variant text-body-medium mt-1">
+              This changes new Project and Initiative quarters, halves, and years. Saved timeframes
+              do not move.
+            </p>
+          </div>
+
+          <Field label="Fiscal year starts" className="max-w-xs">
+            <Select
+              aria-label="Fiscal year starts"
+              value={String(fiscalMonth)}
+              disabled={permissionLoading || !canManage || saveFiscalMonth.isPending}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                setFiscalMonth(next);
+                if (next !== settingsQ.data.fiscalYearStartMonth) {
+                  saveFiscalMonth.mutate(next);
+                }
+              }}
+            >
+              {MONTH_NAMES.map((name, month) => (
+                <option key={name} value={month}>
+                  {name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <SettingRowStatus
+            pending={saveFiscalMonth.isPending}
+            saved={saveFiscalMonth.isSuccess}
+            error={
+              saveFiscalMonth.error
+                ? userErrorMessage(
+                    saveFiscalMonth.error,
+                    'Could not save the fiscal year start month.',
+                  )
+                : null
+            }
+            idleLabel={`Current start: ${MONTH_NAMES[settingsQ.data.fiscalYearStartMonth] ?? 'January'}`}
           />
         </section>
       )}

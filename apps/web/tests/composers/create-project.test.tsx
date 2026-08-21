@@ -25,6 +25,7 @@ const {
   initiativesGet,
   programsGet,
   templatesGet,
+  settingsGet,
   creationState,
   createObjectState,
   sessionState,
@@ -39,6 +40,7 @@ const {
     initiativesGet: vi.fn(),
     programsGet: vi.fn(),
     templatesGet: vi.fn(),
+    settingsGet: vi.fn(),
     creationState,
     createObjectState,
     sessionState: { data: { user: { id: 'user_1' } }, isPending: false },
@@ -57,6 +59,7 @@ vi.mock('../../src/lib/api', () => ({
           initiatives: { $get: initiativesGet },
           programs: { $get: programsGet },
           templates: { $get: templatesGet },
+          settings: { 'work-structure': { $get: settingsGet } },
         },
       },
     },
@@ -225,6 +228,13 @@ beforeEach(() => {
       jsonResponse(true, { items: param.orgId === TARGET_ORG_ID ? TARGET_PROGRAMS : PROGRAMS }),
     );
   templatesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
+  settingsGet.mockReset().mockResolvedValue(
+    jsonResponse(true, {
+      initiativeMaxDepth: 2,
+      estimationScale: 'fibonacci',
+      fiscalYearStartMonth: 0,
+    }),
+  );
   createObjectState.current = {
     request: null,
     closeCreate: vi.fn(),
@@ -740,6 +750,32 @@ describe('CreateProjectDialog — robust composer', () => {
       teamId: TEAM_ID,
     });
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'proj_1' }));
+  });
+
+  it('sends broad Project start and target resolutions with their canonical anchors', async () => {
+    projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_timeframe', name: 'Timed' }));
+    renderComposer();
+
+    await waitFor(() => {
+      expect(settingsGet).toHaveBeenCalled();
+    });
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Timed' } });
+    fireEvent.click(screen.getByRole('button', { name: /Project start/ }));
+    fireEvent.click(screen.getByRole('option', { name: 'Quarter' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Q3 2026' }));
+    fireEvent.click(screen.getByRole('button', { name: /Project target/ }));
+    fireEvent.click(screen.getByRole('option', { name: 'December 2026' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    await waitFor(() => {
+      expect(projectPost).toHaveBeenCalledTimes(1);
+    });
+    expect(firstJson(projectPost.mock.calls)).toMatchObject({
+      startDate: '2026-07-01',
+      startDateResolution: 'quarter',
+      targetDate: '2026-12-31',
+      targetDateResolution: 'month',
+    });
   });
 
   it('threads a chosen lead through the create DTO', async () => {

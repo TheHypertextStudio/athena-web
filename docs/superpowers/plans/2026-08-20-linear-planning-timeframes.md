@@ -688,6 +688,11 @@ calendar instead of changing it.
 - Modify: `apps/web/src/lib/use-project-mutations.ts`
 - Modify: `apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx`
 - Modify: `apps/web/src/components/projects/project-catalog.ts`
+- Modify: `apps/web/src/components/projects/project-timeline-catalog.ts`
+- Modify: `apps/web/src/components/timeline/timeline-catalog.ts`
+- Modify: `apps/web/src/components/timeline/timeline-canvas.tsx`
+- Create: `apps/web/src/lib/planning-timeframe.ts`
+- Create: `apps/web/src/lib/use-fiscal-year-start-month.ts`
 - Modify: `apps/web/tests/composers/create-project.test.tsx`
 - Modify: `apps/web/tests/components/project-detail/project-properties-panel.test.tsx`
 - Modify: `apps/web/tests/components/projects/projects-experience-contract.test.ts`
@@ -699,7 +704,7 @@ calendar instead of changing it.
 - Project create and detail send each date and resolution together.
 - Project rows display semantic target labels and group/filter on semantic timeframe keys.
 
-- [ ] **Step 1: Write failing workspace-setting tests**
+- [x] **Step 1: Write failing workspace-setting tests**
 
 ```tsx
 expect(screen.getByLabelText('Fiscal year starts')).toHaveValue('0');
@@ -708,12 +713,12 @@ expect(patch).toHaveBeenCalledWith({ fiscalYearStartMonth: 6 });
 expect(screen.getByText(/new project and initiative timeframes/i)).toBeVisible();
 ```
 
-- [ ] **Step 2: Add the month selector through the typed settings mutation**
+- [x] **Step 2: Add the month selector through the typed settings mutation**
 
 Use month values `0` through `11` and localized month names. The supporting copy must state:
 `This changes new Project and Initiative quarters, halves, and years. Saved timeframes do not move.`
 
-- [ ] **Step 3: Write failing Project create and detail tests**
+- [x] **Step 3: Write failing Project create and detail tests**
 
 ```tsx
 await chooseTimeframe('Project start', 'Quarter', 'Q3 2026');
@@ -731,7 +736,7 @@ expect(createProject).toHaveBeenCalledWith(
 Assert that detail updates invalidate the same query keys as exact updates. Assert that choosing a
 specific date sends a null resolution. Assert that clear sends null for both fields.
 
-- [ ] **Step 4: Replace Project date controls and mutation payloads**
+- [x] **Step 4: Replace Project date controls and mutation payloads**
 
 Build values from `ProjectOut`:
 
@@ -748,7 +753,7 @@ const target = project.targetDate
 The create composer reads the current workspace setting. The detail panel uses the saved fiscal
 snapshot for labels and the current setting for new selections.
 
-- [ ] **Step 5: Write failing Project catalog tests for semantic display and grouping**
+- [x] **Step 5: Write failing Project catalog tests for semantic display and grouping**
 
 ```typescript
 expect(formatProjectTarget(monthProject)).toBe('June 2026');
@@ -761,19 +766,19 @@ chronological sorting on the canonical target anchor. Keep the existing target-d
 filter for exact range comparisons and add a semantic `Target timeframe` enum filter for saved
 periods.
 
-- [ ] **Step 6: Update Project list and timeline copy**
+- [x] **Step 6: Update Project list and timeline copy**
 
 Use `timeframeLabel` in the target column and any accessible timeline span copy. Keep timeline
 geometry on `startDate` and `targetDate`. A broad month target must display `June 2026`, not
 `Jun 30`.
 
-- [ ] **Step 7: Run the focused Project and settings tests**
+- [x] **Step 7: Run the focused Project and settings tests**
 
 Run: `pnpm --filter @docket/web test -- tests/components/settings/work-structure-timeframes.test.tsx tests/composers/create-project.test.tsx tests/components/project-detail/project-properties-panel.test.tsx tests/components/projects/projects-experience-contract.test.ts tests/components/projects/project-timeframe-catalog.test.ts tests/timeline && pnpm --filter @docket/web typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit the Project and setting slice**
+- [x] **Step 8: Commit the Project and setting slice**
 
 Commit type/scope: `feat(projects)` with a body that explains the user-visible choices, saved label
 stability, and unchanged timeline anchors.

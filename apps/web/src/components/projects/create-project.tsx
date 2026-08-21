@@ -33,6 +33,7 @@ import {
   TeamId,
   type TeamOut,
 } from '@docket/types';
+import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import { EntityPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight, Layers } from '@docket/ui/icons';
@@ -64,6 +65,7 @@ import { useSession } from '@/lib/auth-client';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { seedProjectRecord } from '@/lib/entity-records';
 import { queryKeys } from '@/lib/query';
+import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 
 import { ProjectComposerPickers } from './project-form-pickers';
 
@@ -81,8 +83,8 @@ export interface ProjectDraft {
   programId: string | null;
   status: ProjectStatus;
   health: Health | null;
-  startDate: string | null;
-  targetDate: string | null;
+  startTimeframe: PlanningTimeframe | null;
+  targetTimeframe: PlanningTimeframe | null;
   initiativeIds: readonly string[];
 }
 
@@ -171,6 +173,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   const destinationReady = globalCreation?.ready ?? true;
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
+  const planningCalendar = useFiscalYearStartMonth(orgId, open && destinationReady);
   const { draft, setField, updateDraft } = useComposerDraft<ProjectDraft>({
     name: '',
     summary: '',
@@ -180,8 +183,8 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
     programId: contextualRequestDefaultsApply ? (defaultProgramId ?? null) : null,
     status: 'planned',
     health: null,
-    startDate: null,
-    targetDate: null,
+    startTimeframe: null,
+    targetTimeframe: null,
     initiativeIds: [],
   });
 
@@ -221,8 +224,10 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       leadId: null,
       programId: null,
       initiativeIds: [],
+      startTimeframe: draft.startTimeframe?.resolution ? null : draft.startTimeframe,
+      targetTimeframe: draft.targetTimeframe?.resolution ? null : draft.targetTimeframe,
     }));
-  }, [globalCreation, updateDraft]);
+  }, [draft.startTimeframe, draft.targetTimeframe, globalCreation, updateDraft]);
 
   /** Toggle an initiative id in/out of the selected set. */
   const toggleInitiative = useCallback(
@@ -262,8 +267,18 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
             ...(draft.programId ? { programId: ProgramId.parse(draft.programId) } : {}),
             status: draft.status,
             ...(draft.health ? { health: draft.health } : {}),
-            ...(draft.startDate ? { startDate: draft.startDate } : {}),
-            ...(draft.targetDate ? { targetDate: draft.targetDate } : {}),
+            ...(draft.startTimeframe
+              ? {
+                  startDate: draft.startTimeframe.date,
+                  startDateResolution: draft.startTimeframe.resolution,
+                }
+              : {}),
+            ...(draft.targetTimeframe
+              ? {
+                  targetDate: draft.targetTimeframe.date,
+                  targetDateResolution: draft.targetTimeframe.resolution,
+                }
+              : {}),
             ...(draft.initiativeIds.length > 0
               ? { initiativeIds: draft.initiativeIds.map((id) => InitiativeId.parse(id)) }
               : {}),
@@ -454,10 +469,12 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
           onProgramChange: (next) => {
             setField('programId', next);
           },
-          startDate: draft.startDate,
-          targetDate: draft.targetDate,
-          onTimelineChange: ({ start, end }) => {
-            updateDraft(() => ({ startDate: start, targetDate: end }));
+          startTimeframe: draft.startTimeframe,
+          targetTimeframe: draft.targetTimeframe,
+          fiscalYearStartMonth: planningCalendar.fiscalYearStartMonth,
+          planningCalendarLoading: planningCalendar.loading,
+          onTimelineChange: ({ start, target }) => {
+            updateDraft(() => ({ startTimeframe: start, targetTimeframe: target }));
           },
           initiativeOptions: options.initiativeOptions,
           initiativeIds: draft.initiativeIds,

@@ -1,0 +1,37 @@
+'use client';
+
+import { api } from './api';
+import { apiQueryOptions, queryKeys, useApiQuery } from './query';
+
+/** Current fiscal-calendar state used by new Project and Initiative planning selections. */
+export interface FiscalYearStartMonthState {
+  /** Zero-based fiscal start month. January is used only while the workspace setting loads. */
+  readonly fiscalYearStartMonth: number;
+  /** Whether the picker must remain disabled to avoid committing against the fallback month. */
+  readonly loading: boolean;
+}
+
+/**
+ * Read the current workspace fiscal start month through the shared settings query.
+ *
+ * @param orgId - Workspace whose planning calendar applies.
+ * @param enabled - Whether the settings request should run.
+ * @returns Current month plus its loading state.
+ */
+export function useFiscalYearStartMonth(orgId: string, enabled = true): FiscalYearStartMonthState {
+  const settings = useApiQuery({
+    ...apiQueryOptions(
+      queryKeys.settings(orgId, 'work-structure'),
+      () =>
+        api.v1.orgs[':orgId'].settings['work-structure'].$get({
+          param: { orgId },
+        }),
+      'Could not load planning calendar settings.',
+    ),
+    enabled,
+  });
+  return {
+    fiscalYearStartMonth: settings.data?.fiscalYearStartMonth ?? 0,
+    loading: enabled && settings.isPending,
+  };
+}

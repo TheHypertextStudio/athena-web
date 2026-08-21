@@ -16,6 +16,7 @@ import {
   ProgramId,
   ProjectId,
 } from '@docket/types';
+import type { DateResolution } from '@docket/work/planning-timeframe';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef } from 'react';
 
@@ -34,7 +35,9 @@ export interface ProjectPatch {
   leadId?: string | null | undefined;
   status?: ProjectStatus | undefined;
   startDate?: string | null | undefined;
+  startDateResolution?: DateResolution | null | undefined;
   targetDate?: string | null | undefined;
+  targetDateResolution?: DateResolution | null | undefined;
   programId?: string | null | undefined;
   labelIds?: readonly string[] | undefined;
 }
@@ -52,7 +55,13 @@ function toProjectPatchBody(patch: ProjectPatch): ProjectUpdate {
       : {}),
     ...(patch.status !== undefined ? { status: patch.status } : {}),
     ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
+    ...(patch.startDateResolution !== undefined
+      ? { startDateResolution: patch.startDateResolution }
+      : {}),
     ...(patch.targetDate !== undefined ? { targetDate: patch.targetDate } : {}),
+    ...(patch.targetDateResolution !== undefined
+      ? { targetDateResolution: patch.targetDateResolution }
+      : {}),
     ...(patch.programId !== undefined
       ? { programId: patch.programId === null ? null : ProgramId.parse(patch.programId) }
       : {}),

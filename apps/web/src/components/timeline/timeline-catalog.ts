@@ -84,6 +84,14 @@ export interface TimelineCatalog<T> {
    * unscheduled tray, where they stay reachable and can be dragged onto the axis.
    */
   span: (row: T) => TimelineSpan | null;
+  /**
+   * Optional semantic span copy for accessible bar descriptions.
+   *
+   * @remarks
+   * Planning rows use this to say `Q3 2026 to December 2026` while geometry remains on the
+   * canonical boundary dates. Other timelines omit it and receive the engine's day formatter.
+   */
+  spanLabel?: ((row: T) => string | null) | undefined;
   /** The row's dated checkpoints. Undated checkpoints are the catalog's to filter out. */
   markers: (row: T) => readonly TimelineMarker[];
   /** The row's semantic tone. */

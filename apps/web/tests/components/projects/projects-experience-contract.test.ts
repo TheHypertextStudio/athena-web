@@ -52,10 +52,25 @@ describe('Projects experience contract', () => {
   it('preserves dense, stable rows and full columns inside a local scroller', () => {
     const overview = source(overviewPath);
     expect(overview).toContain('overflow-x-auto overscroll-x-contain');
-    expect(overview).toContain('min-w-[61rem]');
+    expect(overview).toContain('min-w-[64rem]');
     expect(overview).toContain('min-h-[72px]');
     expect(overview).toContain('line-clamp-2 max-w-[52ch]');
     expect(overview).toContain('{item.summary ? (');
+  });
+
+  it('keeps planning semantics in Project controls, lists, and timeline descriptions', () => {
+    const overview = source(overviewPath);
+    const detail = source(detailPath);
+    const timelineCatalog = source(
+      join(root, 'apps/web/src/components/projects/project-timeline-catalog.ts'),
+    );
+
+    expect(overview).toContain('formatProjectTarget(item)');
+    expect(overview).toContain('startDateResolution: null');
+    expect(overview).toContain('targetDateResolution: null');
+    expect(detail).toContain('startDateResolution={project.startDateResolution}');
+    expect(detail).toContain('targetDateResolution={project.targetDateResolution}');
+    expect(timelineCatalog).toContain('spanLabel: formatProjectTimelineSpan');
   });
 
   it('uses decoupled customizable display icons with 40px targets', () => {

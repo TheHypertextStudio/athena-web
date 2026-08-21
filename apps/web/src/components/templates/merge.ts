@@ -47,9 +47,9 @@ export function templateMerge<T extends object>(
 
     if (key === rule.document && typeof incoming === 'string') {
       const existing = current[key];
-      const existingText = typeof existing === 'string' ? existing.trim() : '';
+      const existingText = typeof existing === 'string' ? existing : '';
       merged[key] = (
-        existingText.length === 0 ? incoming : `${existingText}\n\n${incoming}`
+        existingText.trim().length === 0 ? incoming : `${existingText}\n\n${incoming}`
       ) as T[typeof key];
       continue;
     }

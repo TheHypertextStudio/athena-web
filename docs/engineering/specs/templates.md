@@ -99,6 +99,8 @@ Validation the route enforces beyond the DTO:
 | `payload.targetType` equals `targetType`     | `TemplateCreate.refine`                    | 422      |
 | `scope: 'team'` names a `teamId`             | `TemplateCreate` / `TemplateUpdate` refine | 422      |
 | A template may not change its kind           | route, PATCH                               | 422      |
+| A personal template belongs to the caller    | route, POST + PATCH                        | 422      |
+| A team template belongs to a caller team     | route, POST + PATCH                        | 404      |
 | `teamId` is dropped when scope is not `team` | route, POST + PATCH                        | silent   |
 
 `TemplateUpdate` has no nullable field. `description` clears with an empty string and `teamId` is
@@ -221,6 +223,11 @@ team matches the selected Task or Project team. Initiative and Program intention
 so they do not expose a team-scoped template. The menu groups visible rows as Workspace, Team, and
 Yours.
 
+The API enforces the outer visibility boundary before it returns a payload. It returns organization
+templates, the caller's personal templates, and templates for teams the caller belongs to. The web
+client narrows that authorized set to the team selected in the current composer or persisted entity.
+Client filtering is presentation policy, not access control.
+
 **2. Draft state and merge policy** — `components/composer/use-composer-draft.ts` holds each
 composer's fields as one value. `components/templates/merge.ts` decides how a template's fields
 land in both create drafts and persisted documents. The rule is one sentence: **a template never
@@ -237,6 +244,12 @@ This is the whole fix for the defect the slice exists to remove. The old picker 
 undo affordance but for the action to take nothing away in the first place. Two consequences worth
 stating, because they are why there is no undo, no "Applied" banner, and no applied state on the
 trigger:
+
+The blank check trims a copy only to decide whether a document contains content. The merge appends
+the original Markdown string, and the save boundary preserves meaningful serialized whitespace.
+It removes only newline-only padding that Tiptap emits after a final heading. The editor may
+canonicalize equivalent syntax, such as turning an indented code block into a fenced block, but
+code-block semantics and trailing hard-break spaces survive.
 
 - **Applying is repeatable.** A second template adds a second outline beneath the first.
 - **A template picked by mistake is deleted the way any other text is** — select it and press

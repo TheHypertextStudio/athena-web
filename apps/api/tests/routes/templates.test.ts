@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { TemplateOut } from '@docket/types';
+import { inArray } from 'drizzle-orm';
 
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import type templatesRouter from '../../src/routes/templates';
@@ -32,6 +33,73 @@ const BUG_TEMPLATE = {
     priority: 'urgent',
   },
 };
+
+async function seedScopedTemplates() {
+  const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+  const [otherActor] = await db
+    .insert(schema.actor)
+    .values({ organizationId: orgId, kind: 'human', displayName: 'Grace' })
+    .returning({ id: schema.actor.id });
+  const [otherTeam] = await db
+    .insert(schema.team)
+    .values({
+      organizationId: orgId,
+      name: 'Other',
+      key: `O${Math.random().toString(36).slice(2, 6)}`,
+    })
+    .returning({ id: schema.team.id });
+  if (!otherActor || !otherTeam) throw new Error('failed to seed template visibility fixtures');
+
+  await db.insert(schema.teamMember).values([
+    { organizationId: orgId, teamId, actorId: humanActorId },
+    { organizationId: orgId, teamId: otherTeam.id, actorId: otherActor.id },
+  ]);
+  const rows = await db
+    .insert(schema.template)
+    .values([
+      {
+        organizationId: orgId,
+        targetType: 'task',
+        name: 'Mine',
+        scope: 'personal',
+        ownerActorId: humanActorId,
+        payload: { targetType: 'task', description: 'mine' },
+      },
+      {
+        organizationId: orgId,
+        targetType: 'task',
+        name: 'Theirs',
+        scope: 'personal',
+        ownerActorId: otherActor.id,
+        payload: { targetType: 'task', description: 'theirs' },
+      },
+      {
+        organizationId: orgId,
+        targetType: 'task',
+        name: 'My team',
+        scope: 'team',
+        teamId,
+        payload: { targetType: 'task', description: 'my team' },
+      },
+      {
+        organizationId: orgId,
+        targetType: 'task',
+        name: 'Other team',
+        scope: 'team',
+        teamId: otherTeam.id,
+        payload: { targetType: 'task', description: 'other team' },
+      },
+    ])
+    .returning({ id: schema.template.id, name: schema.template.name });
+
+  return {
+    orgId,
+    humanActorId,
+    otherActorId: otherActor.id,
+    otherTeamId: otherTeam.id,
+    rows,
+  };
+}
 
 describe('templates router', () => {
   it('creates, reads, updates, and deletes a template (payload round-trip)', async () => {
@@ -161,6 +229,9 @@ describe('templates router', () => {
   it('requires a team when the scope is team, and clears it when the scope moves away', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const w = appWithActor(router, orgId, ['contribute'], humanActorId);
+    await db
+      .insert(schema.teamMember)
+      .values({ organizationId: orgId, teamId, actorId: humanActorId });
 
     const teamless = await w.request('/', {
       method: 'POST',
@@ -216,6 +287,95 @@ describe('templates router', () => {
       ).status,
     ).toBe(403);
     expect((await viewer.request('/')).status).toBe(200);
+  });
+
+  it('lists organization templates plus only the caller personal and team scopes', async () => {
+    const { orgId, humanActorId } = await seedScopedTemplates();
+    const viewer = appWithActor(router, orgId, ['view'], humanActorId);
+
+    const listed = await body<{ items: TemplateOut[] }>(await viewer.request('/?targetType=task'));
+    const names = listed.items.map((item) => item.name);
+
+    expect(names).toContain('Mine');
+    expect(names).toContain('My team');
+    expect(names).not.toContain('Theirs');
+    expect(names).not.toContain('Other team');
+  });
+
+  it('hides direct reads of foreign personal and nonmember team templates', async () => {
+    const { orgId, humanActorId, rows } = await seedScopedTemplates();
+    const viewer = appWithActor(router, orgId, ['view'], humanActorId);
+    const theirs = rows.find((row) => row.name === 'Theirs');
+    const otherTeam = rows.find((row) => row.name === 'Other team');
+    if (!theirs || !otherTeam) throw new Error('failed to find hidden template fixtures');
+
+    expect((await viewer.request(`/${theirs.id}`)).status).toBe(404);
+    expect((await viewer.request(`/${otherTeam.id}`)).status).toBe(404);
+  });
+
+  it('rejects mutations of foreign personal and nonmember team templates', async () => {
+    const { orgId, humanActorId, rows } = await seedScopedTemplates();
+    const contributor = appWithActor(router, orgId, ['contribute'], humanActorId);
+    const theirs = rows.find((row) => row.name === 'Theirs');
+    const otherTeam = rows.find((row) => row.name === 'Other team');
+    if (!theirs || !otherTeam) throw new Error('failed to find hidden template fixtures');
+
+    expect(
+      (
+        await contributor.request(`/${theirs.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ name: 'Stolen' }),
+        })
+      ).status,
+    ).toBe(404);
+    expect((await contributor.request(`/${otherTeam.id}`, { method: 'DELETE' })).status).toBe(404);
+
+    const stillPresent = await db
+      .select({ name: schema.template.name })
+      .from(schema.template)
+      .where(inArray(schema.template.id, [theirs.id, otherTeam.id]));
+    expect(stillPresent.map((row) => row.name).sort()).toEqual(['Other team', 'Theirs']);
+  });
+
+  it('rejects creating or retargeting templates into another actor or team scope', async () => {
+    const { orgId, humanActorId, otherActorId, otherTeamId, rows } = await seedScopedTemplates();
+    const contributor = appWithActor(router, orgId, ['contribute'], humanActorId);
+
+    const personal = await contributor.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ ...BUG_TEMPLATE, ownerActorId: otherActorId }),
+    });
+    expect(personal.status).toBe(422);
+
+    const team = await contributor.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ ...BUG_TEMPLATE, scope: 'team', teamId: otherTeamId }),
+    });
+    expect(team.status).toBe(404);
+
+    const organizationTemplate = rows.find((row) => row.name === 'Mine');
+    if (!organizationTemplate) throw new Error('failed to resolve a visible template fixture');
+    expect(
+      (
+        await contributor.request(`/${organizationTemplate.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ scope: 'team', teamId: otherTeamId }),
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await contributor.request(`/${organizationTemplate.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: JSON.stringify({ scope: 'personal', ownerActorId: otherActorId }),
+        })
+      ).status,
+    ).toBe(422);
   });
 
   it('isolates templates by tenant', async () => {

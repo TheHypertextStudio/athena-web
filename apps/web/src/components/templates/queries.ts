@@ -113,12 +113,12 @@ export function templatePatch<K extends TemplateTargetType>(
 }
 
 /**
- * Decide whether a broad template row belongs to the selected person/team context.
+ * Decide whether a caller-visible template belongs to the selected person/team context.
  *
- * @param template - Template returned by the intentionally broad workspace roster.
+ * @param template - Template returned after the API enforces personal and team membership scope.
  * @param currentActorId - Signed-in member Actor id in that workspace, or `null` when unresolved.
  * @param teamId - Team currently selected by the composer, or `null` when no team is selected.
- * @returns Whether the template is safe and applicable in the current creation context.
+ * @returns Whether the template applies in the current creation context.
  */
 export function templateMatchesContext(
   template: TemplateOut,

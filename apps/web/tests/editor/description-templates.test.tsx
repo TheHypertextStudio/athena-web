@@ -211,6 +211,50 @@ describe('description templates inside an existing entity editor', () => {
     );
   });
 
+  it('applies a /template option without moving focus before the pointer selection lands', async () => {
+    const user = userEvent.setup();
+    renderTemplateAwareTaskEditor({
+      value: 'Persisted notes',
+      templates: [taskTemplate('template_task', 'Task Template', 'organization')],
+    });
+    const surface = await screen.findByRole('textbox', { name: 'Description' });
+    fireEvent.mouseDown(assertDefined(surface.closest<HTMLElement>('[data-editor-surface]')));
+    await waitFor(() => expect(surface).toHaveFocus());
+    await user.keyboard('{Enter}/template');
+    const menu = await screen.findByRole('listbox', { name: 'Insert a block' });
+
+    fireEvent.mouseDown(within(menu).getByRole('option', { name: /Task Template/ }));
+
+    await waitFor(() => {
+      expect(surface).toHaveTextContent('Persisted notes');
+      expect(surface).toHaveTextContent('Task Template');
+      expect(screen.queryByRole('listbox', { name: 'Insert a block' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('persists template code-block semantics and terminal hard-break spaces', async () => {
+    const formatted = {
+      ...taskTemplate('formatted', 'Formatted Template', 'organization'),
+      payload: {
+        targetType: 'task',
+        description: '    const answer = 42\n\nFirst line  ',
+      },
+    } as TemplateOut;
+    const { onSave } = renderTemplateAwareTaskEditor({ templates: [formatted] });
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Start from template' }), {
+      button: 0,
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Formatted Template/ }));
+    const surface = await screen.findByRole('textbox', { name: 'Description' });
+    await waitFor(() => expect(surface).toHaveTextContent('const answer = 42'));
+    fireEvent.blur(surface);
+
+    // Tiptap normalizes an indented Markdown code block to an equivalent fenced block. The save
+    // boundary must preserve that serialized document, including the terminal hard-break spaces.
+    expect(onSave).toHaveBeenLastCalledWith('```\nconst answer = 42\n```\n\nFirst line  ');
+  });
+
   it('filters the query-backed menu to organization, matching-team, and own templates', async () => {
     renderTemplateAwareTaskEditor({
       templates: [

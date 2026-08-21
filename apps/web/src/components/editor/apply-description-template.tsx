@@ -44,7 +44,11 @@ function applyTemplate(
   kind: TemplateTargetType,
   range?: { readonly from: number; readonly to: number },
 ): void {
-  if (range) editor.chain().focus().deleteRange(range).run();
+  if (range) {
+    // `/template` owns its whole block. Remove that now-empty command block as well as its text,
+    // or byte-preserving append would retain a blank paragraph that the author never wrote.
+    editor.chain().focus().deleteRange(range).joinBackward().run();
+  }
   const current = editor.getMarkdown();
   const patch = templatePatch(template.payload, kind);
   const merged = templateMerge(

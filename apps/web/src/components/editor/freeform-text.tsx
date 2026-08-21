@@ -479,8 +479,10 @@ export function EditableFreeformText({
     baseline: value ?? '',
     delayMs: 2_000,
     save: (next) => {
-      const trimmed = next.trim();
-      onSave(trimmed.length > 0 ? trimmed : null);
+      // Tiptap serializes a final heading with newline-only padding. Markdown gives those terminal
+      // blank lines no meaning, while leading indentation and spaces before a line break do matter.
+      const persisted = next.replace(/\n+$/, '');
+      onSave(persisted.trim().length > 0 ? persisted : null);
     },
   });
   const flushRef = useRef(flush);

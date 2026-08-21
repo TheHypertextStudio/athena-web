@@ -45,6 +45,22 @@ describe('templateMerge', () => {
     });
   });
 
+  it('preserves leading indentation when appending to an authored code block', () => {
+    const typed: Draft = { ...EMPTY, description: '    const answer = 42' };
+
+    expect(templateMerge(typed, { description: '## Steps' }, RULE)).toEqual({
+      description: '    const answer = 42\n\n## Steps',
+    });
+  });
+
+  it('preserves trailing spaces that encode a Markdown hard break', () => {
+    const typed: Draft = { ...EMPTY, description: 'First line  ' };
+
+    expect(templateMerge(typed, { description: '## Steps' }, RULE)).toEqual({
+      description: 'First line  \n\n## Steps',
+    });
+  });
+
   it('treats a whitespace-only body as empty rather than appending to nothing', () => {
     const blank: Draft = { ...EMPTY, description: '   \n  ' };
 

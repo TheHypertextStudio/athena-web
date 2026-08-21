@@ -21,7 +21,7 @@
  * Enter, plain Tab and plain Escape.
  */
 import { Extension, type AnyExtension, type Editor } from '@tiptap/react';
-import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
+import { type JSX, useCallback, useId, useMemo, useRef, useState } from 'react';
 
 import { rankSlashCommands, type SlashCommand } from './slash-commands';
 import { createSuggestionPlugin, type SuggestionRun } from './suggestion-plugin';
@@ -51,8 +51,6 @@ export interface SlashCommands {
   readonly activeKey: string | undefined;
 }
 
-const SLASH_LISTBOX_ID = 'editor-slash-menu';
-
 /**
  * Wire `/` into an editor.
  *
@@ -61,6 +59,8 @@ const SLASH_LISTBOX_ID = 'editor-slash-menu';
  */
 export function useSlashCommands(options: SlashCommandsOptions = {}): SlashCommands {
   const { disabled = false, commands = [] } = options;
+  const instanceId = useId();
+  const listboxId = `editor-slash-menu-${instanceId}`;
   const editorRef = useRef<Editor | null>(null);
   const [run, setRun] = useState<SuggestionRun | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -194,7 +194,7 @@ export function useSlashCommands(options: SlashCommandsOptions = {}): SlashComma
         }}
         emptyText="No block matches that."
         ariaLabel="Insert a block"
-        listboxId={SLASH_LISTBOX_ID}
+        listboxId={listboxId}
       />
     );
 
@@ -205,10 +205,10 @@ export function useSlashCommands(options: SlashCommandsOptions = {}): SlashComma
     },
     menu,
     isOpen: run !== null,
-    listboxId: SLASH_LISTBOX_ID,
+    listboxId,
     activeKey:
       run === null || items[activeIndex] === undefined
         ? undefined
-        : `${SLASH_LISTBOX_ID}-${items[activeIndex].id}`,
+        : `${listboxId}-${items[activeIndex].id}`,
   };
 }

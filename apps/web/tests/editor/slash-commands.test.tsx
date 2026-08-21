@@ -153,6 +153,61 @@ describe('the slash insert menu', () => {
     });
   });
 
+  it('gives simultaneous editors distinct listbox and active-option relationships', async () => {
+    const user = userEvent.setup();
+    renderEditor(
+      <>
+        <FreeformTextEditor
+          value=""
+          onChange={vi.fn()}
+          placeholder="Write first"
+          ariaLabel="First description"
+        />
+        <FreeformTextEditor
+          value=""
+          onChange={vi.fn()}
+          placeholder="Write second"
+          ariaLabel="Second description"
+        />
+      </>,
+    );
+    const first = await screen.findByRole('textbox', { name: 'First description' });
+    const second = await screen.findByRole('textbox', { name: 'Second description' });
+
+    await user.click(first);
+    await user.keyboard('/');
+    const firstMenu = await screen.findByRole('listbox', { name: 'Insert a block' });
+    await waitFor(() => expect(first).toHaveAttribute('aria-controls', firstMenu.id));
+    const firstListboxId = first.getAttribute('aria-controls');
+    const firstActiveId = first.getAttribute('aria-activedescendant');
+    const firstListbox = firstListboxId === null ? null : document.getElementById(firstListboxId);
+    const firstActive = firstActiveId === null ? null : document.getElementById(firstActiveId);
+    expect(firstListbox).toHaveAttribute('role', 'listbox');
+    expect(firstActive).toHaveAttribute('role', 'option');
+    expect(firstListbox).toContainElement(firstActive);
+
+    await user.click(second);
+    await user.keyboard('/');
+    await waitFor(() => {
+      const controlled = second.getAttribute('aria-controls');
+      expect(controlled).toBeTruthy();
+      expect(controlled).not.toBe(firstListboxId);
+      expect(document.getElementById(controlled ?? '')).toHaveAttribute('role', 'listbox');
+    });
+    const secondListboxId = second.getAttribute('aria-controls');
+    const secondActiveId = second.getAttribute('aria-activedescendant');
+    const secondListbox =
+      secondListboxId === null ? null : document.getElementById(secondListboxId);
+    const secondActive = secondActiveId === null ? null : document.getElementById(secondActiveId);
+
+    expect(firstListboxId).toBeTruthy();
+    expect(secondListboxId).toBeTruthy();
+    expect(firstListboxId).not.toBe(secondListboxId);
+    expect(secondListbox).toHaveAttribute('role', 'listbox');
+    expect(secondActive).toHaveAttribute('role', 'option');
+    expect(secondListbox).toContainElement(secondActive);
+  });
+
   it('replaces the typed query with the chosen block, leaving no stray slash', async () => {
     const { user, surface } = await openEditor();
     await user.keyboard('/quo');

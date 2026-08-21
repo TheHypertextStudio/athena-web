@@ -18,16 +18,27 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { assertDefined } from '@docket/test-utils';
 
-const { activeGet, timelineGet, recordsPost, recordAction, recordPatch, taskGet, teamGet } =
-  vi.hoisted(() => ({
-    activeGet: vi.fn(),
-    timelineGet: vi.fn(),
-    recordsPost: vi.fn(),
-    recordAction: vi.fn(),
-    recordPatch: vi.fn(),
-    taskGet: vi.fn(),
-    teamGet: vi.fn(),
-  }));
+const {
+  activeGet,
+  timelineGet,
+  recordsPost,
+  recordAction,
+  recordPatch,
+  taskGet,
+  teamGet,
+  todayGet,
+  searchGet,
+} = vi.hoisted(() => ({
+  activeGet: vi.fn(),
+  timelineGet: vi.fn(),
+  recordsPost: vi.fn(),
+  recordAction: vi.fn(),
+  recordPatch: vi.fn(),
+  taskGet: vi.fn(),
+  teamGet: vi.fn(),
+  todayGet: vi.fn(),
+  searchGet: vi.fn(),
+}));
 
 vi.mock('../../src/lib/api', () => ({
   api: {
@@ -49,8 +60,18 @@ vi.mock('../../src/lib/api', () => ({
           teams: { ':teamId': { $get: teamGet } },
         },
       },
+      hub: {
+        today: { $get: todayGet },
+        search: { $get: searchGet },
+      },
     },
   },
+}));
+
+vi.mock('../../src/components/active-org', () => ({
+  useActiveOrg: () => ({
+    orgName: (orgId: string) => (orgId === 'org_2' ? 'Transit' : 'Personal'),
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -186,6 +207,46 @@ function taskPayload(): unknown {
   };
 }
 
+/** Accepted work for the day, including the task already being tracked. */
+function todayPayload(): unknown {
+  const task = (id: string, organizationId: string, title: string, position: number) => ({
+    id,
+    organizationId,
+    title,
+    state: 'backlog',
+    stateType: 'backlog',
+    priority: 'none',
+    assigneeId: null,
+    projectId: null,
+    dueDate: null,
+    planItemId: `plan_${id}`,
+    planStatus: 'planned',
+    sort: position,
+    position,
+    estimateMinutes: null,
+    timeboxStartsAt: null,
+    timeboxEndsAt: null,
+    blocked: false,
+    dependencyImpact: 0,
+    reason: 'Accepted into today’s plan',
+  });
+  return {
+    date: '2026-08-02',
+    planState: 'active',
+    attentionSummary: { approvals: 0, blocked: 0, dueToday: 0, inbox: 0, attentionCount: 0 },
+    plan: [
+      task('task_1', 'org_1', 'Rewrite the onboarding email', 0),
+      task('task_2', 'org_1', 'Draft the launch checklist', 1),
+      task('task_3', 'org_2', 'Review the Maryland Parkway route map', 2),
+    ],
+    focus: { now: null, after: null },
+    statusCards: [],
+    suggestions: [],
+    calendar: [],
+    needsAttention: { approvals: [], blocked: [], dueToday: [], inbox: 0 },
+  };
+}
+
 function renderPanel(): void {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -211,7 +272,13 @@ beforeEach(() => {
   recordPatch.mockReset();
   taskGet.mockReset();
   teamGet.mockReset();
+  todayGet.mockReset();
+  searchGet.mockReset();
   timelineGet.mockResolvedValue(jsonResponse({ items: [] }));
+  todayGet.mockResolvedValue(jsonResponse(todayPayload()));
+  searchGet.mockResolvedValue(
+    jsonResponse({ query: '', items: [], facets: [], nextCursor: undefined }),
+  );
   taskGet.mockResolvedValue(jsonResponse(taskPayload()));
   teamGet.mockResolvedValue(
     jsonResponse({
@@ -307,7 +374,7 @@ describe('FocusPanel', () => {
     expect(screen.queryByTestId('timer-start')).toBeNull();
   });
 
-  it('shows focused task context and a truthful summary of today', async () => {
+  it('shows actual upcoming work, excludes the active task, and keeps today truthful', async () => {
     activeGet.mockResolvedValue(
       jsonResponse(activePayload({ startedMinutesAgo: 7, running: true })),
     );
@@ -328,13 +395,14 @@ describe('FocusPanel', () => {
     );
     renderPanel();
 
-    expect(await screen.findByText('In progress')).toBeInTheDocument();
-    expect(screen.getByText('High priority')).toBeInTheDocument();
-    expect(screen.getByText('Due today')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Up next' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rewrite the onboarding email' })).toBeNull();
+    expect(screen.getByRole('button', { name: /Draft the launch checklist/ })).toBeInTheDocument();
     expect(
-      screen.getByText('Make the activation path clearer for new workspace owners.'),
-    ).toHaveClass('line-clamp-2');
-    expect(screen.getByText('1 of 2 subtasks')).toBeInTheDocument();
+      screen.getByRole('button', { name: /Review the Maryland Parkway route map/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Select to switch')).toBeNull();
+    expect(screen.queryByText('In progress')).toBeNull();
     expect(screen.getByText('1h 7m tracked')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Plan launch' })).toHaveAttribute(
       'href',
@@ -343,23 +411,56 @@ describe('FocusPanel', () => {
     expect(screen.getByRole('link', { name: 'Plan launch' })).toHaveClass('min-h-10');
   });
 
-  it('does not infer workflow labels or completion when the canonical workflow is unavailable', async () => {
+  it('switches to planned work with the existing atomic timer command', async () => {
     activeGet.mockResolvedValue(
       jsonResponse(activePayload({ startedMinutesAgo: 7, running: true })),
     );
-    taskGet.mockResolvedValue(
-      jsonResponse({
-        ...(taskPayload() as Record<string, unknown>),
-        state: 'custom_review',
-      }),
+    recordsPost.mockResolvedValue(
+      jsonResponse(
+        activePayload({
+          startedMinutesAgo: 0,
+          running: true,
+          taskId: 'task_2',
+          title: 'Draft the launch checklist',
+        }),
+      ),
     );
-    teamGet.mockRejectedValue(new Error('workflow provider detail'));
     renderPanel();
 
-    expect(await screen.findByText('Could not load the workflow.')).toBeInTheDocument();
-    expect(screen.queryByText('custom review')).toBeNull();
-    expect(screen.queryByText('1 of 2 subtasks')).toBeNull();
-    expect(screen.queryByText(/provider detail/)).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: /Draft the launch checklist/ }));
+    await waitFor(() => {
+      expect(recordsPost).toHaveBeenCalledWith({
+        json: { context: { label: 'Draft the launch checklist', taskId: 'task_2' } },
+      });
+    });
+  });
+
+  it('creates and tracks typed work from the Up next field', async () => {
+    activeGet.mockResolvedValue(
+      jsonResponse(activePayload({ startedMinutesAgo: 7, running: true })),
+    );
+    recordsPost.mockResolvedValue(
+      jsonResponse(
+        activePayload({
+          startedMinutesAgo: 0,
+          running: true,
+          taskId: 'task_new',
+          title: 'Write the launch notes',
+        }),
+      ),
+    );
+    renderPanel();
+
+    const field = await screen.findByRole('searchbox', { name: 'Find or create a task' });
+    expect(field).toHaveClass('min-h-11');
+    fireEvent.change(field, { target: { value: 'Write the launch notes' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    await waitFor(() => {
+      expect(recordsPost).toHaveBeenCalledWith({
+        json: { context: { label: 'Write the launch notes' } },
+      });
+    });
   });
 
   it('shows the newest two earlier sessions from the API ascending timeline', async () => {

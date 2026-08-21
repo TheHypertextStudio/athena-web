@@ -81,6 +81,16 @@ export interface TimerState extends TimerStatus {
   readonly elapsedMs: number;
 }
 
+/** The work a timer start should attach to, when the caller already knows it. */
+export interface TimerStartInput {
+  /** Create and track a personal task with this title. */
+  readonly label?: string;
+  /** Track this existing task. */
+  readonly taskId?: string;
+  /** Create the task in this workspace when the caller supplies a label. */
+  readonly organizationId?: string;
+}
+
 /** What a surface may ask the timer to do. */
 export interface TimerControls {
   /**
@@ -91,11 +101,7 @@ export interface TimerControls {
    * whose name nobody has decided yet. `taskId` tracks existing work; a bare `label` creates an
    * ordinary task from those words.
    */
-  readonly start: (input?: {
-    label?: string;
-    taskId?: string;
-    organizationId?: string;
-  }) => Promise<void>;
+  readonly start: (input?: TimerStartInput) => Promise<void>;
   /** Close the open segment, keeping the session resumable. */
   readonly pause: () => Promise<void>;
   /** Open a new segment on the paused session (or continue the last one, under a minute). */
@@ -249,7 +255,7 @@ export function useTimerControls(recordId: string | null): TimerControls {
   };
 
   const startMutation = useApiMutation({
-    mutationFn: async (input: { label?: string; taskId?: string; organizationId?: string }) => {
+    mutationFn: async (input: TimerStartInput) => {
       const response = await api.v1.time.records.$post({
         json: {
           context: {

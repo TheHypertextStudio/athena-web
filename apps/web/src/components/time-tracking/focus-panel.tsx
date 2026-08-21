@@ -17,18 +17,14 @@
 import { Skeleton, Text } from '@docket/ui/primitives';
 import { type JSX, useId, useState } from 'react';
 
-import FocusIdle, { type FocusShortcut } from './focus-idle';
 import FocusAthenaHandoff from './focus-athena-handoff';
+import FocusIdle from './focus-idle';
 import FocusModeLauncher from './focus-mode-launcher';
 import FocusSession from './focus-session';
-import FocusTaskContext from './focus-task-context';
+import FocusTaskQueue from './focus-task-queue';
 import FocusToday from './focus-today';
-import { useFocusTask } from './use-focus-task';
 import { useFocusToday } from './use-focus-today';
-import { useTimerControls, useTimerState } from './use-timer';
-
-/** How many earlier tasks the idle state offers as one-click restarts. */
-const SHORTCUT_LIMIT = 4;
+import { type TimerStartInput, useTimerControls, useTimerState } from './use-timer';
 
 /** The Focus rail panel. */
 export default function FocusPanel(): JSX.Element {
@@ -37,29 +33,16 @@ export default function FocusPanel(): JSX.Element {
   const controls = useTimerControls(record?.id ?? null);
   const [notice, setNotice] = useState<string | null>(null);
   const nameFieldId = useId();
-  const taskContext = useFocusTask(record?.organizationId ?? null, record?.taskId ?? null);
   const today = useFocusToday();
 
-  // Real sessions only — the shortcut list is a shortcut back into work that actually happened, so
-  // an empty day shows nothing rather than plausible-looking suggestions nobody worked on.
-  const shortcuts: FocusShortcut[] = [];
-  const seen = new Set<string>();
-  for (const item of today.records) {
-    if (!item.taskId || item.id === record?.id || seen.has(item.taskId)) continue;
-    seen.add(item.taskId);
-    shortcuts.push({
-      taskId: item.taskId,
-      title: item.title,
-      trackedMs: item.measures.humanEffortMs,
-    });
-    if (shortcuts.length === SHORTCUT_LIMIT) break;
-  }
-
-  const start = (taskId?: string): void => {
+  const start = async (input: TimerStartInput = {}): Promise<void> => {
     setNotice(null);
-    void controls.start(taskId ? { taskId } : {}).catch(() => {
+    try {
+      await controls.start(input);
+    } catch (error) {
       setNotice('Could not start the timer. Try again.');
-    });
+      throw error;
+    }
   };
 
   return (
@@ -122,33 +105,23 @@ export default function FocusPanel(): JSX.Element {
           <FocusIdle
             suggestion={suggestion}
             nudging={nudging}
-            shortcuts={shortcuts}
+            shortcuts={[]}
             starting={controls.starting}
-            onStart={start}
+            onStart={(taskId) => {
+              void start(taskId ? { taskId } : {}).catch(() => undefined);
+            }}
           />
         )}
 
-        {taskContext.isPending ? (
-          <div aria-label="Loading task context" className="flex flex-col gap-2">
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        ) : taskContext.task ? (
-          <>
-            <FocusTaskContext
-              task={taskContext.task}
-              workflowState={taskContext.workflowState}
-              workflowStates={taskContext.workflowStates}
-            />
-            {taskContext.error ? (
-              <Text token="body-small" role="status" className="text-on-surface-variant">
-                {taskContext.error}
-              </Text>
-            ) : null}
-          </>
-        ) : taskContext.error ? (
+        <FocusTaskQueue
+          activeTaskId={record?.taskId ?? null}
+          starting={controls.starting}
+          onStart={start}
+        />
+
+        {notice && !record ? (
           <Text token="body-small" role="status" className="text-on-surface-variant">
-            {taskContext.error}
+            {notice}
           </Text>
         ) : null}
 

@@ -108,6 +108,22 @@ export const queryKeys = {
     ['org', orgId, 'email-suggestions', suggestionId, 'thread'] as const,
   automationRules: (orgId: string) => ['org', orgId, 'automation-rules'] as const,
   savedViews: (orgId: string) => ['org', orgId, 'saved-views'] as const,
+  workViewDefault: (orgId: string, target: string) =>
+    ['org', orgId, 'work-view-default', target] as const,
+  workView: (
+    orgId: string,
+    target: string,
+    instanceKey: string,
+    requestKey: string,
+    timezone: string,
+  ) => ['org', orgId, 'work-view', target, instanceKey, timezone, requestKey] as const,
+  workViewFacets: (
+    orgId: string,
+    target: string,
+    instanceKey: string,
+    requestKey: string,
+    timezone: string,
+  ) => ['org', orgId, 'work-view-facets', target, instanceKey, timezone, requestKey] as const,
   // The settings page reads every kind at once and each composer picker reads one, so the kind is
   // part of the key: the four picker reads cache apart, and the coarse `templates(orgId)` prefix
   // invalidates all of them plus the settings list after any write.

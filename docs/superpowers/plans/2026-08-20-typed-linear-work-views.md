@@ -215,15 +215,36 @@ Both typechecks, changed-file lint, and whitespace validation pass.
 - Create: `apps/web/src/components/work-views/display-controls.tsx`
 - Create: `apps/web/src/components/work-views/view-state.ts`
 - Test: `apps/web/tests/work-views/view-state.test.ts`
+- Test: `apps/web/tests/work-views/work-view-controller.test.ts`
 - Test: `apps/web/tests/work-views/work-view-toolbar.test.tsx`
+- Test: `apps/web/tests/work-views/work-view-types.test.ts`
 
-- [ ] Write failing precedence, reset, draft, multi-sort, property, and responsive-overflow tests.
-- [ ] Implement URL refinement over saved/default filters and personal presentation/arrangement
+- [x] Write failing precedence, reset, draft, multi-sort, property, and responsive-overflow tests.
+- [x] Implement URL refinement over saved/default filters and personal presentation/arrangement
       overrides over saved/default definitions.
-- [ ] Keep incomplete editor state in `FilterDraft`; parse before applying or saving.
-- [ ] Use named MD3 type roles, semantic colors, `ControlGroup`, and shared primitives only.
-- [ ] Run focused controller/toolbar tests plus web typecheck and lint.
-- [ ] Commit the slice as `feat: Add one controller for typed work views`.
+- [x] Keep incomplete editor state in `FilterDraft`; parse before applying or saving.
+- [x] Use named MD3 type roles, semantic colors, `ControlGroup`, and shared primitives only.
+- [x] Run focused controller/toolbar tests plus web typecheck and lint.
+- [x] Commit the slice as `feat: Add one controller for typed work views`.
+
+The controller keeps URL refinement separate from its durable definition, validates every API
+response and filter draft through the shared Zod contract, and deletes personal state on reset. The
+controller also binds facet reads to the active definition, context, URL refinement, search, and
+viewer timezone. Facets use typed cursor pagination, retain names for active relation operands, and
+load named actor and relation choices without exposing their stored ids. The controller keys local
+state by target and view instance, ignores stale query data during switches, and serializes personal
+preference writes so edit/reset races cannot restore an older override. The recursive editor uses
+named facet options with counts, multi-value and range operands, absolute datetime conversion,
+symbolic date operands, and node-local all, any, and not groups while incomplete drafts remain
+non-executable. Stable draft-node identities keep not wrappers attached to their nodes when siblings
+are inserted or removed.
+Generic component contracts keep definitions, filter fields, sort fields, layouts, contexts,
+results, and setters tied to one target. The toolbar keeps Filter and Save view visible, assigns
+lower-priority controls to one exact responsive partition, and renders only hidden controls in
+overflow. Narrow overflow actions open usable inline controls instead of unanchored popovers. Active
+filters reopen as seeded drafts, and the property catalog uses button-list keyboard semantics with
+focus restoration. Fresh validation passes the focused web tests, the web typecheck, changed-file
+lint, and whitespace checks.
 
 ### Task 8: Add list, board, and timeline adapters
 

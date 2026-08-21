@@ -342,6 +342,8 @@ export function apiQueryOptions<T>(
 
 /** Tunables forwarded to an infinite read (staleness + polling for the live seam). */
 export interface ApiInfiniteOptions {
+  /** Disable the read until all request inputs exist. */
+  readonly enabled?: boolean | undefined;
   /** Override the {@link STALE} tier. */
   readonly staleTime?: number | undefined;
   /** Focus-gated poll interval (ms); set by the live variant for the stream seam. */
@@ -378,6 +380,7 @@ export function apiInfiniteQueryOptions<TPage>(
       unwrap(() => call(pageParam), fallbackMessage),
     initialPageParam: undefined as string | undefined,
     getNextPageParam,
+    ...(options?.enabled !== undefined ? { enabled: options.enabled } : {}),
     ...(options?.staleTime !== undefined ? { staleTime: options.staleTime } : {}),
     ...(options?.refetchInterval !== undefined ? { refetchInterval: options.refetchInterval } : {}),
   });

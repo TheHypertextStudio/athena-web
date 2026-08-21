@@ -330,7 +330,8 @@ export type FilterDraft<TContract extends ViewContract> =
       readonly children: readonly FilterDraft<TContract>[];
     };
 
-const OPERATORS_BY_KIND = {
+/** Closed runtime operator catalog shared by schemas and field-derived editors. */
+export const FILTER_OPERATORS_BY_KIND = {
   enum: ['is', 'isNot', 'isAnyOf', 'isNoneOf', 'isEmpty', 'isNotEmpty'],
   'relation-one': ['is', 'isNot', 'isAnyOf', 'isNoneOf', 'isEmpty', 'isNotEmpty'],
   'relation-many': ['includesAny', 'includesAll', 'includesNone', 'isEmpty', 'isNotEmpty'],
@@ -419,7 +420,7 @@ export function createFilterNodeSchema<const TContract extends ViewContract>(
   for (const [field, definition] of Object.entries(contract.fields)) {
     if (definition.capabilities.filter !== true) continue;
     const operandSchema = definition.operandSchema ?? definition.schema;
-    for (const operator of OPERATORS_BY_KIND[definition.kind]) {
+    for (const operator of FILTER_OPERATORS_BY_KIND[definition.kind]) {
       variants.push(predicateVariant(field, operator, operandSchema));
     }
   }

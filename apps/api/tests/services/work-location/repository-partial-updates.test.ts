@@ -366,18 +366,63 @@ describe('overriding one occurrence of a weekly assertion', () => {
     ).rejects.toBeInstanceOf(ConflictError);
   });
 
-  it('refuses a replacement that does not start on the occurrence being replaced', async () => {
+  it('stores a replacement on a different civil date under the original occurrence key', async () => {
     const place = await seedPlace('Replacement place');
     const created = await seedWeekly(place.id);
 
-    await expect(
-      setWorkLocationOccurrence(database, hubId, created.id, '2026-08-12', {
+    const moved = await setWorkLocationOccurrence(database, hubId, created.id, '2026-08-12', {
+      date: '2026-08-12',
+      action: 'replace',
+      placeId: place.id,
+      schedule: {
+        type: 'one_off_all_day',
+        date: '2026-08-15',
+        timezone: 'America/Los_Angeles',
+      },
+    });
+    const resized = await setWorkLocationOccurrence(database, hubId, created.id, '2026-08-12', {
+      date: '2026-08-12',
+      action: 'replace',
+      placeId: place.id,
+      schedule: {
+        type: 'one_off_timed',
+        startsAt: '2026-08-16T16:00:00.000Z',
+        endsAt: '2026-08-16T20:00:00.000Z',
+        timezone: 'America/Los_Angeles',
+      },
+    });
+
+    expect(moved.exceptions).toContainEqual(
+      expect.objectContaining({
+        action: 'replace',
         date: '2026-08-12',
+        schedule: expect.objectContaining({ type: 'one_off_all_day', date: '2026-08-15' }),
+      }),
+    );
+    expect(resized.exceptions).toContainEqual(
+      expect.objectContaining({
+        action: 'replace',
+        date: '2026-08-12',
+        schedule: expect.objectContaining({
+          type: 'one_off_timed',
+          startsAt: '2026-08-16T16:00:00.000Z',
+        }),
+      }),
+    );
+  });
+
+  it('still refuses a cross-date replacement when the key is not a series occurrence', async () => {
+    const place = await seedPlace('Invalid replacement place');
+    const created = await seedWeekly(place.id);
+
+    await expect(
+      setWorkLocationOccurrence(database, hubId, created.id, '2026-08-11', {
+        date: '2026-08-11',
         action: 'replace',
         placeId: place.id,
         schedule: {
           type: 'one_off_all_day',
-          date: '2026-08-19',
+          date: '2026-08-15',
           timezone: 'America/Los_Angeles',
         },
       }),

@@ -190,6 +190,95 @@ describe('/v1/me/work-location routes', () => {
     ).toBe(200);
   });
 
+  it('moves one weekly occurrence across dates and resolves it on the target date', async () => {
+    const { app } = await seedWorkLocationUser('WorkLocationMovedOccurrence');
+    const regular = (await createPlace(app, 'Regular workplace')).place;
+    const alternate = (await createPlace(app, 'Weekend workplace')).place;
+    const created = await app.request('/assertions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        placeId: regular.id,
+        schedule: {
+          type: 'weekly_all_day',
+          effectiveFrom: '2026-08-03',
+          effectiveUntil: null,
+          weekdays: [2],
+          timezone: 'America/Los_Angeles',
+        },
+      }),
+    });
+    const id = ((await created.json()) as { assertion: { id: string } }).assertion.id;
+
+    const moved = await app.request(`/assertions/${id}/occurrences/2026-08-12`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'replace',
+        date: '2026-08-12',
+        placeId: alternate.id,
+        schedule: {
+          type: 'one_off_all_day',
+          date: '2026-08-15',
+          timezone: 'America/Los_Angeles',
+        },
+      }),
+    });
+
+    expect(moved.status).toBe(200);
+    expect(await moved.json()).toMatchObject({
+      assertion: {
+        exceptions: [
+          expect.objectContaining({
+            date: '2026-08-12',
+            schedule: expect.objectContaining({ date: '2026-08-15' }),
+          }),
+        ],
+      },
+    });
+    expect(await (await app.request('/?at=2026-08-15T19%3A00%3A00.000Z')).json()).toMatchObject({
+      expected: { place: { id: alternate.id }, source: 'assertion' },
+    });
+
+    const timedCreated = await app.request('/assertions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        placeId: regular.id,
+        schedule: {
+          type: 'weekly_timed',
+          effectiveFrom: '2026-08-03',
+          effectiveUntil: null,
+          weekdays: [2],
+          startMinute: 540,
+          endMinute: 720,
+          timezone: 'America/Los_Angeles',
+        },
+      }),
+    });
+    const timedId = ((await timedCreated.json()) as { assertion: { id: string } }).assertion.id;
+    const movedTimed = await app.request(`/assertions/${timedId}/occurrences/2026-08-12`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'replace',
+        date: '2026-08-12',
+        placeId: alternate.id,
+        schedule: {
+          type: 'one_off_timed',
+          startsAt: '2026-08-16T16:00:00.000Z',
+          endsAt: '2026-08-16T20:00:00.000Z',
+          timezone: 'America/Los_Angeles',
+        },
+      }),
+    });
+
+    expect(movedTimed.status).toBe(200);
+    expect(await (await app.request('/?at=2026-08-16T17%3A00%3A00.000Z')).json()).toMatchObject({
+      expected: { place: { id: alternate.id }, source: 'assertion' },
+    });
+  });
+
   it('rejects observation coordinates, accepts matched place evidence, and defaults manual expiry to local day end', async () => {
     const { app, hubId } = await seedWorkLocationUser('WorkLocationEvidence');
     const { place } = await createPlace(app, 'Community center');

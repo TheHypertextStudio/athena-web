@@ -154,6 +154,23 @@ function assertionIntervals(
   }
 
   const intervals: AssertionInterval[] = [];
+  // Replacement schedules are independent one-off intervals. Expanding them directly makes a
+  // moved occurrence visible when the requested point or range contains only its target date and
+  // not the weekly occurrence date that remains its stable exception key.
+  for (const exception of assertion.exceptions) {
+    if (exception.action !== 'replace') continue;
+    const interval = oneOffInterval(exception.schedule);
+    if (interval.end <= windowStart || interval.start >= windowEnd) continue;
+    intervals.push({
+      assertionId: assertion.id,
+      occurrenceDate: exception.date,
+      placeId: exception.placeId,
+      ...interval,
+      revision: assertion.revision,
+      updatedAt: assertion.updatedAt,
+      tieBreaker: assertion.tieBreaker ?? assertion.id,
+    });
+  }
   for (const date of datesForWindow(windowStart, windowEnd, schedule.timezone)) {
     if (
       compareCalendarDates(date, schedule.effectiveFrom) < 0 ||
@@ -165,12 +182,10 @@ function assertionIntervals(
     }
 
     const exception = assertion.exceptions.find((candidate) => candidate.date === date);
-    if (exception?.action === 'cancel') continue;
+    if (exception) continue;
 
-    const replacement = exception?.action === 'replace' ? oneOffInterval(exception.schedule) : null;
     const interval =
-      replacement ??
-      (schedule.type === 'weekly_timed'
+      schedule.type === 'weekly_timed'
         ? {
             start: instantAt(date, schedule.startMinute, schedule.timezone),
             end: instantAt(date, schedule.endMinute, schedule.timezone),
@@ -180,12 +195,12 @@ function assertionIntervals(
             start: instantAt(date, 0, schedule.timezone),
             end: instantAt(addCalendarDays(date, 1), 0, schedule.timezone),
             timed: false,
-          });
+          };
     if (interval.end <= windowStart || interval.start >= windowEnd) continue;
     intervals.push({
       assertionId: assertion.id,
       occurrenceDate: date,
-      placeId: exception?.action === 'replace' ? exception.placeId : assertion.placeId,
+      placeId: assertion.placeId,
       ...interval,
       revision: assertion.revision,
       updatedAt: assertion.updatedAt,

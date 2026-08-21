@@ -559,13 +559,10 @@ export async function setWorkLocationOccurrence(
   }
   if (exception.action === 'replace') {
     await requirePlace(database, hubId, exception.placeId);
-    const replacementDate =
-      exception.schedule.type === 'one_off_all_day'
-        ? exception.schedule.date
-        : localDateString(new Date(exception.schedule.startsAt), exception.schedule.timezone);
-    if (replacementDate !== date) {
-      throw new ConflictError('Replacement schedule must start on the occurrence date');
-    }
+    // `date` names the original weekly occurrence. The one-off replacement owns its target date,
+    // which may differ when a person drags that occurrence to another day. The DTO has already
+    // validated the replacement as one finite one-off schedule, while the checks above prove that
+    // the exception key still identifies a real occurrence in this series.
   }
   await database.transaction(async (tx) => {
     await tx

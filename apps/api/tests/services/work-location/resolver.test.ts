@@ -118,6 +118,45 @@ describe('expected work-location resolution', () => {
     ).toMatchObject({ place: CLIENT, source: 'assertion' });
   });
 
+  it('finds a moved weekly replacement from its target date without the source date in range', () => {
+    const resolutionState = state({
+      assertions: [
+        {
+          id: 'weekly-moved',
+          placeId: LIBRARY.id,
+          schedule: {
+            type: 'weekly_all_day',
+            effectiveFrom: '2026-08-03',
+            effectiveUntil: null,
+            weekdays: [2],
+            timezone: 'America/Los_Angeles',
+          },
+          exceptions: [
+            {
+              action: 'replace',
+              date: '2026-08-12',
+              placeId: CLIENT.id,
+              schedule: {
+                type: 'one_off_all_day',
+                date: '2026-08-15',
+                timezone: 'America/Los_Angeles',
+              },
+            },
+          ],
+          revision: 2,
+          updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+        },
+      ],
+    });
+
+    expect(
+      resolveWorkLocationPoint({
+        at: new Date('2026-08-15T19:00:00.000Z'),
+        state: resolutionState,
+      }).expected,
+    ).toMatchObject({ place: CLIENT, source: 'assertion' });
+  });
+
   it('prefers timed assertions over all-day assertions and newest revisions at equal scope', () => {
     const resolutionState = state({
       assertions: [

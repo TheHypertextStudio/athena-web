@@ -45,6 +45,7 @@ describe('SchedulingCanvas composition seams', () => {
         renderAllDayLaneContext={({ lane: renderedLane, geometry }) => (
           <button
             type="button"
+            className="pointer-events-auto"
             data-testid="all-day-context-chip"
             data-lane={renderedLane.id}
             data-lane-index={geometry.laneIndex}
@@ -77,6 +78,53 @@ describe('SchedulingCanvas composition seams', () => {
     expect(screen.getByTestId('all-day-context-chip')).toHaveAttribute('data-lane-index', '0');
     fireEvent.click(screen.getByTestId('all-day-context-chip'));
     expect(allDayContextClick).toHaveBeenCalledOnce();
+  });
+
+  it('places interactive timed lane context above the inert underlay with neutral snap geometry', () => {
+    const onActivate = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane([])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        renderTimedLaneUnderlay={() => <span data-testid="underlay" />}
+        renderTimedLaneContext={({ lane: renderedLane, geometry, snapMinutes }) => (
+          <button
+            type="button"
+            className="pointer-events-auto"
+            data-testid="timed-context-control"
+            data-lane={renderedLane.id}
+            data-height={geometry.laneHeight}
+            data-snap={snapMinutes}
+            onClick={onActivate}
+          >
+            Context
+          </button>
+        )}
+      />,
+    );
+
+    const laneNode = assertDefined(
+      document.querySelector<HTMLElement>('[data-schedule-lane="date"]'),
+    );
+    const underlay = assertDefined(
+      laneNode.querySelector<HTMLElement>('[data-schedule-timed-lane-underlay="date"]'),
+    );
+    const context = assertDefined(
+      laneNode.querySelector<HTMLElement>('[data-schedule-timed-lane-context="date"]'),
+    );
+    expect([...laneNode.children].indexOf(underlay)).toBeLessThan(
+      [...laneNode.children].indexOf(context),
+    );
+    expect(context).not.toHaveAttribute('inert');
+    expect(context).toHaveClass('pointer-events-none');
+    expect(screen.getByTestId('timed-context-control')).toHaveClass('pointer-events-auto');
+    expect(screen.getByTestId('timed-context-control')).toHaveAttribute('data-lane', 'date');
+    expect(screen.getByTestId('timed-context-control')).toHaveAttribute('data-height', '1440');
+    expect(screen.getByTestId('timed-context-control')).toHaveAttribute('data-snap', '10');
+    fireEvent.click(screen.getByTestId('timed-context-control'));
+    expect(onActivate).toHaveBeenCalledOnce();
   });
 
   it('omits the all-day context wrapper when the app renderer returns no content', () => {

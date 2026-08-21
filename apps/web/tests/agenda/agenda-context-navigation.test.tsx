@@ -5,6 +5,10 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as QueryModule from '../../src/lib/query';
 
+vi.mock('@/components/work-location/use-work-location-calendar-composition', () => ({
+  useWorkLocationCalendarComposition: () => ({ canvasProps: {}, overlays: null }),
+}));
+
 const DAY = '2026-07-13';
 const NEXT_DAY = '2026-07-14';
 

@@ -23,8 +23,8 @@
  * and a wrong first render is a control the person cannot press.
  *
  * Making that the default here means returning `Date | null` and teaching all six call sites what
- * to show before mount, which reaches the `WorkLocationStrip` and calendar scheduling prop
- * contracts. Worth doing deliberately; not worth doing as a side effect of an unrelated change.
+ * to show before mount, which reaches the Agenda and Calendar scheduling prop contracts. Worth
+ * doing deliberately; not worth doing as a side effect of an unrelated change.
  */
 import { useEffect, useState } from 'react';
 

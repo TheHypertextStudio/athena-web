@@ -34,10 +34,6 @@ vi.mock('../../src/components/agenda/agenda-canvas', () => ({
   default: () => <div>Agenda canvas</div>,
 }));
 
-vi.mock('../../src/components/work-location/work-location-strip', () => ({
-  WorkLocationStrip: () => null,
-}));
-
 import Agenda from '../../src/components/agenda/agenda';
 
 describe('Agenda degraded-data rendering', () => {

@@ -96,6 +96,7 @@ function TimelineArrangement({
     timeboxFailed,
     clearTimeboxFailure,
     workPlaces,
+    workLocationComposition,
   } = useAgenda();
   const now = useNow().toISOString();
   const [draftSelection, setDraftSelection] = useState<{
@@ -302,6 +303,7 @@ function TimelineArrangement({
           now={now}
           viewportHeight="100%"
           minimumLaneWidth={180}
+          {...workLocationComposition?.canvasProps}
           selectedRegion={draftSelection?.canvasRegion}
           selectedRegionAnchorRef={draftAnchorRef}
           onSelectRegion={selectTimedRegion}
@@ -374,6 +376,7 @@ function TimelineArrangement({
           }}
         />
       )}
+      {workLocationComposition?.overlays}
       <CreateBlockForm
         presentation="agenda"
         trigger="hidden"

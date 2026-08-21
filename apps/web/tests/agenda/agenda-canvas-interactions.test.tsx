@@ -14,6 +14,7 @@ import type { AgendaEntry } from '../../src/components/agenda/agenda-model';
 import type * as SchedulingModule from '../../src/components/scheduling';
 import type { SchedulingCanvasProps } from '../../src/components/scheduling';
 import type { CreateBlockFormProps } from '../../src/components/calendar/create-block-form';
+import type { WorkLocationCalendarComposition } from '../../src/components/work-location/use-work-location-calendar-composition';
 
 const router = vi.hoisted(() => ({ push: vi.fn() }));
 const mediaState = vi.hoisted(() => ({ isDesktop: true }));
@@ -33,6 +34,7 @@ const agendaState = vi.hoisted<{
   clearTimeboxFailure: ReturnType<typeof vi.fn>;
   registerNavigationGuard: ReturnType<typeof vi.fn>;
   timeboxFailed: boolean;
+  workLocationComposition: WorkLocationCalendarComposition | undefined;
 }>(() => ({
   date: '2026-07-13',
   displayTimezone: 'America/Los_Angeles',
@@ -43,6 +45,7 @@ const agendaState = vi.hoisted<{
   clearTimeboxFailure: vi.fn(),
   registerNavigationGuard: vi.fn(() => () => undefined),
   timeboxFailed: false,
+  workLocationComposition: undefined,
 }));
 const mutationState = vi.hoisted(() => ({
   update: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
@@ -229,6 +232,7 @@ beforeEach(() => {
   agendaState.clearTimeboxFailure.mockReset();
   agendaState.registerNavigationGuard.mockReset().mockImplementation(() => () => undefined);
   agendaState.timeboxFailed = false;
+  agendaState.workLocationComposition = undefined;
   router.push.mockReset();
   mutationState.update.mutate.mockReset();
   mutationState.update.reset.mockReset();
@@ -249,6 +253,29 @@ afterEach(() => {
 });
 
 describe('Agenda scheduling interactions', () => {
+  it('mounts the same work-location composition slots and editor overlays as Calendar', () => {
+    const renderAllDayLaneContext = vi.fn(() => null);
+    const renderTimedLaneContext = vi.fn(() => null);
+    const renderTimedItemDecoration = vi.fn(() => null);
+    agendaState.workLocationComposition = {
+      canvasProps: {
+        gutterSlot: <span>Location status</span>,
+        renderAllDayLaneContext,
+        renderTimedLaneContext,
+        renderTimedItemDecoration,
+      },
+      overlays: <div>Location editor</div>,
+    };
+    renderTimeline([]);
+
+    expect(canvasProps()).toMatchObject({
+      renderAllDayLaneContext,
+      renderTimedLaneContext,
+      renderTimedItemDecoration,
+    });
+    expect(screen.getByText('Location editor')).toBeInTheDocument();
+  });
+
   it('projects a click-or-drag time selection and opens one local quick-create draft', () => {
     renderTimeline([]);
     const props = canvasProps();

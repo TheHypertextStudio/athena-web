@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 const WEB_ROOT = resolve(import.meta.dirname, '../..');
 const SCHEDULING_ROOT = resolve(WEB_ROOT, 'src/components/scheduling');
+const WORK_LOCATION_ROOT = resolve(WEB_ROOT, 'src/components/work-location');
 
 interface SchedulingSource {
   readonly path: string;
@@ -170,5 +171,32 @@ describe('shared scheduling import boundaries', () => {
         text: `export const label = 'Calendar task agenda work-location';`,
       }),
     ).toEqual([]);
+  });
+
+  it('keeps work-location composition independent from item and task mutation domains', () => {
+    const forbidden = discoverSchedulingSources(WORK_LOCATION_ROOT).flatMap((source) => {
+      const violations: string[] = [];
+      if (/CalendarItemKind|AgendaEntry/.test(source.text)) violations.push(source.path);
+      if (
+        /calendar-mutations|task-mutations|calendar-item-(?:card|drawer)|agenda-entry-card/.test(
+          source.text,
+        )
+      ) {
+        violations.push(source.path);
+      }
+      return violations;
+    });
+
+    expect(forbidden).toEqual([]);
+  });
+
+  it('keeps work-location mutations separate from schedule item mutations', () => {
+    const composition = readFileSync(
+      resolve(WORK_LOCATION_ROOT, 'use-work-location-calendar-composition.tsx'),
+      'utf8',
+    );
+
+    expect(composition).toContain("api.v1.me['work-location']");
+    expect(composition).not.toMatch(/useUpdateCalendarItem|useTaskMutation|calendar-mutations/);
   });
 });

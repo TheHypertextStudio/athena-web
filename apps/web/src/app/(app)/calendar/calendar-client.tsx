@@ -32,8 +32,8 @@ import { shiftISODate } from '@/components/agenda/agenda-context';
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
 import CreateBlockForm from '@/components/calendar/create-block-form';
 import { resolveScheduleTimezone, useScheduleDisplayDate } from '@/components/scheduling';
-import { WorkLocationStrip } from '@/components/work-location/work-location-strip';
 import { workLocationPlacesDef } from '@/components/work-location/work-location-data';
+import { useWorkLocationCalendarComposition } from '@/components/work-location/use-work-location-calendar-composition';
 import { api } from '@/lib/api';
 import {
   apiQueryOptions,
@@ -164,6 +164,12 @@ export default function CalendarClient(): JSX.Element {
 
   const dateAxis = useCalendarDateAxis(anchorDate, visibleLaneCount, displayTimezone);
   const peopleAxis = useCalendarPeopleAxis(axis, anchorDate, displayTimezone);
+  const workLocationComposition = useWorkLocationCalendarComposition({
+    start: dateAxis.startISO,
+    end: dateAxis.endISO,
+    timezone: displayTimezone,
+    lanes: dateAxis.lanes,
+  });
   useEffect(() => {
     setOpenSharedItem(null);
   }, [anchorDate, axis, peopleAxis.comparisonOrgId]);
@@ -260,19 +266,6 @@ export default function CalendarClient(): JSX.Element {
         }
       />
 
-      <WorkLocationStrip
-        start={dateAxis.startISO}
-        end={dateAxis.endISO}
-        at={now}
-        timezone={displayTimezone}
-        legacyItems={dateAxis.legacyWorkLocations.map((item) => ({
-          id: item.id,
-          label: item.title,
-          color: dateAxis.layers.find((layer) => layer.id === item.layerId)?.color ?? null,
-        }))}
-        className="shrink-0"
-      />
-
       <CalendarSchedulingSurface
         axis={axis}
         visibleLaneCount={visibleLaneCount}
@@ -283,6 +276,7 @@ export default function CalendarClient(): JSX.Element {
         preferences={preferences}
         dateAxis={dateAxis}
         peopleAxis={peopleAxis}
+        workLocationComposition={workLocationComposition}
         selectedRegion={selection?.canvasRegion}
         selectedRegionAnchorRef={selectionAnchorRef}
         onVisibleLaneCountChange={(count) => {

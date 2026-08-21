@@ -19,6 +19,7 @@ import type {
   ScheduleRegionSelection,
   SchedulingCanvasProps,
 } from '../../src/components/scheduling';
+import type { WorkLocationCalendarComposition } from '../../src/components/work-location/use-work-location-calendar-composition';
 
 const canvas = vi.hoisted<{ props: SchedulingCanvasProps | undefined }>(() => ({
   props: undefined,
@@ -267,6 +268,7 @@ function renderSurface(
     readonly selectedRegionAnchorRef?: React.RefObject<HTMLDivElement | null>;
     readonly dateItemsError?: boolean;
     readonly peopleError?: boolean;
+    readonly workLocationComposition?: WorkLocationCalendarComposition;
   } = {},
 ): {
   readonly onOpenItem: ReturnType<typeof vi.fn>;
@@ -293,6 +295,7 @@ function renderSurface(
             ...peopleAxisState(),
             error: selectionOptions.peopleError ?? false,
           }}
+          workLocationComposition={selectionOptions.workLocationComposition}
           selectedRegion={selectionOptions.selectedRegion}
           selectedRegionAnchorRef={selectionOptions.selectedRegionAnchorRef}
           onVisibleLaneCountChange={vi.fn()}
@@ -347,6 +350,30 @@ afterEach(() => {
 });
 
 describe('CalendarSchedulingSurface persistence', () => {
+  it('mounts the shared work-location composition slots and editor overlays on date lanes', () => {
+    const renderAllDayLaneContext = vi.fn(() => null);
+    const renderTimedLaneContext = vi.fn(() => null);
+    const renderTimedItemDecoration = vi.fn(() => null);
+    renderSurface('dates', calendarItem(), '2026-07-13', {
+      workLocationComposition: {
+        canvasProps: {
+          gutterSlot: <span>Location status</span>,
+          renderAllDayLaneContext,
+          renderTimedLaneContext,
+          renderTimedItemDecoration,
+        },
+        overlays: <div>Location editor</div>,
+      },
+    });
+
+    expect(canvasProps()).toMatchObject({
+      renderAllDayLaneContext,
+      renderTimedLaneContext,
+      renderTimedItemDecoration,
+    });
+    expect(screen.getByText('Location editor')).toBeInTheDocument();
+  });
+
   it('teaches the next action when the date grid is empty', () => {
     renderSurface();
 

@@ -19,6 +19,10 @@ import { readStoredInteger, writeStoredValue } from '@docket/ui/lib/browser-stor
 import { calendarItemsDef } from '@/components/calendar/calendar-data';
 import { workLocationPlacesDef } from '@/components/work-location/work-location-data';
 import {
+  type WorkLocationCalendarComposition,
+  useWorkLocationCalendarComposition,
+} from '@/components/work-location/use-work-location-calendar-composition';
+import {
   resolveScheduleTimezone,
   scheduleDateRange,
   useScheduleDisplayDate,
@@ -96,6 +100,7 @@ interface AgendaContextValue extends AgendaPlanMutations {
   isToday: boolean;
   entries: AgendaEntry[];
   dayContext: AgendaDayContext[];
+  workLocationComposition?: WorkLocationCalendarComposition | undefined;
   workPlaces: WorkPlaceOut[];
   loading: boolean;
   error: string | null;
@@ -258,6 +263,13 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
     void calendarQuery.refetch();
     void planQuery.refetch();
   }, [calendarQuery, planQuery, preferencesQuery, query]);
+  const workLocationRange = calendarDayRange(date, displayTimezone);
+  const workLocationComposition = useWorkLocationCalendarComposition({
+    start: workLocationRange.startISO,
+    end: workLocationRange.endISO,
+    timezone: displayTimezone,
+    lanes: [{ id: `agenda:${date}`, date, label: date, items: [] }],
+  });
 
   const value = useMemo<AgendaContextValue>(
     () => ({
@@ -266,6 +278,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       isToday,
       entries: agendaDay.entries,
       dayContext: agendaDay.dayContext,
+      workLocationComposition,
       workPlaces: workPlacesQuery.data?.items ?? [],
       loading:
         query.isPending ||
@@ -299,6 +312,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       today,
       isToday,
       agendaDay,
+      workLocationComposition,
       workPlacesQuery.data,
       query.isPending,
       query.isPlaceholderData,

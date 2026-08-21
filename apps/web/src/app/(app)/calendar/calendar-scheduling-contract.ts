@@ -2,6 +2,7 @@ import type { CalendarPreferences } from '@docket/types';
 
 import type { CalendarTimedRegionSelection } from '@/components/calendar/calendar-time-draft';
 import type { ScheduleRegionSelection, SchedulingCanvasProps } from '@/components/scheduling';
+import type { WorkLocationCalendarComposition } from '@/components/work-location/use-work-location-calendar-composition';
 
 import type { CalendarAxis } from './calendar-schedule-model';
 import type { SharedCalendarItemDetail } from './calendar-shared-item-details';
@@ -24,6 +25,7 @@ export interface CalendarSchedulingSurfaceProps {
   readonly preferences?: CalendarPreferences | undefined;
   readonly dateAxis: CalendarDateAxisState;
   readonly peopleAxis: CalendarPeopleAxisState;
+  readonly workLocationComposition?: WorkLocationCalendarComposition | undefined;
   readonly selectedRegion?: ScheduleRegionSelection | null | undefined;
   readonly selectedRegionAnchorRef?: SchedulingCanvasProps['selectedRegionAnchorRef'] | undefined;
   readonly onVisibleLaneCountChange: (count: number) => void;

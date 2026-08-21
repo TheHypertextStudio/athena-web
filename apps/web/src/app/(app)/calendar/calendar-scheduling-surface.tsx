@@ -78,6 +78,7 @@ export function CalendarSchedulingSurface({
   preferences,
   dateAxis,
   peopleAxis,
+  workLocationComposition,
   selectedRegion,
   selectedRegionAnchorRef,
   onVisibleLaneCountChange,
@@ -187,6 +188,7 @@ export function CalendarSchedulingSurface({
           now={now}
           viewportHeight="100%"
           minimumLaneWidth={minLaneWidth}
+          {...(axis === 'dates' ? workLocationComposition?.canvasProps : {})}
           initialLaneIndex={axis === 'dates' ? dateAxis.initialLaneIndex : 0}
           horizontalAnchorKey={axis === 'dates' ? horizontalAnchorKey : undefined}
           selectedRegion={selectedRegion}
@@ -333,6 +335,7 @@ export function CalendarSchedulingSurface({
           }}
           onZoomGesture={onZoomGesture}
         />
+        {axis === 'dates' ? workLocationComposition?.overlays : null}
       </div>
     </div>
   );

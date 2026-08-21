@@ -189,6 +189,14 @@ export interface ScheduleTimedLaneRenderContext {
   readonly geometry: ScheduleTimedLaneGeometry;
 }
 
+/** Neutral geometry supplied to an app-owned interactive timed-lane context renderer. */
+export interface ScheduleTimedLaneContextRenderContext extends ScheduleTimedLaneRenderContext {
+  /** Every visible lane, supplied only so app-owned pointer logic can resolve a target date. */
+  readonly lanes: readonly ScheduleLane[];
+  /** Current neutral wall-time snap interval. */
+  readonly snapMinutes: number;
+}
+
 /** Geometry supplied to a consumer-owned all-day lane context renderer. */
 export interface ScheduleAllDayLaneGeometry {
   /** Zero-based lane position in the current canvas. */
@@ -301,6 +309,17 @@ export interface SchedulingCanvasProps {
    */
   readonly renderTimedLaneUnderlay?:
     | ((context: ScheduleTimedLaneRenderContext) => ReactNode)
+    | undefined;
+  /**
+   * Render app-owned controls in a timed lane without exposing scheduling item mutations.
+   *
+   * @remarks
+   * The full-lane wrapper ignores pointer events so empty-grid selection still works. Interactive
+   * descendants must opt back in with `pointer-events-auto`. Consumers receive only readonly lane
+   * geometry, visible lanes, and the neutral snap interval.
+   */
+  readonly renderTimedLaneContext?:
+    | ((context: ScheduleTimedLaneContextRenderContext) => ReactNode)
     | undefined;
   /**
    * Render app-owned interactive context above the existing all-day items in each lane.

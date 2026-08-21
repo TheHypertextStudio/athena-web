@@ -29,6 +29,8 @@ export interface OccurrenceEditorDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly assertion: WorkLocationAssertionOut | null;
+  /** Visible occurrence selected from Calendar or Agenda. */
+  readonly date?: string | null;
   readonly places: readonly WorkPlaceOut[];
   readonly pending: boolean;
   readonly onSet: (
@@ -44,6 +46,7 @@ export function OccurrenceEditorDialog({
   open,
   onOpenChange,
   assertion,
+  date: initialDate = null,
   places,
   pending,
   onSet,
@@ -55,10 +58,10 @@ export function OccurrenceEditorDialog({
 
   useEffect(() => {
     if (!open) return;
-    setDate('');
+    setDate(initialDate ?? '');
     setAction('replace');
     setPlaceId(assertion?.placeId ?? places[0]?.id ?? '');
-  }, [assertion, open, places]);
+  }, [assertion, initialDate, open, places]);
 
   const submit: SubmitEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault();

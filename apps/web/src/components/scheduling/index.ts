@@ -94,5 +94,6 @@ export type {
   ScheduleObjectGridDrop,
   ScheduleRegionSelection,
   ScheduleTimedItemDecorationContext,
+  ScheduleTimedLaneContextRenderContext,
   ScheduleTimedLaneRenderContext,
 } from './scheduling-types';

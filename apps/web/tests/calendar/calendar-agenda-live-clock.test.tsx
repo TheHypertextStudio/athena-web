@@ -34,6 +34,10 @@ const displayDateState = vi.hoisted(() => ({ setDate: vi.fn() }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
+vi.mock('@/components/work-location/use-work-location-calendar-composition', () => ({
+  useWorkLocationCalendarComposition: () => ({ canvasProps: {}, overlays: null }),
+}));
+
 vi.mock('@/components/agenda/agenda-context', () => ({
   isTimeboxed: (entry: { startsAt?: string; endsAt?: string }) =>
     entry.startsAt !== undefined && entry.endsAt !== undefined,
@@ -76,10 +80,6 @@ vi.mock('@/components/calendar/calendar-mutations', () => ({
 vi.mock('@/components/calendar/calendar-item-drawer', () => ({ default: () => null }));
 vi.mock('@/components/calendar/create-block-form', () => ({ default: () => null }));
 vi.mock('@/components/agenda/agenda-entry-card', () => ({ default: () => null }));
-vi.mock('@/components/work-location/work-location-strip', () => ({
-  WorkLocationStrip: () => null,
-}));
-
 vi.mock('@/lib/api', () => ({
   api: { v1: { hub: { preferences: { $get: vi.fn(), $patch: vi.fn() } } } },
 }));

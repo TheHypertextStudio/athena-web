@@ -63,6 +63,7 @@ export default function SchedulingCanvas({
   renderItem,
   renderItemAction,
   renderTimedLaneUnderlay,
+  renderTimedLaneContext,
   renderAllDayLaneContext,
   renderTimedItemDecoration,
   selectedRegion,
@@ -389,6 +390,24 @@ export default function SchedulingCanvas({
                     >
                       {renderTimedLaneUnderlay({
                         lane,
+                        geometry: {
+                          laneIndex,
+                          laneWidth: geometry.laneWidth,
+                          laneHeight: 24 * effectivePixelsPerHour,
+                          pixelsPerHour: effectivePixelsPerHour,
+                        },
+                      })}
+                    </div>
+                  ) : null}
+                  {renderTimedLaneContext ? (
+                    <div
+                      className="pointer-events-none absolute inset-0 z-[2]"
+                      data-schedule-timed-lane-context={lane.id}
+                    >
+                      {renderTimedLaneContext({
+                        lane,
+                        lanes,
+                        snapMinutes,
                         geometry: {
                           laneIndex,
                           laneWidth: geometry.laneWidth,

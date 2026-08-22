@@ -279,12 +279,12 @@ lint, and whitespace checks.
 
 - [x] Switch all four pages together while retaining detail endpoints, dependency view, legacy URL
       decoder, and rollback readers.
-- [ ] Exercise filter, nested filter, group, subgroup, ordered sort, save, reload, share, favorite,
+- [x] Exercise filter, nested filter, group, subgroup, ordered sort, save, reload, share, favorite,
       layout, selection, bulk action, drag, and reset for every target.
-- [ ] Validate 1440, 768, 390, and 320 pixels in both themes, keyboard-only use, screen-reader names,
+- [x] Validate 1440, 768, 390, and 320 pixels in both themes, keyboard-only use, screen-reader names,
       focus restoration, and reduced motion.
-- [ ] Benchmark warm 100-row pages at 50,000 Tasks, 5,000 Projects, 1,000 Programs, and 1,000
+- [x] Benchmark warm 100-row pages at 50,000 Tasks, 5,000 Projects, 1,000 Programs, and 1,000
       Initiatives; fail when p95 exceeds 300ms or mounted rows/cards become unbounded.
-- [ ] Run focused checks, then bounded root typecheck, lint, test, and build gates.
-- [ ] Complete the WORKLOG entry with evidence, remaining compatibility cleanup, and rollout risks.
-- [ ] Commit the page switch as `feat: Replace flat rosters with typed work views`.
+- [x] Run focused checks, then bounded root typecheck, lint, test, and build gates.
+- [x] Complete the WORKLOG entry with evidence, remaining compatibility cleanup, and rollout risks.
+- [x] Commit the page switch as `feat: Replace flat rosters with typed work views`.

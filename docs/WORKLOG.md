@@ -5361,6 +5361,55 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ROSTERS-002] Replace flat planning rosters with typed server queries
+
+- **Completed**: 2026-08-21
+- **Priority**: P0
+- **Summary**: Tasks, Projects, Programs, and Initiatives now use one target-discriminated server
+  query system. The four rosters support nested filters, ordered multi-sort, grouping and
+  subgrouping, target-safe layouts, selected properties, shared ordering, personal overrides,
+  workspace defaults, saved sharing, favorites, reset, bounded pagination, selection, and bulk
+  link copying. Project dependencies remain a separate lens. Initiative lists preserve authorized
+  ancestor context and hierarchy moves. The Initiative header no longer exposes verdict language.
+  Detail metadata overflow contains only properties that no longer fit inline, and its MD3 chips
+  use the shared small control metrics.
+- **Files Changed**: Added the generic contract and four Zod instantiations, additive database
+  storage and migration, authorized SQL compilers, query/facet/order/default routes, the shared web
+  controller and renderers, compatibility readers, and focused contract, migration, API, component,
+  browser, responsive, accessibility, and performance-regression coverage. The branch records the
+  implementation as separate contract, storage, query, route, controller, renderer, page, UX fix,
+  compatibility, and closeout commits rather than one aggregate commit.
+- **Validation**: The final production bundle builds 75 routes and a 274-asset service worker. The
+  final production-browser run passes both Playwright tests in 35.4 seconds. The all-roster journey
+  exercises every target through simple and nested filters, grouping, subgrouping, two ordered
+  sorts, save, organization sharing, favorite persistence, selection, bulk links, layout changes,
+  drag, reload, and reset. The responsive journey covers 1440, 768, 390, and 320 pixels in both
+  themes plus keyboard labels, focus restoration, and reduced motion. The web roster suite passes
+  56 tests, the API query suite passes 34 tests, the Types contract suite passes 6 tests, and the
+  database migration and constraint suite passes 12 tests. Root typecheck passes 26 of 26 tasks,
+  root lint passes 25 of 25 tasks, repository tooling passes 155 tests, and the production build
+  passes all 4 build tasks. The complete web run passes 2,757 of 2,758 tests and reports only the
+  Cycle baseline below. A seeded query run stays under the 300 ms p95 guard at 50,000 Tasks,
+  5,000 Projects, 1,000 Programs, and 1,000 Initiatives. That seeded run is only a regression guard;
+  the production-browser journeys are the primary product evidence.
+- **Compatibility and rollout**: The legacy Task URL decoder, response projection, saved-view
+  columns, Project `teamId`, and old list endpoints remain for one rollback window. The new
+  `project_team` relation is authoritative after backfill. Deployment should monitor query latency,
+  rejected definitions, cursor fingerprint failures, and authorization failures before removing
+  those readers and columns. AI filter generation, custom fields, subscriptions, and saved-view
+  alerts remain separate work. Athena does not expose fake SLA, customer, or subscriber fields.
+- **Known baseline**: The Cycle detail suite on `origin/main` expects separate `Window Starts` and
+  `Window Ends` buttons that the current Cycle header does not render. The same isolated test fails
+  without this branch's roster changes. The roster-focused suites, changed-package typechecks,
+  changed-file lint, root build, and production browser tests pass.
+- **Retrospective**: Browser execution found two bugs that source review missed. Radix `asChild`
+  props stopped at wrapper components, which made direct Sort, Group, Layout, and Properties
+  controls inert. Favorite ids also lived only on the active instance, which hid favorites after a
+  reload selected the built-in tab. Spreading trigger props and treating favorites as a personal
+  cross-instance set fixed both. Replacing the Initiative page also required carrying the parent
+  edge through the typed projection so hierarchy drag did not disappear. Synthetic timing did not
+  reveal any of these failures, so it remains a regression guard rather than a release decision.
+
 ### [TIMEFRAME-001] Match Linear's Project and Initiative timeframes
 
 - **Completed**: 2026-08-21

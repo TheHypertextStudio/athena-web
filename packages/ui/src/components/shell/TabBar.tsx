@@ -23,9 +23,10 @@
  * only** — the strip clips vertical overflow so the chrome never grows a second row or a vertical
  * scrollbar. An always-present **searchable switcher** pinned at the right edge lists *every* open
  * document (type glyph + title) so the caller can jump to or close any tab even when dozens are
- * open and most have scrolled out of view. The switcher is capped at 352px, opens directly into
- * its search field from the trigger or Command/Control+Shift+A, and uses ordinary Tab order across
- * each link and close action instead of imposing menu semantics on a compound interactive row.
+ * open and most have scrolled out of view. The switcher is 352px below the desktop breakpoint and
+ * caps at 480px on desktop, opens directly into its search field from the trigger or
+ * Command/Control+Shift+A, and uses ordinary Tab order across each link and close action instead
+ * of imposing menu semantics on a compound interactive row.
  *
  * @remarks Surface model — the bar is its **own bar on the canvas**: its container inherits the
  * shell's tinted `surface-container` tone (no panel surface, no divider border), so it reads as

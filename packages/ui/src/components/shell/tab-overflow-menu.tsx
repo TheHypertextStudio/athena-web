@@ -8,7 +8,6 @@ import {
   CONTROL,
   fieldSurface,
   menuFocusRing,
-  menuItemClass,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -16,6 +15,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '../../primitives';
+
+import { MenuActionRow } from '../menus/MenuActionRow';
 
 import type { OpenTab, TabRenderLink } from './tab-types';
 import { TYPE_ICON, tabLabel } from './tab-types';
@@ -49,6 +50,7 @@ export function OverflowMenu({
   const [query, setQuery] = React.useState('');
   const [shortcutLabel, setShortcutLabel] = React.useState('Ctrl ⇧ A');
   const searchRef = React.useRef<HTMLInputElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
   const pendingCloseIndexRef = React.useRef<number | null>(null);
 
@@ -62,7 +64,7 @@ export function OverflowMenu({
   );
 
   const resultLinks = React.useCallback((): HTMLAnchorElement[] => {
-    const rows = contentRef.current?.querySelectorAll<HTMLElement>('[data-document-result]') ?? [];
+    const rows = contentRef.current?.querySelectorAll<HTMLElement>('[data-menu-action-row]') ?? [];
     return Array.from(rows).flatMap((row) => {
       const link = row.querySelector<HTMLAnchorElement>('a[href]');
       return link ? [link] : [];
@@ -102,6 +104,13 @@ export function OverflowMenu({
 
   const handleContentKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleOpenChange(false);
+        triggerRef.current?.focus();
+        return;
+      }
+
       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
       const links = resultLinks();
       if (links.length === 0) return;
@@ -109,7 +118,7 @@ export function OverflowMenu({
 
       const direction = event.key === 'ArrowDown' ? 1 : -1;
       const target = event.target instanceof Element ? event.target : null;
-      const currentRow = target?.closest<HTMLElement>('[data-document-result]') ?? null;
+      const currentRow = target?.closest<HTMLElement>('[data-menu-action-row]') ?? null;
       const currentLink = currentRow?.querySelector<HTMLAnchorElement>('a[href]') ?? null;
       const currentIndex = currentLink ? links.indexOf(currentLink) : -1;
       const nextIndex =
@@ -120,7 +129,7 @@ export function OverflowMenu({
           : (currentIndex + direction + links.length) % links.length;
       links[nextIndex]?.focus();
     },
-    [resultLinks],
+    [handleOpenChange, resultLinks],
   );
 
   return (
@@ -128,6 +137,7 @@ export function OverflowMenu({
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger
+            ref={triggerRef}
             type="button"
             aria-label={`Open documents (${String(tabs.length)})`}
             className={cn(
@@ -147,7 +157,7 @@ export function OverflowMenu({
         role="dialog"
         aria-label="Open documents"
         align="end"
-        className="w-88"
+        className="w-88 p-2 lg:w-[min(480px,calc(100vw-1.5rem))]"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           searchRef.current?.focus();
@@ -156,12 +166,12 @@ export function OverflowMenu({
       >
         <div
           className={cn(
-            fieldSurface({ variant: 'filled', controlSize: 'xl' }),
-            CONTROL.xl.gap,
-            'focus-within:ring-ring flex items-center focus-within:ring-2',
+            fieldSurface({ variant: 'filled', controlSize: 'lg', ringOn: 'within' }),
+            CONTROL.lg.gap,
+            'flex items-center',
           )}
         >
-          <Search aria-hidden="true" className={cn(CONTROL.xl.icon, 'text-on-surface-variant')} />
+          <Search aria-hidden="true" className={cn(CONTROL.lg.icon, 'text-on-surface-variant')} />
           <input
             ref={searchRef}
             type="search"
@@ -186,53 +196,31 @@ export function OverflowMenu({
             No open documents found
           </p>
         ) : (
-          <div role="list" aria-label="Open document results" className="flex flex-col gap-0.5">
+          <div
+            role="list"
+            aria-label="Open document results"
+            className="flex max-h-80 flex-col gap-0.5 overflow-y-auto overscroll-contain"
+          >
             {filteredTabs.map((tab, index) => {
               const Icon = TYPE_ICON[tab.type];
               const active = tab.key === activeKey;
               return (
-                <div
+                <MenuActionRow
                   key={tab.key}
-                  role="listitem"
-                  aria-label={tabLabel(tab)}
-                  aria-current={active ? 'true' : undefined}
-                  data-document-result=""
-                  className={menuItemClass('standard', { selected: active })}
-                  onClick={(event) => {
-                    const target = event.target instanceof Element ? event.target : null;
-                    if (target?.closest('a[href]')) handleOpenChange(false);
+                  label={tabLabel(tab)}
+                  leading={<Icon aria-hidden="true" />}
+                  selected={active}
+                  renderPrimary={(children, className) => renderLink(tab.href, children, className)}
+                  actionLabel={`Close ${tabLabel(tab)}`}
+                  actionIcon={<X aria-hidden="true" />}
+                  onPrimarySelect={() => {
+                    handleOpenChange(false);
                   }}
-                >
-                  {renderLink(
-                    tab.href,
-                    <>
-                      <Icon aria-hidden="true" className="shrink-0 opacity-70" />
-                      <span className="min-w-0 flex-1 truncate">{tabLabel(tab)}</span>
-                    </>,
-                    cn(
-                      'flex min-w-0 flex-1 items-center gap-3 rounded-corner-xs outline-none',
-                      menuFocusRing,
-                    ),
-                  )}
-                  <button
-                    type="button"
-                    aria-label={`Close ${tabLabel(tab)}`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      pendingCloseIndexRef.current = index;
-                      onClose(tab.key);
-                    }}
-                    className={cn(
-                      CONTROL.xl.height,
-                      CONTROL.xl.width,
-                      'hover:bg-surface-container-high flex shrink-0 items-center justify-end rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100',
-                      menuFocusRing,
-                    )}
-                  >
-                    <X aria-hidden="true" className={CONTROL.xl.icon} />
-                  </button>
-                </div>
+                  onAction={() => {
+                    pendingCloseIndexRef.current = index;
+                    onClose(tab.key);
+                  }}
+                />
               );
             })}
           </div>

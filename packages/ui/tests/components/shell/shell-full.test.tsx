@@ -1215,7 +1215,7 @@ describe('TabBar', () => {
     expect(tablist).not.toHaveClass('overflow-y-auto', 'overflow-y-scroll', 'flex-wrap');
   });
 
-  it('opens a fixed-width search surface instead of spending a row on a menu heading', async () => {
+  it('opens a compact adaptive search surface instead of spending a row on a menu heading', async () => {
     render(
       <TabBar
         tabs={[TAB_A, TAB_B]}
@@ -1230,7 +1230,9 @@ describe('TabBar', () => {
     const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
     const search = within(switcher).getByRole('searchbox', { name: 'Search open documents' });
     expect(search).toHaveFocus();
-    expect(switcher).toHaveClass('w-88');
+    expect(switcher).toHaveClass('w-88', 'lg:w-[min(480px,calc(100vw-1.5rem))]', 'p-2');
+    expect(switcher).not.toHaveClass('p-1');
+    expect(search.parentElement).toHaveClass('h-9', 'coarse:h-10');
     expect(within(switcher).queryByText('Open documents')).not.toBeInTheDocument();
 
     const jumpA = within(switcher).getByRole('link', { name: 'Fix the build' });
@@ -1361,7 +1363,7 @@ describe('TabBar', () => {
     );
   });
 
-  it('balances result-row insets and removes the close action extra end margin', async () => {
+  it('uses fixed result rows and a contextual close target without expanding the list', async () => {
     render(
       <TabBar
         tabs={[TAB_A, TAB_B]}
@@ -1374,10 +1376,55 @@ describe('TabBar', () => {
     const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
     const row = within(switcher).getByRole('listitem', { name: /Fix the build/ });
     const close = within(row).getByRole('button', { name: 'Close Fix the build' });
-    expect(row).toHaveClass('px-4');
-    expect(close).toHaveClass('h-10', 'w-10');
-    expect(close).toHaveClass('justify-end');
-    expect(close.className).not.toMatch(/\bmr-/);
+    const layer = close.querySelector<HTMLElement>('[data-menu-action-layer]');
+    const results = within(switcher).getByRole('list', { name: 'Open document results' });
+    expect(row).toHaveAttribute('data-menu-action-row', '');
+    expect(row).toHaveClass('h-11', 'min-h-11', 'py-0');
+    expect(close).toHaveClass('size-10');
+    expect(layer).toHaveClass('size-7');
+    expect(close).toHaveClass('absolute');
+    expect(results).toHaveClass('max-h-80', 'overflow-y-auto', 'overscroll-contain');
+  });
+
+  it('filters and closes within a thirteen-document scrolling result list', async () => {
+    const tabs: readonly OpenTab[] = Array.from({ length: 13 }, (_, index) => ({
+      key: `task:o1:t${String(index + 1)}`,
+      type: 'task',
+      orgId: 'o1',
+      id: `t${String(index + 1)}`,
+      title: `Open document ${String(index + 1)}`,
+      href: `/orgs/o1/tasks/t${String(index + 1)}`,
+    }));
+
+    function StatefulTabs(): React.JSX.Element {
+      const [openTabs, setOpenTabs] = React.useState(tabs);
+      return (
+        <TabBar
+          tabs={openTabs}
+          activeKey={tabs[0]?.key}
+          renderLink={renderLink}
+          onClose={(key) => {
+            setOpenTabs((current) => current.filter((tab) => tab.key !== key));
+          }}
+        />
+      );
+    }
+
+    render(<StatefulTabs />);
+    openMenu(screen.getByRole('button', { name: 'Open documents (13)' }));
+    const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
+    const results = within(switcher).getByRole('list', { name: 'Open document results' });
+    const search = within(switcher).getByRole('searchbox', { name: 'Search open documents' });
+    expect(results).toHaveClass('max-h-80', 'overflow-y-auto', 'overscroll-contain');
+    expect(within(results).getAllByRole('listitem')).toHaveLength(13);
+
+    fireEvent.change(search, { target: { value: '13' } });
+    expect(within(results).getByRole('link', { name: 'Open document 13' })).toBeInTheDocument();
+    fireEvent.click(within(results).getByRole('button', { name: 'Close Open document 13' }));
+    await waitFor(() => expect(search).toHaveFocus());
+    expect(
+      within(results).queryByRole('link', { name: 'Open document 13' }),
+    ).not.toBeInTheDocument();
   });
 
   it('closes a document and restores focus to the nearest remaining result', async () => {

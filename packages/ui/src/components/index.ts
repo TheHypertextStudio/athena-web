@@ -132,6 +132,7 @@ export {
   type TaskRowProps,
 } from './views/ListRow';
 export { ListSubGroup, type ListSubGroupProps } from './views/ListSubGroup';
+export { MenuActionRow, type MenuActionRowProps } from './menus/MenuActionRow';
 export {
   AppShell,
   type AppShellProps,

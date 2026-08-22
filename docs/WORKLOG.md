@@ -7,6 +7,51 @@
 
 ## Active Tasks
 
+### [WEB-SWITCHER-003] Correct the open-document switcher layout and actions
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-21
+- **Priority**: P1
+- **Description**: The open-document switcher no longer matches its intended compact menu
+  behavior. A 40 pixel close control plus row padding inflates intended 44 pixel rows to 56 pixels.
+  The close control renders as a visible nested hover tile inside the row and creates an
+  always-visible destructive-action rail. The result list has no bounded height. The narrow menu
+  truncates document titles. The prior audit used six documents and missed the hover and
+  composed-height states that expose these defects.
+- **Approach**: The implementation will introduce a shared `MenuActionRow` primitive. The row will
+  show its action contextually on fine pointers and keep it persistent on coarse pointers. The
+  switcher will use an adaptive 352 or 480 pixel menu width and a seven-row scroll window. The
+  search field will use corrected inset and size values. Tooltips will explain truncated titles
+  and the close action. The design audit will validate the finished interaction with
+  13-document visual evidence that covers scrolling, truncation, hover, and composed row height.
+- **Subtasks**:
+  - [x] Add the shared `MenuActionRow` primitive and its interaction contract.
+  - [x] Migrate the open-document switcher to the shared row and adaptive layout.
+  - [x] Add focused tests and Playwright coverage for pointer, scrolling, and truncation states.
+  - [x] Run the design audit with 13 open documents across the required visual states.
+  - [x] Run full validation, complete the worklog record, and commit the finished slice.
+- **Blockers**: None.
+- **Files changed**: Added the shared `MenuActionRow` primitive and its 14 focused tests. The
+  switcher now uses it for fixed-height rows, contextual close actions, title and action tooltips,
+  desktop width expansion, and a bounded result list. Added the authenticated 13-document browser
+  journey, six captured review states, and the superseding craft audit.
+- **Validation**: `MenuActionRow` and shell tests pass with 83 tests under one worker. The design
+  token policy passes 8 tests. UI typecheck and lint pass. The authenticated one-worker Playwright
+  case passes with one real active task and twelve real persisted background tasks. It verifies row
+  height, desktop and compact caps, scroll reachability, pointer and touch action states, title and
+  action tooltips, focus order, filtering, close recovery, no 320px horizontal overflow, and no
+  post-onboarding console or page errors. Repository typecheck passes 26 Turbo tasks. Tooling tests
+  pass 155 tests. Repository tests pass 26 Turbo tasks, including 644 UI and 2,697 web tests.
+  Repository build passes all 4 tasks. The capped repository lint pass completed 24 packages before
+  `@docket/web` exhausted Node's default 2GB heap; its isolated 4GB rerun passed, so no lint error
+  remains.
+- **Retrospective**: The defect came from treating the close button as ordinary row-flow content.
+  A shared compound-row primitive now owns the geometry and interaction boundary. Screenshot review
+  also caught overlapping title and close tooltips that class assertions missed, so the action now
+  suppresses the title tooltip while it is active.
+
+---
+
 ### [INTERACTION-SURFACES-001] Repair picker, table, and entity-detail spacing contracts
 
 - **Status**: REVIEW

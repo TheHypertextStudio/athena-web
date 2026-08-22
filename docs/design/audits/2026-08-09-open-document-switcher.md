@@ -2,10 +2,15 @@
 date: 2026-08-09
 surface: Open-document switcher
 route: /today (authenticated shell, six persisted open documents)
-verdict: ship
+verdict: superseded
+superseded_by: 2026-08-21-open-document-switcher.md
 ---
 
 # Design review: Open-document switcher — 2026-08-09
+
+> Superseded on 2026-08-21. This pass measured only six documents and omitted the close-hover
+> state and the composed row height, so it could not detect the inflated rows or the competing
+> close-action hierarchy fixed by the later 13-document audit.
 
 Screenshots:
 

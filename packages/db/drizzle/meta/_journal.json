@@ -673,6 +673,13 @@
       "when": 1787337911905,
       "tag": "0095_zippy_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1787374394694,
+      "tag": "0096_tiny_nuke",
+      "breakpoints": true
     }
   ]
 }

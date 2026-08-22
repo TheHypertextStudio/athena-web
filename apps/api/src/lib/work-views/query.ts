@@ -129,6 +129,17 @@ function initiativePageCtes(ctes: SQL, groupScope: SQL, organizationId: string):
     )`;
 }
 
+function orderingContextId(context: WorkViewSqlContext, organizationId: string): string {
+  return context.kind === 'organization'
+    ? organizationId
+    : String(
+        context['teamId'] ??
+          context['projectId'] ??
+          context['programId'] ??
+          context['initiativeId'],
+      );
+}
+
 /**
  * Execute one bounded, permission-scoped, target-specific work-view page.
  *
@@ -141,7 +152,7 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
   const contract = WORK_VIEW_SQL_CONTRACTS[request.target];
   const sortTerms = request.definition.arrangement.orderBy;
   const manualRank = {
-    value: manualRankExpression(request.target, request.context, input.organizationId),
+    value: manualRankExpression(),
     cursor: z.string().nullable(),
   };
   const baseSorts: Readonly<Record<string, SortFieldCompiler>> = contract.sorts;
@@ -228,15 +239,37 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
   );
   const aggregateRows = await executeRows(
     input.database,
-    sql`with recursive ${pageCtes}, page_data as materialized (
-      select ${contract.projection(request.context, input.organizationId)},
+    sql`with recursive ${pageCtes}, contextual_order as materialized (
+      select item_id, rank from work_item_order
+      where organization_id=${input.organizationId}
+        and context_type=${request.context.kind}
+        and context_id=${orderingContextId(request.context, input.organizationId)}
+        and target=${request.target}
+    ), page_candidates as not materialized (
+      select e.*, ranked.rank as _manual_rank from contextual_order ranked
+      join ${sql.raw(pageSource)} e on e.id=ranked.item_id
+      where ${pageScope}
+      union all
+      select e.*, null::text as _manual_rank from ${sql.raw(pageSource)} e
+      where ${pageScope} and not exists (
+        select 1 from contextual_order ranked where ranked.item_id=e.id
+      )
+    ), page_selection as materialized (
+      select e.id, e._is_context, e._manual_rank,
         json_build_array(${sql.join(sortValues, sql`, `)}) as _cursor_sort_tuple,
         row_number() over (order by ${sql.join(order, sql`, `)}) as _page_order
-      from ${sql.raw(pageSource)} e where ${pageScope} and ${keyset}
+      from page_candidates e where ${keyset}
       order by ${sql.join(order, sql`, `)} limit ${pageLimit + 1}
+    ), projectable as not materialized (
+      select e.*, selected._is_context, selected._manual_rank,
+        selected._cursor_sort_tuple, selected._page_order
+      from authorized e join page_selection selected on selected.id=e.id
+    ), page_data as materialized (
+      select ${contract.projection(request.context, input.organizationId)},
+        e._cursor_sort_tuple, e._page_order from projectable e
     )
     select coalesce((select json_agg(page_data order by page_data._page_order) from page_data), '[]'::json) rows,
-      (select count(distinct e.id)::int from ${sql.raw(countSource)} e) total_count,
+      (select count(*)::int from ${sql.raw(countSource)} e) total_count,
       ${groupJson} groups`,
     workViewAggregateRecordSchema,
   );

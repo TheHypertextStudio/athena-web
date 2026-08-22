@@ -14,38 +14,17 @@ import {
 /** Context fields used by work-view rank and projection SQL. */
 export type WorkViewSqlContext = { readonly kind: string } & Record<string, unknown>;
 
-function contextId(context: WorkViewSqlContext, organizationId: string): string {
-  return context.kind === 'organization'
-    ? organizationId
-    : String(
-        context['teamId'] ??
-          context['projectId'] ??
-          context['programId'] ??
-          context['initiativeId'],
-      );
-}
-
 /**
- * Build the nullable contextual manual-rank expression for alias `e`.
+ * Read the nullable contextual manual rank joined into the page candidate set.
  *
- * @param target - Entity target being ordered.
- * @param context - Active list context.
- * @param organizationId - Workspace that owns the ordering context.
- * @returns A correlated rank lookup that remains null for unranked rows.
+ * @returns The rank column that remains null for unranked rows.
  */
-export function manualRankExpression(
-  target: ViewTarget,
-  context: WorkViewSqlContext,
-  organizationId: string,
-): SQL {
-  return sql`(select w.rank from work_item_order w
-    where w.organization_id=${organizationId} and w.context_type=${context.kind}
-      and w.context_id=${contextId(context, organizationId)} and w.target=${target}
-      and w.item_id=e.id)`;
+export function manualRankExpression(): SQL {
+  return sql`e._manual_rank`;
 }
 
-function base(target: ViewTarget, context: WorkViewSqlContext, organizationId: string): SQL {
-  return sql`e.organization_id, coalesce(${manualRankExpression(target, context, organizationId)}, 'U') as manual_rank,
+function base(): SQL {
+  return sql`e.organization_id, coalesce(${manualRankExpression()}, 'U') as manual_rank,
     e._is_context as is_context`;
 }
 
@@ -58,10 +37,7 @@ function scalarRelation(definition: TenantScalarRelationDefinition, columnName: 
 }
 
 const projections = {
-  task: (
-    context: WorkViewSqlContext,
-    organizationId: string,
-  ): SQL => sql`${base('task', context, organizationId)},
+  task: (): SQL => sql`${base()},
     e.id, e.title, e.state as status, e.priority,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'assignee_id')} as assignee,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'delegate_id')} as delegate,
@@ -79,10 +55,7 @@ const projections = {
     e.start_date, e.due_date, e.created_at, e.updated_at, e.estimate, e.estimate_minutes,
     e._blocked as blocked, e._blocking as blocking, e._unfiled as unfiled,
     e._archived as archived`,
-  project: (
-    context: WorkViewSqlContext,
-    organizationId: string,
-  ): SQL => sql`${base('project', context, organizationId)},
+  project: (): SQL => sql`${base()},
     e.id, e.name, e.status, e.priority, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'lead_id')} as lead,
     ${compileTenantRelationArraySql(
@@ -123,10 +96,7 @@ const projections = {
     coalesce((select json_agg(d.blocked_project_id order by d.blocked_project_id)
       from project_dependency d join authorized related on related.id=d.blocked_project_id
       where d.blocking_project_id=e.id and d.organization_id=e.organization_id), '[]'::json) blocks_ids`,
-  program: (
-    context: WorkViewSqlContext,
-    organizationId: string,
-  ): SQL => sql`${base('program', context, organizationId)},
+  program: (): SQL => sql`${base()},
     e.id, e.name, e.status, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
     ${compileTenantRelationArraySql(
@@ -141,10 +111,7 @@ const projections = {
     )} labels, e.visibility,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'created_by')} as creator, e.updated_at,
     e._project_count::int project_count, e._task_count::int task_count`,
-  initiative: (
-    context: WorkViewSqlContext,
-    organizationId: string,
-  ): SQL => sql`${base('initiative', context, organizationId)},
+  initiative: (_context: WorkViewSqlContext, organizationId: string): SQL => sql`${base()},
     e.id, e.name, e.status, e.priority, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.team, 'lead_team_id')} as lead_team,

@@ -62,29 +62,35 @@ export function compileAuthorizationSql(
   userId: string | null,
 ): SQL {
   const visibility = target === 'initiative' ? sql`'public'` : sql`e.visibility`;
-  return sql`
-    exists (
+  const viewerOrganization =
+    target === 'initiative' ? sql`e.organization_id` : sql`${organizationId}`;
+  const viewerIdentity = sql`viewer.organization_id = ${viewerOrganization}
+    and ((viewer.id = ${actorId} and viewer.organization_id=${organizationId})
+      or (${userId}::text is not null and viewer.user_id=${userId}))
+    and viewer.kind = 'human' and viewer.status = 'active'
+    and viewer.archived_at is null
+    and (viewer.role_id is null or viewer_role.id is not null)`;
+  return sql`(
+    (${visibility} = 'public' and exists (
       select 1 from actor viewer
       left join role viewer_role on viewer_role.id = viewer.role_id
         and viewer_role.organization_id = viewer.organization_id
-      where viewer.organization_id = e.organization_id
-        and ((viewer.id = ${actorId} and viewer.organization_id=${organizationId})
-          or (${userId}::text is not null and viewer.user_id=${userId}))
-        and viewer.kind = 'human' and viewer.status = 'active'
-        and viewer.archived_at is null
-        and (viewer.role_id is null or viewer_role.id is not null)
-        and (
-          (${visibility} = 'public' and coalesce(viewer_role.default_visibility, 'public') = 'public')
-          or exists (
-            select 1 from "grant" g
-            where g.organization_id = e.organization_id
-              and ((g.subject_kind = 'actor' and g.subject_id = viewer.id)
-                or (g.subject_kind = 'role' and g.subject_id = viewer_role.id))
-              and ${grantResourceSql(target)}
-              and g.effect = 'allow'
-              and (g.expires_at is null or g.expires_at > now())
-              and g.capabilities ?| array['view','comment','contribute','assign','manage','admin','owner']
-          )
+      where ${viewerIdentity}
+        and coalesce(viewer_role.default_visibility, 'public') = 'public'
+    )) or exists (
+      select 1 from actor viewer
+      left join role viewer_role on viewer_role.id = viewer.role_id
+        and viewer_role.organization_id = viewer.organization_id
+      where ${viewerIdentity}
+        and exists (
+          select 1 from "grant" g
+          where g.organization_id = e.organization_id
+            and ((g.subject_kind = 'actor' and g.subject_id = viewer.id)
+              or (g.subject_kind = 'role' and g.subject_id = viewer_role.id))
+            and ${grantResourceSql(target)}
+            and g.effect = 'allow'
+            and (g.expires_at is null or g.expires_at > now())
+            and g.capabilities ?| array['view','comment','contribute','assign','manage','admin','owner']
         )
-    )`;
+    ))`;
 }

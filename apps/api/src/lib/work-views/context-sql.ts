@@ -172,9 +172,11 @@ function enrichmentSql(target: ViewTarget): SQL {
     case 'program':
       return sql`${status},
         (select count(*) from project p where p.program_id=e.id and p.organization_id=e.organization_id)::int as _project_count,
-        (select count(*) from task t where t.organization_id=e.organization_id and
-          (t.program_id=e.id or t.project_id in(select p.id from project p
-            where p.program_id=e.id and p.organization_id=e.organization_id)))::int as _task_count`;
+        ((select count(*) from task t where t.organization_id=e.organization_id
+          and t.program_id=e.id) + (select count(*) from task t join project p
+          on p.id=t.project_id and p.organization_id=t.organization_id
+          where p.program_id=e.id and p.organization_id=e.organization_id
+            and t.program_id is distinct from e.id))::int as _task_count`;
     case 'initiative':
       return sql`${status},
         (select max(u.created_at) from "update" u where u.subject_type='initiative'
@@ -205,14 +207,11 @@ function baseColumns(target: ViewTarget): SQL {
   }
 }
 
-function requiredScalarRelationsSql(target: ViewTarget): SQL {
+function requiredScalarRelationsJoin(target: ViewTarget): SQL {
   return target === 'task'
-    ? compileTenantScalarRelationExistsSql(
-        WORK_VIEW_SCALAR_RELATIONS.team,
-        sql`e.team_id`,
-        sql`e.organization_id`,
-      )
-    : sql`true`;
+    ? sql`join team required_team on required_team.id=e.team_id
+      and required_team.organization_id=e.organization_id`
+    : sql``;
 }
 
 /**
@@ -262,17 +261,17 @@ export function compileRosterCtes(
         from authorized e join ancestor_ids a on a.id=e.id
       )`;
   }
-  return sql`authorized_base as materialized (
+  return sql`authorized_base as not materialized (
       select ${baseColumns(target)} from ${sql.raw(table)} e
+      ${requiredScalarRelationsJoin(target)}
       where e.organization_id=${organizationId}
         and ${authorizationScope}
-        and ${requiredScalarRelationsSql(target)}
         and ${compileAuthorizationSql(target, organizationId, actorId, userId)}
-    ), authorized as materialized (
+    ), authorized as not materialized (
       select e.*, ${enrichmentSql(target)} from authorized_base e
       left join work_status status_meta on status_meta.id=e.status_id
         and status_meta.organization_id=e.organization_id
-    ), matched as materialized (
+    ), matched as not materialized (
       select e.*, false as _is_context from authorized e
       where ${compileContextSql(target, context, organizationId)} and ${filter}
     )`;

@@ -307,6 +307,7 @@ export const project = pgTable(
   (t) => [
     index('project_org_idx').on(t.organizationId),
     index('project_status_idx').on(t.statusId),
+    index('project_program_idx').on(t.programId),
     index('project_ancestor_path_gin').using('gin', t.ancestorPath),
     uniqueIndex('project_source_uq')
       .on(t.sourceIntegrationId, t.externalId)
@@ -464,6 +465,7 @@ export const task = pgTable(
     index('task_team_state_idx').on(t.teamId, t.state),
     index('task_status_idx').on(t.statusId),
     index('task_project_idx').on(t.projectId),
+    index('task_program_idx').on(t.programId),
     index('task_ancestor_path_gin').using('gin', t.ancestorPath),
     uniqueIndex('task_source_uq')
       .on(t.sourceIntegrationId, t.externalId)

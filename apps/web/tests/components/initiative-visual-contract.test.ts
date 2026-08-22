@@ -158,7 +158,7 @@ describe('Initiative visual contract', () => {
   it('keeps the complete roster inside the bounded shared virtual list', () => {
     const workList = source(workListPath);
     expect(workList).toContain('<ListView');
-    expect(workList).toContain('className="h-full min-h-0"');
+    expect(workList).toContain('className="relative h-full min-h-0"');
     expect(workList).toContain('text-on-surface-variant hidden max-w-40');
     expect(workList).toContain('truncate');
     expect(workList).not.toContain('border-b md:table-row');

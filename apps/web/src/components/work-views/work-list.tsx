@@ -1,7 +1,7 @@
 'use client';
 
 import { ListCell, ListRow, ListView } from '@docket/ui/components';
-import { Checkbox } from '@docket/ui/primitives';
+import { Button, Checkbox } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { type JSX, type KeyboardEvent, useMemo, useRef } from 'react';
 
@@ -30,9 +30,14 @@ export interface WorkListProps<TTarget extends ViewTarget> {
   readonly groups: readonly WorkViewGroupSummary[];
   readonly groupPages: readonly WorkViewGroupPage<TTarget>[];
   readonly selectedIds: ReadonlySet<string>;
+  readonly collapsedGroups?: ReadonlySet<string>;
   readonly onSelectionChange: (ids: ReadonlySet<string>) => void;
   readonly onActivate: (row: WorkViewRowFor<TTarget>) => void;
   readonly onLoadMore?: ((path: readonly string[]) => void) | undefined;
+  readonly hasMoreRows?: boolean;
+  readonly loadingMoreRows?: boolean;
+  readonly onLoadMoreRows?: (() => void) | undefined;
+  readonly onToggleGroup?: ((key: string) => void) | undefined;
 }
 
 const INITIATIVE_DEPTH_CLASS = ['pl-0', 'pl-4', 'pl-8', 'pl-12', 'pl-16'] as const;
@@ -74,9 +79,14 @@ export function WorkList<TTarget extends ViewTarget>({
   groups,
   groupPages,
   selectedIds,
+  collapsedGroups,
   onSelectionChange,
   onActivate,
   onLoadMore,
+  hasMoreRows = false,
+  loadingMoreRows = false,
+  onLoadMoreRows,
+  onToggleGroup,
 }: WorkListProps<TTarget>): JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const groupField = definition.arrangement.groupBy as string | null;
@@ -114,7 +124,7 @@ export function WorkList<TTarget extends ViewTarget>({
   };
 
   return (
-    <div ref={rootRef} className="h-full min-h-0" onKeyDownCapture={handleKeys}>
+    <div ref={rootRef} className="relative h-full min-h-0" onKeyDownCapture={handleKeys}>
       <ListView<ListMembership<TTarget>>
         items={memberships}
         groupBy={
@@ -135,6 +145,8 @@ export function WorkList<TTarget extends ViewTarget>({
         }
         getItemKey={(membership) => `${workViewGroupPathKey(membership.path)}:${membership.row.id}`}
         label={`${target.charAt(0).toUpperCase()}${target.slice(1)}s`}
+        collapsed={collapsedGroups}
+        onToggle={onToggleGroup}
         onActivateItem={(membership) => {
           onActivate(membership.row);
         }}
@@ -198,6 +210,18 @@ export function WorkList<TTarget extends ViewTarget>({
               </button>
             ))
         : null}
+      {hasMoreRows && onLoadMoreRows ? (
+        <Button
+          type="button"
+          variant="secondary"
+          controlSize="sm"
+          className="absolute bottom-3 left-1/2 -translate-x-1/2"
+          disabled={loadingMoreRows}
+          onClick={onLoadMoreRows}
+        >
+          {loadingMoreRows ? 'Loading…' : 'Load more'}
+        </Button>
+      ) : null}
     </div>
   );
 }

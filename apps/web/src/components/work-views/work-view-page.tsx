@@ -3,14 +3,17 @@
 import {
   InitiativeViewDefinition,
   type InitiativeViewRow,
+  pageOf,
   ProgramViewDefinition,
   ProjectViewDefinition,
   type ProjectViewRow,
+  SavedWorkViewOut,
+  type SavedWorkViewOut as SavedWorkViewOutValue,
   TaskViewDefinition,
   ViewInstanceKey,
 } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
-import { FolderKanban, Layers, ListChecks, Plus, Target, Workflow } from '@docket/ui/icons';
+import { FolderKanban, Heart, Layers, ListChecks, Plus, Target, Workflow } from '@docket/ui/icons';
 import {
   Button,
   Dialog,
@@ -28,7 +31,9 @@ import { type JSX, useState } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { ListPageLayout } from '@/components/views/page-layout';
+import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
+import { apiQueryOptions, queryKeys, type RpcResponse, useApiQuery } from '@/lib/query';
 
 import { InitiativeTimeline } from './initiative-timeline';
 import { ProjectDependencyLens } from './project-dependency-lens';
@@ -99,6 +104,19 @@ const PAGE_COPY = {
   initiative: { title: 'Initiatives', singular: 'initiative', icon: Target },
 } as const;
 
+const SavedWorkViewPage = pageOf(SavedWorkViewOut);
+
+async function savedViewsResponse(
+  organizationId: string,
+): Promise<RpcResponse<ReturnType<typeof SavedWorkViewPage.parse>>> {
+  const response = await api.v1.orgs[':orgId']['saved-views'].$get({
+    param: { orgId: organizationId },
+  });
+  if (!response.ok) return response;
+  const value = SavedWorkViewPage.parse(await response.json());
+  return { ok: true, status: response.status, json: async () => value };
+}
+
 /** Props for one organization-level typed planning roster. */
 export interface WorkViewPageProps<TTarget extends ViewTarget> {
   readonly organizationId: string;
@@ -120,13 +138,28 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const [saveOpen, setSaveOpen] = useState(false);
   const [viewName, setViewName] = useState('');
   const [dependencyMode, setDependencyMode] = useState(false);
+  const [selectedViewId, setSelectedViewId] = useState<string | null>(null);
   const copy = PAGE_COPY[target];
+  const savedViewsQuery = useApiQuery(
+    apiQueryOptions(
+      queryKeys.savedViews(organizationId),
+      () => savedViewsResponse(organizationId),
+      'Could not load saved views.',
+    ),
+  );
+  const savedViews = (savedViewsQuery.data?.items ?? [])
+    .filter((view) => view.target === target)
+    .sort((left, right) => left.position.localeCompare(right.position));
+  const selectedSavedView = savedViews.find((view) => view.id === selectedViewId) ?? null;
   const controller = useWorkView({
     organizationId,
     target,
-    instanceKey: ViewInstanceKey.parse(`builtin:${target}:${organizationId}`),
+    instanceKey: selectedSavedView
+      ? ViewInstanceKey.parse(`saved:${selectedSavedView.id}`)
+      : ViewInstanceKey.parse(`builtin:${target}:${organizationId}`),
     fallback: fallbackFor(target),
     context: { kind: 'organization' },
+    savedView: selectedSavedView as Extract<SavedWorkViewOutValue, { target: TTarget }> | null,
   });
   const orderMutation = useWorkViewOrder(organizationId);
   // The target discriminator was validated by `useWorkView`. TypeScript loses that correlation
@@ -177,7 +210,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         definition={controller.definition}
         groups={controller.response?.groups ?? []}
         groupPages={controller.groupPages}
-        hiddenColumns={new Set()}
+        hiddenColumns={controller.hiddenBoardColumns}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
         onCreate={() => {
@@ -198,6 +231,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           });
         }}
         onLoadMore={controller.loadMoreGroup}
+        onHideColumn={controller.toggleHiddenBoardColumn}
+        onShowAllColumns={controller.showAllBoardColumns}
       />
     );
   } else if (target === 'project' && layout === 'timeline') {
@@ -237,9 +272,14 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         groups={controller.response?.groups ?? []}
         groupPages={controller.groupPages}
         selectedIds={selectedIds}
+        collapsedGroups={controller.collapsedGroups}
         onSelectionChange={setSelectedIds}
         onActivate={openRow}
         onLoadMore={controller.loadMoreGroup}
+        hasMoreRows={controller.response?.nextCursor !== null}
+        loadingMoreRows={controller.loadingMoreRows}
+        onLoadMoreRows={controller.loadMoreRows}
+        onToggleGroup={controller.toggleCollapsedGroup}
       />
     );
   }
@@ -254,38 +294,90 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         </Button>
       }
       toolbar={
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <WorkViewToolbar
-              target={target}
-              timezone={controller.timezone}
-              definition={controller.definition}
-              onDefinitionChange={controller.setDefinition}
-              onSaveView={() => {
-                setSaveOpen(true);
-              }}
-              onSetDefault={controller.setAsDefault}
-              facetResponse={controller.facetResponse}
-              facetMetadataResponse={controller.facetMetadataResponse}
-              facetLoading={controller.facetLoading}
-              facetHasMore={controller.facetHasMore}
-              facetLoadingMore={controller.facetLoadingMore}
-              onFacetLoadMore={controller.loadMoreFacets}
-              onFacetRequest={controller.requestFacet}
-            />
-          </div>
-          {target === 'project' ? (
-            <Button
-              variant={dependencyMode ? 'secondary' : 'outline'}
-              className="shrink-0 gap-1.5"
-              aria-pressed={dependencyMode}
-              onClick={() => {
-                setDependencyMode((current) => !current);
-              }}
+        <div className="flex min-w-0 flex-col gap-2">
+          {savedViews.length > 0 ? (
+            <div
+              role="tablist"
+              aria-label={`${copy.title} views`}
+              className="flex min-w-0 items-center gap-1 overflow-x-auto"
             >
-              <Workflow aria-hidden className="size-4" /> Dependencies
-            </Button>
+              <Button
+                role="tab"
+                controlSize="sm"
+                variant={selectedViewId === null ? 'secondary' : 'ghost'}
+                aria-selected={selectedViewId === null}
+                onClick={() => {
+                  setSelectedViewId(null);
+                }}
+              >
+                All
+              </Button>
+              {savedViews.map((view) => {
+                const favorite = controller.favoriteViewIds.has(view.id);
+                return (
+                  <div key={view.id} className="flex shrink-0 items-center">
+                    <Button
+                      role="tab"
+                      controlSize="sm"
+                      variant={selectedViewId === view.id ? 'secondary' : 'ghost'}
+                      aria-selected={selectedViewId === view.id}
+                      onClick={() => {
+                        setSelectedViewId(view.id);
+                      }}
+                    >
+                      {view.name}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      iconOnly
+                      controlSize="sm"
+                      aria-label={`${favorite ? 'Remove' : 'Add'} ${view.name} ${favorite ? 'from' : 'to'} favorites`}
+                      aria-pressed={favorite}
+                      onClick={() => {
+                        controller.toggleFavoriteView(view.id);
+                      }}
+                    >
+                      <Heart aria-hidden className={favorite ? 'text-primary' : undefined} />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
           ) : null}
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <WorkViewToolbar
+                target={target}
+                timezone={controller.timezone}
+                definition={controller.definition}
+                onDefinitionChange={controller.setDefinition}
+                onSaveView={() => {
+                  setSaveOpen(true);
+                }}
+                onSetDefault={controller.setAsDefault}
+                facetResponse={controller.facetResponse}
+                facetMetadataResponse={controller.facetMetadataResponse}
+                facetLoading={controller.facetLoading}
+                facetHasMore={controller.facetHasMore}
+                facetLoadingMore={controller.facetLoadingMore}
+                onFacetLoadMore={controller.loadMoreFacets}
+                onFacetRequest={controller.requestFacet}
+              />
+            </div>
+            {target === 'project' ? (
+              <Button
+                variant={dependencyMode ? 'secondary' : 'outline'}
+                className="shrink-0 gap-1.5"
+                aria-pressed={dependencyMode}
+                onClick={() => {
+                  setDependencyMode((current) => !current);
+                }}
+              >
+                <Workflow aria-hidden className="size-4" /> Dependencies
+              </Button>
+            ) : null}
+          </div>
         </div>
       }
     >

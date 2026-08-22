@@ -1,7 +1,14 @@
 'use client';
 
-import { Checkbox, Button } from '@docket/ui/primitives';
-import { Plus } from '@docket/ui/icons';
+import { Ellipsis, Plus } from '@docket/ui/icons';
+import {
+  Button,
+  Checkbox,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { type DragEvent, type JSX, useMemo } from 'react';
 
@@ -42,6 +49,8 @@ export interface WorkBoardProps<TTarget extends ViewTarget> {
   readonly onActivate: (row: WorkViewRowFor<TTarget>) => void;
   readonly onDrop: (drop: WorkBoardDrop<TTarget>) => void;
   readonly onLoadMore: (path: readonly string[]) => void;
+  readonly onHideColumn?: ((key: string) => void) | undefined;
+  readonly onShowAllColumns?: (() => void) | undefined;
 }
 
 interface DragPayload {
@@ -83,6 +92,8 @@ export function WorkBoard<TTarget extends ViewTarget>({
   onActivate,
   onDrop,
   onLoadMore,
+  onHideColumn,
+  onShowAllColumns,
 }: WorkBoardProps<TTarget>): JSX.Element {
   const columns = groups.filter(
     (group) => group.path.length === 1 && !hiddenColumns.has(group.key),
@@ -120,8 +131,19 @@ export function WorkBoard<TTarget extends ViewTarget>({
     <div
       role="region"
       aria-label={`${target.charAt(0).toUpperCase()}${target.slice(1)} board`}
-      className="h-full min-h-0 overflow-auto"
+      className="relative h-full min-h-0 overflow-auto"
     >
+      {hiddenColumns.size > 0 && onShowAllColumns ? (
+        <Button
+          type="button"
+          variant="secondary"
+          controlSize="sm"
+          className="sticky top-2 left-2 z-10 mb-2"
+          onClick={onShowAllColumns}
+        >
+          Show {hiddenColumns.size} hidden {hiddenColumns.size === 1 ? 'column' : 'columns'}
+        </Button>
+      ) : null}
       <div className="flex min-w-max items-stretch gap-3 pb-3">
         {columns.map((column) => (
           <section
@@ -149,6 +171,30 @@ export function WorkBoard<TTarget extends ViewTarget>({
               >
                 <Plus aria-hidden />
               </Button>
+              {onHideColumn ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      iconOnly
+                      controlSize="sm"
+                      aria-label={`More ${column.label} column actions`}
+                    >
+                      <Ellipsis aria-hidden />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        onHideColumn(column.key);
+                      }}
+                    >
+                      Hide column
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
             </header>
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-2">
               {lanes.map((laneKey) => {

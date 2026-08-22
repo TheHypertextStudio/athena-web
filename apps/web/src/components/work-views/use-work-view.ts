@@ -209,9 +209,13 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   readonly effectiveDefinition: WorkViewDefinitionFor<TTarget>;
   readonly response: QueryResponseFor<TTarget> | undefined;
   readonly groupPages: readonly WorkViewGroupPage<TTarget>[];
+  readonly collapsedGroups: ReadonlySet<string>;
+  readonly hiddenBoardColumns: ReadonlySet<string>;
+  readonly favoriteViewIds: ReadonlySet<string>;
   readonly facetResponse: WorkViewFacetResponseForTarget<TTarget> | undefined;
   readonly facetMetadataResponse: WorkViewFacetResponseForTarget<TTarget> | undefined;
   readonly loading: boolean;
+  readonly loadingMoreRows: boolean;
   readonly facetLoading: boolean;
   readonly facetHasMore: boolean;
   readonly facetLoadingMore: boolean;
@@ -223,6 +227,11 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   readonly requestFacet: (field: WorkViewFilterFieldKey<TTarget>, search: string) => void;
   readonly loadMoreFacets: () => void;
   readonly loadMoreGroup: (path: readonly string[]) => void;
+  readonly loadMoreRows: () => void;
+  readonly toggleCollapsedGroup: (key: string) => void;
+  readonly toggleHiddenBoardColumn: (key: string) => void;
+  readonly showAllBoardColumns: () => void;
+  readonly toggleFavoriteView: (viewId: string) => void;
   readonly resetPersonalOverride: () => void;
   readonly saveView: (input: SaveWorkViewInput) => void;
   readonly setAsDefault: () => void;
@@ -408,6 +417,19 @@ export function useWorkView<TTarget extends ViewTarget>(
     readonly pages: readonly WorkViewGroupPage<TTarget>[];
     readonly error: unknown;
   } | null>(null);
+  const [rootPageState, setRootPageState] = useState<{
+    readonly key: string;
+    readonly rows: readonly WorkViewGroupPage<TTarget>['rows'][number][];
+    readonly nextCursor: string | null;
+    readonly loading: boolean;
+    readonly error: unknown;
+  } | null>(null);
+  const [personalExtrasState, setPersonalExtrasState] = useState<{
+    readonly key: string;
+    readonly collapsedGroups: readonly string[];
+    readonly hiddenBoardColumns: readonly string[];
+    readonly favoriteViewIds: readonly string[];
+  } | null>(null);
   const workingDefinition = workingState?.key === controllerKey ? workingState.definition : null;
   const ignorePersistedPersonal = ignoredPersonalKey === controllerKey;
   const facetInput = facetState?.key === controllerKey ? facetState : null;
@@ -430,6 +452,11 @@ export function useWorkView<TTarget extends ViewTarget>(
     },
   });
   const definition = workingDefinition ?? resolvedDefinition;
+  const activeExtras = personalExtrasState?.key === controllerKey ? personalExtrasState : null;
+  const collapsedGroupValues = activeExtras?.collapsedGroups ?? personal?.collapsedGroups ?? [];
+  const hiddenBoardColumnValues =
+    activeExtras?.hiddenBoardColumns ?? personal?.hiddenBoardColumns ?? [];
+  const favoriteViewIdValues = activeExtras?.favoriteViewIds ?? personal?.favoriteViewIds ?? [];
   const effectiveDefinition = parseWorkViewDefinition(target, {
     ...definition,
     filter:
@@ -796,6 +823,71 @@ export function useWorkView<TTarget extends ViewTarget>(
     });
   }, [controllerKey, enqueuePreferenceWrite, instanceKey]);
 
+  const persistPersonalExtras = useCallback(
+    (
+      collapsedGroups: readonly string[],
+      hiddenBoardColumns: readonly string[],
+      favoriteViewIds: readonly string[],
+    ): void => {
+      setPersonalExtrasState({
+        key: controllerKey,
+        collapsedGroups,
+        hiddenBoardColumns,
+        favoriteViewIds,
+      });
+      const nextPersonal = PersonalWorkViewState.parse({
+        ...personalState(definition, instanceKey, persistedPersonal),
+        collapsedGroups,
+        hiddenBoardColumns,
+        favoriteViewIds,
+      });
+      enqueuePreferenceWrite(
+        [
+          ...preferredStates.current.filter((state) => state.instanceKey !== instanceKey),
+          nextPersonal,
+        ],
+        () => {
+          setPersonalExtrasState((current) => (current?.key === controllerKey ? null : current));
+        },
+      );
+    },
+    [controllerKey, definition, enqueuePreferenceWrite, instanceKey, persistedPersonal],
+  );
+
+  const toggleCollapsedGroup = useCallback(
+    (key: string): void => {
+      const next = collapsedGroupValues.includes(key)
+        ? collapsedGroupValues.filter((candidate) => candidate !== key)
+        : [...collapsedGroupValues, key];
+      persistPersonalExtras(next, hiddenBoardColumnValues, favoriteViewIdValues);
+    },
+    [collapsedGroupValues, favoriteViewIdValues, hiddenBoardColumnValues, persistPersonalExtras],
+  );
+
+  const toggleHiddenBoardColumn = useCallback(
+    (key: string): void => {
+      const next = hiddenBoardColumnValues.includes(key)
+        ? hiddenBoardColumnValues.filter((candidate) => candidate !== key)
+        : [...hiddenBoardColumnValues, key];
+      persistPersonalExtras(collapsedGroupValues, next, favoriteViewIdValues);
+    },
+    [collapsedGroupValues, favoriteViewIdValues, hiddenBoardColumnValues, persistPersonalExtras],
+  );
+
+  const showAllBoardColumns = useCallback((): void => {
+    persistPersonalExtras(collapsedGroupValues, [], favoriteViewIdValues);
+  }, [collapsedGroupValues, favoriteViewIdValues, persistPersonalExtras]);
+
+  const toggleFavoriteView = useCallback(
+    (viewId: string): void => {
+      const next = favoriteViewIdValues.includes(viewId)
+        ? favoriteViewIdValues.filter((candidate) => candidate !== viewId)
+        : [...favoriteViewIdValues, viewId];
+      persistPersonalExtras(collapsedGroupValues, hiddenBoardColumnValues, next);
+    },
+    [collapsedGroupValues, favoriteViewIdValues, hiddenBoardColumnValues, persistPersonalExtras],
+  );
+
   const loadMoreFacets = useCallback((): void => {
     if (facetQ.hasNextPage && !facetQ.isFetchingNextPage) {
       void facetQ.fetchNextPage();
@@ -816,21 +908,116 @@ export function useWorkView<TTarget extends ViewTarget>(
     [executionKey, fetchGroupPage, groupPageState],
   );
 
+  const loadMoreRows = useCallback((): void => {
+    const response = queryQ.data;
+    const current = rootPageState?.key === executionKey ? rootPageState : null;
+    const cursor = current?.nextCursor ?? response?.nextCursor ?? null;
+    const groupField = definition.arrangement.groupBy as string | null;
+    if (!response || groupField !== null || cursor === null || current?.loading === true) return;
+    const existingRows = current?.rows ?? [];
+    setRootPageState({
+      key: executionKey,
+      rows: existingRows,
+      nextCursor: cursor,
+      loading: true,
+      error: null,
+    });
+    const pageRequest = parseQueryRequest(target, { ...request, cursor });
+    void queryClient
+      .fetchQuery(
+        apiQueryOptions<QueryResponseFor<TTarget>>(
+          queryKeys.workView(
+            organizationId,
+            target,
+            instanceKey,
+            JSON.stringify(pageRequest),
+            timezone,
+          ),
+          () =>
+            validatedRpcResponse(
+              () =>
+                api.v1.orgs[':orgId']['work-views'].query.$post({
+                  param: { orgId: organizationId },
+                  json: pageRequest,
+                }),
+              { parse: (value) => parseQueryResponse(target, value) },
+            ),
+          `Could not load more ${target}s.`,
+        ),
+      )
+      .then((page) => {
+        const pageRows =
+          page.rows as unknown as readonly WorkViewGroupPage<TTarget>['rows'][number][];
+        setRootPageState((latest) =>
+          latest?.key === executionKey
+            ? {
+                key: executionKey,
+                rows: [...latest.rows, ...pageRows].filter(
+                  (row, index, all) =>
+                    all.findIndex((candidate) => candidate.id === row.id) === index,
+                ),
+                nextCursor: page.nextCursor,
+                loading: false,
+                error: null,
+              }
+            : latest,
+        );
+      })
+      .catch(() => {
+        setRootPageState((latest) =>
+          latest?.key === executionKey
+            ? {
+                ...latest,
+                loading: false,
+                error: new UserFacingError(`Could not load more ${target}s.`),
+              }
+            : latest,
+        );
+      });
+  }, [
+    definition.arrangement.groupBy,
+    executionKey,
+    instanceKey,
+    organizationId,
+    queryClient,
+    queryQ.data,
+    request,
+    rootPageState,
+    target,
+    timezone,
+  ]);
+
+  const response = useMemo<QueryResponseFor<TTarget> | undefined>(() => {
+    const first = queryQ.isPlaceholderData ? undefined : queryQ.data;
+    const continuation = rootPageState?.key === executionKey ? rootPageState : null;
+    if (!first || !continuation) return first;
+    return {
+      ...first,
+      rows: [...first.rows, ...continuation.rows] as QueryResponseFor<TTarget>['rows'],
+      nextCursor: continuation.nextCursor,
+    };
+  }, [executionKey, queryQ.data, queryQ.isPlaceholderData, rootPageState]);
+
   return useMemo(
     () => ({
       timezone,
       definition,
       effectiveDefinition,
-      response: queryQ.isPlaceholderData ? undefined : queryQ.data,
+      response,
       groupPages: groupPageState?.key === executionKey ? groupPageState.pages : [],
+      collapsedGroups: new Set(collapsedGroupValues),
+      hiddenBoardColumns: new Set(hiddenBoardColumnValues),
+      favoriteViewIds: new Set(favoriteViewIdValues),
       facetResponse,
       facetMetadataResponse,
       loading: !readyToQuery || queryQ.isPending,
+      loadingMoreRows: rootPageState?.key === executionKey && rootPageState.loading,
       facetLoading: facetQ.isPending,
       facetHasMore: facetQ.hasNextPage,
       facetLoadingMore: facetQ.isFetchingNextPage,
       error:
         queryQ.error ??
+        (rootPageState?.key === executionKey ? rootPageState.error : null) ??
         (groupPageState?.key === executionKey ? groupPageState.error : null) ??
         facetQ.error ??
         preferenceError ??
@@ -845,6 +1032,11 @@ export function useWorkView<TTarget extends ViewTarget>(
       requestFacet,
       loadMoreFacets,
       loadMoreGroup,
+      loadMoreRows,
+      toggleCollapsedGroup,
+      toggleHiddenBoardColumn,
+      showAllBoardColumns,
+      toggleFavoriteView,
       resetPersonalOverride,
       saveView: saveMutation.mutate,
       setAsDefault: () => {
@@ -854,6 +1046,7 @@ export function useWorkView<TTarget extends ViewTarget>(
     [
       defaultMutation,
       defaultQ.error,
+      collapsedGroupValues,
       definition,
       effectiveDefinition,
       facetQ.data,
@@ -864,10 +1057,13 @@ export function useWorkView<TTarget extends ViewTarget>(
       facetQ.isPending,
       facetResponse,
       facetMetadataResponse,
+      favoriteViewIdValues,
       executionKey,
       groupPageState,
+      hiddenBoardColumnValues,
       loadMoreFacets,
       loadMoreGroup,
+      loadMoreRows,
       preferenceError,
       preferenceWritesPending,
       preferencesQ.error,
@@ -875,6 +1071,9 @@ export function useWorkView<TTarget extends ViewTarget>(
       queryQ.error,
       queryQ.isPending,
       readyToQuery,
+      response,
+      rootPageState,
+      showAllBoardColumns,
       requestFacet,
       resetPersonalOverride,
       saveMutation.isPending,
@@ -882,6 +1081,9 @@ export function useWorkView<TTarget extends ViewTarget>(
       saveMutation.mutate,
       setDefinition,
       timezone,
+      toggleCollapsedGroup,
+      toggleFavoriteView,
+      toggleHiddenBoardColumn,
       defaultMutation.error,
     ],
   );

@@ -32,6 +32,8 @@ describe('Projects experience contract', () => {
     expect(overview).toContain('<WorkViewPage');
     expect(workPage).toContain('<ListPageLayout');
     expect(workPage).toContain('<WorkViewToolbar');
+    expect(workPage).toContain('role="tablist"');
+    expect(workPage).toContain('controller.toggleFavoriteView(view.id)');
     // The dependencies lens now renders the shared React Flow canvas (lazy-loaded) instead of the
     // old hand-rolled SVG DependencyLens.
     expect(source(dependencyPath)).toContain('<ProjectGraphPanel');
@@ -54,7 +56,7 @@ describe('Projects experience contract', () => {
   it('preserves dense, stable rows and full columns inside a local scroller', () => {
     const workList = source(workListPath);
     expect(workList).toContain('<ListView');
-    expect(workList).toContain('className="h-full min-h-0"');
+    expect(workList).toContain('className="relative h-full min-h-0"');
     expect(workList).toContain('truncate');
   });
 

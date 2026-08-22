@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ActorId,
   InitiativeViewDefinition,
+  PersonalWorkViewState,
   TeamId,
   TaskViewDefinition,
+  TaskViewRow,
   ViewInstanceKey,
   WorkViewFacetResponse,
   WorkViewQueryResponse,
@@ -91,6 +93,45 @@ const initiativeDefinition = InitiativeViewDefinition.parse({
     showEmptyGroups: false,
   },
 });
+
+const flatTaskDefinition = TaskViewDefinition.parse({
+  ...taskDefinition,
+  filter: null,
+  arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+});
+
+function taskRow(index: number) {
+  return TaskViewRow.parse({
+    target: 'task',
+    organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FAD',
+    id: `01ARZ3NDEKTSV4RRFFQ69${String(index).padStart(5, '0')}`,
+    title: `Task ${String(index)}`,
+    status: 'todo',
+    priority: 'medium',
+    assignee: null,
+    delegate: null,
+    team: '01ARZ3NDEKTSV4RRFFQ69G5FB0',
+    project: null,
+    program: null,
+    cycle: null,
+    milestone: null,
+    parent: null,
+    labels: [],
+    creator: null,
+    startDate: null,
+    dueDate: null,
+    createdAt: '2026-08-21T12:00:00.000Z',
+    updatedAt: '2026-08-21T12:00:00.000Z',
+    estimate: null,
+    estimateMinutes: null,
+    blocked: false,
+    blocking: false,
+    unfiled: true,
+    archived: false,
+    manualRank: `a${String(index)}`,
+    isContext: false,
+  });
+}
 
 function defaultResponse(target: 'task' | 'initiative') {
   return {
@@ -221,6 +262,42 @@ describe('useWorkView instance and request identity', () => {
         .getAll()
         .some((query) => query.queryKey.includes('America/Chicago')),
     ).toBe(true);
+  });
+});
+
+describe('useWorkView row pagination', () => {
+  it('appends a validated root cursor page without replacing the first page', async () => {
+    apiMocks.getDefault.mockResolvedValue(
+      okResponse({ ...defaultResponse('task'), definition: flatTaskDefinition }),
+    );
+    apiMocks.query.mockImplementation(({ json }: { json: { target: 'task'; cursor?: string } }) =>
+      Promise.resolve(
+        okResponse(
+          WorkViewQueryResponse.parse({
+            target: 'task',
+            rows: [taskRow(json.cursor ? 2 : 1)],
+            groups: [],
+            totalCount: 2,
+            nextCursor: json.cursor ? null : 'page-2',
+            queryFingerprint: 'sha256:0000000000000002',
+          }),
+        ),
+      ),
+    );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.response?.rows).toHaveLength(1);
+    });
+
+    act(() => {
+      result.current.loadMoreRows();
+    });
+
+    await waitFor(() => {
+      expect(result.current.response?.rows.map((row) => row.title)).toEqual(['Task 1', 'Task 2']);
+    });
+    expect(result.current.response?.nextCursor).toBeNull();
   });
 });
 
@@ -357,6 +434,43 @@ describe('useWorkView facet pagination', () => {
 });
 
 describe('useWorkView preference serialization', () => {
+  it('hydrates and persists collapsed groups and hidden board columns', async () => {
+    const personal = PersonalWorkViewState.parse({
+      instanceKey: taskInstanceOne,
+      target: 'task',
+      arrangement: taskDefinition.arrangement,
+      presentation: taskDefinition.presentation,
+      collapsedGroups: ['todo'],
+      hiddenBoardColumns: ['done'],
+      favoriteViewIds: ['01ARZ3NDEKTSV4RRFFQ69G5FC0'],
+      lastUsedLayout: 'list',
+    });
+    apiMocks.getPreferences.mockResolvedValue(
+      okResponse({ timezone: 'America/Los_Angeles', viewState: [personal] }),
+    );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.response).toBeDefined();
+    });
+    expect(result.current.collapsedGroups).toEqual(new Set(['todo']));
+    expect(result.current.hiddenBoardColumns).toEqual(new Set(['done']));
+    expect(result.current.favoriteViewIds).toEqual(new Set(['01ARZ3NDEKTSV4RRFFQ69G5FC0']));
+
+    act(() => {
+      result.current.toggleHiddenBoardColumn('done');
+    });
+
+    await waitFor(() => {
+      expect(result.current.hiddenBoardColumns.size).toBe(0);
+    });
+    expect(apiMocks.patchPreferences.mock.calls[0]?.[0].json.viewState[0]).toMatchObject({
+      collapsedGroups: ['todo'],
+      hiddenBoardColumns: [],
+      favoriteViewIds: ['01ARZ3NDEKTSV4RRFFQ69G5FC0'],
+    });
+  });
+
   it('serializes edit then reset and leaves the reset as the final state', async () => {
     const resolvers: ((value: ReturnType<typeof okResponse>) => void)[] = [];
     apiMocks.patchPreferences.mockImplementation(

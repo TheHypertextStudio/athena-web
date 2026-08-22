@@ -56,6 +56,8 @@ function task(id: string, title: string) {
 describe('WorkBoard', () => {
   it('omits hidden columns and keeps create inside the destination column', () => {
     const onCreate = vi.fn();
+    const onHideColumn = vi.fn();
+    const onShowAllColumns = vi.fn();
     render(
       <WorkBoard
         target="task"
@@ -80,6 +82,8 @@ describe('WorkBoard', () => {
         onActivate={vi.fn()}
         onDrop={vi.fn()}
         onLoadMore={vi.fn()}
+        onHideColumn={onHideColumn}
+        onShowAllColumns={onShowAllColumns}
       />,
     );
 
@@ -91,6 +95,11 @@ describe('WorkBoard', () => {
       }),
     );
     expect(onCreate).toHaveBeenCalledWith(['todo']);
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 hidden column' }));
+    expect(onShowAllColumns).toHaveBeenCalledOnce();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More Todo column actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Hide column' }));
+    expect(onHideColumn).toHaveBeenCalledWith('todo');
   });
 
   it('paginates one swimlane and routes a mutable drop through its full group path', () => {

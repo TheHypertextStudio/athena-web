@@ -68,4 +68,19 @@ describe('useViewState coordinated URL writes', () => {
       { scroll: false },
     );
   });
+
+  it('pushes several related parameters in one history transaction', () => {
+    harness.search = 'q=calendar&group=provider';
+    const { result } = renderHook(() => useViewState(DEFAULTS));
+
+    act(() => {
+      result.current.pushSearchParams({ q: null, resourceId: 'resource-1' });
+    });
+
+    expect(harness.replace).not.toHaveBeenCalled();
+    expect(harness.push).toHaveBeenCalledWith(
+      '/orgs/org-1/library?group=provider&resourceId=resource-1',
+      { scroll: false },
+    );
+  });
 });

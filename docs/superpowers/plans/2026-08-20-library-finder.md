@@ -13,23 +13,23 @@ Library, and Playwright.
 
 ## Implementation sequence
 
-- [ ] Add failing API tests for attachment host hierarchy, visibility gates, file facets, and
+- [x] Add failing API tests for attachment host hierarchy, visibility gates, file facets, and
       primary search actions. Implement the projection and resolver changes without a migration.
-- [ ] Add failing shared-view tests for the Work context empty label, active Display copy, and
+- [x] Add failing shared-view tests for the Work context empty label, active Display copy, and
       virtual EntityTable behavior. Implement opt-in virtualization with 12-row overscan, end
       callbacks, retry adornments, collapse state, keyboard navigation, and stable keys.
-- [ ] Add failing Library tests for 50-row cursor accumulation, duplicate suppression, automatic
+- [x] Add failing Library tests for 50-row cursor accumulation, duplicate suppression, automatic
       loading, retry, terminal pages, grouped browse state, flat search, scroll restoration, and
       all resource action kinds.
-- [ ] Replace the fixed query with the shared infinite-query layer. Make Work context the default
+- [x] Replace the fixed query with the shared infinite-query layer. Make Work context the default
       grouping, add full-corpus server search, and wire Name and info to separate actions.
-- [ ] Update attachment details so hosts and provider actions replace the invalid attachment
+- [x] Update attachment details so hosts and provider actions replace the invalid attachment
       backlink query. Preserve external-resource backlinks.
-- [ ] Add responsive browser coverage for search, Filter, Display, direct open, download, context,
+- [x] Add responsive browser coverage for search, Filter, Display, direct open, download, context,
       and narrow layouts. Add the deterministic 10,000-row DOM-bound test.
-- [ ] Run focused tests, package typechecks, then the repository typecheck, lint, test, build,
+- [x] Run focused tests, package typechecks, then the repository typecheck, lint, test, build,
       accessibility, and E2E gates with bounded concurrency.
-- [ ] Review the owned diff, update the worklog with validation and retrospective evidence, and
+- [x] Review the owned diff, update the worklog with validation and retrospective evidence, and
       commit the feature with a linear history.
 
 ## Risks and controls

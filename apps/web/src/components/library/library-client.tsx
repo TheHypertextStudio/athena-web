@@ -57,6 +57,7 @@ import {
 
 const SEARCH_DEBOUNCE_MS = 180;
 const LIBRARY_VIEW_DEFAULTS: UseViewStateDefaults = { groupBy: { field: 'usedIn' } };
+const resourceRowKey = (row: SearchResult): string => row.id;
 
 /** Props for {@link LibraryClient}. */
 export interface LibraryClientProps {
@@ -91,7 +92,7 @@ function contextIcon(hint: string | undefined): LucideIcon | null {
 
 /** Render the Library. */
 export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Element {
-  const { state, setFilters, setGroupBy, setSort, setSearchParam, pushSearchParam } =
+  const { state, setFilters, setGroupBy, setSort, setSearchParam, pushSearchParams } =
     useViewState(LIBRARY_VIEW_DEFAULTS);
   const { activeOrg } = useActiveOrg();
   const router = useRouter();
@@ -138,9 +139,9 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
         });
         return;
       }
-      pushSearchParam('resourceId', resourceId);
+      pushSearchParams({ q: draft.trim() || null, resourceId });
     },
-    [pushSearchParam, router],
+    [draft, pushSearchParams, router],
   );
 
   const resourcesDef = useMemo(
@@ -316,7 +317,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
     ),
   );
   const opened = onPage ?? deepLinkQ.data?.items[0] ?? null;
-  const panelOpen = opened !== null || deepLinkQ.isPending;
+  const panelOpen = openedId !== null && (opened !== null || deepLinkQ.isPending);
   const initialError = resourcesQ.isError && rows.length === 0 && !resourcesQ.isFetchNextPageError;
   const refillingSparsePage =
     applied.rows.length === 0 &&
@@ -406,7 +407,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
             <EntityTable
               columns={columns}
               {...(displayedSearchActive ? { rows: applied.rows } : { groups })}
-              getRowKey={(row) => row.id}
+              getRowKey={resourceRowKey}
               rowHref={(row) => primaryResourceAction(row)?.href}
               rowLinkColumnKey="name"
               renderRowLink={(linkProps) => {

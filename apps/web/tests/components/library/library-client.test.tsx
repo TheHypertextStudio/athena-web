@@ -11,8 +11,11 @@ const harness = vi.hoisted(() => ({
   infiniteKeys: [] as unknown[],
   viewDefaults: [] as unknown[],
   tableProps: null as Record<string, unknown> | null,
+  tablePropsHistory: [] as Record<string, unknown>[],
   fetchNextPage: vi.fn(),
   setSearchParam: vi.fn(),
+  pushSearchParam: vi.fn(),
+  pushSearchParams: vi.fn(),
   router: { replace: vi.fn(), push: vi.fn(), back: vi.fn() },
   viewState: {
     filters: [] as { field: string; op: 'contains'; value: string }[],
@@ -20,6 +23,7 @@ const harness = vi.hoisted(() => ({
     sort: [],
   },
   queryResult: {},
+  deepLinkResult: { isPending: false, error: null, data: undefined },
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => harness.router }));
@@ -39,7 +43,8 @@ vi.mock('@/components/views/use-view-state', () => ({
       setGroupBy: vi.fn(),
       setSort: vi.fn(),
       setSearchParam: harness.setSearchParam,
-      pushSearchParam: vi.fn(),
+      pushSearchParam: harness.pushSearchParam,
+      pushSearchParams: harness.pushSearchParams,
     };
   },
 }));
@@ -62,7 +67,7 @@ vi.mock('@/lib/query', () => ({
     message,
     options,
   }),
-  useApiListQuery: () => ({ isPending: false, error: null, data: undefined }),
+  useApiListQuery: () => harness.deepLinkResult,
 }));
 vi.mock('@/lib/api', () => ({ api: { v1: { orgs: {} } } }));
 vi.mock('@/components/library/resource-detail-panel', () => ({
@@ -75,27 +80,38 @@ vi.mock('@docket/ui/components', async (importOriginal) => {
     EntityTable: (props: {
       groups?: readonly { id: string; label: string; rows: readonly SearchResult[] }[];
       rows?: readonly SearchResult[];
+      columns?: readonly {
+        key: string;
+        render?: (row: SearchResult) => ReactNode;
+      }[];
       rowHref?: (row: SearchResult) => string | undefined;
       onEndReached?: () => void;
       endAdornment?: ReactNode;
       'aria-label'?: string;
-      containerInteraction?: { ref?: (element: HTMLElement | null) => void };
+      containerInteraction?: {
+        ref?: (element: HTMLElement | null) => void;
+        onScroll?: React.UIEventHandler<HTMLDivElement>;
+      };
+      getRowKey: (row: SearchResult) => string;
     }) => {
       harness.tableProps = props;
+      harness.tablePropsHistory.push(props);
       const rows = props.groups?.flatMap((group) => group.rows) ?? props.rows ?? [];
       return (
         <div
           role="grid"
           aria-label={props['aria-label']}
           ref={(element) => props.containerInteraction?.ref?.(element)}
+          onScroll={props.containerInteraction?.onScroll}
         >
           {props.groups?.map((group) => (
             <h2 key={group.id}>{group.label}</h2>
           ))}
           {rows.map((row, index) => (
-            <a key={`${row.id}:${String(index)}`} href={props.rowHref?.(row)}>
-              {row.title}
-            </a>
+            <div key={`${row.id}:${String(index)}`}>
+              <a href={props.rowHref?.(row)}>{row.title}</a>
+              {props.columns?.find((column) => column.key === 'info')?.render?.(row)}
+            </div>
           ))}
           <button type="button" onClick={props.onEndReached}>
             Reach end
@@ -168,18 +184,53 @@ beforeEach(() => {
   harness.infiniteKeys.length = 0;
   harness.viewDefaults.length = 0;
   harness.tableProps = null;
+  harness.tablePropsHistory.length = 0;
   harness.fetchNextPage.mockReset();
   harness.setSearchParam.mockReset();
+  harness.pushSearchParam.mockReset();
+  harness.pushSearchParams.mockReset();
   harness.router.replace.mockReset();
   harness.router.push.mockReset();
   harness.router.back.mockReset();
   harness.viewState.filters = [];
   harness.viewState.groupBy = { field: 'usedIn' };
+  harness.deepLinkResult = { isPending: false, error: null, data: undefined };
 });
 
 afterEach(cleanup);
 
 describe('LibraryClient cursor and presentation behavior', () => {
+  it('keeps the row-key contract stable across parent renders', () => {
+    harness.queryResult = queryResult([page([resource('one')])]);
+    const rendered = render(<LibraryFixture />);
+    const first = harness.tablePropsHistory.at(-1)?.['getRowKey'];
+
+    rendered.rerender(<LibraryFixture />);
+
+    expect(harness.tablePropsHistory.at(-1)?.['getRowKey']).toBe(first);
+  });
+
+  it('does not hide the roster while a disabled deep-link query is pending', () => {
+    harness.queryResult = queryResult([page([resource('one')])]);
+    harness.deepLinkResult = { isPending: true, error: null, data: undefined };
+
+    render(<LibraryFixture />);
+
+    expect(screen.queryByRole('complementary', { name: 'Loading entry' })).not.toBeInTheDocument();
+    expect(screen.getByRole('grid', { name: 'Library resources' }).parentElement).not.toHaveClass(
+      'hidden',
+    );
+  });
+
+  it('commits the visible search before pushing a context deep link', () => {
+    harness.queryResult = queryResult([page([resource('one')])]);
+    render(<LibraryFixture />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show context for one' }));
+
+    expect(harness.pushSearchParams).toHaveBeenCalledWith({ q: null, resourceId: 'one' });
+  });
+
   it('deduplicates cursor pages, groups browse rows by Work context, and loads the next page', () => {
     const launch = [{ kind: 'initiative' as const, id: 'launch', title: 'Q3 launch' }];
     harness.queryResult = queryResult(
@@ -212,6 +263,39 @@ describe('LibraryClient cursor and presentation behavior', () => {
     expect(harness.tableProps).toHaveProperty('rows');
     expect(harness.tableProps).not.toHaveProperty('groups');
     expect(harness.infiniteKeys[0]).toEqual(['search', 'org', 'library:launch', ORG_ID]);
+  });
+
+  it('restores the grouped browse scroll position after server search clears', async () => {
+    harness.queryResult = queryResult([page([resource('browse-row')])]);
+    const rendered = render(<LibraryFixture />);
+    const browseGrid = screen.getByRole('grid', { name: 'Library resources' });
+    browseGrid.scrollTop = 640;
+    fireEvent.scroll(browseGrid);
+
+    harness.queryResult = queryResult([page([resource('search-row')])]);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search the Library' }), {
+      target: { value: 'needle' },
+    });
+    rendered.rerender(<LibraryFixture />);
+    await waitFor(() => {
+      expect(screen.getByRole('grid', { name: 'Library search results' })).toHaveProperty(
+        'scrollTop',
+        0,
+      );
+    });
+
+    harness.queryResult = queryResult([page([resource('browse-row')])]);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search the Library' }), {
+      target: { value: '' },
+    });
+    rendered.rerender(<LibraryFixture />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('grid', { name: 'Library resources' })).toHaveProperty(
+        'scrollTop',
+        640,
+      );
+    });
   });
 
   it('keeps the previous browse corpus and cursor idle while server search changes keys', () => {

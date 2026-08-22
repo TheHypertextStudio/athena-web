@@ -57,6 +57,8 @@
  * is the constraint that settled the launcher form.
  */
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 /** The dev domain every local host hangs off. Portless prefixes it; nothing else does. */
@@ -106,14 +108,50 @@ const HOST_BEARING_VARS: readonly string[] = [
 const DELIBERATELY_UNPREFIXED: readonly string[] = ['BETTER_AUTH_COOKIE_DOMAIN'];
 
 /**
- * Read the portless hostname prefix out of `PORTLESS_URL`.
+ * Read the current package's configured Portless service name.
  *
- * @returns The prefix (e.g. `feature-x`), or `undefined` on a plain checkout where portless serves
- *   the bare domain and there is nothing to rewrite.
+ * @returns The `portless.name` string, or `undefined` outside a Portless package.
  */
-export function portlessPrefix(): string | undefined {
-  const raw = process.env['PORTLESS_URL'];
-  if (!raw) return undefined;
+function currentPortlessServiceName(): string | undefined {
+  try {
+    const parsed = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'),
+    ) as unknown;
+    if (!parsed || typeof parsed !== 'object' || !('portless' in parsed)) return undefined;
+    const portless = (parsed as { portless?: unknown }).portless;
+    if (!portless || typeof portless !== 'object' || !('name' in portless)) return undefined;
+    const name = (portless as { name?: unknown }).name;
+    return typeof name === 'string' && name.length > 0 ? name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Convert a Portless service name to its unprefixed host.
+ *
+ * `docket` owns `docket.localhost`; sibling services use names such as `api.docket` and own
+ * `api.docket.localhost`.
+ */
+function canonicalServiceHost(serviceName: string): string | undefined {
+  if (serviceName === 'docket') return DEV_DOMAIN;
+  if (!serviceName.endsWith('.docket')) return undefined;
+  const subdomain = serviceName.slice(0, -'.docket'.length);
+  return subdomain.length > 0 ? `${subdomain}.${DEV_DOMAIN}` : undefined;
+}
+
+/**
+ * Read the branch hostname prefix out of a service's `PORTLESS_URL`.
+ *
+ * @param raw - The URL Portless assigned to the current service.
+ * @param serviceName - The package's configured `portless.name`.
+ * @returns The prefix (e.g. `feature-x`), or `undefined` on the service's canonical host.
+ */
+export function portlessPrefix(
+  raw = process.env['PORTLESS_URL'],
+  serviceName = currentPortlessServiceName(),
+): string | undefined {
+  if (!raw || !serviceName) return undefined;
 
   let host: string;
   try {
@@ -122,15 +160,12 @@ export function portlessPrefix(): string | undefined {
     return undefined;
   }
 
-  if (!host.endsWith(DEV_DOMAIN)) return undefined;
-  // `feature-x.docket.localhost` → `feature-x.`; `api.docket.localhost` → `api.`; `docket.localhost` → ``.
-  const lead = host.slice(0, host.length - DEV_DOMAIN.length);
-  if (lead === '') return undefined;
+  const serviceHost = canonicalServiceHost(serviceName);
+  if (!serviceHost || host === serviceHost) return undefined;
+  if (!host.endsWith(`.${serviceHost}`)) return undefined;
 
-  // Portless publishes one app per sub-name (`docket`, `api.docket`, `admin.docket`) and puts the
-  // branch prefix in front of all of them, so the prefix is the first label and the rest is the
-  // app's own sub-name, which the canonical URLs already carry.
-  const prefix = lead.replace(/\.$/, '').split('.')[0];
+  // `feature-x.api.docket.localhost` minus `.api.docket.localhost` leaves `feature-x`.
+  const prefix = host.slice(0, -(serviceHost.length + 1)).split('.')[0];
   return prefix === undefined || prefix === '' ? undefined : prefix;
 }
 

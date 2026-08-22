@@ -245,6 +245,8 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       }
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('attachment insert returned no row');
+      await enqueueSearchUpsert(orgId, 'attachment', row.id);
+      await enqueueSearchUpsert(orgId, 'task', id);
       return ok(c, AttachmentOut, toOut(row));
     },
   )

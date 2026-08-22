@@ -65,6 +65,8 @@ export interface UseViewStateResult {
   setSearchParam: (name: string, value: string | null) => void;
   /** Push one non-view URL parameter while preserving pending view and search writes. */
   pushSearchParam: (name: string, value: string | null) => void;
+  /** Push several related non-view parameters as one browser-history entry. */
+  pushSearchParams: (updates: Readonly<Record<string, string | null>>) => void;
   /** Clear all filters / grouping / sort and restore the default presentation. */
   reset: () => void;
 }
@@ -166,17 +168,26 @@ export function useViewState(
     [replaceParams],
   );
 
-  const pushSearchParam = useCallback(
-    (name: string, value: string | null): void => {
-      if (VIEW_PARAM_KEYS.includes(name)) {
-        throw new Error(`View-owned URL parameter cannot be written directly: ${name}`);
-      }
+  const pushSearchParams = useCallback(
+    (updates: Readonly<Record<string, string | null>>): void => {
       const params = new URLSearchParams(pendingSearch.current);
-      if (value === null || value.length === 0) params.delete(name);
-      else params.set(name, value);
+      for (const [name, value] of Object.entries(updates)) {
+        if (VIEW_PARAM_KEYS.includes(name)) {
+          throw new Error(`View-owned URL parameter cannot be written directly: ${name}`);
+        }
+        if (value === null || value.length === 0) params.delete(name);
+        else params.set(name, value);
+      }
       navigateParams(params, 'push');
     },
     [navigateParams],
+  );
+
+  const pushSearchParam = useCallback(
+    (name: string, value: string | null): void => {
+      pushSearchParams({ [name]: value });
+    },
+    [pushSearchParams],
   );
 
   const setFilters = useCallback(
@@ -216,6 +227,7 @@ export function useViewState(
     setDisplay,
     setSearchParam,
     pushSearchParam,
+    pushSearchParams,
     reset,
   };
 }

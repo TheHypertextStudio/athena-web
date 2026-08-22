@@ -1,8 +1,6 @@
 import type { TaskOut } from '@docket/types';
-import type * as DocketComponents from '@docket/ui/components';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import type { JSX } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const harness = vi.hoisted(() => ({
   triageQueue: [] as TaskOut[],
@@ -90,33 +88,55 @@ vi.mock('@/lib/use-my-work', () => ({
     rename: vi.fn(),
   }),
 }));
-vi.mock('@docket/ui/components', async (importOriginal) => {
-  const actual = await importOriginal<typeof DocketComponents>();
-  return {
-    ...actual,
-    ListView: <T,>({
-      items,
-      label,
-      renderRow,
-    }: {
-      items: readonly T[];
-      label: string;
-      renderRow: (item: T, context: { active: boolean; onActivate: () => void }) => JSX.Element;
-    }) => (
-      <div role="grid" aria-label={label}>
-        {items.map((item, index) => (
-          <div role="row" key={index}>
-            {renderRow(item, { active: false, onActivate: () => undefined })}
-          </div>
-        ))}
-      </div>
-    ),
-  };
-});
-
 import MyWorkClient from '@/app/(app)/orgs/[orgId]/my-work/my-work-client';
 import TriagePage from '@/app/(app)/orgs/[orgId]/triage/page';
 import { InPageSearchProvider } from '@/components/in-page-search/in-page-search-provider';
+
+const VIEWPORT_HEIGHT = 320;
+const ROW_HEIGHT = 40;
+let heightDescriptor: PropertyDescriptor | undefined;
+let widthDescriptor: PropertyDescriptor | undefined;
+let boundingRectDescriptor: PropertyDescriptor | undefined;
+
+beforeAll(() => {
+  heightDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+  widthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+  boundingRectDescriptor = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    'getBoundingClientRect',
+  );
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get: () => ROW_HEIGHT,
+  });
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+    configurable: true,
+    get: () => 800,
+  });
+  HTMLElement.prototype.getBoundingClientRect = (): DOMRect => ({
+    width: 800,
+    height: VIEWPORT_HEIGHT,
+    top: 0,
+    left: 0,
+    bottom: VIEWPORT_HEIGHT,
+    right: 800,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+});
+
+afterAll(() => {
+  if (heightDescriptor) {
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', heightDescriptor);
+  }
+  if (widthDescriptor) {
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', widthDescriptor);
+  }
+  if (boundingRectDescriptor) {
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', boundingRectDescriptor);
+  }
+});
 
 function task(index: number, needle = false): TaskOut {
   return {
@@ -153,12 +173,15 @@ describe('virtualized task page in-page search', () => {
       </InPageSearchProvider>,
     );
 
+    const browseGrid = screen.getByRole('grid', { name: 'Triage queue, grouped by team' });
+    expect(browseGrid.querySelectorAll('[role="row"]').length).toBeLessThan(121);
+    expect(screen.queryByText('Offscreen needle')).not.toBeInTheDocument();
+
     fireEvent.keyDown(document, { key: 'f', ctrlKey: true });
     const field = screen.getByRole('searchbox', { name: 'Search the triage queue' });
     expect(field).toHaveFocus();
     fireEvent.change(field, { target: { value: 'needle github owner team' } });
 
-    expect(screen.getByRole('grid').querySelectorAll('[role="row"]')).toHaveLength(1);
     expect(screen.getByText('Offscreen needle')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
     expect(screen.getByText('Queue item 0')).toBeInTheDocument();
@@ -171,13 +194,16 @@ describe('virtualized task page in-page search', () => {
       </InPageSearchProvider>,
     );
 
+    const browseGrid = screen.getByRole('grid', { name: 'Tasks assigned to me' });
+    expect(browseGrid.querySelectorAll('[role="row"]').length).toBeLessThan(121);
+    expect(screen.queryByText('Offscreen needle')).not.toBeInTheDocument();
+
     fireEvent.keyDown(document, { key: 'f', metaKey: true });
     const field = screen.getByRole('searchbox', { name: 'Search My Work' });
     fireEvent.change(field, {
       target: { value: 'needle project agent assignee ready needs' },
     });
     expect(screen.getByText('Offscreen needle')).toBeInTheDocument();
-    expect(screen.getByRole('grid').querySelectorAll('[role="row"]')).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('tab', { name: /Delegated & approvals/ }));
     expect(field).toHaveValue('');

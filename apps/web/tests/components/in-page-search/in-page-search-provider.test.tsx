@@ -119,6 +119,23 @@ describe('InPageSearchProvider', () => {
     expect(screen.getByRole('textbox', { name: 'dialog search' })).toHaveFocus();
   });
 
+  it('prefers the last-focused sibling when focus has moved outside both targets', () => {
+    render(
+      <InPageSearchProvider>
+        <button type="button">Outside</button>
+        <Target id="first" />
+        <Target id="second" />
+      </InPageSearchProvider>,
+    );
+    screen.getByRole('button', { name: 'first action' }).focus();
+    screen.getByRole('button', { name: 'second action' }).focus();
+    screen.getByRole('button', { name: 'Outside' }).focus();
+
+    fireEvent.keyDown(document, { key: 'f', ctrlKey: true });
+
+    expect(screen.getByRole('textbox', { name: 'second search' })).toHaveFocus();
+  });
+
   it('keeps a target active while its registered field is outside the surface root', () => {
     render(
       <InPageSearchProvider>

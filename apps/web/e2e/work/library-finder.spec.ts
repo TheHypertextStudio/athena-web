@@ -10,6 +10,10 @@ const FILE_NAME = 'Library finder brief.pdf';
 const OFFSCREEN_FILE_NAME = 'Archived finder appendix.pdf';
 const FILLER_COUNT = 55;
 const INITIATIVE_NAME = 'Q3 finder launch';
+const URL_ATTACHMENT_NAME = 'Launch provider folder';
+const URL_ATTACHMENT_URL = 'https://example.com/library-provider-launch';
+const CALENDAR_ATTACHMENT_NAME = 'Launch review calendar event';
+const EXTERNAL_RESOURCE_URL = 'https://docs.google.com/document/d/libraryfinderexternal/edit';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -26,6 +30,34 @@ async function waitForLibraryFile(page: Page, orgId: string, fileName: string): 
         return items.some((item) => item.title === fileName);
       },
       { timeout: TIMEOUTS.sweep, message: 'the uploaded file should reach Library search' },
+    )
+    .toBe(true);
+}
+
+/** Wait for one indexed Library row by title or provider URL. */
+async function waitForLibraryResource(
+  page: Page,
+  orgId: string,
+  query: string,
+  expected: { readonly title?: string; readonly externalUrl?: string },
+  kinds: 'attachment' | 'external_resource',
+): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const result = await apiFetch(
+          page,
+          `/v1/orgs/${orgId}/search?kinds=${kinds}&q=${encodeURIComponent(query)}&limit=50`,
+        );
+        const items =
+          (result.body as { items?: { title: string; externalUrl: string | null }[] }).items ?? [];
+        return items.some(
+          (item) =>
+            (expected.title === undefined || item.title === expected.title) &&
+            (expected.externalUrl === undefined || item.externalUrl === expected.externalUrl),
+        );
+      },
+      { timeout: TIMEOUTS.sweep, message: `${query} should reach Library search` },
     )
     .toBe(true);
 }
@@ -112,7 +144,24 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
   });
   const task = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/tasks`, {
     method: 'POST',
-    body: { title: 'Verify Library resources', teamId, projectId: project.id },
+    body: {
+      title: 'Verify Library resources',
+      description: `[External provider brief](${EXTERNAL_RESOURCE_URL})`,
+      teamId,
+      projectId: project.id,
+    },
+  });
+  await apiJson(page, `/v1/orgs/${orgId}/tasks/${task.id}/attachments`, {
+    method: 'POST',
+    body: { kind: 'url', title: URL_ATTACHMENT_NAME, url: URL_ATTACHMENT_URL },
+  });
+  await apiJson(page, `/v1/orgs/${orgId}/tasks/${task.id}/attachments`, {
+    method: 'POST',
+    body: {
+      kind: 'calendar_event',
+      title: CALENDAR_ATTACHMENT_NAME,
+      externalId: 'calendar-event-library-finder',
+    },
   });
   await uploadLibraryFile(page, orgId, task.id, OFFSCREEN_FILE_NAME);
   await addFillerAttachments(page, orgId, task.id);
@@ -121,6 +170,27 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
     waitForLibraryFile(page, orgId, OFFSCREEN_FILE_NAME),
     waitForLibraryFile(page, orgId, FILE_NAME),
     waitForFillerPage(page, orgId),
+    waitForLibraryResource(
+      page,
+      orgId,
+      URL_ATTACHMENT_NAME,
+      { title: URL_ATTACHMENT_NAME, externalUrl: URL_ATTACHMENT_URL },
+      'attachment',
+    ),
+    waitForLibraryResource(
+      page,
+      orgId,
+      CALENDAR_ATTACHMENT_NAME,
+      { title: CALENDAR_ATTACHMENT_NAME },
+      'attachment',
+    ),
+    waitForLibraryResource(
+      page,
+      orgId,
+      'libraryfinderexternal',
+      { externalUrl: EXTERNAL_RESOURCE_URL },
+      'external_resource',
+    ),
   ]);
   await expectFileBeyondInitialCursor(page, orgId);
 
@@ -146,6 +216,32 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
   await search.fill('');
   await expect(page.getByRole('grid', { name: 'Library resources' })).toBeVisible();
 
+  await search.fill(URL_ATTACHMENT_NAME);
+  const urlPopupEvent = page.waitForEvent('popup');
+  await page.getByRole('link', { name: URL_ATTACHMENT_NAME }).click();
+  const urlPopup = await urlPopupEvent;
+  await expect(urlPopup).toHaveURL(URL_ATTACHMENT_URL);
+  await urlPopup.close();
+
+  await search.fill('libraryfinderexternal');
+  const externalLink = page.locator(`a[href="${EXTERNAL_RESOURCE_URL}"]`);
+  await expect(externalLink).toBeVisible();
+  const externalPopupEvent = page.waitForEvent('popup');
+  await externalLink.click();
+  const externalPopup = await externalPopupEvent;
+  await expect(externalPopup).toHaveURL(EXTERNAL_RESOURCE_URL);
+  await externalPopup.close();
+
+  await search.fill(CALENDAR_ATTACHMENT_NAME);
+  const calendarLink = page.getByRole('link', { name: CALENDAR_ATTACHMENT_NAME });
+  await expect(calendarLink).toHaveAttribute(
+    'href',
+    new RegExp(`/orgs/${orgId}/tasks/${task.id}\\?attachmentId=`),
+  );
+  await search.fill('');
+  await expect(page).not.toHaveURL(/(?:\?|&)q=/);
+  await expect(page.getByRole('grid', { name: 'Library resources' })).toBeVisible();
+
   await page.getByRole('button', { name: `Show context for ${FILE_NAME}` }).click();
   const details = page.getByRole('complementary', { name: `Details for ${FILE_NAME}` });
   await expect(details).toBeVisible();
@@ -161,7 +257,12 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
   await page.getByRole('button', { name: 'Display · Work context' }).click();
   await page.getByRole('menuitemradio', { name: 'Source' }).click();
   await expect(page).toHaveURL(/(?:\?|&)group=provider(?:&|$)/);
-  await expect(page.getByRole('row').filter({ hasText: 'Uploaded file' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('grid', { name: 'Library resources' })
+      .locator('[role="row"][aria-expanded]')
+      .first(),
+  ).toBeVisible();
 
   await page.getByRole('button', { name: 'Add filter' }).click();
   await expect(page.getByRole('menuitem', { name: 'Name' })).toBeVisible();
@@ -178,11 +279,18 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
   await expect(search).toBeFocused();
   await search.fill('finder brief');
   await expect(page).toHaveURL(/(?:\?|&)q=finder\+brief(?:&|$)/);
-  await expect(page.getByRole('grid', { name: 'Library search results' })).toBeVisible();
+  const searchResults = page.getByRole('grid', { name: 'Library search results' });
+  await expect(searchResults).toBeVisible();
   await expect(page.getByRole('link', { name: FILE_NAME })).toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: 'Uploaded file' })).toHaveCount(0);
+  await expect(searchResults.locator('[role="row"][aria-expanded]')).toHaveCount(0);
 
   await search.fill('');
-  await expect(page.getByRole('grid', { name: 'Library resources' })).toBeVisible();
-  await expect(page.getByRole('row').filter({ hasText: 'Uploaded file' })).toBeVisible();
+  const browseResults = page.getByRole('grid', { name: 'Library resources' });
+  await expect(browseResults).toBeVisible();
+  await expect(browseResults.locator('[role="row"][aria-expanded]').first()).toBeVisible();
+
+  await search.fill(CALENDAR_ATTACHMENT_NAME);
+  await expect(calendarLink).toBeVisible();
+  await calendarLink.click();
+  await expect(page).toHaveURL(new RegExp(`/orgs/${orgId}/tasks/${task.id}\\?attachmentId=`));
 });

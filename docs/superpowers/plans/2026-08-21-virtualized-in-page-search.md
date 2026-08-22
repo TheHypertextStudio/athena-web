@@ -42,7 +42,7 @@ Vitest, Testing Library, TypeScript, Playwright.
 - Create: `apps/web/tests/components/in-page-search/in-page-search-provider.test.tsx`
 - Modify: `apps/web/src/components/providers.tsx`
 
-- [ ] **Step 1: Write the provider tests before production code**
+- [x] **Step 1: Write the provider tests before production code**
 
   Add tests that mount real registered targets under the provider. The tests must prove Control+F
   and Meta+F focus and select the target field, a repeat or Alt-modified event remains unclaimed,
@@ -64,7 +64,7 @@ Vitest, Testing Library, TypeScript, Playwright.
   }
   ```
 
-- [ ] **Step 2: Run the provider test and verify RED**
+- [x] **Step 2: Run the provider test and verify RED**
 
   Run:
 
@@ -75,7 +75,7 @@ Vitest, Testing Library, TypeScript, Playwright.
 
   Expect failure because `InPageSearchProvider` and `useInPageSearchTarget` do not exist.
 
-- [ ] **Step 3: Implement the target interface and provider**
+- [x] **Step 3: Implement the target interface and provider**
 
   Export this public hook boundary:
 
@@ -104,13 +104,13 @@ Vitest, Testing Library, TypeScript, Playwright.
   connected `document.activeElement`, focus the input, and select its value. `restoreFocus()` must
   focus the saved element only while it remains connected.
 
-- [ ] **Step 4: Mount one provider in the global provider stack**
+- [x] **Step 4: Mount one provider in the global provider stack**
 
   Wrap `ServiceWorkerProvider` and application children with `InPageSearchProvider` inside
   `Providers`. Update the provider-stack TSDoc to name the new responsibility. Do not add any other
   document-level Ctrl/Cmd+F listener.
 
-- [ ] **Step 5: Run provider and provider-stack tests and verify GREEN**
+- [x] **Step 5: Run provider and provider-stack tests and verify GREEN**
 
   Run:
 
@@ -131,7 +131,7 @@ Vitest, Testing Library, TypeScript, Playwright.
 - Create: `apps/web/tests/components/in-page-search/in-page-search-field.test.tsx`
 - Create: `apps/web/tests/components/in-page-search/use-resident-in-page-search.test.tsx`
 
-- [ ] **Step 1: Write failing field interaction tests**
+- [x] **Step 1: Write failing field interaction tests**
 
   Pin this public contract:
 
@@ -153,7 +153,7 @@ Vitest, Testing Library, TypeScript, Playwright.
   clears first, Escape on an empty value calls `onEscapeEmpty`, the live region announces the
   settled result count, and `aria-busy` represents pending work without erasing that count.
 
-- [ ] **Step 2: Write failing complete-resident adapter tests**
+- [x] **Step 2: Write failing complete-resident adapter tests**
 
   Define a generic hook that accepts an explicit completeness marker:
 
@@ -177,7 +177,7 @@ Vitest, Testing Library, TypeScript, Playwright.
   Test case-insensitive matching, collapsed whitespace, multiple terms that may occur in any order,
   original ordering, stable identity when the query is empty, and an update to the complete source.
 
-- [ ] **Step 3: Run both tests and verify RED**
+- [x] **Step 3: Run both tests and verify RED**
 
   Run:
 
@@ -189,14 +189,14 @@ Vitest, Testing Library, TypeScript, Playwright.
 
   Expect module-not-found failures for the two production modules.
 
-- [ ] **Step 4: Implement the field and adapter minimally**
+- [x] **Step 4: Implement the field and adapter minimally**
 
   Use the existing MD3 `Input`, `Button`, and semantic typography tokens. Determine the shortcut
   label after mount from the user agent. Use `useDeferredValue` for resident query settlement.
   Normalize with `trim().toLocaleLowerCase().split(/\s+/)` and require every term to occur in the
   normalized searchable text. Memoize results by source items, settled terms, and extractor.
 
-- [ ] **Step 5: Run both tests and verify GREEN**
+- [x] **Step 5: Run both tests and verify GREEN**
 
   Run the Step 3 command again. Expect both test files to pass with no accessibility warnings.
 
@@ -208,14 +208,14 @@ Vitest, Testing Library, TypeScript, Playwright.
 - Modify: `apps/web/tests/components/library/library-client.test.tsx`
 - Modify: `apps/web/e2e/work/library-finder.spec.ts`
 
-- [ ] **Step 1: Add a failing Library shortcut test**
+- [x] **Step 1: Add a failing Library shortcut test**
 
   Render Library under `InPageSearchProvider`. Fire Meta+F and Control+F at `document`, then assert
   that the Library search field owns focus and its current query is selected. Type a term and prove
   the existing search request still includes that term, remains cursor-backed, and retains server
   order. Clear it and prove grouped browsing and its saved scroll position return.
 
-- [ ] **Step 2: Run the Library test and verify RED**
+- [x] **Step 2: Run the Library test and verify RED**
 
   Run:
 
@@ -225,7 +225,7 @@ Vitest, Testing Library, TypeScript, Playwright.
 
   Expect the shortcut assertion to fail because Library is not registered.
 
-- [ ] **Step 3: Register Library without changing its data adapter**
+- [x] **Step 3: Register Library without changing its data adapter**
 
   Add a root ref and input ref, register them through `useInPageSearchTarget`, and replace the raw
   search input with `InPageSearchField`. Keep `useViewState`, the `q` URL transaction, the
@@ -233,13 +233,13 @@ Vitest, Testing Library, TypeScript, Playwright.
   relevance, retry, and browse/search scroll restoration unchanged. Wire empty Escape to
   `restoreFocus()`.
 
-- [ ] **Step 4: Extend the browser scenario**
+- [x] **Step 4: Extend the browser scenario**
 
   In `library-finder.spec.ts`, use the platform-appropriate modifier to focus search, enter a term,
   and verify a resource beyond the mounted DOM is found. Clear search and verify the browse group
   returns. Keep the existing 390-pixel layout assertion.
 
-- [ ] **Step 5: Run Library tests and verify GREEN**
+- [x] **Step 5: Run Library tests and verify GREEN**
 
   Run the Step 2 command. Expect all Library component tests to pass.
 
@@ -253,14 +253,14 @@ Vitest, Testing Library, TypeScript, Playwright.
 - Create: `apps/web/tests/components/in-page-search/virtualized-pages.test.tsx`
 - Modify: `apps/web/tests/components/views/view-runner.test.tsx`
 
-- [ ] **Step 1: Add failing integration tests**
+- [x] **Step 1: Add failing integration tests**
 
   Test Triage and My Work with more rows than the virtualizer mounts. Ctrl/Cmd+F must focus the
   shared field, and a term matching an offscreen task must reduce the semantic grid to that task.
   Test that clearing restores original order and groups. In `ViewRunner`, test that transient search
   composes with the authored filters before grouping and does not mutate `ViewState`.
 
-- [ ] **Step 2: Run integration tests and verify RED**
+- [x] **Step 2: Run integration tests and verify RED**
 
   Run:
 
@@ -272,28 +272,28 @@ Vitest, Testing Library, TypeScript, Playwright.
 
   Expect shortcut/search assertions to fail because these surfaces have no target or field.
 
-- [ ] **Step 3: Integrate Triage**
+- [x] **Step 3: Integrate Triage**
 
   Mark the unbounded task response as a `CompleteResidentCollection`. Search task title, visible
   team label, visible assignee name, and provider label. Apply the resident result before passing
   `items` to `ListView`. Render the shared field above the scroll region, and keep Suggestions
   outside the target because it is not part of the virtualized queue.
 
-- [ ] **Step 4: Integrate My Work**
+- [x] **Step 4: Integrate My Work**
 
   Search only the active tab's complete semantic collection. Include task title, visible project
   group, status label, assignee, and workspace-visible agent/session label. Switching tabs resets the
   transient query and target result count. Counts in the tab strip continue to describe the full
   tabs rather than the current search result.
 
-- [ ] **Step 5: Integrate saved task views**
+- [x] **Step 5: Integrate saved task views**
 
   Add transient query state inside `ViewRunner`. Search the complete `tasks` prop by title and the
   display labels available through the field catalog. Filter by the transient query before calling
   `applyView`, so authored filters, sort, and grouping remain authoritative over the matched set.
   Do not write the transient query into the saved view or URL codec.
 
-- [ ] **Step 6: Run integration tests and verify GREEN**
+- [x] **Step 6: Run integration tests and verify GREEN**
 
   Run the Step 2 command. Expect both files to pass with no row-key or `act()` warnings.
 
@@ -305,7 +305,7 @@ Vitest, Testing Library, TypeScript, Playwright.
   `packages/test-utils/tests/workspace-policies/virtualized-in-page-search-policy.test.ts`
 - Modify: `docs/WORKLOG.md`
 
-- [ ] **Step 1: Write and run the failing policy test**
+- [x] **Step 1: Write and run the failing policy test**
 
   The test must locate production calls to `useVirtualizer` and JSX uses of the exported virtual
   components. It must assert that `ListView` and virtualized `EntityTable` remain the only primitive
@@ -314,13 +314,13 @@ Vitest, Testing Library, TypeScript, Playwright.
   entries must name their server adapter. Run the single policy test and expect failure until all
   four integrations are registered.
 
-- [ ] **Step 2: Add the explicit integration registry and make the policy pass**
+- [x] **Step 2: Add the explicit integration registry and make the policy pass**
 
   Keep the registry inside the policy test rather than production code. Record Library as
   `server-cursor` and Triage, My Work, and saved views as `resident-complete`. The test must fail on
   any new production caller until its search adapter and completeness evidence are reviewed.
 
-- [ ] **Step 3: Run focused behavioral and accessibility suites**
+- [x] **Step 3: Run focused behavioral and accessibility suites**
 
   Run:
 
@@ -338,20 +338,20 @@ Vitest, Testing Library, TypeScript, Playwright.
 
   Expect every test to pass. Confirm the 10,000-row bound remains at no more than 100 mounted rows.
 
-- [ ] **Step 4: Run repository gates with bounded concurrency**
+- [x] **Step 4: Run repository gates with bounded concurrency**
 
   Run typecheck, lint, tests, and build serially. Use `--concurrency=1` for Turbo. Run the
   repository secret scan separately and report any existing `.env.local` failure without printing
   values. Run the Library Playwright scenario with one worker if the authentication harness reaches
   the page.
 
-- [ ] **Step 5: Review against every acceptance criterion**
+- [x] **Step 5: Review against every acceptance criterion**
 
   Confirm native fallback, Mac and Windows modifiers, nested precedence, complete-corpus evidence,
   grouping restoration, active-descendant behavior, live results, server cancellation, and the DOM
   bound. Fix any gap before documenting completion.
 
-- [ ] **Step 6: Finish the worklog and commit the implementation**
+- [x] **Step 6: Finish the worklog and commit the implementation**
 
   Move `[IN-PAGE-SEARCH-001]` to completed only when the evidence above passes. Record exact test
   counts and any external browser blocker. Commit with the repository-declared `web` scope and a

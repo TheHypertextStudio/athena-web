@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { AttachmentOut } from '@docket/types';
+import { and, eq } from 'drizzle-orm';
 
 import {
   appWithActor,
@@ -303,6 +304,20 @@ describe('attachment routes', () => {
     // The bytes are in the blob store under the deterministic key.
     const stored = await getContainer().blob.get(blobKeyFor(orgId, created.id));
     expect(stored?.length).toBe(12);
+
+    const queued = await db
+      .select({ id: schema.searchIndexJob.id })
+      .from(schema.searchIndexJob)
+      .where(
+        and(
+          eq(schema.searchIndexJob.organizationId, orgId),
+          eq(schema.searchIndexJob.sourceTable, 'attachment'),
+          eq(schema.searchIndexJob.entityId, created.id),
+          eq(schema.searchIndexJob.operation, 'upsert'),
+          eq(schema.searchIndexJob.reason, 'entity_write'),
+        ),
+      );
+    expect(queued).toHaveLength(1);
   });
 
   it('uses an explicit title over the filename when provided', async () => {

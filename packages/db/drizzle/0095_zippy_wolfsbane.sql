@@ -63,4 +63,164 @@ ALTER TABLE "initiative" ADD CONSTRAINT "initiative_lead_team_id_team_id_fk" FOR
 CREATE INDEX "saved_view_org_target_position_idx" ON "saved_view" USING btree ("organization_id","target","position");--> statement-breakpoint
 ALTER TABLE "saved_view" ADD CONSTRAINT "saved_view_target_check" CHECK ("saved_view"."target" in ('task', 'project', 'program', 'initiative'));--> statement-breakpoint
 ALTER TABLE "saved_view" ADD CONSTRAINT "saved_view_schema_version_check" CHECK ("saved_view"."schema_version" = 2);--> statement-breakpoint
-ALTER TABLE "saved_view" ADD CONSTRAINT "saved_view_position_not_blank" CHECK ("saved_view"."position" ~ '[^[:space:]]');
+ALTER TABLE "saved_view" ADD CONSTRAINT "saved_view_position_not_blank" CHECK ("saved_view"."position" ~ '[^[:space:]]');--> statement-breakpoint
+INSERT INTO "project_team" ("project_id", "team_id", "organization_id", "is_primary")
+SELECT p."id", p."team_id", p."organization_id", true
+FROM "project" p
+JOIN "team" t ON t."id" = p."team_id" AND t."organization_id" = p."organization_id"
+WHERE p."team_id" IS NOT NULL
+ON CONFLICT ("project_id", "team_id") DO NOTHING;--> statement-breakpoint
+WITH ordered_items AS (
+	SELECT "organization_id", 'task'::text AS "target", "id" AS "item_id", "created_at" FROM "task"
+	UNION ALL
+	SELECT "organization_id", 'project'::text, "id", "created_at" FROM "project"
+	UNION ALL
+	SELECT "organization_id", 'program'::text, "id", "created_at" FROM "program"
+	UNION ALL
+	SELECT "organization_id", 'initiative'::text, "id", "created_at" FROM "initiative"
+), ranked_items AS (
+	SELECT *, row_number() OVER (
+		PARTITION BY "organization_id", "target" ORDER BY "created_at", "item_id"
+	) AS "position"
+	FROM ordered_items
+)
+INSERT INTO "work_item_order" (
+	"organization_id", "context_type", "context_id", "target", "item_id", "rank"
+)
+SELECT "organization_id", 'organization', "organization_id", "target", "item_id",
+	lpad("position"::text, 12, '0')
+FROM ranked_items
+ON CONFLICT ("organization_id", "context_type", "context_id", "target", "item_id") DO NOTHING;--> statement-breakpoint
+CREATE FUNCTION docket_legacy_task_field(legacy_field text) RETURNS text
+LANGUAGE sql IMMUTABLE AS $$
+	SELECT CASE legacy_field
+		WHEN 'state' THEN 'status'
+		WHEN 'status' THEN 'status'
+		WHEN 'priority' THEN 'priority'
+		WHEN 'assigneeId' THEN 'assignee'
+		WHEN 'delegateId' THEN 'delegate'
+		WHEN 'teamId' THEN 'team'
+		WHEN 'projectId' THEN 'project'
+		WHEN 'programId' THEN 'program'
+		WHEN 'cycleId' THEN 'cycle'
+		WHEN 'milestoneId' THEN 'milestone'
+		WHEN 'parentTaskId' THEN 'parent'
+		WHEN 'labels' THEN 'labels'
+		WHEN 'title' THEN 'title'
+		WHEN 'createdBy' THEN 'creator'
+		WHEN 'startDate' THEN 'startDate'
+		WHEN 'dueDate' THEN 'dueDate'
+		WHEN 'createdAt' THEN 'createdAt'
+		WHEN 'updatedAt' THEN 'updatedAt'
+		WHEN 'estimate' THEN 'estimate'
+		WHEN 'estimateMinutes' THEN 'estimateMinutes'
+		WHEN 'blocked' THEN 'blocked'
+		WHEN 'blocking' THEN 'blocking'
+		WHEN 'archived' THEN 'archived'
+		ELSE NULL
+	END
+$$;--> statement-breakpoint
+CREATE FUNCTION docket_legacy_task_operator(legacy_field text, legacy_operator text) RETURNS text
+LANGUAGE sql IMMUTABLE AS $$
+	SELECT CASE legacy_operator
+		WHEN 'eq' THEN CASE WHEN legacy_field = 'labels' THEN 'includesAny' ELSE 'is' END
+		WHEN 'neq' THEN CASE WHEN legacy_field = 'labels' THEN 'includesNone' ELSE 'isNot' END
+		WHEN 'in' THEN CASE WHEN legacy_field = 'labels' THEN 'includesAny' ELSE 'isAnyOf' END
+		WHEN 'nin' THEN CASE WHEN legacy_field = 'labels' THEN 'includesNone' ELSE 'isNoneOf' END
+		WHEN 'gt' THEN CASE
+			WHEN legacy_field IN ('startDate', 'dueDate', 'createdAt', 'updatedAt') THEN 'after'
+			ELSE 'greaterThan'
+		END
+		WHEN 'lt' THEN CASE
+			WHEN legacy_field IN ('startDate', 'dueDate', 'createdAt', 'updatedAt') THEN 'before'
+			ELSE 'lessThan'
+		END
+		WHEN 'contains' THEN 'contains'
+		ELSE NULL
+	END
+$$;--> statement-breakpoint
+CREATE FUNCTION docket_legacy_task_operand(legacy_field text, legacy_value jsonb) RETURNS jsonb
+LANGUAGE sql IMMUTABLE AS $$
+	SELECT CASE
+		WHEN legacy_field IN ('assigneeId', 'delegateId', 'createdBy') THEN
+			CASE WHEN jsonb_typeof(legacy_value) = 'array' THEN (
+				SELECT jsonb_agg(jsonb_build_object('kind', 'actor', 'actorId', item) ORDER BY ordinal)
+				FROM jsonb_array_elements(legacy_value) WITH ORDINALITY AS values(item, ordinal)
+			) ELSE jsonb_build_object('kind', 'actor', 'actorId', legacy_value) END
+		WHEN legacy_field IN ('startDate', 'dueDate', 'createdAt', 'updatedAt') THEN
+			CASE WHEN jsonb_typeof(legacy_value) = 'array' THEN (
+				SELECT jsonb_agg(jsonb_build_object('kind', 'absolute', 'value', item) ORDER BY ordinal)
+				FROM jsonb_array_elements(legacy_value) WITH ORDINALITY AS values(item, ordinal)
+			) ELSE jsonb_build_object('kind', 'absolute', 'value', legacy_value) END
+		WHEN legacy_field = 'labels' AND jsonb_typeof(legacy_value) <> 'array'
+			THEN jsonb_build_array(legacy_value)
+		ELSE legacy_value
+	END
+$$;--> statement-breakpoint
+CREATE FUNCTION docket_legacy_task_predicate(legacy_filter jsonb) RETURNS jsonb
+LANGUAGE sql IMMUTABLE AS $$
+	SELECT CASE
+		WHEN docket_legacy_task_field(legacy_filter->>'field') IS NULL
+			OR docket_legacy_task_operator(legacy_filter->>'field', legacy_filter->>'op') IS NULL
+		THEN jsonb_build_object(
+			'kind', 'predicate', 'field', 'estimateMinutes', 'operator', 'lessThan', 'operand', 0
+		)
+		ELSE jsonb_build_object(
+			'kind', 'predicate',
+			'field', docket_legacy_task_field(legacy_filter->>'field'),
+			'operator', docket_legacy_task_operator(legacy_filter->>'field', legacy_filter->>'op'),
+			'operand', docket_legacy_task_operand(legacy_filter->>'field', legacy_filter->'value')
+		)
+	END
+$$;--> statement-breakpoint
+WITH ranked_views AS (
+	SELECT sv."id", lpad(row_number() OVER (
+		PARTITION BY sv."organization_id" ORDER BY sv."created_at", sv."id"
+	)::text, 12, '0') AS "position"
+	FROM "saved_view" sv
+), migrated_views AS (
+	SELECT sv."id", ranked."position", jsonb_build_object(
+		'version', 2,
+		'target', 'task',
+		'filter', CASE WHEN jsonb_array_length(sv."filters") = 0 THEN NULL ELSE jsonb_build_object(
+			'kind', 'all',
+			'children', (
+				SELECT jsonb_agg(docket_legacy_task_predicate(item) ORDER BY ordinal)
+				FROM jsonb_array_elements(sv."filters") WITH ORDINALITY AS filters(item, ordinal)
+			)
+		) END,
+		'arrangement', jsonb_build_object(
+			'groupBy', CASE WHEN sv."grouping" IS NULL THEN NULL
+				ELSE docket_legacy_task_field(sv."grouping"->>'by') END,
+			'subGroupBy', CASE WHEN sv."grouping" IS NULL THEN NULL
+				ELSE docket_legacy_task_field(sv."grouping"->>'subBy') END,
+			'orderBy', (
+				SELECT coalesce(jsonb_agg(jsonb_build_object(
+					'field', sortable."field", 'direction', sortable."item"->>'order'
+				) ORDER BY sortable."ordinal"), '[]'::jsonb)
+				FROM (
+					SELECT item, ordinal, docket_legacy_task_field(item->>'field') AS "field"
+					FROM jsonb_array_elements(sv."sort") WITH ORDINALITY AS sorts(item, ordinal)
+				) sortable
+				WHERE sortable."field" IS NOT NULL
+			)
+		),
+		'presentation', jsonb_build_object(
+			'layout', 'list',
+			'properties', jsonb_build_array('status', 'priority', 'assignee', 'dueDate'),
+			'density', 'comfortable',
+			'showEmptyGroups', false
+		)
+	) AS "definition"
+	FROM "saved_view" sv
+	JOIN ranked_views ranked ON ranked."id" = sv."id"
+)
+UPDATE "saved_view" sv
+SET "target" = 'task', "schema_version" = 2, "position" = migrated."position",
+	"definition" = migrated."definition"
+FROM migrated_views migrated
+WHERE migrated."id" = sv."id";--> statement-breakpoint
+DROP FUNCTION docket_legacy_task_predicate(jsonb);--> statement-breakpoint
+DROP FUNCTION docket_legacy_task_operand(text, jsonb);--> statement-breakpoint
+DROP FUNCTION docket_legacy_task_operator(text, text);--> statement-breakpoint
+DROP FUNCTION docket_legacy_task_field(text);

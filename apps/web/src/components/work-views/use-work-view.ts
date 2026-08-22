@@ -456,7 +456,11 @@ export function useWorkView<TTarget extends ViewTarget>(
   const collapsedGroupValues = activeExtras?.collapsedGroups ?? personal?.collapsedGroups ?? [];
   const hiddenBoardColumnValues =
     activeExtras?.hiddenBoardColumns ?? personal?.hiddenBoardColumns ?? [];
-  const favoriteViewIdValues = activeExtras?.favoriteViewIds ?? personal?.favoriteViewIds ?? [];
+  const persistedFavoriteViewIdValues = useMemo(
+    () => [...new Set(persistedStates.flatMap((state) => state.favoriteViewIds))],
+    [persistedStates],
+  );
+  const favoriteViewIdValues = activeExtras?.favoriteViewIds ?? persistedFavoriteViewIdValues;
   const effectiveDefinition = parseWorkViewDefinition(target, {
     ...definition,
     filter:
@@ -843,7 +847,9 @@ export function useWorkView<TTarget extends ViewTarget>(
       });
       enqueuePreferenceWrite(
         [
-          ...preferredStates.current.filter((state) => state.instanceKey !== instanceKey),
+          ...preferredStates.current
+            .filter((state) => state.instanceKey !== instanceKey)
+            .map((state) => PersonalWorkViewState.parse({ ...state, favoriteViewIds })),
           nextPersonal,
         ],
         () => {

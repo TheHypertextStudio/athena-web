@@ -434,6 +434,61 @@ describe('useWorkView facet pagination', () => {
 });
 
 describe('useWorkView preference serialization', () => {
+  it('reads favorite saved views across view instances', async () => {
+    const favoriteId = '01ARZ3NDEKTSV4RRFFQ69G5FC0';
+    const otherInstance = PersonalWorkViewState.parse({
+      instanceKey: taskInstanceTwo,
+      target: 'task',
+      collapsedGroups: [],
+      hiddenBoardColumns: [],
+      favoriteViewIds: [favoriteId],
+    });
+    apiMocks.getPreferences.mockResolvedValue(
+      okResponse({ timezone: 'America/Los_Angeles', viewState: [otherInstance] }),
+    );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.response).toBeDefined();
+    });
+
+    expect(result.current.favoriteViewIds).toEqual(new Set([favoriteId]));
+  });
+
+  it('writes one favorite list to every persisted view instance', async () => {
+    const existingFavoriteId = '01ARZ3NDEKTSV4RRFFQ69G5FC0';
+    const nextFavoriteId = '01ARZ3NDEKTSV4RRFFQ69G5FC1';
+    const otherInstance = PersonalWorkViewState.parse({
+      instanceKey: taskInstanceTwo,
+      target: 'task',
+      collapsedGroups: [],
+      hiddenBoardColumns: [],
+      favoriteViewIds: [existingFavoriteId],
+    });
+    apiMocks.getPreferences.mockResolvedValue(
+      okResponse({ timezone: 'America/Los_Angeles', viewState: [otherInstance] }),
+    );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.response).toBeDefined();
+    });
+
+    act(() => {
+      result.current.toggleFavoriteView(nextFavoriteId);
+    });
+
+    await waitFor(() => {
+      expect(apiMocks.patchPreferences).toHaveBeenCalledTimes(1);
+    });
+    const states = apiMocks.patchPreferences.mock.calls[0]?.[0].json.viewState;
+    expect(states).toHaveLength(2);
+    for (const state of states ?? []) {
+      expect(state.favoriteViewIds).toEqual([existingFavoriteId, nextFavoriteId]);
+    }
+  });
+
   it('hydrates and persists collapsed groups and hidden board columns', async () => {
     const personal = PersonalWorkViewState.parse({
       instanceKey: taskInstanceOne,

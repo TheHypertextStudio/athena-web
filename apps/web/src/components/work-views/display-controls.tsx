@@ -4,6 +4,7 @@ import { LayoutGrid, ListView, TuneRounded } from '@docket/ui/icons';
 import { cn } from '@docket/ui';
 import {
   Button,
+  type ButtonProps,
   Checkbox,
   controlChrome,
   ControlGroup,
@@ -235,12 +236,13 @@ export function DisplayControls<TTarget extends ViewTarget>({
 /** Compact MD3 trigger for one display-control section. */
 export function DisplayControlsTrigger({
   kind,
+  ...props
 }: {
   readonly kind: DisplayControlKind;
-}): ReactElement {
+} & Omit<ButtonProps, 'children'>): ReactElement {
   const label = titleFor(kind);
   return (
-    <Button variant="ghost" aria-label={label}>
+    <Button variant="ghost" aria-label={label} {...props}>
       <TuneRounded aria-hidden />
       {label}
     </Button>

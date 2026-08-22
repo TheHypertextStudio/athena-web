@@ -487,6 +487,26 @@ describe('WorkViewToolbar', () => {
     expect(screen.queryByRole('button', { name: 'More view controls' })).not.toBeInTheDocument();
   });
 
+  it('opens the ordered-sort editor from its visible toolbar trigger', async () => {
+    const user = userEvent.setup();
+    renderToolbar();
+    resizeToolbar(1400);
+
+    await user.click(screen.getByRole('button', { name: 'Sort' }));
+
+    expect(screen.getByRole('menu', { name: 'Sort' })).toBeVisible();
+  });
+
+  it('opens grouping from its visible toolbar trigger', async () => {
+    const user = userEvent.setup();
+    renderToolbar();
+    resizeToolbar(1400);
+
+    await user.click(screen.getByRole('button', { name: 'Group' }));
+
+    expect(screen.getByRole('dialog', { name: 'Group view' })).toBeVisible();
+  });
+
   it('uses health throughout Initiative controls and never renders verdict', async () => {
     const user = userEvent.setup();
     renderToolbar('initiative');

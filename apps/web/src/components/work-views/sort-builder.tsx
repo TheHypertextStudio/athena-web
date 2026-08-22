@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronUp, ListOrdered, Plus, X } from '@docket/ui/icons';
 import {
   Button,
+  type ButtonProps,
   ControlGroup,
   DropdownMenu,
   DropdownMenuContent,
@@ -158,9 +159,9 @@ export function SortBuilder<TTarget extends ViewTarget>({
 }
 
 /** Default compact trigger for an ordered-sort builder. */
-export function SortBuilderTrigger(): ReactElement {
+export function SortBuilderTrigger(props: Omit<ButtonProps, 'children'>): ReactElement {
   return (
-    <Button variant="ghost" aria-label="Sort">
+    <Button variant="ghost" aria-label="Sort" {...props}>
       <ListOrdered aria-hidden />
       Sort
     </Button>

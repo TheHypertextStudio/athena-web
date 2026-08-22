@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';
 import { orgHref, TIMEOUTS } from '../helpers/constants';
@@ -49,6 +49,36 @@ async function openOverflowControl(page: Page, label: string): Promise<void> {
   await page.getByRole('menuitem', { name: label, exact: true }).click();
 }
 
+/** Wait for the server-executed roster query produced by one view-state change. */
+function waitForViewQuery(page: Page): ReturnType<Page['waitForResponse']> {
+  return page.waitForResponse(
+    (response) =>
+      response.url().includes('/work-views/query') &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+    { timeout: TIMEOUTS.pageReady },
+  );
+}
+
+/** Open the ordered-sort editor from either its direct trigger or the single overflow surface. */
+async function openSortEditor(page: Page): Promise<Locator> {
+  const dialog = page
+    .locator('[role="dialog"]')
+    .filter({ has: page.getByText('Sort view', { exact: true }) });
+  if (await dialog.isVisible()) return dialog;
+  const menu = page.getByRole('menu', { name: 'Sort' });
+  if (await menu.isVisible()) return menu;
+  const trigger = page.getByRole('button', { name: 'Sort', exact: true });
+  if (await trigger.isVisible()) {
+    await page.getByRole('button', { name: 'Sort' }).click();
+    await expect(menu).toBeVisible();
+    return menu;
+  }
+  await openOverflowControl(page, 'Sort');
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
 /** Apply one executable nested text filter through the advanced editor. */
 async function applyNestedFilter(
   page: Page,
@@ -60,11 +90,16 @@ async function applyNestedFilter(
   const builder = page.getByRole('dialog', { name: `Filter ${route}` });
   await builder.getByRole('button', { name: filterLabel, exact: true }).click();
   await builder.getByRole('textbox', { name: 'Filter value' }).fill(value);
-  await builder.getByRole('button', { name: 'Advanced filter' }).click();
+  await expect(builder.getByRole('button', { name: 'Choose property' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await builder.getByRole('button', { name: 'Add group to root filter group' }).click();
   await builder.getByRole('combobox', { name: 'Filter field' }).nth(1).selectOption(filterField);
   await builder.getByRole('textbox', { name: 'Filter value' }).nth(1).fill(value);
+  const queried = waitForViewQuery(page);
   await builder.getByRole('button', { name: 'Apply filter' }).click();
+  await queried;
 }
 
 /** Apply nested grouping and two ordered sort terms through the shared toolbar. */
@@ -72,21 +107,30 @@ async function arrangeRoster(page: Page, route: keyof typeof CONTROL_CASES): Pro
   const { filterLabel, subgroup, secondSort } = CONTROL_CASES[route];
   await openOverflowControl(page, 'Group');
   const groupDialog = page.getByRole('dialog', { name: 'Group view' });
-  await groupDialog.getByRole('combobox', { name: 'Group by' }).selectOption('status');
-  await groupDialog.getByRole('combobox', { name: 'Subgroup by' }).selectOption(subgroup);
+  const groupBy = groupDialog.getByRole('combobox', { name: 'Group by', exact: true });
+  await groupBy.selectOption('status');
+  await expect(groupBy).toHaveValue('status');
+  const subgrouped = waitForViewQuery(page);
+  await groupDialog
+    .getByRole('combobox', { name: 'Subgroup by', exact: true })
+    .selectOption(subgroup);
+  await subgrouped;
   await page.keyboard.press('Escape');
+  await expect(groupDialog).toHaveCount(0);
+  await expect(page.locator('body')).not.toHaveAttribute('data-scroll-locked', /\d+/);
 
   for (const field of [filterLabel, secondSort]) {
-    await page.getByRole('button', { name: 'Sort' }).click();
-    const sort = page.getByRole('menu', { name: 'Sort view' });
+    const sort = await openSortEditor(page);
     await sort.getByRole('button', { name: 'Add sort' }).click();
+    const sorted = waitForViewQuery(page);
     await page
-      .getByRole('menu', { name: 'Available sort fields' })
+      .getByRole('menu', { name: 'Add sort' })
       .getByRole('menuitem', { name: field, exact: true })
       .click();
+    await sorted;
   }
-  await page.getByRole('button', { name: 'Sort' }).click();
-  const ordered = page.getByRole('list', { name: 'Ordered sort terms' });
+  const sort = await openSortEditor(page);
+  const ordered = sort.getByRole('list', { name: 'Ordered sort terms' });
   await expect(ordered).toContainText(`1. ${filterLabel}`);
   await expect(ordered).toContainText(`2. ${secondSort}`);
   await page.keyboard.press('Escape');
@@ -128,6 +172,7 @@ test('all four rosters execute typed views and preserve layout and saved-view st
   const { orgId } = await signUpAndOnboard(page, 'TypedWorkViews');
   await seedRosters(page, orgId);
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  page.setDefaultTimeout(TIMEOUTS.ui);
 
   const rosters = [
     ['tasks', 'Tasks', 'Map ten-minute service'],
@@ -154,7 +199,7 @@ test('all four rosters execute typed views and preserve layout and saved-view st
 
   for (const [route, title, row] of rosters) {
     await page.goto(orgHref(orgId, route), { waitUntil: 'domcontentloaded' });
-    await applyNestedFilter(page, route, row.split(' ')[0] ?? row);
+    await applyNestedFilter(page, route, row);
     await arrangeRoster(page, route);
     await expect(page.getByText(row, { exact: true })).toBeVisible();
     const viewName = `${title} shared`;

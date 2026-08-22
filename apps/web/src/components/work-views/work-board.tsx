@@ -159,18 +159,20 @@ export function WorkBoard<TTarget extends ViewTarget>({
               <span className="text-on-surface-variant text-label-small tabular-nums">
                 {column.count}
               </span>
-              <Button
-                type="button"
-                variant="ghost"
-                iconOnly
-                controlSize="sm"
-                aria-label={`Create in ${column.label}`}
-                onClick={() => {
-                  onCreate(column.path);
-                }}
-              >
-                <Plus aria-hidden />
-              </Button>
+              {mutable ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  iconOnly
+                  controlSize="sm"
+                  aria-label={`Create in ${column.label}`}
+                  onClick={() => {
+                    onCreate(column.path);
+                  }}
+                >
+                  <Plus aria-hidden />
+                </Button>
+              ) : null}
               {onHideColumn ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

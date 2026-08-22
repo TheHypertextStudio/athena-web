@@ -259,7 +259,7 @@ describe('WorkViewToolbar', () => {
     expect(onDefinitionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ presentation: expect.objectContaining({ layout: 'board' }) }),
     );
-    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Layout view' })).not.toBeInTheDocument();
 
     dialog = await openControl('Properties');
     await user.click(within(dialog).getByRole('checkbox', { name: 'Due date' }));

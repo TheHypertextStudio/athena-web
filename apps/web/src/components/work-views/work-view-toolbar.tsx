@@ -398,7 +398,10 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
               kind={overflowPanel}
               target={target}
               definition={definition}
-              onChange={commit}
+              onChange={(nextDefinition) => {
+                commit(nextDefinition);
+                if (overflowPanel === 'layout') setOverflowPanel(null);
+              }}
             />
           ) : null}
         </DialogContent>

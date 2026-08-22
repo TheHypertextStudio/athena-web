@@ -41,6 +41,7 @@ import { ProjectTimelineAdapter } from './project-timeline-adapter';
 import type { WorkViewRowFor } from './renderer-types';
 import { useWorkView } from './use-work-view';
 import { useWorkViewOrder } from './use-work-view-order';
+import { useProjectTimelineMutations } from './use-project-timeline-mutations';
 import type { WorkViewDefinitionFor } from './view-state';
 import { WorkBoard } from './work-board';
 import { WorkList } from './work-list';
@@ -135,6 +136,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const router = useRouter();
   const { openCreate } = useCreateObject();
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [copiedSelection, setCopiedSelection] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [viewName, setViewName] = useState('');
   const [dependencyMode, setDependencyMode] = useState(false);
@@ -162,6 +164,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     savedView: selectedSavedView as Extract<SavedWorkViewOutValue, { target: TTarget }> | null,
   });
   const orderMutation = useWorkViewOrder(organizationId);
+  const projectTimeline = useProjectTimelineMutations(organizationId);
   // The target discriminator was validated by `useWorkView`. TypeScript loses that correlation
   // when it indexes the four response variants through a generic target.
   const rows = (controller.response?.rows ?? []) as unknown as readonly WorkViewRowFor<TTarget>[];
@@ -169,12 +172,59 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const openRow = (row: WorkViewRowFor<TTarget>): void => {
     router.push(`/orgs/${organizationId}/${target}s/${row.id}`);
   };
-  const create = (): void => {
-    openCreate({
-      kind: target,
-      initialWorkspaceId: organizationId,
-      sameWorkspaceCompletion: 'open',
-    });
+  const create = (path: readonly string[] = []): void => {
+    const applyColumn = (itemId: string): void => {
+      const groupValue = path[0] ?? null;
+      if (path.length === 0) return;
+      orderMutation.mutate({
+        target,
+        itemId,
+        groupField: controller.definition.arrangement.groupBy,
+        sourceGroupValue: null,
+        groupValue: groupValue === '__empty__' ? null : groupValue,
+        beforeId: null,
+        afterId: null,
+      });
+    };
+    const base = { initialWorkspaceId: organizationId, sameWorkspaceCompletion: 'open' } as const;
+    switch (target) {
+      case 'task':
+        openCreate({
+          ...base,
+          kind: 'task',
+          onCreated: (item) => {
+            applyColumn(item.id);
+          },
+        });
+        return;
+      case 'project':
+        openCreate({
+          ...base,
+          kind: 'project',
+          onCreated: (item) => {
+            applyColumn(item.id);
+          },
+        });
+        return;
+      case 'program':
+        openCreate({
+          ...base,
+          kind: 'program',
+          onCreated: (item) => {
+            applyColumn(item.id);
+          },
+        });
+        return;
+      case 'initiative':
+        openCreate({
+          ...base,
+          kind: 'initiative',
+          onCreated: (item) => {
+            applyColumn(item.id);
+          },
+        });
+        return;
+    }
   };
 
   let content: JSX.Element;
@@ -213,8 +263,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         hiddenColumns={controller.hiddenBoardColumns}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
-        onCreate={() => {
-          create();
+        onCreate={(path) => {
+          create(path);
         }}
         onActivate={openRow}
         onDrop={(drop) => {
@@ -241,10 +291,10 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         organizationId={organizationId}
         rows={rows as unknown as readonly ProjectViewRow[]}
         density={controller.definition.presentation.density}
-        canSchedule={false}
-        onReschedule={() => undefined}
-        onApplyCascade={() => undefined}
-        applyingCascade={false}
+        canSchedule
+        onReschedule={projectTimeline.reschedule}
+        onApplyCascade={projectTimeline.applyCascade}
+        applyingCascade={projectTimeline.applyingCascade}
         onActivate={(id) => {
           router.push(`/orgs/${organizationId}/projects/${id}`);
         }}
@@ -289,7 +339,12 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       title={copy.title}
       fill
       actions={
-        <Button className="min-h-10 gap-1.5" onClick={create}>
+        <Button
+          className="min-h-10 gap-1.5"
+          onClick={() => {
+            create();
+          }}
+        >
           <Plus aria-hidden className="size-4" /> New {copy.singular}
         </Button>
       }
@@ -382,6 +437,13 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       }
     >
       <div className="border-outline-variant bg-surface-container-lowest flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+        {projectTimeline.error || orderMutation.error ? (
+          <p role="alert" className="text-error text-body-medium px-3 py-2">
+            {projectTimeline.error
+              ? userErrorMessage(projectTimeline.error, 'Could not reschedule this project.')
+              : userErrorMessage(orderMutation.error, `Could not move this ${copy.singular}.`)}
+          </p>
+        ) : null}
         {content}
       </div>
       {selectedIds.size > 0 ? (
@@ -392,9 +454,23 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         >
           <span>{selectedIds.size} selected</span>
           <Button
+            variant="secondary"
+            onClick={() => {
+              const links = [...selectedIds].map(
+                (id) => `${window.location.origin}/orgs/${organizationId}/${target}s/${id}`,
+              );
+              void navigator.clipboard.writeText(links.join('\n')).then(() => {
+                setCopiedSelection(true);
+              });
+            }}
+          >
+            {copiedSelection ? 'Copied' : 'Copy links'}
+          </Button>
+          <Button
             variant="ghost"
             onClick={() => {
               setSelectedIds(new Set());
+              setCopiedSelection(false);
             }}
           >
             Clear

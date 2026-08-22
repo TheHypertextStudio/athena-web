@@ -1,6 +1,6 @@
 /**
- * The five query definitions the My Work screen composes (tasks, projects, members, agents,
- * sessions), in one place so the client hook and the SSR server entry read from a single source.
+ * The six query definitions the My Work screen composes (tasks, projects, members, agents, teams,
+ * and sessions), in one place so the client hook and the SSR server entry read from one source.
  *
  * @remarks
  * Both {@link useMyWork} (browser client) and `my-work/page.tsx`'s SSR prefetch (server,
@@ -47,6 +47,12 @@ export function myWorkDefs(orgId: string, client: typeof ApiClient) {
       queryKeys.agents(orgId),
       () => client.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
       'Could not load agents.',
+      { staleTime: STALE.static },
+    ),
+    teams: apiQueryOptions(
+      queryKeys.teams(orgId),
+      () => client.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      'Could not load teams.',
       { staleTime: STALE.static },
     ),
     sessions: apiQueryOptions(

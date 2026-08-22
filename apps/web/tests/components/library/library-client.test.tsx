@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { OrganizationId, type SearchOut, type SearchResult } from '@docket/types';
 import type * as DocketComponents from '@docket/ui/components';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const harness = vi.hoisted(() => ({
@@ -12,6 +12,7 @@ const harness = vi.hoisted(() => ({
   viewDefaults: [] as unknown[],
   tableProps: null as Record<string, unknown> | null,
   fetchNextPage: vi.fn(),
+  setSearchParam: vi.fn(),
   router: { replace: vi.fn(), push: vi.fn(), back: vi.fn() },
   viewState: {
     filters: [] as { field: string; op: 'contains'; value: string }[],
@@ -37,7 +38,7 @@ vi.mock('@/components/views/use-view-state', () => ({
       setFilters: vi.fn(),
       setGroupBy: vi.fn(),
       setSort: vi.fn(),
-      setSearchParam: vi.fn(),
+      setSearchParam: harness.setSearchParam,
       pushSearchParam: vi.fn(),
     };
   },
@@ -45,6 +46,7 @@ vi.mock('@/components/views/use-view-state', () => ({
 vi.mock('@/components/views/filter-toolbar', () => ({
   FilterToolbar: () => <div data-testid="filter-toolbar">Filter and Display</div>,
 }));
+vi.mock('@/lib/use-debounced-value', () => ({ useDebouncedValue: <T,>(value: T) => value }));
 vi.mock('@/lib/query', () => ({
   queryKeys: {
     search: (...parts: unknown[]) => ['search', ...parts],
@@ -53,7 +55,7 @@ vi.mock('@/lib/query', () => ({
     harness.infiniteKeys.push(queryKey);
     return { queryKey };
   },
-  useInfiniteApiQuery: () => harness.queryResult,
+  useInfiniteApiListQuery: () => harness.queryResult,
   apiQueryOptions: (queryKey: unknown, queryFn: unknown, message: string, options: unknown) => ({
     queryKey,
     queryFn,
@@ -106,6 +108,7 @@ vi.mock('@docket/ui/components', async (importOriginal) => {
 });
 
 import LibraryClient from '@/components/library/library-client';
+import { InPageSearchProvider } from '@/components/in-page-search/in-page-search-provider';
 
 const ORG_ID = OrganizationId.parse('01HZZZ0000000000000000000G');
 
@@ -146,9 +149,18 @@ function queryResult(pages: readonly SearchOut[], overrides: Record<string, unkn
     hasNextPage: false,
     isFetchingNextPage: false,
     isFetchNextPageError: false,
+    isPlaceholderData: false,
     fetchNextPage: harness.fetchNextPage,
     ...overrides,
   };
+}
+
+function LibraryFixture(): JSX.Element {
+  return (
+    <InPageSearchProvider>
+      <LibraryClient orgId={ORG_ID} />
+    </InPageSearchProvider>
+  );
 }
 
 beforeEach(() => {
@@ -157,6 +169,7 @@ beforeEach(() => {
   harness.viewDefaults.length = 0;
   harness.tableProps = null;
   harness.fetchNextPage.mockReset();
+  harness.setSearchParam.mockReset();
   harness.router.replace.mockReset();
   harness.router.push.mockReset();
   harness.router.back.mockReset();
@@ -174,7 +187,7 @@ describe('LibraryClient cursor and presentation behavior', () => {
       { hasNextPage: true },
     );
 
-    render(<LibraryClient orgId={ORG_ID} />);
+    render(<LibraryFixture />);
 
     expect(screen.getByText('Q3 launch')).toBeInTheDocument();
     expect(screen.getByText('Unreferenced')).toBeInTheDocument();
@@ -192,13 +205,40 @@ describe('LibraryClient cursor and presentation behavior', () => {
       ]),
     ]);
 
-    render(<LibraryClient orgId={ORG_ID} />);
+    render(<LibraryFixture />);
 
     expect(screen.getByRole('grid', { name: 'Library search results' })).toBeInTheDocument();
     expect(screen.queryByText('Q3 launch')).not.toBeInTheDocument();
     expect(harness.tableProps).toHaveProperty('rows');
     expect(harness.tableProps).not.toHaveProperty('groups');
     expect(harness.infiniteKeys[0]).toEqual(['search', 'org', 'library:launch', ORG_ID]);
+  });
+
+  it('keeps the previous browse corpus and cursor idle while server search changes keys', () => {
+    harness.queryResult = queryResult([page([resource('browse-row')], 'browse-next')], {
+      hasNextPage: true,
+    });
+    const rendered = render(<LibraryFixture />);
+
+    harness.queryResult = queryResult([page([resource('browse-row')], 'browse-next')], {
+      hasNextPage: true,
+      isFetching: true,
+      isPlaceholderData: true,
+    });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search the Library' }), {
+      target: { value: 'needle' },
+    });
+
+    expect(screen.getByRole('grid', { name: 'Library resources' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'browse-row' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Reach end' }));
+    expect(harness.fetchNextPage).not.toHaveBeenCalled();
+
+    harness.queryResult = queryResult([page([resource('search-row')])]);
+    rendered.rerender(<LibraryFixture />);
+
+    expect(screen.getByRole('grid', { name: 'Library search results' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'search-row' })).toBeInTheDocument();
   });
 
   it('keeps loaded rows and exposes Retry when a later cursor page fails', () => {
@@ -209,7 +249,7 @@ describe('LibraryClient cursor and presentation behavior', () => {
       isFetchNextPageError: true,
     });
 
-    render(<LibraryClient orgId={ORG_ID} />);
+    render(<LibraryFixture />);
 
     expect(screen.getByRole('link', { name: 'one' })).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Could not load more resources.');
@@ -219,7 +259,7 @@ describe('LibraryClient cursor and presentation behavior', () => {
 
   it('does not request another page after the corpus ends', () => {
     harness.queryResult = queryResult([page([resource('one')])]);
-    render(<LibraryClient orgId={ORG_ID} />);
+    render(<LibraryFixture />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Reach end' }));
     expect(harness.fetchNextPage).not.toHaveBeenCalled();
@@ -231,7 +271,7 @@ describe('LibraryClient cursor and presentation behavior', () => {
       hasNextPage: true,
     });
 
-    render(<LibraryClient orgId={ORG_ID} />);
+    render(<LibraryFixture />);
 
     expect(screen.queryByText('Nothing matches')).not.toBeInTheDocument();
     await waitFor(() => {
@@ -242,9 +282,11 @@ describe('LibraryClient cursor and presentation behavior', () => {
   it('keeps loading when permission filtering returns an empty page with a cursor', async () => {
     harness.queryResult = queryResult([page([], 'next')], { hasNextPage: true });
 
-    render(<LibraryClient orgId={ORG_ID} />);
+    render(<LibraryFixture />);
 
     expect(screen.queryByText('Nothing referenced yet')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading more resources')).toBeInTheDocument();
+    expect(String(harness.tableProps?.['className'])).not.toContain('invisible');
     await waitFor(() => {
       expect(harness.fetchNextPage).toHaveBeenCalledTimes(1);
     });
@@ -258,9 +300,24 @@ describe('LibraryClient cursor and presentation behavior', () => {
       isFetchNextPageError: true,
     });
 
-    render(<LibraryClient orgId={ORG_ID} />);
+    render(<LibraryFixture />);
 
     expect(screen.getByRole('alert')).toHaveTextContent('Could not load more resources.');
     expect(screen.queryByText('provider prose')).not.toBeInTheDocument();
+  });
+
+  it('claims Ctrl/Cmd+F and selects the current server-search query', () => {
+    harness.search = 'q=launch';
+    harness.queryResult = queryResult([page([resource('one', [], 'Launch plan')])]);
+    render(<LibraryFixture />);
+    const search = screen.getByRole<HTMLInputElement>('searchbox', {
+      name: 'Search the Library',
+    });
+
+    expect(fireEvent.keyDown(document, { key: 'f', metaKey: true })).toBe(false);
+    expect(search).toHaveFocus();
+    expect(search.selectionStart).toBe(0);
+    expect(search.selectionEnd).toBe('launch'.length);
+    expect(harness.infiniteKeys.at(-1)).toEqual(['search', 'org', 'library:launch', ORG_ID]);
   });
 });

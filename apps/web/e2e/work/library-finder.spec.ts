@@ -7,25 +7,91 @@ import { expect, test } from '../helpers/fixtures';
 import { apiFetch, apiJson } from '../helpers/net';
 
 const FILE_NAME = 'Library finder brief.pdf';
+const OFFSCREEN_FILE_NAME = 'Archived finder appendix.pdf';
+const FILLER_COUNT = 55;
 const INITIATIVE_NAME = 'Q3 finder launch';
 
 test.use({ serviceWorkers: 'block' });
 
 /** Wait for the asynchronous search projector to expose the uploaded attachment. */
-async function waitForLibraryFile(page: Page, orgId: string): Promise<void> {
+async function waitForLibraryFile(page: Page, orgId: string, fileName: string): Promise<void> {
   await expect
     .poll(
       async () => {
         const result = await apiFetch(
           page,
-          `/v1/orgs/${orgId}/search?kinds=attachment&q=${encodeURIComponent(FILE_NAME)}&limit=50`,
+          `/v1/orgs/${orgId}/search?kinds=attachment&q=${encodeURIComponent(fileName)}&limit=50`,
         );
         const items = (result.body as { items?: { title: string }[] }).items ?? [];
-        return items.some((item) => item.title === FILE_NAME);
+        return items.some((item) => item.title === fileName);
       },
       { timeout: TIMEOUTS.sweep, message: 'the uploaded file should reach Library search' },
     )
     .toBe(true);
+}
+
+/** Upload one small PDF through the authenticated file route. */
+async function uploadLibraryFile(
+  page: Page,
+  orgId: string,
+  taskId: string,
+  fileName: string,
+): Promise<void> {
+  const upload = await page.request.post(`/v1/orgs/${orgId}/tasks/${taskId}/attachments/upload`, {
+    multipart: {
+      file: {
+        name: fileName,
+        mimeType: 'application/pdf',
+        buffer: Buffer.from(`%PDF-1.4\n${fileName}\n%%EOF`),
+      },
+    },
+  });
+  expect(upload.ok(), `file upload should succeed, received ${String(upload.status())}`).toBe(true);
+}
+
+/** Add enough newer rows to place the first file beyond the initial 50-row cursor page. */
+async function addFillerAttachments(page: Page, orgId: string, taskId: string): Promise<void> {
+  const inputs = Array.from({ length: FILLER_COUNT }, (_, index) => ({
+    kind: 'url',
+    title: `Virtualized filler ${String(index).padStart(2, '0')}`,
+    url: `https://example.com/library-virtualized-filler-${String(index)}`,
+  }));
+  for (let index = 0; index < inputs.length; index += 5) {
+    await Promise.all(
+      inputs.slice(index, index + 5).map((body) =>
+        apiJson(page, `/v1/orgs/${orgId}/tasks/${taskId}/attachments`, {
+          method: 'POST',
+          body,
+        }),
+      ),
+    );
+  }
+}
+
+/** Wait until at least one full cursor page of filler attachments reaches search. */
+async function waitForFillerPage(page: Page, orgId: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const result = await apiFetch(
+          page,
+          `/v1/orgs/${orgId}/search?kinds=attachment&q=virtualized+filler&limit=50`,
+        );
+        return (result.body as { items?: unknown[] }).items?.length ?? 0;
+      },
+      { timeout: TIMEOUTS.sweep, message: 'filler attachments should fill the first cursor page' },
+    )
+    .toBe(50);
+}
+
+/** Prove the older file is absent from the cursor page that grouped browsing loads first. */
+async function expectFileBeyondInitialCursor(page: Page, orgId: string): Promise<void> {
+  const result = await apiFetch(page, `/v1/orgs/${orgId}/search?kinds=attachment&limit=50`);
+  const titles = ((result.body as { items?: { title: string }[] }).items ?? []).map(
+    (item) => item.title,
+  );
+  expect(titles).toContain(FILE_NAME);
+  expect(titles).not.toContain(OFFSCREEN_FILE_NAME);
 }
 
 test('Library finds, groups, explains, and downloads a file at desktop and phone widths', async ({
@@ -48,17 +114,15 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
     method: 'POST',
     body: { title: 'Verify Library resources', teamId, projectId: project.id },
   });
-  const upload = await page.request.post(`/v1/orgs/${orgId}/tasks/${task.id}/attachments`, {
-    multipart: {
-      file: {
-        name: FILE_NAME,
-        mimeType: 'application/pdf',
-        buffer: Buffer.from('%PDF-1.4\nLibrary finder browser proof\n%%EOF'),
-      },
-    },
-  });
-  expect(upload.ok(), `file upload should succeed, received ${String(upload.status())}`).toBe(true);
-  await waitForLibraryFile(page, orgId);
+  await uploadLibraryFile(page, orgId, task.id, OFFSCREEN_FILE_NAME);
+  await addFillerAttachments(page, orgId, task.id);
+  await uploadLibraryFile(page, orgId, task.id, FILE_NAME);
+  await Promise.all([
+    waitForLibraryFile(page, orgId, OFFSCREEN_FILE_NAME),
+    waitForLibraryFile(page, orgId, FILE_NAME),
+    waitForFillerPage(page, orgId),
+  ]);
+  await expectFileBeyondInitialCursor(page, orgId);
 
   await page.goto(orgHref(orgId, 'library'), {
     waitUntil: 'domcontentloaded',
@@ -70,7 +134,17 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
   await expect(page.getByRole('grid', { name: 'Library resources' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: INITIATIVE_NAME })).toBeVisible();
   await expect(page.getByRole('link', { name: FILE_NAME })).toBeVisible();
+  await expect(page.getByRole('link', { name: OFFSCREEN_FILE_NAME })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Display · Work context' })).toBeVisible();
+
+  const search = page.getByRole('searchbox', { name: 'Search the Library' });
+  await page.keyboard.press('ControlOrMeta+f');
+  await expect(search).toBeFocused();
+  await search.fill('archived finder appendix');
+  await expect(page.getByRole('grid', { name: 'Library search results' })).toBeVisible();
+  await expect(page.getByRole('link', { name: OFFSCREEN_FILE_NAME })).toBeVisible();
+  await search.fill('');
+  await expect(page.getByRole('grid', { name: 'Library resources' })).toBeVisible();
 
   await page.getByRole('button', { name: `Show context for ${FILE_NAME}` }).click();
   const details = page.getByRole('complementary', { name: `Details for ${FILE_NAME}` });
@@ -100,7 +174,8 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
     true,
   );
 
-  const search = page.getByRole('searchbox', { name: 'Search the Library' });
+  await page.keyboard.press('ControlOrMeta+f');
+  await expect(search).toBeFocused();
   await search.fill('finder brief');
   await expect(page).toHaveURL(/(?:\?|&)q=finder\+brief(?:&|$)/);
   await expect(page.getByRole('grid', { name: 'Library search results' })).toBeVisible();

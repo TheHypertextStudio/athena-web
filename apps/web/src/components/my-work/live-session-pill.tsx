@@ -106,7 +106,7 @@ export interface LiveSessionPillProps {
  * ```
  */
 export function LiveSessionPill({ status, href, className }: LiveSessionPillProps): JSX.Element {
-  const { label, hint, Glyph, tone, pulse } = PILL_TREATMENT[status];
+  const { hint, Glyph, tone, pulse } = PILL_TREATMENT[status];
   return (
     <Link
       href={href}
@@ -126,9 +126,14 @@ export function LiveSessionPill({ status, href, className }: LiveSessionPillProp
           running right now, and the label beside it is already resolved. Inventoried only because
           the pulse utility is what the inventory scan matches on. */}
       <Glyph className={cn('h-3 w-3', pulse && 'animate-pulse')} />
-      <span>{label}</span>
+      <span>{pillLabelOf(status)}</span>
     </Link>
   );
+}
+
+/** Return the user-facing label shared by session pills and in-page search. */
+export function pillLabelOf(status: PillStatus): string {
+  return PILL_TREATMENT[status].label;
 }
 
 /**

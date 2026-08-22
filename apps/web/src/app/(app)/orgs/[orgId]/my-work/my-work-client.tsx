@@ -6,14 +6,20 @@ import { ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
 import { useAppParams } from '@/lib/app-location';
-import { type JSX, useState } from 'react';
+import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
+import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
+import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
+import { useResidentInPageSearch } from '@/components/in-page-search/use-resident-in-page-search';
 import { useSession } from '@/lib/auth-client';
 import { entityDragSource } from '@/lib/entity-drag';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { AgentTaskRow } from '@/components/my-work/agent-task-row';
+import { pillLabelOf } from '@/components/my-work/live-session-pill';
 import { SplitTabs } from '@/components/my-work/split-tabs';
+import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import { taskListKey } from '@/components/views/task-list-key';
 import { useMyWork } from '@/lib/use-my-work';
 
 type WorkTab = 'mine' | 'delegated';
@@ -22,9 +28,9 @@ type WorkTab = 'mine' | 'delegated';
  * The My Work screen (Client Component).
  *
  * @remarks
- * Mounted by the server entry in `page.tsx`, which SSR-prefetches the five slices
- * {@link useMyWork} reads (tasks, projects, members, agents, sessions) so the screen paints
- * from a warm cache on first load instead of a skeleton.
+ * Mounted by the server entry in `page.tsx`, which SSR-prefetches the six slices
+ * {@link useMyWork} reads (tasks, projects, members, agents, teams, and sessions) so the screen
+ * paints from a warm cache on first load instead of a skeleton.
  *
  * @returns the rendered screen.
  */
@@ -49,14 +55,44 @@ export default function MyWorkClient(): JSX.Element {
     counts,
     pendingApprovals,
     visibleTasks,
+    actorName,
     toRow,
     groupBy,
     subGroupBy,
     canEdit,
     rename,
   } = useMyWork(orgId, userId, categoryOf);
+  const statusRegistry = useStatusRegistry();
 
-  const visible = visibleTasks(tab);
+  const visible = useMemo(() => visibleTasks(tab), [tab, visibleTasks]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const source = useMemo(() => ({ completeness: 'complete' as const, items: visible }), [visible]);
+  const searchableText = useCallback(
+    (task: (typeof visible)[number]): string => {
+      const row = toRow(task, tab);
+      const sessionLabel = row.session ? pillLabelOf(row.session.status) : null;
+      return [
+        task.title,
+        groupBy(task)?.label,
+        subGroupBy(task).label,
+        statusRegistry.statusOf('task', task.state, task.teamId)?.name ?? task.state,
+        actorName(task.assigneeId),
+        row.actor?.name,
+        sessionLabel,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .join(' ');
+    },
+    [actorName, groupBy, statusRegistry, subGroupBy, tab, toRow],
+  );
+  const search = useResidentInPageSearch({ source, searchableText });
+  const { restoreFocus } = useInPageSearchTarget({
+    id: `my-work:${tab}`,
+    rootRef,
+    inputRef: searchInputRef,
+    enabled: !loading && !loadError,
+  });
 
   const openTaskComposer = (): void => {
     openCreate({
@@ -79,7 +115,10 @@ export default function MyWorkClient(): JSX.Element {
       : { title: 'All clear', body: 'Nothing delegated, nothing awaiting your approval.' };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+    <div
+      ref={rootRef}
+      className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8"
+    >
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-on-surface text-title-large">My Work</h1>
@@ -96,7 +135,10 @@ export default function MyWorkClient(): JSX.Element {
       <SplitTabs
         label="Filter your work"
         value={tab}
-        onChange={setTab}
+        onChange={(nextTab) => {
+          search.setDraft('');
+          setTab(nextTab);
+        }}
         tabs={[
           { value: 'mine', label: 'Assigned to me', count: counts.mine },
           {
@@ -106,6 +148,17 @@ export default function MyWorkClient(): JSX.Element {
             emphasis: pendingApprovals > 0,
           },
         ]}
+      />
+
+      <InPageSearchField
+        inputRef={searchInputRef}
+        value={search.draft}
+        onValueChange={search.setDraft}
+        onEscapeEmpty={restoreFocus}
+        label="Search My Work"
+        placeholder="Search every task in this tab"
+        resultCount={search.items.length}
+        pending={search.draft !== search.settledQuery}
       />
 
       <section
@@ -151,32 +204,42 @@ export default function MyWorkClient(): JSX.Element {
             ) : null}
           </div>
         ) : (
-          <ListView
-            items={visible}
-            label={tab === 'mine' ? 'Tasks assigned to me' : 'Delegated tasks and approvals'}
-            getItemKey={(task) => task.id}
-            groupBy={groupBy}
-            subGroupBy={subGroupBy}
-            rowHeight={40}
-            renderRow={(task, ctx) => (
-              <AgentTaskRow
-                task={toRow(task, tab)}
-                drag={entityDragSource({
-                  kind: 'task',
-                  id: task.id,
-                  organizationId: task.organizationId,
-                  title: task.title,
-                })}
-                active={ctx.active}
-                onActivate={ctx.onActivate}
-                canEdit={canEdit}
-                onRename={rename}
-              />
-            )}
-            onActivateItem={(task) => {
-              router.push(`/orgs/${orgId}/tasks/${task.id}`);
-            }}
-          />
+          <div className="relative h-full min-h-0">
+            <ListView
+              stateKey={search.settledQuery.trim().length > 0 ? 'search' : 'browse'}
+              items={search.items}
+              label={tab === 'mine' ? 'Tasks assigned to me' : 'Delegated tasks and approvals'}
+              getItemKey={taskListKey}
+              groupBy={groupBy}
+              subGroupBy={subGroupBy}
+              rowHeight={40}
+              className={search.items.length === 0 ? 'invisible' : undefined}
+              renderRow={(task, ctx) => (
+                <AgentTaskRow
+                  task={toRow(task, tab)}
+                  drag={entityDragSource({
+                    kind: 'task',
+                    id: task.id,
+                    organizationId: task.organizationId,
+                    title: task.title,
+                  })}
+                  active={ctx.active}
+                  onActivate={ctx.onActivate}
+                  rowProps={ctx.rowProps}
+                  canEdit={canEdit}
+                  onRename={rename}
+                />
+              )}
+              onActivateItem={(task) => {
+                router.push(`/orgs/${orgId}/tasks/${task.id}`);
+              }}
+            />
+            {search.items.length === 0 ? (
+              <p className="text-on-surface-variant text-body-medium absolute inset-0 flex items-center justify-center p-8 text-center">
+                No tasks in this tab match this search.
+              </p>
+            ) : null}
+          </div>
         )}
       </section>
     </div>

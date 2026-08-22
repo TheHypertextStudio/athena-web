@@ -20,6 +20,7 @@ import {
   AuthenticationInterlockProvider,
   useAuthenticationInterlock,
 } from './authentication-interlock';
+import { InPageSearchProvider } from './in-page-search/in-page-search-provider';
 import { ServiceWorkerProvider } from './service-worker-provider';
 
 /** Props for {@link Providers}. */
@@ -57,7 +58,9 @@ export interface ProvidersProps {
  *    every task list's `L` hotkey can summon it via `usePickerOverlay().open(...)`.
  * 8. {@link ActionDomainsProvider} — registers each object domain with the one registry owned by
  *    {@link InteractionProvider}; it does not mount another menu handler.
- * 9. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
+ * 9. {@link InPageSearchProvider} — routes Ctrl/Cmd+F to the active virtualized surface while
+ *    leaving native browser find alone when no surface registers a target.
+ * 10. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
  *    authenticated shell. Offline support has to be installed before it is needed, and someone
  *    arriving at `/sign-in` is exactly who benefits from the offline page being cached already.
  *
@@ -90,7 +93,9 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
                 <InteractionProvider>
                   <PickerOverlayProvider>
                     <ActionDomainsProvider>
-                      <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+                      <InPageSearchProvider>
+                        <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+                      </InPageSearchProvider>
                     </ActionDomainsProvider>
                   </PickerOverlayProvider>
                 </InteractionProvider>

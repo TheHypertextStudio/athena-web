@@ -11,7 +11,7 @@
 import { z } from 'zod';
 
 import { ApprovalRouting } from './agent';
-import { OrganizationId, TeamId } from './primitives';
+import { ActorId, OrganizationId, TeamId } from './primitives';
 import { compareWorkStatusOrder, DEFAULT_WORK_STATUSES, WorkStatusCategory } from './work-status';
 
 /**
@@ -208,6 +208,9 @@ export type TeamUpdate = z.infer<typeof TeamUpdate>;
 export const TeamOut = z
   .object({
     id: TeamId.describe('Stable ULID identifier of the team.'),
+    actorId: ActorId.optional().describe(
+      "The team's assignable shadow actor id. Present on current API reads; optional for backward-compatible cached payloads.",
+    ),
     organizationId: OrganizationId.describe('The organization this team belongs to.'),
     name: z.string().describe("The team's display name."),
     key: z.string().describe("The team's short key, unique within the org."),

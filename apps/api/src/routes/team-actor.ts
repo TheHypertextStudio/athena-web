@@ -107,7 +107,7 @@ export async function archiveTeamActor(tx: Tx, teamId: string, archivedAt: Date)
  * @returns The actor id, or null when the team has none (a pre-`0068` row that never got one).
  */
 export async function findTeamActorId(
-  tx: Tx,
+  tx: Pick<Tx, 'select'>,
   organizationId: string,
   teamId: string,
 ): Promise<string | null> {

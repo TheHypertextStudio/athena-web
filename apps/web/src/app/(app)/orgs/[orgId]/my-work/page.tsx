@@ -2,8 +2,8 @@
  * The My Work screen — server entry (SSR prefetch + hydration).
  *
  * @remarks
- * Prefetches the five slices {@link useMyWork} composes (tasks, projects, members, agents,
- * sessions) with the caller's session cookie — via the shared {@link myWorkDefs} (so the keys,
+ * Prefetches the six slices {@link useMyWork} composes (tasks, projects, members, agents, teams,
+ * and sessions) with the caller's session cookie — via the shared {@link myWorkDefs} (so the keys,
  * fetchers, and staleTime tiers match the client exactly) — dehydrates them, and hands the warm
  * cache to {@link MyWorkClient} via `<HydrationBoundary>`, so the screen paints complete on first
  * load (no skeleton, no count jump) then stays live via the client's volatile-tier refetch. Each
@@ -38,6 +38,7 @@ export default async function MyWorkPage({
     queryClient.prefetchQuery(defs.projects),
     queryClient.prefetchQuery(defs.members),
     queryClient.prefetchQuery(defs.agents),
+    queryClient.prefetchQuery(defs.teams),
     queryClient.prefetchQuery(defs.sessions),
   ]);
 

@@ -158,6 +158,25 @@ export function useInfiniteApiQuery<TPage>(
 }
 
 /**
+ * Read hook for cursor-paginated lists that keeps the previous corpus visible while its query key
+ * changes.
+ *
+ * @remarks
+ * The returned `isPlaceholderData` flag marks pages that belong to the previous query key. A
+ * caller must not request another cursor page until that flag clears because the visible cursor
+ * belongs to the previous corpus.
+ *
+ * @typeParam TPage - The page response shape carried by the definition.
+ * @param def - A typed definition from {@link apiInfiniteQueryOptions}.
+ * @returns the {@link UseInfiniteQueryResult} over `InfiniteData<TPage>`.
+ */
+export function useInfiniteApiListQuery<TPage>(
+  def: ApiInfiniteDef<TPage>,
+): UseInfiniteQueryResult<InfiniteData<TPage>> {
+  return useInfiniteQuery({ placeholderData: keepPreviousData, ...def });
+}
+
+/**
  * Live cursor-paginated read: {@link useInfiniteApiQuery} that polls page 1 on an interval
  * (focus-gated, like {@link useLiveApiQuery}). The Stream's polling-now / SSE-later seam — the
  * interval is the only thing that changes when SSE lands.

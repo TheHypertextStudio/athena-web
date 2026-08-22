@@ -17,6 +17,10 @@ import { GroupHeader } from './GroupHeader';
 
 /** Props for {@link ListSubGroup}. */
 export interface ListSubGroupProps {
+  /** Stable DOM id used by the owning grid's `aria-activedescendant`. */
+  id?: string | undefined;
+  /** Logical one-based row position in the owning grid. */
+  'aria-rowindex'?: number | undefined;
   /** The display-ready sub-group label (already vocabulary-resolved). */
   label: string;
   /** Whether the sub-group is expanded. */
@@ -44,6 +48,8 @@ export interface ListSubGroupProps {
  * `role="row"` / `aria-expanded` contract.
  */
 export function ListSubGroup({
+  id,
+  'aria-rowindex': ariaRowIndex,
   label,
   expanded,
   onToggle,
@@ -56,6 +62,8 @@ export function ListSubGroup({
     decoration ?? (stateType ? <StatusIcon type={stateType} label={label} /> : undefined);
   return (
     <GroupHeader
+      id={id}
+      aria-rowindex={ariaRowIndex}
       label={label}
       expanded={expanded}
       onToggle={onToggle}

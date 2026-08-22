@@ -21,13 +21,17 @@ import type { TaskOut } from '@docket/types';
 import { type GroupKey, ListView, type TaskRowData, TaskRow } from '@docket/ui/components';
 import type { WorkflowStateType } from '@docket/ui/components';
 import type { JSX } from 'react';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
+import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
+import { useResidentInPageSearch } from '@/components/in-page-search/use-resident-in-page-search';
 import { entityDragSource } from '@/lib/entity-drag';
+import { taskListKey } from './task-list-key';
 
 import { applyView, EMPTY_GROUP_ID } from './apply-view';
-import type { FieldCatalog, ViewState } from './field-catalog';
+import { type FieldCatalog, optionsFor, type ViewState } from './field-catalog';
 
 /** A resolved actor descriptor for a row's assignee avatar. */
 export interface RunnerActor {
@@ -55,6 +59,30 @@ export interface ViewRunnerProps {
   onOpenTask: (taskId: string) => void;
 }
 
+function compileCatalogSearchText(catalog: FieldCatalog<TaskOut>): (task: TaskOut) => string {
+  const fields = catalog.map((field) => {
+    const optionLabels = new Map(optionsFor(field).map((option) => [option.value, option.label]));
+    return {
+      field,
+      label: field.resolveLabel ?? ((value: string): string => optionLabels.get(value) ?? value),
+    };
+  });
+
+  return (task) => {
+    const parts: string[] = [];
+    for (const { field, label } of fields) {
+      const values = field.values?.(task) ?? [field.accessor(task)];
+      for (const value of values) {
+        if (value === null) continue;
+        const raw = String(value);
+        parts.push(raw);
+        if (typeof value === 'string') parts.push(label(value));
+      }
+    }
+    return parts.join(' ');
+  };
+}
+
 /**
  * Render a view's tasks as a grouped, sorted {@link ListView}.
  *
@@ -70,9 +98,22 @@ export function ViewRunner({
   onOpenTask,
 }: ViewRunnerProps): JSX.Element {
   const categoryOf = useCategoryOf('task');
+  const rootRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const source = useMemo(() => ({ completeness: 'complete' as const, items: tasks }), [tasks]);
+  const searchableText = useMemo(() => compileCatalogSearchText(catalog), [catalog]);
+  const search = useResidentInPageSearch({ source, searchableText });
+  const { restoreFocus } = useInPageSearchTarget({
+    id: `saved-view:${label}`,
+    rootRef,
+    inputRef: searchInputRef,
+  });
 
   /** The filtered + sorted + (optionally) grouped result for this query. */
-  const applied = useMemo(() => applyView(tasks, state, catalog), [tasks, state, catalog]);
+  const applied = useMemo(
+    () => applyView(search.items, state, catalog),
+    [catalog, search.items, state],
+  );
 
   /** Group-bucket lookup: task id → its group's id/label/hint (from the engine). */
   const groupOfTask = useMemo(() => {
@@ -91,6 +132,10 @@ export function ViewRunner({
     }
     return map;
   }, [applied.groups, state.groupBy, categoryOf]);
+  const groupTask = useCallback(
+    (task: TaskOut): GroupKey | null => groupOfTask.get(task.id) ?? null,
+    [groupOfTask],
+  );
 
   /** Adapt a task DTO to the design-system {@link TaskRow} view-model. */
   const toRow = (task: TaskOut): TaskRowData => {
@@ -105,44 +150,59 @@ export function ViewRunner({
     };
   };
 
-  if (applied.rows.length === 0) {
-    return (
-      <p className="text-on-surface-variant text-body-medium p-8 text-center">
-        No tasks match this view. Adjust the filters above, or check back as work comes in.
-      </p>
-    );
-  }
-
   return (
-    <ListView
-      // `ListView`'s expand/collapse state is keyed by bucket id, and the synthesized "no value"
-      // bucket (`EMPTY_GROUP_ID`) is the same literal id for every field. Without a remount,
-      // collapsing e.g. "No project" and then re-grouping by Assignee would render "No assignee"
-      // pre-collapsed even though the viewer never touched it — a new grouping is a new partition
-      // of the data, so its collapse state must start fresh rather than inherit the previous
-      // grouping's. Keying on the active field forces exactly that reset.
-      key={state.groupBy?.field ?? '__ungrouped__'}
-      items={applied.rows}
-      label={label}
-      getItemKey={(task) => task.id}
-      groupBy={(task) => groupOfTask.get(task.id) ?? null}
-      rowHeight={40}
-      renderRow={(task, ctx) => (
-        <TaskRow
-          task={toRow(task)}
-          active={ctx.active}
-          onActivate={ctx.onActivate}
-          drag={entityDragSource({
-            kind: 'task',
-            id: task.id,
-            organizationId: task.organizationId,
-            title: task.title,
-          })}
+    <div ref={rootRef} className="flex h-full min-h-0 flex-col gap-3 p-3">
+      <InPageSearchField
+        inputRef={searchInputRef}
+        value={search.draft}
+        onValueChange={search.setDraft}
+        onEscapeEmpty={restoreFocus}
+        label={`Search ${label}`}
+        placeholder="Search every task in this view"
+        resultCount={applied.rows.length}
+        pending={search.draft !== search.settledQuery}
+        className="shrink-0"
+      />
+      <div className="relative min-h-0 flex-1">
+        <ListView
+          // `ListView`'s expand/collapse state is keyed by bucket id, and the synthesized "no value"
+          // bucket (`EMPTY_GROUP_ID`) is the same literal id for every field. Without a remount,
+          // collapsing e.g. "No project" and then re-grouping by Assignee would render "No assignee"
+          // pre-collapsed even though the viewer never touched it — a new grouping is a new partition
+          // of the data, so its collapse state must start fresh rather than inherit the previous
+          // grouping's. Keying on the active field forces exactly that reset.
+          key={state.groupBy?.field ?? '__ungrouped__'}
+          stateKey={search.settledQuery.trim().length > 0 ? 'search' : 'browse'}
+          items={applied.rows}
+          label={label}
+          getItemKey={taskListKey}
+          groupBy={groupTask}
+          rowHeight={40}
+          className={applied.rows.length === 0 ? 'invisible' : undefined}
+          renderRow={(task, ctx) => (
+            <TaskRow
+              task={toRow(task)}
+              active={ctx.active}
+              onActivate={ctx.onActivate}
+              rowProps={ctx.rowProps}
+              drag={entityDragSource({
+                kind: 'task',
+                id: task.id,
+                organizationId: task.organizationId,
+                title: task.title,
+              })}
+            />
+          )}
+          onActivateItem={(task) => {
+            onOpenTask(task.id);
+          }}
         />
-      )}
-      onActivateItem={(task) => {
-        onOpenTask(task.id);
-      }}
-    />
+        {applied.rows.length === 0 ? (
+          <p className="text-on-surface-variant text-body-medium absolute inset-0 flex items-center justify-center p-8 text-center">
+            No tasks match this view. Adjust the filters above, or check back as work comes in.
+          </p>
+        ) : null}
+      </div>
+    </div>
   );
 }

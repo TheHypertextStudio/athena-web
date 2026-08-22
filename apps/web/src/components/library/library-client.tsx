@@ -8,15 +8,8 @@ import type {
   SearchResult,
 } from '@docket/types';
 import { type Column, EntityTable, type EntityTableGroup, EmptyState } from '@docket/ui/components';
-import {
-  Info,
-  Library,
-  Link as LinkIcon,
-  RefreshCw,
-  Search,
-  type LucideIcon,
-} from '@docket/ui/icons';
-import { Button, Input, Skeleton } from '@docket/ui/primitives';
+import { Info, Library, Link as LinkIcon, RefreshCw, type LucideIcon } from '@docket/ui/icons';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -31,6 +24,8 @@ import {
 
 import { useActiveOrg } from '@/components/active-org';
 import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
+import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
+import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import ResourceDetailPanel from '@/components/library/resource-detail-panel';
 import { RESOURCE_TYPE_ICON } from '@/components/mentions/mention-glyphs';
 import { relativeTime } from '@/components/project-detail/format-time';
@@ -46,7 +41,7 @@ import {
   apiQueryOptions,
   queryKeys,
   useApiListQuery,
-  useInfiniteApiQuery,
+  useInfiniteApiListQuery,
 } from '@/lib/query';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 
@@ -107,10 +102,16 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
   const query = useDebouncedValue(draft.trim(), SEARCH_DEBOUNCE_MS);
   const searchActive = query.length > 0;
   const gridRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const tableRef = useRef<HTMLElement | null>(null);
   const scrollPositions = useRef({ browse: 0, search: 0 });
   const restoredMode = useRef<'browse' | 'search' | null>(null);
   const pendingUrlQuery = useRef<string | null>(null);
+  const { restoreFocus } = useInPageSearchTarget({
+    id: 'library',
+    rootRef: gridRef,
+    inputRef: searchInputRef,
+  });
 
   useEffect(() => {
     if (urlQuery === pendingUrlQuery.current) {
@@ -159,12 +160,17 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
       ),
     [orgId, query],
   );
-  const resourcesQ = useInfiniteApiQuery(resourcesDef);
+  const resourcesQ = useInfiniteApiListQuery(resourcesDef);
   const rows = useMemo(() => mergeLibraryPages(resourcesQ.data?.pages ?? []), [resourcesQ.data]);
   const catalog = useMemo(() => buildResourceCatalog(rows), [rows]);
+  const resolvedSearchMode = useRef(searchActive);
+  if (!resourcesQ.isPlaceholderData) resolvedSearchMode.current = searchActive;
+  const displayedSearchActive = resourcesQ.isPlaceholderData
+    ? resolvedSearchMode.current
+    : searchActive;
   const presentationState = useMemo(
-    () => (searchActive ? { filters: state.filters, groupBy: null, sort: [] } : state),
-    [searchActive, state],
+    () => (displayedSearchActive ? { filters: state.filters, groupBy: null, sort: [] } : state),
+    [displayedSearchActive, state],
   );
   const applied = useMemo(
     () => applyView(rows, presentationState, catalog),
@@ -173,6 +179,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
 
   const loadNextPage = useCallback(() => {
     if (
+      !resourcesQ.isPlaceholderData &&
       resourcesQ.hasNextPage &&
       !resourcesQ.isFetchingNextPage &&
       !resourcesQ.isFetchNextPageError
@@ -189,11 +196,11 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
   useLayoutEffect(() => {
     const table = tableRef.current;
     if (!table) return;
-    const mode = searchActive ? 'search' : 'browse';
+    const mode = displayedSearchActive ? 'search' : 'browse';
     if (restoredMode.current === mode) return;
     restoredMode.current = mode;
     table.scrollTop = scrollPositions.current[mode];
-  }, [applied.rows.length, resourcesQ.isPending, searchActive]);
+  }, [applied.rows.length, displayedSearchActive, resourcesQ.isPending]);
 
   const columns: readonly Column<SearchResult>[] = useMemo(
     () => [
@@ -351,28 +358,16 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
       fill
       toolbar={
         <div className="flex min-w-0 flex-col gap-3">
-          <form
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault();
-            }}
-          >
-            <label className="sr-only" htmlFor="library-search">
-              Search the Library
-            </label>
-            <div className="border-outline-variant bg-surface-container-low flex min-h-12 items-center gap-2 rounded-xl border px-3">
-              <Search aria-hidden className="text-on-surface-variant size-5 shrink-0" />
-              <Input
-                id="library-search"
-                value={draft}
-                onChange={(event) => {
-                  setDraft(event.target.value);
-                }}
-                placeholder="Search documents, links, and files"
-                className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-              />
-            </div>
-          </form>
+          <InPageSearchField
+            inputRef={searchInputRef}
+            value={draft}
+            onValueChange={setDraft}
+            onEscapeEmpty={restoreFocus}
+            label="Search the Library"
+            placeholder="Search documents, links, and files"
+            resultCount={applied.rows.length}
+            pending={draft.trim() !== query || resourcesQ.isFetching}
+          />
           <FilterToolbar
             catalog={catalog}
             state={state}
@@ -393,39 +388,24 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
         <p role="alert" className="text-error text-body-medium">
           {userErrorMessage(resourcesQ.error, 'Could not load the library.')}
         </p>
-      ) : applied.rows.length === 0 && !refillingSparsePage ? (
-        searchActive || filtered ? (
-          <EmptyState
-            icon={LinkIcon}
-            title="Nothing matches"
-            body="No document, link, or file matches this search and the active filters."
-            {...(filtered
-              ? {
-                  cta: {
-                    label: 'Clear filters',
-                    onClick: () => {
-                      setFilters([]);
-                    },
-                  },
-                }
-              : {})}
-          />
-        ) : (
-          <EmptyState
-            icon={Library}
-            title="Nothing referenced yet"
-            body={`Link a document or add a file anywhere in ${activeOrg?.name ?? 'this workspace'} and it shows up here.`}
-          />
-        )
+      ) : applied.rows.length === 0 &&
+        !refillingSparsePage &&
+        !displayedSearchActive &&
+        !filtered ? (
+        <EmptyState
+          icon={Library}
+          title="Nothing referenced yet"
+          body={`Link a document or add a file anywhere in ${activeOrg?.name ?? 'this workspace'} and it shows up here.`}
+        />
       ) : (
         <div className="grid min-h-0 min-w-0 flex-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
           <div
             ref={gridRef}
-            className={panelOpen ? 'hidden min-h-0 min-w-0 @4xl:block' : 'min-h-0 min-w-0'}
+            className={`${panelOpen ? 'hidden @4xl:block' : ''} relative min-h-0 min-w-0`}
           >
             <EntityTable
               columns={columns}
-              {...(searchActive ? { rows: applied.rows } : { groups })}
+              {...(displayedSearchActive ? { rows: applied.rows } : { groups })}
               getRowKey={(row) => row.id}
               rowHref={(row) => primaryResourceAction(row)?.href}
               rowLinkColumnKey="name"
@@ -494,7 +474,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
                   tableRef.current = element;
                 },
                 onScroll: (event) => {
-                  const mode = searchActive ? 'search' : 'browse';
+                  const mode = displayedSearchActive ? 'search' : 'browse';
                   scrollPositions.current[mode] = event.currentTarget.scrollTop;
                 },
               }}
@@ -502,9 +482,28 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
               virtualized
               onEndReached={loadNextPage}
               endAdornment={endAdornment}
-              className="h-full"
-              aria-label={searchActive ? 'Library search results' : 'Library resources'}
+              className={`h-full ${applied.rows.length === 0 && !refillingSparsePage ? 'invisible' : ''}`}
+              aria-label={displayedSearchActive ? 'Library search results' : 'Library resources'}
             />
+            {applied.rows.length === 0 && !refillingSparsePage ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <EmptyState
+                  icon={LinkIcon}
+                  title="Nothing matches"
+                  body="No document, link, or file matches this search and the active filters."
+                  {...(filtered
+                    ? {
+                        cta: {
+                          label: 'Clear filters',
+                          onClick: () => {
+                            setFilters([]);
+                          },
+                        },
+                      }
+                    : {})}
+                />
+              </div>
+            ) : null}
           </div>
           {opened ? (
             <ResourceDetailPanel

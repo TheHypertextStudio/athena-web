@@ -6,6 +6,7 @@ import type {
   RoleOut,
   SessionStatus,
   TaskOut,
+  TeamOut,
 } from '@docket/types';
 import type { GroupKey } from '@docket/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
@@ -44,6 +45,8 @@ export interface MyWorkState {
   counts: { mine: number; delegated: number };
   pendingApprovals: number;
   visibleTasks: (tab: 'mine' | 'delegated') => readonly TaskOut[];
+  /** Resolve a human, agent, or team actor name for search and other list metadata. */
+  actorName: (actorId: string | null | undefined) => string | null;
   toRow: (task: TaskOut, tab: 'mine' | 'delegated') => AgentTaskRowData;
   groupBy: (task: TaskOut) => GroupKey | null;
   subGroupBy: (task: TaskOut) => GroupKey;
@@ -69,7 +72,7 @@ export function useMyWork(
 ): MyWorkState {
   const queryClient = useQueryClient();
 
-  // The five slices flow through myWorkDefs — the same definitions the SSR entry prefetches with —
+  // The six slices flow through myWorkDefs — the same definitions the SSR entry prefetches with —
   // so a warm first paint hits the cache and any create/mutation elsewhere reconciles this screen
   // automatically, with no key/fetcher/staleTime drift between server and client.
   const defs = myWorkDefs(orgId, api);
@@ -77,6 +80,7 @@ export function useMyWork(
   const projectsQ = useApiQuery(defs.projects);
   const membersQ = useApiQuery(defs.members);
   const agentsQ = useApiQuery(defs.agents);
+  const teamsQ = useApiQuery(defs.teams);
   const sessionsQ = useApiQuery(defs.sessions);
   // Roles resolve the viewer's edit capability so an inline title rename is only offered when the
   // server would accept it; the server still enforces `contribute` regardless.
@@ -95,6 +99,7 @@ export function useMyWork(
   const projects: readonly ProjectOut[] = projectsQ.data?.items ?? EMPTY;
   const members: readonly MemberOut[] = membersQ.data?.items ?? EMPTY;
   const agents: readonly AgentOut[] = agentsQ.data?.items ?? EMPTY;
+  const teams: readonly TeamOut[] = teamsQ.data?.items ?? EMPTY;
   const sessions: readonly AgentSessionOut[] = sessionsQ.data?.items ?? EMPTY;
   const roles: readonly RoleOut[] = rolesQ.data?.items ?? EMPTY;
 
@@ -108,6 +113,7 @@ export function useMyWork(
     projectsQ.isPending ||
     membersQ.isPending ||
     agentsQ.isPending ||
+    teamsQ.isPending ||
     sessionsQ.isPending;
   const loadError = tasksQ.isError
     ? userErrorMessage(tasksQ.error, 'Could not load your work.')
@@ -157,8 +163,12 @@ export function useMyWork(
         existing ? { ...existing, kind: 'agent' } : { name: 'Agent', kind: 'agent' },
       );
     }
+    for (const team of teams) {
+      if (!team.actorId) continue;
+      byId.set(team.actorId, { name: team.name, kind: 'team' });
+    }
     return byId;
-  }, [agents, members]);
+  }, [agents, members, teams]);
 
   const sessionByTask = useMemo(() => {
     const byTask = new Map<string, AgentSessionOut>();
@@ -171,6 +181,12 @@ export function useMyWork(
     }
     return byTask;
   }, [sessions]);
+
+  const actorName = useCallback(
+    (actorId: string | null | undefined): string | null =>
+      actorId ? (actorInfo.get(actorId)?.name ?? null) : null,
+    [actorInfo],
+  );
 
   const isDelegated = useCallback(
     (task: TaskOut): boolean => {
@@ -268,6 +284,7 @@ export function useMyWork(
     counts,
     pendingApprovals,
     visibleTasks,
+    actorName,
     toRow,
     groupBy,
     subGroupBy,

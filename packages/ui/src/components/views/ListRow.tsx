@@ -21,6 +21,7 @@ import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 import { ActorAvatar, type ActorKind } from '../atoms/ActorAvatar';
 import { StatusIcon, type WorkflowStateType } from '../atoms/StatusIcon';
+import type { ListViewRowProps } from './list-view-types';
 
 /** Props for {@link ListRow}. */
 export interface ListRowProps extends React.ComponentPropsWithoutRef<'div'> {
@@ -165,6 +166,8 @@ export interface TaskRowProps {
    * preset row is draggable from anywhere in its bounds, exactly like a hand-composed row.
    */
   drag?: DragSource;
+  /** Semantic attributes supplied by {@link ListView} for the rendered grid row. */
+  rowProps?: ListViewRowProps | undefined;
 }
 
 /**
@@ -187,9 +190,11 @@ export function TaskRow({
   onActivate,
   tabIndex,
   drag,
+  rowProps,
 }: TaskRowProps): React.JSX.Element {
   return (
     <ListRow
+      {...rowProps}
       active={active}
       selected={selected}
       onActivate={onActivate}

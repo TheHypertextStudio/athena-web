@@ -118,6 +118,7 @@ export {
   type GroupKey,
   ListView,
   type ListViewProps,
+  type ListViewRowProps,
   NO_GROUP_ID,
   NO_GROUP_LABEL,
   type RenderRowContext,

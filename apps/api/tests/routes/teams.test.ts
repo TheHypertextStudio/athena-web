@@ -30,6 +30,7 @@ const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 interface TeamBody {
   id: string;
+  actorId: string;
   name: string;
   key: string;
   description: string | null;
@@ -59,6 +60,7 @@ describe('teams router', () => {
     expect(created.status).toBe(201);
     const team = await json<TeamBody>(created);
     expect(team.key).toBe(key);
+    expect(team.actorId).toBeTruthy();
     expect(team.triageEnabled).toBe(true); // default
     expect(team.description).toBeNull();
     expect(team.agentGuidance).toBeNull();
@@ -68,12 +70,16 @@ describe('teams router', () => {
 
     // List now has both teams.
     const listed = await writer.request('/', { method: 'GET' });
-    expect((await json<{ items: unknown[] }>(listed)).items).toHaveLength(2);
+    const listedTeams = await json<{ items: TeamBody[] }>(listed);
+    expect(listedTeams.items).toHaveLength(2);
+    expect(listedTeams.items.find((item) => item.id === team.id)?.actorId).toBe(team.actorId);
 
     // Get detail by id.
     const got = await writer.request(`/${team.id}`, { method: 'GET' });
     expect(got.status).toBe(200);
-    expect((await json<TeamBody>(got)).id).toBe(team.id);
+    const detail = await json<TeamBody>(got);
+    expect(detail.id).toBe(team.id);
+    expect(detail.actorId).toBe(team.actorId);
 
     // Patch every settable branch, incl. replacing workflowStates + approvalRouting.
     const newKey = uniqueKey();
@@ -96,6 +102,7 @@ describe('teams router', () => {
     expect(patched.status).toBe(200);
     const after = await json<TeamBody>(patched);
     expect(after.name).toBe('Engineering v2');
+    expect(after.actorId).toBe(team.actorId);
     expect(after.key).toBe(newKey);
     expect(after.description).toBe('The eng team');
     expect(after.triageEnabled).toBe(false);

@@ -30,6 +30,7 @@ import type { ViewState } from '../../../src/components/views/field-catalog';
 import { buildTaskCatalog } from '../../../src/components/views/task-catalog';
 import { ViewRunner } from '../../../src/components/views/view-runner';
 import { assertDefined } from '@docket/test-utils';
+import { InPageSearchProvider } from '../../../src/components/in-page-search/in-page-search-provider';
 
 /**
  * jsdom reports zero element sizes; stub them so `@tanstack/react-virtual` (inside `ListView`)
@@ -127,15 +128,21 @@ function resolveActor(): null {
 }
 
 function renderRunner(state: ViewState): ReturnType<typeof render> {
-  return render(
-    <ViewRunner
-      tasks={TASKS}
-      state={state}
-      catalog={catalog}
-      resolveActor={resolveActor}
-      label="View"
-      onOpenTask={() => undefined}
-    />,
+  return render(runner(state));
+}
+
+function runner(state: ViewState): React.JSX.Element {
+  return (
+    <InPageSearchProvider>
+      <ViewRunner
+        tasks={TASKS}
+        state={state}
+        catalog={catalog}
+        resolveActor={resolveActor}
+        label="View"
+        onOpenTask={() => undefined}
+      />
+    </InPageSearchProvider>
   );
 }
 
@@ -155,16 +162,7 @@ describe('ViewRunner — switching the active grouping field', () => {
     // Switch the active grouping to a *different* field whose empty bucket the viewer never
     // touched. Both fixture tasks lack a program, so they both land in "No program".
     const byProgram: ViewState = { filters: [], groupBy: { field: 'programId' }, sort: [] };
-    rerender(
-      <ViewRunner
-        tasks={TASKS}
-        state={byProgram}
-        catalog={catalog}
-        resolveActor={resolveActor}
-        label="View"
-        onOpenTask={() => undefined}
-      />,
-    );
+    rerender(runner(byProgram));
 
     // "No program" must start expanded — the collapse decision belonged to Project's bucket, not
     // Program's, even though both buckets share the engine's synthesized empty-bucket id.
@@ -184,17 +182,25 @@ describe('ViewRunner — switching the active grouping field', () => {
     expect(screen.queryByText('Belongs nowhere')).not.toBeInTheDocument();
 
     // Re-render with the identical state (e.g. a parent re-render triggered by unrelated props).
-    rerender(
-      <ViewRunner
-        tasks={TASKS}
-        state={{ ...byProject }}
-        catalog={catalog}
-        resolveActor={resolveActor}
-        label="View"
-        onOpenTask={() => undefined}
-      />,
-    );
+    rerender(runner({ ...byProject }));
 
     expect(screen.queryByText('Belongs nowhere')).not.toBeInTheDocument();
+  });
+
+  it('composes transient complete-corpus search before the authored view state', () => {
+    const state: ViewState = { filters: [], groupBy: { field: 'projectId' }, sort: [] };
+    renderRunner(state);
+
+    fireEvent.keyDown(document, { key: 'f', ctrlKey: true });
+    const field = screen.getByRole('searchbox', { name: 'Search View' });
+    fireEvent.change(field, { target: { value: 'belongs nowhere' } });
+
+    expect(screen.getByText('Belongs nowhere')).toBeInTheDocument();
+    expect(screen.queryByText('Has a project')).not.toBeInTheDocument();
+    expect(state).toEqual({ filters: [], groupBy: { field: 'projectId' }, sort: [] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(screen.getByText('Has a project')).toBeInTheDocument();
+    expect(screen.getByText('No project')).toBeInTheDocument();
   });
 });

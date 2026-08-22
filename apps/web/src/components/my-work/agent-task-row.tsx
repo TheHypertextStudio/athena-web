@@ -5,6 +5,7 @@ import {
   type ActorKind,
   ListCell,
   ListRow,
+  type ListViewRowProps,
   StatusIcon,
   type WorkflowStateType,
 } from '@docket/ui/components';
@@ -58,6 +59,8 @@ export interface AgentTaskRowProps {
    * the row's view-model does not carry the workspace the drop target needs.
    */
   drag?: DragSource;
+  /** Semantic attributes supplied by the virtualized list for this grid row. */
+  rowProps?: ListViewRowProps | undefined;
 }
 
 /**
@@ -84,9 +87,10 @@ export function AgentTaskRow({
   canEdit,
   onRename,
   drag,
+  rowProps,
 }: AgentTaskRowProps): JSX.Element {
   return (
-    <ListRow active={active} onActivate={onActivate} drag={drag}>
+    <ListRow {...rowProps} active={active} onActivate={onActivate} drag={drag}>
       <ListCell className="shrink-0">
         <StatusIcon type={task.stateType} />
       </ListCell>

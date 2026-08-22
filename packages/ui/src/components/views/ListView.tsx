@@ -34,11 +34,25 @@ import { useDensity } from '../shell/ContextProvider';
 import { ListGroup } from './ListGroup';
 import { ListSubGroup } from './ListSubGroup';
 import { DENSITY_ROW_HEIGHT, flattenGroups, subGroupKey } from './flatten-groups';
-import type { FlatRow, GroupKey, ListViewProps, RenderRowContext } from './list-view-types';
+import type {
+  FlatRow,
+  GroupKey,
+  ListViewProps,
+  ListViewRowProps,
+  RenderRowContext,
+} from './list-view-types';
 import { NO_GROUP_ID, NO_GROUP_LABEL } from './list-view-types';
 
-export type { FlatRow, GroupKey, ListViewProps, RenderRowContext };
+export type { FlatRow, GroupKey, ListViewProps, ListViewRowProps, RenderRowContext };
 export { NO_GROUP_ID, NO_GROUP_LABEL };
+
+interface ListViewPresentationState {
+  activeRowKey: string | null;
+  collapsed: ReadonlySet<string> | null;
+  scrollOffset: number;
+}
+
+const DEFAULT_STATE_KEY = '__list_view_default__';
 
 /**
  * A virtualized, collapsible, flattened-tree list.
@@ -61,7 +75,29 @@ export { NO_GROUP_ID, NO_GROUP_LABEL };
  * />
  * ```
  */
-export function ListView<TItem>({
+export function ListView<TItem>({ stateKey, ...props }: ListViewProps<TItem>): React.JSX.Element {
+  const stateByKey = React.useRef(new Map<string, ListViewPresentationState>());
+  const resolvedStateKey = stateKey ?? DEFAULT_STATE_KEY;
+  let presentationState = stateByKey.current.get(resolvedStateKey);
+  if (!presentationState) {
+    presentationState = {
+      activeRowKey: null,
+      collapsed: null,
+      scrollOffset: 0,
+    };
+    stateByKey.current.set(resolvedStateKey, presentationState);
+  }
+
+  return (
+    <ListViewSurface key={resolvedStateKey} {...props} presentationState={presentationState} />
+  );
+}
+
+interface ListViewSurfaceProps<TItem> extends Omit<ListViewProps<TItem>, 'stateKey'> {
+  readonly presentationState: ListViewPresentationState;
+}
+
+function ListViewSurface<TItem>({
   items,
   groupBy,
   subGroupBy,
@@ -74,13 +110,15 @@ export function ListView<TItem>({
   rowHeight,
   label = 'List',
   className,
-}: ListViewProps<TItem>): React.JSX.Element {
+  presentationState,
+}: ListViewSurfaceProps<TItem>): React.JSX.Element {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const rowIdPrefix = React.useId();
   const density = useDensity();
   const resolvedRowHeight = rowHeight ?? DENSITY_ROW_HEIGHT[density];
 
   const [internalCollapsed, setInternalCollapsed] = React.useState<ReadonlySet<string>>(
-    () => new Set(defaultCollapsed ?? []),
+    () => presentationState.collapsed ?? new Set(defaultCollapsed ?? []),
   );
   const isControlled = collapsedProp !== undefined;
   const collapsed = isControlled ? collapsedProp : internalCollapsed;
@@ -95,10 +133,11 @@ export function ListView<TItem>({
         const next = new Set(current);
         if (next.has(bucketId)) next.delete(bucketId);
         else next.add(bucketId);
+        presentationState.collapsed = next;
         return next;
       });
     },
-    [isControlled, onToggle],
+    [isControlled, onToggle, presentationState],
   );
 
   const resolveItemKey = React.useCallback(
@@ -118,6 +157,11 @@ export function ListView<TItem>({
     overscan: 12,
   });
 
+  React.useLayoutEffect(() => {
+    const scrollElement = scrollRef.current;
+    if (scrollElement) scrollElement.scrollTop = presentationState.scrollOffset;
+  }, [presentationState]);
+
   React.useEffect(() => {
     virtualizer.measure();
   }, [virtualizer, resolvedRowHeight]);
@@ -135,13 +179,43 @@ export function ListView<TItem>({
     [rows, toggleBucket, onActivateItem],
   );
 
-  const { activeIndex, onKeyDown } = useListKeyboard({
+  const restoredActiveIndex = React.useMemo(() => {
+    if (!presentationState.activeRowKey) return -1;
+    const match = rows.findIndex((row) => row.key === presentationState.activeRowKey);
+    return match >= 0 ? match : rows.length > 0 ? 0 : -1;
+  }, [presentationState, rows]);
+
+  const { activeIndex, setActiveIndex, onKeyDown } = useListKeyboard({
     rowCount: rows.length,
+    initialIndex: restoredActiveIndex,
     onActivate: activateRow,
     onActiveChange: (index) => {
+      presentationState.activeRowKey = rows[index]?.key ?? null;
       virtualizer.scrollToIndex(index, { align: 'auto' });
     },
   });
+
+  const previousRows = React.useRef(rows);
+  React.useLayoutEffect(() => {
+    if (previousRows.current === rows) return;
+    previousRows.current = rows;
+    const activeKey = presentationState.activeRowKey;
+    if (!activeKey) return;
+    const match = rows.findIndex((row) => row.key === activeKey);
+    const nextIndex = match >= 0 ? match : rows.length > 0 ? 0 : -1;
+    if (nextIndex !== activeIndex) setActiveIndex(nextIndex);
+  }, [activeIndex, presentationState, rows, setActiveIndex]);
+
+  React.useEffect(() => {
+    presentationState.activeRowKey = rows[activeIndex]?.key ?? null;
+  }, [activeIndex, presentationState, rows]);
+
+  const rowDomId = React.useCallback(
+    (index: number): string => `list-view-${rowIdPrefix}-row-${String(index)}`,
+    [rowIdPrefix],
+  );
+  const virtualItems = virtualizer.getVirtualItems();
+  const activeRowMounted = virtualItems.some((item) => item.index === activeIndex);
 
   return (
     <div
@@ -149,8 +223,14 @@ export function ListView<TItem>({
       role="grid"
       aria-label={label}
       aria-rowcount={rows.length}
+      aria-activedescendant={
+        activeIndex < 0 || !activeRowMounted ? undefined : rowDomId(activeIndex)
+      }
       tabIndex={0}
       onKeyDown={onKeyDown}
+      onScroll={(event) => {
+        presentationState.scrollOffset = event.currentTarget.scrollTop;
+      }}
       className={cn(
         'focus-visible:ring-ring relative h-full w-full overflow-auto outline-none focus-visible:ring-1',
         className,
@@ -160,7 +240,7 @@ export function ListView<TItem>({
         role="rowgroup"
         style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}
       >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
+        {virtualItems.map((virtualRow) => {
           const row = rows[virtualRow.index];
           /* v8 ignore start -- unreachable: the virtualizer only yields indices within `rows`. */
           if (!row) return null;
@@ -181,15 +261,20 @@ export function ListView<TItem>({
             >
               {row.kind === 'group' ? (
                 <ListGroup
+                  id={rowDomId(virtualRow.index)}
+                  aria-rowindex={virtualRow.index + 1}
                   label={row.group.label}
                   count={row.count}
                   expanded={!collapsed.has(row.group.id)}
                   onToggle={() => {
                     toggleBucket(row.group.id);
                   }}
+                  className={cn(active && 'bg-surface-container-high')}
                 />
               ) : row.kind === 'subgroup' ? (
                 <ListSubGroup
+                  id={rowDomId(virtualRow.index)}
+                  aria-rowindex={virtualRow.index + 1}
                   label={row.subGroup.label}
                   count={row.count}
                   stateType={row.subGroup.stateType}
@@ -197,12 +282,17 @@ export function ListView<TItem>({
                   onToggle={() => {
                     toggleBucket(subGroupKey(row.group.id, row.subGroup.id));
                   }}
+                  className={cn(active && 'bg-surface-container-high')}
                 />
               ) : (
                 renderRow(row.item, {
                   flatIndex: virtualRow.index,
                   active,
                   onActivate: () => onActivateItem?.(row.item),
+                  rowProps: {
+                    id: rowDomId(virtualRow.index),
+                    'aria-rowindex': virtualRow.index + 1,
+                  },
                 })
               )}
             </div>

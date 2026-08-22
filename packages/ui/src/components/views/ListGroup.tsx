@@ -15,6 +15,10 @@ import { GroupHeader } from './GroupHeader';
 
 /** Props for {@link ListGroup}. */
 export interface ListGroupProps {
+  /** Stable DOM id used by the owning grid's `aria-activedescendant`. */
+  id?: string | undefined;
+  /** Logical one-based row position in the owning grid. */
+  'aria-rowindex'?: number | undefined;
   /** The display-ready group label (already vocabulary-resolved). */
   label: string;
   /** Whether the group is expanded. */
@@ -37,6 +41,8 @@ export interface ListGroupProps {
  * accessibility contract.
  */
 export function ListGroup({
+  id,
+  'aria-rowindex': ariaRowIndex,
   label,
   expanded,
   onToggle,
@@ -46,6 +52,8 @@ export function ListGroup({
 }: ListGroupProps): React.JSX.Element {
   return (
     <GroupHeader
+      id={id}
+      aria-rowindex={ariaRowIndex}
       label={label}
       expanded={expanded}
       onToggle={onToggle}

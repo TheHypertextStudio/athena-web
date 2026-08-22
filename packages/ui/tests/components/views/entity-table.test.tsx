@@ -504,6 +504,27 @@ describe('EntityTable — keyboard navigation', () => {
     fireEvent.keyDown(grid, { key: 'Escape' });
     expect(screen.getByRole('row', { name: /Billing revamp/ })).not.toHaveAttribute('data-active');
   });
+
+  it('moves the active cursor to the first remaining row when filtering removes it', () => {
+    const view = render(
+      <EntityTable aria-label="Items" columns={COLUMNS} rows={ROWS} getRowKey={getRowKey} />,
+    );
+    const grid = screen.getByRole('grid', { name: 'Items' });
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    expect(screen.getByRole('row', { name: /Auth migration/ })).toHaveAttribute('data-active', '');
+
+    view.rerender(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        rows={[assertDefined(ROWS[0])]}
+        getRowKey={getRowKey}
+      />,
+    );
+
+    expect(screen.getByRole('row', { name: /Billing revamp/ })).toHaveAttribute('data-active', '');
+  });
 });
 
 describe('EntityTable — property-key hotkeys', () => {

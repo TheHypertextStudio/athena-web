@@ -1,10 +1,14 @@
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { StatusIcon, type WorkflowStateType } from '../../../src/components/atoms/StatusIcon';
-import { ListView, type GroupKey } from '../../../src/components/views/ListView';
+import {
+  ListView,
+  type GroupKey,
+  type RenderRowContext,
+} from '../../../src/components/views/ListView';
 import { TaskRow, type TaskRowData } from '../../../src/components/views/ListRow';
 
 /**
@@ -100,6 +104,12 @@ const subGroupByState = (task: MockTask): GroupKey => ({
   stateType: task.stateType,
 });
 
+const taskKey = (task: MockTask): string => task.id;
+
+const renderTaskRow = (task: MockTask, ctx: RenderRowContext): React.JSX.Element => (
+  <TaskRow task={task} active={ctx.active} onActivate={ctx.onActivate} rowProps={ctx.rowProps} />
+);
+
 function renderListView(): ReturnType<typeof render> {
   return render(
     <ListView<MockTask>
@@ -108,10 +118,48 @@ function renderListView(): ReturnType<typeof render> {
       subGroupBy={subGroupByState}
       getItemKey={(task) => task.id}
       renderRow={(task, ctx) => (
-        <TaskRow task={task} active={ctx.active} onActivate={ctx.onActivate} />
+        <TaskRow
+          task={task}
+          active={ctx.active}
+          onActivate={ctx.onActivate}
+          rowProps={ctx.rowProps}
+        />
       )}
     />,
   );
+}
+
+function statefulList(stateKey: string, items: readonly MockTask[] = TASKS): React.JSX.Element {
+  return (
+    <ListView<MockTask>
+      stateKey={stateKey}
+      items={items}
+      groupBy={groupByProject}
+      subGroupBy={subGroupByState}
+      getItemKey={(task) => task.id}
+      renderRow={(task, ctx) => (
+        <TaskRow
+          task={task}
+          active={ctx.active}
+          onActivate={ctx.onActivate}
+          rowProps={ctx.rowProps}
+        />
+      )}
+    />
+  );
+}
+
+/** Return a mounted test element or fail with a useful fixture error. */
+function requiredElement<T extends Element>(element: T | null): T {
+  if (!element) throw new Error('Expected the list row to be mounted.');
+  return element;
+}
+
+/** Return the first task from the non-empty list fixture. */
+function firstTask(): MockTask {
+  const task = TASKS[0];
+  if (!task) throw new Error('Expected the task fixture to contain a row.');
+  return task;
 }
 
 describe('ListView', () => {
@@ -155,6 +203,81 @@ describe('ListView', () => {
     expect(screen.queryByText('In Progress')).not.toBeInTheDocument();
     // The no-project bucket and its row remain.
     expect(screen.getByText('Untriaged bug report')).toBeInTheDocument();
+  });
+
+  it('restores scroll, collapse, and the active row when a presentation mode returns', () => {
+    const view = render(statefulList('browse'));
+    const browseGrid = screen.getByRole('grid');
+    browseGrid.scrollTop = 240;
+    fireEvent.scroll(browseGrid);
+    fireEvent.click(requiredElement(screen.getByText(PROJECT_ALPHA_NAME).closest('[role="row"]')));
+    fireEvent.keyDown(browseGrid, { key: 'End' });
+    expect(screen.getByText('Untriaged bug report').closest('[role="row"]')).toHaveAttribute(
+      'data-active',
+      '',
+    );
+
+    view.rerender(statefulList('search', [firstTask()]));
+    view.rerender(statefulList('browse'));
+
+    const restoredGrid = screen.getByRole('grid');
+    expect(restoredGrid.scrollTop).toBe(240);
+    expect(screen.getByText(PROJECT_ALPHA_NAME).closest('[role="row"]')).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.getByText('Untriaged bug report').closest('[role="row"]')).toHaveAttribute(
+      'data-active',
+      '',
+    );
+  });
+
+  it('moves the active cursor to the first remaining row within one presentation mode', () => {
+    const view = render(statefulList('search'));
+    const grid = screen.getByRole('grid');
+    fireEvent.keyDown(grid, { key: 'End' });
+    expect(screen.getByText('Untriaged bug report').closest('[role="row"]')).toHaveAttribute(
+      'data-active',
+      '',
+    );
+
+    view.rerender(statefulList('search', [firstTask()]));
+
+    const firstRemaining = screen.getByText(PROJECT_ALPHA_NAME).closest('[role="row"]');
+    expect(firstRemaining).toHaveClass('bg-surface-container-high');
+    expect(screen.getByRole('grid')).toHaveAttribute('aria-activedescendant', firstRemaining?.id);
+    expect(firstRemaining).toHaveAttribute('role', 'row');
+  });
+
+  it('does not rebuild the flattened rows for a presentation-only rerender', () => {
+    const groupBy = vi.fn(groupByProject);
+    const getItemKey = vi.fn(taskKey);
+    const view = render(
+      <ListView<MockTask>
+        items={TASKS}
+        groupBy={groupBy}
+        subGroupBy={subGroupByState}
+        getItemKey={getItemKey}
+        renderRow={renderTaskRow}
+        label="Initial label"
+      />,
+    );
+    const groupCalls = groupBy.mock.calls.length;
+    const keyCalls = getItemKey.mock.calls.length;
+
+    view.rerender(
+      <ListView<MockTask>
+        items={TASKS}
+        groupBy={groupBy}
+        subGroupBy={subGroupByState}
+        getItemKey={getItemKey}
+        renderRow={renderTaskRow}
+        label="Updated label"
+      />,
+    );
+
+    expect(groupBy).toHaveBeenCalledTimes(groupCalls);
+    expect(getItemKey).toHaveBeenCalledTimes(keyCalls);
   });
 });
 

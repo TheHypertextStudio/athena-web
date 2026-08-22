@@ -25,6 +25,7 @@ import {
   ActorAvatar,
   ListCell,
   ListRow,
+  type ListViewRowProps,
   StatusIcon,
   type WorkflowStateType,
 } from '@docket/ui/components';
@@ -108,6 +109,8 @@ export interface TriageRowProps {
    * row's view-model does not carry the workspace the drop target needs.
    */
   drag?: DragSource;
+  /** Semantic attributes supplied by the virtualized list for this grid row. */
+  rowProps?: ListViewRowProps | undefined;
 }
 
 /**
@@ -146,6 +149,7 @@ export function TriageRow({
   onAssignProgram,
   onDismiss,
   drag,
+  rowProps,
 }: TriageRowProps): JSX.Element {
   return (
     <ContextMenu>
@@ -156,7 +160,7 @@ export function TriageRow({
         row measurement.
       */}
       <ContextMenuTrigger asChild>
-        <ListRow active={active} onActivate={onActivate} drag={drag}>
+        <ListRow {...rowProps} active={active} onActivate={onActivate} drag={drag}>
           <ListCell className="shrink-0">
             <StatusIcon type={task.stateType} />
           </ListCell>

@@ -306,8 +306,9 @@ export function EntityTable<T>({
     if (activeKey === null) return;
     const nextIndex = flat.findIndex((entry) => entry.key === activeKey);
     if (nextIndex < 0) {
-      activeKeyRef.current = null;
-      setActiveIndex(-1);
+      const first = flat[0];
+      activeKeyRef.current = first?.key ?? null;
+      setActiveIndex(first ? 0 : -1);
     } else if (nextIndex !== activeIndex) {
       setActiveIndex(nextIndex);
     }

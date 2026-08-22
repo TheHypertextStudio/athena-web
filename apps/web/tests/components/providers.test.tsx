@@ -68,4 +68,16 @@ describe('Providers', () => {
     expect(add.mock.calls.filter(([type]) => type === 'contextmenu')).toHaveLength(1);
     add.mockRestore();
   });
+
+  it('installs exactly one document-level in-page find handler', () => {
+    const add = vi.spyOn(document, 'addEventListener');
+    render(
+      <Providers>
+        <main>One find router</main>
+      </Providers>,
+    );
+
+    expect(add.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(1);
+    add.mockRestore();
+  });
 });

@@ -35,7 +35,7 @@ import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { entityMentionRoutes } from './entity-mentions';
-import { archiveTeamActor, createTeamActor, renameTeamActor } from './team-actor';
+import { archiveTeamActor, createTeamActor, findTeamActorId, renameTeamActor } from './team-actor';
 import {
   loadOrgTeamRosters,
   loadTeamActivity,
@@ -47,9 +47,10 @@ import {
 type TeamRow = typeof team.$inferSelect;
 
 /** Map a `team` row to its `TeamOut`/`TeamDetail` wire shape. */
-function toOut(t: TeamRow): z.input<typeof TeamDetail> {
+function toOut(t: TeamRow, actorId?: string | null): z.input<typeof TeamDetail> {
   return {
     id: t.id,
+    ...(actorId ? { actorId } : {}),
     organizationId: t.organizationId,
     name: t.name,
     key: t.key,
@@ -104,10 +105,16 @@ Requires only org membership to read (the \`view\` capability is satisfied by an
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const rows = await db
-        .select()
+        .select({ row: team, actorId: actor.id })
         .from(team)
+        .leftJoin(
+          actor,
+          and(eq(actor.teamId, team.id), eq(actor.kind, 'team'), isNull(actor.archivedAt)),
+        )
         .where(and(eq(team.organizationId, orgId), isNull(team.archivedAt)));
-      return ok(c, pageOf(TeamOut), { items: rows.map(toOut) });
+      return ok(c, pageOf(TeamOut), {
+        items: rows.map(({ row, actorId }) => toOut(row, actorId)),
+      });
     },
   )
   .post(
@@ -130,7 +137,7 @@ Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state
       await assertKeyAvailable(orgId, body.key);
       // The team and its shadow actor land together or not at all: a team with no actor cannot be
       // named as an owner, which fails silently at assignment time rather than here.
-      const row = await db.transaction(async (tx) => {
+      const createdTeam = await db.transaction(async (tx) => {
         const inserted = await tx
           .insert(team)
           .values({
@@ -148,15 +155,15 @@ Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state
         const created = inserted[0];
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!created) throw new Error('team insert returned no row');
-        await createTeamActor(tx, {
+        const actorId = await createTeamActor(tx, {
           organizationId: orgId,
           teamId: created.id,
           name: created.name,
         });
-        return created;
+        return { row: created, actorId };
       });
-      await enqueueSearchUpsert(orgId, 'team', row.id);
-      return created(c, TeamDetail, toOut(row));
+      await enqueueSearchUpsert(orgId, 'team', createdTeam.row.id);
+      return created(c, TeamDetail, toOut(createdTeam.row, createdTeam.actorId));
     },
   )
   .get(
@@ -188,13 +195,17 @@ Declared before \`GET /:teamId\` so the literal segment wins the route match. Or
       const { orgId } = c.get('actorCtx');
       const { teamId } = c.req.valid('param');
       const rows = await db
-        .select()
+        .select({ row: team, actorId: actor.id })
         .from(team)
+        .leftJoin(
+          actor,
+          and(eq(actor.teamId, team.id), eq(actor.kind, 'team'), isNull(actor.archivedAt)),
+        )
         .where(and(eq(team.id, teamId), eq(team.organizationId, orgId), isNull(team.archivedAt)))
         .limit(1);
-      const row = rows[0];
-      if (!row) throw new NotFoundError('Team not found');
-      return ok(c, TeamDetail, toOut(row));
+      const result = rows[0];
+      if (!result) throw new NotFoundError('Team not found');
+      return ok(c, TeamDetail, toOut(result.row, result.actorId));
     },
   )
   .patch(
@@ -238,20 +249,20 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
         const rows = await db.select().from(team).where(where).limit(1);
         const existing = rows[0];
         if (!existing) throw new NotFoundError('Team not found');
-        return ok(c, TeamDetail, toOut(existing));
+        return ok(c, TeamDetail, toOut(existing, await findTeamActorId(db, orgId, existing.id)));
       }
 
-      const row = await db.transaction(async (tx) => {
+      const updatedTeam = await db.transaction(async (tx) => {
         const updated = await tx.update(team).set(patch).where(where).returning();
         const patched = updated[0];
         if (!patched) throw new NotFoundError('Team not found');
         // The actor keeps its own copy of the name so an owner chip renders without joining
         // `team`; a rename that skipped this would leave the pickers offering the old one.
         if (body.name !== undefined) await renameTeamActor(tx, patched.id, patched.name);
-        return patched;
+        return { row: patched, actorId: await findTeamActorId(tx, orgId, patched.id) };
       });
-      await enqueueSearchUpsert(orgId, 'team', row.id);
-      return ok(c, TeamDetail, toOut(row));
+      await enqueueSearchUpsert(orgId, 'team', updatedTeam.row.id);
+      return ok(c, TeamDetail, toOut(updatedTeam.row, updatedTeam.actorId));
     },
   )
   .delete(

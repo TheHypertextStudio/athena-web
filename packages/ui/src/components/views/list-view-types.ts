@@ -20,6 +20,14 @@ export const NO_GROUP_ID = '__no_group__';
 /** The default label for the synthesized no-group bucket. */
 export const NO_GROUP_LABEL = 'No project / Triage';
 
+/** Semantic DOM attributes owned by {@link ListView} and forwarded to one rendered row. */
+export interface ListViewRowProps {
+  /** Stable DOM id referenced by the grid's `aria-activedescendant`. */
+  readonly id: string;
+  /** One-based position in the flattened row sequence. */
+  readonly 'aria-rowindex': number;
+}
+
 /** Context passed to {@link ListViewProps.renderRow} for one data row. */
 export interface RenderRowContext {
   /** The row's index within the flattened row array. */
@@ -28,6 +36,8 @@ export interface RenderRowContext {
   active: boolean;
   /** Activate (open) this row. */
   onActivate: () => void;
+  /** Attributes that the renderer must spread onto its semantic `role="row"` element. */
+  rowProps: ListViewRowProps;
 }
 
 /** A flattened row: a group header, a sub-group header, or a data row. */
@@ -49,6 +59,11 @@ export type FlatRow<TItem> =
 
 /** Props for {@link ListView}. */
 export interface ListViewProps<TItem> {
+  /**
+   * Stable key for one presentation mode whose scroll, collapse, and active-row state should be
+   * restored when that mode returns. Use a small bounded set of keys such as `browse` and `search`.
+   */
+  stateKey?: string | undefined;
   /** The flat list of items to group, sub-group, and render. */
   items: readonly TItem[];
   /** Partition items into top-level groups; omit it for one flat virtualized list. */

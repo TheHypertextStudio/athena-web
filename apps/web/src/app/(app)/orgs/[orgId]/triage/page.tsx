@@ -6,10 +6,14 @@ import { Inbox } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
 import { useAppParams } from '@/lib/app-location';
-import { type JSX } from 'react';
+import { type JSX, useCallback, useMemo, useRef } from 'react';
 
+import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
+import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
+import { useResidentInPageSearch } from '@/components/in-page-search/use-resident-in-page-search';
 import SuggestionsLane from '@/components/triage/suggestions-lane';
 import { TriageRow } from '@/components/triage/triage-row';
+import { taskListKey } from '@/components/views/task-list-key';
 import { entityDragSource } from '@/lib/entity-drag';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { useTriage } from '@/lib/use-triage';
@@ -42,9 +46,35 @@ export default function TriagePage(): JSX.Element {
     sortToProgram,
     dismiss,
   } = useTriage(orgId, categoryOf);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const source = useMemo(() => ({ completeness: 'complete' as const, items: queue }), [queue]);
+  const searchableText = useCallback(
+    (task: (typeof queue)[number]): string => {
+      const row = toRow(task);
+      const provider =
+        task.provenance.source === 'linked'
+          ? providerName(task.provenance.sourceIntegrationId)
+          : 'Docket';
+      return [task.title, groupBy(task).label, row.assigneeName, provider]
+        .filter((value): value is string => Boolean(value))
+        .join(' ');
+    },
+    [groupBy, providerName, toRow],
+  );
+  const search = useResidentInPageSearch({ source, searchableText });
+  const { restoreFocus } = useInPageSearchTarget({
+    id: 'triage',
+    rootRef,
+    inputRef: searchInputRef,
+    enabled: !loading && !loadError,
+  });
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+    <div
+      ref={rootRef}
+      className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8"
+    >
       <header className="flex flex-col gap-1">
         <h1 className="text-on-surface text-title-large">Triage</h1>
         <p className="text-on-surface-variant text-xs">
@@ -55,6 +85,17 @@ export default function TriagePage(): JSX.Element {
       </header>
 
       <SuggestionsLane orgId={orgId} canAct />
+
+      <InPageSearchField
+        inputRef={searchInputRef}
+        value={search.draft}
+        onValueChange={search.setDraft}
+        onEscapeEmpty={restoreFocus}
+        label="Search the triage queue"
+        placeholder="Search every triage item"
+        resultCount={search.items.length}
+        pending={search.draft !== search.settledQuery}
+      />
 
       {!loading && !loadError ? (
         <p className="text-on-surface-variant text-xs tabular-nums">
@@ -96,46 +137,56 @@ export default function TriagePage(): JSX.Element {
             </div>
           </div>
         ) : (
-          <ListView
-            items={queue}
-            label="Triage queue, grouped by team"
-            getItemKey={(task) => task.id}
-            groupBy={groupBy}
-            rowHeight={40}
-            renderRow={(task, ctx) => (
-              <TriageRow
-                task={toRow(task)}
-                drag={entityDragSource({
-                  kind: 'task',
-                  id: task.id,
-                  organizationId: task.organizationId,
-                  title: task.title,
-                })}
-                active={ctx.active}
-                onActivate={ctx.onActivate}
-                canEdit={canEdit}
-                onRename={rename}
-                busy={pending.has(task.id)}
-                projects={projectDestinations}
-                programs={programDestinations}
-                projectNoun={projectNoun}
-                programNoun={programNoun}
-                providerName={providerName}
-                onAssignProject={(projectId) => {
-                  void sortToProject(task.id, projectId);
-                }}
-                onAssignProgram={(programId) => {
-                  void sortToProgram(task.id, programId);
-                }}
-                onDismiss={() => {
-                  void dismiss(task.id);
-                }}
-              />
-            )}
-            onActivateItem={(task) => {
-              router.push(`/orgs/${orgId}/tasks/${task.id}`);
-            }}
-          />
+          <div className="relative h-full min-h-0">
+            <ListView
+              stateKey={search.settledQuery.trim().length > 0 ? 'search' : 'browse'}
+              items={search.items}
+              label="Triage queue, grouped by team"
+              getItemKey={taskListKey}
+              groupBy={groupBy}
+              rowHeight={40}
+              className={search.items.length === 0 ? 'invisible' : undefined}
+              renderRow={(task, ctx) => (
+                <TriageRow
+                  task={toRow(task)}
+                  drag={entityDragSource({
+                    kind: 'task',
+                    id: task.id,
+                    organizationId: task.organizationId,
+                    title: task.title,
+                  })}
+                  active={ctx.active}
+                  onActivate={ctx.onActivate}
+                  rowProps={ctx.rowProps}
+                  canEdit={canEdit}
+                  onRename={rename}
+                  busy={pending.has(task.id)}
+                  projects={projectDestinations}
+                  programs={programDestinations}
+                  projectNoun={projectNoun}
+                  programNoun={programNoun}
+                  providerName={providerName}
+                  onAssignProject={(projectId) => {
+                    void sortToProject(task.id, projectId);
+                  }}
+                  onAssignProgram={(programId) => {
+                    void sortToProgram(task.id, programId);
+                  }}
+                  onDismiss={() => {
+                    void dismiss(task.id);
+                  }}
+                />
+              )}
+              onActivateItem={(task) => {
+                router.push(`/orgs/${orgId}/tasks/${task.id}`);
+              }}
+            />
+            {search.items.length === 0 ? (
+              <p className="text-on-surface-variant text-body-medium absolute inset-0 flex items-center justify-center p-8 text-center">
+                No triage items match this search.
+              </p>
+            ) : null}
+          </div>
         )}
       </section>
     </div>

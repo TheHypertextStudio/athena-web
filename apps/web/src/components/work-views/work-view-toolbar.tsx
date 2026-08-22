@@ -38,8 +38,8 @@ import {
   workViewFieldCatalog,
 } from './view-state';
 
-type ToolbarControl = 'sort' | 'group' | 'layout' | 'properties' | 'default';
-type ToolbarPriority = 0 | 1 | 2 | 3 | 4 | 5;
+type ToolbarControl = 'sort' | 'group' | 'layout' | 'properties' | 'default' | 'reset';
+type ToolbarPriority = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 const CONTROL_PRIORITY = {
   sort: 1,
@@ -47,6 +47,7 @@ const CONTROL_PRIORITY = {
   layout: 3,
   properties: 4,
   default: 5,
+  reset: 6,
 } as const satisfies Record<ToolbarControl, ToolbarPriority>;
 
 const PRIORITY_MIN_WIDTH: Readonly<Record<ToolbarPriority, number>> = {
@@ -56,6 +57,7 @@ const PRIORITY_MIN_WIDTH: Readonly<Record<ToolbarPriority, number>> = {
   3: 960,
   4: 1080,
   5: 1200,
+  6: 1320,
 };
 
 const CONTROL_LABEL = {
@@ -64,12 +66,13 @@ const CONTROL_LABEL = {
   layout: 'Layout',
   properties: 'Properties',
   default: 'Set as default',
+  reset: 'Reset to default',
 } as const satisfies Record<ToolbarControl, string>;
 
 /** Return the highest lower-priority toolbar tier that fits the measured container. */
 export function visibleToolbarPriority(width: number): ToolbarPriority {
   let result: ToolbarPriority = 0;
-  for (const priority of [1, 2, 3, 4, 5] as const) {
+  for (const priority of [1, 2, 3, 4, 5, 6] as const) {
     if (width < PRIORITY_MIN_WIDTH[priority]) break;
     result = priority;
   }
@@ -151,6 +154,7 @@ export interface WorkViewToolbarProps<TTarget extends ViewTarget> {
   readonly onDefinitionChange: (definition: WorkViewDefinitionFor<TTarget>) => void;
   readonly onSaveView: () => void;
   readonly onSetDefault: () => void;
+  readonly onReset: () => void;
   readonly canSetDefault?: boolean;
   readonly facetResponse?: WorkViewFacetResponseForTarget<TTarget> | undefined;
   readonly facetMetadataResponse?: WorkViewFacetResponseForTarget<TTarget> | undefined;
@@ -169,6 +173,7 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
   onDefinitionChange,
   onSaveView,
   onSetDefault,
+  onReset,
   canSetDefault = true,
   facetResponse,
   facetMetadataResponse,
@@ -184,7 +189,14 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
   const [filterOpen, setFilterOpen] = useState(false);
   const [editingFilterIndex, setEditingFilterIndex] = useState<number | null>(null);
   const controls = useMemo<readonly ToolbarControl[]>(
-    () => ['sort', 'group', 'layout', 'properties', ...(canSetDefault ? ['default' as const] : [])],
+    () => [
+      'sort',
+      'group',
+      'layout',
+      'properties',
+      ...(canSetDefault ? ['default' as const] : []),
+      'reset',
+    ],
     [canSetDefault],
   );
   const visibleControls = controls.filter(
@@ -230,6 +242,13 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
       return (
         <Button key={control} variant="ghost" aria-label="Set as default" onClick={onSetDefault}>
           Set as default
+        </Button>
+      );
+    }
+    if (control === 'reset') {
+      return (
+        <Button key={control} variant="ghost" aria-label="Reset to default" onClick={onReset}>
+          Reset to default
         </Button>
       );
     }
@@ -315,6 +334,7 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
                     key={control}
                     onSelect={() => {
                       if (control === 'default') onSetDefault();
+                      else if (control === 'reset') onReset();
                       else setOverflowPanel(control);
                     }}
                   >

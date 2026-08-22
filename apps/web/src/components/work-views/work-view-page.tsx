@@ -10,6 +10,8 @@ import {
   SavedWorkViewOut,
   type SavedWorkViewOut as SavedWorkViewOutValue,
   TaskViewDefinition,
+  TeamId,
+  type ViewScope,
   ViewInstanceKey,
 } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
@@ -23,6 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Select,
   Skeleton,
 } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
@@ -30,6 +33,7 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useState } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
+import { useActiveOrg } from '@/components/active-org';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
@@ -135,10 +139,13 @@ export function WorkViewPage<TTarget extends ViewTarget>({
 }: WorkViewPageProps<TTarget>): JSX.Element {
   const router = useRouter();
   const { openCreate } = useCreateObject();
+  const { teams } = useActiveOrg();
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [copiedSelection, setCopiedSelection] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [viewName, setViewName] = useState('');
+  const [viewScope, setViewScope] = useState<ViewScope>('personal');
+  const [viewTeamId, setViewTeamId] = useState('');
   const [dependencyMode, setDependencyMode] = useState(false);
   const [selectedViewId, setSelectedViewId] = useState<string | null>(null);
   const copy = PAGE_COPY[target];
@@ -411,6 +418,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                   setSaveOpen(true);
                 }}
                 onSetDefault={controller.setAsDefault}
+                onReset={controller.resetPersonalOverride}
                 facetResponse={controller.facetResponse}
                 facetMetadataResponse={controller.facetMetadataResponse}
                 facetLoading={controller.facetLoading}
@@ -477,13 +485,23 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           </Button>
         </div>
       ) : null}
-      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+      <Dialog
+        open={saveOpen}
+        onOpenChange={(open) => {
+          setSaveOpen(open);
+          if (!open) {
+            setViewName('');
+            setViewScope('personal');
+            setViewTeamId('');
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Save view</DialogTitle>
             <DialogDescription>Save the current filter and display settings.</DialogDescription>
           </DialogHeader>
-          <label className="text-body-medium flex flex-col gap-2 font-medium">
+          <label className="text-label-large flex flex-col gap-2">
             View name
             <Input
               autoFocus
@@ -493,21 +511,67 @@ export function WorkViewPage<TTarget extends ViewTarget>({
               }}
             />
           </label>
+          <label className="text-label-large flex flex-col gap-2">
+            Share with
+            <Select
+              value={viewScope}
+              onChange={(event) => {
+                const scope = event.target.value as ViewScope;
+                setViewScope(scope);
+                if (scope !== 'team') setViewTeamId('');
+              }}
+            >
+              <option value="personal">Only me</option>
+              <option value="team">A team</option>
+              <option value="organization">Everyone in this workspace</option>
+            </Select>
+          </label>
+          {viewScope === 'team' ? (
+            <label className="text-label-large flex flex-col gap-2">
+              Team
+              <Select
+                value={viewTeamId}
+                onChange={(event) => {
+                  setViewTeamId(event.target.value);
+                }}
+              >
+                <option value="">Choose a team</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          ) : null}
           <DialogFooter>
             <Button
               variant="ghost"
               onClick={() => {
                 setSaveOpen(false);
+                setViewName('');
+                setViewScope('personal');
+                setViewTeamId('');
               }}
             >
               Cancel
             </Button>
             <Button
-              disabled={viewName.trim().length === 0 || controller.saving}
+              disabled={
+                viewName.trim().length === 0 ||
+                controller.saving ||
+                (viewScope === 'team' && viewTeamId.length === 0)
+              }
               onClick={() => {
-                controller.saveView({ name: viewName.trim() });
+                controller.saveView({
+                  name: viewName.trim(),
+                  scope: viewScope,
+                  ...(viewScope === 'team' ? { teamId: TeamId.parse(viewTeamId) } : {}),
+                });
                 setSaveOpen(false);
                 setViewName('');
+                setViewScope('personal');
+                setViewTeamId('');
               }}
             >
               {controller.saving ? 'Saving…' : 'Save view'}

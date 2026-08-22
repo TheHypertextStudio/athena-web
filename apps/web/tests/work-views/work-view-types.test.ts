@@ -43,6 +43,7 @@ describe('work-view component type relationships', () => {
       onDefinitionChange: () => undefined,
       onSaveView: () => undefined,
       onSetDefault: () => undefined,
+      onReset: () => undefined,
     };
     const initiativeProps: WorkViewToolbarProps<'initiative'> = {
       target: 'initiative',
@@ -50,6 +51,7 @@ describe('work-view component type relationships', () => {
       onDefinitionChange: () => undefined,
       onSaveView: () => undefined,
       onSetDefault: () => undefined,
+      onReset: () => undefined,
     };
     const taskSort: WorkViewSortTerm<'task'> = { field: 'dueDate', direction: 'asc' };
     const exerciseInitiativeController = (controller: WorkViewController<'initiative'>): void => {
@@ -66,6 +68,7 @@ describe('work-view component type relationships', () => {
       onDefinitionChange: () => undefined,
       onSaveView: () => undefined,
       onSetDefault: () => undefined,
+      onReset: () => undefined,
     };
     const invalidInitiativeSort: WorkViewSortTerm<'initiative'> = {
       // @ts-expect-error dueDate is not an Initiative sort field.

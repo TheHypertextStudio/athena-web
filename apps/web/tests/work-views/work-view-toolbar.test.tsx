@@ -159,6 +159,7 @@ describe('WorkViewToolbar', () => {
           onDefinitionChange={vi.fn()}
           onSaveView={vi.fn()}
           onSetDefault={vi.fn()}
+          onReset={vi.fn()}
         />,
       );
       return;
@@ -182,6 +183,7 @@ describe('WorkViewToolbar', () => {
         onDefinitionChange={vi.fn()}
         onSaveView={vi.fn()}
         onSetDefault={vi.fn()}
+        onReset={vi.fn()}
       />,
     );
   }
@@ -223,8 +225,36 @@ describe('WorkViewToolbar', () => {
       .map((item) => item.textContent.trim())
       .filter(Boolean);
 
-    expect(hiddenLabels).toEqual(['Sort', 'Group', 'Layout', 'Properties', 'Set as default']);
+    expect(hiddenLabels).toEqual([
+      'Sort',
+      'Group',
+      'Layout',
+      'Properties',
+      'Set as default',
+      'Reset to default',
+    ]);
     expect(hiddenLabels.filter((label) => visibleLabels.includes(label))).toEqual([]);
+  });
+
+  it('resets personal state from the narrow overflow', async () => {
+    const user = userEvent.setup();
+    const onReset = vi.fn();
+    render(
+      <WorkViewToolbar
+        target="task"
+        definition={taskDefinition}
+        onDefinitionChange={vi.fn()}
+        onSaveView={vi.fn()}
+        onSetDefault={vi.fn()}
+        onReset={onReset}
+      />,
+    );
+    resizeToolbar(600);
+
+    await user.click(screen.getByRole('button', { name: 'More view controls' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Reset to default' }));
+
+    expect(onReset).toHaveBeenCalledOnce();
   });
 
   it('changes group, layout, and properties from the narrow overflow', async () => {
@@ -237,6 +267,7 @@ describe('WorkViewToolbar', () => {
         onDefinitionChange={onDefinitionChange}
         onSaveView={vi.fn()}
         onSetDefault={vi.fn()}
+        onReset={vi.fn()}
       />,
     );
     resizeToolbar(600);
@@ -284,6 +315,7 @@ describe('WorkViewToolbar', () => {
         onDefinitionChange={onDefinitionChange}
         onSaveView={vi.fn()}
         onSetDefault={vi.fn()}
+        onReset={vi.fn()}
       />,
     );
 
@@ -357,6 +389,7 @@ describe('WorkViewToolbar', () => {
         onDefinitionChange={onDefinitionChange}
         onSaveView={vi.fn()}
         onSetDefault={vi.fn()}
+        onReset={vi.fn()}
       />,
     );
 
@@ -414,6 +447,7 @@ describe('WorkViewToolbar', () => {
         onDefinitionChange={vi.fn()}
         onSaveView={vi.fn()}
         onSetDefault={vi.fn()}
+        onReset={vi.fn()}
       />,
     );
 
@@ -449,6 +483,7 @@ describe('WorkViewToolbar', () => {
     expect(screen.getByRole('button', { name: 'Layout' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Properties' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Set as default' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Reset to default' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'More view controls' })).not.toBeInTheDocument();
   });
 

@@ -52,7 +52,7 @@ describe('Initiative visual contract', () => {
   it('keeps the hierarchy dense and gives every data column a clipping gutter', () => {
     const workList = source(workListPath);
     expect(workList).toContain('<ListView');
-    expect(workList).toContain('className="h-full min-h-0"');
+    expect(workList).toContain('className="relative h-full min-h-0"');
     expect(workList).toContain('className={`min-w-40 flex-1');
     expect(workList).toContain('hidden max-w-40 shrink-0');
     expect(workList).toContain('truncate');

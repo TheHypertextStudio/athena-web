@@ -3,7 +3,13 @@
 import { ListCell, ListRow, ListView } from '@docket/ui/components';
 import { Button, Checkbox } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { type JSX, type KeyboardEvent, useMemo, useRef } from 'react';
+import { type DragEvent, type JSX, type KeyboardEvent, useMemo, useRef, useState } from 'react';
+
+import {
+  type InitiativeDragObject,
+  readInitiativeDragObject,
+  writeInitiativeDragObject,
+} from '@/components/initiatives/hierarchy-dnd';
 
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog } from './view-state';
@@ -38,6 +44,9 @@ export interface WorkListProps<TTarget extends ViewTarget> {
   readonly loadingMoreRows?: boolean;
   readonly onLoadMoreRows?: (() => void) | undefined;
   readonly onToggleGroup?: ((key: string) => void) | undefined;
+  readonly onInitiativeReparent?:
+    | ((dragged: InitiativeDragObject, targetId: string | null) => void)
+    | undefined;
 }
 
 const INITIATIVE_DEPTH_CLASS = ['pl-0', 'pl-4', 'pl-8', 'pl-12', 'pl-16'] as const;
@@ -87,8 +96,10 @@ export function WorkList<TTarget extends ViewTarget>({
   loadingMoreRows = false,
   onLoadMoreRows,
   onToggleGroup,
+  onInitiativeReparent,
 }: WorkListProps<TTarget>): JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const [draggingInitiative, setDraggingInitiative] = useState(false);
   const groupField = definition.arrangement.groupBy as string | null;
   const subGroupField = definition.arrangement.subGroupBy as string | null;
   const grouped = groupField !== null;
@@ -122,9 +133,32 @@ export function WorkList<TTarget extends ViewTarget>({
     const id = active?.dataset['rowId'];
     if (id) toggle(id);
   };
+  const dropInitiative = (event: DragEvent<HTMLElement>, targetId: string | null): void => {
+    if (!onInitiativeReparent) return;
+    event.preventDefault();
+    const dragged = readInitiativeDragObject(event.dataTransfer);
+    setDraggingInitiative(false);
+    if (dragged) onInitiativeReparent(dragged, targetId);
+  };
 
   return (
     <div ref={rootRef} className="relative h-full min-h-0" onKeyDownCapture={handleKeys}>
+      {draggingInitiative ? (
+        <div
+          role="button"
+          tabIndex={0}
+          className="border-primary bg-primary-container text-on-primary-container text-label-large absolute inset-x-3 top-3 z-10 flex min-h-10 items-center justify-center rounded-lg border"
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+          }}
+          onDrop={(event) => {
+            dropInitiative(event, null);
+          }}
+        >
+          Drop here to move to the top level
+        </div>
+      ) : null}
       <ListView<ListMembership<TTarget>>
         items={memberships}
         groupBy={
@@ -161,6 +195,28 @@ export function WorkList<TTarget extends ViewTarget>({
               data-row-id={row.id}
               data-context-row={row.isContext ? 'true' : undefined}
               className={row.isContext ? 'text-on-surface-variant' : undefined}
+              draggable={row.target === 'initiative' && onInitiativeReparent !== undefined}
+              onDragStart={(event) => {
+                if (row.target !== 'initiative' || !onInitiativeReparent) return;
+                writeInitiativeDragObject(event.dataTransfer, {
+                  id: row.id,
+                  parentInitiativeId: row.parent,
+                  parentLinkId: row.parentLinkId,
+                });
+                setDraggingInitiative(true);
+              }}
+              onDragEnd={() => {
+                setDraggingInitiative(false);
+              }}
+              onDragOver={(event) => {
+                if (row.target !== 'initiative' || !onInitiativeReparent) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+              }}
+              onDrop={(event) => {
+                if (row.target !== 'initiative') return;
+                dropInitiative(event, row.id);
+              }}
             >
               <ListCell className="shrink-0">
                 <Checkbox

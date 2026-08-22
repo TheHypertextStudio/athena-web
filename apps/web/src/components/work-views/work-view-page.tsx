@@ -45,6 +45,7 @@ import { ProjectTimelineAdapter } from './project-timeline-adapter';
 import type { WorkViewRowFor } from './renderer-types';
 import { useWorkView } from './use-work-view';
 import { useWorkViewOrder } from './use-work-view-order';
+import { useInitiativeHierarchy } from './use-initiative-hierarchy';
 import { useProjectTimelineMutations } from './use-project-timeline-mutations';
 import type { WorkViewDefinitionFor } from './view-state';
 import { WorkBoard } from './work-board';
@@ -171,6 +172,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     savedView: selectedSavedView as Extract<SavedWorkViewOutValue, { target: TTarget }> | null,
   });
   const orderMutation = useWorkViewOrder(organizationId);
+  const initiativeHierarchy = useInitiativeHierarchy(organizationId);
   const projectTimeline = useProjectTimelineMutations(organizationId);
   // The target discriminator was validated by `useWorkView`. TypeScript loses that correlation
   // when it indexes the four response variants through a generic target.
@@ -337,6 +339,17 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         loadingMoreRows={controller.loadingMoreRows}
         onLoadMoreRows={controller.loadMoreRows}
         onToggleGroup={controller.toggleCollapsedGroup}
+        onInitiativeReparent={
+          target === 'initiative'
+            ? (dragged, targetId) => {
+                initiativeHierarchy.mutate({
+                  dragged,
+                  targetId,
+                  rows: rows as unknown as readonly InitiativeViewRow[],
+                });
+              }
+            : undefined
+        }
       />
     );
   }
@@ -445,11 +458,16 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       }
     >
       <div className="border-outline-variant bg-surface-container-lowest flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-        {projectTimeline.error || orderMutation.error ? (
+        {projectTimeline.error || orderMutation.error || initiativeHierarchy.error ? (
           <p role="alert" className="text-error text-body-medium px-3 py-2">
             {projectTimeline.error
               ? userErrorMessage(projectTimeline.error, 'Could not reschedule this project.')
-              : userErrorMessage(orderMutation.error, `Could not move this ${copy.singular}.`)}
+              : initiativeHierarchy.error
+                ? userErrorMessage(
+                    initiativeHierarchy.error,
+                    'Could not change this initiative hierarchy.',
+                  )
+                : userErrorMessage(orderMutation.error, `Could not move this ${copy.singular}.`)}
           </p>
         ) : null}
         {content}

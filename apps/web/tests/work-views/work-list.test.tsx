@@ -158,6 +158,7 @@ describe('WorkList', () => {
       latestUpdate: null,
       activeProjectCount: 1,
       parent: null,
+      parentLinkId: null,
       contributingProjects: [],
       manualRank: 'a0',
       isContext: true,
@@ -201,5 +202,89 @@ describe('WorkList', () => {
       'true',
     );
     expect(screen.getByText('Matching child')).toBeVisible();
+  });
+
+  it('turns an Initiative row drop into a hierarchy move', () => {
+    const definition = InitiativeViewDefinition.parse({
+      version: 2,
+      target: 'initiative',
+      filter: null,
+      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: ['health'],
+        density: 'compact',
+        showEmptyGroups: false,
+      },
+    });
+    const parent = InitiativeViewRow.parse({
+      target: 'initiative',
+      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+      organization: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
+      name: 'Parent',
+      status: 'planned',
+      priority: 'high',
+      health: null,
+      owner: null,
+      leadTeam: null,
+      labels: [],
+      targetDate: null,
+      updateCadence: 'monthly',
+      latestUpdate: null,
+      activeProjectCount: 1,
+      parent: null,
+      parentLinkId: null,
+      contributingProjects: [],
+      manualRank: 'a0',
+      isContext: false,
+    });
+    const child = InitiativeViewRow.parse({
+      ...parent,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
+      name: 'Child',
+      parent: parent.id,
+      parentLinkId: '01ARZ3NDEKTSV4RRFFQ69G5FD0',
+      manualRank: 'a1',
+    });
+    const onInitiativeReparent = vi.fn();
+    const values = new Map<string, string>();
+    const dataTransfer = {
+      effectAllowed: 'none',
+      dropEffect: 'none',
+      setData: (type: string, value: string) => values.set(type, value),
+      getData: (type: string) => values.get(type) ?? '',
+    } as unknown as DataTransfer;
+
+    render(
+      <WorkList
+        target="initiative"
+        definition={definition}
+        rows={[parent, child]}
+        groups={[]}
+        groupPages={[]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+        onInitiativeReparent={onInitiativeReparent}
+      />,
+    );
+
+    const childRow = screen.getByText('Child').closest('[role="row"]');
+    const parentRow = screen.getByText('Parent').closest('[role="row"]');
+    if (!(childRow instanceof HTMLElement) || !(parentRow instanceof HTMLElement)) {
+      throw new Error('Initiative rows did not render.');
+    }
+    fireEvent.dragStart(childRow, { dataTransfer });
+    fireEvent.drop(parentRow, { dataTransfer });
+
+    expect(onInitiativeReparent).toHaveBeenCalledWith(
+      {
+        id: child.id,
+        parentInitiativeId: parent.id,
+        parentLinkId: child.parentLinkId,
+      },
+      parent.id,
+    );
   });
 });

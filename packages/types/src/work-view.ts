@@ -33,6 +33,7 @@ import {
   ActorId,
   CycleId,
   DateString,
+  Id,
   InitiativeId,
   LabelId,
   MilestoneId,
@@ -1332,6 +1333,7 @@ export const InitiativeViewRow = z
     latestUpdate: nullableTimestamp,
     activeProjectCount: count,
     parent: InitiativeId.nullable(),
+    parentLinkId: Id.nullable().default(null),
     organization: OrganizationId,
     contributingProjects: z.array(InitiativeContributingProject).default([]),
   })

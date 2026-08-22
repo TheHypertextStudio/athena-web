@@ -22,17 +22,15 @@ describe('Picker display contract', () => {
     expect(taskDetail).toContain('toProjectOptions(projects, projectDisplays)');
   });
 
-  it('invalidates bulk display caches after every supported icon edit', () => {
+  it('invalidates bulk display caches after every supported icon editor', () => {
     const sources = [
-      source('apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx'),
       source(
         'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
       ),
-      source('apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx'),
       source('apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx'),
       source('apps/web/src/app/(app)/orgs/[orgId]/teams/[teamId]/team-detail-client.tsx'),
     ];
-    const expectedTypes = ['initiative', 'initiative', 'project', 'project', 'team'];
+    const expectedTypes = ['initiative', 'project', 'team'];
 
     sources.forEach((contents, index) => {
       expect(contents).toContain(`queryKeys.entityDisplays(orgId, '${expectedTypes[index]}')`);

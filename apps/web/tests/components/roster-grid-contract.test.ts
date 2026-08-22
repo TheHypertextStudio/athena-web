@@ -5,11 +5,15 @@ import { describe, expect, it } from 'vitest';
 
 const root = resolve(import.meta.dirname, '../../../../');
 const rosterGridPath = join(root, 'apps/web/src/components/views/roster-grid.ts');
-const rosterPaths = [
-  join(root, 'apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx'),
-  join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx'),
+const legacyRosterPaths = [
   join(root, 'apps/web/src/components/programs/program-list-ui.tsx'),
   join(root, 'apps/web/src/components/teams/team-list-ui.tsx'),
+];
+const typedRosterPaths = [
+  join(root, 'apps/web/src/app/(app)/orgs/[orgId]/tasks/org-tasks-client.tsx'),
+  join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx'),
+  join(root, 'apps/web/src/app/(app)/orgs/[orgId]/programs/programs-client.tsx'),
+  join(root, 'apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx'),
 ];
 
 function source(path: string): string {
@@ -24,7 +28,7 @@ describe('Roster grid contract', () => {
     );
     expect(contract).toContain("'flex min-w-0 items-center overflow-hidden px-4'");
 
-    for (const path of rosterPaths) {
+    for (const path of legacyRosterPaths) {
       const roster = source(path);
       expect(roster).toContain("from '@/components/views/roster-grid'");
       expect(roster).toContain('ROSTER_HEADER_CELL_CLASS');
@@ -32,10 +36,13 @@ describe('Roster grid contract', () => {
     }
   });
 
-  it('keeps strategic roster rows at 56px instead of the old 72px', () => {
-    for (const path of rosterPaths) {
+  it('routes the four planning rosters through the shared density-aware list', () => {
+    const workList = source(join(root, 'apps/web/src/components/work-views/work-list.tsx'));
+    expect(workList).toContain('import { ListCell, ListRow, ListView }');
+
+    for (const path of typedRosterPaths) {
       const roster = source(path);
-      expect(roster).toMatch(/(?:h-14|min-h-14)/);
+      expect(roster).toContain("from '@/components/work-views/work-view-page'");
       expect(roster).not.toContain('h-[72px]');
       expect(roster).not.toContain('min-h-[72px]');
     }

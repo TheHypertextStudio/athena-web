@@ -126,6 +126,10 @@ const projections = {
       join authorized parent on parent.id=h.parent_initiative_id
       where h.child_initiative_id=e.id
         and h.context_organization_id=${organizationId} limit 1) parent,
+    (select h.id from initiative_hierarchy_link h
+      join authorized parent on parent.id=h.parent_initiative_id
+      where h.child_initiative_id=e.id
+        and h.context_organization_id=${organizationId} limit 1) parent_link_id,
     e.organization_id as organization,
     coalesce((select json_agg(json_build_object(
       'id', p.id, 'name', p.name,

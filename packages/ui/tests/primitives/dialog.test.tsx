@@ -144,6 +144,8 @@ describe('Dialog family', () => {
     expect(dialog).toHaveAccessibleName('New project');
     expect(dialog).toHaveAccessibleDescription('Give it a name to get started.');
     expect(dialog).toHaveClass('bg-surface-container-high', 'rounded-xl');
+    expect(dialog).toHaveClass('max-h-[85vh]', 'min-h-0', 'overflow-y-auto', 'overscroll-contain');
+    expect(dialog).not.toHaveClass('touch-pan-y');
   });
 
   it('moves focus into the dialog on open (the autoFocused primary field)', async () => {

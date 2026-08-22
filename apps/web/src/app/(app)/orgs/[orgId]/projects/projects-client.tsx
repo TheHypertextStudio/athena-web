@@ -39,6 +39,7 @@ import { type AppliedView, applyView } from '@/components/views/apply-view';
 import { resolveRelationLabel, type FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
+import { ROSTER_DATA_CELL_CLASS, ROSTER_HEADER_CELL_CLASS } from '@/components/views/roster-grid';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { entityDragSource } from '@/lib/entity-drag';
@@ -179,7 +180,7 @@ function ProjectIdentity({
           </Link>
         )}
         {item.summary ? (
-          <p className="text-on-surface-variant mt-0.5 line-clamp-2 max-w-[52ch] text-xs leading-4">
+          <p className="text-on-surface-variant mt-0.5 line-clamp-1 max-w-[52ch] text-xs leading-4">
             {item.summary}
           </p>
         ) : null}
@@ -235,14 +236,14 @@ function ListLens({
         role="row"
         {...dragProps}
         className={cn(
-          'hover:bg-surface-container-high relative grid min-h-[72px] cursor-pointer grid-cols-[minmax(25rem,1fr)_7rem_7rem_10rem_7rem_8rem] items-center rounded-lg transition-colors',
+          'hover:bg-surface-container-high relative grid min-h-14 cursor-pointer grid-cols-[minmax(24rem,1fr)_8rem_8rem_12rem_9rem_10rem] items-center rounded-lg transition-colors',
           dragProps?.className,
         )}
         onMouseEnter={() => {
           onPrefetch(item.id);
         }}
       >
-        <div role="gridcell" className="min-w-0 px-2 py-2">
+        <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} py-2`}>
           <ProjectIdentity
             item={item}
             orgId={orgId}
@@ -255,10 +256,10 @@ function ListLens({
             onOpen={onOpen}
           />
         </div>
-        <div role="gridcell" className="px-3">
+        <div role="gridcell" className={ROSTER_DATA_CELL_CLASS}>
           <WorkStatusBadge name={status.name} category={status.category} />
         </div>
-        <div role="gridcell" className="px-3 whitespace-nowrap">
+        <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} whitespace-nowrap`}>
           {item.health ? (
             <span className={`${HEALTH_CLASS[item.health]} font-medium`}>
               {HEALTH_LABEL[item.health]}
@@ -267,12 +268,15 @@ function ListLens({
             <span className="text-on-surface-variant">—</span>
           )}
         </div>
-        <div role="gridcell" className="px-3 whitespace-nowrap tabular-nums">
+        <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} whitespace-nowrap tabular-nums`}>
           {formatProjectTarget(item) ?? '—'}
         </div>
-        <div role="gridcell" className="px-3">
+        <div
+          role="gridcell"
+          className={`${ROSTER_DATA_CELL_CLASS} flex-col items-start justify-center`}
+        >
           <span className="tabular-nums">{percent}%</span>
-          <div className="bg-surface-container-highest mt-1 h-1 w-14 overflow-hidden rounded-full">
+          <div className="bg-surface-container-highest mt-1 h-1 w-14 max-w-full overflow-hidden rounded-full">
             <span
               className="bg-primary block h-full rounded-full"
               style={{ width: `${percent}%` }}
@@ -281,7 +285,7 @@ function ListLens({
         </div>
         <div
           role="gridcell"
-          className="text-on-surface-variant flex items-center gap-1 px-3 tabular-nums"
+          className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1 whitespace-nowrap tabular-nums`}
         >
           <Workflow aria-hidden className="size-4" />
           {item.blockedByIds.length > 0 ? `${item.blockedByIds.length} upstream` : 'Clear'}
@@ -292,27 +296,27 @@ function ListLens({
 
   return (
     <div className="overflow-x-auto overscroll-x-contain pb-1">
-      <div role="grid" aria-label="Projects" className="min-w-[64rem] text-sm">
+      <div role="grid" aria-label="Projects" className="min-w-[72rem] text-sm">
         <div
           role="row"
-          className="text-on-surface-variant grid h-9 grid-cols-[minmax(25rem,1fr)_7rem_7rem_10rem_7rem_8rem] items-center text-xs"
+          className="text-on-surface-variant grid h-9 grid-cols-[minmax(24rem,1fr)_8rem_8rem_12rem_9rem_10rem] items-center text-xs"
         >
-          <div role="columnheader" className="px-3 pl-14 font-medium">
+          <div role="columnheader" className={`${ROSTER_HEADER_CELL_CLASS} pl-16`}>
             Project
           </div>
-          <div role="columnheader" className="px-3 font-medium">
+          <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
             Status
           </div>
-          <div role="columnheader" className="px-3 font-medium">
+          <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
             Health
           </div>
-          <div role="columnheader" className="px-3 font-medium">
+          <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
             Target
           </div>
-          <div role="columnheader" className="px-3 font-medium">
+          <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
             Progress
           </div>
-          <div role="columnheader" className="px-3 font-medium">
+          <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
             Dependencies
           </div>
         </div>
@@ -498,7 +502,10 @@ export default function ProjectsListClient(): JSX.Element {
       if (context?.previous)
         queryClient.setQueryData([...queryKeys.projects(orgId), 'overview'], context.previous);
     },
-    invalidateKeys: [[...queryKeys.projects(orgId), 'overview']],
+    invalidateKeys: [
+      [...queryKeys.projects(orgId), 'overview'],
+      queryKeys.entityDisplays(orgId, 'project'),
+    ],
   });
 
   const renameMutation = useApiMutation<ProjectOut, { projectId: string; name: string }>({
@@ -710,7 +717,7 @@ export default function ProjectsListClient(): JSX.Element {
       {overviewQ.isPending ? (
         <div className="space-y-2">
           {Array.from({ length: 6 }, (_, index) => (
-            <Skeleton key={index} className="h-[72px] w-full" />
+            <Skeleton key={index} className="h-14 w-full" />
           ))}
         </div>
       ) : overviewQ.isError ? (

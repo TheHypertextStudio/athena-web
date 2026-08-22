@@ -114,6 +114,17 @@ export function useComposerOptions(
       { enabled: on('projects'), staleTime: STALE.static },
     ),
   );
+  const projectDisplaysQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'project'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'project' },
+        }),
+      'Could not load project icons.',
+      { enabled: on('projects'), staleTime: STALE.static },
+    ),
+  );
   const programsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.programs(orgId),
@@ -127,6 +138,17 @@ export function useComposerOptions(
       queryKeys.initiatives(orgId),
       () => api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId }, query: {} }),
       'Could not load initiatives.',
+      { enabled: on('initiatives'), staleTime: STALE.static },
+    ),
+  );
+  const initiativeDisplaysQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'initiative'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'initiative' },
+        }),
+      'Could not load initiative icons.',
       { enabled: on('initiatives'), staleTime: STALE.static },
     ),
   );
@@ -160,8 +182,10 @@ export function useComposerOptions(
     membersQ.isLoading ||
     agentsQ.isLoading ||
     projectsQ.isLoading ||
+    projectDisplaysQ.isLoading ||
     programsQ.isLoading ||
     initiativesQ.isLoading ||
+    initiativeDisplaysQ.isLoading ||
     labelsQ.isLoading ||
     cyclesQ.isLoading ||
     milestonesQ.isLoading;
@@ -189,8 +213,10 @@ export function useComposerOptions(
   const members = membersQ.data?.items ?? [];
   const agents = agentsQ.data?.items ?? [];
   const projects = projectsQ.data?.items ?? [];
+  const projectDisplays = projectDisplaysQ.data?.items ?? [];
   const programs = programsQ.data?.items ?? [];
   const initiatives = initiativesQ.data?.items ?? [];
+  const initiativeDisplays = initiativeDisplaysQ.data?.items ?? [];
   const labels = labelsQ.data?.items ?? [];
   const cycles = cyclesQ.data?.items ?? [];
   const milestones = milestonesQ.data?.items ?? [];
@@ -198,10 +224,10 @@ export function useComposerOptions(
   return useMemo(
     () => ({
       actorOptions: actorOptions(members, agents),
-      projectOptions: projectOptions(projects),
+      projectOptions: projectOptions(projects, projectDisplays),
       projects,
       programOptions: programOptions(programs),
-      initiativeOptions: initiativeOptions(initiatives),
+      initiativeOptions: initiativeOptions(initiatives, initiativeDisplays),
       labelOptions: labelOptions(labels),
       cycles,
       milestones,
@@ -212,8 +238,10 @@ export function useComposerOptions(
       members,
       agents,
       projects,
+      projectDisplays,
       programs,
       initiatives,
+      initiativeDisplays,
       labels,
       cycles,
       milestones,

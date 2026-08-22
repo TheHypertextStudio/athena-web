@@ -212,7 +212,10 @@ describe('AppShell', () => {
   it('is the tinted MD3 canvas, floating the main surface panel with a gutter on desktop only', () => {
     const { container } = render(
       <ContextProvider initialContext={null}>
-        <AppShell sidebar={<nav aria-label="Navigation" />}>
+        <AppShell
+          sidebar={<nav aria-label="Navigation" />}
+          banner={<div data-testid="sync-banner">Syncing</div>}
+        >
           <div>Main</div>
         </AppShell>
       </ContextProvider>,
@@ -229,6 +232,12 @@ describe('AppShell', () => {
     // which together drew a second box around content that already read as a panel.
     const main = screen.getByRole('main');
     expect(main).toHaveClass('bg-surface', 'lg:rounded-xl');
+    expect(main.parentElement).not.toHaveClass('lg:gap-2');
+    expect(screen.getByTestId('sync-banner').parentElement).toHaveAttribute(
+      'data-slot',
+      'shell-banner',
+    );
+    expect(screen.getByTestId('sync-banner').parentElement).toHaveClass('lg:mb-2');
     expect(main).not.toHaveClass(
       'bg-surface',
       'bg-surface-container-low',

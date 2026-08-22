@@ -15,6 +15,7 @@ import {
   AgentOut,
   CycleOut,
   defaultCycleName,
+  EntityDisplayOut,
   InitiativeOut,
   LabelOut,
   MemberOut,
@@ -151,9 +152,87 @@ describe('picker option mappers', () => {
       health: null,
       createdAt: CREATED_AT,
     });
-    expect(projectOptions([project])).toEqual([{ value: IDS.project, label: 'Apollo' }]);
+    expect(projectOptions([project])).toEqual([
+      expect.objectContaining({ value: IDS.project, label: 'Apollo', icon: expect.anything() }),
+    ]);
     expect(programOptions([program])).toEqual([{ value: IDS.program, label: 'Platform' }]);
-    expect(initiativeOptions([initiative])).toEqual([{ value: IDS.initiative, label: 'Q3' }]);
+    expect(initiativeOptions([initiative])).toEqual([
+      expect.objectContaining({ value: IDS.initiative, label: 'Q3', icon: expect.anything() }),
+    ]);
+  });
+
+  it('carries configured Project and Initiative glyphs into picker options', () => {
+    const project = ProjectOut.parse({
+      id: IDS.project,
+      organizationId: IDS.org,
+      name: 'Apollo',
+      description: null,
+      status: 'active',
+      health: null,
+      leadId: null,
+      teamId: null,
+      programId: null,
+      startDate: null,
+      startDateResolution: null,
+      startDateFiscalYearStartMonth: null,
+      targetDate: null,
+      targetDateResolution: null,
+      targetDateFiscalYearStartMonth: null,
+      createdAt: CREATED_AT,
+    });
+    const initiative = InitiativeOut.parse({
+      id: IDS.initiative,
+      organizationId: IDS.org,
+      name: 'Q3',
+      description: null,
+      summary: null,
+      ownerId: null,
+      status: 'active',
+      priority: 'none',
+      updateCadence: 'monthly',
+      targetDate: null,
+      targetDateResolution: null,
+      targetDateFiscalYearStartMonth: null,
+      health: null,
+      createdAt: CREATED_AT,
+    });
+    const projectDisplay = EntityDisplayOut.parse({
+      subjectType: 'project',
+      subjectId: IDS.project,
+      iconKey: 'rocket',
+      colorKey: 'orange',
+      customColor: null,
+      coverImage: null,
+      customized: true,
+    });
+    const initiativeDisplay = EntityDisplayOut.parse({
+      subjectType: 'initiative',
+      subjectId: IDS.initiative,
+      iconKey: 'campaign',
+      colorKey: 'teal',
+      customColor: '#0f766e',
+      coverImage: null,
+      customized: true,
+    });
+
+    const projectIcon = projectOptions([project], [projectDisplay])[0]?.icon as {
+      props?: { iconKey?: string; colorKey?: string; customColor?: string | null; size?: number };
+    };
+    const initiativeIcon = initiativeOptions([initiative], [initiativeDisplay])[0]?.icon as {
+      props?: { iconKey?: string; colorKey?: string; customColor?: string | null; size?: number };
+    };
+    expect(projectIcon.props).toMatchObject({
+      iconKey: 'rocket',
+      colorKey: 'orange',
+      customColor: null,
+      size: 20,
+    });
+    expect(initiativeIcon.props).toMatchObject({
+      iconKey: 'campaign',
+      colorKey: 'teal',
+      customColor: '#0f766e',
+      size: 20,
+    });
   });
 
   it('labels a cycle by its displayName, never its auto-roll number', () => {

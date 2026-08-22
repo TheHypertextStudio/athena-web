@@ -181,7 +181,11 @@ export default function ProjectDetailPage(): JSX.Element {
     onError: (_error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(detailKey, context.previous);
     },
-    invalidateKeys: [detailKey, [...queryKeys.projects(orgId), 'overview']],
+    invalidateKeys: [
+      detailKey,
+      [...queryKeys.projects(orgId), 'overview'],
+      queryKeys.entityDisplays(orgId, 'project'),
+    ],
   });
   const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
     mutationFn: (json) =>

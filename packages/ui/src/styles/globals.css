@@ -945,7 +945,7 @@
  * before while letting the cover fill `.masthead-band` all the way to its actual top.
  */
 .masthead-content {
-  padding-block-start: 1.25rem;
+  padding-block-start: 1.5rem;
   /*
    * Constant, not animated: `.detail-identity`'s compact height (2.5rem) is tuned to exactly match
    * the collapsed glyph's scaled size, so at full collapse the glyph fills that row edge to edge —

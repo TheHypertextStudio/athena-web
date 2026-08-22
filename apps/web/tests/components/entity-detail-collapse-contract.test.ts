@@ -71,7 +71,7 @@ describe('entity detail collapse contract', () => {
     // cover rather than an ancestor of it, so the cover's `inset-0` against `.masthead-band` isn't
     // pushed down by the same padding that indents the eyebrow/title text.
     expect(layout).toContain('className="masthead-content"');
-    expect(css).toMatch(/\.masthead-content\s*\{[\s\S]*padding-block-start:\s*1\.25rem/);
+    expect(css).toMatch(/\.masthead-content\s*\{[\s\S]*padding-block-start:\s*1\.5rem/);
     expect(css).not.toMatch(/\.detail-header\s*\{[^}]*padding-block-start/);
     expect(css).toMatch(/\.detail-tabs\s*\{[\s\S]*margin-block-start:\s*1rem/);
     expect(css).toMatch(

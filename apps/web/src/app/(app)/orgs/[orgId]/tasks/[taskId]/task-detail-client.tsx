@@ -37,7 +37,8 @@ import {
   projectOptions as toProjectOptions,
 } from '@/components/pickers/options';
 import { labelsDef, useCreateLabel } from '@/components/labels/queries';
-import { useApiListQuery } from '@/lib/query';
+import { api } from '@/lib/api';
+import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
@@ -142,9 +143,20 @@ export default function TaskDetailPage(): JSX.Element {
     () => memberActorOptions(members),
     [members],
   );
+  const projectDisplaysQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'project'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'project' },
+        }),
+      'Could not load project icons.',
+    ),
+  );
+  const projectDisplays = projectDisplaysQ.data?.items ?? [];
   const projectOptions = useMemo<readonly PickerOption[]>(
-    () => toProjectOptions(projects),
-    [projects],
+    () => toProjectOptions(projects, projectDisplays),
+    [projectDisplays, projects],
   );
   const programOptions = useMemo<readonly PickerOption[]>(
     () => toProgramOptions(programs),

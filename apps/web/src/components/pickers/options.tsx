@@ -18,10 +18,12 @@
  *
  * @see {@link useComposerOptions} for the hook that fetches the data these map over.
  */
+import { defaultEntityDisplay } from '@docket/types';
 import type {
   AgentOut,
   CycleOut,
   CycleStatus,
+  EntityDisplayOut,
   Health,
   InitiativeOut,
   LabelOut,
@@ -37,6 +39,7 @@ import { Globe, Shield } from '@docket/ui/icons';
 import type { ReactNode } from 'react';
 
 import { CYCLE_STATUS } from '@/components/cycles/cycle-status';
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/project-detail/health';
 import type { StatusLike } from '@/components/statuses/status-registry';
 import { PRIORITY_LABEL, PRIORITY_ORDER } from '@/components/task-detail/priority';
@@ -227,9 +230,27 @@ export function memberActorOptions(members: readonly MemberOut[]): readonly Pick
   }));
 }
 
-/** Map the org's projects into entity options. */
-export function projectOptions(projects: readonly ProjectOut[]): readonly PickerOption[] {
-  return projects.map((project) => ({ value: project.id, label: project.name }));
+/** Map the org's projects into entity options with their configured display glyphs. */
+export function projectOptions(
+  projects: readonly ProjectOut[],
+  displays: readonly EntityDisplayOut[] = [],
+): readonly PickerOption[] {
+  const displayById = new Map(displays.map((display) => [display.subjectId, display]));
+  return projects.map((project) => {
+    const display = displayById.get(project.id) ?? defaultEntityDisplay('project', project.id);
+    return {
+      value: project.id,
+      label: project.name,
+      icon: (
+        <EntityIconGlyph
+          iconKey={display.iconKey}
+          colorKey={display.colorKey}
+          customColor={display.customColor}
+          size={20}
+        />
+      ),
+    };
+  });
 }
 
 /** Map the org's programs into entity options. */
@@ -237,9 +258,28 @@ export function programOptions(programs: readonly ProgramOut[]): readonly Picker
   return programs.map((program) => ({ value: program.id, label: program.name }));
 }
 
-/** Map the org's initiatives into entity options. */
-export function initiativeOptions(initiatives: readonly InitiativeOut[]): readonly PickerOption[] {
-  return initiatives.map((initiative) => ({ value: initiative.id, label: initiative.name }));
+/** Map the org's initiatives into entity options with their configured display glyphs. */
+export function initiativeOptions(
+  initiatives: readonly InitiativeOut[],
+  displays: readonly EntityDisplayOut[] = [],
+): readonly PickerOption[] {
+  const displayById = new Map(displays.map((display) => [display.subjectId, display]));
+  return initiatives.map((initiative) => {
+    const display =
+      displayById.get(initiative.id) ?? defaultEntityDisplay('initiative', initiative.id);
+    return {
+      value: initiative.id,
+      label: initiative.name,
+      icon: (
+        <EntityIconGlyph
+          iconKey={display.iconKey}
+          colorKey={display.colorKey}
+          customColor={display.customColor}
+          size={20}
+        />
+      ),
+    };
+  });
 }
 
 /**

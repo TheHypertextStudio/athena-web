@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The Teams roster in list layout — a 72px identity-row grid, standardized with Initiatives /
+ * The Teams roster in list layout — a 56px identity-row grid, standardized with Initiatives /
  * Programs / Projects / Cycles.
  *
  * @remarks
@@ -27,6 +27,7 @@ import type { ComponentPropsWithoutRef, JSX } from 'react';
 import { useRef } from 'react';
 
 import { entityDragSource } from '@/lib/entity-drag';
+import { ROSTER_DATA_CELL_CLASS, ROSTER_HEADER_CELL_CLASS } from '@/components/views/roster-grid';
 
 /** The row view-model derived for one Team (scope + workflow roll-up). */
 export interface TeamRow {
@@ -55,9 +56,9 @@ export interface TeamRowsProps extends ComponentPropsWithoutRef<'div'> {
 }
 
 /** Column widths shared by {@link TeamRows}'s header and each data row. */
-const ROW_GRID = 'grid-cols-[minmax(20rem,1fr)_7rem_7rem_7rem]';
+const ROW_GRID = 'grid-cols-[minmax(22rem,1fr)_8rem_8rem_12rem]';
 
-/** One 72px team row: a link to the team's page, and a drag source for the team itself. */
+/** One 56px team row: a link to the team's page, and a drag source for the team itself. */
 function TeamGridRow({
   team,
   projectCount,
@@ -104,13 +105,13 @@ function TeamGridRow({
       }}
       {...dragProps}
       className={cn(
-        'hover:bg-surface-container focus-visible:ring-ring grid min-h-[72px] items-center',
+        'hover:bg-surface-container focus-visible:ring-ring grid min-h-14 items-center',
         'rounded-lg transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none',
         ROW_GRID,
         dragProps?.className,
       )}
     >
-      <div className="flex min-w-0 items-center gap-3 px-2 py-2">
+      <div className={`${ROSTER_DATA_CELL_CLASS} gap-3 py-2`}>
         <IdentityGlyph>
           <span className="text-xs font-semibold">{team.key}</span>
         </IdentityGlyph>
@@ -118,7 +119,9 @@ function TeamGridRow({
           {team.name}
         </span>
       </div>
-      <div className="text-on-surface-variant flex items-center gap-1.5 px-3 text-sm tabular-nums">
+      <div
+        className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
+      >
         {workflowStateCount > 0 ? (
           <>
             <Workflow aria-hidden="true" className="size-4" />
@@ -129,12 +132,14 @@ function TeamGridRow({
           '—'
         )}
       </div>
-      <div className="text-on-surface-variant flex items-center gap-1.5 px-3 text-sm tabular-nums">
+      <div
+        className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
+      >
         <FolderKanban aria-hidden="true" className="size-4" />
         {projectCount}
         <span className="sr-only">{projectWord}</span>
       </div>
-      <div className="flex items-center justify-between gap-2 px-3">
+      <div className={`${ROSTER_DATA_CELL_CLASS} justify-between gap-2`}>
         <span className="text-on-surface-variant flex items-center gap-1.5 text-sm tabular-nums">
           <ListChecks aria-hidden="true" className="size-4" />
           {taskCount}
@@ -147,7 +152,7 @@ function TeamGridRow({
 }
 
 /**
- * The Teams roster frame: the 72px-row grid's shared column header + its data rows.
+ * The Teams roster frame: the 56px-row grid's shared column header + its data rows.
  *
  * @remarks
  * Each row opens its team and is a drag source for it, which is what lets a team be dropped onto a
@@ -167,21 +172,21 @@ export function TeamRows({
   return (
     <div {...rest} className={cn('bg-surface-container-low relative rounded-xl p-2', className)}>
       <div className="overflow-x-auto overscroll-x-contain pb-1">
-        <div role="grid" aria-label={ariaLabel} className="min-w-[42rem] text-sm">
+        <div role="grid" aria-label={ariaLabel} className="min-w-[52rem] text-sm">
           <div
             role="row"
             className={cn('text-on-surface-variant grid h-8 items-center text-xs', ROW_GRID)}
           >
-            <div role="columnheader" className="px-3 pl-14 font-medium">
+            <div role="columnheader" className={`${ROSTER_HEADER_CELL_CLASS} pl-16`}>
               Team
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
               States
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
               Projects
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
               Tasks
             </div>
           </div>
@@ -209,7 +214,7 @@ export function ListSkeleton(): JSX.Element {
   return (
     <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl p-2" aria-hidden="true">
       {[0, 1, 2, 3, 4].map((i) => (
-        <Skeleton key={i} className="h-[72px] w-full rounded-lg" />
+        <Skeleton key={i} className="h-14 w-full rounded-lg" />
       ))}
     </div>
   );

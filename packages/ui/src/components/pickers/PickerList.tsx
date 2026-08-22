@@ -47,10 +47,17 @@ import { type PickerOption, optionMatches } from './types';
  * `role="menuitem"` does not: full width, and `disabled:` rather than `data-[disabled]:` for the
  * state layer, because this row is a real disabled button.
  */
-const PICKER_ROW_METRICS = cn(
-  menuItemClass('standard'),
-  'w-full text-left disabled:pointer-events-none disabled:opacity-38',
-);
+const PICKER_ROW_DENSITY =
+  'min-h-9 gap-2 px-3 py-1.5 coarse:min-h-11 coarse:gap-3 coarse:px-4 coarse:py-2';
+
+/** Resolve one picker row's compact pointer-aware metrics and selection colors. */
+function pickerRowClass(selected = false): string {
+  return cn(
+    menuItemClass('standard', selected ? { selected: true } : undefined),
+    PICKER_ROW_DENSITY,
+    'w-full text-left disabled:pointer-events-none disabled:opacity-38',
+  );
+}
 
 /** Props for {@link PickerList}. */
 export interface PickerListProps<TValue extends string = string> {
@@ -263,7 +270,7 @@ export function PickerList<TValue extends string = string>({
   );
 
   return (
-    <div className="flex flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {searchable ? (
         <div className="border-outline-variant flex items-center gap-3 border-b px-4 py-2">
           <Search aria-hidden="true" className="text-on-surface-variant size-5 shrink-0" />
@@ -295,7 +302,7 @@ export function PickerList<TValue extends string = string>({
         tabIndex={searchable ? -1 : 0}
         onKeyDown={searchable ? undefined : onKeyDown}
         aria-busy={loading || undefined}
-        className="max-h-64 overflow-y-auto"
+        className="max-h-64 min-h-0 flex-1 overflow-y-auto overscroll-contain"
       >
         {rows.length === 0 ? (
           loading ? (
@@ -329,7 +336,7 @@ export function PickerList<TValue extends string = string>({
                       setActiveIndex(index);
                     }}
                     className={cn(
-                      PICKER_ROW_METRICS,
+                      pickerRowClass(),
                       'text-on-surface-variant',
                       menuFocusRing,
                       // The keyboard-highlighted row is the focus state, so it takes the 10%
@@ -355,7 +362,7 @@ export function PickerList<TValue extends string = string>({
                     onMouseEnter={() => {
                       setActiveIndex(index);
                     }}
-                    className={cn(PICKER_ROW_METRICS, 'text-on-surface', menuFocusRing, {
+                    className={cn(pickerRowClass(), 'text-on-surface', menuFocusRing, {
                       'bg-on-surface/10': active,
                     })}
                   >
@@ -388,8 +395,7 @@ export function PickerList<TValue extends string = string>({
                     // `tertiary-container` a checked DropdownMenu/ContextMenu row takes — rather
                     // than relying on the trailing check alone. `menuItemClass` carries both
                     // cases, so a picker row and a menu row are the same element in two places.
-                    chosen ? menuItemClass('standard', { selected: true }) : PICKER_ROW_METRICS,
-                    { 'w-full text-left': chosen },
+                    pickerRowClass(chosen),
                     { 'bg-on-surface/10': active && !chosen },
                     menuFocusRing,
                   )}

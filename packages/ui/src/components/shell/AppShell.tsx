@@ -595,16 +595,18 @@ export function AppShell({
         </div>
 
         {/*
-        The content column stacks the optional tab strip over the main panel. A column gap floats
-        a real gutter BETWEEN the two so the detached tab pills read as their own layer on the
-        canvas rather than fusing to the rounded panel below — the gap only materialises between
-        siblings, so it costs nothing when no tab bar is present. Mobile stays full-bleed (no gap)
-        so the panel uses the entire width; the gutter appears at `lg` to match the shell rhythm.
+        The content column stacks the optional tab strip over the main panel. Each page supplies
+        its own internal top inset, while a status banner keeps a small desktop gutter before the
+        panel so its message does not run into the page surface.
       */}
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col lg:gap-2">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {contentOverlay}
           {tabBar}
-          {banner}
+          {banner ? (
+            <div data-slot="shell-banner" className="shrink-0 lg:mb-2">
+              {banner}
+            </div>
+          ) : null}
           <main
             id="main-content"
             tabIndex={-1}

@@ -50,6 +50,16 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
       'Could not load resources.',
     ),
   );
+  const initiativeDisplaysQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'initiative'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'initiative' },
+        }),
+      'Could not load initiative icons.',
+    ),
+  );
 
   const updates = useMemo(() => updatesQ.data?.items ?? [], [updatesQ.data]);
   const resources = useMemo(() => resourcesQ.data?.items ?? [], [resourcesQ.data]);
@@ -86,6 +96,7 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
     (detail === null && membership.pending);
   const programs = detail?.programs ?? [];
   const initiatives = detail?.initiatives ?? [];
+  const initiativeDisplays = initiativeDisplaysQ.data?.items ?? [];
   const milestones = detail?.milestones ?? [];
   const milestoneTasks = useMemo(() => detail?.milestoneTasks ?? [], [detail]);
   const resolveActor = useMemo<ActorDirectory>(
@@ -102,8 +113,8 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
     [programs],
   );
   const initiativeOptions = useMemo<readonly PickerOption[]>(
-    () => toInitiativeOptions(initiatives),
-    [initiatives],
+    () => toInitiativeOptions(initiatives, initiativeDisplays),
+    [initiativeDisplays, initiatives],
   );
 
   const progress = detail?.progress ?? null;

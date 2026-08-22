@@ -322,6 +322,35 @@ describe('PickerList', () => {
     expect(screen.getByText('Owned by Platform')).toBeInTheDocument();
   });
 
+  it('keeps the option list as the bounded internal scrollport', () => {
+    render(
+      <PickerList options={PROJECTS} selected={null} onSelect={vi.fn()} ariaLabel="Project" />,
+    );
+
+    const listbox = screen.getByRole('listbox', { name: 'Project' });
+    expect(listbox).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto', 'overscroll-contain');
+    expect(listbox).not.toHaveClass('touch-pan-y');
+    expect(listbox.parentElement).toHaveClass('min-h-0', 'flex-1', 'overflow-hidden');
+  });
+
+  it('uses compact desktop option rows while preserving coarse-pointer targets', () => {
+    render(
+      <PickerList options={PROJECTS} selected={null} onSelect={vi.fn()} ariaLabel="Project" />,
+    );
+
+    const row = within(screen.getByRole('option', { name: /Migration/ })).getByRole('button');
+    expect(row).toHaveClass(
+      'min-h-9',
+      'gap-2',
+      'px-3',
+      'py-1.5',
+      'coarse:min-h-11',
+      'coarse:gap-3',
+      'coarse:px-4',
+      'coarse:py-2',
+    );
+  });
+
   it('gives the chosen row the same tertiary-container selection role a checked menu item uses', () => {
     render(<PickerList options={PROJECTS} selected="p1" onSelect={vi.fn()} ariaLabel="Project" />);
     const chosen = within(screen.getByRole('option', { name: /Migration/ })).getByRole('button');
@@ -448,6 +477,27 @@ describe('PickerList', () => {
 });
 
 describe('OptionPicker', () => {
+  it('clips the picker surface around its internal list scrollport', async () => {
+    render(
+      <OptionPicker
+        options={PROJECTS}
+        value={null}
+        onChange={vi.fn()}
+        placeholder="Set project"
+        ariaLabel="Project"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Project — not set/ }));
+    const listbox = await screen.findByRole('listbox', { name: 'Project' });
+    expect(listbox.parentElement?.parentElement).toHaveClass(
+      'flex',
+      'min-h-0',
+      'flex-col',
+      'overflow-hidden',
+    );
+  });
+
   it('opens the popover from the trigger and reports a selection, then closes', async () => {
     const onChange = vi.fn();
     function Host(): React.JSX.Element {

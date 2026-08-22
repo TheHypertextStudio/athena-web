@@ -213,7 +213,11 @@ export default function InitiativeDetailPage(): JSX.Element {
     onError: (_error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(displayKey, context.previous);
     },
-    invalidateKeys: [displayKey, queryKeys.initiatives(orgId)],
+    invalidateKeys: [
+      displayKey,
+      queryKeys.initiatives(orgId),
+      queryKeys.entityDisplays(orgId, 'initiative'),
+    ],
   });
   const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
     mutationFn: (json) =>

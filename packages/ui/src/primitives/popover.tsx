@@ -86,7 +86,7 @@ export function PopoverContent({
         collisionPadding={collisionPadding}
         className={cn(
           menuContentClass('standard'),
-          'max-h-[var(--radix-popover-content-available-height)] w-72 origin-[var(--radix-popover-content-transform-origin)] outline-none',
+          'max-h-[var(--radix-popover-content-available-height)] min-h-0 w-72 origin-[var(--radix-popover-content-transform-origin)] outline-none',
           focusRing,
           className,
         )}

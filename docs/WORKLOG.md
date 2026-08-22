@@ -7,6 +7,64 @@
 
 ## Active Tasks
 
+### [INTERACTION-SURFACES-001] Repair picker, table, and entity-detail spacing contracts
+
+- **Status**: REVIEW
+- **Started**: 2026-08-21
+- **Priority**: P0
+- **Description**: Shared relationship pickers cannot reliably scroll inside a bounded overlay,
+  discard the configured Project and Initiative display glyphs stored beside their roster records,
+  and render rows too tall for a dense work surface. The Initiatives hierarchy bypasses
+  `EntityTable` and places six fixed-width columns directly beside one another, which lets long
+  owner and target values collide.
+  The entity-detail page also combines the shell's desktop tab-to-panel gap with a separate 20 pixel
+  masthead inset, which leaves a dead band below the open-document strip while the breadcrumb sits
+  against the page content above it.
+- **Approach**: Fix the contracts at their shared boundaries. Give picker overlays one bounded flex
+  viewport and a compact option-row density, then preserve entity display records when DTOs become
+  picker options. Keep the Initiative hierarchy's drag and tree semantics, but add explicit cell
+  gutters, truncation boundaries, and a shorter row metric instead of replacing it with a flat table
+  that cannot represent nesting. Rebalance the shell-to-panel and masthead insets through the shared
+  shell and `EntityDetailLayout` rules so every strategic-work detail page receives the same rhythm.
+- **Subtasks**:
+  - [x] Add failing behavior tests for bounded picker scrolling, configured entity glyphs, compact
+        option rows, hierarchy cell separation, and entity-detail chrome spacing.
+  - [x] Repair the shared picker viewport and option adapters without changing selection behavior.
+  - [x] Compact strategic-work rosters and enforce internal cell padding and truncation.
+  - [x] Rebalance open-document, panel, breadcrumb, and masthead spacing in shared layout code.
+  - [x] Run focused tests, type checking, lint, and the production build with bounded concurrency.
+  - [ ] Capture the affected surfaces at 1440 by 900 and 390 by 844 in light and dark, then check
+        keyboard use, internal wheel scrolling, and 320 pixel horizontal overflow.
+- **Risks**: A shared picker-density change affects every temporary selection surface. The
+  Initiative hierarchy cannot adopt `EntityTable` without losing treegrid levels and hierarchy
+  rails, so the fix must preserve that specialized structure. The entity header collapse animation
+  has CSS contract tests that currently encode the regressed 20 pixel inset and must change with the
+  intended geometry.
+- **Files changed**: The shared dialog, popover, and picker surfaces now own bounded touch and wheel
+  scrolling without disabling pinch zoom. Composer and direct property-picker option loading join
+  Project and Initiative rosters to the existing bulk display endpoint. Display edits invalidate
+  that bulk cache. Initiatives, Projects, Programs, and Teams use one 16 pixel roster-cell gutter,
+  clipping boundary, and 56 pixel row metric. The application shell removes its duplicate desktop
+  gap, preserves banner separation, and restores a 24 pixel masthead top inset.
+- **Validation**: The full repository test graph passed across 26 packages before the final review
+  fixes. The affected packages then passed their complete suites with 337 web files and 2,703 tests
+  plus 33 UI files and 632 tests. The tooling package passed 155 tests. Web and UI type checking and
+  lint passed. Web lint used a 4 GB heap for that one process because the default 2 GB run aborted
+  during garbage collection. The production web build passed across 75 routes and emitted the
+  production service worker. Focused picker, dialog, shell, entity-display, and roster contracts
+  passed after the final implementation.
+- **Learnings**: Project and Initiative list DTOs do not own their display configuration. The bulk
+  display endpoint returns only customized rows, so picker adapters must merge those rows with
+  `defaultEntityDisplay`. Direct Project and Task property pickers bypass the composer option hook,
+  so they must join the same bulk display records and share its invalidation boundary. The
+  strategic-work tables are four bespoke grids rather than one `EntityTable`; a shared cell
+  contract corrects their spacing without erasing Initiative treegrid semantics.
+- **Blockers**: The in-app browser's URL policy blocks interaction with the local development
+  origin. The required light and dark screenshots, 320 pixel overflow probe, keyboard pass, and
+  direct wheel-scroll check remain unverified. No Craft scorecard claims visual evidence.
+
+---
+
 ### [FOCUS-002] Make task creation and switching native to the Focus sidebar
 
 - **Status**: COMPLETED

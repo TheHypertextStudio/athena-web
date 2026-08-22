@@ -52,9 +52,12 @@ describe('Projects experience contract', () => {
   it('preserves dense, stable rows and full columns inside a local scroller', () => {
     const overview = source(overviewPath);
     expect(overview).toContain('overflow-x-auto overscroll-x-contain');
-    expect(overview).toContain('min-w-[64rem]');
-    expect(overview).toContain('min-h-[72px]');
-    expect(overview).toContain('line-clamp-2 max-w-[52ch]');
+    expect(overview).toContain("from '@/components/views/roster-grid'");
+    expect(overview).toContain('min-w-[72rem]');
+    expect(overview).toContain('min-h-14');
+    expect(overview).toContain('ROSTER_DATA_CELL_CLASS');
+    expect(overview).toContain('line-clamp-1 max-w-[52ch]');
+    expect(overview).not.toContain('min-h-[72px]');
     expect(overview).toContain('{item.summary ? (');
   });
 

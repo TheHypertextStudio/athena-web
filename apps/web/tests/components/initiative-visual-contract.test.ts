@@ -47,6 +47,18 @@ function productionTypeSources(directory: string): string[] {
 }
 
 describe('Initiative visual contract', () => {
+  it('keeps the hierarchy dense and gives every data column a clipping gutter', () => {
+    const overview = source(overviewPath);
+    expect(overview).toContain("from '@/components/views/roster-grid'");
+    expect(overview).toContain('className={ROSTER_HEADER_CELL_CLASS}');
+    expect(overview).toContain('className={ROSTER_DATA_CELL_CLASS}');
+    expect(overview).toContain('className="relative h-full min-w-0 overflow-hidden pr-4"');
+    expect(overview).toContain('min-w-[76rem]');
+    expect(overview).toContain('h-14');
+    expect(overview).toContain('line-clamp-1 max-w-[44ch]');
+    expect(overview).not.toContain('h-[72px]');
+  });
+
   it('uses the canonical MD3 headline for detail titles and keeps status in the properties rail', () => {
     const typography = source(typographyPath);
     const detail = source(detailPath);
@@ -143,12 +155,11 @@ describe('Initiative visual contract', () => {
   it('keeps the complete padded roster scrollable without wrapping metadata', () => {
     const overview = source(overviewPath);
     expect(overview).toContain('overflow-x-auto');
-    expect(overview).toContain('min-w-[56rem]');
+    expect(overview).toContain('min-w-[76rem]');
     expect(overview).toContain('role="treegrid"');
-    expect(overview).toContain('px-3');
+    expect(overview).toContain('ROSTER_DATA_CELL_CLASS');
     expect(overview).toContain('whitespace-nowrap');
     expect(overview).toContain('line-clamp-1 min-w-0');
-    expect(overview).toContain('line-clamp-2');
     expect(overview).toContain('max-w-[44ch]');
     expect(overview).toContain('{item.summary ? (');
     expect(overview).not.toContain('border-b md:table-row');

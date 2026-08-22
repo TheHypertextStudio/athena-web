@@ -150,7 +150,7 @@ export default function TeamDetailClient(): JSX.Element {
     onError: (_error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(displayKey, context.previous);
     },
-    invalidateKeys: [displayKey],
+    invalidateKeys: [displayKey, queryKeys.entityDisplays(orgId, 'team')],
   });
 
   const saveDescription = useApiMutation({

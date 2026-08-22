@@ -7,7 +7,7 @@
  * Programs previously rendered through the dense `EntityListRow` family (the 36px "comfortable"
  * tier used by Tasks/Cycles/Teams), which read as visually smaller than the Initiatives and
  * Projects rosters even though Programs carry the same tier of information — owner, health,
- * status, and a child-work roll-up. This module instead hand-rolls the same 72px identity-row
+ * status, and a child-work roll-up. This module instead hand-rolls the same 56px identity-row
  * grid Initiatives and Projects use (leading glyph + name + summary, then aligned status/health/
  * owner/count columns), so all three read as one product at the same visual weight.
  *
@@ -41,6 +41,7 @@ import { EditableTitle } from '@/components/editor/editable-title';
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/programs/health';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge } from '@/components/entity-display/work-status';
+import { ROSTER_DATA_CELL_CLASS, ROSTER_HEADER_CELL_CLASS } from '@/components/views/roster-grid';
 import { entityDragSource } from '@/lib/entity-drag';
 
 /** The row view-model derived for one Program (owner + child-work roll-up). */
@@ -173,7 +174,7 @@ function useProgramDrag(program: ProgramOut, dragOccurredRef: { current: boolean
   );
 }
 
-/** One 72px identity row: glyph + name/summary, then aligned status/health/owner/count columns. */
+/** One 56px identity row: glyph + name/summary, then aligned status/health/owner/count columns. */
 function ProgramGridRow({
   row: { program, ownerName, projectCount, taskCount },
   projectNoun,
@@ -193,7 +194,7 @@ function ProgramGridRow({
       role="row"
       {...dragProps}
       className={cn(
-        'hover:bg-surface-container-high relative grid min-h-[72px] cursor-pointer grid-cols-[minmax(22rem,1fr)_7rem_7rem_10rem_5.5rem_5.5rem] items-center rounded-lg transition-colors',
+        'hover:bg-surface-container-high relative grid min-h-14 cursor-pointer grid-cols-[minmax(24rem,1fr)_8rem_8rem_12rem_7rem_7rem] items-center rounded-lg transition-colors',
         dragProps?.className,
       )}
       onClick={(event) => {
@@ -202,7 +203,7 @@ function ProgramGridRow({
         onOpen(program.id);
       }}
     >
-      <div role="gridcell" className="flex min-w-0 items-center gap-3 px-2 py-2">
+      <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} gap-3 py-2`}>
         <ProgramGlyph />
         <div className="min-w-0">
           <ProgramName
@@ -213,19 +214,19 @@ function ProgramGridRow({
             className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold"
           />
           {program.summary ? (
-            <p className="text-on-surface-variant mt-0.5 line-clamp-2 max-w-[48ch] text-xs leading-4">
+            <p className="text-on-surface-variant mt-0.5 line-clamp-1 max-w-[48ch] text-xs leading-4">
               {program.summary}
             </p>
           ) : null}
         </div>
       </div>
-      <div role="gridcell" className="px-3">
+      <div role="gridcell" className={ROSTER_DATA_CELL_CLASS}>
         <WorkStatusBadge name={status.name} category={status.category} />
       </div>
-      <div role="gridcell" className="px-3 whitespace-nowrap">
+      <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} whitespace-nowrap`}>
         <HealthLabel health={program.health ?? null} />
       </div>
-      <div role="gridcell" className="flex min-w-0 items-center gap-1.5 px-3">
+      <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} gap-1.5`}>
         {ownerName ? (
           <>
             <ActorAvatar kind="human" name={ownerName} size={20} />
@@ -237,7 +238,7 @@ function ProgramGridRow({
       </div>
       <div
         role="gridcell"
-        className="text-on-surface-variant flex items-center gap-1.5 px-3 text-sm tabular-nums"
+        className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
       >
         <FolderKanban aria-hidden="true" className="size-4" />
         {projectCount}
@@ -245,7 +246,7 @@ function ProgramGridRow({
       </div>
       <div
         role="gridcell"
-        className="text-on-surface-variant flex items-center gap-1.5 px-3 text-sm tabular-nums"
+        className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
       >
         <ListChecks aria-hidden="true" className="size-4" />
         {taskCount}
@@ -279,7 +280,7 @@ export interface ProgramRowsProps extends ComponentPropsWithoutRef<'div'> {
 }
 
 /** Column-header widths shared by {@link ProgramRows}'s header and data rows. */
-const ROW_GRID = 'grid-cols-[minmax(22rem,1fr)_7rem_7rem_10rem_5.5rem_5.5rem]';
+const ROW_GRID = 'grid-cols-[minmax(24rem,1fr)_8rem_8rem_12rem_7rem_7rem]';
 
 /** The Programs roster as aligned identity rows — the List lens, matching Initiatives/Projects. */
 export function ProgramRows({
@@ -307,27 +308,27 @@ export function ProgramRows({
   return (
     <div {...rest} className={cn('bg-surface-container-low relative rounded-xl p-2', className)}>
       <div className="overflow-x-auto overscroll-x-contain pb-1">
-        <div role="grid" aria-label={ariaLabel} className="min-w-[54rem] text-sm">
+        <div role="grid" aria-label={ariaLabel} className="min-w-[68rem] text-sm">
           <div
             role="row"
             className={cn('text-on-surface-variant grid h-8 items-center text-xs', ROW_GRID)}
           >
-            <div role="columnheader" className="px-3 pl-14 font-medium">
+            <div role="columnheader" className={`${ROSTER_HEADER_CELL_CLASS} pl-16`}>
               Program
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
               Status
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
               Health
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
               Owner
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
               Projects
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
               Tasks
             </div>
           </div>

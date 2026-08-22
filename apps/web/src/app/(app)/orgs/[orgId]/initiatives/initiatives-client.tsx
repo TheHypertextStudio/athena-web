@@ -46,6 +46,7 @@ import { ObjectSurface } from '@/components/objects/object-surface';
 import { readObjectPayload } from '@/components/dnd/drag-payload';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
+import { ROSTER_DATA_CELL_CLASS, ROSTER_HEADER_CELL_CLASS } from '@/components/views/roster-grid';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
@@ -68,8 +69,8 @@ const HEALTH_TEXT_CLASS = {
   off_track: 'text-error',
 } as const;
 
-const ROSTER_ROW_HEIGHT = 72;
-const ROSTER_CELL_INSET = 12;
+const ROSTER_ROW_HEIGHT = 56;
+const ROSTER_CELL_INSET = 16;
 const ROSTER_INDENT_STEP = 48;
 const ROSTER_ICON_TARGET = 40;
 
@@ -383,7 +384,7 @@ export default function InitiativesListClient(): JSX.Element {
           : current,
       );
     },
-    invalidateKeys: [overviewKey],
+    invalidateKeys: [overviewKey, queryKeys.entityDisplays(orgId, 'initiative')],
   });
   const attention = data?.attention ?? [];
   const currentAttention = attention[attentionIndex % Math.max(attention.length, 1)];
@@ -651,28 +652,28 @@ export default function InitiativesListClient(): JSX.Element {
               role="treegrid"
               aria-label={`${initiativePlural} hierarchy`}
               aria-rowcount={rosterRows.length}
-              className="min-w-[56rem] text-sm"
+              className="min-w-[76rem] text-sm"
             >
               <div
                 role="row"
-                className="text-on-surface-variant grid h-8 grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] items-center text-xs"
+                className="text-on-surface-variant grid h-8 grid-cols-[minmax(24rem,1fr)_8rem_8rem_12rem_11rem_9rem] items-center text-xs"
               >
-                <div role="columnheader" className="pr-3 pl-16 font-medium">
+                <div role="columnheader" className={`${ROSTER_HEADER_CELL_CLASS} pl-16`}>
                   {initiativeNoun}
                 </div>
-                <div role="columnheader" className="px-3 font-medium whitespace-nowrap">
+                <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
                   Status
                 </div>
-                <div role="columnheader" className="px-3 font-medium whitespace-nowrap">
+                <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
                   Health
                 </div>
-                <div role="columnheader" className="px-3 font-medium whitespace-nowrap">
+                <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
                   Owner
                 </div>
-                <div role="columnheader" className="px-3 font-medium whitespace-nowrap">
+                <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
                   Target
                 </div>
-                <div role="columnheader" className="px-3 font-medium whitespace-nowrap">
+                <div role="columnheader" className={ROSTER_HEADER_CELL_CLASS}>
                   Last update
                 </div>
               </div>
@@ -747,7 +748,7 @@ export default function InitiativesListClient(): JSX.Element {
                         role="row"
                         aria-level={item.depth}
                         aria-rowindex={rowIndex + 1}
-                        className={`grid h-[72px] grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] rounded-lg transition-colors ${draggingId === item.id ? 'opacity-50' : 'hover:bg-surface-container-high'} ${dropTargetId === item.id ? 'ring-primary bg-surface-container-high ring-2 ring-inset' : ''}`}
+                        className={`grid h-14 grid-cols-[minmax(24rem,1fr)_8rem_8rem_12rem_11rem_9rem] rounded-lg transition-colors ${draggingId === item.id ? 'opacity-50' : 'hover:bg-surface-container-high'} ${dropTargetId === item.id ? 'ring-primary bg-surface-container-high ring-2 ring-inset' : ''}`}
                         onMouseEnter={() => {
                           prefetch(initiativeDetailDef(item.organizationId, item.id));
                         }}
@@ -778,7 +779,10 @@ export default function InitiativesListClient(): JSX.Element {
                           if (dragged) handleReparent(dragged, item.id);
                         }}
                       >
-                        <div role="gridcell" className="relative h-full min-w-0">
+                        <div
+                          role="gridcell"
+                          className="relative h-full min-w-0 overflow-hidden pr-4"
+                        >
                           <HierarchyRails
                             depth={item.depth}
                             continuationDepths={continuationDepths}
@@ -840,7 +844,7 @@ export default function InitiativesListClient(): JSX.Element {
                                 ) : null}
                               </div>
                               {item.summary ? (
-                                <p className="text-on-surface-variant mt-0.5 line-clamp-2 max-w-[44ch] text-xs leading-4">
+                                <p className="text-on-surface-variant mt-0.5 line-clamp-1 max-w-[44ch] text-xs leading-4">
                                   {item.summary}
                                 </p>
                               ) : null}
@@ -849,7 +853,7 @@ export default function InitiativesListClient(): JSX.Element {
                         </div>
                         <div
                           role="gridcell"
-                          className="flex items-center gap-2 px-3 whitespace-nowrap"
+                          className={`${ROSTER_DATA_CELL_CLASS} gap-2 whitespace-nowrap`}
                         >
                           <WorkStatusIcon
                             name={statusOf(item.status).name}
@@ -857,7 +861,10 @@ export default function InitiativesListClient(): JSX.Element {
                           />
                           {statusOf(item.status).name}
                         </div>
-                        <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
+                        <div
+                          role="gridcell"
+                          className={`${ROSTER_DATA_CELL_CLASS} whitespace-nowrap`}
+                        >
                           {item.health ? (
                             <span
                               className={`${HEALTH_TEXT_CLASS[item.health]} flex items-center gap-1.5 font-medium`}
@@ -872,18 +879,22 @@ export default function InitiativesListClient(): JSX.Element {
                             <span className="text-on-surface-variant">—</span>
                           )}
                         </div>
-                        <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
-                          {item.ownerName ?? <span className="text-on-surface-variant">—</span>}
+                        <div role="gridcell" className={ROSTER_DATA_CELL_CLASS}>
+                          {item.ownerName ? (
+                            <span className="truncate">{item.ownerName}</span>
+                          ) : (
+                            <span className="text-on-surface-variant">—</span>
+                          )}
                         </div>
                         <div
                           role="gridcell"
-                          className="flex items-center px-3 whitespace-nowrap tabular-nums"
+                          className={`${ROSTER_DATA_CELL_CLASS} whitespace-nowrap tabular-nums`}
                         >
                           {targetDate ?? <span className="text-on-surface-variant">—</span>}
                         </div>
                         <div
                           role="gridcell"
-                          className="flex items-center px-3 whitespace-nowrap tabular-nums"
+                          className={`${ROSTER_DATA_CELL_CLASS} whitespace-nowrap tabular-nums`}
                         >
                           {lastUpdate ?? <span className="text-on-surface-variant">Never</span>}
                         </div>

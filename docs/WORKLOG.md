@@ -9,7 +9,7 @@
 
 ### [LIBRARY-FINDER-DEPLOY-001] Integrate and deploy Library finder
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-08-22
 - **Priority**: P1
 - **Description**: Fast-forward the completed Library finder and shared virtualized-search work
@@ -19,8 +19,8 @@
   - [x] Rebase the five Library commits onto current `origin/main` with zero merge commits.
   - [x] Fast-forward and push `main`.
   - [x] Repair the combined-tree CI policy failures.
-  - [ ] Pass the production deployment workflow for the corrected revision.
-  - [ ] Verify the deployed revision and live production routes.
+  - [x] Pass the production deployment workflow for the corrected revision.
+  - [x] Verify the deployed revision and live production routes.
 - **Blockers**: None. CI run 32614320165 blocked the first deployment attempt because the newer
   work-view slice did not register its virtualized list with the shared in-page search contract.
   The same slice left one domain export, one exported overload implementation, and design-token
@@ -51,7 +51,24 @@
   passes all 14 tests with the responsive overflow path under test. The API coverage-edge suite
   passes all 7 tests with valid sharing state. The local web typecheck produced no diagnostic but
   exceeded five minutes on the integrated graph, so the exact-SHA CI run remains authoritative for
-  that application typecheck.
+  that application typecheck. CI run 32621452960 passed every deployment gate. Its API shard passed
+  383 files and 4,618 tests with 89.03 percent branch coverage. The production workflow migrated the
+  database, deployed API and admin images tagged `101d40faf719507921564ca8c2ca62a863aa04eb`,
+  passed the live health and auth probes, and reconciled Scheduler jobs. Vercel deployment
+  `dpl_251y8HRd63e1zdX1jN55tAQqsr5F` is Ready, owns the production aliases, and reports the same Git
+  SHA. An authenticated production browser loaded Library, showed Work context grouping and the
+  full-corpus search control, and focused that control on Command-F. The Library browser E2E passed
+  at desktop and phone widths in 15.1 seconds.
+- **Known follow-ups**: The separate advisory E2E workflow failed in unrelated MCP authorization,
+  notification, and offline-sync cases. Production Calendar and Library navigation both log a React
+  hydration mismatch. The `launch:verify-prod` package script still points to the absent
+  `scripts/production-verify.ts`; this deployment used the workflow probes, Vercel API, direct live
+  health checks, and an authenticated browser instead.
+- **Retrospective**: The implementation was not the long pole. Repeated combined-tree policy and
+  coverage failures consumed most of the release time. Focused coverage accounting identified the
+  final 34-branch deficit without another local full-suite run. Future integration work should run
+  the changed package's repository-threshold coverage before the first push and should keep the
+  production verifier entry point executable.
 
 ### [WEB-SWITCHER-003] Correct the open-document switcher layout and actions
 

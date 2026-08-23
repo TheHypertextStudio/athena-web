@@ -22,7 +22,6 @@ import {
   useState,
 } from 'react';
 
-import { useActiveOrg } from '@/components/active-org';
 import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
@@ -94,7 +93,6 @@ function contextIcon(hint: string | undefined): LucideIcon | null {
 export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Element {
   const { state, setFilters, setGroupBy, setSort, setSearchParam, pushSearchParams } =
     useViewState(LIBRARY_VIEW_DEFAULTS);
-  const { activeOrg } = useActiveOrg();
   const router = useRouter();
   const searchParams = useAppSearchParams();
   const urlQuery = searchParams.get('q')?.trim() ?? '';
@@ -402,11 +400,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
         !refillingSparsePage &&
         !displayedSearchActive &&
         !filtered ? (
-        <EmptyState
-          icon={Library}
-          title="Nothing referenced yet"
-          body={`Link a document or add a file anywhere in ${activeOrg?.name ?? 'this workspace'} and it shows up here.`}
-        />
+        <EmptyState icon={Library} title="Nothing referenced yet" />
       ) : (
         <div className="grid min-h-0 min-w-0 flex-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
           <div

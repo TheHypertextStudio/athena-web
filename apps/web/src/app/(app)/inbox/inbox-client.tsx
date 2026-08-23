@@ -172,18 +172,15 @@ function filterNotification(tab: InboxTab, notification: NotificationOut): boole
 function emptyStateForTab(tab: InboxTab): EmptyStateProps {
   switch (tab) {
     case 'unread':
-      return { title: 'All caught up', body: 'No unread notifications need your attention.' };
+      return { title: 'All caught up' };
     case 'needs_action':
-      return { title: 'Nothing needs action', body: 'No approvals are waiting on you right now.' };
+      return { title: 'Nothing needs action' };
     case 'announcements':
-      return { title: 'No announcements', body: 'Service updates will show up here.' };
+      return { title: 'No announcements' };
     case 'mentions':
-      return { title: 'No mentions or assignments', body: 'Direct work pings will show up here.' };
+      return { title: 'No mentions or assignments' };
     default:
-      return {
-        title: 'Inbox zero',
-        body: 'No approvals, mentions, or assignments need your response right now.',
-      };
+      return { title: 'Inbox zero' };
   }
 }
 
@@ -232,14 +229,14 @@ function NotificationGroup({
 interface EmptyStateProps {
   /** The empty-state headline. */
   readonly title: string;
-  /** The empty-state supporting copy. */
-  readonly body: string;
+  /** Optional supporting copy for states that require an explanation. */
+  readonly body?: string | undefined;
 }
 
 /** A calm, centered empty state for a feed with no content. */
 function EmptyState({ title, body }: EmptyStateProps): JSX.Element {
   return (
-    <div className="border-outline-variant mt-2 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-10 text-center">
+    <div className="mt-2 flex flex-col items-center justify-center gap-2 p-10 text-center">
       <span
         aria-hidden="true"
         className="bg-surface-container text-on-surface-variant flex h-10 w-10 items-center justify-center rounded-full"
@@ -247,7 +244,7 @@ function EmptyState({ title, body }: EmptyStateProps): JSX.Element {
         <InboxIcon className="h-5 w-5" />
       </span>
       <p className="text-on-surface text-body-medium font-medium">{title}</p>
-      <p className="text-on-surface-variant max-w-xs text-xs">{body}</p>
+      {body ? <p className="text-on-surface-variant max-w-xs text-xs">{body}</p> : null}
     </div>
   );
 }

@@ -210,11 +210,7 @@ export default function FocusTaskQueue({
             />
           ))}
         </div>
-      ) : (
-        <Text token="body-small" tone="muted">
-          Nothing else is planned for today.
-        </Text>
-      )}
+      ) : null}
     </section>
   );
 }

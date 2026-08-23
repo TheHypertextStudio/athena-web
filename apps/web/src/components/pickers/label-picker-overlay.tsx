@@ -42,7 +42,7 @@ import { taskDetailDef } from '@/lib/use-task-detail';
 import { userErrorMessage } from '@/lib/problem';
 import { queryKeys, unwrap, useApiListQuery, useApiMutation } from '@/lib/query';
 
-import type { LabelPickerRequest } from './picker-overlay';
+import { capturePickerAnchor, type LabelPickerRequest } from './picker-overlay';
 
 /** Props for {@link LabelPickerOverlay}. */
 export interface LabelPickerOverlayProps {
@@ -213,12 +213,15 @@ export function LabelPickerOverlay({ request, onClose }: LabelPickerOverlayProps
 
   // Computed once at mount (this component remounts fresh per open() call), matching the timing
   // Radix needs to measure the popover's initial position correctly.
-  const anchorRef = useRef<PopoverVirtualAnchor | null>(
-    request.anchor ??
-      (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null),
-  );
+  const capturedAnchor = useRef(
+    capturePickerAnchor(
+      request.anchor ??
+        (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null),
+    ),
+  ).current;
+  const anchorRef = useRef<PopoverVirtualAnchor | null>(capturedAnchor.virtual);
 
   const readError = detailFailed
     ? userErrorMessage(detailResults.find((r) => r.isError)?.error, DETAIL_ERROR_FALLBACK)
@@ -240,7 +243,9 @@ export function LabelPickerOverlay({ request, onClose }: LabelPickerOverlayProps
           // popover is anchored via `virtualRef`), so left alone focus would fall through to
           // `<body>` and drop keyboard navigation out of the grid entirely.
           event.preventDefault();
-          resolveCloseFocusTarget(anchorRef.current)?.focus();
+          if (capturedAnchor.focusTarget?.isConnected) {
+            resolveCloseFocusTarget(capturedAnchor.focusTarget)?.focus();
+          }
         }}
       >
         {writeError ? <ErrorBanner message={writeError} /> : null}

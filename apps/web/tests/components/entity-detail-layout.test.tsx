@@ -8,6 +8,7 @@ import {
   EntityDetailLayout,
   EntityMetadataItem,
   EntityMetadataRow,
+  fitEntityMetadataPriority,
 } from '../../src/components/views/entity-detail-layout';
 
 describe('EntityDetailLayout', () => {
@@ -114,15 +115,34 @@ describe('EntityMetadataRow', () => {
   let resize: ResizeObserverCallback;
 
   beforeEach(() => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const priority = this.getAttribute('data-entity-metadata-priority');
+      const width = priority === null ? 0 : 80;
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        right: width,
+        bottom: 28,
+        left: 0,
+        width,
+        height: 28,
+        toJSON: () => ({}),
+      };
+    });
     vi.stubGlobal(
       'ResizeObserver',
       class ResizeObserverMock {
+        readonly callback: ResizeObserverCallback;
+
         constructor(callback: ResizeObserverCallback) {
-          resize = callback;
+          this.callback = callback;
         }
 
-        observe(): void {
-          return undefined;
+        observe(target: Element): void {
+          if (!target.hasAttribute('data-entity-metadata-item')) resize = this.callback;
         }
         unobserve(): void {
           return undefined;
@@ -135,6 +155,7 @@ describe('EntityMetadataRow', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -162,7 +183,7 @@ describe('EntityMetadataRow', () => {
       </EntityMetadataRow>,
     );
 
-    resizeRow(700);
+    resizeRow(260);
 
     const row = screen.getByRole('group', { name: 'Project properties' });
     expect(row).toHaveClass('flex-nowrap');
@@ -173,7 +194,7 @@ describe('EntityMetadataRow', () => {
     );
     expect(inline.getByRole('button', { name: 'Status' })).toBeVisible();
     expect(inline.getByRole('button', { name: 'Health' })).toBeVisible();
-    expect(inline.getByRole('button', { name: 'Target date' })).toBeVisible();
+    expect(inline.queryByRole('button', { name: 'Target date' })).not.toBeInTheDocument();
     expect(inline.queryByRole('button', { name: 'Lead' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'More Project properties' }));
@@ -182,8 +203,28 @@ describe('EntityMetadataRow', () => {
     });
     expect(within(overflow).queryByRole('button', { name: 'Status' })).not.toBeInTheDocument();
     expect(within(overflow).queryByRole('button', { name: 'Health' })).not.toBeInTheDocument();
-    expect(within(overflow).queryByRole('button', { name: 'Target date' })).not.toBeInTheDocument();
+    expect(within(overflow).getByRole('button', { name: 'Target date' })).toBeVisible();
     expect(within(overflow).getByRole('button', { name: 'Lead' })).toBeVisible();
+  });
+
+  it('uses measured control widths instead of hiding properties at fixed page breakpoints', () => {
+    expect(
+      fitEntityMetadataPriority({
+        availableWidth: 1_000,
+        itemWidths: [
+          { priority: 0, width: 92 },
+          { priority: 1, width: 94 },
+          { priority: 2, width: 118 },
+          { priority: 3, width: 136 },
+          { priority: 4, width: 80 },
+          { priority: 5, width: 84 },
+          { priority: 6, width: 96 },
+          { priority: 7, width: 150 },
+        ],
+        gap: 6,
+        overflowWidth: 28,
+      }),
+    ).toBe(7);
   });
 
   it('removes the overflow trigger when every declared property fits', () => {

@@ -25,6 +25,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { PopoverVirtualAnchor } from '@docket/ui/primitives';
 
 import type { ObjectRef } from '@/lib/actions';
 
@@ -71,6 +72,30 @@ export type PickerOverlayRequest =
   | LabelPickerRequest
   | InitiativeHierarchyPickerRequest
   | TaskHierarchyPickerRequest;
+
+/** Stable fallback geometry and focus ownership captured when a moved picker opens. */
+export interface CapturedPickerAnchor {
+  readonly virtual: PopoverVirtualAnchor | null;
+  readonly focusTarget: HTMLElement | null;
+}
+
+/**
+ * Preserve an invoking element's geometry when a temporary menu unmounts it.
+ *
+ * @param anchor - The live control that opened the moved picker.
+ * @returns Stable virtual geometry plus the original focus target.
+ */
+export function capturePickerAnchor(anchor: HTMLElement | null): CapturedPickerAnchor {
+  if (anchor === null) return { virtual: null, focusTarget: null };
+  const fallbackRect = anchor.getBoundingClientRect();
+  return {
+    virtual: {
+      getBoundingClientRect: () =>
+        anchor.isConnected ? anchor.getBoundingClientRect() : fallbackRect,
+    },
+    focusTarget: anchor,
+  };
+}
 
 /** What `usePickerOverlay()` exposes. */
 export interface PickerOverlayApi {

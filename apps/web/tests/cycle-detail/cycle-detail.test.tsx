@@ -292,7 +292,6 @@ describe('cycle detail — one window, stated once', () => {
 
   it('shows the same dates on separate Window boundary chips', () => {
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: 'More Cycle properties' }));
     expect(screen.getByRole('button', { name: 'Window Starts — Jul 27' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Window Ends — Aug 2' })).toBeInTheDocument();
   });

@@ -12,7 +12,10 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useCallback, useMemo, useRef } from 'react';
 
-import type { TaskHierarchyPickerRequest } from '@/components/pickers/picker-overlay';
+import {
+  capturePickerAnchor,
+  type TaskHierarchyPickerRequest,
+} from '@/components/pickers/picker-overlay';
 import { createTaskHierarchy } from '@/components/tasks/task-hierarchy-model';
 import { useTaskHierarchyMutation } from '@/components/tasks/use-task-hierarchy-mutation';
 import { api } from '@/lib/api';
@@ -78,19 +81,22 @@ export function TaskHierarchyPickerOverlay({
     });
   }, [projectsQ.data, selectedIds, tasks, teamsQ.data]);
 
-  const anchorRef = useRef<PopoverVirtualAnchor | null>(
-    request.anchor ??
-      (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null),
-  );
+  const capturedAnchor = useRef(
+    capturePickerAnchor(
+      request.anchor ??
+        (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null),
+    ),
+  ).current;
+  const anchorRef = useRef<PopoverVirtualAnchor | null>(capturedAnchor.virtual);
   const closedRef = useRef(false);
   const close = useCallback(() => {
     if (closedRef.current) return;
     closedRef.current = true;
-    if (anchorRef.current instanceof HTMLElement) anchorRef.current.focus();
+    if (capturedAnchor.focusTarget?.isConnected) capturedAnchor.focusTarget.focus();
     onClose();
-  }, [onClose]);
+  }, [capturedAnchor, onClose]);
   const readError = tasksQ.error ?? projectsQ.error ?? teamsQ.error;
   const isPending = tasksQ.isPending || projectsQ.isPending || teamsQ.isPending;
   const count = request.subjects.length;
@@ -106,7 +112,7 @@ export function TaskHierarchyPickerOverlay({
       <PopoverContent
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          if (anchorRef.current instanceof HTMLElement) anchorRef.current.focus();
+          if (capturedAnchor.focusTarget?.isConnected) capturedAnchor.focusTarget.focus();
         }}
       >
         {readError ? (

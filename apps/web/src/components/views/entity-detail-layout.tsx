@@ -29,6 +29,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -217,31 +218,61 @@ export const ENTITY_METADATA_CHIP_CLASS =
 /** Ordered visibility tier for one property in the inline metadata row. */
 export type EntityMetadataPriority = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-const ENTITY_METADATA_PRIORITY_MIN_WIDTH: Readonly<Record<EntityMetadataPriority, number>> = {
-  0: 0,
-  1: 28 * 16,
-  2: 40 * 16,
-  3: 52 * 16,
-  4: 64 * 16,
-  5: 76 * 16,
-  6: 88 * 16,
-  7: 100 * 16,
-};
+/** One measured metadata control used to calculate progressive inline disclosure. */
+export interface EntityMetadataItemWidth {
+  readonly priority: EntityMetadataPriority;
+  readonly width: number;
+}
 
-/** Return the highest metadata priority that fits the measured row width. */
-export function visibleEntityMetadataPriority(width: number): EntityMetadataPriority {
-  let visible: EntityMetadataPriority = 0;
-  for (const priority of [1, 2, 3, 4, 5, 6, 7] as const) {
-    if (width < ENTITY_METADATA_PRIORITY_MIN_WIDTH[priority]) break;
-    visible = priority;
+/** Inputs for {@link fitEntityMetadataPriority}. */
+export interface FitEntityMetadataPriorityOptions {
+  readonly availableWidth: number;
+  readonly itemWidths: readonly EntityMetadataItemWidth[];
+  readonly gap: number;
+  readonly overflowWidth: number;
+}
+
+/** Return the highest consecutive priority whose measured controls fit the row. */
+export function fitEntityMetadataPriority({
+  availableWidth,
+  itemWidths,
+  gap,
+  overflowWidth,
+}: FitEntityMetadataPriorityOptions): EntityMetadataPriority {
+  if (itemWidths.length === 0) return 0;
+  const priorities = [...new Set(itemWidths.map(({ priority }) => priority))].sort(
+    (left, right) => left - right,
+  );
+  const declaredPriority = priorities.at(-1) ?? 0;
+  const fullWidth = itemWidths.reduce(
+    (total, item, index) => total + item.width + (index === 0 ? 0 : gap),
+    0,
+  );
+  if (fullWidth <= availableWidth) return declaredPriority;
+
+  const inlineWidth = Math.max(0, availableWidth - overflowWidth - gap);
+  let usedWidth = 0;
+  let usedItems = 0;
+  let visiblePriority: EntityMetadataPriority = 0;
+  for (const priority of priorities) {
+    const items = itemWidths.filter((item) => item.priority === priority);
+    const groupWidth = items.reduce(
+      (total, item, index) => total + item.width + (index === 0 ? 0 : gap),
+      0,
+    );
+    const nextWidth = usedWidth + (usedItems === 0 ? 0 : gap) + groupWidth;
+    if (priority !== 0 && nextWidth > inlineWidth) break;
+    usedWidth = nextWidth;
+    usedItems += items.length;
+    visiblePriority = priority;
   }
-  return visible;
+  return visiblePriority;
 }
 
 interface EntityMetadataLaneContext {
   readonly lane: 'inline' | 'overflow';
   readonly visiblePriority: EntityMetadataPriority;
-  readonly declarePriority?: (priority: EntityMetadataPriority) => () => void;
+  readonly declareItem?: (priority: EntityMetadataPriority, element: HTMLElement) => () => void;
 }
 
 const MetadataLaneContext = createContext<EntityMetadataLaneContext | null>(null);
@@ -268,17 +299,22 @@ export function EntityMetadataItem({
   children,
 }: EntityMetadataItemProps): JSX.Element | null {
   const lane = useContext(MetadataLaneContext);
+  const itemRef = useRef<HTMLDivElement>(null);
+  const declareItem = lane?.lane === 'inline' ? lane.declareItem : undefined;
 
-  useEffect(() => {
-    if (lane?.lane !== 'inline') return;
-    return lane.declarePriority?.(priority);
-  }, [lane, priority]);
+  useLayoutEffect(() => {
+    const element = itemRef.current;
+    if (!declareItem || !element) return;
+    return declareItem(priority, element);
+  }, [declareItem, priority]);
 
-  if (lane?.lane === 'inline' && priority > lane.visiblePriority) return null;
+  const hiddenInline = lane?.lane === 'inline' && priority > lane.visiblePriority;
   if (lane?.lane === 'overflow' && priority <= lane.visiblePriority) return null;
 
   return (
     <div
+      ref={itemRef}
+      hidden={hiddenInline}
       data-entity-metadata-item=""
       data-entity-metadata-priority={priority}
       className={cn('max-w-64 min-w-0 shrink-0 items-center [&>*]:min-w-0', className)}
@@ -310,41 +346,78 @@ export interface EntityMetadataRowProps {
  */
 export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProps): JSX.Element {
   const inlineRef = useRef<HTMLDivElement>(null);
-  const priorityCounts = useRef(new Map<EntityMetadataPriority, number>());
-  const [visiblePriority, setVisiblePriority] = useState<EntityMetadataPriority>(0);
+  const availableWidth = useRef(0);
+  const itemMeasurements = useRef(
+    new Map<HTMLElement, { priority: EntityMetadataPriority; width: number }>(),
+  );
+  const [visiblePriority, setVisiblePriority] = useState<EntityMetadataPriority>(7);
   const [declaredPriority, setDeclaredPriority] = useState<EntityMetadataPriority>(0);
 
-  const declarePriority = useCallback((priority: EntityMetadataPriority) => {
-    const counts = priorityCounts.current;
-    counts.set(priority, (counts.get(priority) ?? 0) + 1);
-    setDeclaredPriority(Math.max(...counts.keys()) as EntityMetadataPriority);
-
-    return () => {
-      const nextCount = (counts.get(priority) ?? 1) - 1;
-      if (nextCount === 0) counts.delete(priority);
-      else counts.set(priority, nextCount);
-      setDeclaredPriority(
-        counts.size === 0 ? 0 : (Math.max(...counts.keys()) as EntityMetadataPriority),
-      );
-    };
+  const recomputeVisibility = useCallback(() => {
+    const measurements = [...itemMeasurements.current.values()];
+    const nextDeclared = measurements.reduce<EntityMetadataPriority>(
+      (highest, item) => Math.max(highest, item.priority) as EntityMetadataPriority,
+      0,
+    );
+    setDeclaredPriority(nextDeclared);
+    if (availableWidth.current <= 0) {
+      setVisiblePriority(nextDeclared);
+      return;
+    }
+    setVisiblePriority(
+      fitEntityMetadataPriority({
+        availableWidth: availableWidth.current,
+        itemWidths: measurements,
+        // The row inherits the shared `sm` control step: 6px gap and a 28px icon control.
+        gap: 6,
+        overflowWidth: 28,
+      }),
+    );
   }, []);
+
+  const declareItem = useCallback(
+    (priority: EntityMetadataPriority, element: HTMLElement) => {
+      const measure = (): void => {
+        const width = element.getBoundingClientRect().width;
+        if (width <= 0) return;
+        itemMeasurements.current.set(element, { priority, width });
+        recomputeVisibility();
+      };
+      measure();
+      const observer =
+        typeof ResizeObserver === 'undefined'
+          ? null
+          : new ResizeObserver(() => {
+              measure();
+            });
+      observer?.observe(element);
+
+      return () => {
+        observer?.disconnect();
+        itemMeasurements.current.delete(element);
+        recomputeVisibility();
+      };
+    },
+    [recomputeVisibility],
+  );
 
   useEffect(() => {
     const row = inlineRef.current?.parentElement;
     if (!row || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return;
-      setVisiblePriority(visibleEntityMetadataPriority(entry.contentRect.width));
+      availableWidth.current = entry.contentRect.width;
+      recomputeVisibility();
     });
     observer.observe(row);
     return () => {
       observer.disconnect();
     };
-  }, []);
+  }, [recomputeVisibility]);
 
   const inlineLane = useMemo<EntityMetadataLaneContext>(
-    () => ({ lane: 'inline', visiblePriority, declarePriority }),
-    [declarePriority, visiblePriority],
+    () => ({ lane: 'inline', visiblePriority, declareItem }),
+    [declareItem, visiblePriority],
   );
   const overflowLane = useMemo<EntityMetadataLaneContext>(
     () => ({ lane: 'overflow', visiblePriority }),

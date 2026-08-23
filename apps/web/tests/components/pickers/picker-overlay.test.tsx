@@ -4,7 +4,11 @@ import { OrganizationId } from '@docket/types';
 import { act, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { PickerOverlayProvider, usePickerOverlay } from '@/components/pickers/picker-overlay';
+import {
+  capturePickerAnchor,
+  PickerOverlayProvider,
+  usePickerOverlay,
+} from '@/components/pickers/picker-overlay';
 import { makeQueryWrapper } from '../../support/query';
 
 afterEach(() => {
@@ -32,6 +36,33 @@ vi.mock('@/lib/api', () => ({
 const ORG = OrganizationId.parse('01HZX5K3QJ9F8B7C6D5E4F3G2H');
 
 describe('usePickerOverlay', () => {
+  it('keeps the invoking geometry after a temporary overflow trigger unmounts', () => {
+    const anchor = document.createElement('button');
+    document.body.append(anchor);
+    vi.spyOn(anchor, 'getBoundingClientRect').mockReturnValue({
+      x: 640,
+      y: 224,
+      top: 224,
+      right: 760,
+      bottom: 252,
+      left: 640,
+      width: 120,
+      height: 28,
+      toJSON: () => ({}),
+    });
+
+    const captured = capturePickerAnchor(anchor);
+    anchor.remove();
+
+    expect(captured.virtual?.getBoundingClientRect()).toMatchObject({
+      left: 640,
+      top: 224,
+      width: 120,
+      height: 28,
+    });
+    expect(captured.focusTarget).toBe(anchor);
+  });
+
   it('throws when used outside a PickerOverlayProvider', () => {
     const { result } = renderHook(() => {
       try {

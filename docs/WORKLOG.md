@@ -7,6 +7,34 @@
 
 ## Active Tasks
 
+### [ENTITY-METADATA-FIT-001] Fit detail properties to available space
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-23
+- **Priority**: P0
+- **Description**: Initiative, Project, Program, and Cycle detail headers hid metadata behind the
+  overflow action at fixed page-width thresholds. Those thresholds ignored each control's rendered
+  width and left visible row space unused. A hierarchy or label picker opened from that overflow
+  also kept a live DOM button as its virtual anchor. Dismissing the source menu unmounted the
+  button, collapsed its rectangle to the page origin, and moved the picker to the upper-left corner.
+- **Approach**: Measure each metadata control and the row container. Fit consecutive priority
+  groups into the space that remains after reserving the overflow control. Snapshot the invoking
+  control's rectangle before the source menu can unmount it, and use that frozen rectangle for the
+  moved picker while retaining the live element only as an optional focus return target.
+- **Validation**: The metadata-row regression proves that realistic controls through priority seven
+  remain inline in 1,000px and that a 260px row keeps only the controls that fit. The picker-overlay
+  regression proves that an anchor at 640 by 224 keeps its geometry after unmount. All 43 affected
+  Cycle, metadata, hierarchy, and picker tests pass. The web typecheck, focused lint, formatting,
+  and diff checks pass.
+  A local browser check shows all eight Initiative properties inline at 1,800px. At 640px it keeps
+  five properties inline, moves the remaining three into overflow, and opens Set parent directly
+  beneath its 366px by 459px source position instead of at the page origin.
+- **Retrospective**: A page-width breakpoint cannot answer whether rendered controls fit. Responsive
+  disclosure must use the actual control geometry, and a popover that outlives its trigger must own
+  a geometry snapshot instead of a reference to disposable DOM.
+
+---
+
 ### [WORK-VIEW-POPOVERS-001] Standardize work-view popovers
 
 - **Status**: COMPLETED

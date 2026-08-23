@@ -20,7 +20,10 @@ import {
   writeInitiativeHierarchyMutation,
 } from '@/components/initiatives/initiative-hierarchy-mutations';
 import { selfOrDescendantPredicate } from '@/components/initiatives/hierarchy-dnd';
-import type { InitiativeHierarchyPickerRequest } from '@/components/pickers/picker-overlay';
+import {
+  capturePickerAnchor,
+  type InitiativeHierarchyPickerRequest,
+} from '@/components/pickers/picker-overlay';
 import { api } from '@/lib/api';
 import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
 import { userErrorMessage } from '@/lib/problem';
@@ -115,12 +118,15 @@ export function InitiativeHierarchyPickerOverlay({
     [isSelfOrDescendant, items, mode, onClose, orgId, queryClient, subject, writing],
   );
 
-  const anchorRef = useRef<PopoverVirtualAnchor | null>(
-    request.anchor ??
-      (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null),
-  );
+  const capturedAnchor = useRef(
+    capturePickerAnchor(
+      request.anchor ??
+        (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null),
+    ),
+  ).current;
+  const anchorRef = useRef<PopoverVirtualAnchor | null>(capturedAnchor.virtual);
 
   return (
     <Popover
@@ -133,7 +139,7 @@ export function InitiativeHierarchyPickerOverlay({
       <PopoverContent
         onCloseAutoFocus={(event) => {
           event.preventDefault();
-          if (anchorRef.current instanceof HTMLElement) anchorRef.current.focus();
+          if (capturedAnchor.focusTarget?.isConnected) capturedAnchor.focusTarget.focus();
         }}
       >
         {writeError ? (

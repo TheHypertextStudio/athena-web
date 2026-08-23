@@ -62,7 +62,7 @@ describe('work-view contracts', () => {
 
   it('rejects a contract that cannot supply any view fields', () => {
     const filterOnlyContract = defineViewContract({
-      target: 'empty',
+      target: 'task',
       layouts: ['list'],
       fields: {
         name: {

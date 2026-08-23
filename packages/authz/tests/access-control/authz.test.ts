@@ -296,6 +296,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       team_id text,
       status text not null default 'planned',
       status_id text not null,
+      priority task_priority not null default 'none',
       health health,
       start_date timestamp,
       start_date_resolution planning_date_resolution,

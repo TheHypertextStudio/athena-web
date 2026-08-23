@@ -31,13 +31,16 @@
 - **Integration repair**: The Project work-view migration added a required `priority` column, but
   the authorization package's hand-written Project schema did not copy it. The fixture now tracks
   the production schema so Drizzle can insert Project rows during the repository coverage gate.
+  The Cycle detail regression now opens the responsive property overflow before asserting a
+  priority-one Window control, which matches the shared masthead's zero-width test layout.
 - **Validation**: The four formerly failing repository policy files pass 27 tests. Focused web and
   API regressions prove that work-view search reaches the server, searches only the authorized
   corpus, applies before counts and cursor pagination, and remains separate from saved view state.
   The corrected API query suite passes all 12 tests under one worker.
   The shared types package passes all 43 files and 747 tests with 100 percent statement, branch,
   function, and line coverage, and its typecheck passes. The authorization package passes all 49
-  tests with 100 percent coverage against the corrected Project fixture. The local API typecheck
+  tests with 100 percent coverage against the corrected Project fixture. The Cycle detail suite
+  passes all 14 tests with the responsive overflow path under test. The local API typecheck
   exhausted Node's default 2 GB heap after 97 seconds without a diagnostic. The local web typecheck
   also produced no diagnostic but exceeded five minutes on the integrated graph, so the exact-SHA
   CI run remains authoritative for both application typechecks.
